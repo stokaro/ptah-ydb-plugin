@@ -117,6 +117,25 @@ retain source type, location, authentication references, and native properties.
 External tables retain source references, location, ordered typed columns, and
 content options without rewriting their native keys or JSON values.
 
+## Offline column-storage observations
+
+The column-storage decoder accepts captured monitoring JSON together with an
+independent table-service description. It checks table identity, ordered
+columns and primary keys, primitive types, nullability, and reported hash keys.
+It preserves hash-column order, partition and data-channel counts, local
+bloom/ngram/min-max indexes, index storage settings, and TTL tiers. Omitted
+index options remain absent. Explicit false values remain explicit.
+
+Unknown schema fields, repeated fields or aliases, inconsistent descriptions,
+unsupported type extensions, and configured column families are refused.
+Native IDs, schema versions, and shard addresses are excluded from the model.
+Local indexes are sorted by name; hash columns and TTL tiers retain order.
+
+Fixture replay covers prior YDB 25.1 and 26.2 captures. A subprocess test checks
+SDK normalization without opening a database session. Live column-table
+inspection still refuses: monitoring transport and the combined live reader
+are not connected yet. These tests do not establish live column-table support.
+
 ## Native protocol generation
 
 The upstream Go bindings lack some native index, sequence, changefeed, and consumer fields. The

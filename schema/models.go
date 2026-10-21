@@ -30,11 +30,13 @@ const (
 // Models returns fresh definitions for the supported observed models. Desired
 // models are not enrolled until their decoding and comparison are implemented.
 func Models() []*protocol.ValueModel {
-	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties)}
+	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties)}
 }
 
 func message(kind string) proto.Message {
 	switch kind {
+	case ColumnStorageProperties:
+		return &native.ColumnStorageObservation{}
 	case TableProperties:
 		return &native.DescribeTableResult{}
 	case ColumnProperties:
@@ -69,7 +71,8 @@ func excluded(kind string) []string {
 }
 
 var definitions = map[string]*protocol.ValueModel{
-	TableProperties: buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties), ChangefeedProperties: buildModel(ChangefeedProperties), TopicProperties: buildModel(TopicProperties),
+	ColumnStorageProperties: buildModel(ColumnStorageProperties),
+	TableProperties:         buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties), ChangefeedProperties: buildModel(ChangefeedProperties), TopicProperties: buildModel(TopicProperties),
 	ViewProperties: buildModel(ViewProperties), CoordinationProperties: buildModel(CoordinationProperties), ExternalSourceProperties: buildModel(ExternalSourceProperties), ExternalTableProperties: buildModel(ExternalTableProperties),
 }
 
@@ -91,6 +94,10 @@ func buildModel(kind string) *protocol.ValueModel {
 		"changefeed_observations": "complete feed set per table sorted by name; each feed includes its child topic settings; initial scan presence retained, progress counters excluded",
 		"native_objects":          "retain view query plus table API attributes; coordination config except duplicate path; external source options and ordered external columns; transient self identity excluded",
 		"index_observations":      "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
+	}
+	if kind == ColumnStorageProperties {
+		definition["not_observed"] = []string{"live_column_storage", "shared_topic_consumers"}
+		definition["column_storage"] = "hash column order and TTL tier order retained; local indexes sorted by name; native IDs and versions excluded; omitted index defaults remain absent; offline only until live monitoring is connected"
 	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
@@ -220,6 +227,11 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	})
 	if refused {
 		return nil, fmt.Errorf("YDB facet repeats a common or transient field")
+	}
+	if storage, ok := target.(*native.ColumnStorageObservation); ok {
+		if err := normalizeColumnStorage(storage); err != nil {
+			return nil, err
+		}
 	}
 	if indexes, ok := target.(*native.IndexObservations); ok {
 		if err := normalizeIndexes(indexes); err != nil {

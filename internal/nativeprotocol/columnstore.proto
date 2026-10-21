@@ -1,0 +1,165 @@
+// Provider-owned observations of settings omitted by YDB's table API.
+syntax = "proto3";
+package ptah.ydb.native;
+option go_package = "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol";
+import "google/protobuf/empty.proto";
+
+message ColumnStorageObservation {
+    repeated string hash_columns = 1;
+    uint64 partitions = 2;
+    uint64 data_channel_count = 3;
+    repeated LocalIndexObservation local_indexes = 4;
+    ColumnTTLPolicy ttl = 5;
+}
+message LocalIndexObservation {
+    string name = 1;
+    repeated string columns = 2;
+    string storage_id = 3;
+    bool inherit_portion_storage = 4;
+    oneof kind {
+        LocalBloomSettings bloom = 5;
+        LocalNGramSettings ngram = 6;
+        LocalMinMaxSettings min_max = 7;
+    }
+}
+message LocalBloomSettings {
+    string data_extractor = 1;
+    string bits_storage = 2;
+    optional double false_positive_probability = 3;
+}
+message LocalNGramSettings {
+    string data_extractor = 1;
+    string bits_storage = 2;
+    optional double false_positive_probability = 3;
+    optional uint64 ngram_size = 4;
+    optional bool case_sensitive = 5;
+}
+message LocalMinMaxSettings { string data_extractor = 1; }
+message ColumnTTLPolicy {
+    oneof state {
+        google.protobuf.Empty disabled = 1;
+        ColumnTTLEnabled enabled = 2;
+    }
+}
+message ColumnTTLEnabled {
+    string column = 1;
+    // Native units: 0 is a date/time column, 1..4 are seconds through nanoseconds.
+    uint64 column_unit = 2;
+    optional uint64 expire_after_seconds = 3;
+    repeated ColumnTTLTier tiers = 4;
+}
+message ColumnTTLTier {
+    uint64 apply_after_seconds = 1;
+    oneof action {
+        google.protobuf.Empty delete = 2;
+        string external_storage = 3;
+    }
+}
+
+// Monitoring input is separate from normalized observations. Native IDs,
+// counters and schema versions are checked here and never become schema state.
+message MonitoringColumnTable {
+    string name = 1 [json_name="Name"];
+    uint64 column_shard_count = 2 [json_name="ColumnShardCount"];
+    bool is_restore = 3 [json_name="IsRestore"];
+    MonitoringStorage storage_config = 4 [json_name="StorageConfig"];
+    MonitoringColumnSchema schema = 5 [json_name="Schema"];
+    MonitoringSharding sharding = 6 [json_name="Sharding"];
+    MonitoringTTL ttl_settings = 7 [json_name="TtlSettings"];
+}
+message MonitoringStorage {
+    uint64 data_channel_count = 1 [json_name="DataChannelCount"];
+}
+message MonitoringColumnSchema {
+    repeated MonitoringColumn columns = 1 [json_name="Columns"];
+    repeated MonitoringLocalIndex indexes = 2 [json_name="Indexes"];
+    repeated MonitoringFamily column_families = 3 [json_name="ColumnFamilies"];
+    uint64 next_column_id = 4 [json_name="NextColumnId"];
+    uint64 next_column_family_id = 5 [json_name="NextColumnFamilyId"];
+    repeated string key_column_names = 6 [json_name="KeyColumnNames"];
+    uint64 version = 7 [json_name="Version"];
+    MonitoringSchemaOptions options = 8 [json_name="Options"];
+}
+message MonitoringSchemaOptions {
+    bool scheme_need_actualization = 1 [json_name="SchemeNeedActualization"];
+}
+message MonitoringColumn {
+    uint64 id = 1 [json_name="Id"];
+    string name = 2 [json_name="Name"];
+    string type = 3 [json_name="Type"];
+    uint64 type_id = 4 [json_name="TypeId"];
+    bool not_null = 5 [json_name="NotNull"];
+    // Nonempty type extensions remain refused until they have a typed model.
+    google.protobuf.Empty type_info = 6 [json_name="TypeInfo"];
+    uint64 column_family_id = 7 [json_name="ColumnFamilyId"];
+    string storage_id = 8 [json_name="StorageId"];
+    google.protobuf.Empty default_value = 9 [json_name="DefaultValue"];
+}
+message MonitoringFamily {
+    uint64 id = 1 [json_name="Id"];
+    string name = 2 [json_name="Name"];
+}
+message MonitoringSharding {
+    repeated uint64 column_shards = 1 [json_name="ColumnShards"];
+    MonitoringHash hash_sharding = 2 [json_name="HashSharding"];
+}
+message MonitoringHash {
+    uint64 function = 1 [json_name="Function"];
+    repeated string columns = 2 [json_name="Columns"];
+}
+message MonitoringLocalIndex {
+    uint64 id = 1 [json_name="Id"];
+    string name = 2 [json_name="Name"];
+    string storage_id = 3 [json_name="StorageId"];
+    string class_name = 4 [json_name="ClassName"];
+    bool inherit_portion_storage = 5 [json_name="InheritPortionStorage"];
+    oneof kind {
+        MonitoringBloom bloom_filter = 6 [json_name="BloomFilter"];
+        MonitoringNGram bloom_ngramm_filter = 7 [json_name="BloomNGrammFilter"];
+        MonitoringMinMax min_max_index = 8 [json_name="MinMaxIndex"];
+    }
+}
+message MonitoringClass {
+    string class_name = 1 [json_name="ClassName"];
+}
+message MonitoringBloom {
+    MonitoringClass data_extractor = 1 [json_name="DataExtractor"];
+    MonitoringClass bits_storage = 2 [json_name="BitsStorage"];
+    optional double false_positive_probability = 3 [json_name="FalsePositiveProbability"];
+    repeated uint64 column_ids = 4 [json_name="ColumnIds"];
+}
+message MonitoringNGram {
+    MonitoringClass data_extractor = 1 [json_name="DataExtractor"];
+    MonitoringClass bits_storage = 2 [json_name="BitsStorage"];
+    optional double false_positive_probability = 3 [json_name="FalsePositiveProbability"];
+    uint64 column_id = 4 [json_name="ColumnId"];
+    optional uint64 ngramm_size = 5 [json_name="NGrammSize"];
+    optional bool case_sensitive = 6 [json_name="CaseSensitive"];
+}
+message MonitoringMinMax {
+    MonitoringClass data_extractor = 1 [json_name="DataExtractor"];
+    uint64 column_id = 2 [json_name="ColumnId"];
+}
+message MonitoringTTL {
+    uint64 version = 1 [json_name="Version"];
+    oneof state {
+        google.protobuf.Empty disabled = 2 [json_name="Disabled"];
+        MonitoringTTLEnabled enabled = 3 [json_name="Enabled"];
+    }
+}
+message MonitoringTTLEnabled {
+    string column_name = 1 [json_name="ColumnName"];
+    uint64 column_unit = 2 [json_name="ColumnUnit"];
+    optional uint64 expire_after_seconds = 3 [json_name="ExpireAfterSeconds"];
+    repeated MonitoringTTLTier tiers = 4 [json_name="Tiers"];
+}
+message MonitoringTTLTier {
+    uint64 apply_after_seconds = 1 [json_name="ApplyAfterSeconds"];
+    oneof action {
+        google.protobuf.Empty delete = 2 [json_name="Delete"];
+        MonitoringEviction evict_to_external_storage = 3 [json_name="EvictToExternalStorage"];
+    }
+}
+message MonitoringEviction {
+    string storage = 1 [json_name="Storage"];
+}
