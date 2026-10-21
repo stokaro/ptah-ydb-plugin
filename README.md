@@ -6,7 +6,8 @@ changefeeds, topics, views, coordination nodes, external data sources, and
 external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history and coordination
 locks. Offline YAML decoding is available for coordination-node declarations.
-Schema planning is still pending.
+Offline comparison also produces typed coordination changes. Schema planning
+is still pending.
 
 The executable opens native YDB connections and reads row-table schemas
 through the public Ptah SDK. It supports anonymous, URL user/password, and URL token authentication.
@@ -268,7 +269,7 @@ statistics are excluded. A missing child description refuses the entire read.
 
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
-Other desired models, semantic comparisons, and planning remain pending.
+Other desired models, their comparisons, and planning remain pending.
 
 Views retain the query returned by the view service and the attributes read
 through the table service on the same path. This includes comments and custom
@@ -325,8 +326,44 @@ models.
 
 The subprocess tests exercise decoding and normalization without a database
 address. HCL, Go annotation and SQL adapters, desired/observed conversion,
-contextual comparison, rendering, and native change planning remain pending.
+rendering and native change planning remain pending.
 This service alone does not make the YAML example executable as a migration.
+
+## Coordination comparison
+
+The offline `models.compare` service compares desired coordination declarations
+with captured native observations. Its context must establish the
+`coordination_nodes` capability. Session receipts do not advertise that capability
+yet; host-driven comparison still requires capability wiring with native planning. Omitted settings compare using server defaults;
+source holder names do not change native configuration. Removing an explicit
+nondefault setting produces a change back to the default. Raw stored values that
+the server clamps refuse comparison.
+
+The `ydb.coordination-node-change` model carries complete `before` and `after`
+operands. The native `before` retains access metadata. A null operand means
+established absence. Normalization reconstructs impact, removal, and access
+facts from these operands. Creation has unknown inherited access policy;
+alteration preserves access; dropping a node removes its runtime state and access.
+These changes are not executable until native planning and operation dispatch
+are implemented.
+
+An unread object does not establish absence. Independent coverage sources must
+all establish completeness; overlapping unknown regions override complete
+regions, and explicit subject claims override namespace claims. Namespace
+components, target scopes, and exact empty paths retain their boundaries.
+An incomplete desired source preserves known current configuration. Missing
+namespace coverage also produces an undecided diagnostic.
+
+The comparison refuses contradictory identities, forged normalization receipts,
+and collisions with declared relations. Database defaults require an explicit
+host binding. Required nodes are not removed. Exclusions for this model match
+exact relative paths such as `app/workers`, without case folding or trimming.
+The database-root `ptah_locks` observation remains visible and produces an
+undecided lifecycle diagnostic; its name does not prove provider ownership.
+
+Offline subprocess tests cover decode, compare, and change normalization without
+opening a session. Live tests compare native observations after closing their
+session on both qualified YDB lines.
 
 ## Offline column-storage observations
 
@@ -367,10 +404,10 @@ requires unchanged generated files.
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes the other desired schema models and source formats,
-comparison, planning, rendering, native operation envelopes, migration
+comparison for the other models, planning, rendering, native operation envelopes, migration
 logs/tags, capability detection, environment credential sources,
 monitoring, and dev-database provisioning. The provider advertises implemented
-inspection, normalization, coordination YAML source decoding, SQL execution,
+inspection, normalization, coordination YAML source decoding and comparison, SQL execution,
 transaction, history, and lock services. The
 remaining capabilities stay unadvertised.
 

@@ -61,6 +61,13 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 		var err error
 		format := input.GetValue().GetKind() + "/observed-json-v1"
 		switch input.GetRepresentation() {
+		case protocol.ValueInput_CHANGE:
+			normalized, changeErr := schema.NormalizeCoordinationChange(input)
+			if changeErr != nil {
+				return nil, status.Error(codes.InvalidArgument, changeErr.Error())
+			}
+			result.Values = append(result.Values, normalized)
+			continue
 		case protocol.ValueInput_OBSERVED:
 			value, err = schema.Normalize(input.GetValue())
 		case protocol.ValueInput_DESIRED:

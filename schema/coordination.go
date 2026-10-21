@@ -98,7 +98,9 @@ func ValidateCoordinationIntent(value CoordinationIntent) error {
 	return nil
 }
 
-func desiredCoordinationOwner(owner *protocol.Reference) error {
+// ValidateCoordinationOwner checks exact native path components, including runtime nodes.
+// Desired declarations apply their additional runtime-node policy separately.
+func ValidateCoordinationOwner(owner *protocol.Reference) error {
 	if owner.GetEngine() != "ydb" || owner.GetKind() != CoordinationProperties || owner.GetCatalog() != "" || len(owner.GetPath()) != 0 || len(owner.GetOverload()) != 0 {
 		return fmt.Errorf("invalid desired YDB coordination identity")
 	}
@@ -113,6 +115,13 @@ func desiredCoordinationOwner(owner *protocol.Reference) error {
 		if strings.TrimSpace(part) == "" || !utf8.ValidString(part) || strings.HasPrefix(part, ".") || strings.ContainsAny(part, "/\\\x00") {
 			return fmt.Errorf("invalid or system-owned YDB coordination path")
 		}
+	}
+	return nil
+}
+
+func desiredCoordinationOwner(owner *protocol.Reference) error {
+	if err := ValidateCoordinationOwner(owner); err != nil {
+		return err
 	}
 	if owner.GetSchema() == "" && owner.GetName() == "ptah_locks" {
 		return fmt.Errorf("database-root ptah_locks is reserved for provider runtime use")
