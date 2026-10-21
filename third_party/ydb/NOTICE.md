@@ -15,3 +15,10 @@ The upstream definitions are licensed under Apache-2.0; see `LICENSE` here.
 Implementation table names and their kind-specific membership follow
 [NTableIndex::GetImplTables at the same commit](https://github.com/ydb-platform/ydb/blob/6006bfe4442d2064e7c06ed1719d438e36ca5bf8/ydb/core/base/table_index.cpp#L287)
 and the constants in `ydb/core/base/table_index.h`.
+
+Topic and consumer messages in `internal/nativeprotocol/topics.proto` are
+adapted from [ydb_topic.proto at the same upstream commit](https://github.com/ydb-platform/ydb/blob/6006bfe4442d2064e7c06ed1719d438e36ca5bf8/ydb/public/api/protos/ydb_topic.proto).
+The changefeed description comes from the table protocol cited above. The
+shared-consumer arm is omitted and refused as unknown. Ptah-owned observation
+messages pair each changefeed with its child topic and retain initial scan
+presence without runtime progress counters.

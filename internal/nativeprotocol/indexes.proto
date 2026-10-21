@@ -6,6 +6,7 @@ syntax = "proto3";
 package ptah.ydb.native;
 option go_package = "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol";
 import "protos/ydb_table.proto";
+import "internal/nativeprotocol/topics.proto";
 import "protos/ydb_value.proto";
 import "protos/ydb_scheme.proto";
 import "protos/ydb_common.proto";
@@ -210,7 +211,7 @@ message DescribeTableResult {
     Ydb.Table.PartitioningSettings partitioning_settings = 12;
     Ydb.FeatureFlag.Status key_bloom_filter = 13;
     Ydb.Table.ReadReplicasSettings read_replicas_settings = 14;
-    repeated Ydb.Table.ChangefeedDescription changefeeds = 15;
+    repeated ChangefeedDescription changefeeds = 15;
     string tiering = 16;
     bool temporary = 17;
     Ydb.Table.StoreType store_type = 18;

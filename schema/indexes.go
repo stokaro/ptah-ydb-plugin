@@ -54,7 +54,7 @@ func validateIndex(index *native.TableIndexDescription) error {
 	if err := Known(index); err != nil {
 		return err
 	}
-	if !indexName(index.GetName()) || len(index.GetIndexColumns()) == 0 {
+	if !componentName(index.GetName()) || len(index.GetIndexColumns()) == 0 {
 		return fmt.Errorf("invalid YDB index identity or columns")
 	}
 	if index.GetStatus() != native.TableIndexDescription_STATUS_READY {
@@ -73,7 +73,7 @@ func validateIndex(index *native.TableIndexDescription) error {
 	return err
 }
 
-func indexName(name string) bool {
+func componentName(name string) bool {
 	return utf8.ValidString(name) && name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00")
 }
 

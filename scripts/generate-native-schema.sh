@@ -8,4 +8,4 @@ trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 go run ./internal/cmd/native-descriptors "$tmp/dependencies.pb"
 protoc -I . --descriptor_set_in="$tmp/dependencies.pb" \
   --plugin=protoc-gen-go="$(go tool -n protoc-gen-go)" \
-  --go_out=. --go_opt=paths=source_relative internal/nativeprotocol/indexes.proto
+  --go_out=. --go_opt=paths=source_relative internal/nativeprotocol/indexes.proto internal/nativeprotocol/topics.proto

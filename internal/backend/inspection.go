@@ -43,7 +43,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	return result, nil
 }
 
-// NormalizeValues validates captured YDB observation facets offline. Results
+// NormalizeValues validates captured YDB observation models offline. Results
 // preserve the complete input provenance and expose no successful prefix.
 func (*Provider) NormalizeValues(ctx context.Context, request *protocol.NormalizeValuesRequest) (*protocol.NormalizedValues, error) {
 	if err := provider.ValidateValueInputs(Description(), request); err != nil {
@@ -55,7 +55,7 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 			return nil, status.FromContextError(err).Err()
 		}
 		if input.GetRepresentation() != protocol.ValueInput_OBSERVED {
-			return nil, status.Error(codes.InvalidArgument, "only observed YDB facets are implemented")
+			return nil, status.Error(codes.InvalidArgument, "only observed YDB models are implemented")
 		}
 		value, err := schema.Normalize(input.GetValue())
 		if err != nil {

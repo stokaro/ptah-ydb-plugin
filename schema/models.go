@@ -26,10 +26,10 @@ const (
 	ColumnProperties = "ydb.column-properties"
 )
 
-// Models returns fresh definitions for the supported observed facets. Desired
+// Models returns fresh definitions for the supported observed models. Desired
 // models are not enrolled until their decoding and comparison are implemented.
 func Models() []*protocol.ValueModel {
-	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties)}
+	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties)}
 }
 
 func message(kind string) proto.Message {
@@ -40,6 +40,10 @@ func message(kind string) proto.Message {
 		return &native.ColumnMeta{}
 	case IndexProperties:
 		return &native.IndexObservations{}
+	case ChangefeedProperties:
+		return &native.ChangefeedObservations{}
+	case TopicProperties:
+		return &native.DescribeTopicResult{}
 	default:
 		return nil
 	}
@@ -47,7 +51,7 @@ func message(kind string) proto.Message {
 
 func excluded(kind string) []string {
 	if kind == TableProperties {
-		return []string{"columns", "table_stats", "indexes"}
+		return []string{"columns", "table_stats", "indexes", "changefeeds"}
 	}
 	if kind == ColumnProperties {
 		return []string{"name", "type", "not_null"}
@@ -56,7 +60,7 @@ func excluded(kind string) []string {
 }
 
 var definitions = map[string]*protocol.ValueModel{
-	TableProperties: buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties),
+	TableProperties: buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties), ChangefeedProperties: buildModel(ChangefeedProperties), TopicProperties: buildModel(TopicProperties),
 }
 
 func model(kind string) *protocol.ValueModel { return proto.CloneOf(definitions[kind]) }
@@ -69,11 +73,13 @@ func buildModel(kind string) *protocol.ValueModel {
 		"message":  string(message(kind).ProtoReflect().Descriptor().FullName()),
 		"messages": graph, "excluded_fields": excluded(kind),
 		"unknown_fields_and_enum_values": "refused", "representation": "observed",
-		"canonicalization":   "protojson with absent defaults omitted, then modeljson canonical JSON; arrays retain server order",
-		"table_self":         "retain owner and permissions; omit name, type, size_bytes, created_at",
-		"common_columns":     "names, storage type, and nullability live only in common columns; primary_key preserves key order",
-		"not_observed":       []string{"changefeeds", "column_storage"},
-		"index_observations": "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
+		"canonicalization":        "protojson with absent defaults omitted, then modeljson canonical JSON; arrays retain server order",
+		"table_self":              "retain owner and permissions; omit name, type, size_bytes, created_at",
+		"common_columns":          "names, storage type, and nullability live only in common columns; primary_key preserves key order",
+		"not_observed":            []string{"column_storage", "shared_topic_consumers"},
+		"topic_observations":      "retain topic and consumer configuration, attributes and access metadata; omit partitions, topic/consumer stats and transient self fields; consumers sorted by name",
+		"changefeed_observations": "complete feed set per table sorted by name; each feed includes its child topic settings; initial scan presence retained, progress counters excluded",
+		"index_observations":      "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
 	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
@@ -127,8 +133,8 @@ func CaptureTable(owner *protocol.Reference, description *native.DescribeTableRe
 	if err := Known(description); err != nil {
 		return nil, err
 	}
-	if len(description.GetIndexes()) != 0 {
-		return nil, fmt.Errorf("capture indexes separately before table properties")
+	if len(description.GetIndexes()) != 0 || len(description.GetChangefeeds()) != 0 {
+		return nil, fmt.Errorf("capture child objects separately before table properties")
 	}
 	projected := proto.CloneOf(description)
 	projected.Columns, projected.TableStats = nil, nil
@@ -165,7 +171,7 @@ func capture(kind string, owner *protocol.Reference, value proto.Message) (*prot
 	return Normalize(envelope)
 }
 
-// Normalize interprets an observed facet without a connection. A payload
+// Normalize interprets an observed model without a connection. A payload
 // cannot smuggle common fields or unrecognized native fields through a model.
 func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	target := message(value.GetKind())
@@ -178,14 +184,17 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	}
 	owner := value.GetOwner()
 	expected := "table"
+	if value.GetKind() == TopicProperties {
+		expected = TopicProperties
+	}
 	if value.GetKind() == ColumnProperties {
 		expected = "column"
 	}
 	if owner.GetEngine() != "ydb" || owner.GetKind() != expected || owner.GetName() == "" || owner.GetDatabase() == "" || owner.GetCatalog() != "" || len(owner.GetOverload()) != 0 {
-		return nil, fmt.Errorf("invalid YDB facet owner")
+		return nil, fmt.Errorf("invalid YDB observation owner")
 	}
-	if (expected == "table" && len(owner.GetPath()) != 0) || (expected == "column" && len(owner.GetPath()) != 1) {
-		return nil, fmt.Errorf("invalid YDB facet owner path")
+	if (expected != "column" && len(owner.GetPath()) != 0) || (expected == "column" && len(owner.GetPath()) != 1) {
+		return nil, fmt.Errorf("invalid YDB observation owner path")
 	}
 	if err := protojson.Unmarshal(value.GetPayload(), target); err != nil {
 		return nil, fmt.Errorf("invalid YDB observation JSON")
@@ -206,10 +215,17 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 			return nil, err
 		}
 	}
-	if table, ok := target.(*native.DescribeTableResult); ok {
-		if len(table.GetChangefeeds()) != 0 {
-			return nil, fmt.Errorf("YDB changefeeds need their child descriptions")
+	if topic, ok := target.(*native.DescribeTopicResult); ok {
+		if err := normalizeTopic(topic); err != nil {
+			return nil, err
 		}
+	}
+	if feeds, ok := target.(*native.ChangefeedObservations); ok {
+		if err := normalizeChangefeeds(feeds); err != nil {
+			return nil, err
+		}
+	}
+	if table, ok := target.(*native.DescribeTableResult); ok {
 		seen := map[string]bool{}
 		if len(table.GetPrimaryKey()) == 0 {
 			return nil, fmt.Errorf("observed YDB table properties require a primary key")
@@ -229,7 +245,7 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 		}
 	}
 	if strings.TrimSpace(owner.GetName()) == "" {
-		return nil, fmt.Errorf("empty YDB facet name")
+		return nil, fmt.Errorf("empty YDB observation name")
 	}
 	payload, err := protojson.Marshal(target)
 	if err != nil {

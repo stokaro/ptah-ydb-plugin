@@ -1,7 +1,7 @@
 # Ptah YDB provider
 
 This repository owns the executable YDB provider for [Ptah #4204](https://github.com/stokaro/ptah/issues/4204).
-It is under development. Row-table and index inspection is available; schema planning
+It is under development. Row-table, index, changefeed, and topic inspection is available; schema planning
 and migration execution are not implemented yet.
 
 The executable opens native YDB connections and reads row-table schemas
@@ -22,7 +22,7 @@ The SDK dependency is pinned to a published experimental revision. There is no
 `replace` directive or workspace dependency.
 
 Live checks require an isolated test database. Schema tests create uniquely
-named directories and tables and remove them afterward. Session tests only
+named directories, tables, and topics and remove them afterward. Session tests only
 read server metadata.
 
 ```sh
@@ -35,7 +35,8 @@ The test servers enable `enable_vector_index`; the 26.2 fixture also enables
 
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
 host-module imports and local module replacements. These checks cover sessions, native row-table observations, offline
-normalization, index implementation tables, and refusals for incomplete reads. They do not establish
+normalization, index implementation tables, changefeed consumers and retention,
+standalone topics, and refusals for incomplete reads. They do not establish
 planning or migration support.
 
 ## Connection addresses
@@ -55,7 +56,7 @@ provider process when that bound is reached.
 
 ## Schema observations
 
-Inspection reads the native scheme and table APIs. Common columns preserve
+Inspection reads the native scheme, table, and topic APIs. Common columns preserve
 YDB type spelling, Decimal precision/scale, nullability, and key membership.
 Provider-owned table properties retain key order, TTL, column families,
 partitioning, storage settings, attributes, and access metadata. Column
@@ -71,9 +72,8 @@ Coverage names the inspected subjects only; it does not claim native-object
 absence outside those subjects.
 
 Unknown native fields and enum values are refused before JSON conversion.
-Changefeeds need an additional child-object reader and currently
-refuse the whole inspection. Column tables, other native object kinds, and
-replication-owned tables also refuse. A failed traversal returns no snapshot.
+Shared topic consumers, column tables, unextracted native object kinds, and
+replication-owned tables refuse inspection. A failed traversal returns no snapshot.
 These limitations preserve data for the remaining extraction work.
 
 Observed property models use YDB's typed protocol definitions inside this
@@ -86,13 +86,25 @@ metadata alone does not expose those settings. Missing implementation tables
 or non-ready indexes refuse inspection. An empty index facet records the
 absence of indexes on that inspected table.
 
-Index lists and implementation-table lists are sorted by name. Column and key
-arrays retain their observed order. Desired
-models, semantic comparisons, and planning are still pending.
+Changefeed observations combine the table API description with a topic API
+read for each child stream. They retain modes, formats, state, retention,
+consumers, access metadata, and attributes, including replication bindings.
+Initial scan presence is retained after completion; progress counters are
+excluded. An empty changefeed facet records absence on its inspected table.
+Standalone topics use the same reader and normalization rules, with their own
+object identities.
+
+Topic observations preserve partition settings and quotas, retention, codecs,
+consumer options, and attributes. Live partition topology and topic/consumer
+statistics are excluded. A missing child description refuses the entire read.
+
+Indexes, implementation tables, changefeeds, and consumers are sorted by name.
+Column and key arrays retain their observed order. Desired models, semantic
+comparisons, and planning are still pending.
 
 ## Native protocol generation
 
-The upstream Go bindings lack some native index and sequence fields. The
+The upstream Go bindings lack some native index, sequence, changefeed, and consumer fields. The
 provider's typed definitions preserve their native wire numbers; attribution
 and the pinned upstream source are in `third_party/ydb/NOTICE.md`. Unsupported
 fields remain errors. Runtime statistics are omitted from schema observations.
@@ -104,7 +116,7 @@ sh scripts/generate-native-schema.sh
 ```
 
 The Go generator is pinned in `go.mod`. CI regenerates these definitions and
-requires an unchanged generated file.
+requires unchanged generated files.
 
 ## Extraction still required
 

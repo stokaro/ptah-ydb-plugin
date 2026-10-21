@@ -40,7 +40,7 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 		Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}}
 	for _, model := range schema.Models() {
 		result.Coverage.Kinds = append(result.Coverage.Kinds, &protocol.ModelKindCoverage{Model: model,
-			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Only returned table and column subjects were inspected"}})
+			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Only returned subjects were inspected"}})
 	}
 	if len(selectors) == 0 {
 		schemas = []string{""}
@@ -99,19 +99,43 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 					return nil, err
 				}
 				table.Facets = append(table.Facets, facet)
+				feeds, err := source.readChangefeeds(ctx, path.Join(database, selected, name), description)
+				if err != nil {
+					return nil, err
+				}
+				feedFacet, err := schema.CaptureChangefeeds(table.Identity, feeds)
+				if err != nil {
+					return nil, err
+				}
+				table.Facets = append(table.Facets, feedFacet)
 				result.Tables = append(result.Tables, table)
 				observe(result, table.Facets)
 				for _, column := range table.Columns {
 					observe(result, column.Facets)
 				}
+			case Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP:
+				topic, err := source.describeTopic(ctx, path.Join(database, selected, name))
+				if err != nil {
+					return nil, err
+				}
+				if err := topicIdentity(topic, name); err != nil {
+					return nil, err
+				}
+				owner := &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: schema.TopicProperties, Name: name}
+				value, err := schema.CaptureTopic(owner, topic)
+				if err != nil {
+					return nil, err
+				}
+				result.NativeObjects = append(result.NativeObjects, value)
+				observe(result, []*protocol.Envelope{value})
 			default:
 				return nil, fmt.Errorf("YDB object kind %s needs an extracted reader", entry.GetType())
 			}
 			if proto.Size(result) > 3<<20 {
 				return nil, fmt.Errorf("YDB schema exceeds snapshot size limit")
 			}
-			if len(result.Tables) > 4096 {
-				return nil, fmt.Errorf("YDB schema read exceeds table limit")
+			if len(result.Tables)+len(result.NativeObjects) > 4096 {
+				return nil, fmt.Errorf("YDB schema read exceeds object limit")
 			}
 		}
 	}
@@ -120,6 +144,12 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 			return compared
 		}
 		return strings.Compare(a.Identity.Name, b.Identity.Name)
+	})
+	slices.SortFunc(result.NativeObjects, func(a, b *protocol.Envelope) int {
+		if order := strings.Compare(a.Owner.Schema, b.Owner.Schema); order != 0 {
+			return order
+		}
+		return strings.Compare(a.Owner.Name, b.Owner.Name)
 	})
 	if err := provider.ValidateSchema(result); err != nil {
 		return nil, err
@@ -163,9 +193,6 @@ func scopes(database string, selectors []string) ([]string, []*protocol.Inspecti
 func readTable(database, directory, name string, described *nativeprotocol.DescribeTableResult) (*protocol.Table, error) {
 	if described.GetSelf().GetName() != name || described.GetSelf().GetType() != Ydb_Scheme.Entry_TABLE {
 		return nil, fmt.Errorf("YDB listing and table description disagree")
-	}
-	if len(described.GetChangefeeds()) != 0 {
-		return nil, fmt.Errorf("YDB changefeeds require their child-object reader")
 	}
 	if _, replica := described.GetAttributes()["__async_replica"]; replica {
 		return nil, fmt.Errorf("YDB replica table requires its replication owner")

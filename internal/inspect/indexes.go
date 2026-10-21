@@ -34,8 +34,8 @@ func (s *source) readIndexes(ctx context.Context, tablePath string, table *descr
 			if err != nil {
 				return nil, fmt.Errorf("read YDB index implementation %s: %w", name, err)
 			}
-			if len(implementation.indexes) != 0 {
-				return nil, fmt.Errorf("nested indexes on a YDB index implementation table")
+			if len(implementation.indexes) != 0 || len(implementation.changefeeds) != 0 {
+				return nil, fmt.Errorf("nested child objects on a YDB index implementation table")
 			}
 			if implementation.table.GetSelf().GetName() != name || implementation.table.GetSelf().GetType() != Ydb_Scheme.Entry_TABLE {
 				return nil, fmt.Errorf("YDB index implementation identity changed")

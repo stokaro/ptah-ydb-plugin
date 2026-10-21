@@ -1,0 +1,102 @@
+// Native descriptions adapted from ydb-platform/ydb commit
+// 6006bfe4442d2064e7c06ed1719d438e36ca5bf8. See third_party/ydb/NOTICE.md.
+syntax = "proto3";
+package ptah.ydb.native;
+option go_package = "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol";
+import "protos/ydb_topic.proto";
+import "protos/ydb_table.proto";
+import "protos/ydb_scheme.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+message StreamingConsumerType {}
+
+message Consumer {
+    string name = 1;
+    bool important = 2;
+    google.protobuf.Timestamp read_from = 3;
+    reserved 4;
+    Ydb.Topic.SupportedCodecs supported_codecs = 5;
+    map<string, string> attributes = 6;
+    ConsumerStats consumer_stats = 7;
+    message ConsumerStats {
+        google.protobuf.Timestamp min_partitions_last_read_time = 1;
+        google.protobuf.Duration max_read_time_lag = 2;
+        google.protobuf.Duration max_write_time_lag = 3;
+        google.protobuf.Duration max_committed_time_lag = 5;
+        Ydb.Topic.MultipleWindowsStat bytes_read = 4;
+    }
+    optional google.protobuf.Duration availability_period = 8;
+    oneof consumer_type {
+        StreamingConsumerType streaming_consumer_type = 9;
+        // Shared consumers require a separate reader. Unknown arm 10 is refused.
+    }
+}
+
+message DescribeTopicResult {
+    Ydb.Scheme.Entry self = 1;
+    Ydb.Topic.PartitioningSettings partitioning_settings = 2;
+    repeated PartitionInfo partitions = 3;
+    google.protobuf.Duration retention_period = 4;
+    int64 retention_storage_mb = 5;
+    reserved 6;
+    Ydb.Topic.SupportedCodecs supported_codecs = 7;
+    int64 partition_write_speed_bytes_per_second = 8;
+    int64 partition_total_read_speed_bytes_per_second = 14;
+    int64 partition_consumer_read_speed_bytes_per_second = 15;
+    int64 partition_write_burst_bytes = 9;
+    map<string, string> attributes = 10;
+    repeated Consumer consumers = 11;
+    Ydb.Topic.MeteringMode metering_mode = 12;
+    TopicStats topic_stats = 13;
+    message PartitionInfo {
+        int64 partition_id = 1;
+        bool active = 2;
+        repeated int64 child_partition_ids = 3;
+        repeated int64 parent_partition_ids = 4;
+        Ydb.Topic.PartitionStats partition_stats = 5;
+        Ydb.Topic.PartitionLocation partition_location = 6;
+        Ydb.Topic.PartitionKeyRange key_range = 7;
+    }
+    message TopicStats {
+        int64 store_size_bytes = 1;
+        google.protobuf.Timestamp min_last_write_time = 2;
+        google.protobuf.Duration max_write_time_lag = 3;
+        Ydb.Topic.MultipleWindowsStat bytes_written = 4;
+    }
+    optional uint32 metrics_level = 16;
+}
+
+message ChangefeedDescription {
+    enum State {
+        STATE_UNSPECIFIED = 0;
+        STATE_ENABLED = 1;
+        STATE_DISABLED = 2;
+        STATE_INITIAL_SCAN = 3;
+    }
+    message InitialScanProgress {
+        uint32 parts_total = 1;
+        uint32 parts_completed = 2;
+    }
+    string name = 1;
+    Ydb.Table.ChangefeedMode.Mode mode = 2;
+    Ydb.Table.ChangefeedFormat.Format format = 3;
+    State state = 4;
+    bool virtual_timestamps = 5;
+    map<string, string> attributes = 6;
+    string aws_region = 7;
+    google.protobuf.Duration resolved_timestamps_interval = 8;
+    InitialScanProgress initial_scan_progress = 9;
+    bool schema_changes = 10;
+    bool user_sids = 11;
+}
+
+// Complete changefeed set for one table, with settings from each child topic.
+message ChangefeedObservations { repeated ObservedChangefeed changefeeds = 1; }
+message ObservedChangefeed {
+    ChangefeedDescription description = 1;
+    DescribeTopicResult topic = 2;
+    // Presence of the native initial_scan_progress records the requested scan
+    // even after it completes. Progress counters themselves are not schema.
+    bool initial_scan = 3;
+}

@@ -10,10 +10,12 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
+	"github.com/ydb-platform/ydb-go-genproto/Ydb_Topic_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Operations"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
 )
@@ -21,12 +23,13 @@ import (
 type source struct {
 	scheme  Ydb_Scheme_V1.SchemeServiceClient
 	table   Ydb_Table_V1.TableServiceClient
+	topic   Ydb_Topic_V1.TopicServiceClient
 	session string
 }
 
 func open(ctx context.Context, driver *ydb.Driver) (*source, error) {
 	conn := ydb.GRPCConn(driver)
-	s := &source{scheme: Ydb_Scheme_V1.NewSchemeServiceClient(conn), table: Ydb_Table_V1.NewTableServiceClient(conn)}
+	s := &source{scheme: Ydb_Scheme_V1.NewSchemeServiceClient(conn), table: Ydb_Table_V1.NewTableServiceClient(conn), topic: Ydb_Topic_V1.NewTopicServiceClient(conn)}
 	response, err := s.table.CreateSession(ctx, &Ydb_Table.CreateSessionRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("create inspection session: transport failed")
@@ -89,8 +92,9 @@ func (s *source) directory(ctx context.Context, path string) (*Ydb_Scheme.ListDi
 }
 
 type description struct {
-	table   *native.DescribeTableResult
-	indexes []*native.TableIndexDescription
+	table       *native.DescribeTableResult
+	indexes     []*native.TableIndexDescription
+	changefeeds []*native.ChangefeedDescription
 }
 
 func (s *source) describeTable(ctx context.Context, path string) (*description, error) {
@@ -112,13 +116,37 @@ func (s *source) describeTable(ctx context.Context, path string) (*description, 
 	if err := schema.Known(&result); err != nil {
 		return nil, err
 	}
-	if len(result.GetChangefeeds()) != 0 {
-		return nil, fmt.Errorf("YDB changefeeds require their child-object reader")
+	if err := schema.ValidateChangefeeds(result.Changefeeds); err != nil {
+		return nil, err
 	}
+	feeds := result.Changefeeds
+	result.Changefeeds = nil
 	indexes := result.Indexes
 	if err := schema.ValidateIndexes(indexes); err != nil {
 		return nil, err
 	}
 	result.Indexes = nil
-	return &description{table: &result, indexes: indexes}, nil
+	return &description{table: &result, indexes: indexes, changefeeds: feeds}, nil
+}
+
+func (s *source) describeTopic(ctx context.Context, path string) (*native.DescribeTopicResult, error) {
+	response, err := s.topic.DescribeTopic(ctx, &Ydb_Topic.DescribeTopicRequest{Path: path})
+	if err != nil {
+		return nil, fmt.Errorf("describe YDB topic: transport failed")
+	}
+	if err := operationStatus(response.GetOperation()); err != nil {
+		return nil, err
+	}
+	payload := response.GetOperation().GetResult()
+	if !payload.MessageIs(&Ydb_Topic.DescribeTopicResult{}) {
+		return nil, fmt.Errorf("invalid YDB topic response type")
+	}
+	var result native.DescribeTopicResult
+	if err := proto.Unmarshal(payload.GetValue(), &result); err != nil {
+		return nil, fmt.Errorf("invalid YDB topic response")
+	}
+	if err := schema.Known(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

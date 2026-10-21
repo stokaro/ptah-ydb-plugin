@@ -117,7 +117,7 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	normalized, err := client.NormalizeValues(ctx, values)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidateNormalizedInspection(client.Description(), request, snapshot, normalized), qt.IsNil)
-	c.Assert(len(normalized.Values), qt.Equals, 6)
+	c.Assert(len(normalized.Values), qt.Equals, 7)
 	c.Assert(client.CloseSession(ctx, session.Id), qt.IsNil)
 	// Captured observations remain usable after their database session closes.
 	again, err := client.NormalizeValues(ctx, values)
@@ -125,7 +125,7 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	c.Assert(string(again.Values[0].CanonicalProjection), qt.Equals, string(normalized.Values[0].CanonicalProjection))
 }
 
-func TestInspectionRefusesIncompleteAndEscapingScopes(t *testing.T) {
+func TestInspectionRefusesEscapingAndMissingScopes(t *testing.T) {
 	c := qt.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -140,9 +140,26 @@ func TestInspectionRefusesIncompleteAndEscapingScopes(t *testing.T) {
 		c.Assert(snapshot, qt.IsNil)
 		c.Assert(err, qt.IsNotNil)
 	}
-	_, err = opened.DB.ExecContext(ctx, "ALTER TABLE `"+path.Join(database, directory, "records")+"` ADD CHANGEFEED changes WITH (FORMAT = 'JSON', MODE = 'UPDATES')")
+}
+
+func TestInspectionRefusesUnmodeledObjectWithoutPartialSnapshot(t *testing.T) {
+	c := qt.New(t)
+	opened, directory, database := inspectionFixture(c)
+	createFixtureTable(c, opened, database, directory)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	view := path.Join(database, directory, "z_unmodeled")
+	_, err := opened.DB.ExecContext(ctx, "CREATE VIEW `"+view+"` WITH (security_invoker=TRUE) AS SELECT 1 AS id")
 	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_, err := opened.DB.ExecContext(cleanup, "DROP VIEW `"+view+"`")
+		c.Check(err, qt.IsNil)
+	})
+	// The supported records table sorts first. The later view must invalidate
+	// the whole snapshot, including the already captured table and its facets.
 	snapshot, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
 	c.Assert(snapshot, qt.IsNil)
-	c.Assert(err, qt.ErrorMatches, "YDB changefeeds require their child-object reader")
+	c.Assert(err, qt.ErrorMatches, "YDB object kind VIEW needs an extracted reader")
 }

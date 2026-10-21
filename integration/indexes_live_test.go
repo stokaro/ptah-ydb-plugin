@@ -75,7 +75,7 @@ func TestNativeIndexObservationsSubprocess(t *testing.T) {
 			snapshot, err := client.Inspect(ctx, request)
 			c.Assert(err, qt.IsNil)
 			table := snapshot.Tables[0]
-			c.Assert(table.Facets, qt.HasLen, 2)
+			c.Assert(table.Facets, qt.HasLen, 3)
 			c.Assert(table.Facets[1].Kind, qt.Equals, schema.IndexProperties)
 			var indexes native.IndexObservations
 			c.Assert(protojson.Unmarshal(table.Facets[1].Payload, &indexes), qt.IsNil)

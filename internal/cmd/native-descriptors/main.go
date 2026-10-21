@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	_ "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	_ "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"

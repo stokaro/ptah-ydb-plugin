@@ -17,6 +17,9 @@ func Known(value proto.Message) error {
 }
 
 func knownMessage(value protoreflect.Message) error {
+	if !value.IsValid() {
+		return fmt.Errorf("missing YDB description")
+	}
 	if len(value.GetUnknown()) != 0 {
 		return fmt.Errorf("unknown fields in %s", value.Descriptor().FullName())
 	}

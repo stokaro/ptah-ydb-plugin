@@ -1626,24 +1626,24 @@ func (*ColumnMeta_FromSequence) isColumnMeta_DefaultValue() {}
 func (*ColumnMeta_EmptyDefault) isColumnMeta_DefaultValue() {}
 
 type DescribeTableResult struct {
-	state                protoimpl.MessageState             `protogen:"open.v1"`
-	Self                 *Ydb_Scheme.Entry                  `protobuf:"bytes,1,opt,name=self,proto3" json:"self,omitempty"`
-	Columns              []*ColumnMeta                      `protobuf:"bytes,2,rep,name=columns,proto3" json:"columns,omitempty"`
-	PrimaryKey           []string                           `protobuf:"bytes,3,rep,name=primary_key,json=primaryKey,proto3" json:"primary_key,omitempty"`
-	ShardKeyBounds       []*Ydb.TypedValue                  `protobuf:"bytes,4,rep,name=shard_key_bounds,json=shardKeyBounds,proto3" json:"shard_key_bounds,omitempty"`
-	Indexes              []*TableIndexDescription           `protobuf:"bytes,5,rep,name=indexes,proto3" json:"indexes,omitempty"`
-	TableStats           *Ydb_Table.TableStats              `protobuf:"bytes,6,opt,name=table_stats,json=tableStats,proto3" json:"table_stats,omitempty"`
-	TtlSettings          *Ydb_Table.TtlSettings             `protobuf:"bytes,7,opt,name=ttl_settings,json=ttlSettings,proto3" json:"ttl_settings,omitempty"`
-	StorageSettings      *Ydb_Table.StorageSettings         `protobuf:"bytes,8,opt,name=storage_settings,json=storageSettings,proto3" json:"storage_settings,omitempty"`
-	ColumnFamilies       []*Ydb_Table.ColumnFamily          `protobuf:"bytes,9,rep,name=column_families,json=columnFamilies,proto3" json:"column_families,omitempty"`
-	Attributes           map[string]string                  `protobuf:"bytes,10,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	PartitioningSettings *Ydb_Table.PartitioningSettings    `protobuf:"bytes,12,opt,name=partitioning_settings,json=partitioningSettings,proto3" json:"partitioning_settings,omitempty"`
-	KeyBloomFilter       Ydb.FeatureFlag_Status             `protobuf:"varint,13,opt,name=key_bloom_filter,json=keyBloomFilter,proto3,enum=Ydb.FeatureFlag_Status" json:"key_bloom_filter,omitempty"`
-	ReadReplicasSettings *Ydb_Table.ReadReplicasSettings    `protobuf:"bytes,14,opt,name=read_replicas_settings,json=readReplicasSettings,proto3" json:"read_replicas_settings,omitempty"`
-	Changefeeds          []*Ydb_Table.ChangefeedDescription `protobuf:"bytes,15,rep,name=changefeeds,proto3" json:"changefeeds,omitempty"`
-	Tiering              string                             `protobuf:"bytes,16,opt,name=tiering,proto3" json:"tiering,omitempty"`
-	Temporary            bool                               `protobuf:"varint,17,opt,name=temporary,proto3" json:"temporary,omitempty"`
-	StoreType            Ydb_Table.StoreType                `protobuf:"varint,18,opt,name=store_type,json=storeType,proto3,enum=Ydb.Table.StoreType" json:"store_type,omitempty"`
+	state                protoimpl.MessageState          `protogen:"open.v1"`
+	Self                 *Ydb_Scheme.Entry               `protobuf:"bytes,1,opt,name=self,proto3" json:"self,omitempty"`
+	Columns              []*ColumnMeta                   `protobuf:"bytes,2,rep,name=columns,proto3" json:"columns,omitempty"`
+	PrimaryKey           []string                        `protobuf:"bytes,3,rep,name=primary_key,json=primaryKey,proto3" json:"primary_key,omitempty"`
+	ShardKeyBounds       []*Ydb.TypedValue               `protobuf:"bytes,4,rep,name=shard_key_bounds,json=shardKeyBounds,proto3" json:"shard_key_bounds,omitempty"`
+	Indexes              []*TableIndexDescription        `protobuf:"bytes,5,rep,name=indexes,proto3" json:"indexes,omitempty"`
+	TableStats           *Ydb_Table.TableStats           `protobuf:"bytes,6,opt,name=table_stats,json=tableStats,proto3" json:"table_stats,omitempty"`
+	TtlSettings          *Ydb_Table.TtlSettings          `protobuf:"bytes,7,opt,name=ttl_settings,json=ttlSettings,proto3" json:"ttl_settings,omitempty"`
+	StorageSettings      *Ydb_Table.StorageSettings      `protobuf:"bytes,8,opt,name=storage_settings,json=storageSettings,proto3" json:"storage_settings,omitempty"`
+	ColumnFamilies       []*Ydb_Table.ColumnFamily       `protobuf:"bytes,9,rep,name=column_families,json=columnFamilies,proto3" json:"column_families,omitempty"`
+	Attributes           map[string]string               `protobuf:"bytes,10,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	PartitioningSettings *Ydb_Table.PartitioningSettings `protobuf:"bytes,12,opt,name=partitioning_settings,json=partitioningSettings,proto3" json:"partitioning_settings,omitempty"`
+	KeyBloomFilter       Ydb.FeatureFlag_Status          `protobuf:"varint,13,opt,name=key_bloom_filter,json=keyBloomFilter,proto3,enum=Ydb.FeatureFlag_Status" json:"key_bloom_filter,omitempty"`
+	ReadReplicasSettings *Ydb_Table.ReadReplicasSettings `protobuf:"bytes,14,opt,name=read_replicas_settings,json=readReplicasSettings,proto3" json:"read_replicas_settings,omitempty"`
+	Changefeeds          []*ChangefeedDescription        `protobuf:"bytes,15,rep,name=changefeeds,proto3" json:"changefeeds,omitempty"`
+	Tiering              string                          `protobuf:"bytes,16,opt,name=tiering,proto3" json:"tiering,omitempty"`
+	Temporary            bool                            `protobuf:"varint,17,opt,name=temporary,proto3" json:"temporary,omitempty"`
+	StoreType            Ydb_Table.StoreType             `protobuf:"varint,18,opt,name=store_type,json=storeType,proto3,enum=Ydb.Table.StoreType" json:"store_type,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -1769,7 +1769,7 @@ func (x *DescribeTableResult) GetReadReplicasSettings() *Ydb_Table.ReadReplicasS
 	return nil
 }
 
-func (x *DescribeTableResult) GetChangefeeds() []*Ydb_Table.ChangefeedDescription {
+func (x *DescribeTableResult) GetChangefeeds() []*ChangefeedDescription {
 	if x != nil {
 		return x.Changefeeds
 	}
@@ -2109,7 +2109,7 @@ var File_internal_nativeprotocol_indexes_proto protoreflect.FileDescriptor
 
 const file_internal_nativeprotocol_indexes_proto_rawDesc = "" +
 	"\n" +
-	"%internal/nativeprotocol/indexes.proto\x12\x0fptah.ydb.native\x1a\x16protos/ydb_table.proto\x1a\x16protos/ydb_value.proto\x1a\x17protos/ydb_scheme.proto\x1a\x17protos/ydb_common.proto\x1a\x1cgoogle/protobuf/struct.proto\"\xce\x02\n" +
+	"%internal/nativeprotocol/indexes.proto\x12\x0fptah.ydb.native\x1a\x16protos/ydb_table.proto\x1a$internal/nativeprotocol/topics.proto\x1a\x16protos/ydb_value.proto\x1a\x17protos/ydb_scheme.proto\x1a\x17protos/ydb_common.proto\x1a\x1cgoogle/protobuf/struct.proto\"\xce\x02\n" +
 	"\x13GlobalIndexSettings\x12/\n" +
 	"\x12uniform_partitions\x18\x01 \x01(\x04H\x00R\x11uniformPartitions\x12K\n" +
 	"\x11partition_at_keys\x18\x02 \x01(\v2\x1d.Ydb.Table.ExplicitPartitionsH\x00R\x0fpartitionAtKeys\x12T\n" +
@@ -2300,7 +2300,7 @@ const file_internal_nativeprotocol_indexes_proto_rawDesc = "" +
 	"\bencoding\x18\t \x03(\v2\x1f.ptah.ydb.native.ColumnEncodingR\bencodingB\x0f\n" +
 	"\rdefault_valueB\v\n" +
 	"\t_not_nullB\x0e\n" +
-	"\f_compression\"\xc9\b\n" +
+	"\f_compression\"\xcf\b\n" +
 	"\x13DescribeTableResult\x12%\n" +
 	"\x04self\x18\x01 \x01(\v2\x11.Ydb.Scheme.EntryR\x04self\x125\n" +
 	"\acolumns\x18\x02 \x03(\v2\x1b.ptah.ydb.native.ColumnMetaR\acolumns\x12\x1f\n" +
@@ -2319,8 +2319,8 @@ const file_internal_nativeprotocol_indexes_proto_rawDesc = "" +
 	"attributes\x12T\n" +
 	"\x15partitioning_settings\x18\f \x01(\v2\x1f.Ydb.Table.PartitioningSettingsR\x14partitioningSettings\x12A\n" +
 	"\x10key_bloom_filter\x18\r \x01(\x0e2\x17.Ydb.FeatureFlag.StatusR\x0ekeyBloomFilter\x12U\n" +
-	"\x16read_replicas_settings\x18\x0e \x01(\v2\x1f.Ydb.Table.ReadReplicasSettingsR\x14readReplicasSettings\x12B\n" +
-	"\vchangefeeds\x18\x0f \x03(\v2 .Ydb.Table.ChangefeedDescriptionR\vchangefeeds\x12\x18\n" +
+	"\x16read_replicas_settings\x18\x0e \x01(\v2\x1f.Ydb.Table.ReadReplicasSettingsR\x14readReplicasSettings\x12H\n" +
+	"\vchangefeeds\x18\x0f \x03(\v2&.ptah.ydb.native.ChangefeedDescriptionR\vchangefeeds\x12\x18\n" +
 	"\atiering\x18\x10 \x01(\tR\atiering\x12\x1c\n" +
 	"\ttemporary\x18\x11 \x01(\bR\ttemporary\x123\n" +
 	"\n" +
@@ -2386,7 +2386,7 @@ var file_internal_nativeprotocol_indexes_proto_goTypes = []any{
 	(*Ydb_Table.StorageSettings)(nil),             // 39: Ydb.Table.StorageSettings
 	(*Ydb_Table.ColumnFamily)(nil),                // 40: Ydb.Table.ColumnFamily
 	(Ydb.FeatureFlag_Status)(0),                   // 41: Ydb.FeatureFlag.Status
-	(*Ydb_Table.ChangefeedDescription)(nil),       // 42: Ydb.Table.ChangefeedDescription
+	(*ChangefeedDescription)(nil),                 // 42: ptah.ydb.native.ChangefeedDescription
 	(Ydb_Table.StoreType)(0),                      // 43: Ydb.Table.StoreType
 }
 var file_internal_nativeprotocol_indexes_proto_depIdxs = []int32{
@@ -2445,7 +2445,7 @@ var file_internal_nativeprotocol_indexes_proto_depIdxs = []int32{
 	31, // 52: ptah.ydb.native.DescribeTableResult.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
 	41, // 53: ptah.ydb.native.DescribeTableResult.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
 	32, // 54: ptah.ydb.native.DescribeTableResult.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
-	42, // 55: ptah.ydb.native.DescribeTableResult.changefeeds:type_name -> Ydb.Table.ChangefeedDescription
+	42, // 55: ptah.ydb.native.DescribeTableResult.changefeeds:type_name -> ptah.ydb.native.ChangefeedDescription
 	43, // 56: ptah.ydb.native.DescribeTableResult.store_type:type_name -> Ydb.Table.StoreType
 	2,  // 57: ptah.ydb.native.FulltextIndexSettings.Analyzers.tokenizer:type_name -> ptah.ydb.native.FulltextIndexSettings.Tokenizer
 	24, // 58: ptah.ydb.native.FulltextIndexSettings.ColumnAnalyzers.analyzers:type_name -> ptah.ydb.native.FulltextIndexSettings.Analyzers
@@ -2461,6 +2461,7 @@ func file_internal_nativeprotocol_indexes_proto_init() {
 	if File_internal_nativeprotocol_indexes_proto != nil {
 		return
 	}
+	file_internal_nativeprotocol_topics_proto_init()
 	file_internal_nativeprotocol_indexes_proto_msgTypes[0].OneofWrappers = []any{
 		(*GlobalIndexSettings_UniformPartitions)(nil),
 		(*GlobalIndexSettings_PartitionAtKeys)(nil),
