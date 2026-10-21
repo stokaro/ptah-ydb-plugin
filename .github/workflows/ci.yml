@@ -55,7 +55,6 @@ jobs:
     env:
       GOWORK: 'off'
       PTAH_YDB_TEST_URL: ydb://127.0.0.1:2136/local?go_balancer=disable
-      PTAH_HOST_TEST_BIN: ${{ runner.temp }}/ptah-contract
     services:
       ydb:
         image: ${{ matrix.image }}
@@ -82,5 +81,8 @@ jobs:
           ref: 4f1e8d7eb83b7e4ce68b96c7a49d933bbb5a38ed
           path: .host-contract
       - name: Build the external host binary
-        run: CGO_ENABLED=0 go build -C .host-contract -o "$PTAH_HOST_TEST_BIN" ./cmd/ptah
+        run: |
+          host_binary="$RUNNER_TEMP/ptah-contract"
+          CGO_ENABLED=0 go build -C .host-contract -o "$host_binary" ./cmd/ptah
+          printf 'PTAH_HOST_TEST_BIN=%s\n' "$host_binary" >> "$GITHUB_ENV"
       - run: go test -race -tags integration ./integration -count=1 -v
