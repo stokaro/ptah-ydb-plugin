@@ -76,7 +76,7 @@ The host and provider were built against the published SDK revision 21 pin
 with `GOWORK=off`. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
 Host `schema inspect --format json` still refuses observed row-table facets
-without desired model conversion, including column properties. The native
+without desired model conversion for every covered model kind. Column property conversion is available; table and child-object conversion remain incomplete. The native
 inspection service retains those observations; export and table comparison
 require further model support.
 
@@ -345,7 +345,7 @@ statistics are excluded. A missing child description refuses the entire read.
 
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
-Other desired models, their comparisons, and planning remain pending.
+Desired column properties and their offline conversions are also available. Other desired models, column comparison, and column planning remain pending.
 
 Views retain the query returned by the view service and the attributes read
 through the table service on the same path. This includes comments and custom
@@ -440,6 +440,29 @@ undecided lifecycle diagnostic; its name does not prove provider ownership.
 Offline subprocess tests cover decode, compare, and change normalization without
 opening a session. Live tests compare native observations after closing their
 session on both qualified YDB lines.
+
+## Offline column declarations
+
+The `values.convert` service converts column properties between distinct typed
+observed and desired models. It preserves family assignment, typed literal
+defaults, sequence configuration, compression settings, and encoding order.
+Identity, storage type, and nullability remain in the common column contract.
+An omitted default requests the native no-default setting and stays omitted
+during normalization; `dropDefault: true` expresses removal explicitly.
+Unknown fields, unknown enums, duplicate keys, null settings, and overlapping
+defaults are refused. Explicit sequence configuration retains optional values,
+including `cycle: false`.
+
+Sequence positions are mutable data. An observation containing `setVal` refuses
+conversion rather than exporting a request to reset the sequence. Conversion
+validates the source payload and its captured normalization, retains exact owner
+identity and ordered records, and returns no prefix on failure or cancellation.
+It opens no connection and establishes no inspection coverage.
+
+This supports column-property transport and export semantics. Complete schema
+export still requires desired models for every covered kind, including table
+properties, indexes, and changefeeds. Column comparison and planning are not
+advertised by this implementation.
 
 ## Offline column-storage observations
 

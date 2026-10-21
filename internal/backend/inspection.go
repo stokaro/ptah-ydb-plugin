@@ -79,7 +79,7 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 			value, err = schema.Normalize(input.GetValue())
 		case protocol.ValueInput_DESIRED:
 			value, err = schema.NormalizeDesired(input.GetValue())
-			format = schema.CoordinationDesiredModel().CanonicalFormat
+			format = input.GetValue().GetKind() + "/desired-json-v1"
 		default:
 			return nil, status.Error(codes.InvalidArgument, "unsupported YDB model representation")
 		}

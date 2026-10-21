@@ -201,20 +201,10 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	if value.GetProviderId() != ProviderID || value.GetSchemaVersion() != 1 || value.GetEncoding() != definition.Encoding || value.GetDefinitionSha256() != definition.DefinitionSha256 {
 		return nil, fmt.Errorf("YDB observation does not match its negotiated definition")
 	}
+	if err := validateModelOwner(value, true); err != nil {
+		return nil, err
+	}
 	owner := value.GetOwner()
-	expected := "table"
-	if IsNativeObject(value.GetKind()) {
-		expected = value.GetKind()
-	}
-	if value.GetKind() == ColumnProperties {
-		expected = "column"
-	}
-	if owner.GetEngine() != "ydb" || owner.GetKind() != expected || owner.GetName() == "" || owner.GetDatabase() == "" || owner.GetCatalog() != "" || len(owner.GetOverload()) != 0 {
-		return nil, fmt.Errorf("invalid YDB observation owner")
-	}
-	if (expected != "column" && len(owner.GetPath()) != 0) || (expected == "column" && len(owner.GetPath()) != 1) {
-		return nil, fmt.Errorf("invalid YDB observation owner path")
-	}
 	if err := protojson.Unmarshal(value.GetPayload(), target); err != nil {
 		return nil, fmt.Errorf("invalid YDB observation JSON")
 	}
@@ -287,5 +277,23 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
+	return append(ObservedModels(), ColumnDesiredModel(), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
+}
+
+func validateModelOwner(value *protocol.Envelope, requireDatabase bool) error {
+	owner := value.GetOwner()
+	expected := "table"
+	if IsNativeObject(value.GetKind()) {
+		expected = value.GetKind()
+	}
+	if value.GetKind() == ColumnProperties {
+		expected = "column"
+	}
+	if owner.GetEngine() != "ydb" || owner.GetKind() != expected || owner.GetName() == "" || (requireDatabase && owner.GetDatabase() == "") || owner.GetCatalog() != "" || len(owner.GetOverload()) != 0 {
+		return fmt.Errorf("invalid YDB observation owner")
+	}
+	if (expected != "column" && len(owner.GetPath()) != 0) || (expected == "column" && len(owner.GetPath()) != 1) {
+		return fmt.Errorf("invalid YDB observation owner path")
+	}
+	return nil
 }
