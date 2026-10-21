@@ -35,11 +35,11 @@ func TestNativeStreamsSubprocess(t *testing.T) {
 	if newer {
 		options += ", USER_SIDS=TRUE, SCHEMA_CHANGES=TRUE"
 	}
-	_, err := opened.DB.ExecContext(ctx, "ALTER TABLE `"+table+"` ADD CHANGEFEED z_events WITH ("+options+")")
+	err := execFixtureSchema(ctx, opened.DB, "ALTER TABLE `"+table+"` ADD CHANGEFEED z_events WITH ("+options+")")
 	c.Assert(err, qt.IsNil)
-	_, err = opened.DB.ExecContext(ctx, "ALTER TABLE `"+table+"` ADD CHANGEFEED a_audit WITH (MODE='NEW_AND_OLD_IMAGES',FORMAT='DEBEZIUM_JSON')")
+	err = execFixtureSchema(ctx, opened.DB, "ALTER TABLE `"+table+"` ADD CHANGEFEED a_audit WITH (MODE='NEW_AND_OLD_IMAGES',FORMAT='DEBEZIUM_JSON')")
 	c.Assert(err, qt.IsNil)
-	_, err = opened.DB.ExecContext(ctx, "ALTER TOPIC `"+table+"/z_events` ADD CONSUMER z_plain, ADD CONSUMER a_billing WITH (important=TRUE,read_from=Timestamp('2026-01-01T00:00:00Z'),supported_codecs='raw,gzip')")
+	err = execFixtureSchema(ctx, opened.DB, "ALTER TOPIC `"+table+"/z_events` ADD CONSUMER z_plain, ADD CONSUMER a_billing WITH (important=TRUE,read_from=Timestamp('2026-01-01T00:00:00Z'),supported_codecs='raw,gzip')")
 	c.Assert(err, qt.IsNil)
 	topicPath := path.Join(database, directory, "order.events")
 	_, err = opened.DB.ExecContext(ctx, "CREATE TOPIC `"+topicPath+"` (CONSUMER z_plain,CONSUMER a_billing WITH (important=TRUE)) WITH (min_active_partitions=2,retention_period=Interval('PT36H'),partition_write_speed_bytes_per_second=2097152,partition_write_burst_bytes=3145728,supported_codecs='raw,gzip')")

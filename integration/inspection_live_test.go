@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"fmt"
 	"os"
 	"path"
@@ -19,6 +20,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -53,9 +55,27 @@ func createFixtureTable(c *qt.C, opened *connection.Connection, database, direct
 	c.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		_, err := opened.DB.ExecContext(cleanup, "DROP TABLE `"+table+"`")
+		err := execFixtureSchema(cleanup, opened.DB, "DROP TABLE `"+table+"`")
 		c.Check(err, qt.IsNil)
 	})
+}
+
+// execFixtureSchema waits only after an explicit rejection of a schema change
+// while an earlier change is still running. A successful changefeed creation
+// can return before YDB releases the table's schema operation. Transport errors
+// and uncertain outcomes must not replay DDL, even during fixture setup.
+func execFixtureSchema(ctx context.Context, db *sql.DB, statement string) error {
+	for {
+		_, err := db.ExecContext(ctx, statement)
+		if !ydb.IsOperationErrorOverloaded(err) || !strings.Contains(err.Error(), "path is under operation") {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 func TestRowTableInspectionSubprocess(t *testing.T) {
