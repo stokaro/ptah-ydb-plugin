@@ -8,6 +8,7 @@ import (
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -93,6 +94,11 @@ func CaptureIndexes(owner *protocol.Reference, observed *native.IndexObservation
 			if table == nil || table.Description == nil {
 				return nil, fmt.Errorf("missing YDB index implementation observation")
 			}
+			for _, column := range table.Description.Columns {
+				if sequence := column.GetFromSequence(); sequence != nil {
+					sequence.SetVal = nil
+				}
+			}
 			table.Description.TableStats = nil
 			if self := table.Description.Self; self != nil {
 				self.Name = ""
@@ -154,10 +160,17 @@ func validateImplementation(table *native.DescribeTableResult) error {
 	if table.GetTableStats() != nil || table.GetSelf().GetName() != "" || table.GetSelf().GetType() != 0 || table.GetSelf().GetSizeBytes() != 0 || table.GetSelf().GetCreatedAt() != nil {
 		return fmt.Errorf("index implementation properties contain transient metadata")
 	}
+	if table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED && table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_ROW {
+		return fmt.Errorf("index implementation requires row storage")
+	}
+	table.StoreType = Ydb_Table.StoreType_STORE_TYPE_ROW
 	columns := map[string]bool{}
 	for _, column := range table.GetColumns() {
 		if column.GetName() == "" || columns[column.GetName()] {
 			return fmt.Errorf("invalid YDB index implementation column")
+		}
+		if column.GetFromSequence().GetSetVal() != nil {
+			return fmt.Errorf("index implementation contains a runtime sequence position")
 		}
 		columns[column.GetName()] = true
 		if _, _, err := ColumnType(column.GetType()); err != nil {

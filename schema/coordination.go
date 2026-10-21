@@ -138,6 +138,9 @@ func NormalizeDesired(value *protocol.Envelope) (*protocol.Envelope, error) {
 	if value.GetKind() == ColumnProperties {
 		return normalizeColumnIntent(value)
 	}
+	if childMessage(value.GetKind()) != nil {
+		return normalizeChildIntent(value)
+	}
 	model := CoordinationDesiredModel()
 	if value.GetProviderId() != ProviderID || value.GetKind() != model.Kind || value.GetSchemaVersion() != model.SchemaVersion ||
 		value.GetEncoding() != model.Encoding || value.GetDefinitionSha256() != model.DefinitionSha256 {

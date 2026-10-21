@@ -187,18 +187,7 @@ func tableIntent(observed *native.DescribeTableResult) *native.RowTableIntent {
 		result.ColumnFamilies = append(result.ColumnFamilies, proto.CloneOf(family))
 	}
 	result.Attributes = maps.Clone(observed.Attributes)
-	if self := observed.Self; self != nil {
-		result.Access = &native.AccessIntent{}
-		if self.Owner != "" {
-			result.Access.Owner = proto.String(self.Owner)
-		}
-		for _, grant := range self.Permissions {
-			result.Access.DirectGrants = append(result.Access.DirectGrants, proto.CloneOf(grant))
-		}
-		for _, grant := range self.EffectivePermissions {
-			result.Access.RequiredEffectivePermissions = append(result.Access.RequiredEffectivePermissions, proto.CloneOf(grant))
-		}
-	}
+	result.Access = accessIntent(observed.Self)
 	return result
 }
 
@@ -211,14 +200,6 @@ func tableObservation(intent *native.RowTableIntent) *native.DescribeTableResult
 		result.ColumnFamilies = append(result.ColumnFamilies, proto.CloneOf(family))
 	}
 	result.Attributes = maps.Clone(intent.Attributes)
-	if access := intent.Access; access != nil {
-		result.Self = &Ydb_Scheme.Entry{Owner: access.GetOwner()}
-		for _, grant := range access.DirectGrants {
-			result.Self.Permissions = append(result.Self.Permissions, proto.CloneOf(grant))
-		}
-		for _, grant := range access.RequiredEffectivePermissions {
-			result.Self.EffectivePermissions = append(result.Self.EffectivePermissions, proto.CloneOf(grant))
-		}
-	}
+	result.Self = accessObservation(intent.Access)
 	return result
 }

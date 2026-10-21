@@ -96,6 +96,9 @@ func buildModel(kind string) *protocol.ValueModel {
 		"native_objects":          "retain view query plus table API attributes; coordination config except duplicate path; external source options and ordered external columns; transient self identity excluded",
 		"index_observations":      "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
 	}
+	if kind == IndexProperties {
+		definition["implementation_state"] = "internal sequence positions excluded after unknown-field validation; row storage canonicalized; sequence configuration retained"
+	}
 	if kind == TableProperties {
 		definition["row_storage"] = "unspecified storage on a row-table observation normalizes to STORE_TYPE_ROW"
 	}
@@ -281,7 +284,7 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
+	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), ChildDesiredModel(IndexProperties), ChildDesiredModel(ChangefeedProperties), ChildDesiredModel(TopicProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
 }
 
 func validateModelOwner(value *protocol.Envelope, requireDatabase bool) error {
