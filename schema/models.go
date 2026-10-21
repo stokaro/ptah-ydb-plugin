@@ -11,6 +11,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -29,7 +30,7 @@ const (
 // Models returns fresh definitions for the supported observed models. Desired
 // models are not enrolled until their decoding and comparison are implemented.
 func Models() []*protocol.ValueModel {
-	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties)}
+	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties)}
 }
 
 func message(kind string) proto.Message {
@@ -44,6 +45,14 @@ func message(kind string) proto.Message {
 		return &native.ChangefeedObservations{}
 	case TopicProperties:
 		return &native.DescribeTopicResult{}
+	case ViewProperties:
+		return &native.ViewObservation{}
+	case CoordinationProperties:
+		return &Ydb_Coordination.DescribeNodeResult{}
+	case ExternalSourceProperties:
+		return &Ydb_Table.DescribeExternalDataSourceResult{}
+	case ExternalTableProperties:
+		return &native.DescribeExternalTableResult{}
 	default:
 		return nil
 	}
@@ -61,6 +70,7 @@ func excluded(kind string) []string {
 
 var definitions = map[string]*protocol.ValueModel{
 	TableProperties: buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties), ChangefeedProperties: buildModel(ChangefeedProperties), TopicProperties: buildModel(TopicProperties),
+	ViewProperties: buildModel(ViewProperties), CoordinationProperties: buildModel(CoordinationProperties), ExternalSourceProperties: buildModel(ExternalSourceProperties), ExternalTableProperties: buildModel(ExternalTableProperties),
 }
 
 func model(kind string) *protocol.ValueModel { return proto.CloneOf(definitions[kind]) }
@@ -79,6 +89,7 @@ func buildModel(kind string) *protocol.ValueModel {
 		"not_observed":            []string{"column_storage", "shared_topic_consumers"},
 		"topic_observations":      "retain topic and consumer configuration, attributes and access metadata; omit partitions, topic/consumer stats and transient self fields; consumers sorted by name",
 		"changefeed_observations": "complete feed set per table sorted by name; each feed includes its child topic settings; initial scan presence retained, progress counters excluded",
+		"native_objects":          "retain view query plus table API attributes; coordination config except duplicate path; external source options and ordered external columns; transient self identity excluded",
 		"index_observations":      "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
 	}
 	encoded, err := json.Marshal(definition)
@@ -184,8 +195,8 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	}
 	owner := value.GetOwner()
 	expected := "table"
-	if value.GetKind() == TopicProperties {
-		expected = TopicProperties
+	if IsNativeObject(value.GetKind()) {
+		expected = value.GetKind()
 	}
 	if value.GetKind() == ColumnProperties {
 		expected = "column"
@@ -215,8 +226,8 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 			return nil, err
 		}
 	}
-	if topic, ok := target.(*native.DescribeTopicResult); ok {
-		if err := normalizeTopic(topic); err != nil {
+	if IsNativeObject(value.GetKind()) {
+		if err := normalizeObject(target); err != nil {
 			return nil, err
 		}
 	}

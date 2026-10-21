@@ -22,3 +22,9 @@ The changefeed description comes from the table protocol cited above. The
 shared-consumer arm is omitted and refused as unknown. Ptah-owned observation
 messages pair each changefeed with its child topic and retain initial scan
 presence without runtime progress counters.
+
+The external-table description in `internal/nativeprotocol/objects.proto` is
+adapted from the same table protocol, using the provider's complete column
+grammar. `ViewObservation` is a Ptah-owned composition of the view and table
+API descriptions. View and coordination API descriptors otherwise come from
+the Go dependency pinned in `go.mod`.

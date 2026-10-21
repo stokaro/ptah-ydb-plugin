@@ -46,7 +46,7 @@ func nativeFeed(name string) *native.ObservedChangefeed {
 func TestTopicObservationPreservesSettingsAndOmitsRuntimeState(t *testing.T) {
 	c := qt.New(t)
 	input := nativeTopic()
-	result, err := schema.CaptureTopic(topicOwner(), input)
+	result, err := schema.CaptureObject(topicOwner(), input)
 	c.Assert(err, qt.IsNil)
 	var decoded native.DescribeTopicResult
 	c.Assert(protojson.Unmarshal(result.Payload, &decoded), qt.IsNil)
@@ -94,7 +94,7 @@ func TestChangefeedsRetainScanProvenanceAndOwnershipAttributes(t *testing.T) {
 
 func TestStreamModelsRefuseIncompleteAndRuntimePayloads(t *testing.T) {
 	c := qt.New(t)
-	topic, err := schema.CaptureTopic(topicOwner(), nativeTopic())
+	topic, err := schema.CaptureObject(topicOwner(), nativeTopic())
 	c.Assert(err, qt.IsNil)
 	feeds, err := schema.CaptureChangefeeds(tableOwner(), &native.ChangefeedObservations{})
 	c.Assert(err, qt.IsNil)
@@ -134,7 +134,7 @@ func TestUnknownConsumerArmsAndNestedMissingMessagesCannotDisappear(t *testing.T
 	}{{"shared consumer", shared}, {"nil consumer", missing}} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
-			value, err := schema.CaptureTopic(topicOwner(), test.value)
+			value, err := schema.CaptureObject(topicOwner(), test.value)
 			c.Assert(value, qt.IsNil)
 			c.Assert(err, qt.IsNotNil)
 		})

@@ -8,9 +8,11 @@ import (
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
+	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Topic_V1"
+	"github.com/ydb-platform/ydb-go-genproto/draft/Ydb_View_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Operations"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -21,15 +23,17 @@ import (
 )
 
 type source struct {
-	scheme  Ydb_Scheme_V1.SchemeServiceClient
-	table   Ydb_Table_V1.TableServiceClient
-	topic   Ydb_Topic_V1.TopicServiceClient
-	session string
+	scheme       Ydb_Scheme_V1.SchemeServiceClient
+	table        Ydb_Table_V1.TableServiceClient
+	topic        Ydb_Topic_V1.TopicServiceClient
+	view         Ydb_View_V1.ViewServiceClient
+	coordination Ydb_Coordination_V1.CoordinationServiceClient
+	session      string
 }
 
 func open(ctx context.Context, driver *ydb.Driver) (*source, error) {
 	conn := ydb.GRPCConn(driver)
-	s := &source{scheme: Ydb_Scheme_V1.NewSchemeServiceClient(conn), table: Ydb_Table_V1.NewTableServiceClient(conn), topic: Ydb_Topic_V1.NewTopicServiceClient(conn)}
+	s := &source{scheme: Ydb_Scheme_V1.NewSchemeServiceClient(conn), table: Ydb_Table_V1.NewTableServiceClient(conn), topic: Ydb_Topic_V1.NewTopicServiceClient(conn), view: Ydb_View_V1.NewViewServiceClient(conn), coordination: Ydb_Coordination_V1.NewCoordinationServiceClient(conn)}
 	response, err := s.table.CreateSession(ctx, &Ydb_Table.CreateSessionRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("create inspection session: transport failed")

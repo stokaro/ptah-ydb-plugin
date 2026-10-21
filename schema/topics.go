@@ -18,17 +18,6 @@ const (
 	ChangefeedProperties = "ydb.table-changefeeds"
 )
 
-// CaptureTopic retains topic and consumer configuration while excluding live
-// partition topology and statistics. The envelope owns the topic identity.
-func CaptureTopic(owner *protocol.Reference, described *native.DescribeTopicResult) (*protocol.Envelope, error) {
-	if err := Known(described); err != nil {
-		return nil, err
-	}
-	projected := proto.CloneOf(described)
-	projectTopic(projected)
-	return capture(TopicProperties, owner, projected)
-}
-
 func projectTopic(topic *native.DescribeTopicResult) {
 	topic.Partitions = nil
 	topic.TopicStats = nil

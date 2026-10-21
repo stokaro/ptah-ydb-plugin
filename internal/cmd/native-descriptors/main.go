@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	_ "github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
 	_ "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	_ "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/proto"
@@ -29,11 +30,15 @@ func run() error {
 	set := &descriptorpb.FileDescriptorSet{}
 	protoregistry.GlobalFiles.RangeFiles(func(file protoreflect.FileDescriptor) bool {
 		definition := protodesc.ToFileDescriptorProto(file)
-		if strings.HasPrefix(file.Path(), "protos/") {
+		prefix := "protos/"
+		if strings.HasPrefix(file.Path(), "draft/protos/") {
+			prefix = "draft/protos/"
+		}
+		if strings.HasPrefix(file.Path(), prefix) {
 			if definition.Options == nil {
 				definition.Options = &descriptorpb.FileOptions{}
 			}
-			definition.Options.GoPackage = proto.String("github.com/ydb-platform/ydb-go-genproto/protos/" + strings.ReplaceAll(string(file.Package()), ".", "_"))
+			definition.Options.GoPackage = proto.String("github.com/ydb-platform/ydb-go-genproto/" + prefix + strings.ReplaceAll(string(file.Package()), ".", "_"))
 		}
 		set.File = append(set.File, definition)
 		return true

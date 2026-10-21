@@ -1,8 +1,9 @@
 # Ptah YDB provider
 
 This repository owns the executable YDB provider for [Ptah #4204](https://github.com/stokaro/ptah/issues/4204).
-It is under development. Row-table, index, changefeed, and topic inspection is available; schema planning
-and migration execution are not implemented yet.
+It is under development. Inspection covers row tables and their indexes and
+changefeeds, topics, views, coordination nodes, external data sources, and
+external tables. Schema planning and migration execution are not implemented yet.
 
 The executable opens native YDB connections and reads row-table schemas
 through the public Ptah SDK. It supports anonymous, URL user/password, and URL token authentication.
@@ -30,13 +31,15 @@ PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
   GOWORK=off go test -race -tags integration ./integration -count=1 -v
 ```
 
-The test servers enable `enable_vector_index`; the 26.2 fixture also enables
+The test servers enable `enable_vector_index` and
+`enable_external_data_sources`; the 26.2 fixture also enables
 `enable_add_unique_index`. Fulltext creation is expected to be refused on 25.1.
 
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
 host-module imports and local module replacements. These checks cover sessions, native row-table observations, offline
 normalization, index implementation tables, changefeed consumers and retention,
-standalone topics, and refusals for incomplete reads. They do not establish
+standalone native objects, exact-directory completeness, and refusals for
+incomplete reads. They do not establish
 planning or migration support.
 
 ## Connection addresses
@@ -56,7 +59,7 @@ provider process when that bound is reached.
 
 ## Schema observations
 
-Inspection reads the native scheme, table, and topic APIs. Common columns preserve
+Inspection reads the native scheme, table, topic, view, and coordination APIs. Common columns preserve
 YDB type spelling, Decimal precision/scale, nullability, and key membership.
 Provider-owned table properties retain key order, TTL, column families,
 partitioning, storage settings, attributes, and access metadata. Column
@@ -68,8 +71,12 @@ Schema selectors name exact directories relative to the selected database.
 Use `/` for its root. An unfiltered read walks subdirectories. System
 (dot-prefixed) directories are excluded; user tables are not excluded merely
 because their names begin with a dot. Traversal and snapshot size are bounded.
-Coverage names the inspected subjects only; it does not claim native-object
-absence outside those subjects.
+Coverage names inspected subjects and records native-object completeness for
+each directory whose listing and child reads finished. These regions bind the
+exact database, empty catalog, and exact schema directory. An empty directory
+therefore establishes native-object absence there. Unread descendants, excluded
+system directories, and other namespaces remain unknown. Table and column
+facets keep subject-only coverage.
 
 Unknown native fields and enum values are refused before JSON conversion.
 Shared topic consumers, column tables, unextracted native object kinds, and
@@ -101,6 +108,14 @@ statistics are excluded. A missing child description refuses the entire read.
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired models, semantic
 comparisons, and planning are still pending.
+
+Views retain the query returned by the view service and the attributes read
+through the table service on the same path. This includes comments and custom
+attributes. Coordination nodes retain native consistency modes, timing, and
+counter configuration; the envelope owns the node path. External data sources
+retain source type, location, authentication references, and native properties.
+External tables retain source references, location, ordered typed columns, and
+content options without rewriting their native keys or JSON values.
 
 ## Native protocol generation
 

@@ -1,0 +1,25 @@
+// Provider observations compose native descriptions without host schema types.
+syntax = "proto3";
+package ptah.ydb.native;
+option go_package = "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol";
+import "draft/protos/ydb_view.proto";
+import "protos/ydb_scheme.proto";
+import "internal/nativeprotocol/indexes.proto";
+
+// The view service owns query and access metadata; the table service owns
+// attributes (including comments) on the same path.
+message ViewObservation {
+    Ydb.View.DescribeViewResult view = 1;
+    DescribeTableResult properties = 2;
+}
+
+// Adapted from the pinned YDB table protocol cited in third_party/ydb/NOTICE.md.
+// Use the provider's complete native column grammar in external tables too.
+message DescribeExternalTableResult {
+    Ydb.Scheme.Entry self = 1;
+    optional string source_type = 2;
+    optional string data_source_path = 3;
+    optional string location = 4;
+    repeated ColumnMeta columns = 5;
+    map<string, string> content = 6;
+}

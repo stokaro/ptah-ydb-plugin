@@ -148,18 +148,18 @@ func TestInspectionRefusesUnmodeledObjectWithoutPartialSnapshot(t *testing.T) {
 	createFixtureTable(c, opened, database, directory)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	view := path.Join(database, directory, "z_unmodeled")
-	_, err := opened.DB.ExecContext(ctx, "CREATE VIEW `"+view+"` WITH (security_invoker=TRUE) AS SELECT 1 AS id")
+	unsupported := path.Join(database, directory, "z_unmodeled")
+	_, err := opened.DB.ExecContext(ctx, "CREATE TABLE `"+unsupported+"` (id Int64 NOT NULL, PRIMARY KEY(id)) PARTITION BY HASH(id) WITH (STORE=COLUMN)")
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		_, err := opened.DB.ExecContext(cleanup, "DROP VIEW `"+view+"`")
+		_, err := opened.DB.ExecContext(cleanup, "DROP TABLE `"+unsupported+"`")
 		c.Check(err, qt.IsNil)
 	})
-	// The supported records table sorts first. The later view must invalidate
+	// The supported records table sorts first. The later column table must invalidate
 	// the whole snapshot, including the already captured table and its facets.
 	snapshot, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
 	c.Assert(snapshot, qt.IsNil)
-	c.Assert(err, qt.ErrorMatches, "YDB object kind VIEW needs an extracted reader")
+	c.Assert(err, qt.ErrorMatches, "YDB object kind COLUMN_TABLE needs an extracted reader")
 }

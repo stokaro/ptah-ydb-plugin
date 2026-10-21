@@ -40,7 +40,7 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 		Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}}
 	for _, model := range schema.Models() {
 		result.Coverage.Kinds = append(result.Coverage.Kinds, &protocol.ModelKindCoverage{Model: model,
-			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Only returned subjects were inspected"}})
+			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Knowledge is limited to returned subjects and fully listed directories"}})
 	}
 	if len(selectors) == 0 {
 		schemas = []string{""}
@@ -122,7 +122,19 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 					return nil, err
 				}
 				owner := &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: schema.TopicProperties, Name: name}
-				value, err := schema.CaptureTopic(owner, topic)
+				value, err := schema.CaptureObject(owner, topic)
+				if err != nil {
+					return nil, err
+				}
+				result.NativeObjects = append(result.NativeObjects, value)
+				observe(result, []*protocol.Envelope{value})
+			case Ydb_Scheme.Entry_VIEW, Ydb_Scheme.Entry_COORDINATION_NODE, Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE, Ydb_Scheme.Entry_EXTERNAL_TABLE:
+				kind, described, err := source.readObject(ctx, path.Join(database, selected, name), entry.GetType())
+				if err != nil {
+					return nil, err
+				}
+				owner := &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: kind, Name: name}
+				value, err := schema.CaptureObject(owner, described)
 				if err != nil {
 					return nil, err
 				}
@@ -136,6 +148,16 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 			}
 			if len(result.Tables)+len(result.NativeObjects) > 4096 {
 				return nil, fmt.Errorf("YDB schema read exceeds object limit")
+			}
+		}
+		// A successful list and complete child reads prove native-object
+		// absence only in this exact directory, never in skipped descendants.
+		for _, record := range result.Coverage.Kinds {
+			if schema.IsNativeObject(record.Model.Kind) {
+				record.Regions = append(record.Regions, &protocol.ModelNamespaceKnowledge{
+					Scope:     &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: database, Normalized: database}, Catalog: &protocol.NamespaceComponent{}, Schema: &protocol.NamespaceComponent{Source: selected, Normalized: selected}},
+					Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
+				})
 			}
 		}
 	}
