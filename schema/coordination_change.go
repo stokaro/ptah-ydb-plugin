@@ -15,7 +15,7 @@ import (
 )
 
 // CoordinationChange identifies a complete native before/desired after change.
-const CoordinationChange = "ydb.coordination-node-change"
+const CoordinationChange = modelNamespace + "coordination-node-change"
 
 // CoordinationSettings is the effective configuration used for semantic equality.
 // Source provenance and access metadata are not writable coordination settings.

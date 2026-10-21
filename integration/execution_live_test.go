@@ -140,7 +140,7 @@ func TestNativeExecutionFailureAndBatchPreflight(t *testing.T) {
 	create := "CREATE TABLE `" + table + "` (id Uint64 NOT NULL, PRIMARY KEY (id))"
 	request := &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "preflight", Units: []*protocol.Unit{
 		{ChangeId: "create", Body: &protocol.Unit_Sql{Sql: create}},
-		{ChangeId: "native", Body: &protocol.Unit_Native{Native: &protocol.Envelope{ProviderId: "stokaro/ptah-ydb-plugin", Kind: "unsupported", SchemaVersion: 1, Encoding: "json", Payload: []byte("{}")}}},
+		{ChangeId: "native", Body: &protocol.Unit_Native{Native: &protocol.Envelope{ProviderId: "github.com/stokaro/ptah-ydb-plugin", Kind: "unsupported", SchemaVersion: 1, Encoding: "json", Payload: []byte("{}")}}},
 	}}
 	result, err := client.Execute(c.Context(), request)
 	c.Assert(err, qt.ErrorIs, provider.ErrExecution)

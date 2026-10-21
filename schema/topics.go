@@ -13,9 +13,9 @@ import (
 
 const (
 	// TopicProperties identifies a standalone native topic observation.
-	TopicProperties = "ydb.topic"
+	TopicProperties = modelNamespace + "topic"
 	// ChangefeedProperties identifies the complete changefeed set of one table.
-	ChangefeedProperties = "ydb.table-changefeeds"
+	ChangefeedProperties = modelNamespace + "table-changefeeds"
 )
 
 func projectTopic(topic *native.DescribeTopicResult) {

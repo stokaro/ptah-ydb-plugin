@@ -14,13 +14,13 @@ import (
 
 const (
 	// ViewProperties owns a view query, attributes, and access metadata.
-	ViewProperties = "ydb.view"
+	ViewProperties = modelNamespace + "view"
 	// CoordinationProperties owns a coordination node's configuration.
-	CoordinationProperties = "ydb.coordination-node"
+	CoordinationProperties = modelNamespace + "coordination-node"
 	// ExternalSourceProperties owns an external source's native options.
-	ExternalSourceProperties = "ydb.external-data-source"
+	ExternalSourceProperties = modelNamespace + "external-data-source"
 	// ExternalTableProperties owns an external table's columns and options.
-	ExternalTableProperties = "ydb.external-table"
+	ExternalTableProperties = modelNamespace + "external-table"
 )
 
 // IsNativeObject distinguishes standalone objects from table/column facets.

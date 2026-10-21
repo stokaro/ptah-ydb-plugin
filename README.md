@@ -14,6 +14,10 @@ through the public Ptah SDK. It supports anonymous, URL user/password, and URL t
 Session receipts contain the selected database and measured server version.
 The implementation does not import the Ptah application module.
 
+The provider ID is `github.com/stokaro/ptah-ydb-plugin`. Model kinds use the `github.com/stokaro/ptah-ydb-plugin/` namespace. This changes
+the experimental model identities; pre-v1, no compatibility with the earlier
+unpublished names is owed. Older envelopes and plans are refused.
+
 ## Build and test
 
 The current source uses experimental SDK revision 21 reservations. That revision
@@ -59,6 +63,22 @@ standalone native objects, exact-directory completeness, and refusals for
 incomplete reads. Coordination tests cover source decoding through planning,
 rendering, native execution, and inspection. They do not establish complete
 migration support or host CLI integration.
+
+## Native CLI development acceptance
+
+Development checks with the experimental host adapter verified reviewed SQL
+migration execution and rollback against YDB 25.1.4.7 and 26.2.1.14. The checks
+also exercised status, journals, tags, and default locking through the executable.
+Schema changes used `--tx-mode none` for `migrations up` and a
+`-- +ptah no_transaction` directive in the down file. YDB does not provide
+transactional schema changes.
+
+The host and provider were built with a temporary SDK revision 21 workspace.
+These checks do not establish installation from the committed dependency pin.
+Host `schema inspect --format json` still refuses observed row-table facets
+without desired model conversion, including column properties. The native
+inspection service retains those observations; export and table comparison
+require further model support.
 
 ## Connection addresses
 
@@ -395,12 +415,12 @@ source holder names do not change native configuration. Removing an explicit
 nondefault setting produces a change back to the default. Raw stored values that
 the server clamps refuse comparison.
 
-The `ydb.coordination-node-change` model carries complete `before` and `after`
+The `github.com/stokaro/ptah-ydb-plugin/coordination-node-change` model carries complete `before` and `after`
 operands. The native `before` retains access metadata. A null operand means
 established absence. Normalization reconstructs impact, removal, and access
 facts from these operands. Creation has unknown inherited access policy;
 alteration preserves access; dropping a node removes its runtime state and access.
-Planning lowers these changes to the `ydb.coordination-node-operation` model,
+Planning lowers these changes to the `github.com/stokaro/ptah-ydb-plugin/coordination-node-operation` model,
 which rendering preserves as a native execution envelope.
 
 An unread object does not establish absence. Independent coverage sources must

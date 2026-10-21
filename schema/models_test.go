@@ -1,6 +1,7 @@
 package schema_test
 
 import (
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -106,4 +107,17 @@ func TestUnknownNativeFieldsCannotDisappearDuringProjection(t *testing.T) {
 	result, err := schema.CaptureTable(tableOwner(), value)
 	c.Assert(result, qt.IsNil)
 	c.Assert(err, qt.ErrorMatches, "unknown fields in ptah.ydb.native.ColumnMeta")
+}
+
+func TestModelKindsUseProviderNamespace(t *testing.T) {
+	c := qt.New(t)
+	for _, model := range schema.Models() {
+		c.Assert(strings.HasPrefix(model.GetKind(), "github.com/stokaro/ptah-ydb-plugin/"), qt.IsTrue, qt.Commentf("%s", model.GetKind()))
+	}
+	owner := tableOwner()
+	captured, err := schema.CaptureTable(owner, &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"id"}})
+	c.Assert(err, qt.IsNil)
+	captured.Kind = "ydb.row-table-properties"
+	_, err = schema.Normalize(captured)
+	c.Assert(err, qt.IsNotNil)
 }

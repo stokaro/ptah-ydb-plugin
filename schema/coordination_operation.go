@@ -15,7 +15,7 @@ import (
 )
 
 // CoordinationOperation identifies an executable, complete configuration transition.
-const CoordinationOperation = "ydb.coordination-node-operation"
+const CoordinationOperation = modelNamespace + "coordination-node-operation"
 
 // CoordinationOperationModel defines native operations and their preconditions.
 func CoordinationOperationModel() *protocol.ValueModel {

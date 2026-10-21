@@ -12,7 +12,7 @@ import (
 )
 
 // IndexProperties identifies the complete observed index set of one table.
-const IndexProperties = "ydb.table-indexes"
+const IndexProperties = modelNamespace + "table-indexes"
 
 // ValidateIndexes refuses incomplete, unknown, or duplicate native indexes before
 // their names are used to read physical tables.

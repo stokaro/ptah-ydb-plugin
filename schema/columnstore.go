@@ -12,7 +12,7 @@ import (
 )
 
 // ColumnStorageProperties owns hash partitioning, local indexes, and column TTL.
-const ColumnStorageProperties = "ydb.column-storage-properties"
+const ColumnStorageProperties = modelNamespace + "column-storage-properties"
 
 // CaptureColumnStorage binds a complete column-storage observation to its table.
 // Live inspection still requires both native table and monitoring descriptions.

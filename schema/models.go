@@ -18,13 +18,15 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+const modelNamespace = ProviderID + "/"
+
 const (
 	// ProviderID binds model envelopes to the official YDB owner.
-	ProviderID = "stokaro/ptah-ydb-plugin"
+	ProviderID = "github.com/stokaro/ptah-ydb-plugin"
 	// TableProperties identifies observed YDB row-table properties.
-	TableProperties = "ydb.row-table-properties"
+	TableProperties = modelNamespace + "row-table-properties"
 	// ColumnProperties identifies column family and native default properties.
-	ColumnProperties = "ydb.column-properties"
+	ColumnProperties = modelNamespace + "column-properties"
 )
 
 // ObservedModels returns fresh definitions for the supported native observations.

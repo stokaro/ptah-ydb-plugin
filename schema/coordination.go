@@ -40,7 +40,7 @@ func CoordinationDesiredModel() *protocol.ValueModel { return proto.CloneOf(coor
 var coordinationDesiredModel = buildCoordinationDesiredModel()
 
 func buildCoordinationDesiredModel() *protocol.ValueModel {
-	const definition = `{"kind":"ydb.coordination-node","representation":"desired","schema_version":1,"encoding":"json",
+	const definition = `{"kind":"` + CoordinationProperties + `","representation":"desired","schema_version":1,"encoding":"json",
 "payload":{"type":"object","additionalProperties":false,"properties":{
 "self_check_period_millis":{"type":"integer","minimum":500,"maximum":10000},
 "session_grace_period_millis":{"type":"integer","minimum":1500,"maximum":30000},
