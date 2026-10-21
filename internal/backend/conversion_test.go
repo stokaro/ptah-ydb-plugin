@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -71,4 +72,18 @@ func TestColumnConversionCancellationDiscardsBatch(t *testing.T) {
 	result, err := p.ConvertValues(ctx, request)
 	c.Assert(result, qt.IsNil)
 	c.Assert(status.Code(err), qt.Equals, codes.Canceled)
+}
+
+func TestMixedConversionDiscardsColumnsWhenTableRefusesTopology(t *testing.T) {
+	c := qt.New(t)
+	p, request := columnConversion(c, &native.ColumnMeta{Family: "default"})
+	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Name: "Orders"}
+	table, err := schema.CaptureTable(owner, &native.DescribeTableResult{PrimaryKey: []string{"a"}, ShardKeyBounds: []*Ydb.TypedValue{{Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UINT64}}, Value: &Ydb.Value{Value: &Ydb.Value_Uint64Value{Uint64Value: 100}}}}})
+	c.Assert(err, qt.IsNil)
+	normalized, err := p.NormalizeValues(context.Background(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "table", Representation: protocol.ValueInput_OBSERVED, Value: table}}})
+	c.Assert(err, qt.IsNil)
+	request.Values = append(request.Values, normalized.Values...)
+	result, err := p.ConvertValues(context.Background(), request)
+	c.Assert(result, qt.IsNil)
+	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
 }

@@ -241,3 +241,28 @@ message SequenceIntent {
     optional bool cycle = 7;
     optional Ydb.Type data_type = 8;
 }
+
+// AccessIntent separates direct grants from constraints on effective access.
+// Required effective permissions never imply direct grants or an inheritance
+// switch: the reader does not observe that switch.
+message AccessIntent {
+    optional string owner = 1;
+    repeated Ydb.Scheme.Permissions direct_grants = 2;
+    repeated Ydb.Scheme.Permissions required_effective_permissions = 3;
+}
+
+// RowTableIntent owns native settings outside common columns and child models.
+// Physical shard boundaries are runtime topology, not creation split points.
+message RowTableIntent {
+    repeated string primary_key = 1;
+    AccessIntent access = 2;
+    Ydb.Table.TtlSettings ttl_settings = 3;
+    Ydb.Table.StorageSettings storage_settings = 4;
+    repeated Ydb.Table.ColumnFamily column_families = 5;
+    map<string, string> attributes = 6;
+    Ydb.Table.PartitioningSettings partitioning_settings = 7;
+    Ydb.FeatureFlag.Status key_bloom_filter = 8;
+    Ydb.Table.ReadReplicasSettings read_replicas_settings = 9;
+    string tiering = 10;
+    bool temporary = 11;
+}

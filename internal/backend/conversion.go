@@ -35,10 +35,16 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 		if err := ctx.Err(); err != nil {
 			return nil, status.FromContextError(err).Err()
 		}
-		if value.Value.Kind != schema.ColumnProperties {
+		var converted *protocol.Envelope
+		var err error
+		switch value.Value.Kind {
+		case schema.ColumnProperties:
+			converted, err = schema.ConvertColumn(value.Value, request.From, request.To)
+		case schema.TableProperties:
+			converted, err = schema.ConvertTable(value.Value, request.From, request.To)
+		default:
 			return nil, status.Error(codes.Unimplemented, "YDB model has no representation conversion")
 		}
-		converted, err := schema.ConvertColumn(value.Value, request.From, request.To)
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}

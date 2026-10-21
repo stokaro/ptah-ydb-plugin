@@ -76,7 +76,7 @@ The host and provider were built against the published SDK revision 21 pin
 with `GOWORK=off`. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
 Host `schema inspect --format json` still refuses observed row-table facets
-without desired model conversion for every covered model kind. Column property conversion is available; table and child-object conversion remain incomplete. The native
+without desired model conversion for every covered model kind. Column and row-table property conversion is available; child-object conversion remains incomplete. The native
 inspection service retains those observations; export and table comparison
 require further model support.
 
@@ -345,7 +345,7 @@ statistics are excluded. A missing child description refuses the entire read.
 
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
-Desired column properties and their offline conversions are also available. Other desired models, column comparison, and column planning remain pending.
+Desired column and row-table properties and their offline conversions are also available. Other desired models, table/column comparison, and table/column planning remain pending.
 
 Views retain the query returned by the view service and the attributes read
 through the table service on the same path. This includes comments and custom
@@ -460,9 +460,37 @@ identity and ordered records, and returns no prefix on failure or cancellation.
 It opens no connection and establishes no inspection coverage.
 
 This supports column-property transport and export semantics. Complete schema
-export still requires desired models for every covered kind, including table
-properties, indexes, and changefeeds. Column comparison and planning are not
+export still requires desired models for every covered kind, including
+indexes and changefeeds. Column comparison and planning are not
 advertised by this implementation.
+
+## Offline row-table declarations
+
+The row-table model preserves ordered primary keys, TTL, storage pools, column
+families, attributes, partitioning policy, bloom-filter settings, read replicas,
+tiering, and temporary lifetime. Unknown settings, duplicate keys or families,
+invalid TTL modes, and null settings are refused. Attribute values remain exact,
+including empty strings. The row-table reader interprets an unspecified native
+storage kind as row storage; column storage retains its separate model.
+
+Access declarations keep the owner and direct grants separate from requirements
+on effective permissions. Effective permissions include inherited access under
+[YDB's permission model](https://ydb.tech/docs/en/reference/ydb-cli/commands/scheme-permissions).
+A present access declaration specifies the complete direct-grant set and the
+required effective-permission set. These requirements do not add direct grants. Conversion
+neither infers an inheritance switch nor changes permissions. The provider does
+not yet advertise table or access comparison/planning.
+
+Physical shard boundaries are runtime topology. A captured value containing them
+refuses conversion rather than turning the current split points into creation
+settings. Partitioning policy remains declarative. Statistics and transient
+object identity cannot enter the property model. Conversion preserves a complete
+mixed table/column batch, works after the session closes, and establishes no
+inspection coverage.
+
+Complete schema export still requires desired models for indexes, changefeeds,
+and the remaining native object families. Unsupported families refuse the whole
+conversion; a converted table does not make an incomplete schema export succeed.
 
 ## Offline column-storage observations
 

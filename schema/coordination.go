@@ -132,6 +132,9 @@ func desiredCoordinationOwner(owner *protocol.Reference) error {
 // NormalizeDesired validates a desired model independently of observed payloads.
 // It neither opens a connection nor turns missing settings into stored defaults.
 func NormalizeDesired(value *protocol.Envelope) (*protocol.Envelope, error) {
+	if value.GetKind() == TableProperties {
+		return normalizeTableIntent(value)
+	}
 	if value.GetKind() == ColumnProperties {
 		return normalizeColumnIntent(value)
 	}
