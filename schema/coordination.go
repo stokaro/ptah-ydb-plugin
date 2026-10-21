@@ -10,8 +10,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -19,6 +21,9 @@ import (
 // server defaults; normalization retains omission and does not resolve defaults.
 // Period pointers distinguish an omitted setting from an invalid explicit zero.
 type CoordinationIntent struct {
+	// Access requires the captured owner, direct grants, and effective permissions.
+	// Omission leaves access unmanaged; this model does not grant permissions.
+	Access *native.AccessIntent `json:"access,omitempty"`
 	// SelfCheckPeriodMillis is the declared self-check interval.
 	SelfCheckPeriodMillis *uint32 `json:"self_check_period_millis,omitempty"`
 	// SessionGracePeriodMillis is the declared grace interval on leader changes.
@@ -34,7 +39,7 @@ type CoordinationIntent struct {
 }
 
 // CoordinationDesiredModel returns the complete desired configuration contract.
-// Native access metadata is observed separately and is not an authored setting.
+// Access constraints are validated independently from native timing settings.
 func CoordinationDesiredModel() *protocol.ValueModel { return proto.CloneOf(coordinationDesiredModel) }
 
 var coordinationDesiredModel = buildCoordinationDesiredModel()
@@ -45,7 +50,7 @@ func buildCoordinationDesiredModel() *protocol.ValueModel {
 "self_check_period_millis":{"type":"integer","minimum":500,"maximum":10000},
 "session_grace_period_millis":{"type":"integer","minimum":1500,"maximum":30000},
 "read_consistency_mode":{"enum":["strict","relaxed"]},"attach_consistency_mode":{"enum":["strict","relaxed"]},
-"rate_limiter_counters_mode":{"enum":["aggregated","detailed"]},"struct_name":{"type":"string"}}},
+"rate_limiter_counters_mode":{"enum":["aggregated","detailed"]},"struct_name":{"type":"string"},"access":{"type":"object","format":"native-access-json"}}},
 "default_intent":"omitted settings request server defaults; normalization preserves omission",
 "effective_defaults":{"self_check_period_millis":1000,"session_grace_period_millis":10000,"read_consistency_mode":"relaxed","attach_consistency_mode":"strict","rate_limiter_counters_mode":"aggregated"},
 "cross_field_rule":"effective grace >= effective self-check + 1000 milliseconds; refuse server clamping",
@@ -56,12 +61,25 @@ func buildCoordinationDesiredModel() *protocol.ValueModel {
 "modes":"trimmed and case-insensitive; empty or null values refused","unknown_fields":"refused"},
 "identity":"exact YDB relative schema and leaf name; no catalog, parent path, overload or system path; root ptah_locks is reserved for runtime use",
 "comparison":"canonical desired equality is representation-local; no desired-observed equivalence implied"}`
-	canonical, err := modeljson.Canonical([]byte(definition))
+	var document map[string]any
+	if err := json.Unmarshal([]byte(definition), &document); err != nil {
+		panic(err)
+	}
+	graph := make(map[string]any)
+	describeMessage((&native.AccessIntent{}).ProtoReflect().Descriptor(), graph)
+	document["access_definition"] = graph
+	document["access_contract"] = "snake_case JSON fields; missing access is unmanaged; complete direct and effective permission sets; owner omission is unmanaged; comparison and execution refuse unsatisfied constraints, never grant or infer inheritance"
+	document["conversion"] = "offline; native unspecified settings stay omitted; preserves access; source holder provenance cannot become observed state"
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		panic(err)
+	}
+	canonical, err := modeljson.Canonical(encoded)
 	if err != nil {
 		panic(err)
 	}
 	digest := sha256.Sum256(canonical)
-	return &protocol.ValueModel{Kind: CoordinationProperties, Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
+	return &protocol.ValueModel{Kind: CoordinationProperties, DisplayName: modelDisplayName(CoordinationProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
 		Encoding: "json", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]),
 		CanonicalFormat: CoordinationProperties + "/desired-json-v1", SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML}}
 }
@@ -95,7 +113,7 @@ func ValidateCoordinationIntent(value CoordinationIntent) error {
 	if !utf8.ValidString(value.StructName) {
 		return fmt.Errorf("invalid YDB source holder name")
 	}
-	return nil
+	return validateAccessIntent(value.Access)
 }
 
 // ValidateCoordinationOwner checks exact native path components, including runtime nodes.
@@ -138,8 +156,8 @@ func NormalizeDesired(value *protocol.Envelope) (*protocol.Envelope, error) {
 	if value.GetKind() == ColumnProperties {
 		return normalizeColumnIntent(value)
 	}
-	if childMessage(value.GetKind()) != nil {
-		return normalizeChildIntent(value)
+	if nativeIntentMessage(value.GetKind()) != nil {
+		return normalizeNativeIntent(value)
 	}
 	model := CoordinationDesiredModel()
 	if value.GetProviderId() != ProviderID || value.GetKind() != model.Kind || value.GetSchemaVersion() != model.SchemaVersion ||
@@ -161,12 +179,21 @@ func NormalizeDesired(value *protocol.Envelope) (*protocol.Envelope, error) {
 		// encoding/json matches struct tags case-insensitively. The negotiated
 		// grammar does not: aliases could overwrite another authored field.
 		switch key {
-		case "self_check_period_millis", "session_grace_period_millis", "read_consistency_mode", "attach_consistency_mode", "rate_limiter_counters_mode", "struct_name":
+		case "self_check_period_millis", "session_grace_period_millis", "read_consistency_mode", "attach_consistency_mode", "rate_limiter_counters_mode", "struct_name", "access":
 		default:
 			return nil, fmt.Errorf("unknown desired YDB coordination field")
 		}
 		if bytes.Equal(raw, []byte("null")) {
 			return nil, fmt.Errorf("null YDB coordination setting")
+		}
+	}
+	if raw, ok := fields["access"]; ok {
+		var access native.AccessIntent
+		if err := rejectNullSettings(raw, access.ProtoReflect().Descriptor()); err != nil {
+			return nil, err
+		}
+		if err := protojson.Unmarshal(raw, &access); err != nil {
+			return nil, fmt.Errorf("invalid YDB coordination access requirements")
 		}
 	}
 	var intent CoordinationIntent

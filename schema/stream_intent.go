@@ -5,7 +5,6 @@ import (
 	"maps"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -62,14 +61,7 @@ func validateTopicIntent(intent *native.TopicIntent) error {
 	if intent.RetentionStorageMb < 0 || intent.PartitionWriteSpeedBytesPerSecond < 0 || intent.PartitionTotalReadSpeedBytesPerSecond < 0 || intent.PartitionConsumerReadSpeedBytesPerSecond < 0 || intent.PartitionWriteBurstBytes < 0 {
 		return fmt.Errorf("negative YDB topic retention or quota")
 	}
-	if access := intent.Access; access != nil {
-		for _, grants := range [][]*Ydb_Scheme.Permissions{access.DirectGrants, access.RequiredEffectivePermissions} {
-			if err := validatePermissionSet(grants); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return validateAccessIntent(intent.Access)
 }
 
 func changefeedIntents(observed *native.ChangefeedObservations) *native.ChangefeedSetIntent {

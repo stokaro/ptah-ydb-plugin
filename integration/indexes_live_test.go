@@ -142,7 +142,7 @@ func TestNativeIndexObservationsSubprocess(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			c.Assert(provider.ValidateNormalizedInspection(client.Description(), request, snapshot, normalized), qt.IsNil)
 			c.Assert(client.CloseSession(ctx, session.Id), qt.IsNil)
-			convertChildProperties(c, client, values)
+			convertNativeProperties(c, client, values)
 		})
 	}
 }

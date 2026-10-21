@@ -40,7 +40,7 @@ func buildColumnDesiredModel() *protocol.ValueModel {
 		panic(err)
 	}
 	digest := sha256.Sum256(canonical)
-	return &protocol.ValueModel{Kind: ColumnProperties, Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
+	return &protocol.ValueModel{Kind: ColumnProperties, DisplayName: modelDisplayName(ColumnProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
 		Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]),
 		CanonicalFormat: ColumnProperties + "/desired-json-v1"}
 }

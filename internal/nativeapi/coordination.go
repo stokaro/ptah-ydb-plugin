@@ -159,6 +159,9 @@ func confirmCoordination(before, after, current *protocol.Envelope) error {
 	if current == nil {
 		return fmt.Errorf("coordination result is absent")
 	}
+	if err := schema.ValidateCoordinationAccess(current, after); err != nil {
+		return err
+	}
 	actual, err := schema.CoordinationConfiguration(current, protocol.ValueInput_OBSERVED)
 	if err != nil {
 		return err

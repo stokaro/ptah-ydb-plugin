@@ -96,6 +96,9 @@ func buildModel(kind string) *protocol.ValueModel {
 		"native_objects":          "retain view query plus table API attributes; coordination config except duplicate path; external source options and ordered external columns; transient self identity excluded",
 		"index_observations":      "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
 	}
+	if kind == ViewProperties {
+		definition["view_api_projection"] = "view table API disabled partitioning-by-size/load switches are nondeclarative scaffolding; omit only this exact configuration and refuse any other partition settings"
+	}
 	if kind == IndexProperties {
 		definition["implementation_state"] = "internal sequence positions excluded after unknown-field validation; row storage canonicalized; sequence configuration retained"
 	}
@@ -115,7 +118,7 @@ func buildModel(kind string) *protocol.ValueModel {
 		panic(err)
 	}
 	digest := sha256.Sum256(canonical)
-	return &protocol.ValueModel{Kind: kind, Representation: protocol.ValueInput_OBSERVED, SchemaVersion: 1,
+	return &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_OBSERVED, SchemaVersion: 1,
 		Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]),
 		CanonicalFormat: kind + "/observed-json-v1"}
 }
@@ -284,7 +287,7 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), ChildDesiredModel(IndexProperties), ChildDesiredModel(ChangefeedProperties), ChildDesiredModel(TopicProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
+	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
 }
 
 func validateModelOwner(value *protocol.Envelope, requireDatabase bool) error {
@@ -303,4 +306,31 @@ func validateModelOwner(value *protocol.Envelope, requireDatabase bool) error {
 		return fmt.Errorf("invalid YDB observation owner path")
 	}
 	return nil
+}
+
+func modelDisplayName(kind string) string {
+	switch kind {
+	case TableProperties:
+		return "YDB row-table properties"
+	case ColumnProperties:
+		return "YDB column properties"
+	case IndexProperties:
+		return "YDB index sets"
+	case ChangefeedProperties:
+		return "YDB changefeed sets"
+	case TopicProperties:
+		return "YDB topics"
+	case ViewProperties:
+		return "YDB views"
+	case ExternalSourceProperties:
+		return "YDB external data sources"
+	case ExternalTableProperties:
+		return "YDB external tables"
+	case CoordinationProperties:
+		return "YDB coordination nodes"
+	case ColumnStorageProperties:
+		return "YDB column-storage properties"
+	default:
+		return ""
+	}
 }

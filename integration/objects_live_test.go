@@ -150,6 +150,10 @@ func TestNativeObjectsAndNamespaceCoverageSubprocess(t *testing.T) {
 	again, err := client.NormalizeValues(ctx, values)
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(again, normalized), qt.IsTrue)
+	convertNativeProperties(c, client, values)
+	t.Run("host export", func(t *testing.T) {
+		assertHostSchemaExport(t, client, binary, digest, []string{directory, child}, values)
+	})
 }
 
 func assertExactObjectRegions(c *qt.C, snapshot *protocol.Schema, database string, schemas []string) {

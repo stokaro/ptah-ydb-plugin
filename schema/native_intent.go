@@ -15,17 +15,18 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ChildDesiredModel returns an independent declaration contract for indexes,
-// changefeeds or topics. Other kinds have no contract in this family.
-func ChildDesiredModel(kind string) *protocol.ValueModel {
-	return proto.CloneOf(childDefinitions[kind])
+// NativeDesiredModel returns a declaration contract for native objects, indexes,
+// changefeeds, and column storage. Unsupported kinds return nil.
+func NativeDesiredModel(kind string) *protocol.ValueModel {
+	return proto.CloneOf(nativeIntentDefinitions[kind])
 }
 
-var childDefinitions = map[string]*protocol.ValueModel{
-	IndexProperties: buildChildModel(IndexProperties), ChangefeedProperties: buildChildModel(ChangefeedProperties), TopicProperties: buildChildModel(TopicProperties),
+var nativeIntentDefinitions = map[string]*protocol.ValueModel{
+	IndexProperties: buildNativeIntentModel(IndexProperties), ChangefeedProperties: buildNativeIntentModel(ChangefeedProperties), TopicProperties: buildNativeIntentModel(TopicProperties),
+	ViewProperties: buildNativeIntentModel(ViewProperties), ExternalSourceProperties: buildNativeIntentModel(ExternalSourceProperties), ExternalTableProperties: buildNativeIntentModel(ExternalTableProperties), ColumnStorageProperties: buildNativeIntentModel(ColumnStorageProperties),
 }
 
-func childMessage(kind string) proto.Message {
+func nativeIntentMessage(kind string) proto.Message {
 	switch kind {
 	case IndexProperties:
 		return &native.IndexSetIntent{}
@@ -33,13 +34,21 @@ func childMessage(kind string) proto.Message {
 		return &native.ChangefeedSetIntent{}
 	case TopicProperties:
 		return &native.TopicIntent{}
+	case ViewProperties:
+		return &native.ViewIntent{}
+	case ExternalSourceProperties:
+		return &native.ExternalSourceIntent{}
+	case ExternalTableProperties:
+		return &native.ExternalTableIntent{}
+	case ColumnStorageProperties:
+		return &native.ColumnStorageIntent{}
 	default:
 		return nil
 	}
 }
 
-func buildChildModel(kind string) *protocol.ValueModel {
-	target := childMessage(kind)
+func buildNativeIntentModel(kind string) *protocol.ValueModel {
+	target := nativeIntentMessage(kind)
 	graph := make(map[string]any)
 	describeMessage(target.ProtoReflect().Descriptor(), graph)
 	definition := map[string]any{
@@ -52,6 +61,9 @@ func buildChildModel(kind string) *protocol.ValueModel {
 		"streams":              "all topic and consumer configuration retained without partition topology or statistics; access uses separate direct-grant and effective-access requirements",
 		"initial_scan":         "initialScan retains creation intent; disabled is independent; observed INITIAL_SCAN converts to enabled intent with initialScan true, never to a claim that scanning finished",
 		"conversion":           "offline and all-or-nothing; requires complete implementation and child-topic settings; no comparison or planning advertised by these models",
+		"access":               "missing access leaves ownership and permissions unmanaged; present access retains complete direct grants and effective-permission requirements without granting permissions",
+		"native_objects":       "views require matching access from view and table APIs; external options, references and column order remain exact; no network access to external sources",
+		"column_storage":       "preserves hash order, partition and data-channel counts, local indexes and TTL tiers; excludes native IDs and runtime topology",
 	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
@@ -62,14 +74,14 @@ func buildChildModel(kind string) *protocol.ValueModel {
 		panic(err)
 	}
 	digest := sha256.Sum256(canonical)
-	return &protocol.ValueModel{Kind: kind, Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
+	return &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
 }
 
-func normalizeChildIntent(value *protocol.Envelope) (*protocol.Envelope, error) {
-	definition := ChildDesiredModel(value.GetKind())
-	target := childMessage(value.GetKind())
+func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error) {
+	definition := NativeDesiredModel(value.GetKind())
+	target := nativeIntentMessage(value.GetKind())
 	if definition == nil || value.GetProviderId() != ProviderID || value.GetSchemaVersion() != definition.SchemaVersion || value.GetEncoding() != definition.Encoding || value.GetDefinitionSha256() != definition.DefinitionSha256 {
-		return nil, fmt.Errorf("desired YDB child value does not match its negotiated definition")
+		return nil, fmt.Errorf("desired native YDB value does not match its negotiated definition")
 	}
 	if err := validateModelOwner(value, false); err != nil {
 		return nil, err
@@ -79,18 +91,18 @@ func normalizeChildIntent(value *protocol.Envelope) (*protocol.Envelope, error) 
 		return nil, err
 	}
 	if string(canonical) == "null" {
-		return nil, fmt.Errorf("desired YDB child value requires an object")
+		return nil, fmt.Errorf("desired native YDB value requires an object")
 	}
 	if err := rejectNullSettings(canonical, target.ProtoReflect().Descriptor()); err != nil {
 		return nil, err
 	}
 	if err := protojson.Unmarshal(canonical, target); err != nil {
-		return nil, fmt.Errorf("invalid desired YDB child JSON")
+		return nil, fmt.Errorf("invalid desired native YDB JSON")
 	}
 	if err := Known(target); err != nil {
 		return nil, err
 	}
-	if _, err := childObservation(target); err != nil {
+	if _, err := nativeObservation(target); err != nil {
 		return nil, err
 	}
 	switch intent := target.(type) {
@@ -108,6 +120,8 @@ func normalizeChildIntent(value *protocol.Envelope) (*protocol.Envelope, error) 
 		}
 	case *native.TopicIntent:
 		sortTopicIntent(intent)
+	case *native.ColumnStorageIntent:
+		slices.SortFunc(intent.LocalIndexes, func(a, b *native.LocalIndexObservation) int { return strings.Compare(a.Name, b.Name) })
 	}
 	payload, err := protojson.Marshal(target)
 	if err != nil {
@@ -126,11 +140,11 @@ func sortTopicIntent(intent *native.TopicIntent) {
 	slices.SortFunc(intent.Consumers, func(a, b *native.ConsumerIntent) int { return strings.Compare(a.Name, b.Name) })
 }
 
-// ConvertChild converts native child models without publishing coverage or
+// ConvertNative converts native models without publishing coverage or
 // confusing an initial scan request with its current progress.
-func ConvertChild(value *protocol.Envelope, from, to protocol.ValueInput_Representation) (*protocol.Envelope, error) {
-	if childMessage(value.GetKind()) == nil {
-		return nil, fmt.Errorf("unsupported YDB child model")
+func ConvertNative(value *protocol.Envelope, from, to protocol.ValueInput_Representation) (*protocol.Envelope, error) {
+	if nativeIntentMessage(value.GetKind()) == nil {
+		return nil, fmt.Errorf("unsupported native YDB model")
 	}
 	if from == protocol.ValueInput_OBSERVED && to == protocol.ValueInput_DESIRED {
 		normalized, err := Normalize(value)
@@ -141,31 +155,31 @@ func ConvertChild(value *protocol.Envelope, from, to protocol.ValueInput_Represe
 		if err := protojson.Unmarshal(normalized.Payload, observed); err != nil {
 			return nil, err
 		}
-		intent, err := childIntent(observed)
+		intent, err := nativeIntent(observed)
 		if err != nil {
 			return nil, err
 		}
-		return convertedEnvelope(value, ChildDesiredModel(value.Kind), intent, NormalizeDesired)
+		return convertedEnvelope(value, NativeDesiredModel(value.Kind), intent, NormalizeDesired)
 	}
 	if from == protocol.ValueInput_DESIRED && to == protocol.ValueInput_OBSERVED {
-		normalized, err := normalizeChildIntent(value)
+		normalized, err := normalizeNativeIntent(value)
 		if err != nil {
 			return nil, err
 		}
-		intent := childMessage(value.Kind)
+		intent := nativeIntentMessage(value.Kind)
 		if err := protojson.Unmarshal(normalized.Payload, intent); err != nil {
 			return nil, err
 		}
-		observed, err := childObservation(intent)
+		observed, err := nativeObservation(intent)
 		if err != nil {
 			return nil, err
 		}
 		return convertedEnvelope(value, model(value.Kind), observed, Normalize)
 	}
-	return nil, fmt.Errorf("YDB child conversion requires distinct schema representations")
+	return nil, fmt.Errorf("native YDB conversion requires distinct schema representations")
 }
 
-func childIntent(value proto.Message) (proto.Message, error) {
+func nativeIntent(value proto.Message) (proto.Message, error) {
 	switch v := value.(type) {
 	case *native.IndexObservations:
 		return indexIntents(v)
@@ -174,11 +188,11 @@ func childIntent(value proto.Message) (proto.Message, error) {
 	case *native.DescribeTopicResult:
 		return topicIntent(v), nil
 	default:
-		return nil, fmt.Errorf("unsupported YDB child observation")
+		return objectIntent(value)
 	}
 }
 
-func childObservation(value proto.Message) (proto.Message, error) {
+func nativeObservation(value proto.Message) (proto.Message, error) {
 	switch v := value.(type) {
 	case *native.IndexSetIntent:
 		return indexObservations(v)
@@ -194,6 +208,6 @@ func childObservation(value proto.Message) (proto.Message, error) {
 		}
 		return observed, nil
 	default:
-		return nil, fmt.Errorf("unsupported YDB child declaration")
+		return objectObservation(value)
 	}
 }

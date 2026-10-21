@@ -6,6 +6,7 @@ import (
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -95,6 +96,16 @@ func normalizeObject(described proto.Message) error {
 		}
 		self = value.View.Self
 		properties := value.Properties
+		// DescribeTable returns these disabled switches for views on YDB 25.1
+		// and 26.2. They describe no view partition policy. Refuse any other
+		// table partition configuration instead of silently losing it.
+		if partitioning := properties.PartitioningSettings; partitioning != nil {
+			disabled := &Ydb_Table.PartitioningSettings{PartitioningBySize: Ydb.FeatureFlag_DISABLED, PartitioningByLoad: Ydb.FeatureFlag_DISABLED}
+			if !proto.Equal(partitioning, disabled) {
+				return fmt.Errorf("view table response has unsupported partitioning settings")
+			}
+			properties.PartitioningSettings = nil
+		}
 		if transientSelf(properties.Self) || properties.TableStats != nil {
 			return fmt.Errorf("view properties contain transient metadata")
 		}

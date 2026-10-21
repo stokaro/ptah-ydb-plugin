@@ -4,6 +4,7 @@ package ptah.ydb.native;
 option go_package = "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol";
 import "internal/nativeprotocol/indexes.proto";
 import "internal/nativeprotocol/topics.proto";
+import "internal/nativeprotocol/columnstore.proto";
 import "protos/ydb_value.proto";
 import "protos/ydb_table.proto";
 import "protos/ydb_topic.proto";
@@ -33,9 +34,9 @@ message IndexDeclaration {
 message ImplementationRequirement {
     string name = 1;
     RowTableIntent settings = 2;
-    repeated ImplementationColumnRequirement columns = 3;
+    repeated ColumnDeclaration columns = 3;
 }
-message ImplementationColumnRequirement {
+message ColumnDeclaration {
     string name = 1;
     Ydb.Type type = 2;
     optional bool not_null = 3;
@@ -79,4 +80,32 @@ message ChangefeedIntent {
     bool schema_changes = 10;
     bool user_sids = 11;
     TopicIntent topic = 12;
+}
+
+
+message ViewIntent {
+    string query_text = 1;
+    map<string, string> attributes = 2;
+    AccessIntent access = 3;
+}
+message ExternalSourceIntent {
+    AccessIntent access = 1;
+    optional string source_type = 2;
+    optional string location = 3;
+    map<string, string> properties = 4;
+}
+message ExternalTableIntent {
+    AccessIntent access = 1;
+    optional string source_type = 2;
+    optional string data_source_path = 3;
+    optional string location = 4;
+    repeated ColumnDeclaration columns = 5;
+    map<string, string> content = 6;
+}
+message ColumnStorageIntent {
+    repeated string hash_columns = 1;
+    uint64 partitions = 2;
+    uint64 data_channel_count = 3;
+    repeated LocalIndexObservation local_indexes = 4;
+    ColumnTTLPolicy ttl = 5;
 }

@@ -57,7 +57,7 @@ func EffectiveCoordination(value CoordinationIntent) (CoordinationSettings, erro
 }
 
 // CoordinationConfiguration extracts comparable settings from a validated model.
-// Native access metadata remains in the original observation and change payload.
+// Access requirements retain the native metadata without making grants.
 // Raw values that the server clamps are refused rather than compared as defaults.
 func CoordinationConfiguration(value *protocol.Envelope, representation protocol.ValueInput_Representation) (CoordinationIntent, error) {
 	var result CoordinationIntent
@@ -80,6 +80,7 @@ func CoordinationConfiguration(value *protocol.Envelope, representation protocol
 	if err := protojson.Unmarshal(normalized.Payload, &observed); err != nil {
 		return result, err
 	}
+	result.Access = accessIntent(observed.Self)
 	config := observed.Config
 	if config.SelfCheckPeriodMillis != 0 {
 		result.SelfCheckPeriodMillis = new(config.SelfCheckPeriodMillis)
@@ -181,6 +182,7 @@ func NormalizeCoordinationChange(input *protocol.ValueInput) (*protocol.Normaliz
 		return nil, fmt.Errorf("coordination change requires exact before and after operands")
 	}
 	present := map[string]bool{}
+	validated := map[string]*protocol.Envelope{}
 	for _, key := range []string{"before", "after"} {
 		raw := operands[key]
 		if bytes.Equal(raw, []byte("null")) {
@@ -205,9 +207,13 @@ func NormalizeCoordinationChange(input *protocol.ValueInput) (*protocol.Normaliz
 			return nil, err
 		}
 		operands[key] = normalized.Payload
+		validated[key] = normalized
 	}
 	if !present["before"] && !present["after"] {
 		return nil, fmt.Errorf("coordination change has no operands")
+	}
+	if err := ValidateCoordinationAccess(validated["before"], validated["after"]); err != nil {
+		return nil, err
 	}
 	encoded, err := json.Marshal(operands)
 	if err != nil {

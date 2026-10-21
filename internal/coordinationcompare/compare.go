@@ -206,6 +206,10 @@ func compareNode(request *protocol.CompareModelsRequest, result *protocol.Compar
 			}
 		}
 	}
+	if err := schema.ValidateCoordinationAccess(item.current, item.desired); err != nil {
+		undecided(result, item, err.Error())
+		return nil
+	}
 	if item.desired != nil && item.current != nil {
 		before, err := schema.CoordinationConfiguration(item.current, protocol.ValueInput_OBSERVED)
 		if err != nil {

@@ -7,6 +7,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -251,4 +252,39 @@ func TestCoordinationComparisonPreservesPolicy(t *testing.T) {
 	result, err = backend.New().CompareModels(ctx, request)
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(result, qt.IsNil)
+}
+
+func TestCoordinationAccessRequirementsCannotBecomeIgnoredChanges(t *testing.T) {
+	for _, test := range []struct {
+		name               string
+		observed           *Ydb_Coordination.DescribeNodeResult
+		owner              string
+		changes, undecided int
+	}{
+		{"satisfied", coordinationObserved(), "original-owner", 1, 0},
+		{"owner mismatch", coordinationObserved(), "other", 0, 1},
+		{"creation requirements", nil, "original-owner", 0, 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			desired := &schema.CoordinationIntent{ReadConsistencyMode: new("strict"), Access: &native.AccessIntent{Owner: new(test.owner), DirectGrants: []*Ydb_Scheme.Permissions{{Subject: "reader", PermissionNames: []string{"ydb.generic.read"}}}}}
+			request, err := testcomparison.Request(desired, test.observed)
+			c.Assert(err, qt.IsNil)
+			result, err := backend.New().CompareModels(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateComparedModels(backend.Description(), request, result), qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, test.changes)
+			c.Assert(result.Undecided, qt.HasLen, test.undecided)
+			if test.undecided > 0 {
+				var before *protocol.Envelope
+				if len(request.Current.Records) > 0 {
+					before = request.Current.Records[0].Value.Value
+				}
+				after := request.Desired.Records[0].Value.Value
+				change, err := schema.CaptureCoordinationChange("forged", after.Owner, before, after)
+				c.Assert(change, qt.IsNil)
+				c.Assert(err, qt.IsNotNil)
+			}
+		})
+	}
 }
