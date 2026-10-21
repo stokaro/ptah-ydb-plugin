@@ -328,7 +328,8 @@ writable representation. Index observations preserve sync, async, unique, vector
 and fulltext variants. The provider reads every kind-specific implementation
 table, including its columns, keys, and partition settings; parent table
 metadata alone does not expose those settings. Missing implementation tables
-or non-ready indexes refuse inspection. An empty index facet records the
+or non-ready indexes refuse inspection. Internal sequence configuration is retained;
+its mutable position is excluded after unknown-field validation. An empty index facet records the
 absence of indexes on that inspected table.
 
 Changefeed observations combine the table API description with a topic API
@@ -345,7 +346,9 @@ statistics are excluded. A missing child description refuses the entire read.
 
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
-Desired column and row-table properties and their offline conversions are also available. Other desired models, table/column comparison, and table/column planning remain pending.
+Desired column, row-table, index, changefeed, and topic models support offline
+conversion. Other desired models, table/column comparison, and table/column
+planning remain pending.
 
 Views retain the query returned by the view service and the attributes read
 through the table service on the same path. This includes comments and custom
@@ -461,7 +464,7 @@ It opens no connection and establishes no inspection coverage.
 
 This supports column-property transport and export semantics. Complete schema
 export still requires desired models for every covered kind, including
-indexes and changefeeds. Column comparison and planning are not
+views and external tables. Column comparison and planning are not
 advertised by this implementation.
 
 ## Offline row-table declarations
@@ -488,9 +491,48 @@ object identity cannot enter the property model. Conversion preserves a complete
 mixed table/column batch, works after the session closes, and establishes no
 inspection coverage.
 
-Complete schema export still requires desired models for indexes, changefeeds,
-and the remaining native object families. Unsupported families refuse the whole
+Complete schema export still requires desired models for the remaining native
+object families. Unsupported families refuse the whole
 conversion; a converted table does not make an incomplete schema export succeed.
+
+## Offline index and stream declarations
+
+The `values.convert` service also converts index, changefeed, and standalone
+topic properties between separate typed desired and observed models. It works
+without an open session, retains exact owner identity, and returns no prefix
+when any value in a mixed batch fails. Conversion establishes no inspection
+coverage. These models do not yet advertise comparison or planning.
+
+Index declarations retain the native index kind, ordered index/data columns,
+and kind-specific settings. Each declaration includes complete requirements on
+the server-owned implementation tables: ordered columns and keys, column
+defaults, storage, partitioning policy, and access constraints. These are
+requirements on the index implementation, not independent tables to create.
+Missing implementation tables or columns refuse conversion. Physical shard
+boundaries also refuse conversion; current splits are not creation settings.
+The observed index model canonicalizes unspecified implementation storage as
+row storage and excludes internal sequence positions. This changes its definition
+digest; this provider is pre-v1 and carries no reader for the previous shape.
+
+Topic declarations preserve partitioning policy, retention, codecs, write/read
+quotas, attributes, metrics settings, and consumer configuration. Consumer
+settings retain read timestamps, availability periods, codec preferences,
+attributes, and streaming-consumer presence. Access uses the same direct-grant
+and effective-permission requirements as row tables. Runtime partition topology
+and statistics cannot enter a declaration.
+
+Changefeed declarations include the child topic's settings as well as mode,
+format, virtual/resolved timestamps, attributes, AWS region, schema-change
+reporting, and user SIDs. `disabled` and `initialScan` are independent settings.
+An observation in `STATE_INITIAL_SCAN` converts to enabled intent with
+`initialScan: true`. Converting that declaration back predicts
+`STATE_ENABLED`; it does not prove that a server finished scanning. Scan
+progress counters remain excluded.
+
+Unknown fields/enums, runtime state in declarations, null settings, duplicate
+names, and incomplete child descriptions are refused. Empty index/changefeed
+sets keep their own desired model definitions. Indexes, implementation tables,
+changefeeds, and consumers normalize by name; column and key order is retained.
 
 ## Offline column-storage observations
 

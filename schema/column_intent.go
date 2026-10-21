@@ -72,11 +72,8 @@ func normalizeColumnIntent(value *protocol.Envelope) (*protocol.Envelope, error)
 	if err := Known(&intent); err != nil {
 		return nil, err
 	}
-	if literal := intent.GetLiteral(); literal != nil && (literal.Type == nil || literal.Value == nil) {
-		return nil, fmt.Errorf("YDB literal default requires type and value")
-	}
-	if _, drop := intent.DefaultValue.(*native.ColumnIntent_DropDefault); drop && !intent.GetDropDefault() {
-		return nil, fmt.Errorf("YDB dropDefault must be true")
+	if err := validateColumnIntent(&intent); err != nil {
+		return nil, err
 	}
 	payload, err := protojson.Marshal(&intent)
 	if err != nil {
@@ -168,4 +165,14 @@ func columnObservation(intent *native.ColumnIntent) *native.ColumnMeta {
 		result.DefaultValue = &native.ColumnMeta_EmptyDefault{}
 	}
 	return result
+}
+
+func validateColumnIntent(intent *native.ColumnIntent) error {
+	if literal := intent.GetLiteral(); literal != nil && (literal.Type == nil || literal.Value == nil) {
+		return fmt.Errorf("YDB literal default requires type and value")
+	}
+	if _, drop := intent.DefaultValue.(*native.ColumnIntent_DropDefault); drop && !intent.GetDropDefault() {
+		return fmt.Errorf("YDB dropDefault must be true")
+	}
+	return nil
 }

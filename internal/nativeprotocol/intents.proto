@@ -1,0 +1,82 @@
+// Declarative models owned by the YDB provider.
+syntax = "proto3";
+package ptah.ydb.native;
+option go_package = "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol";
+import "internal/nativeprotocol/indexes.proto";
+import "internal/nativeprotocol/topics.proto";
+import "protos/ydb_value.proto";
+import "protos/ydb_table.proto";
+import "protos/ydb_topic.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+message IndexIntent {
+    string name = 1;
+    repeated string index_columns = 2;
+    oneof type {
+       GlobalIndex global_index = 3;
+       GlobalAsyncIndex global_async_index = 5;
+       GlobalUniqueIndex global_unique_index = 8;
+       GlobalVectorKMeansTreeIndex global_vector_kmeans_tree_index = 9;
+       GlobalFulltextPlainIndex global_fulltext_plain_index = 10;
+       GlobalFulltextRelevanceIndex global_fulltext_relevance_index = 11;
+    }
+    repeated string data_columns = 6;
+    reserved 4, 7; // Runtime status and size are not declarations.
+}
+message IndexSetIntent { repeated IndexDeclaration indexes = 1; }
+message IndexDeclaration {
+    IndexIntent specification = 1;
+    // Requirements on server-owned storage; these are not independent tables.
+    repeated ImplementationRequirement implementation = 2;
+}
+message ImplementationRequirement {
+    string name = 1;
+    RowTableIntent settings = 2;
+    repeated ImplementationColumnRequirement columns = 3;
+}
+message ImplementationColumnRequirement {
+    string name = 1;
+    Ydb.Type type = 2;
+    optional bool not_null = 3;
+    ColumnIntent settings = 4;
+}
+message ConsumerIntent {
+    string name = 1;
+    bool important = 2;
+    google.protobuf.Timestamp read_from = 3;
+    Ydb.Topic.SupportedCodecs supported_codecs = 4;
+    map<string,string> attributes = 5;
+    google.protobuf.Duration availability_period = 6;
+    optional StreamingConsumerType streaming_consumer_type = 7;
+}
+message TopicIntent {
+    AccessIntent access = 1;
+    Ydb.Topic.PartitioningSettings partitioning_settings = 2;
+    google.protobuf.Duration retention_period = 3;
+    int64 retention_storage_mb = 4;
+    Ydb.Topic.SupportedCodecs supported_codecs = 5;
+    int64 partition_write_speed_bytes_per_second = 6;
+    int64 partition_total_read_speed_bytes_per_second = 7;
+    int64 partition_consumer_read_speed_bytes_per_second = 8;
+    int64 partition_write_burst_bytes = 9;
+    map<string,string> attributes = 10;
+    repeated ConsumerIntent consumers = 11;
+    Ydb.Topic.MeteringMode metering_mode = 12;
+    optional uint32 metrics_level = 13;
+}
+message ChangefeedSetIntent { repeated ChangefeedIntent changefeeds = 1; }
+message ChangefeedIntent {
+    string name = 1;
+    Ydb.Table.ChangefeedMode.Mode mode = 2;
+    Ydb.Table.ChangefeedFormat.Format format = 3;
+    bool disabled = 4;
+    bool initial_scan = 5;
+    bool virtual_timestamps = 6;
+    map<string,string> attributes = 7;
+    string aws_region = 8;
+    google.protobuf.Duration resolved_timestamps_interval = 9;
+    bool schema_changes = 10;
+    bool user_sids = 11;
+    TopicIntent topic = 12;
+}

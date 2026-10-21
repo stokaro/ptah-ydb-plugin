@@ -87,3 +87,17 @@ func TestMixedConversionDiscardsColumnsWhenTableRefusesTopology(t *testing.T) {
 	c.Assert(result, qt.IsNil)
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
 }
+
+func TestMixedConversionDiscardsChildPrefixOnSequenceFailure(t *testing.T) {
+	c := qt.New(t)
+	p, request := columnConversion(c, &native.ColumnMeta{DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: &native.SequenceDescription{SetVal: &native.SequenceDescription_SetVal{NextValue: proto.Int64(11)}}}})
+	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Name: "Orders"}
+	child, err := schema.CaptureIndexes(owner, &native.IndexObservations{})
+	c.Assert(err, qt.IsNil)
+	values, err := p.NormalizeValues(context.Background(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "indexes", Representation: protocol.ValueInput_OBSERVED, Value: child}}})
+	c.Assert(err, qt.IsNil)
+	request.Values = append(values.Values, request.Values...)
+	result, err := p.ConvertValues(context.Background(), request)
+	c.Assert(result, qt.IsNil)
+	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
+}

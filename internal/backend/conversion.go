@@ -42,6 +42,8 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 			converted, err = schema.ConvertColumn(value.Value, request.From, request.To)
 		case schema.TableProperties:
 			converted, err = schema.ConvertTable(value.Value, request.From, request.To)
+		case schema.IndexProperties, schema.ChangefeedProperties, schema.TopicProperties:
+			converted, err = schema.ConvertChild(value.Value, request.From, request.To)
 		default:
 			return nil, status.Error(codes.Unimplemented, "YDB model has no representation conversion")
 		}
