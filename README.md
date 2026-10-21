@@ -4,7 +4,8 @@ This repository owns the executable YDB provider for [Ptah #4204](https://github
 It is under development. Inspection covers row tables and their indexes and
 changefeeds, topics, views, coordination nodes, external data sources, and
 external tables. Native SQL execution and session-bound data transactions are
-implemented, together with provider-owned migration history. Schema planning
+implemented, together with provider-owned migration history and coordination
+locks. Schema planning
 is still pending.
 
 The executable opens native YDB connections and reads row-table schemas
@@ -40,7 +41,8 @@ The test servers enable `enable_vector_index` and
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
 host-module imports and local module replacements. These checks cover sessions,
 SQL execution, commit/rollback, range conflicts, durable migration history,
-atomic revision comparisons, shared data/history transactions,
+atomic revision comparisons, shared data/history transactions, process lock
+exclusion, confirmed release, and write refusal after lease loss,
 native row-table observations, offline
 normalization, index implementation tables, changefeed consumers and retention,
 standalone native objects, exact-directory completeness, and refusals for
@@ -96,7 +98,7 @@ DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
 Native envelopes for provider-specific operations, SQL analysis, rendering,
-locks, logs, and tags remain to be extracted. The host's
+logs and tags remain to be extracted. The host's
 extended comment and coordination SQL forms are not implemented here.
 
 ## Migration history
@@ -131,9 +133,54 @@ refused. A failed native listing is an error rather than evidence of absence.
 Snapshots are bounded by the caller's revision limit and a 3 MiB size limit;
 exceeding either returns no partial history. An unreadable history snapshot or
 failed dispatched history mutation makes its caller transaction rollback-only.
-This service does not provide migration locks or establish complete migration
-support. Planning, inspection filtering of owned metadata tables, and host
-integration remain pending.
+History storage alone does not establish complete migration support. Planning,
+inspection filtering of owned metadata, and host integration remain pending.
+
+## Coordination locks
+
+The lock service uses exclusive ephemeral semaphores on the database-root
+`ptah_locks` coordination node. Each acquisition has its own native session.
+The provider creates a missing node with strict read and attach consistency.
+An existing node must have both settings explicitly strict; the provider refuses
+an incompatible configuration without changing it. YDB's default read mode can
+return stale state during leader changes; see the
+[YDB coordination documentation](https://ydb.tech/docs/en/reference/ydb-sdk/coordination).
+This changes the requirements for an older Ptah lock node; pre-v1, so no
+compatibility is owed. Configure that reserved node explicitly before using it.
+
+Acquisition is nonblocking. Only a confirmed BUSY permits the host to try a new
+handle under its wait policy. Handles are single-use and bound to the exact
+session and name. Release of an unused handle fences a late acquisition. A
+session retains at most 1,024 handles and holds at most 16 active locks.
+Acquisition during an execution transaction is refused. Read-only lock previews
+are not represented by this SDK revision.
+
+A native bidirectional stream sends each acquisition once and checks native
+operation status and request identity. It does not reconnect or reacquire after
+a transport failure. Keepalives run every two seconds; the native session timeout
+is ten seconds. Ownership checks run every second and verify the strict node
+configuration, exact session owner, and exclusive ephemeral semaphore count.
+A confirmation expires after five seconds. Both monotonic and wall-clock elapsed
+time are checked, including before refreshing a confirmation after a pause.
+
+Every SQL unit, history mutation, and transaction commit verifies guarding locks.
+Loss or uncertainty cancels guarded calls and permanently fences further writes
+in that provider session. Rollback, release, and close remain available. A new
+owner does not repair the old session. Failure after dispatch may have effects;
+an acknowledgment racing ownership loss is reported as uncertain.
+
+Release requires successful semaphore-release and session-stop acknowledgments.
+Local stream shutdown is insufficient. Cleanup continues with its own timeout
+after caller cancellation and retains uncertainty on repetition. Provider death
+leaves the server to expire the native lease. The coordination node remains for
+later runs; its ephemeral semaphores disappear after their owners leave.
+
+These are advisory leases, not transactional fencing tokens for SQL or DDL.
+Fresh checks and cancellation cannot undo a statement already executed or make
+nontransactional DDL atomic with ownership. Live tests cover competing provider
+processes, independent names, immediate takeover after confirmed close, process
+exit, node removal, and refusal of execution/history/commit after loss. Controlled
+clock tests cover stale confirmations without relying on a scheduled watcher.
 
 ## Schema observations
 
@@ -235,9 +282,9 @@ requires unchanged generated files.
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes desired schema models, offline source formats,
 comparison, planning, rendering, native operation envelopes, migration
-locks/logs/tags, capability detection, environment credential sources,
+logs/tags, capability detection, environment credential sources,
 monitoring, and dev-database provisioning. The provider advertises implemented
-inspection, normalization, SQL execution, transaction, and history services. The
+inspection, normalization, SQL execution, transaction, history, and lock services. The
 remaining capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

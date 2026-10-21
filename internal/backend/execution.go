@@ -43,6 +43,12 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	if err := ctx.Err(); err != nil {
 		return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.canceled-before-execution"}, nil
 	}
+	guarded, stop, err := s.guard(ctx)
+	if err != nil {
+		return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.lock-guarantee-lost"}, nil
+	}
+	defer stop()
+	ctx = guarded
 	var runner sqlExecutor
 	if request.TransactionId != "" {
 		record := s.transactions[request.TransactionId]
@@ -61,7 +67,12 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		defer func() { s.cleanupErr = errors.Join(s.cleanupErr, closeSQLConnection(conn)) }()
 		runner = conn
 	}
-	return executeUnits(ctx, runner, request.Units), nil
+	result := executeUnits(ctx, guardedExecutor{session: s, runner: runner}, request.Units)
+	if s.verifyLocks(ctx) != nil {
+		result.Outcome = protocol.Execution_UNKNOWN
+		result.DiagnosticCode = "ydb.lock-guarantee-lost"
+	}
+	return result, nil
 }
 
 func executeUnits(ctx context.Context, runner sqlExecutor, units []*protocol.Unit) *protocol.Execution {
@@ -97,4 +108,17 @@ func (p *Provider) lookup(id string) (*session, error) {
 		return nil, status.Error(codes.NotFound, "unknown YDB session")
 	}
 	return s, nil
+}
+
+// A fresh check precedes each unit, including units after a long earlier query.
+type guardedExecutor struct {
+	session *session
+	runner  sqlExecutor
+}
+
+func (g guardedExecutor) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if err := g.session.verifyLocks(ctx); err != nil {
+		return nil, err
+	}
+	return g.runner.ExecContext(ctx, query, args...)
 }

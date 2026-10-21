@@ -61,7 +61,16 @@ func (p *Provider) PrepareHistory(ctx context.Context, request *protocol.Prepare
 		return nil, err
 	}
 	defer unlock()
+	guarded, stop, err := s.guard(ctx)
+	if err != nil {
+		return historyResult(request.Scope, request.RequestId, protocol.HistoryResult_REFUSED, "ydb.lock-guarantee-lost"), nil
+	}
+	defer stop()
+	ctx = guarded
 	attempted, err := store.Prepare(ctx, s.connection.Driver)
+	if s.verifyLocks(ctx) != nil && err == nil {
+		err = errors.New("YDB lock guarantee lost")
+	}
 	if err != nil {
 		outcome := protocol.HistoryResult_REFUSED
 		if attempted {
@@ -136,6 +145,12 @@ func (p *Provider) MutateHistory(ctx context.Context, request *protocol.MutateHi
 		return nil, err
 	}
 	defer unlock()
+	guarded, stop, err := s.guard(ctx)
+	if err != nil {
+		return historyResult(request.Scope, request.RequestId, protocol.HistoryResult_REFUSED, "ydb.lock-guarantee-lost"), nil
+	}
+	defer stop()
+	ctx = guarded
 	for _, record := range []*protocol.HistoryRevision{request.Expected, request.Replacement} {
 		if record != nil {
 			if _, err := store.Encode(record); err != nil {
@@ -156,6 +171,9 @@ func (p *Provider) MutateHistory(ctx context.Context, request *protocol.MutateHi
 		}
 	} else {
 		outcome, err = s.mutatePrivateHistory(ctx, store, request)
+	}
+	if s.verifyLocks(ctx) != nil && err == nil {
+		err = errors.New("YDB lock guarantee lost")
 	}
 	if err != nil {
 		return historyResult(request.Scope, request.RequestId, protocol.HistoryResult_UNKNOWN, "ydb.history-mutation-unconfirmed"), nil
@@ -187,6 +205,9 @@ func (s *session) mutatePrivateHistory(ctx context.Context, store history.Store,
 			return protocol.HistoryResult_UNKNOWN, err
 		}
 		return outcome, nil
+	}
+	if err := s.verifyLocks(ctx); err != nil {
+		return protocol.HistoryResult_UNKNOWN, err
 	}
 	if err := tx.Commit(); err != nil {
 		return protocol.HistoryResult_UNKNOWN, err

@@ -33,19 +33,21 @@ type session struct {
 	cleanupErr   error
 	transactions map[string]*transaction
 	active       string
+	locks        map[string]*lockRecord
+	fenced       bool
 }
 
 // New constructs an isolated session service.
 func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
-// Description advertises native sessions, execution, transactions, inspection,
-// and offline observation normalization. Unextracted services remain unadvertised.
+// Description advertises implemented native services and offline observation
+// normalization. Unextracted services remain unadvertised.
 func Description() *protocol.Description {
 	return &protocol.Description{
 		Revision: provider.Revision, ProviderId: "stokaro/ptah-ydb-plugin",
-		Version: "0.0.0-dev", SemanticIdentity: "ydb-owned-history-1",
-		Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature},
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature}}},
+		Version: "0.0.0-dev", SemanticIdentity: "ydb-coordination-locks-1",
+		Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature}}},
 	}
 }
 
@@ -111,6 +113,7 @@ func (p *Provider) Close(_ context.Context, request *protocol.CloseRequest) erro
 	if !opened.closed {
 		opened.closed = true
 		opened.rollbackTransactions()
+		opened.closeLocks()
 		opened.closeErr = errors.Join(opened.cleanupErr, opened.connection.Close())
 	}
 	if opened.closeErr != nil {

@@ -11,7 +11,7 @@ import (
 
 func main() {
 	owner := backend.New()
-	if err := runtime.Serve(runtime.Server{Description: backend.Description(), Sessions: owner, Inspector: owner, ValueNormalizer: owner, Executor: owner, Transactions: owner, History: owner}); err != nil {
+	if err := runtime.Serve(runtime.Server{Description: backend.Description(), Sessions: owner, Inspector: owner, ValueNormalizer: owner, Executor: owner, Transactions: owner, History: owner, Locks: owner}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

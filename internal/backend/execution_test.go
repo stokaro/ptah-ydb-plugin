@@ -29,6 +29,7 @@ type driverProbe struct {
 	execErr       error
 	commitErr     error
 	onBegin       func(context.Context) error
+	onExec        func(context.Context) error
 	onCommit      func(context.Context) error
 }
 
@@ -62,6 +63,9 @@ func (c *probeConnection) ExecContext(ctx context.Context, _ string, _ []driver.
 	c.state.execCalls.Add(1)
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
+	}
+	if c.state.onExec != nil {
+		return driver.RowsAffected(1), c.state.onExec(ctx)
 	}
 	return driver.RowsAffected(1), c.state.execErr
 }

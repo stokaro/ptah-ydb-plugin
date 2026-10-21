@@ -40,6 +40,9 @@ func (p *Provider) BeginTransaction(ctx context.Context, request *protocol.Begin
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
+	if err := s.verifyLocks(ctx); err != nil {
+		return nil, err
+	}
 	record, err := s.reserveTransaction(request.TransactionId)
 	if err != nil {
 		return nil, err
@@ -125,11 +128,22 @@ func (p *Provider) FinishTransaction(ctx context.Context, request *protocol.Fini
 		}
 	}
 	if record.tx != nil {
+		if request.Action == protocol.FinishTransactionRequest_COMMIT && !record.failed {
+			guarded, stop, err := s.guard(ctx)
+			if err != nil {
+				return nil, err
+			}
+			defer stop()
+			ctx = guarded
+		}
 		action := request.Action
 		if record.failed {
 			action = protocol.FinishTransactionRequest_ROLLBACK
 		}
 		s.finishTransaction(ctx, record, action)
+		if action == protocol.FinishTransactionRequest_COMMIT && s.verifyLocks(ctx) != nil {
+			record.outcome = protocol.TransactionResult_UNKNOWN
+		}
 		s.active = ""
 	}
 	result := &protocol.TransactionResult{Outcome: record.outcome}
