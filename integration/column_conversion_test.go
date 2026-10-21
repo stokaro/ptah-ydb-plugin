@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func convertColumns(c *qt.C, client *providerruntime.Client, request *protocol.NormalizeValuesRequest) {
+func convertProperties(c *qt.C, client *providerruntime.Client, request *protocol.NormalizeValuesRequest) {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -29,7 +29,8 @@ func convertColumns(c *qt.C, client *providerruntime.Client, request *protocol.N
 	c.Assert(provider.ValidateConvertedValues(client.Description(), conversion, desired), qt.IsNil)
 	c.Assert(desired.Values, qt.HasLen, len(request.Values))
 	for _, value := range desired.Values {
-		c.Assert(value.Value.DefinitionSha256, qt.Equals, schema.ColumnDesiredModel().DefinitionSha256)
+		definitions := map[string]string{schema.ColumnProperties: schema.ColumnDesiredModel().DefinitionSha256, schema.TableProperties: schema.TableDesiredModel().DefinitionSha256}
+		c.Assert(value.Value.DefinitionSha256, qt.Equals, definitions[value.Value.Kind])
 	}
 	back, err := client.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_DESIRED, To: protocol.ValueInput_OBSERVED, Values: desired.Values})
 	c.Assert(err, qt.IsNil)
@@ -43,7 +44,7 @@ func TestColumnConversionOfflineSubprocess(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
-	convertColumns(c, client, &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "serial", Representation: protocol.ValueInput_OBSERVED, Value: observed}}})
+	convertProperties(c, client, &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "serial", Representation: protocol.ValueInput_OBSERVED, Value: observed}}})
 }
 
 func TestColumnConversionLiveSubprocess(t *testing.T) {
@@ -70,5 +71,5 @@ func TestColumnConversionLiveSubprocess(t *testing.T) {
 	c.Assert(columns.Values, qt.HasLen, 4)
 	// Conversion must keep working after the only database session is closed.
 	c.Assert(client.CloseSession(ctx, session.Id), qt.IsNil)
-	convertColumns(c, client, columns)
+	convertProperties(c, client, columns)
 }

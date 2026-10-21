@@ -96,6 +96,9 @@ func buildModel(kind string) *protocol.ValueModel {
 		"native_objects":          "retain view query plus table API attributes; coordination config except duplicate path; external source options and ordered external columns; transient self identity excluded",
 		"index_observations":      "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
 	}
+	if kind == TableProperties {
+		definition["row_storage"] = "unspecified storage on a row-table observation normalizes to STORE_TYPE_ROW"
+	}
 	if kind == ColumnStorageProperties {
 		definition["not_observed"] = []string{"live_column_storage", "shared_topic_consumers"}
 		definition["column_storage"] = "hash column order and TTL tier order retained; local indexes sorted by name; native IDs and versions excluded; omitted index defaults remain absent; offline only until live monitoring is connected"
@@ -257,6 +260,7 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 		if table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_ROW && table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED {
 			return nil, fmt.Errorf("column storage requires its own description")
 		}
+		table.StoreType = Ydb_Table.StoreType_STORE_TYPE_ROW
 	}
 	if strings.TrimSpace(owner.GetName()) == "" {
 		return nil, fmt.Errorf("empty YDB observation name")
@@ -277,7 +281,7 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), ColumnDesiredModel(), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
+	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
 }
 
 func validateModelOwner(value *protocol.Envelope, requireDatabase bool) error {
