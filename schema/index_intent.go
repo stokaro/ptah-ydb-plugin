@@ -16,13 +16,11 @@ func indexIntents(observed *native.IndexObservations) (*native.IndexSetIntent, e
 				return nil, fmt.Errorf("index physical shard boundaries cannot become creation settings")
 			}
 			requirement := &native.ImplementationRequirement{Name: table.Name, Settings: tableIntent(table.Description)}
-			for _, column := range table.Description.Columns {
-				settings, err := columnIntent(column)
-				if err != nil {
-					return nil, err
-				}
-				requirement.Columns = append(requirement.Columns, &native.ImplementationColumnRequirement{Name: column.Name, Type: proto.CloneOf(column.Type), NotNull: column.NotNull, Settings: settings})
+			columns, err := columnDeclarations(table.Description.Columns)
+			if err != nil {
+				return nil, err
 			}
+			requirement.Columns = columns
 			declaration.Implementation = append(declaration.Implementation, requirement)
 		}
 		result.Indexes = append(result.Indexes, declaration)
@@ -45,17 +43,11 @@ func indexObservations(intent *native.IndexSetIntent) (*native.IndexObservations
 				return nil, err
 			}
 			description := tableObservation(table.Settings)
-			for _, column := range table.Columns {
-				if column.Settings == nil {
-					return nil, fmt.Errorf("missing YDB implementation column settings")
-				}
-				if err := validateColumnIntent(column.Settings); err != nil {
-					return nil, err
-				}
-				observedColumn := columnObservation(column.Settings)
-				observedColumn.Name, observedColumn.Type, observedColumn.NotNull = column.Name, proto.CloneOf(column.Type), column.NotNull
-				description.Columns = append(description.Columns, observedColumn)
+			columns, err := declaredColumns(table.Columns)
+			if err != nil {
+				return nil, err
 			}
+			description.Columns = columns
 			observed.Tables = append(observed.Tables, &native.ImplementationTable{Name: table.Name, Description: description})
 		}
 		result.Indexes = append(result.Indexes, observed)

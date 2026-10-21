@@ -118,5 +118,5 @@ func TestNativeStreamsSubprocess(t *testing.T) {
 	again, err := client.NormalizeValues(ctx, values)
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(again, normalized), qt.IsTrue)
-	convertChildProperties(c, client, values)
+	convertNativeProperties(c, client, values)
 }

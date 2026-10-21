@@ -296,10 +296,10 @@ func (x *IndexDeclaration) GetImplementation() []*ImplementationRequirement {
 }
 
 type ImplementationRequirement struct {
-	state         protoimpl.MessageState             `protogen:"open.v1"`
-	Name          string                             `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Settings      *RowTableIntent                    `protobuf:"bytes,2,opt,name=settings,proto3" json:"settings,omitempty"`
-	Columns       []*ImplementationColumnRequirement `protobuf:"bytes,3,rep,name=columns,proto3" json:"columns,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Settings      *RowTableIntent        `protobuf:"bytes,2,opt,name=settings,proto3" json:"settings,omitempty"`
+	Columns       []*ColumnDeclaration   `protobuf:"bytes,3,rep,name=columns,proto3" json:"columns,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -348,14 +348,14 @@ func (x *ImplementationRequirement) GetSettings() *RowTableIntent {
 	return nil
 }
 
-func (x *ImplementationRequirement) GetColumns() []*ImplementationColumnRequirement {
+func (x *ImplementationRequirement) GetColumns() []*ColumnDeclaration {
 	if x != nil {
 		return x.Columns
 	}
 	return nil
 }
 
-type ImplementationColumnRequirement struct {
+type ColumnDeclaration struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Type          *Ydb.Type              `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
@@ -365,20 +365,20 @@ type ImplementationColumnRequirement struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ImplementationColumnRequirement) Reset() {
-	*x = ImplementationColumnRequirement{}
+func (x *ColumnDeclaration) Reset() {
+	*x = ColumnDeclaration{}
 	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ImplementationColumnRequirement) String() string {
+func (x *ColumnDeclaration) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ImplementationColumnRequirement) ProtoMessage() {}
+func (*ColumnDeclaration) ProtoMessage() {}
 
-func (x *ImplementationColumnRequirement) ProtoReflect() protoreflect.Message {
+func (x *ColumnDeclaration) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -390,33 +390,33 @@ func (x *ImplementationColumnRequirement) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ImplementationColumnRequirement.ProtoReflect.Descriptor instead.
-func (*ImplementationColumnRequirement) Descriptor() ([]byte, []int) {
+// Deprecated: Use ColumnDeclaration.ProtoReflect.Descriptor instead.
+func (*ColumnDeclaration) Descriptor() ([]byte, []int) {
 	return file_internal_nativeprotocol_intents_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *ImplementationColumnRequirement) GetName() string {
+func (x *ColumnDeclaration) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *ImplementationColumnRequirement) GetType() *Ydb.Type {
+func (x *ColumnDeclaration) GetType() *Ydb.Type {
 	if x != nil {
 		return x.Type
 	}
 	return nil
 }
 
-func (x *ImplementationColumnRequirement) GetNotNull() bool {
+func (x *ColumnDeclaration) GetNotNull() bool {
 	if x != nil && x.NotNull != nil {
 		return *x.NotNull
 	}
 	return false
 }
 
-func (x *ImplementationColumnRequirement) GetSettings() *ColumnIntent {
+func (x *ColumnDeclaration) GetSettings() *ColumnIntent {
 	if x != nil {
 		return x.Settings
 	}
@@ -831,11 +831,299 @@ func (x *ChangefeedIntent) GetTopic() *TopicIntent {
 	return nil
 }
 
+type ViewIntent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	QueryText     string                 `protobuf:"bytes,1,opt,name=query_text,json=queryText,proto3" json:"query_text,omitempty"`
+	Attributes    map[string]string      `protobuf:"bytes,2,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Access        *AccessIntent          `protobuf:"bytes,3,opt,name=access,proto3" json:"access,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ViewIntent) Reset() {
+	*x = ViewIntent{}
+	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ViewIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ViewIntent) ProtoMessage() {}
+
+func (x *ViewIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ViewIntent.ProtoReflect.Descriptor instead.
+func (*ViewIntent) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_intents_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ViewIntent) GetQueryText() string {
+	if x != nil {
+		return x.QueryText
+	}
+	return ""
+}
+
+func (x *ViewIntent) GetAttributes() map[string]string {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
+func (x *ViewIntent) GetAccess() *AccessIntent {
+	if x != nil {
+		return x.Access
+	}
+	return nil
+}
+
+type ExternalSourceIntent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Access        *AccessIntent          `protobuf:"bytes,1,opt,name=access,proto3" json:"access,omitempty"`
+	SourceType    *string                `protobuf:"bytes,2,opt,name=source_type,json=sourceType,proto3,oneof" json:"source_type,omitempty"`
+	Location      *string                `protobuf:"bytes,3,opt,name=location,proto3,oneof" json:"location,omitempty"`
+	Properties    map[string]string      `protobuf:"bytes,4,rep,name=properties,proto3" json:"properties,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExternalSourceIntent) Reset() {
+	*x = ExternalSourceIntent{}
+	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExternalSourceIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExternalSourceIntent) ProtoMessage() {}
+
+func (x *ExternalSourceIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExternalSourceIntent.ProtoReflect.Descriptor instead.
+func (*ExternalSourceIntent) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_intents_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ExternalSourceIntent) GetAccess() *AccessIntent {
+	if x != nil {
+		return x.Access
+	}
+	return nil
+}
+
+func (x *ExternalSourceIntent) GetSourceType() string {
+	if x != nil && x.SourceType != nil {
+		return *x.SourceType
+	}
+	return ""
+}
+
+func (x *ExternalSourceIntent) GetLocation() string {
+	if x != nil && x.Location != nil {
+		return *x.Location
+	}
+	return ""
+}
+
+func (x *ExternalSourceIntent) GetProperties() map[string]string {
+	if x != nil {
+		return x.Properties
+	}
+	return nil
+}
+
+type ExternalTableIntent struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Access         *AccessIntent          `protobuf:"bytes,1,opt,name=access,proto3" json:"access,omitempty"`
+	SourceType     *string                `protobuf:"bytes,2,opt,name=source_type,json=sourceType,proto3,oneof" json:"source_type,omitempty"`
+	DataSourcePath *string                `protobuf:"bytes,3,opt,name=data_source_path,json=dataSourcePath,proto3,oneof" json:"data_source_path,omitempty"`
+	Location       *string                `protobuf:"bytes,4,opt,name=location,proto3,oneof" json:"location,omitempty"`
+	Columns        []*ColumnDeclaration   `protobuf:"bytes,5,rep,name=columns,proto3" json:"columns,omitempty"`
+	Content        map[string]string      `protobuf:"bytes,6,rep,name=content,proto3" json:"content,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ExternalTableIntent) Reset() {
+	*x = ExternalTableIntent{}
+	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExternalTableIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExternalTableIntent) ProtoMessage() {}
+
+func (x *ExternalTableIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExternalTableIntent.ProtoReflect.Descriptor instead.
+func (*ExternalTableIntent) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_intents_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ExternalTableIntent) GetAccess() *AccessIntent {
+	if x != nil {
+		return x.Access
+	}
+	return nil
+}
+
+func (x *ExternalTableIntent) GetSourceType() string {
+	if x != nil && x.SourceType != nil {
+		return *x.SourceType
+	}
+	return ""
+}
+
+func (x *ExternalTableIntent) GetDataSourcePath() string {
+	if x != nil && x.DataSourcePath != nil {
+		return *x.DataSourcePath
+	}
+	return ""
+}
+
+func (x *ExternalTableIntent) GetLocation() string {
+	if x != nil && x.Location != nil {
+		return *x.Location
+	}
+	return ""
+}
+
+func (x *ExternalTableIntent) GetColumns() []*ColumnDeclaration {
+	if x != nil {
+		return x.Columns
+	}
+	return nil
+}
+
+func (x *ExternalTableIntent) GetContent() map[string]string {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+type ColumnStorageIntent struct {
+	state            protoimpl.MessageState   `protogen:"open.v1"`
+	HashColumns      []string                 `protobuf:"bytes,1,rep,name=hash_columns,json=hashColumns,proto3" json:"hash_columns,omitempty"`
+	Partitions       uint64                   `protobuf:"varint,2,opt,name=partitions,proto3" json:"partitions,omitempty"`
+	DataChannelCount uint64                   `protobuf:"varint,3,opt,name=data_channel_count,json=dataChannelCount,proto3" json:"data_channel_count,omitempty"`
+	LocalIndexes     []*LocalIndexObservation `protobuf:"bytes,4,rep,name=local_indexes,json=localIndexes,proto3" json:"local_indexes,omitempty"`
+	Ttl              *ColumnTTLPolicy         `protobuf:"bytes,5,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ColumnStorageIntent) Reset() {
+	*x = ColumnStorageIntent{}
+	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ColumnStorageIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ColumnStorageIntent) ProtoMessage() {}
+
+func (x *ColumnStorageIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_intents_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ColumnStorageIntent.ProtoReflect.Descriptor instead.
+func (*ColumnStorageIntent) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_intents_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ColumnStorageIntent) GetHashColumns() []string {
+	if x != nil {
+		return x.HashColumns
+	}
+	return nil
+}
+
+func (x *ColumnStorageIntent) GetPartitions() uint64 {
+	if x != nil {
+		return x.Partitions
+	}
+	return 0
+}
+
+func (x *ColumnStorageIntent) GetDataChannelCount() uint64 {
+	if x != nil {
+		return x.DataChannelCount
+	}
+	return 0
+}
+
+func (x *ColumnStorageIntent) GetLocalIndexes() []*LocalIndexObservation {
+	if x != nil {
+		return x.LocalIndexes
+	}
+	return nil
+}
+
+func (x *ColumnStorageIntent) GetTtl() *ColumnTTLPolicy {
+	if x != nil {
+		return x.Ttl
+	}
+	return nil
+}
+
 var File_internal_nativeprotocol_intents_proto protoreflect.FileDescriptor
 
 const file_internal_nativeprotocol_intents_proto_rawDesc = "" +
 	"\n" +
-	"%internal/nativeprotocol/intents.proto\x12\x0fptah.ydb.native\x1a%internal/nativeprotocol/indexes.proto\x1a$internal/nativeprotocol/topics.proto\x1a\x16protos/ydb_value.proto\x1a\x16protos/ydb_table.proto\x1a\x16protos/ydb_topic.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc3\x05\n" +
+	"%internal/nativeprotocol/intents.proto\x12\x0fptah.ydb.native\x1a%internal/nativeprotocol/indexes.proto\x1a$internal/nativeprotocol/topics.proto\x1a)internal/nativeprotocol/columnstore.proto\x1a\x16protos/ydb_value.proto\x1a\x16protos/ydb_table.proto\x1a\x16protos/ydb_topic.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc3\x05\n" +
 	"\vIndexIntent\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rindex_columns\x18\x02 \x03(\tR\findexColumns\x12A\n" +
@@ -852,12 +1140,12 @@ const file_internal_nativeprotocol_intents_proto_rawDesc = "" +
 	"\aindexes\x18\x01 \x03(\v2!.ptah.ydb.native.IndexDeclarationR\aindexes\"\xaa\x01\n" +
 	"\x10IndexDeclaration\x12B\n" +
 	"\rspecification\x18\x01 \x01(\v2\x1c.ptah.ydb.native.IndexIntentR\rspecification\x12R\n" +
-	"\x0eimplementation\x18\x02 \x03(\v2*.ptah.ydb.native.ImplementationRequirementR\x0eimplementation\"\xb8\x01\n" +
+	"\x0eimplementation\x18\x02 \x03(\v2*.ptah.ydb.native.ImplementationRequirementR\x0eimplementation\"\xaa\x01\n" +
 	"\x19ImplementationRequirement\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12;\n" +
-	"\bsettings\x18\x02 \x01(\v2\x1f.ptah.ydb.native.RowTableIntentR\bsettings\x12J\n" +
-	"\acolumns\x18\x03 \x03(\v20.ptah.ydb.native.ImplementationColumnRequirementR\acolumns\"\xbc\x01\n" +
-	"\x1fImplementationColumnRequirement\x12\x12\n" +
+	"\bsettings\x18\x02 \x01(\v2\x1f.ptah.ydb.native.RowTableIntentR\bsettings\x12<\n" +
+	"\acolumns\x18\x03 \x03(\v2\".ptah.ydb.native.ColumnDeclarationR\acolumns\"\xae\x01\n" +
+	"\x11ColumnDeclaration\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\x04type\x18\x02 \x01(\v2\t.Ydb.TypeR\x04type\x12\x1e\n" +
 	"\bnot_null\x18\x03 \x01(\bH\x00R\anotNull\x88\x01\x01\x129\n" +
@@ -919,7 +1207,53 @@ const file_internal_nativeprotocol_intents_proto_rawDesc = "" +
 	"\x05topic\x18\f \x01(\v2\x1c.ptah.ydb.native.TopicIntentR\x05topic\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xee\x01\n" +
+	"\n" +
+	"ViewIntent\x12\x1d\n" +
+	"\n" +
+	"query_text\x18\x01 \x01(\tR\tqueryText\x12K\n" +
+	"\n" +
+	"attributes\x18\x02 \x03(\v2+.ptah.ydb.native.ViewIntent.AttributesEntryR\n" +
+	"attributes\x125\n" +
+	"\x06access\x18\x03 \x01(\v2\x1d.ptah.ydb.native.AccessIntentR\x06access\x1a=\n" +
+	"\x0fAttributesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc7\x02\n" +
+	"\x14ExternalSourceIntent\x125\n" +
+	"\x06access\x18\x01 \x01(\v2\x1d.ptah.ydb.native.AccessIntentR\x06access\x12$\n" +
+	"\vsource_type\x18\x02 \x01(\tH\x00R\n" +
+	"sourceType\x88\x01\x01\x12\x1f\n" +
+	"\blocation\x18\x03 \x01(\tH\x01R\blocation\x88\x01\x01\x12U\n" +
+	"\n" +
+	"properties\x18\x04 \x03(\v25.ptah.ydb.native.ExternalSourceIntent.PropertiesEntryR\n" +
+	"properties\x1a=\n" +
+	"\x0fPropertiesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x0e\n" +
+	"\f_source_typeB\v\n" +
+	"\t_location\"\xbb\x03\n" +
+	"\x13ExternalTableIntent\x125\n" +
+	"\x06access\x18\x01 \x01(\v2\x1d.ptah.ydb.native.AccessIntentR\x06access\x12$\n" +
+	"\vsource_type\x18\x02 \x01(\tH\x00R\n" +
+	"sourceType\x88\x01\x01\x12-\n" +
+	"\x10data_source_path\x18\x03 \x01(\tH\x01R\x0edataSourcePath\x88\x01\x01\x12\x1f\n" +
+	"\blocation\x18\x04 \x01(\tH\x02R\blocation\x88\x01\x01\x12<\n" +
+	"\acolumns\x18\x05 \x03(\v2\".ptah.ydb.native.ColumnDeclarationR\acolumns\x12K\n" +
+	"\acontent\x18\x06 \x03(\v21.ptah.ydb.native.ExternalTableIntent.ContentEntryR\acontent\x1a:\n" +
+	"\fContentEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x0e\n" +
+	"\f_source_typeB\x13\n" +
+	"\x11_data_source_pathB\v\n" +
+	"\t_location\"\x87\x02\n" +
+	"\x13ColumnStorageIntent\x12!\n" +
+	"\fhash_columns\x18\x01 \x03(\tR\vhashColumns\x12\x1e\n" +
+	"\n" +
+	"partitions\x18\x02 \x01(\x04R\n" +
+	"partitions\x12,\n" +
+	"\x12data_channel_count\x18\x03 \x01(\x04R\x10dataChannelCount\x12K\n" +
+	"\rlocal_indexes\x18\x04 \x03(\v2&.ptah.ydb.native.LocalIndexObservationR\flocalIndexes\x122\n" +
+	"\x03ttl\x18\x05 \x01(\v2 .ptah.ydb.native.ColumnTTLPolicyR\x03ttlB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
 
 var (
 	file_internal_nativeprotocol_intents_proto_rawDescOnce sync.Once
@@ -933,76 +1267,94 @@ func file_internal_nativeprotocol_intents_proto_rawDescGZIP() []byte {
 	return file_internal_nativeprotocol_intents_proto_rawDescData
 }
 
-var file_internal_nativeprotocol_intents_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_internal_nativeprotocol_intents_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_internal_nativeprotocol_intents_proto_goTypes = []any{
-	(*IndexIntent)(nil),                     // 0: ptah.ydb.native.IndexIntent
-	(*IndexSetIntent)(nil),                  // 1: ptah.ydb.native.IndexSetIntent
-	(*IndexDeclaration)(nil),                // 2: ptah.ydb.native.IndexDeclaration
-	(*ImplementationRequirement)(nil),       // 3: ptah.ydb.native.ImplementationRequirement
-	(*ImplementationColumnRequirement)(nil), // 4: ptah.ydb.native.ImplementationColumnRequirement
-	(*ConsumerIntent)(nil),                  // 5: ptah.ydb.native.ConsumerIntent
-	(*TopicIntent)(nil),                     // 6: ptah.ydb.native.TopicIntent
-	(*ChangefeedSetIntent)(nil),             // 7: ptah.ydb.native.ChangefeedSetIntent
-	(*ChangefeedIntent)(nil),                // 8: ptah.ydb.native.ChangefeedIntent
-	nil,                                     // 9: ptah.ydb.native.ConsumerIntent.AttributesEntry
-	nil,                                     // 10: ptah.ydb.native.TopicIntent.AttributesEntry
-	nil,                                     // 11: ptah.ydb.native.ChangefeedIntent.AttributesEntry
-	(*GlobalIndex)(nil),                     // 12: ptah.ydb.native.GlobalIndex
-	(*GlobalAsyncIndex)(nil),                // 13: ptah.ydb.native.GlobalAsyncIndex
-	(*GlobalUniqueIndex)(nil),               // 14: ptah.ydb.native.GlobalUniqueIndex
-	(*GlobalVectorKMeansTreeIndex)(nil),     // 15: ptah.ydb.native.GlobalVectorKMeansTreeIndex
-	(*GlobalFulltextPlainIndex)(nil),        // 16: ptah.ydb.native.GlobalFulltextPlainIndex
-	(*GlobalFulltextRelevanceIndex)(nil),    // 17: ptah.ydb.native.GlobalFulltextRelevanceIndex
-	(*RowTableIntent)(nil),                  // 18: ptah.ydb.native.RowTableIntent
-	(*Ydb.Type)(nil),                        // 19: Ydb.Type
-	(*ColumnIntent)(nil),                    // 20: ptah.ydb.native.ColumnIntent
-	(*timestamppb.Timestamp)(nil),           // 21: google.protobuf.Timestamp
-	(*Ydb_Topic.SupportedCodecs)(nil),       // 22: Ydb.Topic.SupportedCodecs
-	(*durationpb.Duration)(nil),             // 23: google.protobuf.Duration
-	(*StreamingConsumerType)(nil),           // 24: ptah.ydb.native.StreamingConsumerType
-	(*AccessIntent)(nil),                    // 25: ptah.ydb.native.AccessIntent
-	(*Ydb_Topic.PartitioningSettings)(nil),  // 26: Ydb.Topic.PartitioningSettings
-	(Ydb_Topic.MeteringMode)(0),             // 27: Ydb.Topic.MeteringMode
-	(Ydb_Table.ChangefeedMode_Mode)(0),      // 28: Ydb.Table.ChangefeedMode.Mode
-	(Ydb_Table.ChangefeedFormat_Format)(0),  // 29: Ydb.Table.ChangefeedFormat.Format
+	(*IndexIntent)(nil),                    // 0: ptah.ydb.native.IndexIntent
+	(*IndexSetIntent)(nil),                 // 1: ptah.ydb.native.IndexSetIntent
+	(*IndexDeclaration)(nil),               // 2: ptah.ydb.native.IndexDeclaration
+	(*ImplementationRequirement)(nil),      // 3: ptah.ydb.native.ImplementationRequirement
+	(*ColumnDeclaration)(nil),              // 4: ptah.ydb.native.ColumnDeclaration
+	(*ConsumerIntent)(nil),                 // 5: ptah.ydb.native.ConsumerIntent
+	(*TopicIntent)(nil),                    // 6: ptah.ydb.native.TopicIntent
+	(*ChangefeedSetIntent)(nil),            // 7: ptah.ydb.native.ChangefeedSetIntent
+	(*ChangefeedIntent)(nil),               // 8: ptah.ydb.native.ChangefeedIntent
+	(*ViewIntent)(nil),                     // 9: ptah.ydb.native.ViewIntent
+	(*ExternalSourceIntent)(nil),           // 10: ptah.ydb.native.ExternalSourceIntent
+	(*ExternalTableIntent)(nil),            // 11: ptah.ydb.native.ExternalTableIntent
+	(*ColumnStorageIntent)(nil),            // 12: ptah.ydb.native.ColumnStorageIntent
+	nil,                                    // 13: ptah.ydb.native.ConsumerIntent.AttributesEntry
+	nil,                                    // 14: ptah.ydb.native.TopicIntent.AttributesEntry
+	nil,                                    // 15: ptah.ydb.native.ChangefeedIntent.AttributesEntry
+	nil,                                    // 16: ptah.ydb.native.ViewIntent.AttributesEntry
+	nil,                                    // 17: ptah.ydb.native.ExternalSourceIntent.PropertiesEntry
+	nil,                                    // 18: ptah.ydb.native.ExternalTableIntent.ContentEntry
+	(*GlobalIndex)(nil),                    // 19: ptah.ydb.native.GlobalIndex
+	(*GlobalAsyncIndex)(nil),               // 20: ptah.ydb.native.GlobalAsyncIndex
+	(*GlobalUniqueIndex)(nil),              // 21: ptah.ydb.native.GlobalUniqueIndex
+	(*GlobalVectorKMeansTreeIndex)(nil),    // 22: ptah.ydb.native.GlobalVectorKMeansTreeIndex
+	(*GlobalFulltextPlainIndex)(nil),       // 23: ptah.ydb.native.GlobalFulltextPlainIndex
+	(*GlobalFulltextRelevanceIndex)(nil),   // 24: ptah.ydb.native.GlobalFulltextRelevanceIndex
+	(*RowTableIntent)(nil),                 // 25: ptah.ydb.native.RowTableIntent
+	(*Ydb.Type)(nil),                       // 26: Ydb.Type
+	(*ColumnIntent)(nil),                   // 27: ptah.ydb.native.ColumnIntent
+	(*timestamppb.Timestamp)(nil),          // 28: google.protobuf.Timestamp
+	(*Ydb_Topic.SupportedCodecs)(nil),      // 29: Ydb.Topic.SupportedCodecs
+	(*durationpb.Duration)(nil),            // 30: google.protobuf.Duration
+	(*StreamingConsumerType)(nil),          // 31: ptah.ydb.native.StreamingConsumerType
+	(*AccessIntent)(nil),                   // 32: ptah.ydb.native.AccessIntent
+	(*Ydb_Topic.PartitioningSettings)(nil), // 33: Ydb.Topic.PartitioningSettings
+	(Ydb_Topic.MeteringMode)(0),            // 34: Ydb.Topic.MeteringMode
+	(Ydb_Table.ChangefeedMode_Mode)(0),     // 35: Ydb.Table.ChangefeedMode.Mode
+	(Ydb_Table.ChangefeedFormat_Format)(0), // 36: Ydb.Table.ChangefeedFormat.Format
+	(*LocalIndexObservation)(nil),          // 37: ptah.ydb.native.LocalIndexObservation
+	(*ColumnTTLPolicy)(nil),                // 38: ptah.ydb.native.ColumnTTLPolicy
 }
 var file_internal_nativeprotocol_intents_proto_depIdxs = []int32{
-	12, // 0: ptah.ydb.native.IndexIntent.global_index:type_name -> ptah.ydb.native.GlobalIndex
-	13, // 1: ptah.ydb.native.IndexIntent.global_async_index:type_name -> ptah.ydb.native.GlobalAsyncIndex
-	14, // 2: ptah.ydb.native.IndexIntent.global_unique_index:type_name -> ptah.ydb.native.GlobalUniqueIndex
-	15, // 3: ptah.ydb.native.IndexIntent.global_vector_kmeans_tree_index:type_name -> ptah.ydb.native.GlobalVectorKMeansTreeIndex
-	16, // 4: ptah.ydb.native.IndexIntent.global_fulltext_plain_index:type_name -> ptah.ydb.native.GlobalFulltextPlainIndex
-	17, // 5: ptah.ydb.native.IndexIntent.global_fulltext_relevance_index:type_name -> ptah.ydb.native.GlobalFulltextRelevanceIndex
+	19, // 0: ptah.ydb.native.IndexIntent.global_index:type_name -> ptah.ydb.native.GlobalIndex
+	20, // 1: ptah.ydb.native.IndexIntent.global_async_index:type_name -> ptah.ydb.native.GlobalAsyncIndex
+	21, // 2: ptah.ydb.native.IndexIntent.global_unique_index:type_name -> ptah.ydb.native.GlobalUniqueIndex
+	22, // 3: ptah.ydb.native.IndexIntent.global_vector_kmeans_tree_index:type_name -> ptah.ydb.native.GlobalVectorKMeansTreeIndex
+	23, // 4: ptah.ydb.native.IndexIntent.global_fulltext_plain_index:type_name -> ptah.ydb.native.GlobalFulltextPlainIndex
+	24, // 5: ptah.ydb.native.IndexIntent.global_fulltext_relevance_index:type_name -> ptah.ydb.native.GlobalFulltextRelevanceIndex
 	2,  // 6: ptah.ydb.native.IndexSetIntent.indexes:type_name -> ptah.ydb.native.IndexDeclaration
 	0,  // 7: ptah.ydb.native.IndexDeclaration.specification:type_name -> ptah.ydb.native.IndexIntent
 	3,  // 8: ptah.ydb.native.IndexDeclaration.implementation:type_name -> ptah.ydb.native.ImplementationRequirement
-	18, // 9: ptah.ydb.native.ImplementationRequirement.settings:type_name -> ptah.ydb.native.RowTableIntent
-	4,  // 10: ptah.ydb.native.ImplementationRequirement.columns:type_name -> ptah.ydb.native.ImplementationColumnRequirement
-	19, // 11: ptah.ydb.native.ImplementationColumnRequirement.type:type_name -> Ydb.Type
-	20, // 12: ptah.ydb.native.ImplementationColumnRequirement.settings:type_name -> ptah.ydb.native.ColumnIntent
-	21, // 13: ptah.ydb.native.ConsumerIntent.read_from:type_name -> google.protobuf.Timestamp
-	22, // 14: ptah.ydb.native.ConsumerIntent.supported_codecs:type_name -> Ydb.Topic.SupportedCodecs
-	9,  // 15: ptah.ydb.native.ConsumerIntent.attributes:type_name -> ptah.ydb.native.ConsumerIntent.AttributesEntry
-	23, // 16: ptah.ydb.native.ConsumerIntent.availability_period:type_name -> google.protobuf.Duration
-	24, // 17: ptah.ydb.native.ConsumerIntent.streaming_consumer_type:type_name -> ptah.ydb.native.StreamingConsumerType
-	25, // 18: ptah.ydb.native.TopicIntent.access:type_name -> ptah.ydb.native.AccessIntent
-	26, // 19: ptah.ydb.native.TopicIntent.partitioning_settings:type_name -> Ydb.Topic.PartitioningSettings
-	23, // 20: ptah.ydb.native.TopicIntent.retention_period:type_name -> google.protobuf.Duration
-	22, // 21: ptah.ydb.native.TopicIntent.supported_codecs:type_name -> Ydb.Topic.SupportedCodecs
-	10, // 22: ptah.ydb.native.TopicIntent.attributes:type_name -> ptah.ydb.native.TopicIntent.AttributesEntry
+	25, // 9: ptah.ydb.native.ImplementationRequirement.settings:type_name -> ptah.ydb.native.RowTableIntent
+	4,  // 10: ptah.ydb.native.ImplementationRequirement.columns:type_name -> ptah.ydb.native.ColumnDeclaration
+	26, // 11: ptah.ydb.native.ColumnDeclaration.type:type_name -> Ydb.Type
+	27, // 12: ptah.ydb.native.ColumnDeclaration.settings:type_name -> ptah.ydb.native.ColumnIntent
+	28, // 13: ptah.ydb.native.ConsumerIntent.read_from:type_name -> google.protobuf.Timestamp
+	29, // 14: ptah.ydb.native.ConsumerIntent.supported_codecs:type_name -> Ydb.Topic.SupportedCodecs
+	13, // 15: ptah.ydb.native.ConsumerIntent.attributes:type_name -> ptah.ydb.native.ConsumerIntent.AttributesEntry
+	30, // 16: ptah.ydb.native.ConsumerIntent.availability_period:type_name -> google.protobuf.Duration
+	31, // 17: ptah.ydb.native.ConsumerIntent.streaming_consumer_type:type_name -> ptah.ydb.native.StreamingConsumerType
+	32, // 18: ptah.ydb.native.TopicIntent.access:type_name -> ptah.ydb.native.AccessIntent
+	33, // 19: ptah.ydb.native.TopicIntent.partitioning_settings:type_name -> Ydb.Topic.PartitioningSettings
+	30, // 20: ptah.ydb.native.TopicIntent.retention_period:type_name -> google.protobuf.Duration
+	29, // 21: ptah.ydb.native.TopicIntent.supported_codecs:type_name -> Ydb.Topic.SupportedCodecs
+	14, // 22: ptah.ydb.native.TopicIntent.attributes:type_name -> ptah.ydb.native.TopicIntent.AttributesEntry
 	5,  // 23: ptah.ydb.native.TopicIntent.consumers:type_name -> ptah.ydb.native.ConsumerIntent
-	27, // 24: ptah.ydb.native.TopicIntent.metering_mode:type_name -> Ydb.Topic.MeteringMode
+	34, // 24: ptah.ydb.native.TopicIntent.metering_mode:type_name -> Ydb.Topic.MeteringMode
 	8,  // 25: ptah.ydb.native.ChangefeedSetIntent.changefeeds:type_name -> ptah.ydb.native.ChangefeedIntent
-	28, // 26: ptah.ydb.native.ChangefeedIntent.mode:type_name -> Ydb.Table.ChangefeedMode.Mode
-	29, // 27: ptah.ydb.native.ChangefeedIntent.format:type_name -> Ydb.Table.ChangefeedFormat.Format
-	11, // 28: ptah.ydb.native.ChangefeedIntent.attributes:type_name -> ptah.ydb.native.ChangefeedIntent.AttributesEntry
-	23, // 29: ptah.ydb.native.ChangefeedIntent.resolved_timestamps_interval:type_name -> google.protobuf.Duration
+	35, // 26: ptah.ydb.native.ChangefeedIntent.mode:type_name -> Ydb.Table.ChangefeedMode.Mode
+	36, // 27: ptah.ydb.native.ChangefeedIntent.format:type_name -> Ydb.Table.ChangefeedFormat.Format
+	15, // 28: ptah.ydb.native.ChangefeedIntent.attributes:type_name -> ptah.ydb.native.ChangefeedIntent.AttributesEntry
+	30, // 29: ptah.ydb.native.ChangefeedIntent.resolved_timestamps_interval:type_name -> google.protobuf.Duration
 	6,  // 30: ptah.ydb.native.ChangefeedIntent.topic:type_name -> ptah.ydb.native.TopicIntent
-	31, // [31:31] is the sub-list for method output_type
-	31, // [31:31] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	16, // 31: ptah.ydb.native.ViewIntent.attributes:type_name -> ptah.ydb.native.ViewIntent.AttributesEntry
+	32, // 32: ptah.ydb.native.ViewIntent.access:type_name -> ptah.ydb.native.AccessIntent
+	32, // 33: ptah.ydb.native.ExternalSourceIntent.access:type_name -> ptah.ydb.native.AccessIntent
+	17, // 34: ptah.ydb.native.ExternalSourceIntent.properties:type_name -> ptah.ydb.native.ExternalSourceIntent.PropertiesEntry
+	32, // 35: ptah.ydb.native.ExternalTableIntent.access:type_name -> ptah.ydb.native.AccessIntent
+	4,  // 36: ptah.ydb.native.ExternalTableIntent.columns:type_name -> ptah.ydb.native.ColumnDeclaration
+	18, // 37: ptah.ydb.native.ExternalTableIntent.content:type_name -> ptah.ydb.native.ExternalTableIntent.ContentEntry
+	37, // 38: ptah.ydb.native.ColumnStorageIntent.local_indexes:type_name -> ptah.ydb.native.LocalIndexObservation
+	38, // 39: ptah.ydb.native.ColumnStorageIntent.ttl:type_name -> ptah.ydb.native.ColumnTTLPolicy
+	40, // [40:40] is the sub-list for method output_type
+	40, // [40:40] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_internal_nativeprotocol_intents_proto_init() }
@@ -1012,6 +1364,7 @@ func file_internal_nativeprotocol_intents_proto_init() {
 	}
 	file_internal_nativeprotocol_indexes_proto_init()
 	file_internal_nativeprotocol_topics_proto_init()
+	file_internal_nativeprotocol_columnstore_proto_init()
 	file_internal_nativeprotocol_intents_proto_msgTypes[0].OneofWrappers = []any{
 		(*IndexIntent_GlobalIndex)(nil),
 		(*IndexIntent_GlobalAsyncIndex)(nil),
@@ -1023,13 +1376,15 @@ func file_internal_nativeprotocol_intents_proto_init() {
 	file_internal_nativeprotocol_intents_proto_msgTypes[4].OneofWrappers = []any{}
 	file_internal_nativeprotocol_intents_proto_msgTypes[5].OneofWrappers = []any{}
 	file_internal_nativeprotocol_intents_proto_msgTypes[6].OneofWrappers = []any{}
+	file_internal_nativeprotocol_intents_proto_msgTypes[10].OneofWrappers = []any{}
+	file_internal_nativeprotocol_intents_proto_msgTypes[11].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_nativeprotocol_intents_proto_rawDesc), len(file_internal_nativeprotocol_intents_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

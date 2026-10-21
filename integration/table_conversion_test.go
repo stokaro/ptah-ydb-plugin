@@ -61,4 +61,5 @@ func TestTableConversionLiveSubprocess(t *testing.T) {
 	c.Assert(properties.Values, qt.HasLen, 5)
 	c.Assert(client.CloseSession(ctx, session.Id), qt.IsNil)
 	convertProperties(c, client, properties)
+	t.Run("host export", func(t *testing.T) { assertHostSchemaExport(t, client, binary, digest, []string{directory}, all) })
 }

@@ -48,6 +48,7 @@ func TestColumnStorageOfflineSubprocess(t *testing.T) {
 	again, err := client.NormalizeValues(ctx, request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(normalized, again), qt.IsTrue)
+	convertNativeProperties(c, client, request)
 	bad := proto.CloneOf(request)
 	bad.Values[0].Value.Payload = []byte(`{"hashColumns":["id"],"partitions":"1","dataChannelCount":"64","localIndexes":[{"name":"missing-kind","columns":["id"]}]}`)
 	_, err = client.NormalizeValues(ctx, bad)

@@ -47,7 +47,7 @@ func buildTableDesiredModel() *protocol.ValueModel {
 		panic(err)
 	}
 	digest := sha256.Sum256(canonical)
-	return &protocol.ValueModel{Kind: TableProperties, Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
+	return &protocol.ValueModel{Kind: TableProperties, DisplayName: modelDisplayName(TableProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
 		Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: TableProperties + "/desired-json-v1"}
 }
 
@@ -123,14 +123,7 @@ func validateTableIntent(intent *native.RowTableIntent) error {
 			return fmt.Errorf("YDB TTL requires an explicit mode")
 		}
 	}
-	if access := intent.Access; access != nil {
-		for _, grants := range [][]*Ydb_Scheme.Permissions{access.DirectGrants, access.RequiredEffectivePermissions} {
-			if err := validatePermissionSet(grants); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return validateAccessIntent(intent.Access)
 }
 
 func validatePermissionSet(grants []*Ydb_Scheme.Permissions) error {

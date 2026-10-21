@@ -20,14 +20,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func convertChildProperties(c *qt.C, client *providerruntime.Client, inputs *protocol.NormalizeValuesRequest) {
+func convertNativeProperties(c *qt.C, client *providerruntime.Client, inputs *protocol.NormalizeValuesRequest) {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	selected := &protocol.NormalizeValuesRequest{Engine: inputs.Engine, TargetFeatures: inputs.TargetFeatures}
 	for _, input := range inputs.Values {
 		switch input.Value.Kind {
-		case schema.IndexProperties, schema.ChangefeedProperties, schema.TopicProperties:
+		case schema.IndexProperties, schema.ChangefeedProperties, schema.TopicProperties, schema.ViewProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties, schema.ColumnStorageProperties, schema.CoordinationProperties:
 			selected.Values = append(selected.Values, proto.CloneOf(input))
 		}
 	}
@@ -35,13 +35,28 @@ func convertChildProperties(c *qt.C, client *providerruntime.Client, inputs *pro
 	observed, err := client.NormalizeValues(ctx, selected)
 	c.Assert(err, qt.IsNil)
 	request := &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_OBSERVED, To: protocol.ValueInput_DESIRED, Values: observed.Values, TargetFeatures: inputs.TargetFeatures}
+	// Check the public codec too so a sanitized subprocess failure retains a
+	// model-specific diagnostic in this fixture without printing schema payloads.
+	for _, record := range observed.Values {
+		var conversionErr error
+		if record.Value.Kind == schema.CoordinationProperties {
+			_, conversionErr = schema.ConvertCoordination(record.Value, request.From, request.To)
+		} else {
+			_, conversionErr = schema.ConvertNative(record.Value, request.From, request.To)
+		}
+		c.Assert(conversionErr, qt.IsNil, qt.Commentf("native model: %s", record.Value.Kind))
+	}
 	desired, err := client.ConvertValues(ctx, request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidateConvertedValues(client.Description(), request, desired), qt.IsNil)
 	back, err := client.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_DESIRED, To: protocol.ValueInput_OBSERVED, Values: desired.Values, TargetFeatures: inputs.TargetFeatures})
 	c.Assert(err, qt.IsNil)
 	for i, value := range desired.Values {
-		c.Assert(value.Value.DefinitionSha256, qt.Equals, schema.ChildDesiredModel(value.Value.Kind).DefinitionSha256)
+		definition := schema.NativeDesiredModel(value.Value.Kind)
+		if value.Value.Kind == schema.CoordinationProperties {
+			definition = schema.CoordinationDesiredModel()
+		}
+		c.Assert(value.Value.DefinitionSha256, qt.Equals, definition.DefinitionSha256)
 		expected := proto.CloneOf(observed.Values[i].Value)
 		if expected.Kind == schema.ChangefeedProperties {
 			var feeds native.ChangefeedObservations
@@ -86,5 +101,5 @@ func TestChildConversionOfflineSubprocess(t *testing.T) {
 	}
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
-	convertChildProperties(c, client, request)
+	convertNativeProperties(c, client, request)
 }

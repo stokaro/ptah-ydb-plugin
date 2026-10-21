@@ -346,9 +346,9 @@ statistics are excluded. A missing child description refuses the entire read.
 
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
-Desired column, row-table, index, changefeed, and topic models support offline
-conversion. Other desired models, table/column comparison, and table/column
-planning remain pending.
+Every observed model has a separate desired contract and an offline conversion.
+Comparison and planning remain limited to coordination nodes; source adapters
+for the other families remain pending.
 
 Views retain the query returned by the view service and the attributes read
 through the table service on the same path. This includes comments and custom
@@ -403,8 +403,8 @@ invalid entry or cancellation. Desired and observed models have distinct
 encodings and definition digests; observation coverage contains only observed
 models.
 
-The subprocess tests exercise decoding and normalization without a database
-address. HCL, Go annotation and SQL adapters and desired/observed conversion
+The subprocess tests exercise decoding, normalization, and representation
+conversion without a database address. HCL, Go annotation, and SQL adapters
 remain pending.
 This service alone does not make the YAML example executable as a migration.
 
@@ -432,6 +432,15 @@ regions, and explicit subject claims override namespace claims. Namespace
 components, target scopes, and exact empty paths retain their boundaries.
 An incomplete desired source preserves known current configuration. Missing
 namespace coverage also produces an undecided diagnostic.
+
+Coordination exports retain owner, direct grants, and effective-permission
+requirements in an optional `access` field. Its JSON field names use snake case.
+Omission leaves access unmanaged. The YAML source grammar above does not accept
+access declarations. Comparison reports unsatisfied access requirements as
+undecided; change/operation normalization refuses them. Existing nodes can
+change configuration while satisfying unchanged access requirements. Creation
+with explicit access requirements is refused because the coordination service
+cannot promise inherited permissions or apply grants.
 
 The comparison refuses contradictory identities, forged normalization receipts,
 and collisions with declared relations. Database defaults require an explicit
@@ -462,10 +471,8 @@ validates the source payload and its captured normalization, retains exact owner
 identity and ordered records, and returns no prefix on failure or cancellation.
 It opens no connection and establishes no inspection coverage.
 
-This supports column-property transport and export semantics. Complete schema
-export still requires desired models for every covered kind, including
-views and external tables. Column comparison and planning are not
-advertised by this implementation.
+This supports column-property transport and JSON schema export. Column
+comparison and planning are not advertised by this implementation.
 
 ## Offline row-table declarations
 
@@ -491,9 +498,8 @@ object identity cannot enter the property model. Conversion preserves a complete
 mixed table/column batch, works after the session closes, and establishes no
 inspection coverage.
 
-Complete schema export still requires desired models for the remaining native
-object families. Unsupported families refuse the whole
-conversion; a converted table does not make an incomplete schema export succeed.
+JSON schema export includes table and column facets together with native objects
+and their captured coverage. Unsupported input refuses the whole conversion.
 
 ## Offline index and stream declarations
 
@@ -534,6 +540,43 @@ names, and incomplete child descriptions are refused. Empty index/changefeed
 sets keep their own desired model definitions. Indexes, implementation tables,
 changefeeds, and consumers normalize by name; column and key order is retained.
 
+## Offline native-object declarations
+
+View declarations retain query text and table-service attributes, including
+comments. The view and table APIs must agree about access metadata. Conflicting
+access or additional table settings refuse conversion rather than creating
+competing declarations for one view. The table API returns disabled partitioning
+switches for views on both tested YDB lines. This exact placeholder is excluded;
+other partition settings are refused.
+
+External-source declarations preserve source type, location, and exact native
+property keys and values, including authentication references. External-table
+declarations preserve the data-source path, location, content options, ordered
+column names and types, nullability, and typed column settings. Conversion does
+not contact an external service or resolve a secret.
+
+Coordination conversion retains optional timing and mode settings together with
+access requirements. Native unspecified settings remain omitted. A desired
+`struct_name` cannot convert to an observation because it has no server
+counterpart. A runtime-reserved coordination identity is not exportable as a
+user declaration.
+
+Column-storage declarations retain hash-column order, partition and data-channel
+counts, local-index settings, and TTL tiers. Optional false values, disabled TTL,
+and omitted TTL stay distinct. The same validation applies to both
+representations; native IDs and shard addresses have no declaration field.
+
+The native models use distinct desired definitions. This changes experimental
+definition digests and the coordination change/operation contracts. This
+provider is pre-v1 and has no reader for the previous shapes.
+
+The live CI jobs build a pinned Ptah host in a separate checkout and run
+`schema inspect --format json` with an explicitly trusted provider manifest.
+They compare every exported model with SDK conversion and check that coverage
+keeps every inspected model family. These tests exercise row tables, columns,
+views, external objects, and coordination nodes. Local runs enable the same
+checks with `PTAH_HOST_TEST_BIN` pointing to that host binary.
+
 ## Offline column-storage observations
 
 The column-storage decoder accepts captured monitoring JSON together with an
@@ -549,7 +592,7 @@ Native IDs, schema versions, and shard addresses are excluded from the model.
 Local indexes are sorted by name; hash columns and TTL tiers retain order.
 
 Fixture replay covers prior YDB 25.1 and 26.2 captures. A subprocess test checks
-SDK normalization without opening a database session. Live column-table
+SDK normalization and conversion without opening a database session. Live column-table
 inspection still refuses: monitoring transport and the combined live reader
 are not connected yet. These tests do not establish live column-table support.
 

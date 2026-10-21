@@ -35,3 +35,20 @@ func accessObservation(access *native.AccessIntent) *Ydb_Scheme.Entry {
 	}
 	return result
 }
+
+// Access requirements stay separate from the permission changes an executor
+// can perform. All native declarations share this validation.
+func validateAccessIntent(access *native.AccessIntent) error {
+	if access == nil {
+		return nil
+	}
+	if err := Known(access); err != nil {
+		return err
+	}
+	for _, grants := range [][]*Ydb_Scheme.Permissions{access.DirectGrants, access.RequiredEffectivePermissions} {
+		if err := validatePermissionSet(grants); err != nil {
+			return err
+		}
+	}
+	return nil
+}

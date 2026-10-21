@@ -23,10 +23,10 @@ import (
 func assertChildRoundTrip(c *qt.C, observed *protocol.Envelope) *protocol.Envelope {
 	c.Helper()
 	before := proto.CloneOf(observed)
-	desired, err := schema.ConvertChild(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	desired, err := schema.ConvertNative(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 	c.Assert(err, qt.IsNil)
-	c.Assert(desired.DefinitionSha256, qt.Equals, schema.ChildDesiredModel(observed.Kind).DefinitionSha256)
-	back, err := schema.ConvertChild(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+	c.Assert(desired.DefinitionSha256, qt.Equals, schema.NativeDesiredModel(observed.Kind).DefinitionSha256)
+	back, err := schema.ConvertNative(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(back, observed), qt.IsTrue)
 	c.Assert(proto.Equal(observed, before), qt.IsTrue)
@@ -90,7 +90,7 @@ func TestIndexConversionRefusesPhysicalBoundaries(t *testing.T) {
 	input.Indexes[0].Tables[0].Description.ShardKeyBounds = []*Ydb.TypedValue{{Type: primitive(Ydb.Type_UINT64), Value: &Ydb.Value{Value: &Ydb.Value_Uint64Value{Uint64Value: 10}}}}
 	observed, err := schema.CaptureIndexes(tableOwner(), input)
 	c.Assert(err, qt.IsNil)
-	desired, err := schema.ConvertChild(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	desired, err := schema.ConvertNative(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 	c.Assert(desired, qt.IsNil)
 	c.Assert(err, qt.ErrorMatches, "index physical shard boundaries cannot become creation settings")
 }
@@ -133,13 +133,13 @@ func TestChangefeedDeclarationsSeparateInitialScanFromProgress(t *testing.T) {
 			feed.Description.ResolvedTimestampsInterval = durationpb.New(10 * time.Second)
 			observed, err := schema.CaptureChangefeeds(tableOwner(), &native.ChangefeedObservations{Changefeeds: []*native.ObservedChangefeed{feed}})
 			c.Assert(err, qt.IsNil)
-			desired, err := schema.ConvertChild(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+			desired, err := schema.ConvertNative(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 			c.Assert(err, qt.IsNil)
 			var intent native.ChangefeedSetIntent
 			c.Assert(protojson.Unmarshal(desired.Payload, &intent), qt.IsNil)
 			c.Assert(intent.Changefeeds[0].InitialScan, qt.IsTrue)
 			c.Assert(intent.Changefeeds[0].Disabled, qt.Equals, state == native.ChangefeedDescription_STATE_DISABLED)
-			back, err := schema.ConvertChild(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+			back, err := schema.ConvertNative(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
 			c.Assert(err, qt.IsNil)
 			if state == native.ChangefeedDescription_STATE_INITIAL_SCAN {
 				var decoded native.ChangefeedObservations
@@ -148,7 +148,7 @@ func TestChangefeedDeclarationsSeparateInitialScanFromProgress(t *testing.T) {
 				c.Assert(decoded.Changefeeds[0].InitialScan, qt.IsTrue)
 				c.Assert(decoded.Changefeeds[0].Description.InitialScanProgress, qt.IsNil)
 				c.Assert(proto.Equal(back, observed), qt.IsFalse)
-				again, err := schema.ConvertChild(back, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+				again, err := schema.ConvertNative(back, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 				c.Assert(err, qt.IsNil)
 				c.Assert(proto.Equal(again, desired), qt.IsTrue)
 			} else {
@@ -194,7 +194,7 @@ func TestDesiredChildrenRefuseIncompleteAndRuntimeSettings(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
-			definition := schema.ChildDesiredModel(test.kind)
+			definition := schema.NativeDesiredModel(test.kind)
 			owner := tableOwner()
 			if test.kind == schema.TopicProperties {
 				owner = topicOwner()
@@ -229,7 +229,7 @@ func TestDesiredIndexRefusesIncompleteImplementation(t *testing.T) {
 			c := qt.New(t)
 			observed, err := schema.CaptureIndexes(tableOwner(), &native.IndexObservations{Indexes: []*native.ObservedIndex{indexObservation("idx")}})
 			c.Assert(err, qt.IsNil)
-			desired, err := schema.ConvertChild(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+			desired, err := schema.ConvertNative(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 			c.Assert(err, qt.IsNil)
 			var intent native.IndexSetIntent
 			c.Assert(protojson.Unmarshal(desired.Payload, &intent), qt.IsNil)
