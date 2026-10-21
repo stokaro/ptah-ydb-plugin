@@ -30,7 +30,7 @@ jobs:
       - run: sh scripts/check-module-boundaries.sh
       - run: go test -race ./...
       - run: go vet -tags integration ./...
-      - run: go test -race -tags integration ./integration -run 'TestColumnStorageOfflineSubprocess|TestCoordinationSourceOfflineSubprocess|TestCoordinationComparisonOfflineSubprocess' -count=1
+      - run: go test -race -tags integration ./integration -run 'TestColumnStorageOfflineSubprocess|TestCoordinationSourceOfflineSubprocess|TestCoordinationComparisonOfflineSubprocess|TestYQLAnalysisOfflineSubprocess' -count=1
       - run: CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
   windows-unit:
     runs-on: windows-latest

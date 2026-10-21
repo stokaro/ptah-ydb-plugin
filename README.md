@@ -491,6 +491,41 @@ subprocess tests cover create, alter, reset, drop, stale plans, mixed SQL/native
 batch refusal, and lease loss on both tested YDB release lines. Host CLI routing,
 other object lifecycles, and complete migration planning remain pending.
 
+## Offline SQL analysis
+
+The SQL analysis service reads default-mode YQL without a database session. It
+preserves source byte ranges and line numbers, original tokens, and quoted case.
+Semicolons inside quoted or multiline literals, comments, action definitions,
+inline actions, and lambda bodies remain inside their enclosing statement.
+Leading and trailing comments stay in the returned source ranges.
+
+The scanner and value decoder were extracted from Ptah's YQL implementation,
+with its lexical regression corpus. The provider keeps no host-package import.
+Live tests compare reconstructed statements with results from both supported
+YDB test lines, including escaped quotes, multiline strings, compound bodies,
+and numeric suffixes.
+
+Native safety judgments cover topic and consumer positions, transfer consumers,
+replica tables, coordination state, secrets, external data access, and streaming
+checkpoints. Common table creation and a single ADD COLUMN clause retain the
+host's common DDL assessment. Unmodeled effects, including arbitrary compound
+bodies and changes to automatic expiration, report UNKNOWN and require review.
+The analysis does not replace the server's full SQL grammar validation.
+
+Malformed literals, incomplete compound bodies, invalid UTF-8, NUL, and unsupported
+translation settings refuse the whole batch. Only the default lexer and
+`--!syntax_v1` are accepted; ANSI mode is refused even when its directive appears
+later in a source, because splitting could move it to a new query's head.
+Whitespace-only sources are accepted. A source containing only comments or
+terminators is refused because SDK revision 21 requires tokens for every
+non-whitespace source range. No prefix of a refused batch is returned.
+
+A request contains at most 256 sources and 3 MiB. Each source contains at most
+65,536 significant tokens, and the complete response is bounded by 3 MiB.
+Cancellation returns no analysis. The native CLI still requires integration of
+YDB's table comparison rules; the provider does not claim the common table
+identity contract to bypass that requirement.
+
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
@@ -500,8 +535,8 @@ capability detection, environment credential sources,
 monitoring, and dev-database provisioning. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
 rendering, SQL and native coordination execution, transaction, history, metadata,
-and lock services. The
-remaining capabilities stay unadvertised.
+lock, and offline SQL analysis services. The remaining capabilities stay
+unadvertised.
 
 The host's embedded implementation still needs removal when these operations
 are wired through this executable. Provider release workflows, default Ptah bundling,
