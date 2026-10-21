@@ -39,7 +39,7 @@ func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 func Description() *protocol.Description {
 	return &protocol.Description{
 		Revision: provider.Revision, ProviderId: "stokaro/ptah-ydb-plugin",
-		Version: "0.0.0-dev", SemanticIdentity: "ydb-native-row-observations-1",
+		Version: "0.0.0-dev", SemanticIdentity: "ydb-native-index-observations-1",
 		Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature},
 		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature}}},
 	}

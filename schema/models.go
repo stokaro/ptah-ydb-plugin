@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -28,15 +29,17 @@ const (
 // Models returns fresh definitions for the supported observed facets. Desired
 // models are not enrolled until their decoding and comparison are implemented.
 func Models() []*protocol.ValueModel {
-	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties)}
+	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties)}
 }
 
 func message(kind string) proto.Message {
 	switch kind {
 	case TableProperties:
-		return &Ydb_Table.DescribeTableResult{}
+		return &native.DescribeTableResult{}
 	case ColumnProperties:
-		return &Ydb_Table.ColumnMeta{}
+		return &native.ColumnMeta{}
+	case IndexProperties:
+		return &native.IndexObservations{}
 	default:
 		return nil
 	}
@@ -44,13 +47,16 @@ func message(kind string) proto.Message {
 
 func excluded(kind string) []string {
 	if kind == TableProperties {
-		return []string{"columns", "table_stats"}
+		return []string{"columns", "table_stats", "indexes"}
 	}
-	return []string{"name", "type", "not_null"}
+	if kind == ColumnProperties {
+		return []string{"name", "type", "not_null"}
+	}
+	return nil
 }
 
 var definitions = map[string]*protocol.ValueModel{
-	TableProperties: buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties),
+	TableProperties: buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties),
 }
 
 func model(kind string) *protocol.ValueModel { return proto.CloneOf(definitions[kind]) }
@@ -63,10 +69,11 @@ func buildModel(kind string) *protocol.ValueModel {
 		"message":  string(message(kind).ProtoReflect().Descriptor().FullName()),
 		"messages": graph, "excluded_fields": excluded(kind),
 		"unknown_fields_and_enum_values": "refused", "representation": "observed",
-		"canonicalization": "protojson with absent defaults omitted, then modeljson canonical JSON; arrays retain server order",
-		"table_self":       "retain owner and permissions; omit name, type, size_bytes, created_at",
-		"common_columns":   "names, storage type, and nullability live only in common columns; primary_key preserves key order",
-		"not_observed":     []string{"indexes", "changefeeds", "column_storage"},
+		"canonicalization":   "protojson with absent defaults omitted, then modeljson canonical JSON; arrays retain server order",
+		"table_self":         "retain owner and permissions; omit name, type, size_bytes, created_at",
+		"common_columns":     "names, storage type, and nullability live only in common columns; primary_key preserves key order",
+		"not_observed":       []string{"changefeeds", "column_storage"},
+		"index_observations": "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
 	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
@@ -116,9 +123,12 @@ func describeMessage(desc protoreflect.MessageDescriptor, graph map[string]any) 
 
 // CaptureTable separates YDB-only properties from common table and column
 // fields. Server statistics and transient self metadata are not schema state.
-func CaptureTable(owner *protocol.Reference, description *Ydb_Table.DescribeTableResult) (*protocol.Envelope, error) {
+func CaptureTable(owner *protocol.Reference, description *native.DescribeTableResult) (*protocol.Envelope, error) {
 	if err := Known(description); err != nil {
 		return nil, err
+	}
+	if len(description.GetIndexes()) != 0 {
+		return nil, fmt.Errorf("capture indexes separately before table properties")
 	}
 	projected := proto.CloneOf(description)
 	projected.Columns, projected.TableStats = nil, nil
@@ -131,7 +141,7 @@ func CaptureTable(owner *protocol.Reference, description *Ydb_Table.DescribeTabl
 
 // CaptureColumn retains family assignment and typed literal/sequence defaults.
 // The common column owns its name, storage type, and nullability.
-func CaptureColumn(owner *protocol.Reference, column *Ydb_Table.ColumnMeta) (*protocol.Envelope, error) {
+func CaptureColumn(owner *protocol.Reference, column *native.ColumnMeta) (*protocol.Envelope, error) {
 	if err := Known(column); err != nil {
 		return nil, err
 	}
@@ -191,9 +201,14 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	if refused {
 		return nil, fmt.Errorf("YDB facet repeats a common or transient field")
 	}
-	if table, ok := target.(*Ydb_Table.DescribeTableResult); ok {
-		if len(table.GetIndexes()) != 0 || len(table.GetChangefeeds()) != 0 {
-			return nil, fmt.Errorf("YDB indexes and changefeeds need their child descriptions")
+	if indexes, ok := target.(*native.IndexObservations); ok {
+		if err := normalizeIndexes(indexes); err != nil {
+			return nil, err
+		}
+	}
+	if table, ok := target.(*native.DescribeTableResult); ok {
+		if len(table.GetChangefeeds()) != 0 {
+			return nil, fmt.Errorf("YDB changefeeds need their child descriptions")
 		}
 		seen := map[string]bool{}
 		if len(table.GetPrimaryKey()) == 0 {

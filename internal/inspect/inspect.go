@@ -9,11 +9,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
 )
@@ -86,10 +86,19 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 				if err != nil {
 					return nil, err
 				}
-				table, err := readTable(database, selected, name, description)
+				table, err := readTable(database, selected, name, description.table)
 				if err != nil {
 					return nil, err
 				}
+				indexes, err := source.readIndexes(ctx, path.Join(database, selected, name), description)
+				if err != nil {
+					return nil, err
+				}
+				facet, err := schema.CaptureIndexes(table.Identity, indexes)
+				if err != nil {
+					return nil, err
+				}
+				table.Facets = append(table.Facets, facet)
 				result.Tables = append(result.Tables, table)
 				observe(result, table.Facets)
 				for _, column := range table.Columns {
@@ -151,12 +160,12 @@ func scopes(database string, selectors []string) ([]string, []*protocol.Inspecti
 	return directories, bindings, nil
 }
 
-func readTable(database, directory, name string, described *Ydb_Table.DescribeTableResult) (*protocol.Table, error) {
+func readTable(database, directory, name string, described *nativeprotocol.DescribeTableResult) (*protocol.Table, error) {
 	if described.GetSelf().GetName() != name || described.GetSelf().GetType() != Ydb_Scheme.Entry_TABLE {
 		return nil, fmt.Errorf("YDB listing and table description disagree")
 	}
-	if len(described.GetIndexes()) != 0 || len(described.GetChangefeeds()) != 0 {
-		return nil, fmt.Errorf("YDB indexes and changefeeds require their child-object readers")
+	if len(described.GetChangefeeds()) != 0 {
+		return nil, fmt.Errorf("YDB changefeeds require their child-object reader")
 	}
 	if _, replica := described.GetAttributes()["__async_replica"]; replica {
 		return nil, fmt.Errorf("YDB replica table requires its replication owner")

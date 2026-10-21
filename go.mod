@@ -35,3 +35,5 @@ require (
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
 )
+
+tool google.golang.org/protobuf/cmd/protoc-gen-go

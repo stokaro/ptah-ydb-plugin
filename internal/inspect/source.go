@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
@@ -58,12 +59,19 @@ func operationStatus(op *Ydb_Operations.Operation) error {
 	return nil
 }
 
-func operation(op *Ydb_Operations.Operation, target proto.Message) error {
+func unpack(op *Ydb_Operations.Operation, target proto.Message) error {
 	if err := operationStatus(op); err != nil {
 		return err
 	}
 	if err := op.GetResult().UnmarshalTo(target); err != nil {
 		return fmt.Errorf("invalid YDB schema response")
+	}
+	return nil
+}
+
+func operation(op *Ydb_Operations.Operation, target proto.Message) error {
+	if err := unpack(op, target); err != nil {
+		return err
 	}
 	return schema.Known(target)
 }
@@ -80,14 +88,37 @@ func (s *source) directory(ctx context.Context, path string) (*Ydb_Scheme.ListDi
 	return &result, nil
 }
 
-func (s *source) describeTable(ctx context.Context, path string) (*Ydb_Table.DescribeTableResult, error) {
+type description struct {
+	table   *native.DescribeTableResult
+	indexes []*native.TableIndexDescription
+}
+
+func (s *source) describeTable(ctx context.Context, path string) (*description, error) {
 	response, err := s.table.DescribeTable(ctx, &Ydb_Table.DescribeTableRequest{SessionId: s.session, Path: path, IncludeSetVal: true})
 	if err != nil {
 		return nil, fmt.Errorf("describe YDB table: transport failed")
 	}
-	var result Ydb_Table.DescribeTableResult
-	if err := operation(response.GetOperation(), &result); err != nil {
+	if err := operationStatus(response.GetOperation()); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	payload := response.GetOperation().GetResult()
+	if !payload.MessageIs(&Ydb_Table.DescribeTableResult{}) {
+		return nil, fmt.Errorf("invalid YDB table response type")
+	}
+	var result native.DescribeTableResult
+	if err := proto.Unmarshal(payload.GetValue(), &result); err != nil {
+		return nil, fmt.Errorf("invalid YDB table response")
+	}
+	if err := schema.Known(&result); err != nil {
+		return nil, err
+	}
+	if len(result.GetChangefeeds()) != 0 {
+		return nil, fmt.Errorf("YDB changefeeds require their child-object reader")
+	}
+	indexes := result.Indexes
+	if err := schema.ValidateIndexes(indexes); err != nil {
+		return nil, err
+	}
+	result.Indexes = nil
+	return &description{table: &result, indexes: indexes}, nil
 }

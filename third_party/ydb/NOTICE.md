@@ -1,0 +1,17 @@
+# YDB native protocol definitions
+
+The table, column, sequence, and index messages in `internal/nativeprotocol/indexes.proto` are adapted
+from `ydb/public/api/protos/ydb_table.proto` in
+[ydb-platform/ydb at 6006bfe4442d2064e7c06ed1719d438e36ca5bf8](https://github.com/ydb-platform/ydb/blob/6006bfe4442d2064e7c06ed1719d438e36ca5bf8/ydb/public/api/protos/ydb_table.proto).
+They retain the native wire field numbers and types. The package and Go
+package differ to avoid conflicting with the generated YDB client bindings.
+Upstream validation annotations are omitted. Provider code checks supported
+variants, identity, read completeness, and unknown fields. Unsupported local-index
+arms are omitted and refused as unknown fields. Ptah-owned observation
+messages bind the index to its implementation tables.
+
+The upstream definitions are licensed under Apache-2.0; see `LICENSE` here.
+
+Implementation table names and their kind-specific membership follow
+[NTableIndex::GetImplTables at the same commit](https://github.com/ydb-platform/ydb/blob/6006bfe4442d2064e7c06ed1719d438e36ca5bf8/ydb/core/base/table_index.cpp#L287)
+and the constants in `ydb/core/base/table_index.h`.

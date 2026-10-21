@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -20,14 +21,14 @@ func tableOwner() *protocol.Reference {
 
 func TestTablePropertiesSeparateSharedAndTransientFields(t *testing.T) {
 	c := qt.New(t)
-	original := &Ydb_Table.DescribeTableResult{
+	original := &nativeprotocol.DescribeTableResult{
 		Self:    &Ydb_Scheme.Entry{Name: "records", Type: Ydb_Scheme.Entry_TABLE, Owner: "alice", SizeBytes: 100, CreatedAt: &Ydb.VirtualTimestamp{PlanStep: 3}},
-		Columns: []*Ydb_Table.ColumnMeta{{Name: "a", Type: primitive(Ydb.Type_UINT64)}}, PrimaryKey: []string{"b", "a"},
+		Columns: []*nativeprotocol.ColumnMeta{{Name: "a", Type: primitive(Ydb.Type_UINT64)}}, PrimaryKey: []string{"b", "a"},
 		Attributes: map[string]string{"comment": "caption"}, TableStats: &Ydb_Table.TableStats{},
 	}
 	captured, err := schema.CaptureTable(tableOwner(), original)
 	c.Assert(err, qt.IsNil)
-	var properties Ydb_Table.DescribeTableResult
+	var properties nativeprotocol.DescribeTableResult
 	c.Assert(protojson.Unmarshal(captured.Payload, &properties), qt.IsNil)
 	c.Assert(properties.GetPrimaryKey(), qt.DeepEquals, []string{"b", "a"})
 	c.Assert(properties.GetAttributes(), qt.DeepEquals, map[string]string{"comment": "caption"})
@@ -45,8 +46,8 @@ func TestTablePropertiesSeparateSharedAndTransientFields(t *testing.T) {
 
 func TestColumnPropertiesRetainFamilyAndLiteral(t *testing.T) {
 	c := qt.New(t)
-	original := &Ydb_Table.ColumnMeta{Name: "label", Type: optional(primitive(Ydb.Type_UTF8)), Family: "cold",
-		DefaultValue: &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: primitive(Ydb.Type_UTF8), Value: &Ydb.Value{Value: &Ydb.Value_TextValue{TextValue: "hello"}}}},
+	original := &nativeprotocol.ColumnMeta{Name: "label", Type: optional(primitive(Ydb.Type_UTF8)), Family: "cold",
+		DefaultValue: &nativeprotocol.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: primitive(Ydb.Type_UTF8), Value: &Ydb.Value{Value: &Ydb.Value_TextValue{TextValue: "hello"}}}},
 	}
 	owner := tableOwner()
 	owner.Kind = "column"
@@ -54,7 +55,7 @@ func TestColumnPropertiesRetainFamilyAndLiteral(t *testing.T) {
 	owner.Name = "label"
 	captured, err := schema.CaptureColumn(owner, original)
 	c.Assert(err, qt.IsNil)
-	var properties Ydb_Table.ColumnMeta
+	var properties nativeprotocol.ColumnMeta
 	c.Assert(protojson.Unmarshal(captured.Payload, &properties), qt.IsNil)
 	c.Assert(properties.GetFamily(), qt.Equals, "cold")
 	c.Assert(properties.GetFromLiteral().GetValue().GetTextValue(), qt.Equals, "hello")
@@ -65,7 +66,7 @@ func TestColumnPropertiesRetainFamilyAndLiteral(t *testing.T) {
 
 func TestObservationRefusesUnknownAndDuplicatedState(t *testing.T) {
 	c := qt.New(t)
-	base, err := schema.CaptureTable(tableOwner(), &Ydb_Table.DescribeTableResult{PrimaryKey: []string{"id"}})
+	base, err := schema.CaptureTable(tableOwner(), &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"id"}})
 	c.Assert(err, qt.IsNil)
 	for _, test := range []struct{ name, payload string }{
 		{"unknown field", `{"primaryKey":["id"],"surprise":true}`},
@@ -100,9 +101,9 @@ func TestObservationRefusesUnknownAndDuplicatedState(t *testing.T) {
 
 func TestUnknownNativeFieldsCannotDisappearDuringProjection(t *testing.T) {
 	c := qt.New(t)
-	value := &Ydb_Table.DescribeTableResult{PrimaryKey: []string{"id"}, Columns: []*Ydb_Table.ColumnMeta{{Name: "id", Type: primitive(Ydb.Type_UINT64)}}}
+	value := &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"id"}, Columns: []*nativeprotocol.ColumnMeta{{Name: "id", Type: primitive(Ydb.Type_UINT64)}}}
 	value.Columns[0].ProtoReflect().SetUnknown(protowire.AppendVarint(protowire.AppendTag(nil, 400, protowire.VarintType), 1))
 	result, err := schema.CaptureTable(tableOwner(), value)
 	c.Assert(result, qt.IsNil)
-	c.Assert(err, qt.ErrorMatches, "unknown fields in Ydb.Table.ColumnMeta")
+	c.Assert(err, qt.ErrorMatches, "unknown fields in ptah.ydb.native.ColumnMeta")
 }

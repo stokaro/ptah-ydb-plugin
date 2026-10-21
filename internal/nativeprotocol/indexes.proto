@@ -1,0 +1,217 @@
+// Native YDB table and index fields adapted from ydb-platform/ydb commit
+// 6006bfe4442d2064e7c06ed1719d438e36ca5bf8, ydb/public/api/protos/ydb_table.proto.
+// Upstream license: third_party/ydb/LICENSE (Apache-2.0).
+// These types extend the incomplete Go bindings inside this provider only.
+syntax = "proto3";
+package ptah.ydb.native;
+option go_package = "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol";
+import "protos/ydb_table.proto";
+import "protos/ydb_value.proto";
+import "protos/ydb_scheme.proto";
+import "protos/ydb_common.proto";
+import "google/protobuf/struct.proto";
+
+message GlobalIndexSettings {
+    oneof partitions {
+        uint64 uniform_partitions = 1;
+        Ydb.Table.ExplicitPartitions partition_at_keys = 2;
+    }
+    Ydb.Table.PartitioningSettings partitioning_settings = 3;
+    Ydb.Table.ReadReplicasSettings read_replicas_settings = 4;
+}
+
+message VectorIndexSettings {
+    enum Metric {
+        METRIC_UNSPECIFIED = 0;
+        SIMILARITY_INNER_PRODUCT = 1;
+        SIMILARITY_COSINE = 2;
+        DISTANCE_COSINE = 3;
+        DISTANCE_MANHATTAN = 4;
+        DISTANCE_EUCLIDEAN = 5;
+    }
+    enum VectorType {
+        VECTOR_TYPE_UNSPECIFIED = 0;
+        VECTOR_TYPE_FLOAT = 1;
+        VECTOR_TYPE_UINT8 = 2;
+        VECTOR_TYPE_INT8 = 3;
+        VECTOR_TYPE_BIT = 4;
+    }
+    optional Metric metric = 1;
+    optional VectorType vector_type = 2;
+    optional uint32 vector_dimension = 3;
+}
+
+message KMeansTreeSettings {
+    VectorIndexSettings settings = 1;
+    optional uint32 clusters = 2;
+    optional uint32 levels = 3;
+    optional uint32 overlap_clusters = 4;
+    optional double overlap_ratio = 5;
+}
+
+message GlobalIndex {
+    GlobalIndexSettings settings = 1;
+}
+
+message GlobalAsyncIndex {
+    GlobalIndexSettings settings = 1;
+}
+
+message GlobalUniqueIndex {
+    GlobalIndexSettings settings = 1;
+}
+
+message GlobalVectorKMeansTreeIndex {
+    GlobalIndexSettings level_table_settings = 1;
+    GlobalIndexSettings posting_table_settings = 2;
+    GlobalIndexSettings prefix_table_settings = 4;
+    KMeansTreeSettings vector_settings = 3;
+}
+
+message FulltextIndexSettings {
+    enum Tokenizer {
+        TOKENIZER_UNSPECIFIED = 0;
+        WHITESPACE = 1;
+        STANDARD = 2;
+        KEYWORD = 3;
+    }
+    message Analyzers {
+        optional Tokenizer tokenizer = 1;
+        optional string language = 2;
+        optional bool use_filter_lowercase = 100;
+        optional bool use_filter_stopwords = 110;
+        optional bool use_filter_ngram = 120;
+        optional bool use_filter_edge_ngram = 121;
+        optional int32 filter_ngram_min_length = 122;
+        optional int32 filter_ngram_max_length = 123;
+        optional bool use_filter_length = 130;
+        optional int32 filter_length_min = 131;
+        optional int32 filter_length_max = 132;
+        optional bool use_filter_snowball = 140;
+    }
+    message ColumnAnalyzers {
+        optional string column = 1;
+        Analyzers analyzers = 2;
+    }
+    reserved 1;
+    repeated ColumnAnalyzers columns = 2;
+}
+
+message GlobalFulltextPlainIndex {
+    GlobalIndexSettings settings = 1;
+    FulltextIndexSettings fulltext_settings = 2;
+}
+
+message GlobalFulltextRelevanceIndex {
+    GlobalIndexSettings posting_table_settings = 1;
+    FulltextIndexSettings fulltext_settings = 2;
+    GlobalIndexSettings dict_table_settings = 3;
+    GlobalIndexSettings docs_table_settings = 4;
+    GlobalIndexSettings stats_table_settings = 5;
+}
+
+message TableIndexDescription {
+    enum Status {
+        STATUS_UNSPECIFIED = 0;
+        STATUS_READY = 1;
+        STATUS_BUILDING = 2;
+    }
+    string name = 1;
+    repeated string index_columns = 2;
+    oneof type {
+       GlobalIndex global_index = 3;
+       GlobalAsyncIndex global_async_index = 5;
+       GlobalUniqueIndex global_unique_index = 8;
+       GlobalVectorKMeansTreeIndex global_vector_kmeans_tree_index = 9;
+       GlobalFulltextPlainIndex global_fulltext_plain_index = 10;
+       GlobalFulltextRelevanceIndex global_fulltext_relevance_index = 11;
+    }
+    Status status = 4;
+    repeated string data_columns = 6;
+    uint64 size_bytes = 7;
+}
+
+// IndexObservations binds every index to the physical tables read for it.
+message IndexObservations { repeated ObservedIndex indexes = 1; }
+message ObservedIndex {
+  TableIndexDescription description = 1;
+  repeated ImplementationTable tables = 2;
+}
+message ImplementationTable {
+  string name = 1;
+  DescribeTableResult description = 2;
+}
+
+
+message SequenceDescription {
+    message SetVal {
+        optional sint64 next_value = 1;
+        optional bool next_used = 2;
+    }
+    optional string name = 1;
+    optional sint64 min_value = 2;
+    optional sint64 max_value = 3;
+    optional sint64 start_value = 4;
+    optional uint64 cache = 5;
+    optional sint64 increment = 6;
+    optional bool cycle = 7;
+    optional SetVal set_val = 8;
+    optional Ydb.Type data_type = 9;
+}
+
+message ColumnCompression {
+    enum Algorithm {
+        ALGORITHM_UNSPECIFIED = 0;
+        ALGORITHM_OFF = 1;
+        ALGORITHM_LZ4 = 2;
+        ALGORITHM_ZSTD = 3;
+    }
+    optional Algorithm algorithm = 1;
+    optional int32 compression_level = 2;
+}
+
+message ColumnEncoding {
+    message Off {
+    }
+    message Dictionary {
+    }
+    oneof encoding_settings {
+        Off off = 1;
+        Dictionary dictionary = 2;
+    }
+}
+
+message ColumnMeta {
+    string name = 1;
+    Ydb.Type type = 2;
+    string family = 3;
+    optional bool not_null = 4;
+    oneof default_value {
+        Ydb.TypedValue from_literal = 5;
+        SequenceDescription from_sequence = 6;
+        google.protobuf.NullValue empty_default = 7;
+    }
+    optional ColumnCompression compression = 8;
+    repeated ColumnEncoding encoding = 9;
+}
+
+message DescribeTableResult {
+    Ydb.Scheme.Entry self = 1;
+    repeated ColumnMeta columns = 2;
+    repeated string primary_key = 3;
+    repeated Ydb.TypedValue shard_key_bounds = 4;
+    repeated TableIndexDescription indexes = 5;
+    Ydb.Table.TableStats table_stats = 6;
+    Ydb.Table.TtlSettings ttl_settings = 7;
+    Ydb.Table.StorageSettings storage_settings = 8;
+    repeated Ydb.Table.ColumnFamily column_families = 9;
+    map<string, string> attributes = 10;
+    reserved 11;
+    Ydb.Table.PartitioningSettings partitioning_settings = 12;
+    Ydb.FeatureFlag.Status key_bloom_filter = 13;
+    Ydb.Table.ReadReplicasSettings read_replicas_settings = 14;
+    repeated Ydb.Table.ChangefeedDescription changefeeds = 15;
+    string tiering = 16;
+    bool temporary = 17;
+    Ydb.Table.StoreType store_type = 18;
+}

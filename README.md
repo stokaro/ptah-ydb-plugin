@@ -1,7 +1,7 @@
 # Ptah YDB provider
 
 This repository owns the executable YDB provider for [Ptah #4204](https://github.com/stokaro/ptah/issues/4204).
-It is under development. Row-table inspection is available; schema planning
+It is under development. Row-table and index inspection is available; schema planning
 and migration execution are not implemented yet.
 
 The executable opens native YDB connections and reads row-table schemas
@@ -30,9 +30,12 @@ PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
   GOWORK=off go test -race -tags integration ./integration -count=1 -v
 ```
 
+The test servers enable `enable_vector_index`; the 26.2 fixture also enables
+`enable_add_unique_index`. Fulltext creation is expected to be refused on 25.1.
+
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
 host-module imports and local module replacements. These checks cover sessions, native row-table observations, offline
-normalization, and refusals for incomplete reads. They do not establish
+normalization, index implementation tables, and refusals for incomplete reads. They do not establish
 planning or migration support.
 
 ## Connection addresses
@@ -68,7 +71,7 @@ Coverage names the inspected subjects only; it does not claim native-object
 absence outside those subjects.
 
 Unknown native fields and enum values are refused before JSON conversion.
-Indexes and changefeeds need additional child-object readers and currently
+Changefeeds need an additional child-object reader and currently
 refuse the whole inspection. Column tables, other native object kinds, and
 replication-owned tables also refuse. A failed traversal returns no snapshot.
 These limitations preserve data for the remaining extraction work.
@@ -76,8 +79,32 @@ These limitations preserve data for the remaining extraction work.
 Observed property models use YDB's typed protocol definitions inside this
 provider. The neutral SDK carries their envelopes. Common fields and runtime
 statistics are excluded from property payloads; they cannot become a second
-writable representation. Native arrays retain their observed order. Desired
+writable representation. Index observations preserve sync, async, unique, vector, prefixed vector,
+and fulltext variants. The provider reads every kind-specific implementation
+table, including its columns, keys, and partition settings; parent table
+metadata alone does not expose those settings. Missing implementation tables
+or non-ready indexes refuse inspection. An empty index facet records the
+absence of indexes on that inspected table.
+
+Index lists and implementation-table lists are sorted by name. Column and key
+arrays retain their observed order. Desired
 models, semantic comparisons, and planning are still pending.
+
+## Native protocol generation
+
+The upstream Go bindings lack some native index and sequence fields. The
+provider's typed definitions preserve their native wire numbers; attribution
+and the pinned upstream source are in `third_party/ydb/NOTICE.md`. Unsupported
+fields remain errors. Runtime statistics are omitted from schema observations.
+
+With protoc 35.1 on `PATH`, regenerate with:
+
+```sh
+sh scripts/generate-native-schema.sh
+```
+
+The Go generator is pinned in `go.mod`. CI regenerates these definitions and
+requires an unchanged generated file.
 
 ## Extraction still required
 

@@ -15,6 +15,17 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Verify generated native protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools_dir=$(mktemp -d)
+          trap 'rm -rf "$tools_dir"' EXIT
+          curl --fail --location --retry 3 https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-x86_64.zip -o "$tools_dir/protoc.zip"
+          echo "6930ebf62bd4ea607b98fff052596c6ee564b9835b4ce172c75a3f53ae9d91b7  $tools_dir/protoc.zip" | sha256sum -c -
+          unzip -q "$tools_dir/protoc.zip" -d "$tools_dir/protoc"
+          PATH="$tools_dir/protoc/bin:$PATH" sh scripts/generate-native-schema.sh
+          git diff --exit-code -- internal/nativeprotocol
       - run: go mod tidy -diff
       - run: sh scripts/check-module-boundaries.sh
       - run: go test -race ./...
@@ -25,9 +36,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image:
-          - ydbplatform/local-ydb:25.1.4.7
-          - ydbplatform/local-ydb:26.2.1.14
+        include:
+          - image: ydbplatform/local-ydb:25.1.4.7
+            features: enable_vector_index
+          - image: ydbplatform/local-ydb:26.2.1.14
+            features: enable_vector_index,enable_add_unique_index
     env:
       GOWORK: 'off'
       PTAH_YDB_TEST_URL: ydb://127.0.0.1:2136/local?go_balancer=disable
@@ -36,6 +49,7 @@ jobs:
         image: ${{ matrix.image }}
         env:
           YDB_USE_IN_MEMORY_PDISKS: 'true'
+          YDB_FEATURE_FLAGS: ${{ matrix.features }}
         ports:
           - 2136:2136
         options: >-

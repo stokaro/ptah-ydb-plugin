@@ -15,10 +15,10 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -106,7 +106,7 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	}
 	c.Assert(columns, qt.DeepEquals, []string{"a:Utf8:false:true", "b:Uint64:false:true", "amount:Decimal(22,9):true:false", "expires:Timestamp:true:false"})
 	c.Assert(table.Facets[0].Kind, qt.Equals, schema.TableProperties)
-	var native Ydb_Table.DescribeTableResult
+	var native nativeprotocol.DescribeTableResult
 	c.Assert(protojson.Unmarshal(table.Facets[0].Payload, &native), qt.IsNil)
 	c.Assert(native.GetPrimaryKey(), qt.DeepEquals, []string{"b", "a"})
 	c.Assert(native.GetTtlSettings().GetDateTypeColumn().GetColumnName(), qt.Equals, "expires")
@@ -117,7 +117,7 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	normalized, err := client.NormalizeValues(ctx, values)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidateNormalizedInspection(client.Description(), request, snapshot, normalized), qt.IsNil)
-	c.Assert(len(normalized.Values), qt.Equals, 5)
+	c.Assert(len(normalized.Values), qt.Equals, 6)
 	c.Assert(client.CloseSession(ctx, session.Id), qt.IsNil)
 	// Captured observations remain usable after their database session closes.
 	again, err := client.NormalizeValues(ctx, values)
@@ -140,9 +140,9 @@ func TestInspectionRefusesIncompleteAndEscapingScopes(t *testing.T) {
 		c.Assert(snapshot, qt.IsNil)
 		c.Assert(err, qt.IsNotNil)
 	}
-	_, err = opened.DB.ExecContext(ctx, "ALTER TABLE `"+path.Join(database, directory, "records")+"` ADD INDEX by_amount GLOBAL ON (amount)")
+	_, err = opened.DB.ExecContext(ctx, "ALTER TABLE `"+path.Join(database, directory, "records")+"` ADD CHANGEFEED changes WITH (FORMAT = 'JSON', MODE = 'UPDATES')")
 	c.Assert(err, qt.IsNil)
 	snapshot, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
 	c.Assert(snapshot, qt.IsNil)
-	c.Assert(err, qt.ErrorMatches, `(unknown fields in Ydb.Table.GlobalIndex|YDB indexes and changefeeds require their child-object readers)`)
+	c.Assert(err, qt.ErrorMatches, "YDB changefeeds require their child-object reader")
 }
