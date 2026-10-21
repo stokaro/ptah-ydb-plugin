@@ -182,3 +182,22 @@ func (s Store) ValidateLayout(value *native.DescribeTableResult) error {
 	}
 	return nil
 }
+
+// Owned identifies history by its exact marker and complete native layout, never
+// by a table name. Unknown markers and altered marked tables refuse inspection.
+func Owned(name string, value *native.DescribeTableResult) (bool, error) {
+	marker, exists := value.GetAttributes()[ownershipAttribute]
+	if !exists {
+		return false, nil
+	}
+	for _, format := range []protocol.HistoryScope_Format{protocol.HistoryScope_NATIVE, protocol.HistoryScope_ATLAS} {
+		store := Store{Name: name, Format: format}
+		if marker == store.marker() {
+			if err := store.ValidateLayout(value); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("unknown YDB history ownership marker")
+}

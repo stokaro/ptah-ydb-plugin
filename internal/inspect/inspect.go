@@ -86,6 +86,10 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 				if err != nil {
 					return nil, err
 				}
+				if description.ownedHistory {
+					reserve(result, &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: "table", Name: name}, protocol.ReservedObject_HISTORY)
+					break
+				}
 				table, err := readTable(database, selected, name, description.table)
 				if err != nil {
 					return nil, err
@@ -146,7 +150,7 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 			if proto.Size(result) > 3<<20 {
 				return nil, fmt.Errorf("YDB schema exceeds snapshot size limit")
 			}
-			if len(result.Tables)+len(result.NativeObjects) > 4096 {
+			if len(result.Tables)+len(result.NativeObjects)+len(result.ReservedObjects) > 4096 {
 				return nil, fmt.Errorf("YDB schema read exceeds object limit")
 			}
 		}

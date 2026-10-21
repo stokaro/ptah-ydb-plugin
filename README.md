@@ -15,6 +15,14 @@ The implementation does not import the Ptah application module.
 
 ## Build and test
 
+The current source uses experimental SDK revision 21 reservations. That revision
+is not published yet; `go.mod` still pins published revision 19. A standalone
+build from that pin is incomplete. Development checks currently use a temporary
+workspace containing this module and Ptah's `provider-sdk` checkout. The
+workspace is not committed and is not independent installation evidence.
+
+After publishing revision 21 and updating the dependency pin, run:
+
 ```sh
 GOWORK=off go test -race ./...
 GOWORK=off CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
@@ -22,8 +30,8 @@ GOWORK=off CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
 
 The executable requires the SDK's authenticated local subprocess bootstrap.
 Run it through a Ptah SDK client rather than invoking it as a command-line tool.
-The SDK dependency is pinned to a published experimental revision. There is no
-`replace` directive or workspace dependency.
+The committed module has no `replace` directive or workspace file. The SDK
+pin update remains required before the standalone commands and CI can pass.
 
 Live checks require an isolated test database. Schema tests create uniquely
 named directories, tables, and topics and remove them afterward. Session tests only
@@ -133,8 +141,8 @@ refused. A failed native listing is an error rather than evidence of absence.
 Snapshots are bounded by the caller's revision limit and a 3 MiB size limit;
 exceeding either returns no partial history. An unreadable history snapshot or
 failed dispatched history mutation makes its caller transaction rollback-only.
-History storage alone does not establish complete migration support. Planning,
-inspection filtering of owned metadata, and host integration remain pending.
+History storage alone does not establish complete migration support. Planning
+and complete host integration remain pending.
 
 ## Coordination locks
 
@@ -181,6 +189,34 @@ nontransactional DDL atomic with ownership. Live tests cover competing provider
 processes, independent names, immediate takeover after confirmed close, process
 exit, node removal, and refusal of execution/history/commit after loss. Controlled
 clock tests cover stale confirmations without relying on a scheduled watcher.
+
+## Operational storage reservations
+
+Inspection recognizes history storage from its exact ownership attribute and
+complete native layout, before extracting indexes or changefeeds. A marked
+table with an altered layout refuses the entire inspection. An unknown marker
+version is also refused. An unmarked table remains managed even when its name
+or layout matches a history table.
+
+Confirmed history stores are returned as SDK reservations instead of managed
+tables. A reservation occupies the name for every supported native scheme-object
+kind and for common tables. Exact UNREPRESENTABLE subject coverage overrides
+directory completeness at these occupied names, so omission does not assert
+absence. Filtered reads return reservations only from the exact directories
+they inspect. Names or layout alone never establish ownership.
+
+Coordination nodes remain managed observations. YDB returns SUCCESS for repeated
+native CreateNode requests, so a successful create cannot prove that this
+provider created the node. Installing an ownership marker based on that result
+could claim a concurrently created foreign node. Lock-node ownership and
+reservation need a separate initialization contract and remain pending. No
+node is hidden or reserved merely because it is named `ptah_locks` or has
+strict consistency settings.
+
+History reservations support host collision and reference guards. They do not
+establish native directory-cascade safety; native planning and containment
+qualification remain pending. Markers are storage-format identifiers, not an
+access-control mechanism against a database administrator.
 
 ## Schema observations
 

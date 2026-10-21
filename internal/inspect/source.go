@@ -4,6 +4,9 @@ package inspect
 import (
 	"context"
 	"fmt"
+	"path"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/history"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -54,13 +57,20 @@ func (s *source) directory(ctx context.Context, path string) (*Ydb_Scheme.ListDi
 }
 
 type description struct {
-	table       *native.DescribeTableResult
-	indexes     []*native.TableIndexDescription
-	changefeeds []*native.ChangefeedDescription
+	ownedHistory bool
+	table        *native.DescribeTableResult
+	indexes      []*native.TableIndexDescription
+	changefeeds  []*native.ChangefeedDescription
 }
 
-func (s *source) describeTable(ctx context.Context, path string) (*description, error) {
-	result, err := s.owner.Describe(ctx, path)
+func (s *source) describeTable(ctx context.Context, absolute string) (*description, error) {
+	result, err := s.owner.Describe(ctx, absolute)
+	if err != nil {
+		return nil, err
+	}
+	// Classify before projecting children away: a marked table with an index
+	// or changefeed is altered storage and must not be silently hidden.
+	owned, err := history.Owned(path.Base(absolute), result)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +84,7 @@ func (s *source) describeTable(ctx context.Context, path string) (*description, 
 		return nil, err
 	}
 	result.Indexes = nil
-	return &description{table: result, indexes: indexes, changefeeds: feeds}, nil
+	return &description{ownedHistory: owned, table: result, indexes: indexes, changefeeds: feeds}, nil
 }
 
 func (s *source) describeTopic(ctx context.Context, path string) (*native.DescribeTopicResult, error) {

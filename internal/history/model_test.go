@@ -148,3 +148,33 @@ func TestHistoryOwnershipAndBehaviorAreValidated(t *testing.T) {
 		})
 	}
 }
+
+func TestHistoryClassificationRequiresMarkerAndCompleteLayout(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		change func(*native.DescribeTableResult)
+		owned  bool
+		failed bool
+	}{
+		{"native", func(*native.DescribeTableResult) {}, true, false},
+		{"atlas", func(v *native.DescribeTableResult) {
+			v.Attributes["ptah.history"] = "stokaro/ptah-ydb-plugin/history-v1/atlas"
+			v.Columns[0].Type = &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}
+		}, true, false},
+		{"same name and layout without marker", func(v *native.DescribeTableResult) { v.Attributes = nil }, false, false},
+		{"foreign marker", func(v *native.DescribeTableResult) { v.Attributes["ptah.history"] = "foreign" }, false, true},
+		{"empty marker", func(v *native.DescribeTableResult) { v.Attributes["ptah.history"] = "" }, false, true},
+		{"wrong identity", func(v *native.DescribeTableResult) { v.Self.Name = "other" }, false, true},
+		{"index must not be projected away", func(v *native.DescribeTableResult) { v.Indexes = []*native.TableIndexDescription{{Name: "extra"}} }, false, true},
+		{"changefeed must not be projected away", func(v *native.DescribeTableResult) { v.Changefeeds = []*native.ChangefeedDescription{{Name: "extra"}} }, false, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			value := layout()
+			test.change(value)
+			owned, err := history.Owned("revisions", value)
+			c.Assert(err != nil, qt.Equals, test.failed)
+			c.Assert(owned, qt.Equals, test.owned)
+		})
+	}
+}

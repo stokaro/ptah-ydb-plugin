@@ -43,11 +43,12 @@ func historyChange(c *qt.C, client *providerruntime.Client, scope *protocol.Hist
 	c.Assert(result, qt.IsNotNil)
 	c.Assert(provider.ValidateHistoryResult(scope, "cas", result), qt.IsNil)
 	c.Assert(result.Outcome, qt.Equals, want)
-	if want == protocol.HistoryResult_APPLIED {
+	switch want {
+	case protocol.HistoryResult_APPLIED:
 		c.Assert(err, qt.IsNil)
-	} else if want == protocol.HistoryResult_UNKNOWN {
+	case protocol.HistoryResult_UNKNOWN:
 		c.Assert(err, qt.ErrorIs, provider.ErrOutcomeUnknown)
-	} else {
+	default:
 		c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 	}
 }
