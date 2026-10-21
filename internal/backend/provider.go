@@ -43,9 +43,9 @@ func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 func Description() *protocol.Description {
 	return &protocol.Description{
 		Revision: provider.Revision, ProviderId: "stokaro/ptah-ydb-plugin",
-		Version: "0.0.0-dev", SemanticIdentity: "ydb-native-execution-transactions-1",
-		Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature},
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature}}},
+		Version: "0.0.0-dev", SemanticIdentity: "ydb-owned-history-1",
+		Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature}}},
 	}
 }
 

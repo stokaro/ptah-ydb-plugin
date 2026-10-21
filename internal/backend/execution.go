@@ -46,7 +46,7 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	var runner sqlExecutor
 	if request.TransactionId != "" {
 		record := s.transactions[request.TransactionId]
-		if record == nil || record.tx == nil || s.active != request.TransactionId {
+		if record == nil || record.tx == nil || record.failed || s.active != request.TransactionId {
 			return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.transaction-inactive"}, nil
 		}
 		runner = record.tx

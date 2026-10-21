@@ -19,6 +19,7 @@ type transaction struct {
 	conn    *sql.Conn
 	cancel  context.CancelFunc
 	outcome protocol.TransactionResult_Outcome
+	failed  bool
 }
 
 // BeginTransaction reserves a session-scoped caller handle exactly once.
@@ -124,7 +125,11 @@ func (p *Provider) FinishTransaction(ctx context.Context, request *protocol.Fini
 		}
 	}
 	if record.tx != nil {
-		s.finishTransaction(ctx, record, request.Action)
+		action := request.Action
+		if record.failed {
+			action = protocol.FinishTransactionRequest_ROLLBACK
+		}
+		s.finishTransaction(ctx, record, action)
 		s.active = ""
 	}
 	result := &protocol.TransactionResult{Outcome: record.outcome}

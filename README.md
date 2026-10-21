@@ -4,7 +4,8 @@ This repository owns the executable YDB provider for [Ptah #4204](https://github
 It is under development. Inspection covers row tables and their indexes and
 changefeeds, topics, views, coordination nodes, external data sources, and
 external tables. Native SQL execution and session-bound data transactions are
-implemented. Schema planning and migration history are still pending.
+implemented, together with provider-owned migration history. Schema planning
+is still pending.
 
 The executable opens native YDB connections and reads row-table schemas
 through the public Ptah SDK. It supports anonymous, URL user/password, and URL token authentication.
@@ -37,7 +38,9 @@ The test servers enable `enable_vector_index` and
 `enable_add_unique_index`. Fulltext creation is expected to be refused on 25.1.
 
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
-host-module imports and local module replacements. These checks cover sessions, SQL execution, commit/rollback and range conflicts,
+host-module imports and local module replacements. These checks cover sessions,
+SQL execution, commit/rollback, range conflicts, durable migration history,
+atomic revision comparisons, shared data/history transactions,
 native row-table observations, offline
 normalization, index implementation tables, changefeed consumers and retention,
 standalone native objects, exact-directory completeness, and refusals for
@@ -93,8 +96,44 @@ DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
 Native envelopes for provider-specific operations, SQL analysis, rendering,
-migration history, locks, logs, and tags remain to be extracted. The host's
+locks, logs, and tags remain to be extracted. The host's
 extended comment and coordination SQL forms are not implemented here.
+
+## Migration history
+
+The history service owns its physical YDB storage. Native revision keys are signed
+64-bit integers; Atlas revision keys retain exact strings, including an empty
+identity. Each row contains the key and a deterministic binary SDK revision
+record. The record retains nanosecond timestamps and durations, direction,
+progress, diagnostics, checksums, Atlas type bits, and ordered partial hashes.
+
+Creation installs the table layout and a `ptah.history` ownership attribute in
+one native request. The marker is `stokaro/ptah-ydb-plugin/history-v1/native`
+or `stokaro/ptah-ydb-plugin/history-v1/atlas`. This is a storage format version,
+not a stable SDK release. Reads and writes verify the marker, column types,
+primary key, and absence of automatic behavior such as TTL or changefeeds.
+Unknown fields, malformed records, altered layouts, and unmarked tables are
+refused. Older Ptah tables are left untouched. This changes storage behavior;
+pre-v1, so no compatibility is owed. The Atlas format preserves SDK revision
+semantics; it does not reproduce the legacy Atlas SQL column layout or promise
+interchange with external Atlas tools.
+
+Mutations compare the complete expected record before inserting, replacing, or
+deleting it. The comparison and write share one native serializable transaction.
+A caller transaction binds history and application writes to the same commit
+or rollback. Otherwise the provider opens and finishes a private transaction.
+A result inside a caller transaction remains provisional until commit succeeds.
+Conflicts cannot overwrite a committed winner; uncertain outcomes never authorize
+an automatic retry. Request IDs are correlation identifiers.
+
+Reads distinguish a missing store from an empty store. Namespace traversal is
+refused. A failed native listing is an error rather than evidence of absence.
+Snapshots are bounded by the caller's revision limit and a 3 MiB size limit;
+exceeding either returns no partial history. An unreadable history snapshot or
+failed dispatched history mutation makes its caller transaction rollback-only.
+This service does not provide migration locks or establish complete migration
+support. Planning, inspection filtering of owned metadata tables, and host
+integration remain pending.
 
 ## Schema observations
 
@@ -196,9 +235,9 @@ requires unchanged generated files.
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes desired schema models, offline source formats,
 comparison, planning, rendering, native operation envelopes, migration
-history/locks/logs/tags, capability detection, environment credential sources,
+locks/logs/tags, capability detection, environment credential sources,
 monitoring, and dev-database provisioning. The provider advertises implemented
-inspection, normalization, SQL execution, and transaction services. The
+inspection, normalization, SQL execution, transaction, and history services. The
 remaining capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

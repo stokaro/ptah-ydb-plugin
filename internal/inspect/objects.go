@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
@@ -29,7 +30,7 @@ func (s *source) readObject(ctx context.Context, absolute string, kind Ydb_Schem
 			return "", nil, fmt.Errorf("describe YDB view: transport failed")
 		}
 		var view Ydb_View.DescribeViewResult
-		if err := operation(response.GetOperation(), &view); err != nil {
+		if err := nativeapi.Operation(response.GetOperation(), &view); err != nil {
 			return "", nil, err
 		}
 		if err := objectIdentity(view.Self, absolute, kind); err != nil {
@@ -52,7 +53,7 @@ func (s *source) readObject(ctx context.Context, absolute string, kind Ydb_Schem
 			return "", nil, fmt.Errorf("describe YDB coordination node: transport failed")
 		}
 		var node Ydb_Coordination.DescribeNodeResult
-		if err := operation(response.GetOperation(), &node); err != nil {
+		if err := nativeapi.Operation(response.GetOperation(), &node); err != nil {
 			return "", nil, err
 		}
 		if err := objectIdentity(node.Self, absolute, kind); err != nil {
@@ -68,7 +69,7 @@ func (s *source) readObject(ctx context.Context, absolute string, kind Ydb_Schem
 			return "", nil, fmt.Errorf("describe YDB external data source: transport failed")
 		}
 		var source Ydb_Table.DescribeExternalDataSourceResult
-		if err := operation(response.GetOperation(), &source); err != nil {
+		if err := nativeapi.Operation(response.GetOperation(), &source); err != nil {
 			return "", nil, err
 		}
 		if err := objectIdentity(source.Self, absolute, kind); err != nil {
@@ -80,7 +81,7 @@ func (s *source) readObject(ctx context.Context, absolute string, kind Ydb_Schem
 		if err != nil {
 			return "", nil, fmt.Errorf("describe YDB external table: transport failed")
 		}
-		if err := operationStatus(response.GetOperation()); err != nil {
+		if err := nativeapi.Status(response.GetOperation()); err != nil {
 			return "", nil, err
 		}
 		payload := response.GetOperation().GetResult()
