@@ -4,8 +4,8 @@ This repository owns the executable YDB provider for [Ptah #4204](https://github
 It is under development. Inspection covers row tables and their indexes and
 changefeeds, topics, views, coordination nodes, external data sources, and
 external tables. Native SQL execution and session-bound data transactions are
-implemented, together with provider-owned migration history and coordination
-locks. Offline YAML decoding is available for coordination-node declarations.
+implemented, together with provider-owned migration history, event journals,
+tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations.
 Offline comparison, planning, and rendering produce native coordination
 operations. Execution verifies their captured preconditions and reads back the result.
 
@@ -50,7 +50,8 @@ The test servers enable `enable_vector_index` and
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
 host-module imports and local module replacements. These checks cover sessions,
 SQL execution, commit/rollback, range conflicts, durable migration history,
-atomic revision comparisons, shared data/history transactions, process lock
+atomic revision comparisons, shared data/history/tag transactions, durable event
+journals, immutable paged metadata snapshots, process lock
 exclusion, confirmed release, and write refusal after lease loss,
 native row-table observations, offline
 normalization, index implementation tables, changefeed consumers and retention,
@@ -109,7 +110,7 @@ DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
 Coordination operations use native envelopes. Other operation models, common
-SQL rendering and analysis, logs, and tags remain to be extracted. The host's
+SQL rendering and analysis remain to be extracted. The host's
 extended comment and coordination SQL forms are not implemented here.
 
 ## Migration history
@@ -147,6 +148,57 @@ failed dispatched history mutation makes its caller transaction rollback-only.
 History storage alone does not establish complete migration support. Planning
 and complete host integration remain pending.
 
+## Migration journals and tags
+
+The metadata service stores exact SDK records. A journal key combines the run ID
+and signed sequence number; duplicate identities are refused even when the
+payload is identical. A tag key preserves its exact name. Versions remain signed
+64-bit values, including zero, and timestamps retain nanoseconds. The host owns
+event meaning, attempt pairing, tag normalization, and migration recovery.
+
+Creation installs the native layout and the `ptah.metadata` ownership attribute
+in one request. Its value is `stokaro/ptah-ydb-plugin/metadata-v1/log` for journals
+or `stokaro/ptah-ydb-plugin/metadata-v1/tags` for tags. Preparation and operations
+refuse unmarked tables, unknown markers, altered columns or keys, indexes,
+changefeeds, and automatic deletion settings. Reads also refuse unknown,
+noncanonical, corrupt, or mismatched record identities. Existing Ptah SQL stores
+are not adopted; pre-v1, so no compatibility is owed.
+
+Log writes use a separate serializable transaction and remain durable when an
+execution transaction rolls back. Log scopes cannot name that execution
+transaction. Tag mutations use the selected execution handle, or a private
+serializable transaction when no handle is active. Preparation inside a
+transaction only validates an existing store; it never creates schema. Tag
+replacement and deletion validate any existing record before changing it.
+Deletion reports existence from an atomic read, not from affected-row counts.
+A missing tag is distinct from a tag at version zero.
+
+Each dispatched mutation runs once. A lost write or commit acknowledgment is
+UNKNOWN, without automatic replay. A storage read or mutation error on the
+selected SQL transaction makes it rollback-only. Lock loss refuses further
+journal and tag writes, including durable log writes outside an execution
+transaction.
+
+Opening a reader captures a complete immutable snapshot in one serializable
+transaction. A count and ordered stream must agree before any page is exposed.
+The snapshot uses a private temporary file, so memory is bounded by a record
+and an RPC page rather than journal length. Unix unlinks the file immediately;
+Windows uses native delete-on-close. Closing the handle or terminating the
+provider releases the file on both platforms.
+
+Pages contain at most 256 records and 3 MiB including their envelope. Oversized
+records and incomplete reads are refused, never truncated. Snapshot handles
+are single-use and bind the exact session, transaction, kind, and store. Page
+indices advance once; a failed or uncertain page must be closed. Closing an
+unused ID fences a late open. Each session retains at most 1,024 reader IDs and
+allows at most 16 unfinished snapshots. Completion and close release snapshot
+files; transaction finish and session close release their remaining readers.
+
+The live tests cover journal durability, tag commit and rollback, same-transaction
+snapshot immutability, journals larger than one RPC, storage reservations,
+corruption, and reader fencing. Metadata unit tests also run on Windows to
+exercise native file cleanup.
+
 ## Coordination locks
 
 The lock service uses exclusive ephemeral semaphores on the database-root
@@ -174,8 +226,9 @@ configuration, exact session owner, and exclusive ephemeral semaphore count.
 A confirmation expires after five seconds. Both monotonic and wall-clock elapsed
 time are checked, including before refreshing a confirmation after a pause.
 
-Every SQL unit, native coordination operation, history mutation, and transaction
-commit verifies guarding locks.
+Every SQL unit, native coordination operation, history or metadata mutation, and
+transaction commit verifies guarding locks. Storage creation checks the lease
+immediately before native dispatch too.
 Loss or uncertainty cancels guarded calls and permanently fences further writes
 in that provider session. Rollback, release, and close remain available. A new
 owner does not repair the old session. Failure after dispatch may have effects;
@@ -196,14 +249,14 @@ clock tests cover stale confirmations without relying on a scheduled watcher.
 
 ## Operational storage reservations
 
-Inspection recognizes history storage from its exact ownership attribute and
+Inspection recognizes history and metadata storage from exact ownership attributes and
 complete native layout, before extracting indexes or changefeeds. A marked
 table with an altered layout refuses the entire inspection. An unknown marker
 version is also refused. An unmarked table remains managed even when its name
 or layout matches a history table.
 
-Confirmed history stores are returned as SDK reservations instead of managed
-tables. A reservation occupies the name for every supported native scheme-object
+Confirmed history, journal, and tag stores are returned as SDK reservations
+instead of managed tables. A reservation occupies the name for every supported native scheme-object
 kind and for common tables. Exact UNREPRESENTABLE subject coverage overrides
 directory completeness at these occupied names, so omission does not assert
 absence. Filtered reads return reservations only from the exact directories
@@ -217,7 +270,7 @@ reservation need a separate initialization contract and remain pending. No
 node is hidden or reserved merely because it is named `ptah_locks` or has
 strict consistency settings.
 
-History reservations support host collision and reference guards. They do not
+Operational storage reservations support host collision and reference guards. They do not
 establish native directory-cascade safety; containment qualification remains
 pending. Coordination planning refuses overlapping directory lifecycles. Markers
 are storage-format identifiers, not an access-control mechanism against a database administrator.
@@ -442,12 +495,12 @@ other object lifecycles, and complete migration planning remain pending.
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes the other desired schema models and source formats,
-comparison, planning, rendering, and operation models for other objects, migration
-logs/tags, capability detection, environment credential sources,
+comparison, planning, rendering, and operation models for other objects,
+capability detection, environment credential sources,
 monitoring, and dev-database provisioning. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
-rendering, SQL and native coordination execution, transaction, history, and lock
-services. The
+rendering, SQL and native coordination execution, transaction, history, metadata,
+and lock services. The
 remaining capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

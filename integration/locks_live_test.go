@@ -138,6 +138,10 @@ func TestNativeLockLossFencesExecutionHistoryAndCommit(t *testing.T) {
 		_, err := opened.DB.ExecContext(context.Background(), "DROP TABLE `"+history+"`")
 		c.Check(err, qt.IsNil)
 	})
+	logs := &protocol.MetadataScope{SessionId: id, Schema: directory, Table: "events", Kind: protocol.MetadataScope_LOG}
+	tags := &protocol.MetadataScope{SessionId: id, Schema: directory, Table: "tags", Kind: protocol.MetadataScope_TAGS}
+	prepareMetadataStore(c, client, opened, database, logs)
+	prepareMetadataStore(c, client, opened, database, tags)
 	tx, err := client.BeginTransaction(c.Context(), &protocol.BeginTransactionRequest{SessionId: id, TransactionId: "tx", Isolation: protocol.TransactionIsolation_SERIALIZABLE})
 	c.Assert(err, qt.IsNil)
 	c.Assert(executeSQL(c, client, id, tx.Id, "UPSERT INTO `"+table+"` (id) VALUES (1u)").Outcome, qt.Equals, protocol.Execution_APPLIED)
@@ -150,12 +154,23 @@ func TestNativeLockLossFencesExecutionHistoryAndCommit(t *testing.T) {
 	txScope := proto.CloneOf(scope)
 	txScope.TransactionId = tx.Id
 	historyChange(c, client, txScope, nil, historyRow(scope.Format, "1"), protocol.HistoryResult_REFUSED)
+	metadataMutation(c, client, &protocol.MutateMetadataRequest{Scope: logs, Mutation: &protocol.MutateMetadataRequest_AppendLog{AppendLog: logRecord(1)}}, protocol.MetadataResult_REJECTED)
+	boundTags := proto.CloneOf(tags)
+	boundTags.TransactionId = tx.Id
+	metadataMutation(c, client, &protocol.MutateMetadataRequest{Scope: boundTags, Mutation: &protocol.MutateMetadataRequest_PutTag{PutTag: tagRecord("fenced", 1)}}, protocol.MetadataResult_REJECTED)
+
 	_, err = client.FinishTransaction(c.Context(), &protocol.FinishTransactionRequest{SessionId: id, TransactionId: tx.Id, Action: protocol.FinishTransactionRequest_COMMIT})
 	c.Assert(err, qt.IsNotNil)
 	_, err = client.FinishTransaction(c.Context(), &protocol.FinishTransactionRequest{SessionId: id, TransactionId: tx.Id, Action: protocol.FinishTransactionRequest_ROLLBACK})
 	c.Assert(err, qt.IsNil)
 	assertRowCount(c, opened, table, 0)
 	c.Assert(historyRead(c, client, scope).Revisions, qt.HasLen, 0)
+	for _, metadataScope := range []*protocol.MetadataScope{logs, tags} {
+		records, exists, _ := drainMetadata(c, client, openMetadata(c, client, metadataScope), 1)
+		c.Assert(exists, qt.IsTrue)
+		c.Assert(records, qt.HasLen, 0)
+	}
+
 	// Native operations share the same permanent fence after lease loss.
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Database: database, Schema: directory, Name: "fenced-node"}
 	desired, err := schema.CaptureCoordinationIntent(owner, schema.CoordinationIntent{})

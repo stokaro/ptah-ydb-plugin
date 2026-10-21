@@ -67,7 +67,7 @@ func (p *Provider) PrepareHistory(ctx context.Context, request *protocol.Prepare
 	}
 	defer stop()
 	ctx = guarded
-	attempted, err := store.Prepare(ctx, s.connection.Driver)
+	attempted, err := store.Prepare(ctx, s.connection.Driver, s.verifyLocks)
 	if s.verifyLocks(ctx) != nil && err == nil {
 		err = errors.New("YDB lock guarantee lost")
 	}

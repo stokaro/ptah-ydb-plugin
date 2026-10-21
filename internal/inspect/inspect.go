@@ -86,8 +86,8 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 				if err != nil {
 					return nil, err
 				}
-				if description.ownedHistory {
-					reserve(result, &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: "table", Name: name}, protocol.ReservedObject_HISTORY)
+				if description.reservation != protocol.ReservedObject_PURPOSE_UNSPECIFIED {
+					reserve(result, &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: "table", Name: name}, description.reservation)
 					break
 				}
 				table, err := readTable(database, selected, name, description.table)

@@ -27,16 +27,17 @@ type Provider struct {
 }
 
 type session struct {
-	mu           sync.Mutex
-	connection   *connection.Connection
-	database     string
-	closed       bool
-	closeErr     error
-	cleanupErr   error
-	transactions map[string]*transaction
-	active       string
-	locks        map[string]*lockRecord
-	fenced       bool
+	mu              sync.Mutex
+	connection      *connection.Connection
+	database        string
+	closed          bool
+	closeErr        error
+	cleanupErr      error
+	transactions    map[string]*transaction
+	active          string
+	locks           map[string]*lockRecord
+	fenced          bool
+	metadataReaders map[string]*metadataReader
 }
 
 // New constructs an isolated session service.
@@ -47,9 +48,9 @@ func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 func Description() *protocol.Description {
 	return &protocol.Description{
 		Revision: provider.Revision, ProviderId: "stokaro/ptah-ydb-plugin",
-		Version: "0.0.0-dev", SemanticIdentity: "ydb-coordination-operations-1",
-		Features: []string{provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature},
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}}, YamlSourceKeys: []*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, Features: []string{provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature}}},
+		Version: "0.0.0-dev", SemanticIdentity: "ydb-metadata-1",
+		Features: []string{provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}}, YamlSourceKeys: []*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, Features: []string{provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature}}},
 	}
 }
 
@@ -114,6 +115,7 @@ func (p *Provider) Close(_ context.Context, request *protocol.CloseRequest) erro
 	defer opened.mu.Unlock()
 	if !opened.closed {
 		opened.closed = true
+		opened.closeMetadataReaders("", true)
 		opened.rollbackTransactions()
 		opened.closeLocks()
 		opened.closeErr = errors.Join(opened.cleanupErr, opened.connection.Close())

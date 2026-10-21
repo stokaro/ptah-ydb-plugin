@@ -5,15 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"path"
 	"strconv"
-	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
-	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -22,104 +16,6 @@ type Runner interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 	QueryRowContext(context.Context, string, ...any) *sql.Row
-}
-
-// Check establishes absence through complete parent listings, or validates the
-// existing table. An arbitrary scheme error never becomes proof of absence.
-func (s Store) Check(ctx context.Context, driver *ydb.Driver) (exists bool, err error) {
-	exists, err = s.listed(ctx, driver)
-	if err != nil || !exists {
-		return exists, err
-	}
-	table, err := nativeapi.OpenTable(ctx, driver)
-	if err != nil {
-		return false, err
-	}
-	defer func() {
-		err = errors.Join(err, table.Close())
-		if err != nil {
-			exists = false
-		}
-	}()
-	value, err := table.Describe(ctx, s.Path())
-	if err != nil {
-		return false, err
-	}
-	if err = s.ValidateLayout(value); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (s Store) listed(ctx context.Context, driver *ydb.Driver) (bool, error) {
-	client := Ydb_Scheme_V1.NewSchemeServiceClient(ydb.GRPCConn(driver))
-	parts := []string{}
-	if s.Directory != "" {
-		parts = strings.Split(s.Directory, "/")
-	}
-	parts = append(parts, s.Name)
-	parent := s.Database
-	for i, name := range parts {
-		response, err := client.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: parent})
-		if err != nil {
-			return false, fmt.Errorf("list YDB history namespace: transport failed")
-		}
-		var value Ydb_Scheme.ListDirectoryResult
-		if err := nativeapi.Operation(response.GetOperation(), &value); err != nil {
-			return false, err
-		}
-		if value.GetSelf().GetName() != path.Base(parent) ||
-			(value.GetSelf().GetType() != Ydb_Scheme.Entry_DIRECTORY && (i != 0 || value.GetSelf().GetType() != Ydb_Scheme.Entry_DATABASE)) ||
-			len(value.Children) > 4096 {
-			return false, fmt.Errorf("invalid or oversized YDB history namespace listing")
-		}
-		var found *Ydb_Scheme.Entry
-		seen := map[string]bool{}
-		for _, entry := range value.Children {
-			if !component(entry.Name) || seen[entry.Name] {
-				return false, fmt.Errorf("invalid YDB history namespace entry")
-			}
-			seen[entry.Name] = true
-			if entry.Name == name {
-				found = entry
-			}
-		}
-		if found == nil {
-			return false, nil
-		}
-		expected := Ydb_Scheme.Entry_DIRECTORY
-		if i == len(parts)-1 {
-			expected = Ydb_Scheme.Entry_TABLE
-		}
-		if found.Type != expected {
-			return false, fmt.Errorf("YDB history path has an incompatible object kind")
-		}
-		parent = path.Join(parent, name)
-	}
-	return true, nil
-}
-
-// Prepare creates a missing table with its marker in one native request.
-// Attempted distinguishes a failure after create dispatch from a refusal.
-func (s Store) Prepare(ctx context.Context, driver *ydb.Driver) (attempted bool, err error) {
-	exists, err := s.Check(ctx, driver)
-	if err != nil || exists {
-		return false, err
-	}
-	table, err := nativeapi.OpenTable(ctx, driver)
-	if err != nil {
-		return false, err
-	}
-	defer func() { err = errors.Join(err, table.Close()) }()
-	attempted = true
-	if err := table.Create(ctx, s.CreateRequest()); err != nil {
-		return true, err
-	}
-	described, err := table.Describe(ctx, s.Path())
-	if err != nil {
-		return true, err
-	}
-	return true, s.ValidateLayout(described)
 }
 
 // Read returns one consistent bounded query result, never a truncated prefix.

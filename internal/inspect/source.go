@@ -7,6 +7,8 @@ import (
 	"path"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/history"
+	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -57,10 +59,10 @@ func (s *source) directory(ctx context.Context, path string) (*Ydb_Scheme.ListDi
 }
 
 type description struct {
-	ownedHistory bool
-	table        *native.DescribeTableResult
-	indexes      []*native.TableIndexDescription
-	changefeeds  []*native.ChangefeedDescription
+	reservation protocol.ReservedObject_Purpose
+	table       *native.DescribeTableResult
+	indexes     []*native.TableIndexDescription
+	changefeeds []*native.ChangefeedDescription
 }
 
 func (s *source) describeTable(ctx context.Context, absolute string) (*description, error) {
@@ -74,6 +76,13 @@ func (s *source) describeTable(ctx context.Context, absolute string) (*descripti
 	if err != nil {
 		return nil, err
 	}
+	purpose, err := metadata.Owned(path.Base(absolute), result)
+	if err != nil {
+		return nil, err
+	}
+	if owned {
+		purpose = protocol.ReservedObject_HISTORY
+	}
 	if err := schema.ValidateChangefeeds(result.Changefeeds); err != nil {
 		return nil, err
 	}
@@ -84,7 +93,7 @@ func (s *source) describeTable(ctx context.Context, absolute string) (*descripti
 		return nil, err
 	}
 	result.Indexes = nil
-	return &description{ownedHistory: owned, table: result, indexes: indexes, changefeeds: feeds}, nil
+	return &description{reservation: purpose, table: result, indexes: indexes, changefeeds: feeds}, nil
 }
 
 func (s *source) describeTopic(ctx context.Context, path string) (*native.DescribeTopicResult, error) {

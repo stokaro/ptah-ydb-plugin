@@ -128,6 +128,7 @@ func (p *Provider) FinishTransaction(ctx context.Context, request *protocol.Fini
 		}
 	}
 	if record.tx != nil {
+		s.closeMetadataReaders(request.TransactionId, false)
 		if request.Action == protocol.FinishTransactionRequest_COMMIT && !record.failed {
 			guarded, stop, err := s.guard(ctx)
 			if err != nil {

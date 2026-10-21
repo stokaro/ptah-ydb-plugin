@@ -3,19 +3,20 @@ package history
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"path"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -25,10 +26,8 @@ const ownershipAttribute = "ptah.history"
 
 // Store binds exact storage identity and representation to a database.
 type Store struct {
-	Database  string
-	Directory string
-	Name      string
-	Format    protocol.HistoryScope_Format
+	ownedtable.Identity
+	Format protocol.HistoryScope_Format
 }
 
 // Resolve refuses namespace traversal instead of cleaning it into another store.
@@ -36,32 +35,11 @@ func Resolve(database string, scope *protocol.HistoryScope) (Store, error) {
 	if err := provider.ValidateHistoryScope(scope); err != nil {
 		return Store{}, err
 	}
-	if !path.IsAbs(database) || path.Clean(database) != database || !component(scope.Table) {
-		return Store{}, fmt.Errorf("invalid YDB history store identity")
+	identity, err := ownedtable.Resolve(database, scope.Schema, scope.Table)
+	if err != nil {
+		return Store{}, err
 	}
-	directory := scope.Schema
-	if directory == "/" {
-		directory = ""
-	}
-	if directory != "" {
-		for _, part := range strings.Split(directory, "/") {
-			if !component(part) {
-				return Store{}, fmt.Errorf("invalid YDB history directory")
-			}
-		}
-	}
-	return Store{Database: database, Directory: directory, Name: scope.Table, Format: scope.Format}, nil
-}
-func component(value string) bool {
-	return utf8.ValidString(value) && value != "" && value != "." && value != ".." && !strings.ContainsAny(value, "/\\\x00")
-}
-
-// Path returns the absolute native path of the selected store.
-func (s Store) Path() string { return path.Join(s.Database, s.Directory, s.Name) }
-
-// QuotedPath quotes the whole native path using YQL backslash escapes.
-func (s Store) QuotedPath() string {
-	return "`" + strings.ReplaceAll(strings.ReplaceAll(s.Path(), "\\", "\\\\"), "`", "\\`") + "`"
+	return Store{Identity: identity, Format: scope.Format}, nil
 }
 func (s Store) marker() string {
 	return "stokaro/ptah-ydb-plugin/history-v1/" + strings.ToLower(s.Format.String())
@@ -135,52 +113,26 @@ func (s Store) nativeKeyType() Ydb.Type_PrimitiveTypeId {
 	}
 	return Ydb.Type_UTF8
 }
-func primitive(kind Ydb.Type_PrimitiveTypeId) *Ydb.Type {
-	return &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: kind}}
+func (s Store) definition() ownedtable.Definition {
+	return ownedtable.Definition{Identity: s.Identity, Attribute: ownershipAttribute, Marker: s.marker(), Columns: []ownedtable.Column{{Name: "version", Type: s.nativeKeyType()}, {Name: "revision", Type: Ydb.Type_STRING}}, PrimaryKey: []string{"version"}}
 }
 
-// CreateRequest declares the layout and ownership marker in the same operation.
-func (s Store) CreateRequest() *Ydb_Table.CreateTableRequest {
-	return &Ydb_Table.CreateTableRequest{
-		Path: s.Path(), StoreType: Ydb_Table.StoreType_STORE_TYPE_ROW,
-		Columns: []*Ydb_Table.ColumnMeta{
-			{Name: "version", Type: primitive(s.nativeKeyType()), NotNull: proto.Bool(true)},
-			{Name: "revision", Type: primitive(Ydb.Type_STRING), NotNull: proto.Bool(true)},
-		}, PrimaryKey: []string{"version"}, Attributes: map[string]string{ownershipAttribute: s.marker()},
-	}
-}
+// CreateRequest installs the history marker and native layout together.
+func (s Store) CreateRequest() *Ydb_Table.CreateTableRequest { return s.definition().CreateRequest() }
 
-// ValidateLayout refuses unowned stores and schema behavior that could remove
-// history or change a mutation. Physical partition/storage tuning is retained.
+// ValidateLayout refuses foreign or altered history storage.
 func (s Store) ValidateLayout(value *native.DescribeTableResult) error {
-	if err := schema.Known(value); err != nil {
-		return err
-	}
-	if value.GetSelf().GetName() != s.Name || value.GetSelf().GetType() != Ydb_Scheme.Entry_TABLE ||
-		(value.StoreType != Ydb_Table.StoreType_STORE_TYPE_ROW && value.StoreType != Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED) ||
-		len(value.Attributes) != 1 || value.Attributes[ownershipAttribute] != s.marker() {
-		return fmt.Errorf("YDB history ownership or table kind does not match")
-	}
-	if len(value.Columns) != 2 || len(value.PrimaryKey) != 1 || value.PrimaryKey[0] != "version" ||
-		len(value.Indexes) != 0 || len(value.Changefeeds) != 0 || value.TtlSettings != nil || value.Tiering != "" || value.Temporary {
-		return fmt.Errorf("YDB history has incompatible layout or automatic behavior")
-	}
-	expected := map[string]string{"version": s.KeyType(), "revision": "String"}
-	for _, column := range value.Columns {
-		spelling, nullable, err := schema.ColumnType(column.Type)
-		if column.GetNotNull() {
-			nullable = false
-		}
-		if err != nil || nullable || expected[column.Name] != spelling || column.DefaultValue != nil ||
-			(column.Family != "" && column.Family != "default") {
-			return fmt.Errorf("YDB history has an incompatible column")
-		}
-		delete(expected, column.Name)
-	}
-	if len(expected) != 0 {
-		return fmt.Errorf("YDB history is missing required columns")
-	}
-	return nil
+	return s.definition().ValidateLayout(value)
+}
+
+// Check establishes history absence or validates its owned storage.
+func (s Store) Check(ctx context.Context, driver *ydb.Driver) (bool, error) {
+	return s.definition().Check(ctx, driver)
+}
+
+// Prepare creates absent history storage once and confirms its layout.
+func (s Store) Prepare(ctx context.Context, driver *ydb.Driver, beforeCreate func(context.Context) error) (bool, error) {
+	return s.definition().Prepare(ctx, driver, beforeCreate)
 }
 
 // Owned identifies history by its exact marker and complete native layout, never
@@ -191,7 +143,7 @@ func Owned(name string, value *native.DescribeTableResult) (bool, error) {
 		return false, nil
 	}
 	for _, format := range []protocol.HistoryScope_Format{protocol.HistoryScope_NATIVE, protocol.HistoryScope_ATLAS} {
-		store := Store{Name: name, Format: format}
+		store := Store{Identity: ownedtable.Identity{Name: name}, Format: format}
 		if marker == store.marker() {
 			if err := store.ValidateLayout(value); err != nil {
 				return false, err

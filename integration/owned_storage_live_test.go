@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -92,7 +93,7 @@ func TestAlteredHistoryRefusesInspectionBeforeChildProjection(t *testing.T) {
 	owner, err := nativeapi.OpenTable(c.Context(), opened.Driver)
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(owner.Close(), qt.IsNil) })
-	store := history.Store{Database: database, Directory: directory, Name: "marked_with_index", Format: protocol.HistoryScope_NATIVE}
+	store := history.Store{Identity: ownedtable.Identity{Database: database, Directory: directory, Name: "marked_with_index"}, Format: protocol.HistoryScope_NATIVE}
 	request := store.CreateRequest()
 	request.Indexes = []*Ydb_Table.TableIndex{{Name: "extra", IndexColumns: []string{"revision"}, Type: &Ydb_Table.TableIndex_GlobalIndex{GlobalIndex: &Ydb_Table.GlobalIndex{}}}}
 	c.Assert(owner.Create(c.Context(), request), qt.IsNil)
@@ -102,7 +103,7 @@ func TestAlteredHistoryRefusesInspectionBeforeChildProjection(t *testing.T) {
 		c.Check(err, qt.IsNil)
 	})
 	snapshot, err := inspect.Read(c.Context(), opened.Driver, database, []string{directory})
-	c.Assert(err, qt.ErrorMatches, ".*history has incompatible layout.*")
+	c.Assert(err, qt.ErrorMatches, ".*storage has incompatible layout.*")
 	c.Assert(snapshot, qt.IsNil)
 	// Unknown marker versions must not fall back to an ordinary managed table.
 	store.Name = "unknown_marker"

@@ -32,6 +32,16 @@ jobs:
       - run: go vet -tags integration ./...
       - run: go test -race -tags integration ./integration -run 'TestColumnStorageOfflineSubprocess|TestCoordinationSourceOfflineSubprocess|TestCoordinationComparisonOfflineSubprocess' -count=1
       - run: CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
+  windows-unit:
+    runs-on: windows-latest
+    env:
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test ./internal/metadata ./internal/history ./internal/backend
   live:
     runs-on: ubuntu-latest
     strategy:
