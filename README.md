@@ -1,10 +1,11 @@
 # Ptah YDB provider
 
 This repository owns the executable YDB provider for [Ptah #4204](https://github.com/stokaro/ptah/issues/4204).
-It is under development and is not ready for schema or migration workloads.
+It is under development. Row-table inspection is available; schema planning
+and migration execution are not implemented yet.
 
-The current executable opens native YDB connections through the public Ptah
-SDK. It supports anonymous, URL user/password, and URL token authentication.
+The executable opens native YDB connections and reads row-table schemas
+through the public Ptah SDK. It supports anonymous, URL user/password, and URL token authentication.
 Session receipts contain the selected database and measured server version.
 The implementation does not import the Ptah application module.
 
@@ -20,8 +21,9 @@ Run it through a Ptah SDK client rather than invoking it as a command-line tool.
 The SDK dependency is pinned to a published experimental revision. There is no
 `replace` directive or workspace dependency.
 
-Live checks require an existing test database. They open sessions and read
-server metadata; they do not create or change database objects.
+Live checks require an isolated test database. Schema tests create uniquely
+named directories and tables and remove them afterward. Session tests only
+read server metadata.
 
 ```sh
 PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
@@ -29,8 +31,9 @@ PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
 ```
 
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
-host-module imports and local module replacements. These checks qualify the
-session service only; they do not establish schema or migration support.
+host-module imports and local module replacements. These checks cover sessions, native row-table observations, offline
+normalization, and refusals for incomplete reads. They do not establish
+planning or migration support.
 
 ## Connection addresses
 
@@ -47,14 +50,43 @@ when the RPC context is canceled. Cleanup results are retained for repeated
 closes. A process accepts at most 1,024 lifetime session handles; start a new
 provider process when that bound is reached.
 
+## Schema observations
+
+Inspection reads the native scheme and table APIs. Common columns preserve
+YDB type spelling, Decimal precision/scale, nullability, and key membership.
+Provider-owned table properties retain key order, TTL, column families,
+partitioning, storage settings, attributes, and access metadata. Column
+properties retain family assignment and typed literal or sequence defaults.
+The observations carry their complete native field definitions and digests.
+Normalization works offline after the database session closes.
+
+Schema selectors name exact directories relative to the selected database.
+Use `/` for its root. An unfiltered read walks subdirectories. System
+(dot-prefixed) directories are excluded; user tables are not excluded merely
+because their names begin with a dot. Traversal and snapshot size are bounded.
+Coverage names the inspected subjects only; it does not claim native-object
+absence outside those subjects.
+
+Unknown native fields and enum values are refused before JSON conversion.
+Indexes and changefeeds need additional child-object readers and currently
+refuse the whole inspection. Column tables, other native object kinds, and
+replication-owned tables also refuse. A failed traversal returns no snapshot.
+These limitations preserve data for the remaining extraction work.
+
+Observed property models use YDB's typed protocol definitions inside this
+provider. The neutral SDK carries their envelopes. Common fields and runtime
+statistics are excluded from property payloads; they cannot become a second
+writable representation. Native arrays retain their observed order. Desired
+models, semantic comparisons, and planning are still pending.
+
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 The complete scope includes typed schema objects and facets, offline source
 formats, normalization, comparison, planning, rendering, execution, migration
 transactions/history/locks/logs/tags, capability detection, environment
-credential sources, monitoring, and dev-database provisioning. The current
-session service advertises none of these unfinished capabilities.
+credential sources, monitoring, and dev-database provisioning. The provider advertises only implemented inspection and normalization
+services. The remaining capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations
 are wired through this executable. Provider release workflows, default Ptah bundling,

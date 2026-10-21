@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
@@ -18,20 +19,29 @@ import (
 // an uncertain cleanup into success. The process bounds retained handles.
 type Provider struct {
 	mu       sync.Mutex
-	sessions map[string]*connection.Connection
+	sessions map[string]*session
 	opening  int
 }
 
-// New constructs an isolated session service.
-func New() *Provider { return &Provider{sessions: make(map[string]*connection.Connection)} }
+type session struct {
+	mu         sync.Mutex
+	connection *connection.Connection
+	database   string
+	closed     bool
+	closeErr   error
+}
 
-// Description advertises only implemented services. Schema and migration
-// capabilities remain unadvertised until their YDB semantics are extracted.
+// New constructs an isolated session service.
+func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
+
+// Description advertises native sessions, row-table inspection, and offline
+// observation normalization. Unextracted services remain unadvertised.
 func Description() *protocol.Description {
 	return &protocol.Description{
 		Revision: provider.Revision, ProviderId: "stokaro/ptah-ydb-plugin",
-		Version: "0.0.0-dev", SemanticIdentity: "ydb-native-sessions-1",
-		Engines: []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules()}},
+		Version: "0.0.0-dev", SemanticIdentity: "ydb-native-row-observations-1",
+		Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature}}},
 	}
 }
 
@@ -78,7 +88,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	}
 	id := rand.Text()
 	p.mu.Lock()
-	p.sessions[id] = opened
+	p.sessions[id] = &session{connection: opened, database: address.Database()}
 	p.mu.Unlock()
 	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Database(), ServerVersion: version, Identifiers: identifierRules()}, nil
 }
@@ -92,7 +102,13 @@ func (p *Provider) Close(_ context.Context, request *protocol.CloseRequest) erro
 	if opened == nil {
 		return status.Error(codes.NotFound, "unknown YDB session")
 	}
-	if err := opened.Close(); err != nil {
+	opened.mu.Lock()
+	defer opened.mu.Unlock()
+	if !opened.closed {
+		opened.closed = true
+		opened.closeErr = opened.connection.Close()
+	}
+	if opened.closeErr != nil {
 		return status.Error(codes.Unavailable, "close YDB connection failed")
 	}
 	return nil

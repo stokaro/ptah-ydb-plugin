@@ -1,0 +1,230 @@
+package schema
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/stokaro/ptah/provider-sdk/modeljson"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+)
+
+const (
+	// ProviderID binds model envelopes to the official YDB owner.
+	ProviderID = "stokaro/ptah-ydb-plugin"
+	// TableProperties identifies observed YDB row-table properties.
+	TableProperties = "ydb.row-table-properties"
+	// ColumnProperties identifies column family and native default properties.
+	ColumnProperties = "ydb.column-properties"
+)
+
+// Models returns fresh definitions for the supported observed facets. Desired
+// models are not enrolled until their decoding and comparison are implemented.
+func Models() []*protocol.ValueModel {
+	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties)}
+}
+
+func message(kind string) proto.Message {
+	switch kind {
+	case TableProperties:
+		return &Ydb_Table.DescribeTableResult{}
+	case ColumnProperties:
+		return &Ydb_Table.ColumnMeta{}
+	default:
+		return nil
+	}
+}
+
+func excluded(kind string) []string {
+	if kind == TableProperties {
+		return []string{"columns", "table_stats"}
+	}
+	return []string{"name", "type", "not_null"}
+}
+
+var definitions = map[string]*protocol.ValueModel{
+	TableProperties: buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties),
+}
+
+func model(kind string) *protocol.ValueModel { return proto.CloneOf(definitions[kind]) }
+
+func buildModel(kind string) *protocol.ValueModel {
+	graph := make(map[string]any)
+	describeMessage(message(kind).ProtoReflect().Descriptor(), graph)
+	definition := map[string]any{
+		"kind": kind, "schema_version": 1, "encoding": "ydb-protojson",
+		"message":  string(message(kind).ProtoReflect().Descriptor().FullName()),
+		"messages": graph, "excluded_fields": excluded(kind),
+		"unknown_fields_and_enum_values": "refused", "representation": "observed",
+		"canonicalization": "protojson with absent defaults omitted, then modeljson canonical JSON; arrays retain server order",
+		"table_self":       "retain owner and permissions; omit name, type, size_bytes, created_at",
+		"common_columns":   "names, storage type, and nullability live only in common columns; primary_key preserves key order",
+		"not_observed":     []string{"indexes", "changefeeds", "column_storage"},
+	}
+	encoded, err := json.Marshal(definition)
+	if err != nil {
+		panic(err)
+	}
+	canonical, err := modeljson.Canonical(encoded)
+	if err != nil {
+		panic(err)
+	}
+	digest := sha256.Sum256(canonical)
+	return &protocol.ValueModel{Kind: kind, Representation: protocol.ValueInput_OBSERVED, SchemaVersion: 1,
+		Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]),
+		CanonicalFormat: kind + "/observed-json-v1"}
+}
+
+// describeMessage embeds the complete native field grammar in the negotiated
+// model. A dependency update that changes its grammar changes its digest too.
+func describeMessage(desc protoreflect.MessageDescriptor, graph map[string]any) {
+	name := string(desc.FullName())
+	if _, found := graph[name]; found {
+		return
+	}
+	fields := make(map[string]any)
+	graph[name] = fields
+	for i := 0; i < desc.Fields().Len(); i++ {
+		field := desc.Fields().Get(i)
+		entry := map[string]any{"number": int(field.Number()), "json_name": field.JSONName(), "kind": field.Kind().String(), "cardinality": field.Cardinality().String(), "presence": field.HasPresence()}
+		if field.ContainingOneof() != nil {
+			entry["oneof"] = string(field.ContainingOneof().Name())
+		}
+		if field.Message() != nil {
+			entry["message"] = string(field.Message().FullName())
+			entry["map"] = field.IsMap()
+			describeMessage(field.Message(), graph)
+		}
+		if field.Enum() != nil {
+			values := make(map[string]int32)
+			for j := 0; j < field.Enum().Values().Len(); j++ {
+				item := field.Enum().Values().Get(j)
+				values[string(item.Name())] = int32(item.Number())
+			}
+			entry["enum"] = values
+		}
+		fields[string(field.Name())] = entry
+	}
+}
+
+// CaptureTable separates YDB-only properties from common table and column
+// fields. Server statistics and transient self metadata are not schema state.
+func CaptureTable(owner *protocol.Reference, description *Ydb_Table.DescribeTableResult) (*protocol.Envelope, error) {
+	if err := Known(description); err != nil {
+		return nil, err
+	}
+	projected := proto.CloneOf(description)
+	projected.Columns, projected.TableStats = nil, nil
+	if projected.Self != nil {
+		projected.Self.Name, projected.Self.Type = "", 0
+		projected.Self.SizeBytes, projected.Self.CreatedAt = 0, nil
+	}
+	return capture(TableProperties, owner, projected)
+}
+
+// CaptureColumn retains family assignment and typed literal/sequence defaults.
+// The common column owns its name, storage type, and nullability.
+func CaptureColumn(owner *protocol.Reference, column *Ydb_Table.ColumnMeta) (*protocol.Envelope, error) {
+	if err := Known(column); err != nil {
+		return nil, err
+	}
+	projected := proto.CloneOf(column)
+	projected.Name, projected.Type, projected.NotNull = "", nil, nil
+	return capture(ColumnProperties, owner, projected)
+}
+
+func capture(kind string, owner *protocol.Reference, value proto.Message) (*protocol.Envelope, error) {
+	payload, err := protojson.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	payload, err = modeljson.Canonical(payload)
+	if err != nil {
+		return nil, err
+	}
+	definition := model(kind)
+	envelope := &protocol.Envelope{ProviderId: ProviderID, Kind: kind, SchemaVersion: 1, Encoding: definition.Encoding,
+		Owner: proto.CloneOf(owner), Payload: payload, DefinitionSha256: definition.DefinitionSha256}
+	return Normalize(envelope)
+}
+
+// Normalize interprets an observed facet without a connection. A payload
+// cannot smuggle common fields or unrecognized native fields through a model.
+func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
+	target := message(value.GetKind())
+	if target == nil {
+		return nil, fmt.Errorf("unknown YDB observation model")
+	}
+	definition := model(value.GetKind())
+	if value.GetProviderId() != ProviderID || value.GetSchemaVersion() != 1 || value.GetEncoding() != definition.Encoding || value.GetDefinitionSha256() != definition.DefinitionSha256 {
+		return nil, fmt.Errorf("YDB observation does not match its negotiated definition")
+	}
+	owner := value.GetOwner()
+	expected := "table"
+	if value.GetKind() == ColumnProperties {
+		expected = "column"
+	}
+	if owner.GetEngine() != "ydb" || owner.GetKind() != expected || owner.GetName() == "" || owner.GetDatabase() == "" || owner.GetCatalog() != "" || len(owner.GetOverload()) != 0 {
+		return nil, fmt.Errorf("invalid YDB facet owner")
+	}
+	if (expected == "table" && len(owner.GetPath()) != 0) || (expected == "column" && len(owner.GetPath()) != 1) {
+		return nil, fmt.Errorf("invalid YDB facet owner path")
+	}
+	if err := protojson.Unmarshal(value.GetPayload(), target); err != nil {
+		return nil, fmt.Errorf("invalid YDB observation JSON")
+	}
+	if err := Known(target); err != nil {
+		return nil, err
+	}
+	var refused bool
+	target.ProtoReflect().Range(func(field protoreflect.FieldDescriptor, _ protoreflect.Value) bool {
+		refused = slices.Contains(excluded(value.GetKind()), string(field.Name()))
+		return !refused
+	})
+	if refused {
+		return nil, fmt.Errorf("YDB facet repeats a common or transient field")
+	}
+	if table, ok := target.(*Ydb_Table.DescribeTableResult); ok {
+		if len(table.GetIndexes()) != 0 || len(table.GetChangefeeds()) != 0 {
+			return nil, fmt.Errorf("YDB indexes and changefeeds need their child descriptions")
+		}
+		seen := map[string]bool{}
+		if len(table.GetPrimaryKey()) == 0 {
+			return nil, fmt.Errorf("observed YDB table properties require a primary key")
+		}
+		for _, key := range table.GetPrimaryKey() {
+			if key == "" || seen[key] {
+				return nil, fmt.Errorf("invalid YDB primary key")
+			}
+			seen[key] = true
+		}
+		self := table.GetSelf()
+		if self.GetName() != "" || self.GetType() != 0 || self.GetSizeBytes() != 0 || self.GetCreatedAt() != nil {
+			return nil, fmt.Errorf("YDB facet repeats transient table identity")
+		}
+		if table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_ROW && table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED {
+			return nil, fmt.Errorf("column storage requires its own description")
+		}
+	}
+	if strings.TrimSpace(owner.GetName()) == "" {
+		return nil, fmt.Errorf("empty YDB facet name")
+	}
+	payload, err := protojson.Marshal(target)
+	if err != nil {
+		return nil, err
+	}
+	canonical, err := modeljson.Canonical(payload)
+	if err != nil {
+		return nil, err
+	}
+	result := proto.CloneOf(value)
+	result.Payload = canonical
+	return result, nil
+}

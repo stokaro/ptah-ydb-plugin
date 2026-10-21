@@ -7,8 +7,10 @@ toolchain go1.27.3
 require (
 	github.com/frankban/quicktest v1.14.6
 	github.com/stokaro/ptah/provider-sdk v0.0.0-20261021132018-f45b1fd2b698
+	github.com/ydb-platform/ydb-go-genproto v0.0.0-20260810123728-f0c151ab31b9
 	github.com/ydb-platform/ydb-go-sdk/v3 v3.155.1
 	google.golang.org/grpc v1.86.0-dev
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -27,11 +29,9 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/oklog/run v1.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
-	github.com/ydb-platform/ydb-go-genproto v0.0.0-20260810122915-65bfd5c4b705 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
 )

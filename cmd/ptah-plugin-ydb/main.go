@@ -10,7 +10,8 @@ import (
 )
 
 func main() {
-	if err := runtime.Serve(runtime.Server{Description: backend.Description(), Sessions: backend.New()}); err != nil {
+	owner := backend.New()
+	if err := runtime.Serve(runtime.Server{Description: backend.Description(), Sessions: owner, Inspector: owner, ValueNormalizer: owner}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

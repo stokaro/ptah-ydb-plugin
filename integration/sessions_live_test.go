@@ -81,9 +81,9 @@ func TestNativeSessionsSubprocess(t *testing.T) {
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(err.Error(), qt.Not(qt.Contains), "test-secret")
 	c.Assert(err.Error(), qt.Not(qt.Contains), "other")
-	// An incomplete extraction must refuse operations it does not advertise.
-	_, err = client.Inspect(ctx, &protocol.InspectRequest{SessionId: third.GetId()})
-	c.Assert(err, qt.ErrorMatches, `.*\(Unimplemented\)`)
+	// A closed session cannot inspect through its previously opened driver.
+	_, err = client.Inspect(ctx, &protocol.InspectRequest{SessionId: first.GetId()})
+	c.Assert(err, qt.ErrorMatches, `.*\(FailedPrecondition\)`)
 	c.Assert(client.CloseSession(ctx, third.GetId()), qt.IsNil)
 	// A new process does not accept old handles even when the database is equal.
 	live, err := other.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: address})
