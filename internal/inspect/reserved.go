@@ -10,7 +10,7 @@ import (
 // object occupies every such identity; omitting it must not imply native absence.
 func reserve(snapshot *protocol.Schema, object *protocol.Reference, purpose protocol.ReservedObject_Purpose) {
 	reservation := &protocol.ReservedObject{Object: object, NormalizedObject: proto.CloneOf(object), Purpose: purpose, ConflictKinds: []string{"table"}}
-	for _, model := range schema.Models() {
+	for _, model := range schema.ObservedModels() {
 		if !schema.IsNativeObject(model.Kind) {
 			continue
 		}

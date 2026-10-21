@@ -5,8 +5,8 @@ It is under development. Inspection covers row tables and their indexes and
 changefeeds, topics, views, coordination nodes, external data sources, and
 external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history and coordination
-locks. Schema planning
-is still pending.
+locks. Offline YAML decoding is available for coordination-node declarations.
+Schema planning is still pending.
 
 The executable opens native YDB connections and reads row-table schemas
 through the public Ptah SDK. It supports anonymous, URL user/password, and URL token authentication.
@@ -267,8 +267,8 @@ consumer options, and attributes. Live partition topology and topic/consumer
 statistics are excluded. A missing child description refuses the entire read.
 
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
-Column and key arrays retain their observed order. Desired models, semantic
-comparisons, and planning are still pending.
+Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
+Other desired models, semantic comparisons, and planning remain pending.
 
 Views retain the query returned by the view service and the attributes read
 through the table service on the same path. This includes comments and custom
@@ -277,6 +277,56 @@ counter configuration; the envelope owns the node path. External data sources
 retain source type, location, authentication references, and native properties.
 External tables retain source references, location, ordered typed columns, and
 content options without rewriting their native keys or JSON values.
+
+## Offline coordination declarations
+
+The source service accepts the captured YAML document key `coordination_nodes`.
+The host parses YAML and supplies typed values and original byte spans; the
+provider interprets this grammar without reading files or opening a session.
+
+```yaml
+coordination_nodes:
+  workers:
+    schema: app
+    self_check_period: PT2S
+    session_grace_period: PT5S
+    read_consistency_mode: strict
+    attach_consistency_mode: relaxed
+    rate_limiter_counters_mode: detailed
+```
+
+Each entry is a mapping. Its key supplies the node name unless `name` overrides
+it. `schema` is an exact directory relative to the database; `struct_name`
+retains source provenance. These fields and every setting require text.
+Unknown keys, explicit nulls, numeric coercion, repeated fields, duplicate
+object identities, and collisions with declared tables in the same captured
+namespace refuse the whole source batch. Root `ptah_locks` is reserved for
+runtime use; the same leaf name in a user directory is allowed. Inspection
+still returns root coordination nodes as ordinary observations.
+
+Periods use positive ISO8601 durations and must preserve whole milliseconds.
+The self-check interval must be 500–10,000 milliseconds. The grace interval
+must be at least the effective self-check interval plus 1,000 milliseconds and
+at most 30,000 milliseconds. The provider refuses configurations the server
+would clamp. Mode strings are case-insensitive in source and stored lowercase.
+
+Omitted settings remain absent in the desired model. They request server
+defaults when the node is created or compared: a 1,000-millisecond self-check,
+10,000-millisecond grace interval, relaxed reads, strict attachment, and
+aggregated counters. Explicit settings equal to defaults remain explicit.
+Offline normalization does not assert desired/observed equivalence.
+
+The decoder returns native objects with source traces and coverage limited to
+the models enrolled by each document. An empty mapping declares no nodes within
+that scope; an empty model scope stays empty. No successful prefix survives an
+invalid entry or cancellation. Desired and observed models have distinct
+encodings and definition digests; observation coverage contains only observed
+models.
+
+The subprocess tests exercise decoding and normalization without a database
+address. HCL, Go annotation and SQL adapters, desired/observed conversion,
+contextual comparison, rendering, and native change planning remain pending.
+This service alone does not make the YAML example executable as a migration.
 
 ## Offline column-storage observations
 
@@ -316,11 +366,12 @@ requires unchanged generated files.
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
-Remaining work includes desired schema models, offline source formats,
+Remaining work includes the other desired schema models and source formats,
 comparison, planning, rendering, native operation envelopes, migration
 logs/tags, capability detection, environment credential sources,
 monitoring, and dev-database provisioning. The provider advertises implemented
-inspection, normalization, SQL execution, transaction, history, and lock services. The
+inspection, normalization, coordination YAML source decoding, SQL execution,
+transaction, history, and lock services. The
 remaining capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

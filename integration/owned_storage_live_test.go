@@ -68,7 +68,7 @@ func TestOwnedHistoryInspectionPreservesForeignTables(t *testing.T) {
 func assertReservedCoverage(c *qt.C, snapshot *protocol.Schema, reserved *protocol.ReservedObject) {
 	c.Helper()
 	expected := []string{"table"}
-	for _, model := range schema.Models() {
+	for _, model := range schema.ObservedModels() {
 		if !schema.IsNativeObject(model.Kind) {
 			continue
 		}

@@ -27,9 +27,8 @@ const (
 	ColumnProperties = "ydb.column-properties"
 )
 
-// Models returns fresh definitions for the supported observed models. Desired
-// models are not enrolled until their decoding and comparison are implemented.
-func Models() []*protocol.ValueModel {
+// ObservedModels returns fresh definitions for the supported native observations.
+func ObservedModels() []*protocol.ValueModel {
 	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties)}
 }
 
@@ -281,4 +280,10 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	result := proto.CloneOf(value)
 	result.Payload = canonical
 	return result, nil
+}
+
+// Models returns negotiated models with their separate representations. Source
+// support does not advertise contextual comparison or planning capabilities.
+func Models() []*protocol.ValueModel {
+	return append(ObservedModels(), CoordinationDesiredModel())
 }

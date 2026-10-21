@@ -38,7 +38,7 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 	}()
 	result = &protocol.Schema{Complete: true, Engine: "ydb", ScopeBindings: bindings,
 		Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}}
-	for _, model := range schema.Models() {
+	for _, model := range schema.ObservedModels() {
 		result.Coverage.Kinds = append(result.Coverage.Kinds, &protocol.ModelKindCoverage{Model: model,
 			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Knowledge is limited to returned subjects and fully listed directories"}})
 	}

@@ -1,4 +1,4 @@
-// Package schema owns YDB schema observations and their wire definitions.
+// Package schema owns YDB schema models and their wire definitions.
 package schema
 
 import (

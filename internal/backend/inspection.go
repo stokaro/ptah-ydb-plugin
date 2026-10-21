@@ -40,10 +40,13 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	if _, err := provider.InspectionValues(Description(), request, result); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, status.FromContextError(err).Err()
+	}
 	return result, nil
 }
 
-// NormalizeValues validates captured YDB observation models offline. Results
+// NormalizeValues validates captured YDB schema models offline. Results
 // preserve the complete input provenance and expose no successful prefix.
 func (*Provider) NormalizeValues(ctx context.Context, request *protocol.NormalizeValuesRequest) (*protocol.NormalizedValues, error) {
 	if err := provider.ValidateValueInputs(Description(), request); err != nil {
@@ -54,15 +57,26 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 		if err := ctx.Err(); err != nil {
 			return nil, status.FromContextError(err).Err()
 		}
-		if input.GetRepresentation() != protocol.ValueInput_OBSERVED {
-			return nil, status.Error(codes.InvalidArgument, "only observed YDB models are implemented")
+		var value *protocol.Envelope
+		var err error
+		format := input.GetValue().GetKind() + "/observed-json-v1"
+		switch input.GetRepresentation() {
+		case protocol.ValueInput_OBSERVED:
+			value, err = schema.Normalize(input.GetValue())
+		case protocol.ValueInput_DESIRED:
+			value, err = schema.NormalizeDesired(input.GetValue())
+			format = schema.CoordinationDesiredModel().CanonicalFormat
+		default:
+			return nil, status.Error(codes.InvalidArgument, "unsupported YDB model representation")
 		}
-		value, err := schema.Normalize(input.GetValue())
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 		result.Values = append(result.Values, &protocol.NormalizedValue{Id: input.GetId(), Value: value, NormalizedOwner: proto.CloneOf(value.Owner),
-			CanonicalFormat: value.Kind + "/observed-json-v1", CanonicalProjection: bytes.Clone(value.Payload)})
+			CanonicalFormat: format, CanonicalProjection: bytes.Clone(value.Payload)})
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, status.FromContextError(err).Err()
 	}
 	return result, nil
 }
