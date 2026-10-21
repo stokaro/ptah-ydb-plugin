@@ -1,0 +1,52 @@
+name: Provider checks
+on:
+  push:
+    branches: [master]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go mod tidy -diff
+      - run: sh scripts/check-module-boundaries.sh
+      - run: go test -race ./...
+      - run: go vet ./...
+      - run: CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
+  live:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ydbplatform/local-ydb:25.1.4.7
+          - ydbplatform/local-ydb:26.2.1.14
+    env:
+      GOWORK: 'off'
+      PTAH_YDB_TEST_URL: ydb://127.0.0.1:2136/local?go_balancer=disable
+    services:
+      ydb:
+        image: ${{ matrix.image }}
+        env:
+          YDB_USE_IN_MEMORY_PDISKS: 'true'
+        ports:
+          - 2136:2136
+        options: >-
+          --hostname localhost
+          --health-cmd "sh /health_check"
+          --health-interval 5s
+          --health-timeout 20s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test -race -tags integration ./integration -count=1 -v
