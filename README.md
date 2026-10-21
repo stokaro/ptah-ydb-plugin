@@ -3,7 +3,8 @@
 This repository owns the executable YDB provider for [Ptah #4204](https://github.com/stokaro/ptah/issues/4204).
 It is under development. Inspection covers row tables and their indexes and
 changefeeds, topics, views, coordination nodes, external data sources, and
-external tables. Schema planning and migration execution are not implemented yet.
+external tables. Native SQL execution and session-bound data transactions are
+implemented. Schema planning and migration history are still pending.
 
 The executable opens native YDB connections and reads row-table schemas
 through the public Ptah SDK. It supports anonymous, URL user/password, and URL token authentication.
@@ -36,11 +37,12 @@ The test servers enable `enable_vector_index` and
 `enable_add_unique_index`. Fulltext creation is expected to be refused on 25.1.
 
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
-host-module imports and local module replacements. These checks cover sessions, native row-table observations, offline
+host-module imports and local module replacements. These checks cover sessions, SQL execution, commit/rollback and range conflicts,
+native row-table observations, offline
 normalization, index implementation tables, changefeed consumers and retention,
 standalone native objects, exact-directory completeness, and refusals for
 incomplete reads. They do not establish
-planning or migration support.
+planning or complete migration support.
 
 ## Connection addresses
 
@@ -56,6 +58,43 @@ Session close releases both the SQL pool and its parent native driver, even
 when the RPC context is canceled. Cleanup results are retained for repeated
 closes. A process accepts at most 1,024 lifetime session handles; start a new
 provider process when that bound is reached.
+
+## Execution and transactions
+
+Execution sends native SQL units through YDB's query service. A batch is checked
+before its first unit runs. Unsupported native envelopes refuse the whole batch.
+Each request uses a pinned connection; dispatched writes are not retried.
+Request IDs correlate calls and do not provide exactly-once execution.
+
+Results distinguish a confirmed prefix from an uncertain remainder. A failed
+dispatched unit reports UNKNOWN, even when earlier units succeeded. A unit may
+contain several SQL statements, so its error cannot prove that none ran.
+Cancellation between units reports the confirmed prefix. Diagnostics omit raw
+driver errors and SQL text.
+
+Transaction handles belong to one provider session. DEFAULT and SERIALIZABLE
+both use YDB's native serializable read/write mode; receipts retain the
+requested isolation. Begin cancellation remains connected while the database
+transaction opens, then detaches when the handle is returned. Ending the begin
+RPC therefore does not roll back later work.
+
+A session permits one active transaction. Execution must name its handle while
+it is active. Commit and rollback retain their terminal result, including
+UNKNOWN, without issuing a second database operation. Rollback of an unused
+handle fences a late begin. The SDK client sends rollback after a failed begin,
+including a duplicate begin; callers must not reuse handles.
+Each session retains at most 1,024 transaction handles.
+
+Closing a session rolls back unfinished work even if the close caller was
+canceled. Connection acquisition for begin and native transaction calls have a
+30-second bound. Unconfirmed cleanup remains an error. YDB schema changes are not transactional; session
+receipts explicitly report `transactional_ddl=false`. Live tests verify that
+DDL and SQL transaction-control statements cannot escape an explicit data
+transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
+
+Native envelopes for provider-specific operations, SQL analysis, rendering,
+migration history, locks, logs, and tags remain to be extracted. The host's
+extended comment and coordination SQL forms are not implemented here.
 
 ## Schema observations
 
@@ -155,11 +194,12 @@ requires unchanged generated files.
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
-The complete scope includes typed schema objects and facets, offline source
-formats, normalization, comparison, planning, rendering, execution, migration
-transactions/history/locks/logs/tags, capability detection, environment
-credential sources, monitoring, and dev-database provisioning. The provider advertises only implemented inspection and normalization
-services. The remaining capabilities stay unadvertised.
+Remaining work includes desired schema models, offline source formats,
+comparison, planning, rendering, native operation envelopes, migration
+history/locks/logs/tags, capability detection, environment credential sources,
+monitoring, and dev-database provisioning. The provider advertises implemented
+inspection, normalization, SQL execution, and transaction services. The
+remaining capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations
 are wired through this executable. Provider release workflows, default Ptah bundling,

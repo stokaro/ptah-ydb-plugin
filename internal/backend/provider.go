@@ -4,6 +4,7 @@ package backend
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"sync"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
@@ -24,24 +25,27 @@ type Provider struct {
 }
 
 type session struct {
-	mu         sync.Mutex
-	connection *connection.Connection
-	database   string
-	closed     bool
-	closeErr   error
+	mu           sync.Mutex
+	connection   *connection.Connection
+	database     string
+	closed       bool
+	closeErr     error
+	cleanupErr   error
+	transactions map[string]*transaction
+	active       string
 }
 
 // New constructs an isolated session service.
 func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
-// Description advertises native sessions, schema inspection, and offline
-// observation normalization. Unextracted services remain unadvertised.
+// Description advertises native sessions, execution, transactions, inspection,
+// and offline observation normalization. Unextracted services remain unadvertised.
 func Description() *protocol.Description {
 	return &protocol.Description{
 		Revision: provider.Revision, ProviderId: "stokaro/ptah-ydb-plugin",
-		Version: "0.0.0-dev", SemanticIdentity: "ydb-native-object-observations-1",
-		Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature},
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature}}},
+		Version: "0.0.0-dev", SemanticIdentity: "ydb-native-execution-transactions-1",
+		Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Features: []string{provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature}}},
 	}
 }
 
@@ -90,7 +94,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	p.mu.Lock()
 	p.sessions[id] = &session{connection: opened, database: address.Database()}
 	p.mu.Unlock()
-	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Database(), ServerVersion: version, Identifiers: identifierRules()}, nil
+	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Database(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: map[string]bool{"transactional_ddl": false}}, nil
 }
 
 // Close releases only the named session. Repeated closes return the original
@@ -106,7 +110,8 @@ func (p *Provider) Close(_ context.Context, request *protocol.CloseRequest) erro
 	defer opened.mu.Unlock()
 	if !opened.closed {
 		opened.closed = true
-		opened.closeErr = opened.connection.Close()
+		opened.rollbackTransactions()
+		opened.closeErr = errors.Join(opened.cleanupErr, opened.connection.Close())
 	}
 	if opened.closeErr != nil {
 		return status.Error(codes.Unavailable, "close YDB connection failed")
