@@ -20,13 +20,11 @@ unpublished names is owed. Older envelopes and plans are refused.
 
 ## Build and test
 
-The current source uses experimental SDK revision 21 reservations. That revision
-is not published yet; `go.mod` still pins published revision 19. A standalone
-build from that pin is incomplete. Development checks currently use a temporary
-workspace containing this module and Ptah's `provider-sdk` checkout. The
-workspace is not committed and is not independent installation evidence.
+The module pins a published experimental SDK revision 21, including operational
+storage reservations. Builds require neither the Ptah application source nor a
+local SDK checkout.
 
-After publishing revision 21 and updating the dependency pin, run:
+Run the unit suite and build the executable:
 
 ```sh
 GOWORK=off go test -race ./...
@@ -35,8 +33,9 @@ GOWORK=off CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
 
 The executable requires the SDK's authenticated local subprocess bootstrap.
 Run it through a Ptah SDK client rather than invoking it as a command-line tool.
-The committed module has no `replace` directive or workspace file. The SDK
-pin update remains required before the standalone commands and CI can pass.
+The committed module has no `replace` directive or workspace file.
+`scripts/check-module-boundaries.sh` rejects local replacements and host-module
+dependencies.
 
 Live checks require an isolated test database. Schema tests create uniquely
 named directories, tables, and topics and remove them afterward. Session tests only
@@ -73,8 +72,9 @@ Schema changes used `--tx-mode none` for `migrations up` and a
 `-- +ptah no_transaction` directive in the down file. YDB does not provide
 transactional schema changes.
 
-The host and provider were built with a temporary SDK revision 21 workspace.
-These checks do not establish installation from the committed dependency pin.
+The host and provider were built against the published SDK revision 21 pin
+with `GOWORK=off`. These are source-build checks; packaged installation and
+default bundling remain separate requirements.
 Host `schema inspect --format json` still refuses observed row-table facets
 without desired model conversion, including column properties. The native
 inspection service retains those observations; export and table comparison
