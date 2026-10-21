@@ -285,5 +285,5 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), CoordinationDesiredModel(), CoordinationChangeModel())
+	return append(ObservedModels(), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
 }

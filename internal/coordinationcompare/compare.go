@@ -112,15 +112,8 @@ func capture(request *protocol.CompareModelsRequest) ([]node, error) {
 }
 
 func identity(subject *protocol.ComparisonIdentity) error {
-	if subject.GetKind() != schema.CoordinationProperties || subject.GetCatalog().GetSource() != "" || subject.GetParent().GetSource() != "" || len(subject.GetPath())+len(subject.GetSignature()) != 0 {
-		return fmt.Errorf("invalid coordination comparison identity")
-	}
-	for _, part := range []*protocol.ComparisonPart{subject.Database, subject.Catalog, subject.Schema, subject.Name} {
-		if part.GetSource() != part.GetNormalized() {
-			return fmt.Errorf("YDB identifiers must retain exact spelling")
-		}
-	}
-	return schema.ValidateCoordinationOwner(owner(subject))
+	_, err := schema.CoordinationBoundOwner(subject)
+	return err
 }
 
 func owner(subject *protocol.ComparisonIdentity) *protocol.Reference {

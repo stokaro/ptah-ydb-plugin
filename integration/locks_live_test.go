@@ -13,6 +13,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -155,6 +156,19 @@ func TestNativeLockLossFencesExecutionHistoryAndCommit(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	assertRowCount(c, opened, table, 0)
 	c.Assert(historyRead(c, client, scope).Revisions, qt.HasLen, 0)
+	// Native operations share the same permanent fence after lease loss.
+	owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Database: database, Schema: directory, Name: "fenced-node"}
+	desired, err := schema.CaptureCoordinationIntent(owner, schema.CoordinationIntent{})
+	c.Assert(err, qt.IsNil)
+	change, err := schema.CaptureCoordinationChange("fenced", owner, nil, desired)
+	c.Assert(err, qt.IsNil)
+	operation, err := schema.CoordinationOperationFromChange("fenced", change.Value)
+	c.Assert(err, qt.IsNil)
+	nativeResult, err := client.Execute(c.Context(), &protocol.ExecuteRequest{SessionId: id, RequestId: "fenced-native", Units: []*protocol.Unit{{ChangeId: "fenced", Body: &protocol.Unit_Native{Native: operation.Value}}}})
+	c.Assert(err, qt.IsNotNil)
+	c.Assert(nativeResult.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
+	c.Assert(nativeResult.AppliedCount, qt.Equals, uint32(0))
+
 	// Fresh ownership in another session does not repair the fenced owner.
 	other, otherID, _ := historySession(c, binary, digest)
 	acquireNativeLock(c, other, nativeLockRequest(otherID, "new", request.Scope.Name))

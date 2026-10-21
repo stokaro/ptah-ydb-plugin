@@ -6,8 +6,8 @@ changefeeds, topics, views, coordination nodes, external data sources, and
 external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history and coordination
 locks. Offline YAML decoding is available for coordination-node declarations.
-Offline comparison also produces typed coordination changes. Schema planning
-is still pending.
+Offline comparison, planning, and rendering produce native coordination
+operations. Execution verifies their captured preconditions and reads back the result.
 
 The executable opens native YDB connections and reads row-table schemas
 through the public Ptah SDK. It supports anonymous, URL user/password, and URL token authentication.
@@ -55,8 +55,9 @@ exclusion, confirmed release, and write refusal after lease loss,
 native row-table observations, offline
 normalization, index implementation tables, changefeed consumers and retention,
 standalone native objects, exact-directory completeness, and refusals for
-incomplete reads. They do not establish
-planning or complete migration support.
+incomplete reads. Coordination tests cover source decoding through planning,
+rendering, native execution, and inspection. They do not establish complete
+migration support or host CLI integration.
 
 ## Connection addresses
 
@@ -77,7 +78,8 @@ provider process when that bound is reached.
 
 Execution sends native SQL units through YDB's query service. A batch is checked
 before its first unit runs. Unsupported native envelopes refuse the whole batch.
-Each request uses a pinned connection; dispatched writes are not retried.
+SQL units use a pinned connection; native coordination units use their native
+service. Dispatched writes are not retried.
 Request IDs correlate calls and do not provide exactly-once execution.
 
 Results distinguish a confirmed prefix from an uncertain remainder. A failed
@@ -106,8 +108,8 @@ receipts explicitly report `transactional_ddl=false`. Live tests verify that
 DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
-Native envelopes for provider-specific operations, SQL analysis, rendering,
-logs and tags remain to be extracted. The host's
+Coordination operations use native envelopes. Other operation models, common
+SQL rendering and analysis, logs, and tags remain to be extracted. The host's
 extended comment and coordination SQL forms are not implemented here.
 
 ## Migration history
@@ -172,7 +174,8 @@ configuration, exact session owner, and exclusive ephemeral semaphore count.
 A confirmation expires after five seconds. Both monotonic and wall-clock elapsed
 time are checked, including before refreshing a confirmation after a pause.
 
-Every SQL unit, history mutation, and transaction commit verifies guarding locks.
+Every SQL unit, native coordination operation, history mutation, and transaction
+commit verifies guarding locks.
 Loss or uncertainty cancels guarded calls and permanently fences further writes
 in that provider session. Rollback, release, and close remain available. A new
 owner does not repair the old session. Failure after dispatch may have effects;
@@ -215,9 +218,9 @@ node is hidden or reserved merely because it is named `ptah_locks` or has
 strict consistency settings.
 
 History reservations support host collision and reference guards. They do not
-establish native directory-cascade safety; native planning and containment
-qualification remain pending. Markers are storage-format identifiers, not an
-access-control mechanism against a database administrator.
+establish native directory-cascade safety; containment qualification remains
+pending. Coordination planning refuses overlapping directory lifecycles. Markers
+are storage-format identifiers, not an access-control mechanism against a database administrator.
 
 ## Schema observations
 
@@ -325,16 +328,16 @@ encodings and definition digests; observation coverage contains only observed
 models.
 
 The subprocess tests exercise decoding and normalization without a database
-address. HCL, Go annotation and SQL adapters, desired/observed conversion,
-rendering and native change planning remain pending.
+address. HCL, Go annotation and SQL adapters and desired/observed conversion
+remain pending.
 This service alone does not make the YAML example executable as a migration.
 
 ## Coordination comparison
 
 The offline `models.compare` service compares desired coordination declarations
 with captured native observations. Its context must establish the
-`coordination_nodes` capability. Session receipts do not advertise that capability
-yet; host-driven comparison still requires capability wiring with native planning. Omitted settings compare using server defaults;
+`coordination_nodes` capability, which session receipts advertise for the native
+implementation. Omitted settings compare using server defaults;
 source holder names do not change native configuration. Removing an explicit
 nondefault setting produces a change back to the default. Raw stored values that
 the server clamps refuse comparison.
@@ -344,8 +347,8 @@ operands. The native `before` retains access metadata. A null operand means
 established absence. Normalization reconstructs impact, removal, and access
 facts from these operands. Creation has unknown inherited access policy;
 alteration preserves access; dropping a node removes its runtime state and access.
-These changes are not executable until native planning and operation dispatch
-are implemented.
+Planning lowers these changes to the `ydb.coordination-node-operation` model,
+which rendering preserves as a native execution envelope.
 
 An unread object does not establish absence. Independent coverage sources must
 all establish completeness; overlapping unknown regions override complete
@@ -400,15 +403,51 @@ sh scripts/generate-native-schema.sh
 The Go generator is pinned in `go.mod`. CI regenerates these definitions and
 requires unchanged generated files.
 
+## Native coordination planning and execution
+
+The offline planner preserves complete before and after operands. Each step
+has an object effect, a shared `ydb.scheme-path` effect, and a forbidden SQL
+transaction requirement. Table-to-node and node-to-table replacements require
+an explicit common path handoff. Unsupported common footprints and overlapping
+parent/descendant paths are refused until a directory lifecycle is captured.
+The parent directory must already exist; execution never creates or deletes it.
+
+Rendering validates the complete operation receipt and emits a native envelope.
+It does not generate coordination SQL. Execution uses native CreateNode,
+AlterNode, and DropNode requests. A nonempty database identity must equal the
+selected session database. The provider validates every envelope and transaction
+constraint before executing any unit in the batch.
+
+Before each native write, execution lists the exact parent directory and reads
+the node. The current configuration and access metadata must match the captured
+observation, or creation must have established absence. A stale operation is
+refused before dispatch. Effective settings are sent explicitly, including
+omitted settings that reset to defaults. Alteration preserves the existing node.
+After a successful reply, execution reads back the configuration or confirms
+absence; alteration also checks that access metadata did not change.
+
+A refusal before dispatch reports NOT_STARTED, or PARTIAL after an applied
+prefix. A failed or unconfirmed dispatched request reports UNKNOWN and is never
+retried. Native operations cannot join SQL transactions. Lease checks run before
+dispatch and guard the call, as they do for SQL execution.
+
+These checks are not an atomic compare-and-set. Another actor can change a node
+between validation and dispatch; the native API has no conditional schema-write
+contract. Successful creation does not establish exclusive ownership. The SDK
+subprocess tests cover create, alter, reset, drop, stale plans, mixed SQL/native
+batch refusal, and lease loss on both tested YDB release lines. Host CLI routing,
+other object lifecycles, and complete migration planning remain pending.
+
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes the other desired schema models and source formats,
-comparison for the other models, planning, rendering, native operation envelopes, migration
+comparison, planning, rendering, and operation models for other objects, migration
 logs/tags, capability detection, environment credential sources,
 monitoring, and dev-database provisioning. The provider advertises implemented
-inspection, normalization, coordination YAML source decoding and comparison, SQL execution,
-transaction, history, and lock services. The
+inspection, normalization, coordination YAML source decoding, comparison, planning,
+rendering, SQL and native coordination execution, transaction, history, and lock
+services. The
 remaining capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

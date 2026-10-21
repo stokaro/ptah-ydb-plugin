@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -38,6 +40,16 @@ func TestCoordinationComparisonOfflineSubprocess(t *testing.T) {
 	normalized, err := client.NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: change.Id, Representation: protocol.ValueInput_CHANGE, Value: change.Value}}})
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(change, normalized.Values[0]), qt.IsTrue)
+
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: coordinationplan.ServiceID, DatabasePath: request.DatabasePath, Identifiers: request.Identifiers, Capabilities: map[string]bool{"coordination_nodes": true, "transactional_ddl": false}, Changes: []*protocol.PlanningChange{{Subject: compared.Changes[0].Subject, Value: change}}}
+	plan, err := client.PlanFeatures(t.Context(), planning)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	rendered, err := client.Render(t.Context(), testplanning.RenderRequest(plan, planning.Capabilities))
+	c.Assert(err, qt.IsNil)
+	c.Assert(rendered.Units, qt.HasLen, 1)
+	c.Assert(rendered.Units[0].GetNative().Kind, qt.Equals, schema.CoordinationOperation)
+	c.Assert(rendered.Units[0].GetSql(), qt.Equals, "")
 	// A forged canonical receipt is refused across the process boundary, even
 	// when its JSON and transport structure are otherwise valid.
 	request.Desired.Records[0].Value.CanonicalProjection = []byte(`{}`)

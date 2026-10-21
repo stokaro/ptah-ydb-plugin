@@ -9,6 +9,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -42,13 +43,13 @@ type session struct {
 func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
 // Description advertises native runtime services and offline coordination
-// decoding, normalization, and comparison. Planning remains unadvertised.
+// decoding, normalization, comparison, and native operation planning.
 func Description() *protocol.Description {
 	return &protocol.Description{
 		Revision: provider.Revision, ProviderId: "stokaro/ptah-ydb-plugin",
-		Version: "0.0.0-dev", SemanticIdentity: "ydb-coordination-comparison-1",
-		Features: []string{provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature},
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}}, YamlSourceKeys: []*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, Features: []string{provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature}}},
+		Version: "0.0.0-dev", SemanticIdentity: "ydb-coordination-operations-1",
+		Features: []string{provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ValueModels: schema.Models(), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}}, YamlSourceKeys: []*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, Features: []string{provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature}}},
 	}
 }
 
@@ -97,7 +98,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	p.mu.Lock()
 	p.sessions[id] = &session{connection: opened, database: address.Database()}
 	p.mu.Unlock()
-	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Database(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: map[string]bool{"transactional_ddl": false}}, nil
+	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Database(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: map[string]bool{"transactional_ddl": false, "coordination_nodes": true}}, nil
 }
 
 // Close releases only the named session. Repeated closes return the original

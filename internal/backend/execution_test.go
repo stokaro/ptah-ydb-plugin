@@ -14,6 +14,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -251,8 +252,73 @@ func TestCancellationBetweenUnitsPreservesConfirmedPrefix(t *testing.T) {
 	defer cancel()
 	runner := &cancelAfterExecution{cancel: cancel}
 	unit := sqlRequest("").Units[0]
-	result := executeUnits(ctx, runner, []*protocol.Unit{unit, unit})
+	result := executeUnits(ctx, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
+		_, err := runner.ExecContext(ctx, unit.GetSql())
+		return true, err
+	}, []*protocol.Unit{unit, unit})
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_PARTIAL)
 	c.Assert(result.AppliedCount, qt.Equals, uint32(1))
 	c.Assert(runner.count, qt.Equals, 1)
+}
+
+func TestNativeBatchPreflightPreventsSQLPrefix(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		modify func(*protocol.ExecuteRequest)
+	}{
+		{"malformed operation", func(r *protocol.ExecuteRequest) {
+			r.Units[1].GetNative().Payload = []byte(`{"before":null,"after":{"bad":true}}`)
+		}},
+		{"foreign database", func(r *protocol.ExecuteRequest) { r.Units[1].GetNative().Owner.Database = "/foreign" }},
+		{"transaction", func(r *protocol.ExecuteRequest) { r.TransactionId = "tx" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			probe := &driverProbe{}
+			p := probeProvider(c, probe)
+			p.sessions["session"].database = "/local"
+			owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Database: "/local", Schema: "app", Name: "node"}
+			desired, err := schema.CaptureCoordinationIntent(owner, schema.CoordinationIntent{})
+			c.Assert(err, qt.IsNil)
+			change, err := schema.CaptureCoordinationChange("native", owner, nil, desired)
+			c.Assert(err, qt.IsNil)
+			operation, err := schema.CoordinationOperationFromChange("native", change.Value)
+			c.Assert(err, qt.IsNil)
+			request := sqlRequest("")
+			request.Units = append(request.Units, &protocol.Unit{ChangeId: "native", Body: &protocol.Unit_Native{Native: operation.Value}})
+			test.modify(request)
+			result, err := p.Execute(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
+			c.Assert(result.AppliedCount, qt.Equals, uint32(0))
+			c.Assert(probe.execCalls.Load(), qt.Equals, int32(0))
+		})
+	}
+}
+
+func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		prefix     int
+		dispatched bool
+		outcome    protocol.Execution_Outcome
+	}{
+		{"preflight", 0, false, protocol.Execution_NOT_STARTED}, {"prefix refused", 1, false, protocol.Execution_PARTIAL}, {"lost reply", 0, true, protocol.Execution_UNKNOWN}, {"prefix lost reply", 1, true, protocol.Execution_UNKNOWN},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			calls := 0
+			result := executeUnits(t.Context(), func(context.Context, *protocol.Unit) (bool, error) {
+				calls++
+				if calls > test.prefix {
+					return test.dispatched, errors.New("secret-marker")
+				}
+				return true, nil
+			}, []*protocol.Unit{{}, {}, {}})
+			c.Assert(result.Outcome, qt.Equals, test.outcome)
+			c.Assert(result.AppliedCount, qt.Equals, uint32(test.prefix))
+			c.Assert(calls, qt.Equals, test.prefix+1)
+			c.Assert(result.Message, qt.Not(qt.Contains), "secret-marker")
+		})
+	}
 }
