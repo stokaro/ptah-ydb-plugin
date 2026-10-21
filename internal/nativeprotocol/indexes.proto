@@ -216,3 +216,28 @@ message DescribeTableResult {
     bool temporary = 17;
     Ydb.Table.StoreType store_type = 18;
 }
+
+// ColumnIntent contains writable column properties. Identity, storage type and
+// nullability belong to common columns. Sequence positions are runtime state;
+// the declaration retains configuration without a request to reset that state.
+message ColumnIntent {
+    string family = 1;
+    oneof default_value {
+        Ydb.TypedValue literal = 2;
+        SequenceIntent sequence = 3;
+        bool drop_default = 4;
+    }
+    optional ColumnCompression compression = 5;
+    repeated ColumnEncoding encoding = 6;
+}
+
+message SequenceIntent {
+    optional string name = 1;
+    optional sint64 min_value = 2;
+    optional sint64 max_value = 3;
+    optional sint64 start_value = 4;
+    optional uint64 cache = 5;
+    optional sint64 increment = 6;
+    optional bool cycle = 7;
+    optional Ydb.Type data_type = 8;
+}
