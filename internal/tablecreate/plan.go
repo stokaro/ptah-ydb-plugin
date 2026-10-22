@@ -26,7 +26,7 @@ type creation struct {
 }
 
 // Plan contributes native table creation, and the alteration of an existing
-// table's column families and columns, to the common graph. The host's steps
+// table's column families, columns and TTL, to the common graph. The host's steps
 // that add a nullable column or drop a column are replaced by native
 // operations, ordered with the family operation in one graph. Dropping or
 // rebuilding a table remains an explicit refusal until its complete state is
@@ -56,7 +56,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("invalid YDB table parent assignment")
 		}
 		if table.Action != protocol.PlanningTable_CREATE && table.Action != protocol.PlanningTable_ALTER {
-			return refused(i, "Only native row-table creation and alteration of column families and columns are implemented"), nil
+			return refused(i, "Only native row-table creation and alteration of column families, columns and the TTL are implemented"), nil
 		}
 		transactional, known := request.Capabilities["transactional_ddl"]
 		if !known || transactional {
@@ -70,16 +70,21 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("YDB table creation targets another database")
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			change, reason, err := planAlteration(owner, table)
+			change, ttl, reason, err := planAlteration(owner, table)
 			if err != nil {
 				return nil, err
 			}
 			if reason != "" {
 				return refused(i, reason), nil
 			}
-			item := alteration{index: i, table: table, change: change}
+			item := alteration{index: i, table: table, change: change, ttl: ttl}
 			if !change.empty() {
 				if item.operation, err = CaptureAlteration("pending", owner, change); err != nil {
+					return refused(i, err.Error()), nil
+				}
+			}
+			if !ttl.empty() {
+				if item.ttlOperation, err = CaptureTTLAlteration("pending", owner, ttl); err != nil {
 					return refused(i, err.Error()), nil
 				}
 			}
@@ -132,7 +137,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
 	}
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals int
+	var families, additions, removals, ttls int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -173,6 +178,21 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 						{Subject: familySlot, Action: protocol.PlanningEffect_ALTER}}}})
 			contribution.Dependencies = append(contribution.Dependencies, alterStepDependencies(*item, request.CommonSteps)...)
 			ordered = append(ordered, item.id)
+		}
+		if item.ttlOperation != nil {
+			item.ttlID = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-ttl/%06d", ttls)}
+			ttls++
+			item.ttlOperation.Id = item.ttlID.Name
+			facts := item.ttlOperation.OperationSemantics
+			ttlSlot := proto.CloneOf(subject)
+			ttlSlot.Kind = "ydb.ttl"
+			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: item.ttlID,
+				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.ttlOperation},
+				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
+					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
+						{Subject: ttlSlot, Action: ttlAction(item.ttl)}}}})
+			contribution.Dependencies = append(contribution.Dependencies, ttlStepDependencies(*item, request.CommonSteps)...)
+			ordered = append(ordered, item.ttlID)
 		}
 		receiptSteps[item.index] = append(ordered, dropped...)
 	}
@@ -216,9 +236,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			steps = append(steps, proto.CloneOf(id))
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			strategy = "Add and drop columns, and alter the column families and their column placements, through the native table service; other settings and column steps the native call cannot state stay with the host"
+			strategy = "Add and drop columns, alter the column families and their column placements, and set or drop the TTL, through the native table service; other settings and column steps the native call cannot state stay with the host"
 			if steps == nil {
-				strategy = "The column families and column placements already match the declaration, and the host has no column step this service can carry out"
+				strategy = "The column families, column placements and TTL already match the declaration, and the host has no column step this service can carry out"
 			}
 		}
 		for _, kind := range request.ParentKinds {
@@ -233,6 +253,19 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		return nil, err
 	}
 	return result, nil
+}
+
+// ttlAction is what a TTL step does to the table's TTL setting: a removal drops
+// it, a set on a table without one creates it, and any other set replaces it.
+func ttlAction(change ttlChange) protocol.PlanningEffect_Action {
+	switch {
+	case change.drop:
+		return protocol.PlanningEffect_DROP
+	case change.held == nil:
+		return protocol.PlanningEffect_CREATE
+	default:
+		return protocol.PlanningEffect_ALTER
+	}
 }
 func cloneEffects(effects []*protocol.PlanningEffect) []*protocol.PlanningEffect {
 	result := make([]*protocol.PlanningEffect, len(effects))

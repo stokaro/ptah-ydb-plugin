@@ -7,7 +7,7 @@ external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations.
 Offline comparison, planning, and rendering produce native coordination
-operations. Native row-table creation and alteration of column families and columns are available through captured SDK planning requests.
+operations. Native row-table creation and alteration of column families, columns and the TTL are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
 
 The executable opens native YDB connections and reads row-table schemas
@@ -736,7 +736,7 @@ exclusive ownership against another schema writer.
 Access requirements, temporary tables, indexes, changefeeds, sequence defaults,
 column compression or encoding, and richer common constraints are refused.
 Table removal and rebuild remain unsupported, and alteration covers column
-families and the addition and removal of columns (see below). An unknown populated
+families, the addition and removal of columns, and the TTL (see below). An unknown populated
 field cannot disappear during compilation. A mixed SQL/native batch is validated
 before its first unit executes.
 
@@ -751,8 +751,8 @@ complete native CLI table migration workflow.
 ## Native table alteration
 
 The same planning service (`ydb-row-table-create`) accepts captured ALTER
-lifecycles for row tables. It owns two facets of an altered table: its column
-families, and the addition and removal of its columns. Each becomes native
+lifecycles for row tables. It owns three facets of an altered table: its column
+families, the addition and removal of its columns, and its TTL. Each becomes native
 AlterTable calls. Everything else about an altered table stays with the host:
 other table settings, and any column step the native call cannot state.
 
@@ -806,6 +806,41 @@ family step form one graph with one owner.
   steps of this provider. Where a step stays with the host, the edge names the
   host step.
 
+### TTL
+
+The service sets, changes and removes the TTL of an existing row table with one
+native `AlterTable` step, `row-table-ttl/N`. A step carries the whole TTL the
+table holds afterward (`set_ttl_settings`) or removes it
+(`drop_ttl_settings`), and also the TTL the table held when the plan was made.
+
+- The TTL is managed when the declaration states table properties for this
+  target. A table the declaration leaves without a `ttlSettings` then requests
+  none, and a TTL the table holds is removed. A declaration with no table
+  properties leaves the TTL alone, and a declaration that states table
+  properties while the table's current TTL was not captured is refused.
+- The declared and the held TTL are the same when the mode, the column, the
+  unit and the seconds are the same. A `runIntervalSeconds` the declaration
+  leaves out is not compared. A step that replaces a TTL carries the run
+  interval the table held unless the declaration states one, because the call
+  resets an interval it does not carry (measured on 25.1.4.7 and 26.2.1.14).
+  The server refuses a run interval below its configured limit, 900 seconds on
+  the test servers, after the call; the plan does not check it.
+- The column must be declared, with a type the mode reads: a Date, Datetime,
+  Timestamp, Date32, Datetime64 or Timestamp64 column for a date TTL, and a
+  Uint32, Uint64 or DyNumber column with a unit for an integer TTL. The server
+  refuses each other combination only after the call, so the plan refuses it.
+  A key column is allowed.
+- The TTL step runs after the addition of the column it reads, and before the
+  removal of the column the table's TTL reads now, whoever carries those steps
+  out. The server refuses a TTL on a column the table does not hold, and refuses
+  to drop the column a TTL reads. The family step and the TTL step do not
+  depend on each other.
+- Impact is behavioral for a set and for a removal: a TTL decides which rows
+  YDB deletes, and restoring a prior TTL does not recover deleted rows.
+- The host capabilities `RowDeletionPolicy` and `RowDeletionPolicyEpochColumn`
+  are not session capabilities of this provider. The host keeps refusing a TTL
+  its target cannot write.
+
 ### Execution
 
 Execution reads the table first. A family operation requires every touched
@@ -814,19 +849,25 @@ An addition requires the column to be absent. A removal requires the column to
 exist and not to be a key column, an index column or stored column, the TTL
 column or a partitioning column; the server refuses each of those only after the
 call, which would leave the outcome uncertain, so the provider reads them first.
-A table that changed since planning is refused before the call.
+A TTL operation requires the table to hold exactly the TTL the plan captured, or
+none, and a TTL to set must read a column the table holds with a type its mode
+reads. A table that changed since planning is refused before the call.
 
 After the call the provider reads the table back and checks that the requested
 change holds and that nothing else moved: other families and columns, column
-names and types, their order, and the key. An added column must read back with
-its type, nullable and in the default family. A failed reply or unconfirmed
+names and types, their order, the key, and the TTL. The TTL must read back as
+the one the request sets, run interval included, or as none after a removal, and
+as before for every other operation. An added column must read back with its
+type, nullable and in the default family. A failed reply or unconfirmed
 read remains UNKNOWN and is never retried. As for creation, these checks do not
 establish exclusive ownership against another schema writer.
 
 Live tests alter a table on YDB 25.1.4.7 and 26.2.1.14: families and column
 placements; adding columns, placing one in a family and dropping others in a
-single plan; and the refusal of an indexed column and of a stale alteration
-before the call. They plan again from the read back to show the declaration no
+single plan; setting, changing, moving and removing a TTL, including the move of
+a TTL to an added column in the same plan that drops the column it read; and the
+refusal of an indexed column, of a TTL column the server would refuse, and of a
+stale alteration before the call. They plan again from the read back to show the declaration no
 longer changes anything, and check that rows survive.
 
 ## Offline SQL analysis

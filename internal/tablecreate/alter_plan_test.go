@@ -22,10 +22,12 @@ type alterCase struct {
 	desiredTable   string
 	desiredColumns map[string]string
 	declared       []string
-	heldTable      string
-	heldColumns    map[string]string
-	held           []string
-	want           string
+	// types gives a declared column a type other than Utf8.
+	types       map[string]string
+	heldTable   string
+	heldColumns map[string]string
+	held        []string
+	want        string
 }
 
 const plainTable = `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}]}`
@@ -71,7 +73,11 @@ func alterRequest(c *qt.C, in alterCase) *protocol.PlanFeaturesRequest {
 			Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}},
 			Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}}}}
 	for _, name := range in.declared {
-		desired.Columns = append(desired.Columns, &protocol.DeclaredColumn{Name: name, Type: "Utf8", Nullable: true})
+		kind := "Utf8"
+		if declared, found := in.types[name]; found {
+			kind = declared
+		}
+		desired.Columns = append(desired.Columns, &protocol.DeclaredColumn{Name: name, Type: kind, Nullable: true})
 	}
 	for _, name := range in.held {
 		current.Columns = append(current.Columns, &protocol.ObservedColumn{Name: name})
@@ -252,7 +258,7 @@ func TestAlterPlan_RefusesLifecyclesItDoesNotOwn(t *testing.T) {
 		want   string
 	}{
 		{"rebuild", func(r *protocol.PlanFeaturesRequest) { r.Tables[0].Action = protocol.PlanningTable_REBUILD },
-			"Only native row-table creation and alteration of column families and columns are implemented"},
+			"Only native row-table creation and alteration of column families, columns and the TTL are implemented"},
 		{"transactional claim", func(r *protocol.PlanFeaturesRequest) { r.Capabilities["transactional_ddl"] = true },
 			"YDB table creation requires established nontransactional DDL"},
 		{"unmeasured capabilities", func(r *protocol.PlanFeaturesRequest) { r.Capabilities = nil },

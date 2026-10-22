@@ -15,14 +15,15 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // AlterOperationKind identifies a native alteration of an existing row table:
 // its column families and their placements, the addition of nullable columns,
-// or the removal of columns. One operation does exactly one of the three.
+// the removal of columns, or its TTL. One operation does exactly one of the four.
 const AlterOperationKind = schema.ProviderID + "/row-table-alter-operation"
 
-var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns", "add_columns", "drop_columns"}
+var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns", "add_columns", "drop_columns", "set_ttl_settings", "drop_ttl_settings"}
 var alterModel = buildAlterModel()
 
 // AlterModel binds the alteration payload grammar, its preconditions, and its
@@ -37,15 +38,16 @@ func buildAlterModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": AlterOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
 		"request": json.RawMessage(descriptor), "allowed_request_fields": alterFields,
-		"payload":      "request: native AlterTableRequest without session or path; held_families: the touched families as the table held them; held_columns: the family each moved column sat in",
+		"payload":      "request: native AlterTableRequest without session or path; held_families: the touched families as the table held them; held_columns: the family each moved column sat in; held_ttl: the TTL the table held, absent for none",
 		"families":     "families are added or have only the settings the declaration states changed; a family is never dropped, a setting is never reset, keep_in_memory is never set",
 		"columns":      "a column moves between families by name; key columns stay in the default family; a column the plan drops is never named",
 		"additions":    "add_columns names columns that are nullable, have no default and sit in the default family; a column that must be placed in another family is moved by a separate family operation after the addition",
 		"removals":     "drop_columns names columns that are not part of the key, an index, the TTL or the partitioning",
-		"exclusive":    "an operation changes families and placements, or adds columns, or drops columns, never a mix",
+		"ttl":          "set_ttl_settings states the whole TTL the table holds afterward, a date column with seconds or an integer column with a unit and seconds, and a run interval only to keep or set one; drop_ttl_settings removes it; the column must exist with a type the mode reads",
+		"exclusive":    "an operation changes families and placements, or adds columns, or drops columns, or sets or drops the TTL, never a mix",
 		"execution":    "native AlterTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
-		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add must be absent; a family to move into must exist or be added by the same request; a column to add must be absent; a column to drop must exist and must not be a key column, an index column, the TTL column or a partitioning column",
-		"confirmation": "read back the whole family set and every column; each family and column the request does not name must be unchanged, an added column must exist with its type and in the default family, a dropped column must be gone, and the key must be unchanged",
+		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add must be absent; a family to move into must exist or be added by the same request; a column to add must be absent; a column to drop must exist and must not be a key column, an index column, the TTL column or a partitioning column; the table must hold exactly the TTL captured, or none; a TTL to set must read an existing column of a type its mode reads",
+		"confirmation": "read back the whole family set and every column; each family and column the request does not name must be unchanged, an added column must exist with its type and in the default family, a dropped column must be gone, the TTL must be the one set, or gone for a drop and otherwise unchanged, and the key must be unchanged",
 		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
@@ -70,6 +72,9 @@ type Alteration struct {
 	HeldFamilies []*Ydb_Table.ColumnFamily
 	// HeldColumns maps each moved column to the family it sat in; empty is the default family.
 	HeldColumns map[string]string
+	// HeldTTL is the TTL the table held when planned; nil is none. Only a TTL
+	// alteration carries it.
+	HeldTTL *Ydb_Table.TtlSettings
 }
 
 type heldColumn struct {
@@ -81,6 +86,7 @@ type alterPayload struct {
 	Request      json.RawMessage   `json:"request"`
 	HeldFamilies []json.RawMessage `json:"held_families,omitempty"`
 	HeldColumns  []heldColumn      `json:"held_columns,omitempty"`
+	HeldTTL      json.RawMessage   `json:"held_ttl,omitempty"`
 }
 
 // CaptureAlteration builds the operation for a family change planned against a
@@ -88,6 +94,18 @@ type alterPayload struct {
 func CaptureAlteration(id string, owner *protocol.Reference, change familyChange) (*protocol.NormalizedValue, error) {
 	request := &Ydb_Table.AlterTableRequest{AddColumnFamilies: change.add, AlterColumnFamilies: change.alter, AlterColumns: change.move}
 	return captureRequest(id, owner, &Alteration{Request: request, HeldFamilies: change.heldFamilies, HeldColumns: change.heldColumns})
+}
+
+// CaptureTTLAlteration builds the operation for a TTL change planned against a
+// table in owner.
+func CaptureTTLAlteration(id string, owner *protocol.Reference, change ttlChange) (*protocol.NormalizedValue, error) {
+	request := &Ydb_Table.AlterTableRequest{}
+	if change.drop {
+		request.TtlAction = &Ydb_Table.AlterTableRequest_DropTtlSettings{DropTtlSettings: &emptypb.Empty{}}
+	} else {
+		request.TtlAction = &Ydb_Table.AlterTableRequest_SetTtlSettings{SetTtlSettings: change.set}
+	}
+	return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: map[string]string{}, HeldTTL: change.held})
 }
 
 func captureRequest(id string, owner *protocol.Reference, alteration *Alteration) (*protocol.NormalizedValue, error) {
@@ -123,6 +141,11 @@ func encodeAlteration(alteration *Alteration) ([]byte, error) {
 	}) {
 		payload.HeldColumns = append(payload.HeldColumns, heldColumn{Name: name, Family: alteration.HeldColumns[name]})
 	}
+	if alteration.HeldTTL != nil {
+		if payload.HeldTTL, err = protojson.Marshal(alteration.HeldTTL); err != nil {
+			return nil, err
+		}
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -153,6 +176,8 @@ func NormalizeAlteration(input *protocol.ValueInput) (*protocol.NormalizedValue,
 	result.Payload = payload
 	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Adds column families"
 	switch {
+	case alteration.Request.TtlAction != nil:
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "A TTL decides which rows YDB deletes; restoring a prior TTL cannot recover deleted rows"
 	case len(alteration.Request.DropColumns) > 0:
 		impact, reason = protocol.ChangeSemantics_DESTRUCTIVE, "Drops columns and the data they hold"
 	case len(alteration.Request.AddColumns) > 0:
@@ -207,6 +232,16 @@ func decodeAlteration(raw []byte) (*Alteration, error) {
 		}
 		alteration.HeldFamilies = append(alteration.HeldFamilies, &family)
 	}
+	if payload.HeldTTL != nil {
+		var held Ydb_Table.TtlSettings
+		if err := protojson.Unmarshal(payload.HeldTTL, &held); err != nil {
+			return nil, fmt.Errorf("invalid held YDB TTL")
+		}
+		if err := validateTTLSettings(&held); err != nil {
+			return nil, err
+		}
+		alteration.HeldTTL = &held
+	}
 	for _, held := range payload.HeldColumns {
 		if _, duplicate := alteration.HeldColumns[held.Name]; duplicate {
 			return nil, fmt.Errorf("duplicate held YDB column")
@@ -220,7 +255,7 @@ func validateAlteration(alteration *Alteration) error {
 	request := alteration.Request
 	groups := 0
 	for _, used := range []bool{len(request.AddColumnFamilies)+len(request.AlterColumnFamilies)+len(request.AlterColumns) > 0,
-		len(request.AddColumns) > 0, len(request.DropColumns) > 0} {
+		len(request.AddColumns) > 0, len(request.DropColumns) > 0, request.TtlAction != nil} {
 		if used {
 			groups++
 		}
@@ -229,9 +264,12 @@ func validateAlteration(alteration *Alteration) error {
 		return fmt.Errorf("YDB table alteration changes nothing")
 	}
 	if groups > 1 {
-		return fmt.Errorf("YDB table alteration mixes family, column addition and column removal changes")
+		return fmt.Errorf("YDB table alteration mixes family, column addition, column removal and TTL changes")
 	}
 	if err := validateColumnAlteration(request); err != nil {
+		return err
+	}
+	if err := validateTTLAlteration(alteration); err != nil {
 		return err
 	}
 	named := map[string]bool{}
@@ -311,6 +349,54 @@ func validateColumnAlteration(request *Ydb_Table.AlterTableRequest) error {
 			return fmt.Errorf("invalid or duplicate YDB column removal")
 		}
 		names[name] = true
+	}
+	return nil
+}
+
+// validateTTLAlteration checks a TTL alteration. A set states a whole valid TTL
+// that differs from the one held, a removal names a TTL the table held, and a
+// request that does not touch the TTL carries no held TTL.
+func validateTTLAlteration(alteration *Alteration) error {
+	request := alteration.Request
+	switch action := request.TtlAction.(type) {
+	case nil:
+		if alteration.HeldTTL != nil {
+			return fmt.Errorf("a held YDB TTL disagrees with the alteration")
+		}
+	case *Ydb_Table.AlterTableRequest_DropTtlSettings:
+		if action.DropTtlSettings == nil || alteration.HeldTTL == nil {
+			return fmt.Errorf("YDB TTL removal requires the held TTL")
+		}
+	case *Ydb_Table.AlterTableRequest_SetTtlSettings:
+		if err := validateTTLSettings(action.SetTtlSettings); err != nil {
+			return err
+		}
+		if proto.Equal(action.SetTtlSettings, alteration.HeldTTL) {
+			return fmt.Errorf("YDB TTL alteration changes nothing")
+		}
+	default:
+		return fmt.Errorf("unsupported YDB TTL action")
+	}
+	return nil
+}
+
+// validateTTLSettings requires one mode with a valid column and, for an integer
+// column, a unit the server reads. The server also refuses a run interval below
+// its limit; the limit is configuration, so it is left to the server.
+func validateTTLSettings(ttl *Ydb_Table.TtlSettings) error {
+	switch mode := ttl.GetMode().(type) {
+	case *Ydb_Table.TtlSettings_DateTypeColumn:
+		if !validName(mode.DateTypeColumn.GetColumnName()) {
+			return fmt.Errorf("invalid YDB TTL column")
+		}
+	case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
+		unit := mode.ValueSinceUnixEpoch.GetColumnUnit()
+		// A unit the enum does not name is refused earlier, with every unknown value.
+		if !validName(mode.ValueSinceUnixEpoch.GetColumnName()) || unit == Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_UNSPECIFIED {
+			return fmt.Errorf("invalid YDB epoch TTL column or unit")
+		}
+	default:
+		return fmt.Errorf("YDB TTL requires one explicit mode")
 	}
 	return nil
 }

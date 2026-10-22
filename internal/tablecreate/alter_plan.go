@@ -13,42 +13,45 @@ import (
 )
 
 // alteration is one planned change of an existing table: its column families,
-// and the host column steps this service replaces.
+// its TTL, and the host column steps this service replaces.
 type alteration struct {
-	index     int
-	table     *protocol.PlanningTable
-	change    familyChange
-	operation *protocol.NormalizedValue
-	id        *protocol.StepIdentity
-	claims    []*columnClaim
+	index        int
+	table        *protocol.PlanningTable
+	change       familyChange
+	operation    *protocol.NormalizedValue
+	id           *protocol.StepIdentity
+	ttl          ttlChange
+	ttlOperation *protocol.NormalizedValue
+	ttlID        *protocol.StepIdentity
+	claims       []*columnClaim
 }
 
 func stepKey(id *protocol.StepIdentity) string { return id.GetOwner() + "\x00" + id.GetName() }
 
-// planAlteration reads the families and column placements a captured ALTER
-// carries on both sides and returns the change that gives the table what the
+// planAlteration reads the families, column placements and TTL a captured ALTER
+// carries on both sides and returns the changes that give the table what the
 // declaration states. A non-empty reason refuses the whole request.
-func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable) (familyChange, string, error) {
+func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable) (familyChange, ttlChange, string, error) {
 	desired, err := facetEnvelopes(owner, table.Desired.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
 	if err != nil {
-		return familyChange{}, "", err
+		return familyChange{}, ttlChange{}, "", err
 	}
 	observed, err := facetEnvelopes(owner, table.Current.GetFeatures().GetFacets(), protocol.ValueInput_OBSERVED)
 	if err != nil {
-		return familyChange{}, "", err
+		return familyChange{}, ttlChange{}, "", err
 	}
 	in := familyInput{placement: map[string]string{}, heldPlacement: map[string]string{}, existing: map[string]bool{}}
 	var intent native.RowTableIntent
 	if env := desired.table; env != nil {
 		if err := protojson.Unmarshal(env.Payload, &intent); err != nil {
-			return familyChange{}, "", err
+			return familyChange{}, ttlChange{}, "", err
 		}
 	}
 	in.desired = intent.ColumnFamilies
 	for name, env := range desired.columns {
 		var column native.ColumnIntent
 		if err := protojson.Unmarshal(env.Payload, &column); err != nil {
-			return familyChange{}, "", err
+			return familyChange{}, ttlChange{}, "", err
 		}
 		in.placement[name] = column.Family
 	}
@@ -66,14 +69,14 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable) (f
 	var held native.DescribeTableResult
 	if env := observed.table; env != nil {
 		if err := protojson.Unmarshal(env.Payload, &held); err != nil {
-			return familyChange{}, "", err
+			return familyChange{}, ttlChange{}, "", err
 		}
 	}
 	in.held = held.ColumnFamilies
 	for name, env := range observed.columns {
 		var column native.ColumnMeta
 		if err := protojson.Unmarshal(env.Payload, &column); err != nil {
-			return familyChange{}, "", err
+			return familyChange{}, ttlChange{}, "", err
 		}
 		in.heldPlacement[name] = column.Family
 	}
@@ -81,18 +84,29 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable) (f
 	if stated && observed.table == nil {
 		// Without the table's own read, a family the table already holds would look
 		// missing, and adding it would fail after dispatch.
-		return familyChange{}, "The table's current column families were not captured", nil
+		return familyChange{}, ttlChange{}, "The table's current column families were not captured", nil
 	}
 	for name := range in.placement {
 		if !slices.Contains(in.columns, name) {
-			return familyChange{}, fmt.Sprintf("Column properties name column %q, which the table does not declare", name), nil
+			return familyChange{}, ttlChange{}, fmt.Sprintf("Column properties name column %q, which the table does not declare", name), nil
 		}
 	}
 	change, reason := planFamilies(in)
 	if reason != "" {
-		return familyChange{}, reason, nil
+		return familyChange{}, ttlChange{}, reason, nil
 	}
-	return change, "", nil
+	// The TTL is managed only by a declaration that states table properties.
+	// Without the table's own read, a TTL the table already holds would look
+	// absent, and a removal or a set would be planned against the wrong state.
+	managed := desired.table != nil
+	if managed && observed.table == nil {
+		return familyChange{}, ttlChange{}, "The table's current TTL was not captured", nil
+	}
+	ttl, reason := planTTL(ttlInput{managed: managed, desired: intent.TtlSettings, held: held.TtlSettings, declared: declaredTypes(table.Desired.GetColumns())})
+	if reason != "" {
+		return familyChange{}, ttlChange{}, reason, nil
+	}
+	return change, ttl, "", nil
 }
 
 // capturedFacets are the table and column facets one side of a table carries.
@@ -182,4 +196,46 @@ func dropsColumn(step *protocol.CommonPlanningStep) bool {
 	return slices.ContainsFunc(step.GetMetadata().GetEffects(), func(effect *protocol.PlanningEffect) bool {
 		return effect.Action == protocol.PlanningEffect_DROP && effect.GetSubject().GetKind() == "column"
 	})
+}
+
+// ttlStepDependencies orders the TTL operation against the column steps of the
+// same table, whoever carries them out. A TTL set follows the addition of the
+// column it reads, since the server refuses a TTL on a column the table does
+// not hold. A TTL change or removal precedes the removal of the column the
+// table's TTL reads now, since the server refuses to drop that column while the
+// TTL reads it. A claimed step is named by its native replacement, as in
+// alterStepDependencies.
+func ttlStepDependencies(item alteration, steps []*protocol.CommonPlanningStep) []*protocol.PlanningDependency {
+	replacement := map[string]*protocol.StepIdentity{}
+	for _, claim := range item.claims {
+		replacement[stepKey(claim.source.Id)] = claim.id
+	}
+	identity := func(step *protocol.CommonPlanningStep) *protocol.StepIdentity {
+		if claimed := replacement[stepKey(step.Id)]; claimed != nil {
+			return proto.CloneOf(claimed)
+		}
+		return proto.CloneOf(step.Id)
+	}
+	reads := ttlColumn(item.ttl.set)
+	held := ttlColumn(item.ttl.held)
+	var dependencies []*protocol.PlanningDependency
+	for _, step := range steps {
+		if step.Parent == nil || provider.CompareIdentities(step.Parent, item.table.Subject) != 0 {
+			continue
+		}
+		switch {
+		case step.AddedColumn != nil && reads != "" && step.AddedColumn.Name == reads:
+			dependencies = append(dependencies, &protocol.PlanningDependency{Before: identity(step), After: proto.CloneOf(item.ttlID)})
+		case step.AddedColumn == nil && held != "" && dropsColumn(step) && dropsNamed(step, item.table.Subject, held):
+			dependencies = append(dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(item.ttlID), After: identity(step)})
+		}
+	}
+	return dependencies
+}
+
+// dropsNamed reports whether a host step that removes a column may remove the
+// named one. A step whose footprint does not name its column is assumed to.
+func dropsNamed(step *protocol.CommonPlanningStep, table *protocol.ComparisonIdentity, name string) bool {
+	column, _, shaped := columnFootprint(step, table)
+	return !shaped || column == name
 }

@@ -242,7 +242,7 @@ func TestNativeTableAlteration_ColumnsHappyPath(t *testing.T) {
 		{"drops a column that is not last", withColumns("", oldCol, payloadCol), withColumns("", payloadCol), dropOld, 0, 1},
 		{"drops a column other columns or indexes do not use",
 			withColumns(`,"indexes":[{"name":"by_payload","indexColumns":["payload"],"dataColumns":["id"]}],"ttlSettings":{"dateTypeColumn":{"columnName":"payload","expireAfterSeconds":60}},"partitioningSettings":{"partitionBy":["id"]}`, payloadCol, oldCol),
-			withColumns("", payloadCol), dropOld, 0, 1},
+			withColumns(`,"ttlSettings":{"dateTypeColumn":{"columnName":"payload","expireAfterSeconds":60}}`, payloadCol), dropOld, 0, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
