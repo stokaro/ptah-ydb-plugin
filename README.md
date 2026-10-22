@@ -7,7 +7,7 @@ external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations.
 Offline comparison, planning, and rendering produce native coordination
-operations. Native row-table creation is available through captured SDK planning requests.
+operations. Native row-table creation and column family alteration are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
 
 The executable opens native YDB connections and reads row-table schemas
@@ -100,7 +100,7 @@ provider process when that bound is reached.
 
 Execution sends native SQL units through YDB's query service. A batch is checked
 before its first unit runs. Unsupported native envelopes refuse the whole batch.
-SQL units use a pinned connection; native coordination and table creation units
+SQL units use a pinned connection; native coordination, table creation and table alteration units
 use their native services. Dispatched writes are not retried.
 Request IDs correlate calls and do not provide exactly-once execution.
 
@@ -130,7 +130,7 @@ receipts explicitly report `transactional_ddl=false`. Live tests verify that
 DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
-Coordination and row-table creation operations use native envelopes. Other
+Coordination, row-table creation and column family alteration operations use native envelopes. Other
 operation models and common SQL rendering remain to be extracted. The host's
 extended comment and coordination SQL forms are not implemented here.
 
@@ -703,7 +703,8 @@ exclusive ownership against another schema writer.
 
 Access requirements, temporary tables, indexes, changefeeds, sequence defaults,
 column compression or encoding, and richer common constraints are refused.
-Table alterations and removals also remain unsupported. An unknown populated
+Table removal and rebuild remain unsupported, and alteration covers column
+families only (see below). An unknown populated
 field cannot disappear during compilation. A mixed SQL/native batch is validated
 before its first unit executes.
 
@@ -714,6 +715,48 @@ The host still refuses general table planning through this provider: its common
 table validation and comparison need to preserve complete native declarations
 before that capability can be advertised. These SDK checks do not establish a
 complete native CLI table migration workflow.
+
+## Native column family alteration
+
+The same planning service (`ydb-row-table-create`) accepts captured ALTER
+lifecycles for row tables. It reads the declared and the observed table and
+column properties, and plans one native AlterTable call that adds families,
+changes the settings the declaration states, and moves columns between
+families. Everything else about an altered table stays with the host: other
+table settings, and the host's own column addition and removal steps, which the
+plan leaves in place.
+
+The rules follow the host's family rules:
+
+- A setting the declaration leaves out is kept as the table holds it. A cluster
+  profile gives new tables settings of their own, so the table is not reset.
+  A declared `COMPRESSION_NONE` matches a family that reads back unspecified.
+- A family only the table holds stays. No family is dropped, because YDB has no
+  way to drop one.
+- A column moves only when a column property record names it. A column with no
+  record keeps its family. An empty family in a record means the default family.
+- A key column stays in the default family. A column that names a family
+  neither the declaration nor the table has is refused. So is a `keep_in_memory`
+  that only one side sets, and a declaration that states families when the
+  table's current families were not captured.
+- A column the plan removes is never named, so it is never moved.
+
+Ordering against the host's steps is explicit: the family step runs after the
+addition of every column it moves, and before every column removal. A table
+whose families already match yields no step and receipts that say so.
+
+Execution reads the table first and requires every touched family and moved
+column to match the plan, and every family to add to be absent. A table that
+changed since planning is refused before the call. After the call the provider
+reads the table back and checks that the requested families, settings and
+placements hold and that nothing else moved: other families, other columns'
+families, column names and types, and the key. A failed reply or unconfirmed
+read remains UNKNOWN and is never retried. As for creation, these checks do not
+establish exclusive ownership against another schema writer.
+
+Live tests alter a table on YDB 25.1.4.7 and 26.2.1.14, plan again from the read
+back to show the declaration no longer changes anything, check that rows
+survive, and check that a stale alteration is refused.
 
 ## Offline SQL analysis
 
