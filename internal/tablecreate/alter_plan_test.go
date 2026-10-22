@@ -252,7 +252,7 @@ func TestAlterPlan_RefusesLifecyclesItDoesNotOwn(t *testing.T) {
 		want   string
 	}{
 		{"rebuild", func(r *protocol.PlanFeaturesRequest) { r.Tables[0].Action = protocol.PlanningTable_REBUILD },
-			"Only native row-table creation and column family alteration are implemented"},
+			"Only native row-table creation and alteration of column families and columns are implemented"},
 		{"transactional claim", func(r *protocol.PlanFeaturesRequest) { r.Capabilities["transactional_ddl"] = true },
 			"YDB table creation requires established nontransactional DDL"},
 		{"unmeasured capabilities", func(r *protocol.PlanFeaturesRequest) { r.Capabilities = nil },
@@ -296,13 +296,13 @@ func TestAlterPlan_OrdersAgainstColumnSteps(t *testing.T) {
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
-	c.Assert(plan.Rewrites, qt.HasLen, 0)
-	step := plan.Contributions[0].Steps[0].Id
-	var edges []string
-	for _, dependency := range plan.Contributions[0].Dependencies {
-		edges = append(edges, dependency.Before.Name+" -> "+dependency.After.Name)
-	}
-	c.Assert(edges, qt.DeepEquals, []string{"add-payload -> " + step.Name, step.Name + " -> drop-old"})
+	// The removal has a native replacement; the additions carry no footprint, so the
+	// host keeps them and the family step names them by their host identity.
+	c.Assert(rewrites(plan), qt.DeepEquals, []string{"drop-old => row-table-drop-column/000000"})
+	c.Assert(plan.Contributions[0].Steps, qt.HasLen, 2)
+	step := plan.Contributions[0].Steps[1].Id
+	c.Assert(step.Name, qt.Equals, "row-table-alter/000000")
+	c.Assert(edges(plan), qt.DeepEquals, []string{"add-payload -> " + step.Name, step.Name + " -> row-table-drop-column/000000"})
 }
 
 func TestAlterPlan_LeavesColumnStepsAloneWithoutFamilyChange(t *testing.T) {
@@ -356,7 +356,7 @@ func TestAlterOperation_FailurePath(t *testing.T) {
 	for _, payload := range []string{
 		`{"request":{"sessionId":"smuggled","alterColumns":[{"name":"a","family":"f"}]},"held_columns":[{"name":"a","family":""}]}`,
 		`{"request":{"path":"/other/table","alterColumns":[{"name":"a","family":"f"}]},"held_columns":[{"name":"a","family":""}]}`,
-		`{"request":{"dropColumns":["a"]}}`,
+		`{"request":{"dropColumns":[]}}`,
 		`{"request":{}}`,
 		`{"request":{"alterColumns":[{"name":"a","family":null}]},"held_columns":[{"name":"a","family":""}]}`,
 		`{"request":{"alterColumns":[{"name":"a","family":"f","type":{"typeId":"UINT64"}}]},"held_columns":[{"name":"a","family":""}]}`,

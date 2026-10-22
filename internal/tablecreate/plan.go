@@ -26,10 +26,12 @@ type creation struct {
 }
 
 // Plan contributes native table creation, and the alteration of an existing
-// table's column families, to the common graph. Dropping or rebuilding a table
-// remains an explicit refusal until its complete state is handled. Every other
-// setting of an altered table, and its column additions and removals, stay with
-// the host's steps.
+// table's column families and columns, to the common graph. The host's steps
+// that add a nullable column or drop a column are replaced by native
+// operations, ordered with the family operation in one graph. Dropping or
+// rebuilding a table remains an explicit refusal until its complete state is
+// handled. Every other setting of an altered table, and a column step the
+// native call cannot state, stay with the host's steps.
 func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol.PlannedFeatures, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -54,7 +56,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("invalid YDB table parent assignment")
 		}
 		if table.Action != protocol.PlanningTable_CREATE && table.Action != protocol.PlanningTable_ALTER {
-			return refused(i, "Only native row-table creation and column family alteration are implemented"), nil
+			return refused(i, "Only native row-table creation and alteration of column families and columns are implemented"), nil
 		}
 		transactional, known := request.Capabilities["transactional_ddl"]
 		if !known || transactional {
@@ -81,6 +83,17 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 					return refused(i, err.Error()), nil
 				}
 			}
+			if item.claims, reason, err = planColumnClaims(owner, table, request.CommonSteps); err != nil {
+				return nil, err
+			}
+			if reason != "" {
+				return refused(i, reason), nil
+			}
+			for _, claim := range item.claims {
+				if claim.operation, err = captureColumns("pending", owner, claim); err != nil {
+					return refused(i, err.Error()), nil
+				}
+			}
 			alterations = append(alterations, item)
 			continue
 		}
@@ -95,7 +108,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	}
 	slices.SortFunc(creations, func(a, b creation) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
-	receiptSteps := make(map[int]*protocol.StepIdentity)
+	receiptSteps := make(map[int][]*protocol.StepIdentity)
 	for i := range creations {
 		item := &creations[i]
 		item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-create/%06d", i)}
@@ -116,28 +129,52 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
 				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.table.Subject), Action: protocol.PlanningEffect_CREATE},
 					{Subject: slot, Action: protocol.PlanningEffect_CREATE}}}})
-		receiptSteps[item.index] = item.id
+		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
 	}
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	number := 0
+	var families, additions, removals int
 	for i := range alterations {
 		item := &alterations[i]
-		if item.operation == nil {
-			continue
+		subject := item.table.Subject
+		var added, dropped []*protocol.StepIdentity
+		for _, claim := range item.claims {
+			prefix, number := "row-table-drop-column", &removals
+			if claim.add {
+				prefix, number = "row-table-add-column", &additions
+			}
+			claim.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", prefix, *number)}
+			*number++
+			claim.operation.Id = claim.id.Name
+			facts := claim.operation.OperationSemantics
+			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: claim.id,
+				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: claim.operation},
+				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
+					Placement: claim.source.GetMetadata().GetPlacement(), Effects: cloneEffects(claim.source.GetMetadata().GetEffects())}})
+			result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: []*protocol.StepIdentity{proto.CloneOf(claim.source.Id)}, Replacement: proto.CloneOf(claim.id)})
+			if claim.add {
+				added = append(added, claim.id)
+			} else {
+				dropped = append(dropped, claim.id)
+			}
 		}
-		item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-alter/%06d", number)}
-		number++
-		item.operation.Id = item.id.Name
-		facts := item.operation.OperationSemantics
-		families := proto.CloneOf(item.table.Subject)
-		families.Kind = "ydb.column-families"
-		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: item.id,
-			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation},
-			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
-				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.table.Subject), Action: protocol.PlanningEffect_READ},
-					{Subject: families, Action: protocol.PlanningEffect_ALTER}}}})
-		contribution.Dependencies = append(contribution.Dependencies, alterStepDependencies(*item, request.CommonSteps)...)
-		receiptSteps[item.index] = item.id
+		var ordered []*protocol.StepIdentity
+		ordered = append(ordered, added...)
+		if item.operation != nil {
+			item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-alter/%06d", families)}
+			families++
+			item.operation.Id = item.id.Name
+			facts := item.operation.OperationSemantics
+			familySlot := proto.CloneOf(subject)
+			familySlot.Kind = "ydb.column-families"
+			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: item.id,
+				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation},
+				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
+					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
+						{Subject: familySlot, Action: protocol.PlanningEffect_ALTER}}}})
+			contribution.Dependencies = append(contribution.Dependencies, alterStepDependencies(*item, request.CommonSteps)...)
+			ordered = append(ordered, item.id)
+		}
+		receiptSteps[item.index] = append(ordered, dropped...)
 	}
 	// This service can replace only a complete common table creation. A column
 	// step or a mixed footprint needs its own lifecycle, never a partial rewrite.
@@ -175,13 +212,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		strategy := "Create the complete captured row table through the native table service"
 		var steps []*protocol.StepIdentity
-		if id := receiptSteps[i]; id != nil {
-			steps = []*protocol.StepIdentity{proto.CloneOf(id)}
+		for _, id := range receiptSteps[i] {
+			steps = append(steps, proto.CloneOf(id))
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			strategy = "Alter the column families and their column placements through the native table service; other settings and column steps stay with the host"
+			strategy = "Add and drop columns, and alter the column families and their column placements, through the native table service; other settings and column steps the native call cannot state stay with the host"
 			if steps == nil {
-				strategy = "The column families and column placements already match the declaration"
+				strategy = "The column families and column placements already match the declaration, and the host has no column step this service can carry out"
 			}
 		}
 		for _, kind := range request.ParentKinds {
@@ -196,6 +233,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		return nil, err
 	}
 	return result, nil
+}
+func cloneEffects(effects []*protocol.PlanningEffect) []*protocol.PlanningEffect {
+	result := make([]*protocol.PlanningEffect, len(effects))
+	for i, effect := range effects {
+		result[i] = proto.CloneOf(effect)
+	}
+	return result
 }
 func refused(index int, message string) *protocol.PlannedFeatures {
 	return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE,

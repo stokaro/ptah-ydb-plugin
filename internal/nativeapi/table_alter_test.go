@@ -211,3 +211,90 @@ func TestNativeTableAlteration_RefusesUnsafeSessionDatabase(t *testing.T) {
 		})
 	}
 }
+
+const (
+	utf8Optional = `{"optionalType":{"item":{"typeId":"UTF8"}}}`
+	addExtra     = `{"request":{"addColumns":[{"name":"extra","type":` + utf8Optional + `,"notNull":false}]}}`
+	dropOld      = `{"request":{"dropColumns":["old"]}}`
+	payloadCol   = `{"name":"payload","type":` + utf8Optional + `}`
+	oldCol       = `{"name":"old","type":` + utf8Optional + `}`
+	extraCol     = `{"name":"extra","type":` + utf8Optional + `}`
+)
+
+// withColumns is a table whose columns follow the key, plus extra table fields.
+func withColumns(extra string, columns ...string) string {
+	text := tableHead + `"columns":[` + idColumn
+	for _, column := range columns {
+		text += "," + column
+	}
+	return text + `],"columnFamilies":[{"name":"default"}]` + extra + `}`
+}
+
+func TestNativeTableAlteration_ColumnsHappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		before, after string
+		payload       string
+		added, drops  int
+	}{
+		{"adds a column", withColumns("", payloadCol), withColumns("", payloadCol, extraCol), addExtra, 1, 0},
+		{"drops a column", withColumns("", payloadCol, oldCol), withColumns("", payloadCol), dropOld, 0, 1},
+		{"drops a column that is not last", withColumns("", oldCol, payloadCol), withColumns("", payloadCol), dropOld, 0, 1},
+		{"drops a column other columns or indexes do not use",
+			withColumns(`,"indexes":[{"name":"by_payload","indexColumns":["payload"],"dataColumns":["id"]}],"ttlSettings":{"dateTypeColumn":{"columnName":"payload","expireAfterSeconds":60}},"partitioningSettings":{"partitionBy":["id"]}`, payloadCol, oldCol),
+			withColumns("", payloadCol), dropOld, 0, 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			fixture := &alterFixture{before: test.before, after: test.after}
+			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
+			c.Assert(err, qt.IsNil)
+			c.Assert(dispatched, qt.IsTrue)
+			c.Assert(fixture.events, qt.DeepEquals, []string{"open", "describe", "guard", "alter", "describe", "close"})
+			c.Assert(fixture.sent.AddColumns, qt.HasLen, test.added)
+			c.Assert(fixture.sent.DropColumns, qt.HasLen, test.drops)
+		})
+	}
+}
+
+func TestNativeTableAlteration_ColumnsFailurePath(t *testing.T) {
+	refused := []string{"open", "describe", "close"}
+	unconfirmed := []string{"open", "describe", "guard", "alter", "describe", "close"}
+	for _, test := range []struct {
+		name       string
+		fixture    alterFixture
+		payload    string
+		dispatched bool
+		events     []string
+		message    string
+	}{
+		{"column to add exists", alterFixture{before: withColumns("", payloadCol, extraCol)}, addExtra, false, refused, "YDB column to add already exists"},
+		{"column to drop is absent", alterFixture{before: withColumns("", payloadCol)}, dropOld, false, refused, "YDB column to drop is absent"},
+		{"column to drop is the key", alterFixture{before: withColumns("", payloadCol)}, `{"request":{"dropColumns":["id"]}}`, false, refused, "YDB column to drop is part of the primary key"},
+		{"column to drop is indexed", alterFixture{before: withColumns(`,"indexes":[{"name":"by_old","indexColumns":["old"]}]`, payloadCol, oldCol)}, dropOld, false, refused, `YDB column to drop is used by index "by_old"`},
+		{"column to drop is stored in an index", alterFixture{before: withColumns(`,"indexes":[{"name":"covering","indexColumns":["payload"],"dataColumns":["old"]}]`, payloadCol, oldCol)}, dropOld, false, refused, `YDB column to drop is used by index "covering"`},
+		{"column to drop is the TTL column", alterFixture{before: withColumns(`,"ttlSettings":{"dateTypeColumn":{"columnName":"old","expireAfterSeconds":60}}`, payloadCol, oldCol)}, dropOld, false, refused, "YDB column to drop is the TTL column"},
+		{"column to drop is the TTL column by epoch", alterFixture{before: withColumns(`,"ttlSettings":{"valueSinceUnixEpoch":{"columnName":"old","columnUnit":"UNIT_SECONDS","expireAfterSeconds":60}}`, payloadCol, oldCol)}, dropOld, false, refused, "YDB column to drop is the TTL column"},
+		{"column to drop partitions the table", alterFixture{before: withColumns(`,"partitioningSettings":{"partitionBy":["old"]}`, payloadCol, oldCol)}, dropOld, false, refused, "YDB column to drop is a partitioning column"},
+		{"addition not applied", alterFixture{before: withColumns("", payloadCol), after: withColumns("", payloadCol)}, addExtra, true, unconfirmed, "YDB altered table key or columns differ from the request"},
+		{"another column added", alterFixture{before: withColumns("", payloadCol), after: withColumns("", payloadCol, strings.Replace(extraCol, "extra", "elsewhere", 1))}, addExtra, true, unconfirmed, "YDB added column differs from the request"},
+		{"added column has another type", alterFixture{before: withColumns("", payloadCol), after: withColumns("", payloadCol, `{"name":"extra","type":{"typeId":"STRING"}}`)}, addExtra, true, unconfirmed, "YDB added column differs from the request"},
+		{"added column is required", alterFixture{before: withColumns("", payloadCol), after: withColumns("", payloadCol, `{"name":"extra","type":`+utf8Optional+`,"notNull":true}`)}, addExtra, true, unconfirmed, "YDB added column differs from the request"},
+		{"added column sits in a family", alterFixture{before: withColumns("", payloadCol), after: withColumns("", payloadCol, `{"name":"extra","type":`+utf8Optional+`,"family":"archive"}`)}, addExtra, true, unconfirmed, "YDB added column differs from the request"},
+		{"addition changed an existing column", alterFixture{before: withColumns("", payloadCol), after: withColumns("", `{"name":"payload","type":{"typeId":"STRING"}}`, extraCol)}, addExtra, true, unconfirmed, "YDB altered column differs from the request"},
+		{"removal not applied", alterFixture{before: withColumns("", payloadCol, oldCol), after: withColumns("", payloadCol, oldCol)}, dropOld, true, unconfirmed, "YDB altered table key or columns differ from the request"},
+		{"another column dropped", alterFixture{before: withColumns("", payloadCol, oldCol), after: withColumns("", oldCol)}, dropOld, true, unconfirmed, "YDB altered column differs from the request"},
+		{"removal changed an existing column", alterFixture{before: withColumns("", payloadCol, oldCol), after: withColumns("", `{"name":"payload","type":{"typeId":"STRING"}}`)}, dropOld, true, unconfirmed, "YDB altered column differs from the request"},
+		{"removal changed the key", alterFixture{before: withColumns("", payloadCol, oldCol), after: strings.Replace(withColumns("", payloadCol), `"primaryKey":["id"]`, `"primaryKey":["id","payload"]`, 1)}, dropOld, true, unconfirmed, "YDB altered table key or columns differ from the request"},
+		{"lost reply", alterFixture{before: withColumns("", payloadCol, oldCol), alterFailure: true}, dropOld, true, []string{"open", "describe", "guard", "alter", "close"}, "lost native reply"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			fixture := test.fixture
+			dispatched, err := applyAlteration(c, &fixture, "", test.payload, false)
+			c.Assert(err, qt.ErrorMatches, test.message)
+			c.Assert(dispatched, qt.Equals, test.dispatched)
+			c.Assert(fixture.events, qt.DeepEquals, test.events)
+		})
+	}
+}
