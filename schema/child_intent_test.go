@@ -167,7 +167,7 @@ func TestEmptyChildSetsHaveIndependentDesiredContracts(t *testing.T) {
 	for _, observed := range []*protocol.Envelope{indexes, feeds} {
 		desired := assertChildRoundTrip(c, observed)
 		c.Assert(string(desired.Payload), qt.Equals, "{}")
-		c.Assert(desired.DefinitionSha256 == observed.DefinitionSha256, qt.IsFalse)
+		c.Assert(desired.DefinitionSha256, qt.Not(qt.Equals), observed.DefinitionSha256)
 	}
 }
 

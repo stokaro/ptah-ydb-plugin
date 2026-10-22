@@ -170,7 +170,7 @@ func NormalizeCoordinationChange(input *protocol.ValueInput) (*protocol.Normaliz
 	if input.GetRepresentation() != protocol.ValueInput_CHANGE || value.GetProviderId() != ProviderID || value.GetKind() != contract.Kind || value.GetSchemaVersion() != contract.SchemaVersion || value.GetEncoding() != contract.Encoding || value.GetDefinitionSha256() != contract.DefinitionSha256 {
 		return nil, fmt.Errorf("coordination change does not match its negotiated definition")
 	}
-	if err := desiredCoordinationOwner(value.GetOwner()); err != nil {
+	if err := ValidateManagedCoordinationOwner(value.GetOwner()); err != nil {
 		return nil, err
 	}
 	canonical, err := modeljson.Canonical(value.Payload)

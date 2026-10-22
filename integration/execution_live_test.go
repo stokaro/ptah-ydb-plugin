@@ -4,7 +4,6 @@ package integration_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -32,7 +31,7 @@ func executeSQL(c *qt.C, client *providerruntime.Client, session, transaction st
 		c.Assert(err, qt.IsNil)
 	} else {
 		var executionError *provider.ExecutionError
-		c.Assert(errors.As(err, &executionError), qt.IsTrue)
+		c.Assert(err, qt.ErrorAs, &executionError)
 		c.Assert(executionError.Outcome, qt.Equals, result.Outcome)
 	}
 	return result

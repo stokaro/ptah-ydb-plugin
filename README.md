@@ -21,8 +21,8 @@ unpublished names is owed. Older envelopes and plans are refused.
 
 ## Build and test
 
-The module pins a published experimental SDK revision 21, including operational
-storage reservations. Builds require neither the Ptah application source nor a
+The module pins published experimental SDK revision 22, including operational
+storage reservations and offline table preparation. Builds require neither the Ptah application source nor a
 local SDK checkout.
 
 Run the unit suite and build the executable:
@@ -449,6 +449,11 @@ host binding. Required nodes are not removed. Exclusions for this model match
 exact relative paths such as `app/workers`, without case folding or trimming.
 The database-root `ptah_locks` observation remains visible and produces an
 undecided lifecycle diagnostic; its name does not prove provider ownership.
+Offline conversion and host schema export retain this observation, including
+its configuration and access metadata. Export does not authorize management:
+YAML declarations and change normalization still reject this root path.
+This changes the desired model definition; pre-v1, no compatibility with the
+earlier experimental definition is owed.
 
 Offline subprocess tests cover decode, compare, and change normalization without
 opening a session. Live tests compare native observations after closing their
