@@ -648,6 +648,15 @@ subprocess tests cover create, alter, reset, drop, stale plans, mixed SQL/native
 batch refusal, and lease loss on both tested YDB release lines. Host CLI routing,
 other object lifecycles, and complete migration planning remain pending.
 
+## Offline table preparation
+
+The experimental `schema.prepare-tables` service derives column key membership
+from a complete captured row-table declaration. It uses the same native compiler
+as CREATE, including ordered composite keys and native properties. Source values,
+observations, and explicit existence knowledge remain unchanged. The service
+opens no session and refuses the whole batch when any declaration is unsupported.
+It does not predict server defaults or enable the host's common SQL table planner.
+
 ## Native row-table creation
 
 The SDK planner accepts captured CREATE lifecycles for row tables. It retains

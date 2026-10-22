@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"slices"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -66,6 +68,7 @@ func TestRowTableCreationSubprocess(t *testing.T) {
 	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 		Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE, Desired: source}}}
+	prepareCapturedCreation(c, client, planning)
 	plan, err := client.PlanFeatures(ctx, planning)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -124,6 +127,7 @@ func TestRowTableCreationOfflineSubprocess(t *testing.T) {
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE,
 			Desired: &protocol.DeclaredTable{Name: owner.Name, Schema: owner.Schema, PrimaryKey: []string{"id"},
 				Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}, Features: features}}}}
+	prepareCapturedCreation(c, client, request)
 	plan, err := client.PlanFeatures(t.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -132,4 +136,28 @@ func TestRowTableCreationOfflineSubprocess(t *testing.T) {
 	c.Assert(rendered.Units, qt.HasLen, 1)
 	c.Assert(rendered.Units[0].GetNative().Kind, qt.Equals, tablecreate.OperationKind)
 	c.Assert(rendered.Units[0].GetNative().Owner.Database, qt.Equals, "")
+}
+
+func prepareCapturedCreation(c *qt.C, client *providerruntime.Client, planning *protocol.PlanFeaturesRequest) {
+	c.Helper()
+	table := planning.Tables[0]
+	declaration := proto.CloneOf(table.Desired)
+	for _, column := range declaration.Columns {
+		column.Primary = false
+	}
+	request := &protocol.PrepareTablesRequest{Engine: planning.Engine, Identifiers: planning.Identifiers, Capabilities: planning.Capabilities,
+		Tables: []*protocol.TablePreparationInput{{Subject: table.Subject, Desired: declaration,
+			CurrentKnowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_ABSENT}}}}
+	original := proto.CloneOf(request)
+	prepared, err := client.PrepareTables(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(prepared.Complete, qt.IsTrue)
+	c.Assert(prepared.Tables, qt.HasLen, 1)
+	c.Assert(prepared.Tables[0].ColumnPrimaryKeysPrepared, qt.IsTrue)
+	c.Assert(prepared.Tables[0].ColumnPrimaryKeys, qt.DeepEquals, table.Desired.PrimaryKey)
+	c.Assert(proto.Equal(request, original), qt.IsTrue)
+	for _, column := range declaration.Columns {
+		column.Primary = slices.Contains(prepared.Tables[0].ColumnPrimaryKeys, column.Name)
+	}
+	table.Desired = declaration
 }
