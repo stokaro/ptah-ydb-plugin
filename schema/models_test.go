@@ -121,3 +121,12 @@ func TestModelKindsUseProviderNamespace(t *testing.T) {
 	_, err = schema.Normalize(captured)
 	c.Assert(err, qt.IsNotNil)
 }
+
+func TestLiveCaptureRequiresDatabaseBinding(t *testing.T) {
+	c := qt.New(t)
+	owner := tableOwner()
+	owner.Database = ""
+	value, err := schema.CaptureTable(owner, &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"id"}})
+	c.Assert(value, qt.IsNil)
+	c.Assert(err, qt.ErrorMatches, "captured YDB observation requires a database")
+}

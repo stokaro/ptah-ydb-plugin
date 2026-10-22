@@ -87,6 +87,7 @@ func buildModel(kind string) *protocol.ValueModel {
 		"message":  string(message(kind).ProtoReflect().Descriptor().FullName()),
 		"messages": graph, "excluded_fields": excluded(kind),
 		"unknown_fields_and_enum_values": "refused", "representation": "observed",
+		"database_binding":        "offline models retain optional database binding; live capture requires a database",
 		"canonicalization":        "protojson with absent defaults omitted, then modeljson canonical JSON; arrays retain server order",
 		"table_self":              "retain owner and permissions; omit name, type, size_bytes, created_at",
 		"common_columns":          "names, storage type, and nullability live only in common columns; primary_key preserves key order",
@@ -185,6 +186,9 @@ func CaptureColumn(owner *protocol.Reference, column *native.ColumnMeta) (*proto
 }
 
 func capture(kind string, owner *protocol.Reference, value proto.Message) (*protocol.Envelope, error) {
+	if owner.GetDatabase() == "" {
+		return nil, fmt.Errorf("captured YDB observation requires a database")
+	}
 	payload, err := protojson.Marshal(value)
 	if err != nil {
 		return nil, err
@@ -201,6 +205,8 @@ func capture(kind string, owner *protocol.Reference, value proto.Message) (*prot
 
 // Normalize interprets an observed model without a connection. A payload
 // cannot smuggle common fields or unrecognized native fields through a model.
+// Offline predictions may remain unbound; capture requires a database because
+// a live observation must identify the database that supplied it.
 func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	target := message(value.GetKind())
 	if target == nil {
@@ -210,7 +216,7 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	if value.GetProviderId() != ProviderID || value.GetSchemaVersion() != 1 || value.GetEncoding() != definition.Encoding || value.GetDefinitionSha256() != definition.DefinitionSha256 {
 		return nil, fmt.Errorf("YDB observation does not match its negotiated definition")
 	}
-	if err := validateModelOwner(value, true); err != nil {
+	if err := validateModelOwner(value); err != nil {
 		return nil, err
 	}
 	owner := value.GetOwner()
@@ -290,7 +296,7 @@ func Models() []*protocol.ValueModel {
 	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel())
 }
 
-func validateModelOwner(value *protocol.Envelope, requireDatabase bool) error {
+func validateModelOwner(value *protocol.Envelope) error {
 	owner := value.GetOwner()
 	expected := "table"
 	if IsNativeObject(value.GetKind()) {
@@ -299,7 +305,7 @@ func validateModelOwner(value *protocol.Envelope, requireDatabase bool) error {
 	if value.GetKind() == ColumnProperties {
 		expected = "column"
 	}
-	if owner.GetEngine() != "ydb" || owner.GetKind() != expected || owner.GetName() == "" || (requireDatabase && owner.GetDatabase() == "") || owner.GetCatalog() != "" || len(owner.GetOverload()) != 0 {
+	if owner.GetEngine() != "ydb" || owner.GetKind() != expected || owner.GetName() == "" || owner.GetCatalog() != "" || len(owner.GetOverload()) != 0 {
 		return fmt.Errorf("invalid YDB observation owner")
 	}
 	if (expected != "column" && len(owner.GetPath()) != 0) || (expected == "column" && len(owner.GetPath()) != 1) {

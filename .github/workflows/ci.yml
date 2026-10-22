@@ -78,7 +78,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: stokaro/ptah
-          ref: 66ed446346e8f0c37b6ddf1099f6b473273d6c35
+          ref: 205268aba9152942d71e8deb61ad151d4e937685
           path: .host-contract
       - name: Build the external host binary
         run: |

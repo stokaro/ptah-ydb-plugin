@@ -57,7 +57,7 @@ func normalizeTableIntent(value *protocol.Envelope) (*protocol.Envelope, error) 
 		value.GetEncoding() != definition.Encoding || value.GetDefinitionSha256() != definition.DefinitionSha256 {
 		return nil, fmt.Errorf("desired YDB table does not match its negotiated definition")
 	}
-	if err := validateModelOwner(value, false); err != nil {
+	if err := validateModelOwner(value); err != nil {
 		return nil, err
 	}
 	canonical, err := modeljson.Canonical(value.Payload)

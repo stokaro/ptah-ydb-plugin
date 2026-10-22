@@ -34,13 +34,8 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	if request.PlanningId != ServiceID || len(request.Changes) != 0 {
 		return nil, fmt.Errorf("invalid YDB table creation assignment")
 	}
-	if request.Identifiers.GetDefaultSchema() != "" || request.Identifiers.GetCatalogCollation() != "" {
-		return nil, fmt.Errorf("invalid YDB table identifier context")
-	}
-	for _, resolved := range request.Identifiers.GetResolvedNames() {
-		if resolved.Name != resolved.Key {
-			return nil, fmt.Errorf("YDB table planning requires exact identifiers")
-		}
+	if err := validateTableIdentifiers(request.Identifiers); err != nil {
+		return nil, err
 	}
 	result := &protocol.PlannedFeatures{Complete: true}
 	var creations []creation
