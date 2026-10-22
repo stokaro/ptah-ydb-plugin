@@ -83,6 +83,9 @@ func coordinationSource(ctx context.Context, document *protocol.SourceDocument, 
 				return nil, fmt.Errorf("YDB coordination node conflicts with a declared table")
 			}
 		}
+		if err := schema.ValidateManagedCoordinationOwner(owner); err != nil {
+			return nil, err
+		}
 		value, err := schema.CaptureCoordinationIntent(owner, intent)
 		if err != nil {
 			return nil, err

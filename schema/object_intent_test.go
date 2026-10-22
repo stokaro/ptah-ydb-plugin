@@ -143,7 +143,7 @@ func TestEveryObservedKindHasItsOwnDesiredContract(t *testing.T) {
 			}
 		}
 		c.Assert(found, qt.IsNotNil, qt.Commentf("kind %s", observed.Kind))
-		c.Assert(found.DefinitionSha256 == observed.DefinitionSha256, qt.IsFalse)
+		c.Assert(found.DefinitionSha256, qt.Not(qt.Equals), observed.DefinitionSha256)
 		c.Assert(found.DisplayName, qt.Not(qt.Equals), "")
 		c.Assert(found.DisplayName, qt.Equals, observed.DisplayName)
 	}

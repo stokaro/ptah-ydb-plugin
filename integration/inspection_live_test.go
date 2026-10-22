@@ -98,7 +98,7 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	// if the subprocess's intentionally redacted RPC reports a refusal.
 	direct, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
 	c.Assert(err, qt.IsNil)
-	c.Assert(len(direct.GetTables()), qt.Equals, 1)
+	c.Assert(direct.GetTables(), qt.HasLen, 1)
 	all, err := inspect.Read(ctx, opened.Driver, database, nil)
 	c.Assert(err, qt.IsNil)
 	var selected []string
@@ -115,7 +115,7 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	request := &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}}
 	snapshot, err := client.Inspect(ctx, request)
 	c.Assert(err, qt.IsNil)
-	c.Assert(len(snapshot.Tables), qt.Equals, 1)
+	c.Assert(snapshot.Tables, qt.HasLen, 1)
 	table := snapshot.Tables[0]
 	c.Assert(table.Identity.Schema, qt.Equals, directory)
 	c.Assert(table.Identity.Database, qt.Equals, database)
@@ -131,13 +131,13 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	c.Assert(native.GetPrimaryKey(), qt.DeepEquals, []string{"b", "a"})
 	c.Assert(native.GetTtlSettings().GetDateTypeColumn().GetColumnName(), qt.Equals, "expires")
 	c.Assert(native.GetTtlSettings().GetDateTypeColumn().GetExpireAfterSeconds(), qt.Equals, uint32(86400))
-	c.Assert(len(native.GetColumns()), qt.Equals, 0)
+	c.Assert(native.GetColumns(), qt.HasLen, 0)
 	values, err := provider.InspectionValues(client.Description(), request, snapshot)
 	c.Assert(err, qt.IsNil)
 	normalized, err := client.NormalizeValues(ctx, values)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidateNormalizedInspection(client.Description(), request, snapshot, normalized), qt.IsNil)
-	c.Assert(len(normalized.Values), qt.Equals, 7)
+	c.Assert(normalized.Values, qt.HasLen, 7)
 	c.Assert(client.CloseSession(ctx, session.Id), qt.IsNil)
 	// Captured observations remain usable after their database session closes.
 	again, err := client.NormalizeValues(ctx, values)
@@ -152,8 +152,8 @@ func TestInspectionRefusesEscapingAndMissingScopes(t *testing.T) {
 	defer cancel()
 	empty, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
 	c.Assert(err, qt.IsNil)
-	c.Assert(len(empty.Tables), qt.Equals, 0)
-	c.Assert(len(empty.Coverage.Subjects), qt.Equals, 0)
+	c.Assert(empty.Tables, qt.HasLen, 0)
+	c.Assert(empty.Coverage.Subjects, qt.HasLen, 0)
 	createFixtureTable(c, opened, database, directory)
 	for _, selectors := range [][]string{{"../other"}, {directory, "/" + directory}, {""}, {".sys"}, {directory + "/../other"}, {directory + "/missing"}} {
 		snapshot, err := inspect.Read(ctx, opened.Driver, database, selectors)

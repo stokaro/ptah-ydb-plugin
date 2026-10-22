@@ -59,7 +59,7 @@ func buildCoordinationDesiredModel() *protocol.ValueModel {
 "text_fields":["name","schema","struct_name","self_check_period","session_grace_period","read_consistency_mode","attach_consistency_mode","rate_limiter_counters_mode"],
 "periods":"positive ISO8601 week/day/hour/minute/second durations; at most six fractional second digits; exact whole milliseconds",
 "modes":"trimmed and case-insensitive; empty or null values refused","unknown_fields":"refused"},
-"identity":"exact YDB relative schema and leaf name; no catalog, parent path, overload or system path; root ptah_locks is reserved for runtime use",
+"identity":"exact YDB relative schema and leaf name; no catalog, parent path, overload or system path; root ptah_locks can be represented and exported but authored source and changes are refused",
 "comparison":"canonical desired equality is representation-local; no desired-observed equivalence implied"}`
 	var document map[string]any
 	if err := json.Unmarshal([]byte(definition), &document); err != nil {
@@ -137,7 +137,9 @@ func ValidateCoordinationOwner(owner *protocol.Reference) error {
 	return nil
 }
 
-func desiredCoordinationOwner(owner *protocol.Reference) error {
+// ValidateManagedCoordinationOwner rejects runtime paths in authored source and changes.
+// Schema models may retain these paths for inspection and offline export.
+func ValidateManagedCoordinationOwner(owner *protocol.Reference) error {
 	if err := ValidateCoordinationOwner(owner); err != nil {
 		return err
 	}
@@ -164,7 +166,7 @@ func NormalizeDesired(value *protocol.Envelope) (*protocol.Envelope, error) {
 		value.GetEncoding() != model.Encoding || value.GetDefinitionSha256() != model.DefinitionSha256 {
 		return nil, fmt.Errorf("desired YDB value does not match its negotiated definition")
 	}
-	if err := desiredCoordinationOwner(value.GetOwner()); err != nil {
+	if err := ValidateCoordinationOwner(value.GetOwner()); err != nil {
 		return nil, err
 	}
 	canonical, err := modeljson.Canonical(value.GetPayload())

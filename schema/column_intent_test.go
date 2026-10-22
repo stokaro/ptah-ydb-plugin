@@ -41,7 +41,7 @@ func TestColumnConversionRetainsNativeSettings(t *testing.T) {
 			desired, err := schema.ConvertColumn(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 			c.Assert(err, qt.IsNil)
 			c.Assert(desired.DefinitionSha256, qt.Equals, schema.ColumnDesiredModel().DefinitionSha256)
-			c.Assert(desired.DefinitionSha256 == observed.DefinitionSha256, qt.IsFalse)
+			c.Assert(desired.DefinitionSha256, qt.Not(qt.Equals), observed.DefinitionSha256)
 			c.Assert(proto.Equal(desired.Owner, observed.Owner), qt.IsTrue)
 			back, err := schema.ConvertColumn(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
 			c.Assert(err, qt.IsNil)
