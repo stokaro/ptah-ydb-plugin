@@ -16,6 +16,9 @@ func TestAddress(t *testing.T) {
 		{"database parameter", "ydb://host?database=local&go_balancer=disable", "grpc://host:2136/local?go_balancer=disable", "/local"},
 		{"matching database", "ydb://host/local?database=/local/", "grpc://host:2136/local", "/local"},
 		{"token omitted", "ydb://host/local?token=test-secret", "grpc://host:2136/local", "/local"},
+		{"environment credentials", "ydb://host/local?use_env_credentials=true", "grpc://host:2136/local", "/local"},
+		{"bare environment credentials", "ydb://host/local?use_env_credentials", "grpc://host:2136/local", "/local"},
+		{"environment credentials off", "ydb://host/local?use_env_credentials=false&token=test-secret", "grpc://host:2136/local", "/local"},
 		{"password omitted", "ydbs://alice:test-secret@host/local", "grpcs://host:2135/local", "/local"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -56,13 +59,58 @@ func TestAddressRefusesBeforeConnecting(t *testing.T) {
 		{"NUL", "ydb://host/local%00other"},
 		{"unimplemented realm", "ydb://host/local?dev_realm=test-secret"},
 		{"unimplemented monitoring", "ydb://host/local?monitoring=http://host:8765"},
-		{"unimplemented environment credentials", "ydb://host/local?use_env_credentials=true"},
+		{"environment credentials with a token", "ydb://host/local?use_env_credentials=true&token=test-secret"},
+		{"environment credentials with a user", "ydb://alice:test-secret@host/local?use_env_credentials"},
+		{"environment credentials not a boolean", "ydb://host/local?use_env_credentials=maybe"},
+		{"duplicate environment credentials", "ydb://host/local?use_env_credentials&use_env_credentials"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
 			_, err := connection.Parse(test.input)
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(err.Error(), qt.Not(qt.Contains), "test-secret")
+		})
+	}
+}
+
+func environment(values map[string]string) func(string) (string, bool) {
+	return func(name string) (string, bool) {
+		value, ok := values[name]
+		return value, ok
+	}
+}
+
+func TestCheckEnvironment_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		values map[string]string
+	}{
+		{"access token", map[string]string{"YDB_ACCESS_TOKEN_CREDENTIALS": "test-secret"}},
+		{"metadata", map[string]string{"YDB_METADATA_CREDENTIALS": "1"}},
+		{"explicit anonymous", map[string]string{"YDB_ANONYMOUS_CREDENTIALS": "1"}},
+		{"static", map[string]string{"YDB_STATIC_CREDENTIALS_USER": "alice", "YDB_STATIC_CREDENTIALS_PASSWORD": "test-secret", "YDB_STATIC_CREDENTIALS_ENDPOINT": "grpc://host:2136"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			c.Assert(connection.CheckEnvironment(environment(test.values)), qt.IsNil)
+		})
+	}
+}
+
+func TestCheckEnvironment_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name, want string
+		values     map[string]string
+	}{
+		{"nothing set", "no credential variable is", nil},
+		{"metadata switch", "reads only 1", map[string]string{"YDB_METADATA_CREDENTIALS": "true"}},
+		{"static without password", "without YDB_STATIC_CREDENTIALS_PASSWORD and", map[string]string{"YDB_STATIC_CREDENTIALS_USER": "alice"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			err := connection.CheckEnvironment(environment(test.values))
+			c.Assert(err, qt.ErrorMatches, "(?s).*"+test.want+".*")
+			c.Assert(err, qt.Not(qt.ErrorMatches), "(?s).*test-secret.*")
 		})
 	}
 }

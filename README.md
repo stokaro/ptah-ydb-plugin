@@ -84,8 +84,12 @@ file input. Table comparison and full native CLI planning remain pending.
 ## Connection addresses
 
 Use `ydb://host:2136/database` or `ydbs://host:2135/database` for TLS.
-`database`, `token`, and `go_balancer` are the supported query parameters.
-A token and URL user/password cannot be combined. Unknown or repeated
+`database`, `token`, `go_balancer`, and `use_env_credentials` are the supported
+query parameters. A token, URL user/password and `use_env_credentials` cannot be
+combined. `use_env_credentials` reads the `YDB_*` variables of the provider
+process and fails when none is set, so an environment that would connect
+anonymously is refused. An address with no credential source connects
+anonymously. Unknown or repeated
 parameters, conflicting database paths, and malformed values are refused.
 Credentials travel in the session-open request and are omitted from receipts,
 SDK addresses, and error diagnostics. Native errors currently report only the
