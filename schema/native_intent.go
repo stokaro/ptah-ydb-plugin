@@ -83,7 +83,7 @@ func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error)
 	if definition == nil || value.GetProviderId() != ProviderID || value.GetSchemaVersion() != definition.SchemaVersion || value.GetEncoding() != definition.Encoding || value.GetDefinitionSha256() != definition.DefinitionSha256 {
 		return nil, fmt.Errorf("desired native YDB value does not match its negotiated definition")
 	}
-	if err := validateModelOwner(value, false); err != nil {
+	if err := validateModelOwner(value); err != nil {
 		return nil, err
 	}
 	canonical, err := modeljson.Canonical(value.Payload)

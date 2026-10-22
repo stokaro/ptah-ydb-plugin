@@ -69,6 +69,7 @@ func TestRowTableCreationSubprocess(t *testing.T) {
 		Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE, Desired: source}}}
 	prepareCapturedCreation(c, client, planning)
+	projectCapturedCreation(c, client, planning)
 	plan, err := client.PlanFeatures(ctx, planning)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -128,6 +129,7 @@ func TestRowTableCreationOfflineSubprocess(t *testing.T) {
 			Desired: &protocol.DeclaredTable{Name: owner.Name, Schema: owner.Schema, PrimaryKey: []string{"id"},
 				Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}, Features: features}}}}
 	prepareCapturedCreation(c, client, request)
+	projectCapturedCreation(c, client, request)
 	plan, err := client.PlanFeatures(t.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -160,4 +162,41 @@ func prepareCapturedCreation(c *qt.C, client *providerruntime.Client, planning *
 		column.Primary = slices.Contains(prepared.Tables[0].ColumnPrimaryKeys, column.Name)
 	}
 	table.Desired = declaration
+}
+
+func projectCapturedCreation(c *qt.C, client *providerruntime.Client, planning *protocol.PlanFeaturesRequest) {
+	c.Helper()
+	table := planning.Tables[0]
+	request := &protocol.ProjectTableCreationsRequest{Engine: planning.Engine, Identifiers: planning.Identifiers,
+		Capabilities: planning.Capabilities, TargetFeatures: planning.TargetFeatures,
+		Tables: []*protocol.TableCreationInput{{Subject: table.Subject, Declaration: table.Desired,
+			FacetOwners: []*protocol.ComparisonIdentity{proto.CloneOf(table.Subject)}}}}
+	original := proto.CloneOf(request)
+	projected, err := client.ProjectTableCreations(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(projected.Complete, qt.IsTrue)
+	c.Assert(projected.Tables, qt.HasLen, 1)
+	c.Assert(projected.Tables[0].ColumnPrimaryKeysPrepared, qt.IsTrue)
+	c.Assert(projected.Tables[0].ColumnPrimaryKeys, qt.DeepEquals, table.Desired.PrimaryKey)
+	c.Assert(projected.Tables[0].ObservedFacets, qt.HasLen, 0)
+	c.Assert(projected.Tables[0].DesiredFacets, qt.HasLen, 1)
+	c.Assert(proto.Equal(original, request), qt.IsTrue)
+	for _, facet := range projected.Tables[0].DesiredFacets {
+		observed, err := client.ConvertValues(c.Context(), &protocol.ConvertValuesRequest{
+			Engine: planning.Engine, TargetFeatures: planning.TargetFeatures,
+			From: protocol.ValueInput_DESIRED, To: protocol.ValueInput_OBSERVED,
+			Values: []*protocol.NormalizedValue{facet.Value},
+		})
+		c.Assert(err, qt.IsNil)
+		c.Assert(observed.Values, qt.HasLen, 1)
+		c.Assert(proto.Equal(observed.Values[0].Value.Owner, facet.Value.Value.Owner), qt.IsTrue)
+		index := slices.IndexFunc(table.Desired.Features.Facets.Records, func(existing *protocol.ComparisonRecord) bool {
+			return existing.Kind == facet.Kind && proto.Equal(existing.Subject, facet.Subject)
+		})
+		if index >= 0 {
+			table.Desired.Features.Facets.Records[index] = proto.CloneOf(facet)
+		} else {
+			table.Desired.Features.Facets.Records = append(table.Desired.Features.Facets.Records, proto.CloneOf(facet))
+		}
+	}
 }

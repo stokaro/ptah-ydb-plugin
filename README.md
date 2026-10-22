@@ -21,7 +21,7 @@ unpublished names is owed. Older envelopes and plans are refused.
 
 ## Build and test
 
-The module pins published experimental SDK revision 22, including operational
+The module pins published experimental SDK revision 23, including operational
 storage reservations and offline table preparation. Builds require neither the Ptah application source nor a
 local SDK checkout.
 
@@ -662,6 +662,22 @@ observations, and explicit existence knowledge remain unchanged. The service
 opens no session and refuses the whole batch when any declaration is unsupported.
 It does not predict server defaults or enable the host's common SQL table planner.
 
+## Offline CREATE prediction
+
+The experimental `schema.project-table-creations` service predicts column key
+membership and effective desired table properties from complete declarations.
+It uses the native CREATE compiler, including composite key order and authored
+settings. Computed values remain on the captured table owner. Explicitly excluded
+table properties stay excluded, and source declarations remain unchanged.
+Offline representation conversion preserves an absent database binding. Live
+capture still requires the database that supplied the observation.
+
+Unspecified server defaults remain unspecified. The service returns no observed
+overrides and makes no claim that a table exists or a migration ran. Both process
+boundaries validate complete batches, identities, exclusions, and key membership.
+Live tests feed the prediction into native planning, execute CREATE, and inspect
+the resulting table on both qualified server lines.
+
 ## Native row-table creation
 
 The SDK planner accepts captured CREATE lifecycles for row tables. It retains
@@ -695,7 +711,7 @@ Subprocess tests cover creation, inspection, stale plans, retained table data,
 and refusal of a malformed later unit on YDB 25.1.4.7 and 26.2.1.14. Unit tests
 exercise lost replies, lost confirmation, lease failure, and session cleanup.
 The host still refuses general table planning through this provider: its common
-table preparation and comparison need to preserve complete native declarations
+table validation and comparison need to preserve complete native declarations
 before that capability can be advertised. These SDK checks do not establish a
 complete native CLI table migration workflow.
 

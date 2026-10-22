@@ -2,7 +2,6 @@ package tablecreate
 
 import (
 	"context"
-	"fmt"
 	"slices"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -13,13 +12,8 @@ import (
 // that CREATE consumes. It does not inspect a server or replace authored values.
 // Declarations outside the implemented row-table contract are refused as a batch.
 func PrepareTables(ctx context.Context, request *protocol.PrepareTablesRequest) (*protocol.PreparedTables, error) {
-	if request.Identifiers.GetDefaultSchema() != "" || request.Identifiers.GetCatalogCollation() != "" {
-		return nil, fmt.Errorf("invalid YDB table identifier context")
-	}
-	for _, resolved := range request.Identifiers.GetResolvedNames() {
-		if resolved.Name != resolved.Key {
-			return nil, fmt.Errorf("YDB table preparation requires exact identifiers")
-		}
+	if err := validateTableIdentifiers(request.Identifiers); err != nil {
+		return nil, err
 	}
 	result := &protocol.PreparedTables{Complete: true}
 	for _, input := range request.Tables {
