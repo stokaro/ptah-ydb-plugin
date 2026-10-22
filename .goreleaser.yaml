@@ -1,0 +1,64 @@
+version: 2
+
+project_name: ptah-plugin-ydb
+
+builds:
+  - id: ptah-plugin-ydb
+    main: ./cmd/ptah-plugin-ydb
+    binary: ptah-plugin-ydb
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+# A snapshot is named after its commit, not after whatever tag `git describe`
+# finds, so a tag with a slash cannot put a path separator in an artifact name.
+snapshot:
+  version_template: "0.0.0-SNAPSHOT-{{ .ShortCommit }}"
+
+# The host pins an archive by name and the SHA-256 digest listed for it in
+# checksums.txt. The name has no variable part beyond version, OS and
+# architecture: ptah-plugin-ydb_<version>_<os>_<arch>.tar.gz, or .zip on
+# Windows. <version> is the tag without the leading "v".
+archives:
+  - id: ptah-plugin-ydb
+    ids:
+      - ptah-plugin-ydb
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE
+
+# One line per archive in `sha256sum` format: "<hex digest>  <file name>".
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  # A re-run of a tag must finish: replace assets already on the release
+  # instead of failing on the 422 "already_exists" answer.
+  replace_existing_artifacts: true
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

@@ -19,6 +19,34 @@ The provider ID is `github.com/stokaro/ptah-ydb-plugin`. Model kinds use the `gi
 the experimental model identities; pre-v1, no compatibility with the earlier
 unpublished names is owed. Older envelopes and plans are refused.
 
+## Releases
+
+A tag that starts with `v` runs `.github/workflows/release.yml`, which
+publishes a GitHub release through GoReleaser (`.goreleaser.yaml`). Each
+release carries one archive per platform and a `checksums.txt` file:
+
+```text
+ptah-plugin-ydb_<version>_<os>_<arch>.tar.gz   (.zip on Windows)
+checksums.txt
+```
+
+`<version>` is the tag without the leading `v`. The platforms are linux,
+darwin and windows on amd64 and arm64. Every archive holds the
+`ptah-plugin-ydb` binary (`ptah-plugin-ydb.exe` on Windows), `README.md` and
+`LICENSE`. The binaries are built with `CGO_ENABLED=0` and `-trimpath`.
+
+`checksums.txt` lists the SHA-256 digest of every archive in `sha256sum`
+format (`<hex digest>  <file name>`). A host pins a release by version and by
+the digest listed there for its platform's archive.
+
+Pull requests that touch the release inputs run `goreleaser check` and a
+snapshot build, then verify the snapshot's `checksums.txt`. To try it locally:
+
+```sh
+GOWORK=off goreleaser release --snapshot --clean
+(cd dist && shasum -a 256 -c checksums.txt)
+```
+
 ## Build and test
 
 The module pins published experimental SDK revision 23, including operational
