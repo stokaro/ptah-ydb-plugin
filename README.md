@@ -7,7 +7,8 @@ external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations.
 Offline comparison, planning, and rendering produce native coordination
-operations. Execution verifies their captured preconditions and reads back the result.
+operations. Native row-table creation is available through captured SDK planning requests.
+Execution verifies captured preconditions and reads back the result.
 
 The executable opens native YDB connections and reads row-table schemas
 through the public Ptah SDK. It supports anonymous, URL user/password, and URL token authentication.
@@ -75,10 +76,10 @@ transactional schema changes.
 The host and provider were built against the published SDK revision 21 pin
 with `GOWORK=off`. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
-Host `schema inspect --format json` still refuses observed row-table facets
-without desired model conversion for every covered model kind. Column and row-table property conversion is available; child-object conversion remains incomplete. The native
-inspection service retains those observations; export and table comparison
-require further model support.
+Host `schema inspect --format json` exports the native desired model, including
+provider-owned values and coverage. Common collections use names such as
+`Tables`, `Fields`, and `Indexes`. This JSON is diagnostic output, not a schema
+file input. Table comparison and full native CLI planning remain pending.
 
 ## Connection addresses
 
@@ -99,8 +100,8 @@ provider process when that bound is reached.
 
 Execution sends native SQL units through YDB's query service. A batch is checked
 before its first unit runs. Unsupported native envelopes refuse the whole batch.
-SQL units use a pinned connection; native coordination units use their native
-service. Dispatched writes are not retried.
+SQL units use a pinned connection; native coordination and table creation units
+use their native services. Dispatched writes are not retried.
 Request IDs correlate calls and do not provide exactly-once execution.
 
 Results distinguish a confirmed prefix from an uncertain remainder. A failed
@@ -129,8 +130,8 @@ receipts explicitly report `transactional_ddl=false`. Live tests verify that
 DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
-Coordination operations use native envelopes. Other operation models, common
-SQL rendering and analysis remain to be extracted. The host's
+Coordination and row-table creation operations use native envelopes. Other
+operation models and common SQL rendering remain to be extracted. The host's
 extended comment and coordination SQL forms are not implemented here.
 
 ## Migration history
@@ -647,6 +648,43 @@ subprocess tests cover create, alter, reset, drop, stale plans, mixed SQL/native
 batch refusal, and lease loss on both tested YDB release lines. Host CLI routing,
 other object lifecycles, and complete migration planning remain pending.
 
+## Native row-table creation
+
+The SDK planner accepts captured CREATE lifecycles for row tables. It retains
+ordered composite primary keys, native column types and nullability, TTL,
+storage settings, column families, attributes, partitioning settings, bloom
+filters, read replicas, and tiering. Column families and typed literal defaults
+come from native column facets. Missing creation settings request server defaults.
+The common and native primary key declarations must agree on order.
+
+The planner can replace a complete common CREATE TABLE step in the shared graph.
+Its replacement carries table and physical-path effects and forbids SQL
+transactions. A refusal returns no successful planning prefix. Rendering emits
+a native operation envelope and validates its safety metadata again.
+
+Execution requires an existing parent directory and establishes absence through
+its complete listing. An existing path is refused, including an existing table
+with the same schema. The provider binds the session and absolute path, checks
+its guarding leases, sends CreateTable once, and reads the result back. It
+confirms columns, key order, requested settings, and the absence of unexpected
+indexes or changefeeds. A failed reply or unconfirmed result remains UNKNOWN.
+The native API provides no atomic compare-and-set; these checks do not establish
+exclusive ownership against another schema writer.
+
+Access requirements, temporary tables, indexes, changefeeds, sequence defaults,
+column compression or encoding, and richer common constraints are refused.
+Table alterations and removals also remain unsupported. An unknown populated
+field cannot disappear during compilation. A mixed SQL/native batch is validated
+before its first unit executes.
+
+Subprocess tests cover creation, inspection, stale plans, retained table data,
+and refusal of a malformed later unit on YDB 25.1.4.7 and 26.2.1.14. Unit tests
+exercise lost replies, lost confirmation, lease failure, and session cleanup.
+The host still refuses general table planning through this provider: its common
+table preparation and comparison need to preserve complete native declarations
+before that capability can be advertised. These SDK checks do not establish a
+complete native CLI table migration workflow.
+
 ## Offline SQL analysis
 
 The SQL analysis service reads default-mode YQL without a database session. It
@@ -685,12 +723,12 @@ identity contract to bypass that requirement.
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
-Remaining work includes the other desired schema models and source formats,
-comparison, planning, rendering, and operation models for other objects,
+Remaining work includes more source formats, comparison, table alteration and
+removal, and planning, rendering, and operation models for other objects,
 capability detection, environment credential sources,
 monitoring, and dev-database provisioning. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
-rendering, SQL and native coordination execution, transaction, history, metadata,
+rendering, SQL, native coordination and row-table creation execution, transaction, history, metadata,
 lock, and offline SQL analysis services. The remaining capabilities stay
 unadvertised.
 

@@ -2,8 +2,10 @@ package backend
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -24,7 +26,16 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) {
 		return nil, status.Error(codes.InvalidArgument, "YDB planning requires its negotiated identifier rules")
 	}
-	result, err := coordinationplan.Plan(ctx, request)
+	var result *protocol.PlannedFeatures
+	var err error
+	switch request.PlanningId {
+	case coordinationplan.ServiceID:
+		result, err = coordinationplan.Plan(ctx, request)
+	case tablecreate.ServiceID:
+		result, err = tablecreate.Plan(ctx, request)
+	default:
+		err = fmt.Errorf("unsupported YDB planning service")
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
@@ -48,8 +59,8 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 	}
 	if len(request.Changes) > 0 {
 		transactional, known := request.Capabilities["transactional_ddl"]
-		if !known || transactional || !request.Capabilities["coordination_nodes"] {
-			return nil, status.Error(codes.FailedPrecondition, "native coordination rendering requires established capabilities")
+		if !known || transactional {
+			return nil, status.Error(codes.FailedPrecondition, "native YDB rendering requires established nontransactional DDL")
 		}
 	}
 	result := &protocol.RenderResult{Complete: true}
@@ -59,15 +70,18 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		}
 		native := change.GetNative()
 		if native.GetRole() != protocol.NativeOperation_STATEMENT || native.GetParent() != nil {
-			return nil, status.Error(codes.InvalidArgument, "only standalone coordination operations are implemented")
+			return nil, status.Error(codes.InvalidArgument, "only standalone native operations are implemented")
 		}
 		captured := native.GetValue()
-		normalized, err := schema.NormalizeCoordinationOperation(&protocol.ValueInput{Id: captured.GetId(), Representation: protocol.ValueInput_OPERATION, Value: captured.GetValue()})
+		if captured.GetValue().GetKind() == schema.CoordinationOperation && !request.Capabilities["coordination_nodes"] {
+			return nil, status.Error(codes.FailedPrecondition, "native coordination rendering requires established capabilities")
+		}
+		normalized, err := normalizeOperation(&protocol.ValueInput{Id: captured.GetId(), Representation: protocol.ValueInput_OPERATION, Value: captured.GetValue()})
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 		if !proto.Equal(normalized, captured) {
-			return nil, status.Error(codes.InvalidArgument, "coordination operation metadata changed")
+			return nil, status.Error(codes.InvalidArgument, "native operation metadata changed")
 		}
 		result.Units = append(result.Units, &protocol.Unit{ChangeId: change.Id, Body: &protocol.Unit_Native{Native: proto.CloneOf(normalized.Value)}})
 	}
