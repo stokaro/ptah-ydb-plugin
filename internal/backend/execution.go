@@ -6,7 +6,7 @@ import (
 	"errors"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
@@ -39,7 +39,7 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 			if err := provider.ValidateValueInputs(Description(), inputs); err != nil {
 				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.unsupported-unit"}, nil
 			}
-			if _, err := schema.NormalizeCoordinationOperation(inputs.Values[0]); err != nil {
+			if _, err := normalizeOperation(inputs.Values[0]); err != nil {
 				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.invalid-native-unit"}, nil
 			}
 		}
@@ -92,6 +92,9 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	}
 	result := executeUnits(ctx, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
 		if unit.GetNative() != nil {
+			if unit.GetNative().GetKind() == tablecreate.OperationKind {
+				return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			}
 			return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 		}
 		if err := s.verifyLocks(ctx); err != nil {

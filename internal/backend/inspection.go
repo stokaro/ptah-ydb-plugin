@@ -62,7 +62,7 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 		format := input.GetValue().GetKind() + "/observed-json-v1"
 		switch input.GetRepresentation() {
 		case protocol.ValueInput_OPERATION:
-			normalized, operationErr := schema.NormalizeCoordinationOperation(input)
+			normalized, operationErr := normalizeOperation(input)
 			if operationErr != nil {
 				return nil, status.Error(codes.InvalidArgument, operationErr.Error())
 			}
