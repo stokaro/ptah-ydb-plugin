@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
@@ -19,8 +20,13 @@ import (
 
 // alterFixture serves the table read before the call and the one read back.
 type alterFixture struct {
-	events                                       []string
-	before, after                                string
+	events        []string
+	before, after string
+	// later are the tables read after the first read back, in order; the last
+	// one repeats.
+	later []string
+	// indexTimeout bounds the wait for a new index.
+	indexTimeout                                 time.Duration
 	missing, alterFailure, readFailure, closeErr bool
 	described                                    int
 	sent                                         *Ydb_Table.AlterTableRequest
@@ -38,6 +44,9 @@ func (f *alterFixture) Describe(_ context.Context, path string) (*native.Describ
 	text := f.before
 	if f.described > 1 {
 		text = f.after
+	}
+	if f.described > 2 && len(f.later) > 0 {
+		text = f.later[min(f.described-3, len(f.later)-1)]
 	}
 	var result native.DescribeTableResult
 	if err := protojson.Unmarshal([]byte(text), &result); err != nil {
@@ -88,7 +97,7 @@ func applyAlteration(c *qt.C, fixture *alterFixture, database, payload string, g
 	api := &nativeapi.TableAlteration{Open: func(context.Context) (nativeapi.AlterationSession, error) {
 		fixture.events = append(fixture.events, "open")
 		return fixture, nil
-	}}
+	}, IndexPoll: time.Millisecond, IndexTimeout: fixture.indexTimeout}
 	envelope := alterEnvelope(c, database, payload)
 	original := proto.CloneOf(envelope)
 	dispatched, err := api.Apply(c.Context(), "/local", envelope, func(context.Context) error {
@@ -242,7 +251,7 @@ func TestNativeTableAlteration_ColumnsHappyPath(t *testing.T) {
 		{"drops a column that is not last", withColumns("", oldCol, payloadCol), withColumns("", payloadCol), dropOld, 0, 1},
 		{"drops a column other columns or indexes do not use",
 			withColumns(`,"indexes":[{"name":"by_payload","indexColumns":["payload"],"dataColumns":["id"]}],"ttlSettings":{"dateTypeColumn":{"columnName":"payload","expireAfterSeconds":60}},"partitioningSettings":{"partitionBy":["id"]}`, payloadCol, oldCol),
-			withColumns(`,"ttlSettings":{"dateTypeColumn":{"columnName":"payload","expireAfterSeconds":60}}`, payloadCol), dropOld, 0, 1},
+			withColumns(`,"indexes":[{"name":"by_payload","indexColumns":["payload"],"dataColumns":["id"]}],"ttlSettings":{"dateTypeColumn":{"columnName":"payload","expireAfterSeconds":60}}`, payloadCol), dropOld, 0, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)

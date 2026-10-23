@@ -97,7 +97,7 @@ func TestColumnPlan_ClaimsAdditionsAndRemovals(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(alteration.Request.DropColumns, qt.DeepEquals, []string{"old"})
 	// Both parent kinds name every step, so none is left unaccounted for.
-	c.Assert(plan.Parents, qt.HasLen, 2)
+	c.Assert(plan.Parents, qt.HasLen, 3)
 	for _, parent := range plan.Parents {
 		c.Assert(parent.Receipt.Steps, qt.HasLen, 4)
 	}

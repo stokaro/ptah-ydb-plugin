@@ -32,6 +32,12 @@ type facetFixture struct {
 	owner     *protocol.Reference
 	directory string
 	database  string
+	// columns are the declared columns of a plan; nil declares id, ts and payload.
+	columns []*protocol.DeclaredColumn
+	// steps are the host steps a plan carries.
+	steps []*protocol.CommonPlanningStep
+	// version is the server version the fixture connected to.
+	version string
 }
 
 // newFacetFixture creates records (id, ts, payload) with the given trailing
@@ -54,7 +60,9 @@ func newFacetFixture(c *qt.C, clauses, options string) *facetFixture {
 	session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
-	return &facetFixture{client: client, session: session, directory: directory, database: database,
+	var version string
+	c.Assert(opened.DB.QueryRowContext(ctx, "SELECT Version()").Scan(&version), qt.IsNil)
+	return &facetFixture{client: client, session: session, directory: directory, database: database, version: version,
 		owner: &protocol.Reference{Engine: "ydb", Kind: "table", Database: database, Schema: directory, Name: "records"}}
 }
 
@@ -77,9 +85,14 @@ func facetState(representation protocol.ValueInput_Representation, records []*pr
 // it reads from the live table.
 func (f *facetFixture) compare(c *qt.C, declared string) *protocol.ComparedModels {
 	c.Helper()
+	return f.compareRecords(c, desiredFacet(c, f.client, f.owner, schema.TableProperties, declared))
+}
+
+// compareRecords compares the given declared facets with the live table.
+func (f *facetFixture) compareRecords(c *qt.C, desired ...*protocol.ComparisonRecord) *protocol.ComparedModels {
+	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), time.Minute)
 	defer cancel()
-	desired := []*protocol.ComparisonRecord{desiredFacet(c, f.client, f.owner, schema.TableProperties, declared)}
 	current := observedTable(c, f.client, f.session, f.directory).Features.Facets.Records
 	type sides struct {
 		subject          *protocol.ComparisonIdentity
@@ -110,16 +123,25 @@ func (f *facetFixture) compare(c *qt.C, declared string) *protocol.ComparedModel
 // and executes it.
 func (f *facetFixture) apply(c *qt.C, id, declared string, changes []*protocol.ComparedChange) {
 	c.Helper()
+	f.applyRecords(c, id, changes, desiredFacet(c, f.client, f.owner, schema.TableProperties, declared))
+}
+
+// plan plans the reported changes against the live table.
+func (f *facetFixture) plan(c *qt.C, changes []*protocol.ComparedChange, records ...*protocol.ComparisonRecord) *protocol.PlannedFeatures {
+	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	desired := &protocol.DeclaredTable{Name: "records", Schema: f.directory, PrimaryKey: []string{"id"},
-		Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true}, {Name: "payload", Type: "Utf8", Nullable: true}},
+	columns := f.columns
+	if columns == nil {
+		columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true}, {Name: "payload", Type: "Utf8", Nullable: true}}
+	}
+	desired := &protocol.DeclaredTable{Name: "records", Schema: f.directory, PrimaryKey: []string{"id"}, Columns: columns,
 		Features: &protocol.CapturedFeatures{
 			Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 			Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{},
-				Records: []*protocol.ComparisonRecord{desiredFacet(c, f.client, f.owner, schema.TableProperties, declared)}}}}
+				Records: records}}}
 	request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
-		Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
+		Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)}, CommonSteps: f.steps,
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(f.owner), Action: protocol.PlanningTable_ALTER, Desired: desired,
 			Current: observedTable(c, f.client, f.session, f.directory)}}}
 	for _, change := range changes {
@@ -127,14 +149,38 @@ func (f *facetFixture) apply(c *qt.C, id, declared string, changes []*protocol.C
 	}
 	plan, err := f.client.PlanFeatures(ctx, request)
 	c.Assert(err, qt.IsNil)
+	return plan
+}
+
+// applyRecords plans the reported changes, renders the plan and executes it.
+func (f *facetFixture) applyRecords(c *qt.C, id string, changes []*protocol.ComparedChange, records ...*protocol.ComparisonRecord) {
+	c.Helper()
+	plan := f.plan(c, changes, records...)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
 	c.Assert(plan.Changes, qt.HasLen, len(changes))
 	c.Assert(plan.Contributions, qt.HasLen, 1)
-	rendered, err := f.client.Render(ctx, testplanning.RenderRequest(plan, f.session.Capabilities))
-	c.Assert(err, qt.IsNil)
-	execution, err := f.client.Execute(ctx, &protocol.ExecuteRequest{SessionId: f.session.Id, RequestId: id, Units: rendered.Units})
-	c.Assert(err, qt.IsNil)
+	execution := f.execute(c, id, plan)
 	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
+}
+
+// execute renders the steps of a plan in the order its dependencies give and
+// runs them.
+func (f *facetFixture) execute(c *qt.C, id string, plan *protocol.PlannedFeatures) *protocol.Execution {
+	c.Helper()
+	execution, err := f.tryExecute(c, id, plan)
+	c.Assert(err, qt.IsNil)
+	return execution
+}
+
+// tryExecute is execute for a plan that may not apply: the client reports an
+// outcome it cannot confirm as an error.
+func (f *facetFixture) tryExecute(c *qt.C, id string, plan *protocol.PlannedFeatures) (*protocol.Execution, error) {
+	c.Helper()
+	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
+	defer cancel()
+	rendered, err := f.client.Render(ctx, renderSteps(scheduled(c, plan), f.session.Capabilities))
+	c.Assert(err, qt.IsNil)
+	return f.client.Execute(ctx, &protocol.ExecuteRequest{SessionId: f.session.Id, RequestId: id, Units: rendered.Units})
 }
 
 // heldTable is the table facet payload the provider reads back.

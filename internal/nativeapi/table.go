@@ -2,12 +2,14 @@
 package nativeapi
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"time"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
+	"github.com/ydb-platform/ydb-go-genproto/Ydb_Operation_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Operations"
@@ -18,13 +20,18 @@ import (
 
 // Table owns one raw native table session. Calls do not retry mutations.
 type Table struct {
-	client Ydb_Table_V1.TableServiceClient
-	id     string
+	client     Ydb_Table_V1.TableServiceClient
+	operations Ydb_Operation_V1.OperationServiceClient
+	id         string
+	// poll is how long await waits between reads of a running operation; zero
+	// means operationPoll.
+	poll time.Duration
 }
 
 // OpenTable creates the session required by native table schema operations.
 func OpenTable(ctx context.Context, driver *ydb.Driver) (*Table, error) {
-	s := &Table{client: Ydb_Table_V1.NewTableServiceClient(ydb.GRPCConn(driver))}
+	conn := ydb.GRPCConn(driver)
+	s := &Table{client: Ydb_Table_V1.NewTableServiceClient(conn), operations: Ydb_Operation_V1.NewOperationServiceClient(conn)}
 	response, err := s.client.CreateSession(ctx, &Ydb_Table.CreateSessionRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("create YDB table session: transport failed")
@@ -107,6 +114,11 @@ func (s *Table) Create(ctx context.Context, request *Ydb_Table.CreateTableReques
 
 // Alter sends one native alter request. It does not retry: a failed reply leaves
 // the outcome unknown to the caller, which confirms by reading the table back.
+//
+// The server answers the addition of an index with a running operation, because
+// it builds the index in the background. Alter then reads that operation until it
+// finishes and requires it to have succeeded. The wait ends with the context.
+// Any other request must complete in its reply.
 func (s *Table) Alter(ctx context.Context, request *Ydb_Table.AlterTableRequest) error {
 	request = proto.CloneOf(request)
 	request.SessionId = s.id
@@ -114,5 +126,31 @@ func (s *Table) Alter(ctx context.Context, request *Ydb_Table.AlterTableRequest)
 	if err != nil {
 		return fmt.Errorf("alter YDB table: transport failed")
 	}
-	return Status(response.GetOperation())
+	operation := response.GetOperation()
+	if operation.GetReady() || len(request.AddIndexes) == 0 || operation.GetId() == "" {
+		return Status(operation)
+	}
+	return s.await(ctx, operation.GetId())
+}
+
+// operationPoll is how long await waits between reads of a running operation.
+const operationPoll = 250 * time.Millisecond
+
+// await reads a running operation until it is ready and requires it to have
+// succeeded.
+func (s *Table) await(ctx context.Context, id string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(cmp.Or(s.poll, operationPoll)):
+		}
+		response, err := s.operations.GetOperation(ctx, &Ydb_Operations.GetOperationRequest{Id: id})
+		if err != nil {
+			return fmt.Errorf("read YDB operation: transport failed")
+		}
+		if response.GetOperation().GetReady() {
+			return Status(response.GetOperation())
+		}
+	}
 }

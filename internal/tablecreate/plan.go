@@ -16,7 +16,9 @@ import (
 const ServiceID = "ydb-row-table-create"
 
 // ParentKinds assigns the native table and column settings to this assessment.
-func ParentKinds() []string { return []string{schema.TableProperties, schema.ColumnProperties} }
+func ParentKinds() []string {
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties}
+}
 
 type creation struct {
 	index     int
@@ -61,7 +63,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("invalid YDB table parent assignment")
 		}
 		if table.Action != protocol.PlanningTable_CREATE && table.Action != protocol.PlanningTable_ALTER {
-			return refused(i, "Only native row-table creation and alteration of column families, columns, the TTL and the partitioning settings are implemented"), nil
+			return refused(i, "Only native row-table creation and alteration of column families, columns, the TTL, the partitioning settings and the indexes are implemented"), nil
 		}
 		transactional, known := request.Capabilities["transactional_ddl"]
 		if !known || transactional {
@@ -75,14 +77,22 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("YDB table creation targets another database")
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			change, ttl, partitioning, reason, err := planAlteration(owner, table)
+			changes, reason, err := planAlteration(owner, table)
 			if err != nil {
 				return nil, err
 			}
 			if reason != "" {
 				return refused(i, reason), nil
 			}
+			change, ttl, partitioning := changes.family, changes.ttl, changes.partitioning
 			item := alteration{index: i, table: table, change: change, ttl: ttl, partitioning: partitioning}
+			for _, indexChange := range changes.indexes {
+				step := &indexStep{change: indexChange}
+				if step.operation, err = CaptureIndexAlteration("pending", owner, indexChange); err != nil {
+					return refused(i, err.Error()), nil
+				}
+				item.indexes = append(item.indexes, step)
+			}
 			if !change.empty() {
 				if item.operation, err = CaptureAlteration("pending", owner, change); err != nil {
 					return refused(i, err.Error()), nil
@@ -147,7 +157,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
 	}
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals, ttls, partitionings int
+	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -218,6 +228,23 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 						{Subject: partitioningSlot, Action: protocol.PlanningEffect_ALTER}}}})
 			ordered = append(ordered, item.partitioningID)
 		}
+		for _, index := range item.indexes {
+			prefix, number, action := "row-table-drop-index", &indexRemovals, protocol.PlanningEffect_DROP
+			if index.change.add != nil {
+				prefix, number, action = "row-table-add-index", &indexAdditions, protocol.PlanningEffect_CREATE
+			}
+			index.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", prefix, *number)}
+			*number++
+			index.operation.Id = index.id.Name
+			facts := index.operation.OperationSemantics
+			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: index.id,
+				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: index.operation},
+				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
+					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
+						{Subject: indexSubject(subject, index.change.name()), Action: action}}}})
+			contribution.Dependencies = append(contribution.Dependencies, indexStepDependencies(*item, index, request.CommonSteps)...)
+			ordered = append(ordered, index.id)
+		}
 		receiptSteps[item.index] = append(ordered, dropped...)
 	}
 	// This service can replace only a complete common table creation. A column
@@ -267,9 +294,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			steps = append(steps, proto.CloneOf(id))
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, and change the automatic partitioning settings, through the native table service; other settings and column steps the native call cannot state stay with the host"
+			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, change the automatic partitioning settings, and add or drop global secondary indexes, through the native table service; other settings and column steps the native call cannot state stay with the host"
 			if steps == nil {
-				strategy = "The column families, column placements, TTL and partitioning settings already match the declaration, and the host has no column step this service can carry out"
+				strategy = "The column families, column placements, TTL, partitioning settings and indexes already match the declaration, and the host has no column step this service can carry out"
 			}
 		}
 		for _, kind := range request.ParentKinds {

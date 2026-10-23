@@ -36,6 +36,9 @@ func facet(c *qt.C, kind, name, payload string) *protocol.ComparisonRecord {
 		reference.Kind, reference.Path, reference.Name = "column", []string{reference.Name}, name
 		model = schema.ColumnDesiredModel()
 	}
+	if kind == schema.IndexProperties {
+		model = schema.NativeDesiredModel(kind)
+	}
 	values, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{
 		{Id: kind + name, Representation: protocol.ValueInput_DESIRED, Value: &protocol.Envelope{ProviderId: schema.ProviderID,
 			Kind: kind, SchemaVersion: 1, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: reference, Payload: []byte(payload)}},

@@ -2,6 +2,7 @@ package tablecompare_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -37,7 +38,39 @@ func withFamily(family string) string {
 type side struct {
 	table   string
 	columns map[string]string
+	// indexes is the index set of the table; empty states none.
+	indexes string
 }
+
+// declaredIndexes and heldIndexes state index sets from native index
+// definitions: a name, the key columns and the native kind.
+func declaredIndexes(indexes ...string) string {
+	entries := make([]string, len(indexes))
+	for i, index := range indexes {
+		entries[i] = `{"specification":{` + index + `},"implementation":[{"name":"indexImplTable","settings":{"primaryKey":["label","id"]},` +
+			`"columns":[{"name":"label","type":{"typeId":"UTF8"},"settings":{}},{"name":"id","type":{"typeId":"UINT64"},"settings":{}}]}]}`
+	}
+	return `{"indexes":[` + strings.Join(entries, ",") + `]}`
+}
+
+func heldIndexes(indexes ...string) string {
+	entries := make([]string, len(indexes))
+	for i, index := range indexes {
+		entries[i] = `{"description":{` + index + `,"status":"STATUS_READY"},"tables":[{"name":"indexImplTable","description":{` +
+			`"columns":[{"name":"label","type":{"typeId":"UTF8"}},{"name":"id","type":{"typeId":"UINT64"}}],"primaryKey":["label","id"]}}]}`
+	}
+	return `{"indexes":[` + strings.Join(entries, ",") + `]}`
+}
+
+const (
+	syncByLabel   = `"name":"by_label","indexColumns":["label"],"globalIndex":{}`
+	asyncByLabel  = `"name":"by_label","indexColumns":["label"],"globalAsyncIndex":{}`
+	syncByNote    = `"name":"by_note","indexColumns":["note"],"globalIndex":{}`
+	coveringLabel = `"name":"by_label","indexColumns":["label"],"dataColumns":["note"],"globalIndex":{}`
+	uniqueByLabel = `"name":"by_label","indexColumns":["label"],"globalUniqueIndex":{}`
+	byNoteAndText = `"name":"by_both","indexColumns":["note","text"],"globalIndex":{}`
+	byTextAndNote = `"name":"by_both","indexColumns":["text","note"],"globalIndex":{}`
+)
 
 func owner(kind, name string) *protocol.Reference {
 	reference := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
@@ -82,7 +115,7 @@ func record(c *qt.C, representation protocol.ValueInput_Representation, kind, na
 func state(c *qt.C, representation protocol.ValueInput_Representation, facets side) (*protocol.ComparisonState, []*protocol.ComparisonParent) {
 	c.Helper()
 	result := &protocol.ComparisonState{Representation: representation, Coverage: &protocol.ComparisonCoverage{}}
-	for _, model := range []string{schema.TableProperties, schema.ColumnProperties} {
+	for _, model := range []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties} {
 		for _, candidate := range schema.Models() {
 			if candidate.Kind == model && candidate.Representation == representation {
 				result.Coverage.Kinds = append(result.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: candidate,
@@ -93,6 +126,10 @@ func state(c *qt.C, representation protocol.ValueInput_Representation, facets si
 	var parents []*protocol.ComparisonParent
 	if facets.table != "" {
 		result.Records = append(result.Records, record(c, representation, schema.TableProperties, "", facets.table))
+		parents = append(parents, &protocol.ComparisonParent{Subject: subject("table", "")})
+	}
+	if facets.indexes != "" {
+		result.Records = append(result.Records, record(c, representation, schema.IndexProperties, "", facets.indexes))
 		parents = append(parents, &protocol.ComparisonParent{Subject: subject("table", "")})
 	}
 	for _, name := range []string{"note", "title"} {
@@ -150,7 +187,7 @@ func TestDescription_DeclaresTheFacetComparison(t *testing.T) {
 	}
 	c.Assert(service, qt.IsNotNil)
 	c.Assert(service.Placement, qt.Equals, protocol.ModelComparison_FACETS)
-	c.Assert(service.Kinds, qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties})
+	c.Assert(service.Kinds, qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties})
 	c.Assert(service.ChangeKinds, qt.DeepEquals, []string{schema.TablePropertiesChange})
 	c.Assert(service.OwnerKinds, qt.DeepEquals, []string{"table", "column"})
 	c.Assert(service.Actions, qt.HasLen, 0)
@@ -197,6 +234,14 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"a column back in the default family",
 			side{table: plain, columns: map[string]string{"note": `{}`}},
 			side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}, []string{"note"}},
+		{"an index the table lacks", side{table: plain, indexes: declaredIndexes(syncByLabel)}, side{table: plain, indexes: heldIndexes()}, []string{"records"}},
+		{"an index the declaration leaves out", side{table: plain, indexes: declaredIndexes()}, side{table: plain, indexes: heldIndexes(syncByLabel)}, []string{"records"}},
+		{"an index with another kind", side{indexes: declaredIndexes(asyncByLabel)}, side{indexes: heldIndexes(syncByLabel)}, []string{"records"}},
+		{"an index of a unique kind", side{indexes: declaredIndexes(uniqueByLabel)}, side{indexes: heldIndexes(syncByLabel)}, []string{"records"}},
+		{"an index with another covered column", side{indexes: declaredIndexes(coveringLabel)}, side{indexes: heldIndexes(syncByLabel)}, []string{"records"}},
+		{"an index with its key columns in another order", side{indexes: declaredIndexes(byTextAndNote)}, side{indexes: heldIndexes(byNoteAndText)}, []string{"records"}},
+		{"another index in place of the held one", side{indexes: declaredIndexes(syncByNote)}, side{indexes: heldIndexes(syncByLabel)}, []string{"records"}},
+		{"an index and a TTL in one table change", side{table: withTTL(hourly), indexes: declaredIndexes(syncByLabel)}, side{table: plain, indexes: heldIndexes()}, []string{"records", "records"}},
 		{"a table and a column",
 			side{table: withTTL(hourly), columns: map[string]string{"note": `{"family":"archive"}`}},
 			side{table: plain, columns: map[string]string{"note": `{}`}}, []string{"note", "records"}},
@@ -255,6 +300,12 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"a column the default family names two ways",
 			side{table: plain, columns: map[string]string{"note": `{"family":"default"}`}},
 			side{table: plain, columns: map[string]string{"note": `{}`}}},
+		{"the same index", side{indexes: declaredIndexes(syncByLabel)}, side{indexes: heldIndexes(syncByLabel)}},
+		{"the same indexes in another order", side{indexes: declaredIndexes(syncByNote, syncByLabel)}, side{indexes: heldIndexes(syncByLabel, syncByNote)}},
+		{"the same covering index", side{indexes: declaredIndexes(coveringLabel)}, side{indexes: heldIndexes(coveringLabel)}},
+		{"no index on either side", side{indexes: declaredIndexes()}, side{indexes: heldIndexes()}},
+		{"an index set only the read states", side{}, side{indexes: heldIndexes(syncByLabel)}},
+		{"an index set only the declaration states", side{indexes: declaredIndexes(syncByLabel)}, side{}},
 		{"a table the declaration states no properties for", side{}, side{table: withTTL(hourly)}},
 		{"a table the read states no properties for", side{table: withTTL(hourly)}, side{}},
 		{"a column only the declaration states", side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}, side{table: plain}},
@@ -329,4 +380,16 @@ func TestCompare_FailurePath(t *testing.T) {
 
 		c.Assert(err, qt.ErrorMatches, "unknown row-table facet comparison")
 	})
+}
+
+func TestCompare_IndexChangeNamesTheIndexSets(t *testing.T) {
+	c := qt.New(t)
+
+	result := compare(c, request(c, side{indexes: declaredIndexes(syncByLabel)}, side{indexes: heldIndexes()}))
+
+	c.Assert(result.Changes, qt.HasLen, 1)
+	c.Assert(result.Changes[0].Kind, qt.Equals, schema.IndexProperties)
+	c.Assert(result.Changes[0].Subject.Kind, qt.Equals, "table")
+	c.Assert(string(result.Changes[0].Value.Value.Payload), qt.Contains, `"facet":"`+schema.IndexProperties+`"`)
+	c.Assert(string(result.Changes[0].Value.Value.Payload), qt.Contains, `"name":"by_label"`)
 }
