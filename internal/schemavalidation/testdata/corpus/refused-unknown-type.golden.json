@@ -1,0 +1,17 @@
+{
+  "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+  "default": [
+    {
+      "code": "unsupported-feature",
+      "kind": "schema",
+      "message": "column \"b\" of table \"t\": Wibble has no YDB counterpart: YDB has no type of that name"
+    }
+  ],
+  "no_skipped": [
+    {
+      "code": "unsupported-feature",
+      "kind": "schema",
+      "message": "column \"b\" of table \"t\": Wibble has no YDB counterpart: YDB has no type of that name"
+    }
+  ]
+}

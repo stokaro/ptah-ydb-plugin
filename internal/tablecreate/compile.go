@@ -20,6 +20,13 @@ import (
 // session or path: execution must bind both after checking the captured owner.
 // Unknown or unimplemented populated fields refuse the complete declaration.
 func Compile(owner *protocol.Reference, table *protocol.DeclaredTable) (*Ydb_Table.CreateTableRequest, error) {
+	return compile(owner, table, true)
+}
+
+// compile is Compile with the policy only CREATE needs made optional. Access
+// requirements and session-scoped tables are valid declarations that creation
+// cannot establish, so validating the declaration alone leaves them be.
+func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating bool) (*Ydb_Table.CreateTableRequest, error) {
 	if err := validateOwner(owner); err != nil {
 		return nil, err
 	}
@@ -33,10 +40,10 @@ func Compile(owner *protocol.Reference, table *protocol.DeclaredTable) (*Ydb_Tab
 	if err != nil {
 		return nil, err
 	}
-	if settings.Access != nil {
+	if creating && settings.Access != nil {
 		return nil, fmt.Errorf("YDB table creation cannot establish access requirements before creation")
 	}
-	if settings.Temporary {
+	if creating && settings.Temporary {
 		return nil, fmt.Errorf("temporary YDB tables need an explicit session lifetime")
 	}
 	result := &Ydb_Table.CreateTableRequest{
@@ -76,7 +83,7 @@ func Compile(owner *protocol.Reference, table *protocol.DeclaredTable) (*Ydb_Tab
 		result.Columns = append(result.Columns, compiled)
 	}
 	if len(result.Columns) == 0 {
-		return nil, fmt.Errorf("YDB table creation requires columns")
+		return nil, unsupported("YDB table creation requires columns")
 	}
 	for name := range columns {
 		if !names[name] {
@@ -85,7 +92,7 @@ func Compile(owner *protocol.Reference, table *protocol.DeclaredTable) (*Ydb_Tab
 	}
 	if len(result.PrimaryKey) == 0 {
 		if len(marked) != 1 {
-			return nil, fmt.Errorf("YDB table creation requires an ordered primary key")
+			return nil, unsupported("YDB table creation requires an ordered primary key")
 		}
 		result.PrimaryKey = slices.Clone(marked)
 	}
@@ -116,7 +123,7 @@ func compileColumn(column *protocol.DeclaredColumn, settings *native.ColumnInten
 	}
 	value, err := schema.StorageType(column.Type, column.Nullable)
 	if err != nil {
-		return nil, err
+		return nil, unsupported("%s", err)
 	}
 	result := &Ydb_Table.ColumnMeta{Name: column.Name, Type: value, NotNull: new(!column.Nullable)}
 	if settings == nil {
@@ -171,7 +178,7 @@ func only(value proto.Message, allowed ...string) error {
 	var result error
 	value.ProtoReflect().Range(func(field protoreflect.FieldDescriptor, _ protoreflect.Value) bool {
 		if !slices.Contains(allowed, string(field.Name())) {
-			result = fmt.Errorf("YDB table creation does not support %s", field.FullName())
+			result = unsupported("YDB table creation does not support %s", field.FullName())
 		}
 		return result == nil
 	})

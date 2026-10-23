@@ -20,7 +20,7 @@ func features(owner *protocol.Reference, captured *protocol.CapturedFeatures) (*
 		return table, columns, nil
 	}
 	if len(captured.GetObjects().GetRecords()) != 0 {
-		return nil, nil, fmt.Errorf("YDB table creation does not yet support attached objects")
+		return nil, nil, unsupported("YDB table creation does not yet support attached objects")
 	}
 	state := captured.GetFacets()
 	if state == nil {
@@ -65,7 +65,7 @@ func features(owner *protocol.Reference, captured *protocol.CapturedFeatures) (*
 			}
 			columns[value.Owner.Name] = &column
 		default:
-			return nil, nil, fmt.Errorf("YDB table creation does not yet support facet %s", value.Kind)
+			return nil, nil, unsupported("YDB table creation does not yet support facet %s", value.Kind)
 		}
 	}
 	return table, columns, nil

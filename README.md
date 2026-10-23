@@ -792,6 +792,43 @@ boundaries validate complete batches, identities, exclusions, and key membership
 Live tests feed the prediction into native planning, execute CREATE, and inspect
 the resulting table on both qualified server lines.
 
+## Offline schema validation
+
+The experimental `schema.validate` service checks the captured desired schema
+before the host plans. The host asks for it and shows the reply to
+the user; without the service `ptah schema plan` stops with `target "ydb" has no
+schema validation service`. The service reads only the request. It opens no
+session and loads no source file.
+
+Each table declaration is compiled with the CREATE rules, so validation refuses
+what planning would refuse: a missing or unknown key column, a type with no YDB
+counterpart, a table without columns, populated declaration fields and facets
+the provider does not carry (including common indexes), and invalid names. Access
+requirements and temporary tables are valid declarations that only CREATE
+refuses, so validation accepts them. Table paths that coincide or nest are refused
+across the schema, because a YDB table holds no children. Directory names are
+checked as path elements. The native models in the whole-schema capture must
+normalize.
+
+A refusal of the declaration is a diagnostic in a completed reply. Cancellation,
+an identifier context the provider cannot interpret and a capture whose receipt
+differs from the provider's own normalization are errors and carry no
+diagnostics. Diagnostics are sorted, so the same schema gives the same reply in
+any capture order. A key, type or unsupported-field refusal is
+`UNSUPPORTED_FEATURE`, as in the host's bundled YDB validation; other refusals
+are `INVALID_SCHEMA`. A standalone enum, and a directory comment, character set or
+collation, are reported as unsupported and `OMITTED_DECLARATION` only when the
+request asks that nothing be skipped, which is also the host's behavior.
+
+`internal/schemavalidation/testdata/corpus` holds declarations and what the host's
+bundled validation answered, recorded by `testdata/oracle` (the program header says
+how to run it against a host checkout). Rows named `refused-` agree with the host on
+code, `deferred-` rows are ones the host accepts and this provider refuses, and the
+others agree on acceptance and on what would be skipped. The provider imports no host
+code. A subprocess test runs the service through the SDK client, and a host contract
+test (`PTAH_HOST_TEST_BIN`) checks that the host reaches the service and shows its
+refusal.
+
 ## Native row-table creation
 
 The SDK planner accepts captured CREATE lifecycles for row tables. It retains
@@ -825,10 +862,11 @@ before its first unit executes.
 Subprocess tests cover creation, inspection, stale plans, retained table data,
 and refusal of a malformed later unit on YDB 25.1.4.7 and 26.2.1.14. Unit tests
 exercise lost replies, lost confirmation, lease failure, and session cleanup.
-The host still refuses general table planning through this provider: its common
-table validation and comparison need to preserve complete native declarations
-before that capability can be advertised. These SDK checks do not establish a
-complete native CLI table migration workflow.
+With the validation service in place, `ptah schema plan` through this provider
+gets past validation and stops at the host's common-step stage ("A common step is
+outside the supported table creation lifecycle"), because the host's common table
+comparison does not yet preserve complete native declarations. These SDK checks do
+not establish a complete native CLI table migration workflow.
 
 ## Native table alteration
 
@@ -1105,7 +1143,7 @@ settings other than column families, table removal and rebuild, and planning, re
 capability detection, environment credential sources,
 monitoring, and dev-database provisioning. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
-rendering, SQL, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
+rendering, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, and offline SQL analysis services. The remaining capabilities stay
 unadvertised.
 
