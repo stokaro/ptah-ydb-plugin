@@ -1,0 +1,15 @@
+{
+ "tables": {
+  "items": {
+   "column_families": {
+    "  ": {}
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

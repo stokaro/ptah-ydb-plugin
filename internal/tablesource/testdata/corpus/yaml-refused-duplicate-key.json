@@ -1,0 +1,1 @@
+{"tables":{"items":{"columns":{"id":{"type":"bigint","primary":true}},"key_bloom_filter":"ENABLED","key_bloom_filter":"DISABLED"}}}

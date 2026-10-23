@@ -1,0 +1,36 @@
+{
+ "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid fields \"body\": the default family holds the key and every column no other family names, so it lists none on //ptah:schema:columnfamily at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:columnfamily",
+   "attributes": {
+    "fields": "body",
+    "name": "default"
+   },
+   "struct": "Item",
+   "file": "go-refused-default-with-fields.go",
+   "file_size": 198,
+   "start": {
+    "offset": 51,
+    "line": 4,
+    "column": 1
+   },
+   "end": {
+    "offset": 106,
+    "line": 4,
+    "column": 56
+   }
+  }
+ ]
+}

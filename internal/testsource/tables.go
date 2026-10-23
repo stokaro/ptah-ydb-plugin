@@ -1,0 +1,134 @@
+package testsource
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"maps"
+	"slices"
+	"strconv"
+	"strings"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+)
+
+// desiredModels returns the desired models a source of the given format
+// enrolls, as the host does for a provider that claims syntax in that format.
+func desiredModels(format protocol.SourceDocument_Format) []*protocol.ValueModel {
+	var models []*protocol.ValueModel
+	for _, model := range schema.Models() {
+		if model.Representation == protocol.ValueInput_DESIRED && slices.Contains(model.SourceFormats, format) {
+			models = append(models, model)
+		}
+	}
+	return models
+}
+
+// YAMLTables captures a whole YAML schema written as JSON, which YAML reads as
+// flow syntax, the way the host captures the keys the provider claimed: one
+// binding for each table of the tables mapping and one fragment for each
+// claimed table key the table writes, in the order the table writes them.
+func YAMLTables(source string) (*protocol.DecodeSourceRequest, error) {
+	reader := capture{source: source, decoder: json.NewDecoder(strings.NewReader(source))}
+	reader.decoder.UseNumber()
+	root, err := reader.value()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := reader.decoder.Token(); err != io.EOF {
+		return nil, fmt.Errorf("fixture has trailing input")
+	}
+	document := &protocol.SourceDocument{Id: "doc", File: "captured.yaml", ByteLength: uint64(len(source)), Format: protocol.SourceDocument_YAML,
+		Models: desiredModels(protocol.SourceDocument_YAML)}
+	claims := make(map[string]*protocol.YAMLSourceKey)
+	for _, claim := range tablesource.YAMLKeys() {
+		claims[claim.Key] = claim
+	}
+	for _, section := range root.GetMapping().GetEntries() {
+		if section.Key != "tables" {
+			continue
+		}
+		for _, entry := range section.Value.GetMapping().GetEntries() {
+			binding := &protocol.SourceBinding{Id: entry.Key, EntryKey: entry.Key, Object: &protocol.Reference{Engine: "ydb", Kind: "table", Name: entry.Key}}
+			var written []*protocol.SourceEntry
+			for _, field := range entry.Value.GetMapping().GetEntries() {
+				switch field.Key {
+				case "name":
+					binding.Object.Name = field.Value.GetText()
+				case "schema":
+					binding.Object.Schema = field.Value.GetText()
+				}
+				if _, claimed := claims[field.Key]; claimed {
+					written = append(written, field)
+				}
+			}
+			document.Bindings = append(document.Bindings, binding)
+			for _, field := range written {
+				document.Fragments = append(document.Fragments, &protocol.SourceFragment{Id: entry.Key + "/" + field.Key, Selector: field.Key,
+					YamlKey: proto.CloneOf(claims[field.Key]), BindingId: entry.Key, Span: field.Value.Span, Content: &protocol.SourceFragment_Value{Value: field.Value}})
+			}
+		}
+	}
+	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{document}}, nil
+}
+
+// GoPosition is a place in a Go source file.
+type GoPosition struct{ Offset, Line, Column int }
+
+// GoTable is a table a Go file declares.
+type GoTable struct{ Schema, Name, Struct string }
+
+// GoDeclaration is one directive the host lexed from a Go comment.
+type GoDeclaration struct {
+	Directive  string
+	Attributes map[string]string
+	Struct     string
+	File       string
+	FileSize   int
+	Start, End GoPosition
+}
+
+// GoDirectives captures the declarations of one Go file as the host does for a
+// provider that claims Go directives: one document, a binding for each table,
+// and one fragment for each declaration whose attributes are text. A directive
+// of table scope is bound to the table of the struct it is written on, and the
+// provider reads a table attribute itself.
+func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.DecodeSourceRequest, error) {
+	document := &protocol.SourceDocument{Id: "document", Format: protocol.SourceDocument_GO_ANNOTATIONS, File: "<unnamed Go>",
+		Models: desiredModels(protocol.SourceDocument_GO_ANNOTATIONS)}
+	bindings := make([]string, len(tables))
+	for i, table := range tables {
+		bindings[i] = "table-" + strconv.Itoa(i)
+		document.Bindings = append(document.Bindings, &protocol.SourceBinding{Id: bindings[i], StructName: table.Struct,
+			Object: &protocol.Reference{Engine: "ydb", Kind: "table", Schema: table.Schema, Name: table.Name}})
+	}
+	for i, declaration := range declarations {
+		if i == 0 {
+			document.File, document.ByteLength = declaration.File, uint64(declaration.FileSize)
+		}
+		claim := slices.IndexFunc(tablesource.GoDirectives(), func(claim *protocol.GoSourceDirective) bool { return claim.Directive == declaration.Directive })
+		if claim < 0 {
+			return nil, fmt.Errorf("the provider claims no Go directive %q", declaration.Directive)
+		}
+		owning := slices.IndexFunc(tables, func(table GoTable) bool { return table.Struct == declaration.Struct })
+		if owning < 0 {
+			return nil, fmt.Errorf("struct %s maps to no table in this file", declaration.Struct)
+		}
+		span := &protocol.SourceSpan{
+			Start: &protocol.SourcePosition{ByteOffset: uint64(declaration.Start.Offset), Line: uint32(declaration.Start.Line), Column: uint32(declaration.Start.Column)},
+			End:   &protocol.SourcePosition{ByteOffset: uint64(declaration.End.Offset), Line: uint32(declaration.End.Line), Column: uint32(declaration.End.Column)},
+		}
+		mapping := &protocol.SourceMapping{}
+		for _, key := range slices.Sorted(maps.Keys(declaration.Attributes)) {
+			mapping.Entries = append(mapping.Entries, &protocol.SourceEntry{Key: key, KeySpan: span,
+				Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Text{Text: declaration.Attributes[key]}}})
+		}
+		directive := tablesource.GoDirectives()[claim]
+		document.Fragments = append(document.Fragments, &protocol.SourceFragment{Id: strconv.Itoa(i), GoDirective: directive, Selector: directive.Selector,
+			Span: span, BindingId: bindings[owning], Content: &protocol.SourceFragment_Value{Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Mapping{Mapping: mapping}}}})
+	}
+	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{document}}, nil
+}

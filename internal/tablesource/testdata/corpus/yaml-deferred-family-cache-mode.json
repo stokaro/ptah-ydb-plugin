@@ -1,0 +1,17 @@
+{
+ "tables": {
+  "items": {
+   "column_families": {
+    "cold": {
+     "cache_mode": "in_memory"
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

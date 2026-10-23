@@ -84,8 +84,8 @@ func TestTableConversionRefusesPhysicalTopology(t *testing.T) {
 
 func TestDesiredTableRefusesIncompleteOrAmbiguousSettings(t *testing.T) {
 	for _, test := range []struct{ name, payload string }{
-		{"missing key", `{}`},
 		{"null document", `null`},
+		{"blank key column", `{"primaryKey":[""]}`},
 		{"duplicate key", `{"primaryKey":["id","id"]}`},
 		{"common columns", `{"primaryKey":["id"],"columns":[]}`},
 		{"statistics", `{"primaryKey":["id"],"tableStats":{}}`},
@@ -113,4 +113,27 @@ func TestDesiredTableRefusesIncompleteOrAmbiguousSettings(t *testing.T) {
 			c.Assert(err, qt.IsNotNil)
 		})
 	}
+}
+
+// A source that states settings knows no columns, so it states no key: the
+// effective key comes from the common columns.
+func TestDesiredTableAcceptsSettingsWithoutAKey(t *testing.T) {
+	c := qt.New(t)
+	definition := schema.TableDesiredModel()
+	input := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: definition.Kind, Owner: tableOwner(), SchemaVersion: definition.SchemaVersion, Encoding: definition.Encoding,
+		DefinitionSha256: definition.DefinitionSha256, Payload: []byte(`{"keyBloomFilter":"ENABLED"}`)}
+	result, err := schema.NormalizeDesired(input)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(result.Payload), qt.Equals, `{"keyBloomFilter":"ENABLED"}`)
+}
+
+// Without a key there is no observation to predict, so the conversion says so.
+func TestDesiredTableWithoutAKeyIsNotAnObservation(t *testing.T) {
+	c := qt.New(t)
+	definition := schema.TableDesiredModel()
+	input := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: definition.Kind, Owner: tableOwner(), SchemaVersion: definition.SchemaVersion, Encoding: definition.Encoding,
+		DefinitionSha256: definition.DefinitionSha256, Payload: []byte(`{"keyBloomFilter":"ENABLED"}`)}
+	result, err := schema.ConvertTable(input, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+	c.Assert(result == nil, qt.IsTrue)
+	c.Assert(err, qt.ErrorMatches, "observed YDB table properties require a primary key")
 }

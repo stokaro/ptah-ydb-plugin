@@ -1,0 +1,17 @@
+{
+ "tables": {
+  "documents": {
+   "column_families": {
+    "Cold": {
+     "data": "HDD"
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "tables": {
+  "items": {
+   "auto_partitioning_by_size": "disabled",
+   "auto_partitioning_by_load": "ENABLED",
+   "auto_partitioning_partition_size_mb": 512,
+   "auto_partitioning_min_partitions_count": 3,
+   "auto_partitioning_max_partitions_count": 9,
+   "read_replicas_settings": "ANY_AZ:2",
+   "key_bloom_filter": "enabled",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  },
+  "plain": {
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,13 @@
+{
+ "tables": {
+  "items": {
+   "read_replicas_settings": "ANY_AZ",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

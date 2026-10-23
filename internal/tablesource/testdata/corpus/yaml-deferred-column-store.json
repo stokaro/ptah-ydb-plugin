@@ -1,0 +1,18 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {
+    "hash_columns": [
+     "id"
+    ],
+    "partitions": 1
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

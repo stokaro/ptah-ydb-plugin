@@ -1,0 +1,7 @@
+{
+ "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "format": "yaml",
+ "outcome": "refused",
+ "error": "table \"items\": column family \"cold\": invalid data \"\": names the kind of storage pool the family is kept in, such as ssd; leave it out to keep the database's own pool (YDB answers an empty one with `database doesn't have required storage pools`)",
+ "tables": null
+}

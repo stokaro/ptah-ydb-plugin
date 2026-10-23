@@ -1,0 +1,17 @@
+{
+ "tables": {
+  "items": {
+   "column_families": {
+    "cold": {
+     "compression": "gzip"
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

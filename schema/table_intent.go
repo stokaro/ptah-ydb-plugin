@@ -34,6 +34,7 @@ func buildTableDesiredModel() *protocol.ValueModel {
 		"settings":         "ordered primary key, TTL, storage, column families, attributes, partitioning policy, bloom filter, read replicas, tiering and temporary lifetime",
 		"access":           "present access declares the complete direct-grant set and requires the complete effective-permission set; owner omission leaves ownership unmanaged; constraints never grant permissions or infer inheritance settings",
 		"omission":         "missing settings request native defaults and remain absent during normalization; missing access leaves access unmanaged",
+		"primary_key":      "a declaration that states settings only, such as a YAML or Go source, omits the key and the effective key comes from the common columns; a stated key is distinct, ordered, and must agree with them",
 		"runtime_state":    "physical shard boundaries refuse conversion; statistics and transient identity are not allowed in either property model",
 		"row_storage":      "this model requests row storage; observed unspecified storage is interpreted as row storage",
 		"conversion":       "offline representation conversion establishes no observation coverage; permission planning is not advertised",
@@ -48,7 +49,8 @@ func buildTableDesiredModel() *protocol.ValueModel {
 	}
 	digest := sha256.Sum256(canonical)
 	return &protocol.ValueModel{Kind: TableProperties, DisplayName: modelDisplayName(TableProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
-		Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: TableProperties + "/desired-json-v1"}
+		Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: TableProperties + "/desired-json-v1",
+		SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}}
 }
 
 func normalizeTableIntent(value *protocol.Envelope) (*protocol.Envelope, error) {
@@ -91,7 +93,7 @@ func normalizeTableIntent(value *protocol.Envelope) (*protocol.Envelope, error) 
 }
 
 func validateTableIntent(intent *native.RowTableIntent) error {
-	if !distinctColumns(intent.PrimaryKey) {
+	if len(intent.PrimaryKey) != 0 && !distinctColumns(intent.PrimaryKey) {
 		return fmt.Errorf("desired YDB table requires distinct ordered primary key columns")
 	}
 	families := map[string]bool{}

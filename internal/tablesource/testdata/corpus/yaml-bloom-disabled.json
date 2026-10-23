@@ -1,0 +1,13 @@
+{
+ "tables": {
+  "items": {
+   "key_bloom_filter": "DISABLED",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

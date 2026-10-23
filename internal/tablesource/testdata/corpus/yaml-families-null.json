@@ -1,0 +1,13 @@
+{
+ "tables": {
+  "documents": {
+   "column_families": null,
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

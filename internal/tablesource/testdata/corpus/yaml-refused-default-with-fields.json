@@ -1,0 +1,19 @@
+{
+ "tables": {
+  "items": {
+   "column_families": {
+    "default": {
+     "fields": [
+      "a"
+     ]
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

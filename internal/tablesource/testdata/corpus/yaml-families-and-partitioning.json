@@ -1,0 +1,38 @@
+{
+ "tables": {
+  "documents": {
+   "auto_partitioning_by_size": "ENABLED",
+   "column_families": {
+    "default": {
+     "compression": "lz4"
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  },
+  "orders": {
+   "schema": "shop",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   },
+   "read_replicas_settings": "ANY_AZ:1"
+  },
+  "audit": {
+   "name": "audit_log",
+   "key_bloom_filter": "ENABLED",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,36 @@
+{
+ "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "format": "go",
+ "outcome": "refused",
+ "error": "table \"orders\" is not declared in this file, and a column family is declared beside its table on //ptah:schema:columnfamily at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:columnfamily",
+   "attributes": {
+    "name": "cold",
+    "table": "orders"
+   },
+   "struct": "Item",
+   "file": "go-refused-family-unknown-table.go",
+   "file_size": 196,
+   "start": {
+    "offset": 51,
+    "line": 4,
+    "column": 1
+   },
+   "end": {
+    "offset": 104,
+    "line": 4,
+    "column": 54
+   }
+  }
+ ]
+}

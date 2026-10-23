@@ -1,0 +1,20 @@
+{
+ "tables": {
+  "documents": {
+   "column_families": {
+    "cold": {
+     "data": null,
+     "compression": null,
+     "cache_mode": null,
+     "fields": null
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

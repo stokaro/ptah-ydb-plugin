@@ -1,0 +1,14 @@
+{
+ "tables": {
+  "items": {
+   "auto_partitioning_min_partitions_count": "4",
+   "auto_partitioning_max_partitions_count": "8",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}
