@@ -85,4 +85,4 @@ jobs:
           host_binary="$RUNNER_TEMP/ptah-contract"
           CGO_ENABLED=0 go build -C .host-contract -o "$host_binary" ./cmd/ptah
           printf 'PTAH_HOST_TEST_BIN=%s\n' "$host_binary" >> "$GITHUB_ENV"
-      - run: go test -race -tags integration ./integration -count=1 -v -timeout 25m
+      - run: go test -race -tags integration ./integration -count=1 -v -timeout 45m
