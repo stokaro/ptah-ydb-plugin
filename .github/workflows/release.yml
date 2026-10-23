@@ -56,7 +56,10 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          test "$(wc -l < checksums.txt)" -eq 6
+          # Six archives and the release lines document. The document is
+          # written outside dist, so it is checked from a copy.
+          test "$(wc -l < checksums.txt)" -eq 7
+          cp ../.release/release-lines.json .
           sha256sum -c checksums.txt
 
   release:
