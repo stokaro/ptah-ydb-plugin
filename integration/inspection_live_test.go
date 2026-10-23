@@ -115,6 +115,8 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	request := &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}}
 	snapshot, err := client.Inspect(ctx, request)
 	c.Assert(err, qt.IsNil)
+	c.Assert(snapshot.TargetFeatures, qt.DeepEquals, client.Description().Engines[0].Features)
+	c.Assert(session.Features, qt.DeepEquals, client.Description().Engines[0].Features)
 	c.Assert(snapshot.Tables, qt.HasLen, 1)
 	table := snapshot.Tables[0]
 	c.Assert(table.Identity.Schema, qt.Equals, directory)
