@@ -1,6 +1,6 @@
 // Package tablecompare compares the table and column facets of captured YDB row
 // tables offline: the TTL, the automatic partitioning settings, the column
-// families and the family each column sits in.
+// families, the family each column sits in and the set of secondary indexes.
 package tablecompare
 
 import (
@@ -21,7 +21,9 @@ import (
 const ServiceID = "ydb-row-table-properties"
 
 // Kinds lists the facet models this comparison owns.
-func Kinds() []string { return []string{schema.TableProperties, schema.ColumnProperties} }
+func Kinds() []string {
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties}
+}
 
 // OwnerKinds lists the subject kinds that carry those facets.
 func OwnerKinds() []string { return []string{"table", "column"} }

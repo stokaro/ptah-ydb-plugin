@@ -1,11 +1,13 @@
 package nativeapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"path"
 	"slices"
+	"time"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -26,9 +28,17 @@ type AlterationSession interface {
 
 // TableAlteration owns the precondition read, single dispatch, and confirmation
 // of a captured table alteration: column families and their placements, the
-// addition of nullable columns, the removal of columns, or the TTL.
+// addition of nullable columns, the removal of columns, the TTL, the automatic
+// partitioning settings, or one global secondary index.
 type TableAlteration struct {
 	Open func(context.Context) (AlterationSession, error)
+	// IndexPoll is how long Apply waits between reads while a new index is
+	// being built. Zero means one second.
+	IndexPoll time.Duration
+	// IndexTimeout bounds the build of a new index: the call that adds it, and
+	// the wait afterward for it to read back as ready. Zero means ten minutes. An
+	// index not ready by then leaves the outcome uncertain.
+	IndexTimeout time.Duration
 }
 
 // NewTableAlteration binds the native table client to the authenticated session driver.
@@ -76,14 +86,59 @@ func (a *TableAlteration) Apply(ctx context.Context, database string, value *pro
 	}
 	request := proto.CloneOf(alteration.Request)
 	request.Path = target
-	if err := session.Alter(ctx, request); err != nil {
+	if err := a.alter(ctx, session, request); err != nil {
 		return true, err
 	}
 	observed, err := session.Describe(ctx, target)
 	if err != nil {
 		return true, err
 	}
+	if observed, err = a.awaitIndex(ctx, session, target, alteration.Request, observed); err != nil {
+		return true, err
+	}
 	return true, confirmTableAlteration(owner, alteration, before, observed)
+}
+
+// alter dispatches the request. An index addition is bounded by the index
+// timeout, since the call returns only when the server has built the index.
+func (a *TableAlteration) alter(ctx context.Context, session AlterationSession, request *Ydb_Table.AlterTableRequest) error {
+	if len(request.AddIndexes) == 0 {
+		return session.Alter(ctx, request)
+	}
+	ctx, cancel := context.WithTimeout(ctx, cmp.Or(a.IndexTimeout, 10*time.Minute))
+	defer cancel()
+	return session.Alter(ctx, request)
+}
+
+// awaitIndex reads the table again while an index the request added is still
+// being built. YDB builds an index in the background, and an index that is not
+// ready cannot be confirmed. The wait ends when the index is ready, when it is
+// gone, when the timeout passes or when the context ends; the last reading is
+// then confirmed as it stands.
+func (a *TableAlteration) awaitIndex(ctx context.Context, session AlterationSession, target string, request *Ydb_Table.AlterTableRequest, observed *native.DescribeTableResult) (*native.DescribeTableResult, error) {
+	if len(request.AddIndexes) == 0 {
+		return observed, nil
+	}
+	poll, timeout := cmp.Or(a.IndexPoll, time.Second), cmp.Or(a.IndexTimeout, 10*time.Minute)
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	for {
+		index := indexByName(observed.Indexes, request.AddIndexes[0].Name)
+		if index == nil || index.Status == native.TableIndexDescription_STATUS_READY {
+			return observed, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline.C:
+			return observed, nil
+		case <-time.After(poll):
+		}
+		var err error
+		if observed, err = session.Describe(ctx, target); err != nil {
+			return nil, err
+		}
+	}
 }
 
 // familyName spells a family the way the server and the plan agree on: the
@@ -168,7 +223,55 @@ func checkAlterationPrecondition(owner *protocol.Reference, alteration *tablecre
 	if err := checkTTLPrecondition(alteration, table); err != nil {
 		return err
 	}
+	if err := checkIndexPrecondition(alteration, table); err != nil {
+		return err
+	}
 	return checkPartitioningPrecondition(alteration, table)
+}
+
+func indexByName(indexes []*native.TableIndexDescription, name string) *native.TableIndexDescription {
+	for _, index := range indexes {
+		if index.Name == name {
+			return index
+		}
+	}
+	return nil
+}
+
+// sameIndex reports whether two descriptions state one definition: the name,
+// the ordered key and covered columns, and the kind with its settings. Status
+// and size are runtime state.
+func sameIndex(a, b *native.TableIndexDescription) bool {
+	return proto.Equal(schema.IndexSpecification(a), schema.IndexSpecification(b))
+}
+
+// checkIndexPrecondition requires an index to add to be absent and to read
+// columns the table holds, and an index to drop to exist as the plan captured
+// it, so an index changed after planning turns into a refusal. The server
+// refuses a name that is taken or a column that is absent only after the call,
+// which would leave the outcome uncertain.
+func checkIndexPrecondition(alteration *tablecreate.Alteration, table *native.DescribeTableResult) error {
+	request := alteration.Request
+	for _, index := range request.AddIndexes {
+		if indexByName(table.Indexes, index.Name) != nil {
+			return fmt.Errorf("YDB index to add already exists")
+		}
+		for _, name := range slices.Concat(index.IndexColumns, index.DataColumns) {
+			if columnByName(table.Columns, name) == nil {
+				return fmt.Errorf("YDB index to add reads the absent column %q", name)
+			}
+		}
+	}
+	for _, name := range request.DropIndexes {
+		actual := indexByName(table.Indexes, name)
+		if actual == nil {
+			return fmt.Errorf("YDB index to drop is absent")
+		}
+		if !sameIndex(alteration.HeldIndexes[0], actual) {
+			return fmt.Errorf("YDB index differs from the plan")
+		}
+	}
+	return nil
 }
 
 // checkPartitioningPrecondition requires the table to hold exactly the
@@ -321,7 +424,56 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 	if err := confirmTTL(request, before, observed); err != nil {
 		return err
 	}
+	if err := confirmIndexes(request, before, observed); err != nil {
+		return err
+	}
 	return confirmPartitioning(request, before, observed)
+}
+
+// confirmIndexes requires an added index to exist, be ready and hold the
+// definition the request states, a dropped index to be gone, and every other
+// index to be as it was before the call.
+func confirmIndexes(request *Ydb_Table.AlterTableRequest, before, observed *native.DescribeTableResult) error {
+	named := map[string]bool{}
+	for _, index := range request.AddIndexes {
+		named[index.Name] = true
+		actual := indexByName(observed.Indexes, index.Name)
+		if actual == nil || actual.Status != native.TableIndexDescription_STATUS_READY || !slices.Equal(actual.IndexColumns, index.IndexColumns) ||
+			!slices.Equal(actual.DataColumns, index.DataColumns) || !sameIndexKind(actual, index) {
+			return fmt.Errorf("YDB added index differs from the request")
+		}
+	}
+	for _, name := range request.DropIndexes {
+		named[name] = true
+		if indexByName(observed.Indexes, name) != nil {
+			return fmt.Errorf("YDB dropped index is still present")
+		}
+	}
+	for _, index := range before.Indexes {
+		if named[index.Name] {
+			continue
+		}
+		if actual := indexByName(observed.Indexes, index.Name); actual == nil || !sameIndex(index, actual) {
+			return fmt.Errorf("YDB altered table changed the index %q", index.Name)
+		}
+	}
+	if len(observed.Indexes) != len(before.Indexes)-len(request.DropIndexes)+len(request.AddIndexes) {
+		return fmt.Errorf("YDB altered table holds unexpected indexes")
+	}
+	return nil
+}
+
+// sameIndexKind reports whether an observed index is the kind the request adds.
+func sameIndexKind(actual *native.TableIndexDescription, requested *Ydb_Table.TableIndex) bool {
+	switch requested.Type.(type) {
+	case *Ydb_Table.TableIndex_GlobalIndex:
+		return actual.GetGlobalIndex() != nil
+	case *Ydb_Table.TableIndex_GlobalAsyncIndex:
+		return actual.GetGlobalAsyncIndex() != nil
+	case *Ydb_Table.TableIndex_GlobalUniqueIndex:
+		return actual.GetGlobalUniqueIndex() != nil
+	}
+	return false
 }
 
 // confirmPartitioning requires a partitioning alteration to leave the table

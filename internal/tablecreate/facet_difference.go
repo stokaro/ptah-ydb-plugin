@@ -20,8 +20,8 @@ func NormalizedFacet(record *protocol.ComparisonRecord, representation protocol.
 // FacetDiffers reports whether the table the observed facet describes does not
 // already satisfy the desired facet. It applies the rules the alteration
 // planner applies, so a difference reported here is one the planner can act on:
-// the TTL, the automatic partitioning settings and the column families of a table facet, and the family a column
-// sits in for a column facet. Both envelopes must be validated and belong to one
+// the TTL, the automatic partitioning settings and the column families of a table facet, the family a column
+// sits in for a column facet, and the names and definitions of the indexes for an index set. Both envelopes must be validated and belong to one
 // owner.
 func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
 	if desired.GetKind() != observed.GetKind() {
@@ -48,6 +48,16 @@ func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
 			return false, err
 		}
 		return familyKey(want.Family) != familyKey(held.Family), nil
+	case schema.IndexProperties:
+		var want native.IndexSetIntent
+		if err := protojson.Unmarshal(desired.Payload, &want); err != nil {
+			return false, err
+		}
+		var held native.IndexObservations
+		if err := protojson.Unmarshal(observed.Payload, &held); err != nil {
+			return false, err
+		}
+		return indexDiffers(&want, &held), nil
 	default:
 		return false, fmt.Errorf("YDB facet comparison does not support %s", desired.GetKind())
 	}

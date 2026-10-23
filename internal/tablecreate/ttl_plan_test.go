@@ -88,7 +88,7 @@ func TestTTLPlan_HappyPath(t *testing.T) {
 			c.Assert(step.Metadata.Effects[0].Action, qt.Equals, protocol.PlanningEffect_READ)
 			c.Assert(step.Metadata.Effects[1].Action, qt.Equals, test.effect)
 			c.Assert(step.Metadata.Effects[1].Subject.Kind, qt.Equals, "ydb.ttl")
-			c.Assert(plan.Parents, qt.HasLen, 2)
+			c.Assert(plan.Parents, qt.HasLen, 3)
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, 1)
 			c.Assert(plan.Parents[0].Receipt.Steps[0].Name, qt.Equals, "row-table-ttl/000000")
 			alteration, err := tablecreate.DecodeAlteration(step.Operation.Value.Value)
@@ -125,7 +125,7 @@ func TestTTLPlan_NoChange(t *testing.T) {
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
 			c.Assert(plan.Rewrites, qt.HasLen, 0)
-			c.Assert(plan.Parents, qt.HasLen, 2)
+			c.Assert(plan.Parents, qt.HasLen, 3)
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, 0)
 		})
 	}

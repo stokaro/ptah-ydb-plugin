@@ -96,3 +96,10 @@ func indexDescription(source *native.IndexIntent) *native.TableIndexDescription 
 	}
 	return result
 }
+
+// IndexSpecification returns the declaration form of an observed index: its
+// name, ordered key columns, ordered covered columns and kind with its
+// settings. The implementation tables are not part of it.
+func IndexSpecification(source *native.TableIndexDescription) *native.IndexIntent {
+	return indexSpecification(source)
+}

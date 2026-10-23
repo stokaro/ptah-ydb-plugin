@@ -43,7 +43,7 @@ func observedTable(c *qt.C, client *providerruntime.Client, session *protocol.Se
 	}
 	for _, value := range normalized.Values {
 		owner := value.Value.Owner
-		if value.Value.Kind != schema.TableProperties && value.Value.Kind != schema.ColumnProperties {
+		if value.Value.Kind != schema.TableProperties && value.Value.Kind != schema.ColumnProperties && value.Value.Kind != schema.IndexProperties {
 			continue
 		}
 		subject := testplanning.Subject(owner)
@@ -58,8 +58,11 @@ func observedTable(c *qt.C, client *providerruntime.Client, session *protocol.Se
 func desiredFacet(c *qt.C, client *providerruntime.Client, owner *protocol.Reference, kind, payload string) *protocol.ComparisonRecord {
 	c.Helper()
 	model := schema.TableDesiredModel()
-	if kind == schema.ColumnProperties {
+	switch kind {
+	case schema.ColumnProperties:
 		model = schema.ColumnDesiredModel()
+	case schema.IndexProperties:
+		model = schema.NativeDesiredModel(kind)
 	}
 	values, err := client.NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: kind + "/" + owner.Name,
 		Representation: protocol.ValueInput_DESIRED, Value: &protocol.Envelope{ProviderId: schema.ProviderID, Kind: kind, SchemaVersion: 1,

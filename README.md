@@ -545,7 +545,9 @@ The `values.convert` service also converts index, changefeed, and standalone
 topic properties between separate typed desired and observed models. It works
 without an open session, retains exact owner identity, and returns no prefix
 when any value in a mixed batch fails. Conversion establishes no inspection
-coverage. These models do not yet advertise comparison or planning.
+coverage. Only the index model advertises comparison and planning, for adding
+and dropping global secondary indexes of an existing row table (see
+[Index alteration](#index-alteration)); the changefeed and topic models do not.
 
 Index declarations retain the native index kind, ordered index/data columns,
 and kind-specific settings. Each declaration includes complete requirements on
@@ -751,9 +753,9 @@ complete native CLI table migration workflow.
 ## Native table alteration
 
 The same planning service (`ydb-row-table-create`) accepts captured ALTER
-lifecycles for row tables. It owns four facets of an altered table: its column
-families, the addition and removal of its columns, its TTL, and its automatic
-partitioning settings. Each becomes native
+lifecycles for row tables. It owns five facets of an altered table: its column
+families, the addition and removal of its columns, its TTL, its automatic
+partitioning settings, and its global secondary indexes. Each becomes native
 AlterTable calls. Everything else about an altered table stays with the host:
 other table settings, and any column step the native call cannot state.
 
@@ -874,6 +876,54 @@ held when the plan was made. The settings are `AUTO_PARTITIONING_BY_SIZE`,
   partitions. The step reads the table and alters its partitioning only, and does
   not depend on the family, column or TTL steps.
 
+### Index alteration
+
+The service adds and drops global secondary indexes of an existing row table.
+Each index is one native `AlterTable` step: `row-table-add-index/N` reads the
+table and creates one index object, `row-table-drop-index/N` reads the table and
+drops one. The index object is a host subject of kind `index`, named by the
+index and parented by the table, so two index steps of one table never share an
+effect. An addition is `ADD INDEX name GLOBAL [SYNC|ASYNC] [UNIQUE] ON (keys)
+[COVER (columns)]`; a removal is `DROP INDEX name`. Impact is additive for an
+addition and destructive for a removal.
+
+The declaration is the index set model (`table-indexes`, desired side) as a
+facet of the table, beside the table properties. It is managed when the
+declaration states it: an index the table holds and the set leaves out is
+dropped, and a declaration with no index set leaves the indexes alone. The
+comparison reads the specification of each declared index: the name, the kind,
+the ordered key columns and the ordered covered columns. The declared
+`implementation` requirements on the server-owned index table are part of the
+model and have to be valid, but they are not compared and not sent: YDB builds
+that table itself.
+
+- YDB cannot alter an index in place. An index the table holds under a declared
+  name with another kind, other key columns, other covered columns or another
+  key order is a change the planner refuses with a diagnostic that names both
+  definitions. It does not plan a drop followed by an addition, because that
+  rebuilds the index. Declare the removal and the addition in separate plans if
+  a rebuild is wanted.
+- Only global sync, async and unique indexes are altered. A vector or fulltext
+  index, and an index that states settings of its own (such as the partitioning
+  of its table), is refused by name when the plan would have to add it, drop it
+  or tell it from the held one. The same index on both sides, unchanged, is no
+  difference and needs no support.
+- A unique index needs a server that accepts `ALTER TABLE ... ADD INDEX ...
+  GLOBAL UNIQUE`; YDB 25.1 refuses it unless `enable_add_unique_index` is set.
+- An index reads columns the declaration states. A declared index that reads a
+  column the declaration does not state is refused, and so is a kept index whose
+  column the declaration drops.
+- Ordering against column steps of the same table, whoever carries them out: an
+  index is added after the addition of every column it reads, and dropped before
+  the removal of every column it reads or covers. A column removal step that does
+  not name its column is assumed to remove any column. Execution reads the
+  indexes of the table before dropping a column as well, so a column an index
+  still reads is refused before the call.
+- YDB builds a new index in the background. The provider waits for the index to
+  read back as ready, bounded by ten minutes, before it confirms the step.
+  Inspection refuses an index that is not ready, so a table with an index in
+  the build is never compared.
+
 ### Execution
 
 Execution reads the table first. A family operation requires every touched
@@ -885,14 +935,18 @@ call, which would leave the outcome uncertain, so the provider reads them first.
 A TTL operation requires the table to hold exactly the TTL the plan captured, or
 none, and a TTL to set must read a column the table holds with a type its mode
 reads. A partitioning operation requires the table to hold exactly the
-partitioning settings the plan captured. A table that changed since planning is
-refused before the call.
+partitioning settings the plan captured. An index addition requires the index
+to be absent and to read columns the table holds, and an index removal requires
+the table to hold the index as the plan captured it. A table that changed since
+planning is refused before the call.
 
 After the call the provider reads the table back and checks that the requested
 change holds and that nothing else moved: other families and columns, column
 names and types, their order, the key, and the TTL. The TTL must read back as
 the one the request sets, run interval included, or as none after a removal, and
-as before for every other operation. After a partitioning operation the table
+as before for every other operation. After an index operation the added index
+must be ready and hold the requested kind and columns, a dropped index must be
+gone, and every other index must read back unchanged. After a partitioning operation the table
 must hold every setting the request names and the partition columns it held; the
 settings the server derives from them, such as the partition size it no longer
 reports once partitioning by size is off, are not compared. An added column must read back with its
@@ -906,7 +960,8 @@ single plan; changing each partitioning setting on its own and together,
 including switching partitioning by size off and on again; setting, changing, moving and removing a TTL, including the move of
 a TTL to an added column in the same plan that drops the column it read; and the
 refusal of an indexed column, of a TTL column the server would refuse, and of a
-stale alteration before the call. They plan again from the read back to show the declaration no
+stale alteration before the call; and adding and dropping sync, async, covering
+and unique indexes, with the refusal of a changed index definition. They plan again from the read back to show the declaration no
 longer changes anything, and check that rows survive.
 
 ### Table property comparison
@@ -914,8 +969,11 @@ longer changes anything, and check that rows survive.
 The offline `models.compare` service `ydb-row-table-properties` compares the
 table and column properties of a row table that exists on both sides. It reports
 one `github.com/stokaro/ptah-ydb-plugin/row-table-properties-change` for a table whose TTL, partitioning settings or column families
-differ from the declaration, and one for each column that sits in another
-family. The comparison applies the rules of the alteration planner, so a
+differ from the declaration, one for each column that sits in another
+family, and one for a table whose index set differs from the declared one: an
+index added, removed or changed. An index change carries both complete index
+sets and names them with a `facet` key, so a table can have a property change
+and an index change at once. The comparison applies the rules of the alteration planner, so a
 difference it reports is one the planner acts on, and a table that differs only
 in its TTL, its partitioning settings or its families still reaches the planner. A change carries both
 complete facets, replaces no owner, removes no state and leaves access
