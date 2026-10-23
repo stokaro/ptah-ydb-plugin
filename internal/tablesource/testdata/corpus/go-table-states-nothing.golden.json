@@ -1,0 +1,13 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ]
+}

@@ -1,0 +1,39 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid key_bloom_filter \"\": write ENABLED or DISABLED on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "key_bloom_filter": ""
+   },
+   "struct": "Item",
+   "file": "go-refused-table-bloom-empty.go",
+   "file_size": 293,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 70,
+    "line": 3,
+    "column": 53
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

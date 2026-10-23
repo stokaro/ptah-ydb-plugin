@@ -1,0 +1,39 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid feature value: a row deletion policy needs row_deletion_column, the column its interval is measured from",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "platform.ydb.row_deletion_interval": "P30D"
+   },
+   "struct": "Item",
+   "file": "go-refused-ttl-interval-only.go",
+   "file_size": 315,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 92,
+    "line": 3,
+    "column": 75
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

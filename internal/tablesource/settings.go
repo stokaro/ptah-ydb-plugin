@@ -5,8 +5,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 )
@@ -193,4 +195,94 @@ func (s *settings) addFamily(declared family) error {
 	s.intent.ColumnFamilies = append(s.intent.ColumnFamilies, result)
 	s.declared = true
 	return nil
+}
+
+// refuseColumnStore checks the attributes that choose a column table and
+// refuses a column table by name. A row table states them only as store=ROW, or
+// not at all, and then they declare nothing. The checks follow the bundled
+// decoder's, so a mistake in them is refused for the reason it is refused there:
+// a storage kind other than ROW and COLUMN, and a hash key, a shard count or a
+// retention policy on a table that is not a column table.
+func refuseColumnStore(values map[string]string) error {
+	store, written := values[AttributeStore]
+	if written && strings.TrimSpace(store) == "" {
+		return &DeclarationError{Attribute: AttributeStore, Value: store, Reason: "write ROW or COLUMN"}
+	}
+	switch kind := strings.ToUpper(strings.TrimSpace(store)); kind {
+	case "COLUMN":
+		return &UnsupportedError{Setting: AttributeStore, Reason: "the provider plans no column table yet; only row tables are created and altered"}
+	case "", "ROW":
+		for _, name := range []string{AttributeHash, AttributeShards, AttributeColumnTTL} {
+			if value, found := values[name]; found {
+				return &DeclarationError{Attribute: name, Value: value, Reason: "it describes a column table, so write store=COLUMN"}
+			}
+		}
+		return nil
+	default:
+		return &DeclarationError{Attribute: AttributeStore, Value: store, Reason: "write ROW or COLUMN"}
+	}
+}
+
+// setTTL reads the three platform properties that declare a row table's TTL:
+// the column, the interval, and for an integer column the unit it counts since
+// the Unix epoch. None of them declares nothing. A blank value is refused
+// instead of read as no declaration, and a policy needs its column and its
+// interval. The unit decides the mode: without one the column holds a date or
+// a time, with one it holds an integer. Whether the column's type fits the mode
+// is decided where the table's columns are known.
+func (s *settings) setTTL(values map[string]string) error {
+	names := []string{AttributeTTLColumn, AttributeTTLInterval, AttributeTTLUnit}
+	written := false
+	for _, name := range names {
+		value, found := values[name]
+		if !found {
+			continue
+		}
+		written = true
+		if strings.TrimSpace(value) == "" {
+			return &DeclarationError{Attribute: name, Value: value, Reason: "it is empty; remove it to leave the TTL undeclared"}
+		}
+	}
+	if !written {
+		return nil
+	}
+	column, interval, unit := strings.TrimSpace(values[AttributeTTLColumn]), strings.TrimSpace(values[AttributeTTLInterval]), strings.TrimSpace(values[AttributeTTLUnit])
+	switch {
+	case column == "":
+		return &DeclarationError{Attribute: AttributeTTLColumn, Reason: "a TTL needs the column its interval is measured from"}
+	case interval == "":
+		return &DeclarationError{Attribute: AttributeTTLInterval, Reason: "a TTL needs the interval after which a row is deleted"}
+	case !utf8.ValidString(column) || strings.ContainsRune(column, 0):
+		return &DeclarationError{Attribute: AttributeTTLColumn, Value: column, Reason: "the column name is not valid UTF-8 without NUL"}
+	}
+	canonicalUnit, err := ttlgrammar.Unit(unit)
+	if err != nil {
+		return &DeclarationError{Attribute: AttributeTTLUnit, Value: unit, Reason: err.Error()}
+	}
+	seconds, err := ttlgrammar.IntervalSeconds(interval)
+	if err != nil {
+		return &DeclarationError{Attribute: AttributeTTLInterval, Value: interval, Reason: err.Error()}
+	}
+	if s.intent.TtlSettings != nil {
+		return fmt.Errorf("it declares a TTL twice")
+	}
+	// ttlgrammar bounds the interval by MaxSeconds, which fits 32 bits.
+	expire := uint32(seconds)
+	if canonicalUnit == "" {
+		s.intent.TtlSettings = &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_DateTypeColumn{
+			DateTypeColumn: &Ydb_Table.DateTypeColumnModeSettings{ColumnName: column, ExpireAfterSeconds: expire}}}
+	} else {
+		s.intent.TtlSettings = &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_ValueSinceUnixEpoch{
+			ValueSinceUnixEpoch: &Ydb_Table.ValueSinceUnixEpochModeSettings{ColumnName: column, ColumnUnit: epochUnits[canonicalUnit], ExpireAfterSeconds: expire}}}
+	}
+	s.declared = true
+	return nil
+}
+
+// epochUnits maps the unit as YQL spells it to the one the table service takes.
+var epochUnits = map[string]Ydb_Table.ValueSinceUnixEpochModeSettings_Unit{
+	ttlgrammar.Seconds:      Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_SECONDS,
+	ttlgrammar.Milliseconds: Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_MILLISECONDS,
+	ttlgrammar.Microseconds: Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_MICROSECONDS,
+	ttlgrammar.Nanoseconds:  Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_NANOSECONDS,
 }

@@ -1,22 +1,24 @@
 // Package tablesource decodes the table-scope declarations a YAML or Go
 // annotation source writes for a YDB row table: its automatic partitioning,
-// read replicas, key bloom filter and column families.
+// read replicas, key bloom filter, TTL and column families.
 //
 // The host lexes the source and sends the provider the parsed values of the
-// keys and directives the provider claimed. This package owns the claims and
-// the meaning of the values. It turns every fragment that belongs to one table
-// into a single desired row-table facet, because a document may carry only one
-// facet of a kind for a table.
+// keys, directives and attributes the provider claimed. A Go source writes the
+// partitioning and the TTL as attributes of the host's own ptah:schema:table
+// directive, and a column family as a directive of its own. This package owns
+// the claims and the meaning of the values. It turns every fragment that
+// belongs to one table into a single desired row-table facet, because a
+// document may carry only one facet of a kind for a table.
 //
 // What the bundled decoder in the host reads and this package does not is
 // listed in the package README of the provider and in the tests: starting
-// partition layouts, column family cache modes and column placement, TTL,
-// changefeeds, column storage and index options. The host refuses a YAML key
-// that no provider claims, and reads a Go comment that none claims as no
-// declaration. So the provider leaves unclaimed the YAML keys it cannot carry,
-// and claims the Go directives it cannot carry in order to refuse them by name.
-// A claimed key or attribute that it cannot carry yet is refused here by name
-// too.
+// partition layouts, column family cache modes and column placement, a TTL
+// written in YAML, changefeeds, column storage and index options. The host
+// refuses a YAML key that no provider claims, and reads a Go comment that none
+// claims as no declaration. So the provider leaves unclaimed the YAML keys it
+// cannot carry, and claims the Go directives and attributes it cannot carry in
+// order to refuse them by name. A claimed key or attribute that it cannot carry
+// yet is refused here by name too.
 package tablesource
 
 import (
@@ -38,6 +40,36 @@ const (
 	AttributeReadReplicas    = "read_replicas_settings"
 	AttributeKeyBloomFilter  = "key_bloom_filter"
 )
+
+// The attributes of the host's own ptah:schema:table directive that a provider
+// may claim. Partitioning and the starting layout of a new table, column
+// storage and the TTL are the ones the bundled decoder reads.
+const (
+	// DirectiveTable is the host's directive that declares a table.
+	DirectiveTable = "ptah:schema:table"
+
+	// AttributeUniformPartitions and AttributePartitionAtKeys set the layout a
+	// new table starts with. They are claimed so that they are refused by name.
+	AttributeUniformPartitions = "uniform_partitions"
+	AttributePartitionAtKeys   = "partition_at_keys"
+
+	// The attributes that choose a column table and describe it. A row table
+	// has none; they are claimed so that a column table is refused by name.
+	AttributeStore     = "store"
+	AttributeHash      = "partition_by_hash"
+	AttributeShards    = "column_shards"
+	AttributeColumnTTL = "column_ttl"
+
+	// The platform properties that carry a row table's TTL, spelled as the host
+	// spells a platform property of the ydb engine.
+	AttributeTTLColumn   = "platform.ydb.row_deletion_column"
+	AttributeTTLInterval = "platform.ydb.row_deletion_interval"
+	AttributeTTLUnit     = "platform.ydb.row_deletion_unit"
+)
+
+// DirectiveIndex is the host's directive that declares an index. The bundled
+// decoder reads partitioning, vector and full-text options on it.
+const DirectiveIndex = "ptah:schema:index"
 
 // The keys and attributes that declare a column family.
 const (
@@ -74,6 +106,26 @@ func partitioningKeys() []string {
 	}
 }
 
+// tableAttributes are the attributes the provider claims on ptah:schema:table,
+// in the order a refusal reports them.
+func tableAttributes() []string {
+	return slices.Concat(partitioningKeys(), []string{AttributeUniformPartitions, AttributePartitionAtKeys,
+		AttributeStore, AttributeHash, AttributeShards, AttributeColumnTTL, AttributeTTLColumn, AttributeTTLInterval, AttributeTTLUnit})
+}
+
+// indexAttributes are the attributes the provider claims on ptah:schema:index:
+// the ones that set an index's partitioning, local options, full-text options
+// and vector settings. The provider refuses every one by name.
+func indexAttributes() []string {
+	return []string{
+		AttributeBySize, AttributePartitionSizeMB, AttributeByLoad, AttributeMinPartitions, AttributeMaxPartitions, AttributeReadReplicas,
+		"false_positive_probability", "ngram_size", "case_sensitive", "tokenizer", "language",
+		"use_filter_lowercase", "use_filter_stopwords", "use_filter_ngram", "use_filter_edge_ngram", "filter_ngram_min_length", "filter_ngram_max_length",
+		"use_filter_length", "filter_length_min", "filter_length_max", "use_filter_snowball",
+		"distance", "similarity", "vector_type", "vector_dimension", "levels", "clusters",
+	}
+}
+
 // YAMLKeys returns the table-scope YAML keys the provider claims. Each key
 // declares the row-table properties model.
 func YAMLKeys() []*protocol.YAMLSourceKey {
@@ -85,7 +137,8 @@ func YAMLKeys() []*protocol.YAMLSourceKey {
 	return claims
 }
 
-// GoDirectives returns the table-scope Go directives the provider claims. The
+// GoDirectives returns the Go claims of the provider: the attributes it adds to
+// the host's table and index directives, and the directives of its own. The
 // attributes of the changefeed directives are the ones the host's bundled
 // decoder reads, claimed only so that a changefeed is refused by name.
 func GoDirectives() []*protocol.GoSourceDirective {
@@ -93,7 +146,11 @@ func GoDirectives() []*protocol.GoSourceDirective {
 		return &protocol.GoSourceDirective{Scope: protocol.GoSourceDirective_TABLE, Directive: directive, Selector: directive, Attributes: attributes,
 			Models: []string{schema.TableProperties}}
 	}
+	index := claim(DirectiveIndex, indexAttributes()...)
+	index.Scope = protocol.GoSourceDirective_INDEX
 	return []*protocol.GoSourceDirective{
+		claim(DirectiveTable, tableAttributes()...),
+		index,
 		claim(DirectiveColumnFamily, AttributeName, AttributeTable, AttributeData, AttributeCompression, AttributeCacheMode, AttributeFields),
 		claim(DirectiveChangefeed, AttributeName, AttributeTable, "mode", "format", "virtual_timestamps", "resolved_timestamps", "initial_scan", "user_sids",
 			"schema_changes", "topic_min_active_partitions", "topic_auto_partitioning", "retention_period"),
@@ -107,8 +164,9 @@ func Owns(fragment *protocol.SourceFragment) bool {
 		return key.GetScope() == protocol.YAMLSourceKey_TABLE && slices.ContainsFunc(YAMLKeys(), func(claim *protocol.YAMLSourceKey) bool { return claim.GetKey() == key.GetKey() })
 	}
 	if directive := fragment.GetGoDirective(); directive != nil {
-		return directive.GetScope() == protocol.GoSourceDirective_TABLE &&
-			slices.ContainsFunc(GoDirectives(), func(claim *protocol.GoSourceDirective) bool { return claim.GetDirective() == directive.GetDirective() })
+		return slices.ContainsFunc(GoDirectives(), func(claim *protocol.GoSourceDirective) bool {
+			return claim.GetDirective() == directive.GetDirective() && claim.GetScope() == directive.GetScope()
+		})
 	}
 	return false
 }

@@ -1,0 +1,39 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid auto_partitioning_min_partitions_count \"0\": write a whole number of at least 1; YDB refuses a count of zero on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "auto_partitioning_min_partitions_count": "0"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-count-zero.go",
+   "file_size": 316,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 93,
+    "line": 3,
+    "column": 76
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

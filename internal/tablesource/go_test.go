@@ -162,3 +162,133 @@ func TestGoDirectives_ChangefeedsAreRefusedByName(t *testing.T) {
 		})
 	}
 }
+
+// attributes is a ptah:schema:table directive on its own line of the file,
+// carrying only the attributes the provider claimed, as the host sends them.
+func tableDeclaration(line int, structName string, attributes map[string]string) testsource.GoDeclaration {
+	written := declaration(line, structName, attributes)
+	written.Directive = "ptah:schema:table"
+	return written
+}
+
+func indexDeclaration(line int, structName string, attributes map[string]string) testsource.GoDeclaration {
+	written := declaration(line, structName, attributes)
+	written.Directive = "ptah:schema:index"
+	written.Subject = testsource.GoSubject{Kind: "index", Name: "by_body"}
+	return written
+}
+
+func TestTableDirective_HappyPath(t *testing.T) {
+	tests := []struct {
+		name         string
+		declarations []testsource.GoDeclaration
+		wantPayload  string
+	}{
+		{"partitioning", []testsource.GoDeclaration{tableDeclaration(2, "Item", map[string]string{"auto_partitioning_by_load": "enabled", "auto_partitioning_min_partitions_count": "2"})},
+			`{"partitioningSettings":{"minPartitionsCount":"2","partitioningByLoad":"ENABLED"}}`},
+		{"replicas and bloom filter", []testsource.GoDeclaration{tableDeclaration(2, "Item", map[string]string{"read_replicas_settings": "per_az:2", "key_bloom_filter": "DISABLED"})},
+			`{"keyBloomFilter":"DISABLED","readReplicasSettings":{"perAzReadReplicasCount":"2"}}`},
+		{"a TTL on a date column", []testsource.GoDeclaration{tableDeclaration(2, "Item", map[string]string{
+			"platform.ydb.row_deletion_column": " created_at ", "platform.ydb.row_deletion_interval": "P30D"})},
+			`{"ttlSettings":{"dateTypeColumn":{"columnName":"created_at","expireAfterSeconds":2592000}}}`},
+		{"a TTL on an integer column", []testsource.GoDeclaration{tableDeclaration(2, "Item", map[string]string{
+			"platform.ydb.row_deletion_column": "expires", "platform.ydb.row_deletion_interval": "PT1H30M", "platform.ydb.row_deletion_unit": "milliseconds"})},
+			`{"ttlSettings":{"valueSinceUnixEpoch":{"columnName":"expires","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":5400}}}`},
+		{"row storage names nothing", []testsource.GoDeclaration{tableDeclaration(2, "Item", map[string]string{"store": " row ", "key_bloom_filter": "ENABLED"})},
+			`{"keyBloomFilter":"ENABLED"}`},
+		{"attributes and a family join one facet", []testsource.GoDeclaration{
+			declaration(2, "Item", map[string]string{"name": "cold", "data": "hdd"}),
+			tableDeclaration(3, "Item", map[string]string{"auto_partitioning_by_size": "DISABLED", "platform.ydb.row_deletion_column": "created_at", "platform.ydb.row_deletion_interval": "PT0S"})},
+			`{"columnFamilies":[{"data":{"media":"hdd"},"name":"cold"}],"partitioningSettings":{"partitioningBySize":"DISABLED"},` +
+				`"ttlSettings":{"dateTypeColumn":{"columnName":"created_at"}}}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := goRequest(c, test.declarations...)
+			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
+			c.Assert(err, qt.IsNil)
+			c.Assert(tables, qt.HasLen, 1)
+			c.Assert(string(tables[0].Value.CanonicalProjection), qt.Equals, test.wantPayload)
+			decoded, err := backend.New().DecodeSource(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateDecodedSource(backend.Description(), request, decoded), qt.IsNil)
+		})
+	}
+}
+
+// A table that states row storage and nothing else declares nothing, so the
+// host gets no facet for it and the table's settings stay as they are.
+func TestTableDirective_RowStorageAloneDeclaresNothing(t *testing.T) {
+	c := qt.New(t)
+	request := goRequest(c, tableDeclaration(2, "Item", map[string]string{"store": "ROW"}))
+	tables, err := tablesource.Decode(c.Context(), request.Documents[0])
+	c.Assert(err, qt.IsNil)
+	c.Assert(tables, qt.HasLen, 0)
+}
+
+func TestTableDirective_FailurePath(t *testing.T) {
+	ttl := func(column, interval, unit string) map[string]string {
+		attributes := map[string]string{}
+		for name, value := range map[string]string{"platform.ydb.row_deletion_column": column, "platform.ydb.row_deletion_interval": interval, "platform.ydb.row_deletion_unit": unit} {
+			if value != "-" {
+				attributes[name] = value
+			}
+		}
+		return attributes
+	}
+	tests := []struct {
+		name       string
+		attributes map[string]string
+		wantErr    string
+	}{
+		{"a switch that is no switch", map[string]string{"auto_partitioning_by_size": "yes"}, `table "items": invalid auto_partitioning_by_size "yes": write ENABLED or DISABLED`},
+		{"a count of zero", map[string]string{"auto_partitioning_min_partitions_count": "0"}, `table "items": invalid auto_partitioning_min_partitions_count "0": write a whole number of at least 1.*`},
+		{"replicas without a mode", map[string]string{"read_replicas_settings": "2"}, `table "items": invalid read_replicas_settings "2": write PER_AZ:<n>.*`},
+		{"a starting layout by count", map[string]string{"uniform_partitions": "4"}, `table "items": uniform_partitions is not supported by the YDB provider yet: .*`},
+		{"a starting layout by key", map[string]string{"partition_at_keys": "10, 20"}, `table "items": partition_at_keys is not supported by the YDB provider yet: .*`},
+		{"a column table", map[string]string{"store": "column"}, `table "items": store is not supported by the YDB provider yet: .*`},
+		{"a column table with a hash key", map[string]string{"store": "COLUMN", "partition_by_hash": "id", "column_shards": "4"}, `table "items": store is not supported by the YDB provider yet: .*`},
+		{"a storage kind that does not exist", map[string]string{"store": "colum"}, `table "items": invalid store "colum": write ROW or COLUMN`},
+		{"an empty storage kind", map[string]string{"store": " "}, `table "items": invalid store " ": write ROW or COLUMN`},
+		{"a hash key on a row table", map[string]string{"partition_by_hash": "id"}, `table "items": invalid partition_by_hash "id": it describes a column table, so write store=COLUMN`},
+		{"shards on a row table", map[string]string{"store": "ROW", "column_shards": "4"}, `table "items": invalid column_shards "4": it describes a column table.*`},
+		{"a retention policy on a row table", map[string]string{"column_ttl": "{}"}, `table "items": invalid column_ttl "\{\}": it describes a column table.*`},
+		{"a TTL without an interval", ttl("created_at", "-", "-"), `table "items": invalid platform.ydb.row_deletion_interval "": a TTL needs the interval.*`},
+		{"a TTL without a column", ttl("-", "P30D", "-"), `table "items": invalid platform.ydb.row_deletion_column "": a TTL needs the column.*`},
+		{"a unit alone", ttl("-", "-", "SECONDS"), `table "items": invalid platform.ydb.row_deletion_column "": a TTL needs the column.*`},
+		{"an empty column", ttl("", "P30D", "-"), `table "items": invalid platform.ydb.row_deletion_column "": it is empty.*`},
+		{"an empty unit", ttl("created_at", "PT1H", ""), `table "items": invalid platform.ydb.row_deletion_unit "": it is empty.*`},
+		{"an interval in months", ttl("created_at", "P1M", "-"), `table "items": invalid platform.ydb.row_deletion_interval "P1M": .*designator "M" is out of place.*`},
+		{"an interval with a fraction", ttl("created_at", "PT1.5S", "-"), `table "items": invalid platform.ydb.row_deletion_interval "PT1.5S": .*fraction of a second.*`},
+		{"an unknown unit", ttl("created_at", "PT1H", "ms"), `table "items": invalid platform.ydb.row_deletion_unit "ms": unit "ms" is not one YDB takes.*`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := goRequest(c, tableDeclaration(2, "Item", test.attributes))
+			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
+			c.Assert(err, qt.ErrorMatches, test.wantErr)
+			c.Assert(tables, qt.HasLen, 0)
+			decoded, err := backend.New().DecodeSource(c.Context(), request)
+			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
+			c.Assert(decoded == nil, qt.IsTrue)
+		})
+	}
+}
+
+// The provider claims the attributes of an index directive in order to refuse
+// them by name: the row-table model holds no index option, so one accepted
+// would be dropped.
+func TestIndexDirective_RefusedByName(t *testing.T) {
+	for _, attribute := range []string{"auto_partitioning_by_load", "read_replicas_settings", "tokenizer", "false_positive_probability", "distance", "clusters"} {
+		t.Run(attribute, func(t *testing.T) {
+			c := qt.New(t)
+			request := goRequest(c, indexDeclaration(2, "Item", map[string]string{attribute: "x"}))
+			decoded, err := backend.New().DecodeSource(c.Context(), request)
+			c.Assert(err, qt.ErrorMatches, `(?s).*`+attribute+` is not supported by the YDB provider yet: an index states no settings of its own.*`)
+			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
+			c.Assert(decoded == nil, qt.IsTrue)
+		})
+	}
+}

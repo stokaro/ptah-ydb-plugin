@@ -1,0 +1,40 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid feature value: row_deletion_column is empty; remove it to leave the policy undeclared",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "platform.ydb.row_deletion_column": "",
+    "platform.ydb.row_deletion_interval": "P30D"
+   },
+   "struct": "Item",
+   "file": "go-refused-ttl-column-empty.go",
+   "file_size": 351,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 128,
+    "line": 3,
+    "column": 111
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

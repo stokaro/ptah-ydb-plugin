@@ -1,0 +1,39 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid auto_partitioning_by_size \"yes\": write ENABLED or DISABLED on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "auto_partitioning_by_size": "yes"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-size-switch.go",
+   "file_size": 305,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 82,
+    "line": 3,
+    "column": 65
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

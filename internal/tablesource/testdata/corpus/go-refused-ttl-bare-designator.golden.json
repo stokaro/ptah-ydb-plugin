@@ -1,0 +1,40 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "desired model \"ptah.run/ydb/ttl\": invalid feature value: interval \"P\" is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): it names no weeks, days, hours, minutes or seconds",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "platform.ydb.row_deletion_column": "created_at",
+    "platform.ydb.row_deletion_interval": "P"
+   },
+   "struct": "Item",
+   "file": "go-refused-ttl-bare-designator.go",
+   "file_size": 358,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 135,
+    "line": 3,
+    "column": 118
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

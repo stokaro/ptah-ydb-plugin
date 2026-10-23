@@ -1,0 +1,42 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/column-store": "not recorded"
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "column_shards": "4",
+    "partition_by_hash": "id",
+    "store": "column"
+   },
+   "struct": "Item",
+   "file": "go-deferred-table-store-column-hash.go",
+   "file_size": 329,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 106,
+    "line": 3,
+    "column": 89
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

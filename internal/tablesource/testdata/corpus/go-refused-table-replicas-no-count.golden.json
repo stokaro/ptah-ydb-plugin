@@ -1,0 +1,39 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid read_replicas_settings \"PER_AZ\": write PER_AZ:\u003cn\u003e for n replicas in every availability zone, or ANY_AZ:\u003cn\u003e for n in all of them together on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "read_replicas_settings": "PER_AZ"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-replicas-no-count.go",
+   "file_size": 305,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 82,
+    "line": 3,
+    "column": 65
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

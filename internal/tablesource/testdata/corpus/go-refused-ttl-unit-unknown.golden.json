@@ -1,0 +1,41 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid feature value: row_deletion_unit: unit \"ms\" is not one YDB takes: use SECONDS, MILLISECONDS, MICROSECONDS, NANOSECONDS",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "platform.ydb.row_deletion_column": "created_at",
+    "platform.ydb.row_deletion_interval": "PT1H",
+    "platform.ydb.row_deletion_unit": "ms"
+   },
+   "struct": "Item",
+   "file": "go-refused-ttl-unit-unknown.go",
+   "file_size": 397,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 174,
+    "line": 3,
+    "column": 157
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

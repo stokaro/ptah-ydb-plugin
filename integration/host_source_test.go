@@ -61,7 +61,17 @@ const (
 		"    column_families:\n      default: {compression: lz4}\n    columns:\n      id: {type: Uint64, primary: true}\n      body: {type: Utf8}\n"
 	hostGoTable = "package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:columnfamily name=\"default\" compression=\"lz4\"\n" +
 		"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n"
+	// hostGoAttributes writes the settings as attributes of the host's own table directive.
+	hostGoAttributes = "package entities\n\n//ptah:schema:table name=\"host_source_items\" auto_partitioning_by_load=\"ENABLED\" auto_partitioning_min_partitions_count=\"2\" read_replicas_settings=\"ANY_AZ:1\" store=\"ROW\"\n" +
+		"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n\t//ptah:schema:field name=\"created_at\" type=\"Timestamp\"\n\tCreatedAt int64\n}\n"
 )
+
+// goTable is a Go file with one table that writes attributes on its table and
+// index directives.
+func goTable(directives, index string) string {
+	return "package entities\n\n" + directives + "\ntype Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n" +
+		"\t//ptah:schema:field name=\"created_at\" type=\"Timestamp\"\n\tCreatedAt int64\n\t" + index + "\n\tBody string\n}\n"
+}
 
 // The host hands the provider a table's partitioning and column families, and
 // the provider accepts them: whatever the host reports next, it is not a
@@ -70,6 +80,8 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 	for _, test := range []struct{ name, flag, file, content string }{
 		{"YAML keys", "--schema-file", "schema.yaml", hostYAMLTable},
 		{"a Go directive", "--root-dir", "entities.go", hostGoTable},
+		{"Go attributes of the table directive", "--root-dir", "entities.go", hostGoAttributes},
+		{"a Go TTL", "--root-dir", "entities.go", goTable("//ptah:schema:table name=\"host_source_items\" platform.ydb.row_deletion_column=\"created_at\" platform.ydb.row_deletion_interval=\"P30D\"", "")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -92,6 +104,14 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 		{"a changefeed in Go", "--root-dir", "entities.go",
 			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:changefeed name=\"updates\" mode=\"UPDATES\" format=\"JSON\"\n" +
 				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n", `decode Go directives of engine "ydb"`},
+		{"a starting layout in Go", "--root-dir", "entities.go",
+			goTable("//ptah:schema:table name=\"host_source_items\" uniform_partitions=\"4\"", ""), `decode Go directives of engine "ydb"`},
+		{"a column table in Go", "--root-dir", "entities.go",
+			goTable("//ptah:schema:table name=\"host_source_items\" store=\"COLUMN\"", ""), `decode Go directives of engine "ydb"`},
+		{"a TTL interval in months in Go", "--root-dir", "entities.go",
+			goTable("//ptah:schema:table name=\"host_source_items\" platform.ydb.row_deletion_column=\"created_at\" platform.ydb.row_deletion_interval=\"P1M\"", ""), `decode Go directives of engine "ydb"`},
+		{"an index option in Go", "--root-dir", "entities.go",
+			goTable("//ptah:schema:table name=\"host_source_items\"", "//ptah:schema:index name=\"by_body\" fields=\"body\" auto_partitioning_by_load=\"ENABLED\""), `decode Go directives of engine "ydb"`},
 		{"a zstd family in Go", "--root-dir", "entities.go",
 			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:columnfamily name=\"cold\" compression=\"zstd\"\n" +
 				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n", `decode Go directives of engine "ydb"`},

@@ -1,0 +1,39 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid auto_partitioning_by_size \"maybe\": write ENABLED or DISABLED on //ptah:schema:index at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:index",
+   "attributes": {
+    "auto_partitioning_by_size": "maybe"
+   },
+   "struct": "Item",
+   "file": "go-refused-index-partitioning-switch.go",
+   "file_size": 298,
+   "start": {
+    "offset": 199,
+    "line": 9,
+    "column": 2
+   },
+   "end": {
+    "offset": 281,
+    "line": 9,
+    "column": 84
+   },
+   "subject": {
+    "kind": "index",
+    "name": "by_body"
+   }
+  }
+ ]
+}

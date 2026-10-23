@@ -6,7 +6,7 @@ changefeeds, topics, views, coordination nodes, external data sources, and
 external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations, and
-YAML and Go annotation decoding for the partitioning and column families of row tables.
+YAML and Go annotation decoding for the partitioning, column families and, in Go, the TTL of row tables.
 Offline comparison, planning, and rendering produce native coordination
 operations. Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
@@ -446,11 +446,12 @@ This service alone does not make the YAML example executable as a migration.
 The same source service decodes the table-scope settings that the host's
 bundled YDB source reads from YAML and from Go annotations, so a table written
 the way users write tables reaches the provider. The host lexes the source and
-sends the values of the keys and directives the provider claimed; the provider
-owns their meaning. The host refuses a YAML key the provider does not claim. It reads a Go
-comment that no provider claims as no declaration, so the provider claims the
-Go directives it cannot carry and refuses them by name. Nothing is dropped in
-silence.
+sends the values of the keys, directives and attributes the provider claimed;
+the provider owns their meaning. The host refuses a YAML key the provider does
+not claim. It reads a Go comment that no provider claims as no declaration, and
+refuses an attribute of its own directives that no provider claims, so the
+provider claims the Go directives and attributes it cannot carry and refuses
+them by name. Nothing is dropped in silence.
 
 A YAML table entry takes these keys, spelled as the YDB settings are:
 
@@ -469,24 +470,35 @@ tables:
       cold: {data: hdd, compression: lz4}       # data is a storage pool kind, kept as written
 ```
 
-In Go, a family is declared with `//ptah:schema:columnfamily` on the table's
-struct, with the attributes `name`, `data` and `compression`. The `table`
-attribute names another table of the file (`name` or `schema.name`) and wins
-over the struct's own table.
+In Go, the same settings are attributes of the host's own `ptah:schema:table`
+directive, spelled as the YAML keys are, and a TTL is written as the platform
+properties of the `ydb` engine. A family is a directive of its own,
+`//ptah:schema:columnfamily`, on the table's struct, with the attributes `name`,
+`data` and `compression`. The `table` attribute names another table of the file
+(`name` or `schema.name`) and wins over the struct's own table.
 
 ```go
-//ptah:schema:table name="documents"
+//ptah:schema:table name="documents" auto_partitioning_by_load="ENABLED" read_replicas_settings="ANY_AZ:2" platform.ydb.row_deletion_column="created_at" platform.ydb.row_deletion_interval="P30D"
 //ptah:schema:columnfamily name="default" compression="lz4"
 //ptah:schema:columnfamily name="cold" data="hdd" compression="lz4"
 type Document struct { /* ... */ }
 ```
 
-All the keys and directives of one table become one desired row-table facet,
-because a document may hold only one facet of a kind for a table. The facet
-holds only what the source states. It has no primary key, which comes from the
-table's common columns; a stated key must still be distinct and ordered.
-A setting a source leaves out keeps what the table holds. A table that
-declares nothing, such as an empty `column_families` mapping, gets no facet.
+A TTL needs `row_deletion_column` and `row_deletion_interval`. The interval is an
+ISO 8601 duration of weeks, days, hours, minutes and seconds (`P30D`,
+`P2W3D`, `PT1H30M`), and YDB keeps whole seconds, so a fraction of a second,
+months and years are refused. A column that counts since the Unix epoch also
+needs `row_deletion_unit`, one of `SECONDS`, `MILLISECONDS`, `MICROSECONDS` and
+`NANOSECONDS` in any case. Which column types fit the unit is checked when the
+plan is made, where the table's columns are known.
+
+All the keys, attributes and directives of one table become one desired
+row-table facet, because a document may hold only one facet of a kind for a
+table. The facet holds only what the source states. It has no primary key, which
+comes from the table's common columns; a stated key must still be distinct and
+ordered. A partitioning setting a source leaves out keeps what the table holds.
+A table that declares nothing, such as an empty `column_families` mapping or
+`store="ROW"` alone, gets no facet.
 
 The values are read as the text the author wrote, so `3` and `"3"` are the
 same count, and a boolean where `ENABLED` is due is refused. The shared
@@ -498,21 +510,26 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 
 | Setting | Why |
 | --- | --- |
-| `cache_mode`, `fields` of a column family | The row-table model carries no cache mode, and a source facet cannot attach to a column yet. Both are claimed and refused by name. |
-| `uniform_partitions`, `partition_at_keys` | A starting layout is a create-time setting that the row-table model does not carry. Not claimed. |
-| TTL (`platform.ydb.row_deletion_*`) | The host reads it from platform properties, which a provider cannot claim yet. Not claimed. |
-| Partitioning and TTL attributes of `ptah:schema:table` in Go | They are attributes of a host directive, which a provider cannot extend yet. |
+| `fields` of a column family | A table-scope fragment may return a value owned by its table only, and the family a column sits in is a value owned by the column. Claimed and refused by name. Needs a host change: let a table-scope claim return column-owned values. |
+| `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
+| `uniform_partitions`, `partition_at_keys` | A starting layout is a create-time setting that the row-table model does not carry. In Go they are claimed and refused by name; in YAML they are not claimed, so the host refuses the key. |
+| TTL in Go | Decoded, but the host refuses the table afterwards: it keeps a claimed `platform.ydb.*` attribute in the common table's `Overrides`, which the provider contract does not carry. Needs a host change: take a claimed platform attribute out of `Overrides`. |
+| TTL in YAML (`platform: {ydb: {row_deletion_*}}`) | `platform` is a key of the shared frontend, so it cannot be claimed. Needs a host change: let a provider claim the `platform.<engine>` group, or the properties inside it. |
 | `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
 | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
-| `column_store` and the column-table attributes | Column tables have no planning yet. Not claimed. |
-| Index partitioning, vector and full-text options | They are attributes of an index, which needs index-scope Go directives and YAML index keys. Not claimed. |
+| `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables have no planning yet. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |
+| Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name. YAML has no index key claim. |
 | Topics, resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` at document scope. |
 
-A table that has a facet is managed for its TTL and its partitioning: a
-comparison that finds a TTL on the table and none in the facet plans its
-removal. Until the TTL can be declared in a source, a table that declares
-families or partitioning in YAML or Go and holds a TTL on the server will plan
-that removal.
+A table that has a facet is managed for its TTL: a comparison that finds a TTL
+on the table and none in the facet plans its removal, and a table that has no
+facet keeps its TTL. The bundled source behaves the same way for the first
+case, and removes the TTL of a table that states nothing too. Measured with the
+host at the commit named in the corpus, `schema apply` over a Go file with no TTL
+plans `ALTER TABLE ... RESET (TTL)` for every table of the file, with or without
+other attributes. Until the host lets a source state a TTL for the provider, a
+table that declares families or partitioning and holds a TTL on the server
+plans that removal and cannot avoid it.
 
 `internal/tablesource/testdata/corpus` holds the inputs and the answers of the
 host's bundled decoder for them, and the differential test in
