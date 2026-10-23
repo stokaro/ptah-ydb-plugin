@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
@@ -11,8 +12,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// CompareModels compares captured coordination schemas without session access.
-// Coverage and complete operands determine absence, equality, and safety facts.
+// CompareModels compares captured coordination schemas and row-table facets
+// without session access. Coverage and complete operands determine absence,
+// equality, and safety facts.
 func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareModelsRequest) (*protocol.ComparedModels, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -24,7 +26,11 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 	if !proto.Equal(request.GetIdentifiers().GetRules(), identifierRules()) {
 		return nil, status.Error(codes.InvalidArgument, "YDB comparison requires its negotiated identifier rules")
 	}
-	result, err := coordinationcompare.Compare(ctx, request)
+	compare := coordinationcompare.Compare
+	if request.GetComparisonId() == tablecompare.ServiceID {
+		compare = tablecompare.Compare
+	}
+	result, err := compare(ctx, request)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()

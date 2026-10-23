@@ -36,8 +36,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if request.PlanningId != ServiceID || len(request.Changes) != 0 {
+	if request.PlanningId != ServiceID {
 		return nil, fmt.Errorf("invalid YDB table creation assignment")
+	}
+	for _, change := range request.Changes {
+		if err := validateChange(change); err != nil {
+			return nil, err
+		}
 	}
 	if err := validateTableIdentifiers(request.Identifiers); err != nil {
 		return nil, err
@@ -225,6 +230,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		claimed[matched] = true
 		result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: []*protocol.StepIdentity{proto.CloneOf(step.Id)}, Replacement: proto.CloneOf(item.id)})
+	}
+	for i, change := range request.Changes {
+		index := changeIndex(request, change)
+		if index < 0 {
+			return refusedChange(i, "A table property change needs the captured alteration of its table"), nil
+		}
+		result.Changes = append(result.Changes, changeReceipt(change, receiptSteps[index]))
 	}
 	for i, table := range request.Tables {
 		if table.Action == protocol.PlanningTable_CONTEXT {

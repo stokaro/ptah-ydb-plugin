@@ -85,6 +85,13 @@ func sameCompression(want, held Ydb_Table.ColumnFamily_Compression) bool {
 	return want == held
 }
 
+// familyDelta reports which settings of the declared family want a held family
+// does not satisfy: the storage pool, and the compression.
+func familyDelta(want, held *Ydb_Table.ColumnFamily) (data, compression bool) {
+	return want.GetData().GetMedia() != "" && want.GetData().GetMedia() != held.GetData().GetMedia(),
+		!sameCompression(want.GetCompression(), held.GetCompression())
+}
+
 // planFamilies returns the change that gives the table what the declaration
 // states, or the reason it cannot be made. An empty change means the table
 // already satisfies the declaration.
@@ -115,14 +122,14 @@ func planFamilies(in familyInput) (familyChange, string) {
 			continue
 		}
 		changed := &Ydb_Table.ColumnFamily{Name: name}
-		touched := false
-		if stated.Data != nil && stated.Data.Media != held.GetData().GetMedia() {
-			changed.Data, touched = stated.Data, true
+		data, compression := familyDelta(want, held)
+		if data {
+			changed.Data = stated.Data
 		}
-		if !sameCompression(stated.Compression, held.GetCompression()) {
-			changed.Compression, touched = stated.Compression, true
+		if compression {
+			changed.Compression = stated.Compression
 		}
-		if touched {
+		if data || compression {
 			change.alter = append(change.alter, changed)
 			change.heldFamilies = append(change.heldFamilies, proto.CloneOf(held))
 		}
