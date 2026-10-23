@@ -62,6 +62,42 @@ func TestNativeTableCreationPlanRenderNormalize(t *testing.T) {
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(refused, qt.IsNil)
 }
+func TestTableCreationSkipsOrderingMarkers(t *testing.T) {
+	c := qt.New(t)
+	request := creationPlan(c)
+	subject := request.Tables[0].Subject
+	commonID := &protocol.StepIdentity{Owner: "host", Name: "create"}
+	marker := func(name string) *protocol.CommonPlanningStep {
+		return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: name},
+			Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN, Reason: "Ordering marker"}}
+	}
+	request.CommonSteps = []*protocol.CommonPlanningStep{marker("common/prerequisite-creations"),
+		{Id: commonID, Parent: proto.CloneOf(subject),
+			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Creates a table",
+				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_CREATE}}}},
+		marker("common/table-creations-end")}
+
+	plan, err := backend.New().PlanFeatures(t.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(plan.Rewrites, qt.HasLen, 1)
+	c.Assert(proto.Equal(plan.Rewrites[0].Sources[0], commonID), qt.IsTrue)
+}
+func TestTableCreationRefusesParentlessStepWithEffects(t *testing.T) {
+	c := qt.New(t)
+	request := creationPlan(c)
+	subject := request.Tables[0].Subject
+	request.CommonSteps = []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "other"},
+		Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN, Reason: "Fixture common operation",
+			Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ}}}}}
+
+	plan, err := backend.New().PlanFeatures(t.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].Message, qt.Equals, "A common step is outside the supported table creation lifecycle")
+}
 func TestTableCreationRefusesPartialPlanning(t *testing.T) {
 	for _, test := range []struct {
 		name   string
