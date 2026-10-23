@@ -6,7 +6,7 @@ toolchain go1.27.3
 
 require (
 	github.com/frankban/quicktest v1.14.6
-	github.com/stokaro/ptah/provider-sdk v0.0.0-20261022034158-c4798ac27aad
+	github.com/stokaro/ptah/provider-sdk v0.0.0-20261022161256-734978909b25
 	github.com/ydb-platform/ydb-go-genproto v0.0.0-20260810123728-f0c151ab31b9
 	github.com/ydb-platform/ydb-go-sdk-auth-environ v0.5.3
 	github.com/ydb-platform/ydb-go-sdk/v3 v3.155.1
