@@ -107,7 +107,7 @@ default bundling remain separate requirements.
 Host `schema inspect --format json` exports the native desired model, including
 provider-owned values and coverage. Common collections use names such as
 `Tables`, `Fields`, and `Indexes`. This JSON is diagnostic output, not a schema
-file input. Table comparison and full native CLI planning remain pending.
+file input. Full native CLI planning remains pending.
 
 ## Connection addresses
 
@@ -380,7 +380,7 @@ statistics are excluded. A missing child description refuses the entire read.
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
 Every observed model has a separate desired contract and an offline conversion.
-Comparison and planning remain limited to coordination nodes; source adapters
+Comparison and planning remain limited to coordination nodes and the TTL and column families of row tables; source adapters
 for the other families remain pending.
 
 Views retain the query returned by the view service and the attributes read
@@ -869,6 +869,21 @@ a TTL to an added column in the same plan that drops the column it read; and the
 refusal of an indexed column, of a TTL column the server would refuse, and of a
 stale alteration before the call. They plan again from the read back to show the declaration no
 longer changes anything, and check that rows survive.
+
+### Table property comparison
+
+The offline `models.compare` service `ydb-row-table-properties` compares the
+table and column properties of a row table that exists on both sides. It reports
+one `github.com/stokaro/ptah-ydb-plugin/row-table-properties-change` for a table whose TTL or column families
+differ from the declaration, and one for each column that sits in another
+family. The comparison applies the rules of the alteration planner, so a
+difference it reports is one the planner acts on, and a table that differs only
+in its TTL or its families still reaches the planner. A change carries both
+complete facets, replaces no owner, removes no state and leaves access
+unchanged. A facet present on one side only states nothing to compare; the
+planner decides what the missing read means. The planner accepts exactly these
+changes, accounts for each one with the steps of its table alteration, and
+refuses every other change kind.
 
 ## Offline SQL analysis
 
