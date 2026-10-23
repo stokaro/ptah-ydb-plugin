@@ -1,5 +1,6 @@
 // Package tablecompare compares the table and column facets of captured YDB row
-// tables offline: the TTL, the column families and the family each column sits in.
+// tables offline: the TTL, the automatic partitioning settings, the column
+// families and the family each column sits in.
 package tablecompare
 
 import (

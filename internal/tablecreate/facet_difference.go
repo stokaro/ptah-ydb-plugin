@@ -20,7 +20,7 @@ func NormalizedFacet(record *protocol.ComparisonRecord, representation protocol.
 // FacetDiffers reports whether the table the observed facet describes does not
 // already satisfy the desired facet. It applies the rules the alteration
 // planner applies, so a difference reported here is one the planner can act on:
-// the TTL and the column families of a table facet, and the family a column
+// the TTL, the automatic partitioning settings and the column families of a table facet, and the family a column
 // sits in for a column facet. Both envelopes must be validated and belong to one
 // owner.
 func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
@@ -53,11 +53,14 @@ func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
 	}
 }
 
-// tableDiffers applies the TTL and family rules to the table properties. A
+// tableDiffers applies the TTL, partitioning and family rules to the table properties. A
 // declaration that states table properties manages the TTL, so one without a TTL
 // differs from a table that holds one.
 func tableDiffers(want *native.RowTableIntent, held *native.DescribeTableResult) bool {
 	if want.TtlSettings == nil && held.TtlSettings != nil || want.TtlSettings != nil && !sameTTL(want.TtlSettings, held.TtlSettings) {
+		return true
+	}
+	if partitioningDelta(want.PartitioningSettings, held.PartitioningSettings) != nil {
 		return true
 	}
 	for _, family := range want.ColumnFamilies {
