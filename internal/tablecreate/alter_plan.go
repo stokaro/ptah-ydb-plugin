@@ -12,14 +12,18 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// alteration is one planned change of an existing table's column families.
+// alteration is one planned change of an existing table: its column families,
+// and the host column steps this service replaces.
 type alteration struct {
 	index     int
 	table     *protocol.PlanningTable
 	change    familyChange
 	operation *protocol.NormalizedValue
 	id        *protocol.StepIdentity
+	claims    []*columnClaim
 }
+
+func stepKey(id *protocol.StepIdentity) string { return id.GetOwner() + "\x00" + id.GetName() }
 
 // planAlteration reads the families and column placements a captured ALTER
 // carries on both sides and returns the change that gives the table what the
@@ -136,15 +140,27 @@ func facetEnvelopes(owner *protocol.Reference, state *protocol.ComparisonState, 
 	return result, nil
 }
 
-// alterStepDependencies orders an alteration against the host's column steps for
-// the same table. The families change after every column addition it moves a
-// column into, since a column moves only once it exists, and before every column
-// removal, so a removal never meets a family the plan is still reshaping. A
-// column the plan removes is never named by the alteration.
+// alterStepDependencies orders the family operation against the column steps of
+// the same table, whoever carries them out. The families change after every
+// column addition it moves a column into, since a column moves only once it
+// exists, and before every column removal, so a removal never meets a family the
+// plan is still reshaping. A column the plan removes is never named by the
+// alteration. A claimed step is named by its native replacement, so the edge
+// joins two steps of this service; any other step keeps its host identity.
 func alterStepDependencies(item alteration, steps []*protocol.CommonPlanningStep) []*protocol.PlanningDependency {
 	moved := map[string]bool{}
 	for _, move := range item.change.move {
 		moved[move.Name] = true
+	}
+	replacement := map[string]*protocol.StepIdentity{}
+	for _, claim := range item.claims {
+		replacement[stepKey(claim.source.Id)] = claim.id
+	}
+	identity := func(step *protocol.CommonPlanningStep) *protocol.StepIdentity {
+		if claimed := replacement[stepKey(step.Id)]; claimed != nil {
+			return proto.CloneOf(claimed)
+		}
+		return proto.CloneOf(step.Id)
 	}
 	var dependencies []*protocol.PlanningDependency
 	for _, step := range steps {
@@ -153,9 +169,9 @@ func alterStepDependencies(item alteration, steps []*protocol.CommonPlanningStep
 		}
 		switch {
 		case step.AddedColumn != nil && moved[step.AddedColumn.Name]:
-			dependencies = append(dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(step.Id), After: proto.CloneOf(item.id)})
+			dependencies = append(dependencies, &protocol.PlanningDependency{Before: identity(step), After: proto.CloneOf(item.id)})
 		case step.AddedColumn == nil && dropsColumn(step):
-			dependencies = append(dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(item.id), After: proto.CloneOf(step.Id)})
+			dependencies = append(dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(item.id), After: identity(step)})
 		}
 	}
 	return dependencies

@@ -25,7 +25,8 @@ type AlterationSession interface {
 }
 
 // TableAlteration owns the precondition read, single dispatch, and confirmation
-// of a captured column family alteration.
+// of a captured table alteration: column families and their placements, the
+// addition of nullable columns, or the removal of columns.
 type TableAlteration struct {
 	Open func(context.Context) (AlterationSession, error)
 }
@@ -141,6 +142,19 @@ func checkAlterationPrecondition(owner *protocol.Reference, alteration *tablecre
 			return fmt.Errorf("YDB column family differs from the plan")
 		}
 	}
+	for _, column := range request.AddColumns {
+		if columnByName(table.Columns, column.Name) != nil {
+			return fmt.Errorf("YDB column to add already exists")
+		}
+	}
+	for _, name := range request.DropColumns {
+		if columnByName(table.Columns, name) == nil {
+			return fmt.Errorf("YDB column to drop is absent")
+		}
+		if err := dropBlocker(table, name); err != nil {
+			return err
+		}
+	}
 	for _, move := range request.AlterColumns {
 		column := columnByName(table.Columns, move.Name)
 		if column == nil || familyName(column.Family) != familyName(alteration.HeldColumns[move.Name]) {
@@ -150,6 +164,31 @@ func checkAlterationPrecondition(owner *protocol.Reference, alteration *tablecre
 		if !inRequest && familyByName(table.ColumnFamilies, move.Family) == nil && familyName(move.Family) != tablecreate.DefaultFamily {
 			return fmt.Errorf("YDB column moves into a family the table does not hold")
 		}
+	}
+	return nil
+}
+
+// dropBlocker names what keeps the table from dropping a column. The server
+// refuses each case, but only after dispatch, which would leave the outcome
+// uncertain; reading it first turns the refusal into one before the call.
+func dropBlocker(table *native.DescribeTableResult, name string) error {
+	if slices.Contains(table.PrimaryKey, name) {
+		return fmt.Errorf("YDB column to drop is part of the primary key")
+	}
+	for _, index := range table.Indexes {
+		if slices.Contains(index.IndexColumns, name) || slices.Contains(index.DataColumns, name) {
+			return fmt.Errorf("YDB column to drop is used by index %q", index.Name)
+		}
+	}
+	ttl := table.TtlSettings.GetDateTypeColumn().GetColumnName()
+	if ttl == "" {
+		ttl = table.TtlSettings.GetValueSinceUnixEpoch().GetColumnName()
+	}
+	if ttl == name {
+		return fmt.Errorf("YDB column to drop is the TTL column")
+	}
+	if slices.Contains(table.PartitioningSettings.GetPartitionBy(), name) {
+		return fmt.Errorf("YDB column to drop is a partitioning column")
 	}
 	return nil
 }
@@ -170,10 +209,10 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 	if err := holdsRowTable(owner, observed); err != nil {
 		return err
 	}
-	if !slices.Equal(before.PrimaryKey, observed.PrimaryKey) || len(before.Columns) != len(observed.Columns) {
+	request := alteration.Request
+	if !slices.Equal(before.PrimaryKey, observed.PrimaryKey) || len(before.Columns)-len(request.DropColumns)+len(request.AddColumns) != len(observed.Columns) {
 		return fmt.Errorf("YDB altered table key or columns differ from the request")
 	}
-	request := alteration.Request
 	for _, family := range before.ColumnFamilies {
 		changed := familyByName(request.AlterColumnFamilies, family.Name)
 		actual := familyByName(observed.ColumnFamilies, family.Name)
@@ -201,7 +240,15 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 	if len(observed.ColumnFamilies) != len(before.ColumnFamilies)+len(request.AddColumnFamilies) {
 		return fmt.Errorf("YDB altered table holds unexpected column families")
 	}
-	for i, column := range before.Columns {
+	// The columns the request leaves in place keep their order, type and family
+	// (or the one the request moves them to); the added ones follow.
+	var kept []*native.ColumnMeta
+	for _, column := range before.Columns {
+		if !slices.Contains(request.DropColumns, column.Name) {
+			kept = append(kept, column)
+		}
+	}
+	for i, column := range kept {
 		actual := observed.Columns[i]
 		want := familyName(column.Family)
 		if index := slices.IndexFunc(request.AlterColumns, func(move *Ydb_Table.ColumnMeta) bool { return move.Name == column.Name }); index >= 0 {
@@ -209,6 +256,12 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 		}
 		if actual.Name != column.Name || !proto.Equal(actual.Type, column.Type) || actual.GetNotNull() != column.GetNotNull() || familyName(actual.Family) != want {
 			return fmt.Errorf("YDB altered column differs from the request")
+		}
+	}
+	for _, added := range request.AddColumns {
+		actual := columnByName(observed.Columns[len(kept):], added.Name)
+		if actual == nil || !proto.Equal(actual.Type, added.Type) || actual.GetNotNull() || familyName(actual.Family) != tablecreate.DefaultFamily {
+			return fmt.Errorf("YDB added column differs from the request")
 		}
 	}
 	return nil

@@ -17,11 +17,12 @@ import (
 	"google.golang.org/protobuf/reflect/protodesc"
 )
 
-// AlterOperationKind identifies a native alteration of an existing row table's
-// column families.
+// AlterOperationKind identifies a native alteration of an existing row table:
+// its column families and their placements, the addition of nullable columns,
+// or the removal of columns. One operation does exactly one of the three.
 const AlterOperationKind = schema.ProviderID + "/row-table-alter-operation"
 
-var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns"}
+var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns", "add_columns", "drop_columns"}
 var alterModel = buildAlterModel()
 
 // AlterModel binds the alteration payload grammar, its preconditions, and its
@@ -39,9 +40,12 @@ func buildAlterModel() *protocol.ValueModel {
 		"payload":      "request: native AlterTableRequest without session or path; held_families: the touched families as the table held them; held_columns: the family each moved column sat in",
 		"families":     "families are added or have only the settings the declaration states changed; a family is never dropped, a setting is never reset, keep_in_memory is never set",
 		"columns":      "a column moves between families by name; key columns stay in the default family; a column the plan drops is never named",
+		"additions":    "add_columns names columns that are nullable, have no default and sit in the default family; a column that must be placed in another family is moved by a separate family operation after the addition",
+		"removals":     "drop_columns names columns that are not part of the key, an index, the TTL or the partitioning",
+		"exclusive":    "an operation changes families and placements, or adds columns, or drops columns, never a mix",
 		"execution":    "native AlterTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
-		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add must be absent; a family to move into must exist or be added by the same request",
-		"confirmation": "read back the whole family set and every column's family; each family and column the request does not name must be unchanged, and the columns and key must be unchanged",
+		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add must be absent; a family to move into must exist or be added by the same request; a column to add must be absent; a column to drop must exist and must not be a key column, an index column, the TTL column or a partitioning column",
+		"confirmation": "read back the whole family set and every column; each family and column the request does not name must be unchanged, an added column must exist with its type and in the default family, a dropped column must be gone, and the key must be unchanged",
 		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
@@ -59,7 +63,8 @@ func buildAlterModel() *protocol.ValueModel {
 // Alteration is a decoded column family alteration. The request carries no
 // session and no path: execution binds both after checking the captured owner.
 type Alteration struct {
-	// Request holds the families to add, the families to change, and the columns to move.
+	// Request holds the families to add, the families to change, the columns to
+	// move, the columns to add, or the columns to drop.
 	Request *Ydb_Table.AlterTableRequest
 	// HeldFamilies are the families Request changes, as the table held them when planned.
 	HeldFamilies []*Ydb_Table.ColumnFamily
@@ -82,7 +87,11 @@ type alterPayload struct {
 // table in owner.
 func CaptureAlteration(id string, owner *protocol.Reference, change familyChange) (*protocol.NormalizedValue, error) {
 	request := &Ydb_Table.AlterTableRequest{AddColumnFamilies: change.add, AlterColumnFamilies: change.alter, AlterColumns: change.move}
-	encoded, err := encodeAlteration(&Alteration{Request: request, HeldFamilies: change.heldFamilies, HeldColumns: change.heldColumns})
+	return captureRequest(id, owner, &Alteration{Request: request, HeldFamilies: change.heldFamilies, HeldColumns: change.heldColumns})
+}
+
+func captureRequest(id string, owner *protocol.Reference, alteration *Alteration) (*protocol.NormalizedValue, error) {
+	encoded, err := encodeAlteration(alteration)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +152,12 @@ func NormalizeAlteration(input *protocol.ValueInput) (*protocol.NormalizedValue,
 	result := proto.CloneOf(value)
 	result.Payload = payload
 	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Adds column families"
-	if len(alteration.Request.AlterColumnFamilies)+len(alteration.Request.AlterColumns) > 0 {
+	switch {
+	case len(alteration.Request.DropColumns) > 0:
+		impact, reason = protocol.ChangeSemantics_DESTRUCTIVE, "Drops columns and the data they hold"
+	case len(alteration.Request.AddColumns) > 0:
+		impact, reason = protocol.ChangeSemantics_ADDITIVE, "Adds nullable columns"
+	case len(alteration.Request.AlterColumnFamilies)+len(alteration.Request.AlterColumns) > 0:
 		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes column family settings or moves columns between families"
 	}
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner),
@@ -204,8 +218,21 @@ func decodeAlteration(raw []byte) (*Alteration, error) {
 
 func validateAlteration(alteration *Alteration) error {
 	request := alteration.Request
-	if len(request.AddColumnFamilies)+len(request.AlterColumnFamilies)+len(request.AlterColumns) == 0 {
+	groups := 0
+	for _, used := range []bool{len(request.AddColumnFamilies)+len(request.AlterColumnFamilies)+len(request.AlterColumns) > 0,
+		len(request.AddColumns) > 0, len(request.DropColumns) > 0} {
+		if used {
+			groups++
+		}
+	}
+	if groups == 0 {
 		return fmt.Errorf("YDB table alteration changes nothing")
+	}
+	if groups > 1 {
+		return fmt.Errorf("YDB table alteration mixes family, column addition and column removal changes")
+	}
+	if err := validateColumnAlteration(request); err != nil {
+		return err
 	}
 	named := map[string]bool{}
 	for _, family := range slices.Concat(request.AddColumnFamilies, request.AlterColumnFamilies) {
@@ -254,6 +281,36 @@ func validateAlteration(alteration *Alteration) error {
 	}
 	if len(alteration.HeldColumns) != len(columns) {
 		return fmt.Errorf("held YDB columns disagree with the alteration")
+	}
+	return nil
+}
+
+// validateColumnAlteration checks the columns an alteration adds or drops. An
+// added column is nullable, has no default and states no family: the server
+// refuses a NOT NULL addition, and a default is accepted on some lines only.
+func validateColumnAlteration(request *Ydb_Table.AlterTableRequest) error {
+	names := map[string]bool{}
+	for _, column := range request.AddColumns {
+		if err := only(column, "name", "type", "not_null"); err != nil {
+			return err
+		}
+		if !validName(column.Name) || names[column.Name] {
+			return fmt.Errorf("invalid or duplicate YDB column addition")
+		}
+		names[column.Name] = true
+		_, nullable, err := schema.ColumnType(column.Type)
+		if err != nil {
+			return err
+		}
+		if !nullable || column.NotNull == nil || *column.NotNull {
+			return fmt.Errorf("YDB adds only nullable columns to an existing table")
+		}
+	}
+	for _, name := range request.DropColumns {
+		if !validName(name) || names[name] {
+			return fmt.Errorf("invalid or duplicate YDB column removal")
+		}
+		names[name] = true
 	}
 	return nil
 }
