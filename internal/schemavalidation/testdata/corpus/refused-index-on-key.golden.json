@@ -1,0 +1,17 @@
+{
+  "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+  "default": [
+    {
+      "code": "unsupported-feature",
+      "kind": "schema",
+      "message": "index \"by_id\" on table \"t\": its columns are the table's key, which YDB refuses (`index keys shouldn't be table keys`)"
+    }
+  ],
+  "no_skipped": [
+    {
+      "code": "unsupported-feature",
+      "kind": "schema",
+      "message": "index \"by_id\" on table \"t\": its columns are the table's key, which YDB refuses (`index keys shouldn't be table keys`)"
+    }
+  ]
+}

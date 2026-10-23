@@ -1,0 +1,1 @@
+{"tables":[{"name":"t","primary_key":["id"],"columns":[{"name":"id","type":"Uint64","primary":true},{"name":"body","type":"Utf8","nullable":true}]}],"indexes":[{"table":"t","name":"by_id","fields":["id"]}]}

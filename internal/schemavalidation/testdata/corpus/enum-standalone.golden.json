@@ -1,0 +1,11 @@
+{
+  "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+  "default": [],
+  "no_skipped": [
+    {
+      "code": "unsupported-feature",
+      "kind": "schema",
+      "message": "enum mood, which requires target capability enum_custom_type, unavailable on this ydb target"
+    }
+  ]
+}

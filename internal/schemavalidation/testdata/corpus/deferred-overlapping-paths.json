@@ -1,0 +1,1 @@
+{"tables":[{"name":"a","primary_key":["id"],"columns":[{"name":"id","type":"Uint64","primary":true}]},{"schema":"a","name":"b","primary_key":["id"],"columns":[{"name":"id","type":"Uint64","primary":true}]}]}

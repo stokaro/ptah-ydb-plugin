@@ -1,0 +1,17 @@
+{
+  "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+  "default": [
+    {
+      "code": "unsupported-feature",
+      "kind": "schema",
+      "message": "ydb requires a primary key and table \"t\" declares none"
+    }
+  ],
+  "no_skipped": [
+    {
+      "code": "unsupported-feature",
+      "kind": "schema",
+      "message": "ydb requires a primary key and table \"t\" declares none"
+    }
+  ]
+}

@@ -102,3 +102,30 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 		})
 	}
 }
+
+const (
+	hostValidTable = "tables:\n  host_source_items:\n    columns:\n      id: {type: Uint64, primary: true}\n      body: {type: Utf8}\n"
+	// The two tables are valid alone and cannot both exist: YDB keeps one object
+	// at a path and a table holds no children. Only whole-schema validation
+	// sees the pair.
+	hostNestedTables = "tables:\n  a:\n    columns:\n      id: {type: Uint64, primary: true}\n" +
+		"  b:\n    schema: a\n    columns:\n      id: {type: Uint64, primary: true}\n"
+)
+
+// The host asks the provider to validate the desired schema before it plans,
+// because the provider advertises schema.validate. Whatever the plan reports
+// next, it does not stop for want of a validation service.
+func TestHostValidatesTheDesiredSchemaWithTheProvider_HappyPath(t *testing.T) {
+	c := qt.New(t)
+	output := hostSource(c, "--schema-file", "schema.yaml", hostValidTable)
+	c.Assert(output, qt.Not(qt.Matches), `(?s).*(no schema validation service|lies inside table).*`)
+}
+
+// A refusal by the provider's validation reaches the user with the provider's
+// message.
+func TestHostReportsTheProvidersValidationRefusal_FailurePath(t *testing.T) {
+	c := qt.New(t)
+	output := hostSource(c, "--schema-file", "schema.yaml", hostNestedTables)
+	c.Assert(output, qt.Matches, `(?s).*YDB table a/b lies inside table a; a table holds no children.*`)
+	c.Assert(output, qt.Not(qt.Matches), `(?s).*no schema validation service.*`)
+}

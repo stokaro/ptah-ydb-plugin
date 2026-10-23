@@ -1,0 +1,1 @@
+{"tables":[{"schema":"app/sub","name":"t","primary_key":["id"],"columns":[{"name":"id","type":"Uint64","primary":true}]}]}

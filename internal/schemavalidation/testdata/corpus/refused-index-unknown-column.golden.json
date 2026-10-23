@@ -1,0 +1,17 @@
+{
+  "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+  "default": [
+    {
+      "code": "unsupported-feature",
+      "kind": "schema",
+      "message": "index \"by_x\" on table \"t\": it names column \"x\", which the table does not declare"
+    }
+  ],
+  "no_skipped": [
+    {
+      "code": "unsupported-feature",
+      "kind": "schema",
+      "message": "index \"by_x\" on table \"t\": it names column \"x\", which the table does not declare"
+    }
+  ]
+}

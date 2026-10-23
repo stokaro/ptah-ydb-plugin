@@ -1,0 +1,1 @@
+{"namespaces":[{"name":"app"}],"tables":[{"schema":"app","name":"t","primary_key":["id"],"columns":[{"name":"id","type":"Uint64","primary":true}]}]}
