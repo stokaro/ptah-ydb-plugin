@@ -2,6 +2,12 @@ version: 2
 
 project_name: ptah-plugin-ydb
 
+# The release lines the provider declares are published beside the archives, and
+# listed in checksums.txt, so a host can pin them by digest.
+before:
+  hooks:
+    - sh -c 'mkdir -p .release && go run ./cmd/release-lines > .release/release-lines.json'
+
 builds:
   - id: ptah-plugin-ydb
     main: ./cmd/ptah-plugin-ydb
@@ -49,8 +55,12 @@ archives:
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+  extra_files:
+    - glob: ./.release/release-lines.json
 
 release:
+  extra_files:
+    - glob: ./.release/release-lines.json
   # A re-run of a tag must finish: replace assets already on the release
   # instead of failing on the 422 "already_exists" answer.
   replace_existing_artifacts: true
