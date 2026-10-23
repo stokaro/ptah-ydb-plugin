@@ -21,7 +21,11 @@ type Connection struct {
 
 // Open opens the native query-service connection. No schema is created.
 func Open(ctx context.Context, address Address) (*Connection, error) {
-	driver, err := ydb.Open(ctx, address.dsn, address.credentials(), ydb.WithApplicationName("ptah-plugin-ydb"))
+	credentials, err := address.credentials()
+	if err != nil {
+		return nil, err
+	}
+	driver, err := ydb.Open(ctx, address.dsn, credentials, ydb.WithApplicationName("ptah-plugin-ydb"))
 	if err != nil {
 		return nil, err
 	}

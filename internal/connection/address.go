@@ -5,9 +5,12 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"os"
+	"slices"
 	"strconv"
 	"strings"
 
+	environ "github.com/ydb-platform/ydb-go-sdk-auth-environ"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"github.com/ydb-platform/ydb-go-sdk/v3/balancers"
 )
@@ -19,6 +22,7 @@ type Address struct {
 	database string
 	user     *url.Userinfo
 	token    string
+	useEnv   bool
 }
 
 // Parse validates the provider's connection address before any network call.
@@ -53,9 +57,9 @@ func Parse(raw string) (Address, error) {
 			return Address{}, errors.New("YDB URL parameters must appear once")
 		}
 		switch key {
-		case "database", "token", "go_balancer":
+		case "database", "token", "go_balancer", "use_env_credentials":
 		default:
-			return Address{}, errors.New("unsupported YDB URL parameter; supported parameters: database, token, go_balancer")
+			return Address{}, errors.New("unsupported YDB URL parameter; supported parameters: database, token, go_balancer, use_env_credentials")
 		}
 	}
 	database := strings.Trim(u.Path, "/")
@@ -78,6 +82,22 @@ func Parse(raw string) (Address, error) {
 	if q.Has("token") && (strings.TrimSpace(token) == "" || u.User != nil) {
 		return Address{}, errors.New("provide exactly one nonempty YDB credential source")
 	}
+	useEnv := false
+	if q.Has("use_env_credentials") {
+		// A bare parameter is on, the way ydb-go-sdk-auth-environ reads it; a
+		// value is a strict boolean.
+		useEnv = true
+		if raw := strings.TrimSpace(q.Get("use_env_credentials")); raw != "" {
+			enabled, err := strconv.ParseBool(raw)
+			if err != nil {
+				return Address{}, errors.New("use_env_credentials must be a boolean")
+			}
+			useEnv = enabled
+		}
+		if useEnv && (u.User != nil || q.Has("token")) {
+			return Address{}, errors.New("provide exactly one nonempty YDB credential source")
+		}
+	}
 	if u.User != nil {
 		password, ok := u.User.Password()
 		if u.User.Username() == "" || !ok || password == "" {
@@ -97,7 +117,7 @@ func Parse(raw string) (Address, error) {
 	}
 	database = "/" + database
 	dsn := url.URL{Scheme: scheme, Host: net.JoinHostPort(u.Hostname(), port), Path: database, RawQuery: passed.Encode()}
-	return Address{dsn: dsn.String(), database: database, user: u.User, token: token}, nil
+	return Address{dsn: dsn.String(), database: database, user: u.User, token: token, useEnv: useEnv}, nil
 }
 
 // String identifies the address without exposing its credentials.
@@ -109,13 +129,62 @@ func (a Address) GoString() string { return a.String() }
 // Database returns the database selected by both the SDK and session receipt.
 func (a Address) Database() string { return a.database }
 
-func (a Address) credentials() ydb.Option {
+// credentials resolves the one credential source the address names. An address
+// that names none connects anonymously on purpose.
+func (a Address) credentials() (ydb.Option, error) {
 	if a.user != nil {
 		password, _ := a.user.Password()
-		return ydb.WithStaticCredentials(a.user.Username(), password)
+		return ydb.WithStaticCredentials(a.user.Username(), password), nil
 	}
 	if a.token != "" {
-		return ydb.WithAccessTokenCredentials(a.token)
+		return ydb.WithAccessTokenCredentials(a.token), nil
 	}
-	return ydb.WithAnonymousCredentials()
+	if a.useEnv {
+		if err := CheckEnvironment(os.LookupEnv); err != nil {
+			return nil, err
+		}
+		return environ.WithEnvironCredentials(), nil
+	}
+	return ydb.WithAnonymousCredentials(), nil
+}
+
+// environmentCredentials are the variables ydb-go-sdk-auth-environ reads, in
+// the order it reads them.
+var environmentCredentials = []string{
+	"YDB_SERVICE_ACCOUNT_KEY_CREDENTIALS",
+	"YDB_SERVICE_ACCOUNT_KEY_FILE_CREDENTIALS",
+	"YDB_METADATA_CREDENTIALS",
+	"YDB_ACCESS_TOKEN_CREDENTIALS",
+	"YDB_STATIC_CREDENTIALS_USER",
+	"YDB_OAUTH2_KEY_FILE",
+	"YDB_ANONYMOUS_CREDENTIALS",
+}
+
+// CheckEnvironment refuses the environments ydb-go-sdk-auth-environ would read
+// as anonymous without saying so: none of its variables set, a static user
+// without the password or the endpoint it needs, and a metadata switch set to
+// anything but the 1 it reads. The messages name variables, never values.
+func CheckEnvironment(lookup func(string) (string, bool)) error {
+	set := slices.ContainsFunc(environmentCredentials, func(name string) bool {
+		_, ok := lookup(name)
+		return ok
+	})
+	if !set {
+		return errors.New("use_env_credentials is set and no credential variable is: set one of " + strings.Join(environmentCredentials, ", "))
+	}
+	if value, ok := lookup("YDB_METADATA_CREDENTIALS"); ok && value != "1" {
+		return errors.New("YDB_METADATA_CREDENTIALS is ignored by the YDB SDK, which reads only 1")
+	}
+	if _, ok := lookup("YDB_STATIC_CREDENTIALS_USER"); ok {
+		var missing []string
+		for _, name := range []string{"YDB_STATIC_CREDENTIALS_PASSWORD", "YDB_STATIC_CREDENTIALS_ENDPOINT"} {
+			if _, ok := lookup(name); !ok {
+				missing = append(missing, name)
+			}
+		}
+		if len(missing) > 0 {
+			return errors.New("YDB_STATIC_CREDENTIALS_USER is set without " + strings.Join(missing, " and ") + ", and the YDB SDK would connect anonymously instead")
+		}
+	}
+	return nil
 }
