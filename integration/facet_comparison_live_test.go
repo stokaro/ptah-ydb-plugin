@@ -61,7 +61,7 @@ func newFacetFixture(c *qt.C, clauses, options string) *facetFixture {
 // facetState states the records of one side with complete knowledge of both
 // facet models in that representation.
 func facetState(representation protocol.ValueInput_Representation, records []*protocol.ComparisonRecord) *protocol.ComparisonState {
-	models := slices.Concat(schema.Models(), schema.ObservedModels())
+	models := slices.Clone(schema.Models())
 	models = slices.DeleteFunc(models, func(model *protocol.ValueModel) bool {
 		return model.Representation != representation || !slices.Contains(tablecompare.Kinds(), model.Kind)
 	})
