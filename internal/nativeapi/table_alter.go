@@ -26,7 +26,7 @@ type AlterationSession interface {
 
 // TableAlteration owns the precondition read, single dispatch, and confirmation
 // of a captured table alteration: column families and their placements, the
-// addition of nullable columns, or the removal of columns.
+// addition of nullable columns, the removal of columns, or the TTL.
 type TableAlteration struct {
 	Open func(context.Context) (AlterationSession, error)
 }
@@ -165,6 +165,40 @@ func checkAlterationPrecondition(owner *protocol.Reference, alteration *tablecre
 			return fmt.Errorf("YDB column moves into a family the table does not hold")
 		}
 	}
+	return checkTTLPrecondition(alteration, table)
+}
+
+// checkTTLPrecondition requires the table to hold exactly the TTL the plan
+// captured, or none, so a TTL changed after planning turns into a refusal. A
+// TTL to set must read a column the table holds, of a type its mode reads; the
+// server refuses the rest only after the call, which would leave the outcome
+// uncertain.
+func checkTTLPrecondition(alteration *tablecreate.Alteration, table *native.DescribeTableResult) error {
+	if alteration.Request.TtlAction == nil {
+		return nil
+	}
+	if !proto.Equal(table.TtlSettings, alteration.HeldTTL) {
+		return fmt.Errorf("YDB table TTL differs from the plan")
+	}
+	set := alteration.Request.GetSetTtlSettings()
+	if set == nil {
+		return nil
+	}
+	name := set.GetDateTypeColumn().GetColumnName()
+	if name == "" {
+		name = set.GetValueSinceUnixEpoch().GetColumnName()
+	}
+	column := columnByName(table.Columns, name)
+	if column == nil {
+		return fmt.Errorf("YDB TTL column is absent")
+	}
+	kind, _, err := schema.ColumnType(column.Type)
+	if err != nil {
+		return err
+	}
+	if reason := tablecreate.TTLColumnRefusal(name, kind, set.GetValueSinceUnixEpoch() != nil); reason != "" {
+		return fmt.Errorf("YDB TTL %s", reason)
+	}
 	return nil
 }
 
@@ -263,6 +297,22 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 		if actual == nil || !proto.Equal(actual.Type, added.Type) || actual.GetNotNull() || familyName(actual.Family) != tablecreate.DefaultFamily {
 			return fmt.Errorf("YDB added column differs from the request")
 		}
+	}
+	return confirmTTL(request, before, observed)
+}
+
+// confirmTTL requires the TTL read back to be the one the request sets, none
+// after a removal, and otherwise the TTL the table held before the call.
+func confirmTTL(request *Ydb_Table.AlterTableRequest, before, observed *native.DescribeTableResult) error {
+	want := before.TtlSettings
+	switch action := request.TtlAction.(type) {
+	case *Ydb_Table.AlterTableRequest_SetTtlSettings:
+		want = action.SetTtlSettings
+	case *Ydb_Table.AlterTableRequest_DropTtlSettings:
+		want = nil
+	}
+	if !proto.Equal(observed.TtlSettings, want) {
+		return fmt.Errorf("YDB altered table TTL differs from the request")
 	}
 	return nil
 }

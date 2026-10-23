@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -367,5 +368,199 @@ func TestRowTableColumnAlterationSubprocess(t *testing.T) {
 		execution, err := client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "stale-columns", Units: applied.Units})
 		c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 		c.Assert(execution.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
+	})
+}
+
+func TestRowTableTTLAlterationSubprocess(t *testing.T) {
+	c := qt.New(t)
+	opened, directory, database := inspectionFixture(c)
+	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Minute)
+	defer cancel()
+	absolute := path.Join(database, directory, "records")
+	_, err := opened.DB.ExecContext(ctx, "CREATE TABLE `"+absolute+"` (id Uint64, ts Timestamp, stamp Uint64, keep Utf8, label Utf8, PRIMARY KEY (id))")
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), time.Minute)
+		defer stop()
+		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
+	})
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, keep) VALUES (1u, \"kept\"u)")
+	c.Assert(err, qt.IsNil)
+	binary, digest := providerBinary(c)
+	client := startProvider(c, binary, digest)
+	session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: database, Schema: directory, Name: "records"}
+	table := testplanning.Subject(owner)
+	columnSubject := func(name string) *protocol.ComparisonIdentity {
+		subject := testplanning.Subject(&protocol.Reference{Engine: "ydb", Kind: "column", Database: database, Schema: directory, Path: []string{"records"}, Name: name})
+		subject.Parent = &protocol.ComparisonPart{Source: "records", Normalized: "records"}
+		return subject
+	}
+	addition := func(id, name string) *protocol.CommonPlanningStep {
+		return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: id}, Parent: proto.CloneOf(table),
+			AddedColumn: &protocol.PlanningColumn{Name: name, Type: "Timestamp", Nullable: true},
+			Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN, Reason: "Fixture common operation", Effects: []*protocol.PlanningEffect{
+				{Subject: proto.CloneOf(table), Action: protocol.PlanningEffect_READ}, {Subject: columnSubject(name), Action: protocol.PlanningEffect_CREATE}}}}
+	}
+	removal := func(id, name string) *protocol.CommonPlanningStep {
+		return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: id}, Parent: proto.CloneOf(table),
+			Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN, Reason: "Fixture common operation", Effects: []*protocol.PlanningEffect{
+				{Subject: proto.CloneOf(table), Action: protocol.PlanningEffect_READ}, {Subject: columnSubject(name), Action: protocol.PlanningEffect_DROP}}}}
+	}
+	// types are the declared columns beside the key; the table states its TTL as ttl, or none.
+	plan := func(c *qt.C, types map[string]string, ttl string, steps ...*protocol.CommonPlanningStep) *protocol.PlannedFeatures {
+		c.Helper()
+		desired := &protocol.DeclaredTable{Name: "records", Schema: directory, PrimaryKey: []string{"id"},
+			Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}},
+			Features: &protocol.CapturedFeatures{
+				Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
+				Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}}}}
+		for _, name := range slices.Sorted(func(yield func(string) bool) {
+			for name := range types {
+				if !yield(name) {
+					return
+				}
+			}
+		}) {
+			desired.Columns = append(desired.Columns, &protocol.DeclaredColumn{Name: name, Type: types[name], Nullable: true})
+		}
+		settings := `{"primaryKey":["id"]`
+		if ttl != "" {
+			settings += `,"ttlSettings":` + ttl
+		}
+		desired.Features.Facets.Records = append(desired.Features.Facets.Records, desiredFacet(c, client, owner, schema.TableProperties, settings+`}`))
+		request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)}, CommonSteps: steps,
+			Tables: []*protocol.PlanningTable{{Subject: proto.CloneOf(table), Action: protocol.PlanningTable_ALTER, Desired: desired, Current: observedTable(c, client, session, directory)}}}
+		result, err := client.PlanFeatures(ctx, request)
+		c.Assert(err, qt.IsNil)
+		c.Assert(result.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", result))
+		return result
+	}
+	run := func(c *qt.C, id string, result *protocol.PlannedFeatures) ([]string, *protocol.RenderResult) {
+		c.Helper()
+		ordered := scheduled(c, result)
+		var names []string
+		for _, step := range ordered {
+			names = append(names, step.Id.Name)
+		}
+		rendered, err := client.Render(ctx, renderSteps(ordered, session.Capabilities))
+		c.Assert(err, qt.IsNil)
+		execution, err := client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: id, Units: rendered.Units})
+		c.Assert(err, qt.IsNil)
+		c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
+		return names, rendered
+	}
+	// heldTTL is the TTL the provider reads back, as the next plan sees it.
+	heldTTL := func(c *qt.C) string {
+		c.Helper()
+		for _, record := range observedTable(c, client, session, directory).Features.Facets.Records {
+			if record.Kind != schema.TableProperties {
+				continue
+			}
+			var properties struct {
+				TTL any `json:"ttlSettings"`
+			}
+			c.Assert(json.Unmarshal(record.Value.Value.Payload, &properties), qt.IsNil)
+			encoded, err := json.Marshal(properties.TTL)
+			c.Assert(err, qt.IsNil)
+			return string(encoded)
+		}
+		c.Fatal("the table facet was not read back")
+		return ""
+	}
+	columnNames := func(c *qt.C) []string {
+		c.Helper()
+		var names []string
+		for _, column := range observedTable(c, client, session, directory).Columns {
+			names = append(names, column.Name)
+		}
+		slices.Sort(names)
+		return names
+	}
+	date := func(column string, seconds int) string {
+		return `{"dateTypeColumn":{"columnName":"` + column + `","expireAfterSeconds":` + strconv.Itoa(seconds) + `}}`
+	}
+	declared := map[string]string{"ts": "Timestamp", "stamp": "Uint64", "keep": "Utf8", "label": "Utf8"}
+	var applied *protocol.RenderResult
+	for _, step := range []struct {
+		name string
+		ttl  string
+		want string
+	}{
+		{"sets a TTL on a table without one", date("ts", 3600), date("ts", 3600)},
+		{"changes the interval", date("ts", 7200), date("ts", 7200)},
+		{"reads an integer column", `{"valueSinceUnixEpoch":{"columnName":"stamp","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":60}}`,
+			`{"valueSinceUnixEpoch":{"columnName":"stamp","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":60}}`},
+		{"states a run interval", `{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":900}`,
+			`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":900}`},
+		{"keeps the run interval the declaration leaves out", date("ts", 7200),
+			`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":7200},"runIntervalSeconds":900}`},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			c := qt.New(t)
+			result := plan(c, declared, step.ttl)
+			c.Assert(result.Contributions, qt.HasLen, 1)
+			c.Assert(result.Contributions[0].Steps, qt.HasLen, 1)
+			c.Assert(result.Contributions[0].Steps[0].Id.Name, qt.Equals, "row-table-ttl/000000")
+			_, applied = run(c, "ttl-"+step.name, result)
+			c.Assert(heldTTL(c), qt.JSONEquals, json.RawMessage(step.want))
+			// The read-back is what the next plan is made against: the same declaration changes nothing.
+			c.Assert(plan(c, declared, step.ttl).Contributions, qt.HasLen, 0)
+		})
+	}
+	t.Run("refuses a stale alteration before the call", func(t *testing.T) {
+		c := qt.New(t)
+		// The table now holds a TTL the captured alteration did not expect.
+		execution, err := client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "stale-ttl", Units: applied.Units})
+		c.Assert(err, qt.ErrorIs, provider.ErrExecution)
+		c.Assert(execution.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
+	})
+	t.Run("moves the TTL to an added column and drops the column it read", func(t *testing.T) {
+		c := qt.New(t)
+		// The host lists the removal first. The server refuses a TTL on a column that
+		// does not exist yet, and refuses to drop the column a TTL reads, so only the
+		// order add, set TTL, drop can succeed.
+		moved := map[string]string{"fresh": "Timestamp", "stamp": "Uint64", "keep": "Utf8", "label": "Utf8"}
+		result := plan(c, moved, date("fresh", 3600), removal("drop-ts", "ts"), addition("add-fresh", "fresh"))
+		c.Assert(result.Rewrites, qt.HasLen, 2)
+		names, _ := run(c, "ttl-move", result)
+		c.Assert(slices.Index(names, "row-table-add-column/000000") < slices.Index(names, "row-table-ttl/000000"), qt.IsTrue, qt.Commentf("%v", names))
+		c.Assert(slices.Index(names, "row-table-ttl/000000") < slices.Index(names, "row-table-drop-column/000000"), qt.IsTrue, qt.Commentf("%v", names))
+		c.Assert(columnNames(c), qt.DeepEquals, []string{"fresh", "id", "keep", "label", "stamp"})
+		// The run interval the table held survives the move, since the declaration states none.
+		c.Assert(heldTTL(c), qt.JSONEquals, json.RawMessage(`{"dateTypeColumn":{"columnName":"fresh","expireAfterSeconds":3600},"runIntervalSeconds":900}`))
+		c.Assert(plan(c, moved, date("fresh", 3600)).Contributions, qt.HasLen, 0)
+		var count uint64
+		c.Assert(opened.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM `"+absolute+"` WHERE keep = \"kept\"u").Scan(&count), qt.IsNil)
+		c.Assert(count, qt.Equals, uint64(1))
+	})
+	t.Run("refuses a column the server would refuse before the call", func(t *testing.T) {
+		c := qt.New(t)
+		request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)}}
+		desired := &protocol.DeclaredTable{Name: "records", Schema: directory, PrimaryKey: []string{"id"},
+			Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "label", Type: "Utf8", Nullable: true}},
+			Features: &protocol.CapturedFeatures{
+				Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
+				Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{},
+					Records: []*protocol.ComparisonRecord{desiredFacet(c, client, owner, schema.TableProperties, `{"primaryKey":["id"],"ttlSettings":`+date("label", 60)+`}`)}}}}
+		request.Tables = []*protocol.PlanningTable{{Subject: proto.CloneOf(table), Action: protocol.PlanningTable_ALTER, Desired: desired, Current: observedTable(c, client, session, directory)}}
+		result, err := client.PlanFeatures(ctx, request)
+		c.Assert(err, qt.IsNil)
+		c.Assert(result.Diagnostics, qt.HasLen, 1)
+		c.Assert(result.Diagnostics[0].Message, qt.Matches, `the TTL column "label" is Utf8, and YDB reads a TTL from.*`)
+		c.Assert(result.Contributions, qt.HasLen, 0)
+	})
+	t.Run("removes the TTL a declaration leaves out", func(t *testing.T) {
+		c := qt.New(t)
+		moved := map[string]string{"fresh": "Timestamp", "stamp": "Uint64", "keep": "Utf8", "label": "Utf8"}
+		result := plan(c, moved, "")
+		c.Assert(result.Contributions, qt.HasLen, 1)
+		run(c, "ttl-drop", result)
+		c.Assert(heldTTL(c), qt.Equals, "null")
+		c.Assert(plan(c, moved, "").Contributions, qt.HasLen, 0)
 	})
 }
