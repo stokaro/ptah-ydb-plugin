@@ -20,10 +20,11 @@ import (
 
 // AlterOperationKind identifies a native alteration of an existing row table:
 // its column families and their placements, the addition of nullable columns,
-// the removal of columns, or its TTL. One operation does exactly one of the four.
+// the removal of columns, its TTL, or its automatic partitioning settings. One
+// operation does exactly one of the five.
 const AlterOperationKind = schema.ProviderID + "/row-table-alter-operation"
 
-var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns", "add_columns", "drop_columns", "set_ttl_settings", "drop_ttl_settings"}
+var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns", "add_columns", "drop_columns", "set_ttl_settings", "drop_ttl_settings", "alter_partitioning_settings"}
 var alterModel = buildAlterModel()
 
 // AlterModel binds the alteration payload grammar, its preconditions, and its
@@ -38,16 +39,17 @@ func buildAlterModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": AlterOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
 		"request": json.RawMessage(descriptor), "allowed_request_fields": alterFields,
-		"payload":      "request: native AlterTableRequest without session or path; held_families: the touched families as the table held them; held_columns: the family each moved column sat in; held_ttl: the TTL the table held, absent for none",
+		"payload":      "request: native AlterTableRequest without session or path; held_families: the touched families as the table held them; held_columns: the family each moved column sat in; held_ttl: the TTL the table held, absent for none; held_partitioning: the whole partitioning the table held",
 		"families":     "families are added or have only the settings the declaration states changed; a family is never dropped, a setting is never reset, keep_in_memory is never set",
 		"columns":      "a column moves between families by name; key columns stay in the default family; a column the plan drops is never named",
 		"additions":    "add_columns names columns that are nullable, have no default and sit in the default family; a column that must be placed in another family is moved by a separate family operation after the addition",
 		"removals":     "drop_columns names columns that are not part of the key, an index, the TTL or the partitioning",
 		"ttl":          "set_ttl_settings states the whole TTL the table holds afterward, a date column with seconds or an integer column with a unit and seconds, and a run interval only to keep or set one; drop_ttl_settings removes it; the column must exist with a type the mode reads",
-		"exclusive":    "an operation changes families and placements, or adds columns, or drops columns, or sets or drops the TTL, never a mix",
+		"partitioning": "alter_partitioning_settings states only the settings that change, among the automatic partitioning by size and by load, the preferred partition size and the minimum and maximum partition counts; the partition columns are never named, a setting is never reset, and the minimum never exceeds a nonzero maximum",
+		"exclusive":    "an operation changes families and placements, or adds columns, or drops columns, or sets or drops the TTL, or changes the partitioning settings, never a mix",
 		"execution":    "native AlterTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
-		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add must be absent; a family to move into must exist or be added by the same request; a column to add must be absent; a column to drop must exist and must not be a key column, an index column, the TTL column or a partitioning column; the table must hold exactly the TTL captured, or none; a TTL to set must read an existing column of a type its mode reads",
-		"confirmation": "read back the whole family set and every column; each family and column the request does not name must be unchanged, an added column must exist with its type and in the default family, a dropped column must be gone, the TTL must be the one set, or gone for a drop and otherwise unchanged, and the key must be unchanged",
+		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add must be absent; a family to move into must exist or be added by the same request; a column to add must be absent; a column to drop must exist and must not be a key column, an index column, the TTL column or a partitioning column; the table must hold exactly the TTL captured, or none; the table must hold exactly the partitioning settings captured; a TTL to set must read an existing column of a type its mode reads",
+		"confirmation": "read back the whole family set and every column; each family and column the request does not name must be unchanged, an added column must exist with its type and in the default family, a dropped column must be gone, the TTL must be the one set, or gone for a drop and otherwise unchanged, the partitioning must be the captured settings with the stated ones replaced and otherwise unchanged, and the key must be unchanged",
 		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
@@ -75,6 +77,9 @@ type Alteration struct {
 	// HeldTTL is the TTL the table held when planned; nil is none. Only a TTL
 	// alteration carries it.
 	HeldTTL *Ydb_Table.TtlSettings
+	// HeldPartitioning is the whole partitioning the table held when planned.
+	// Only a partitioning alteration carries it.
+	HeldPartitioning *Ydb_Table.PartitioningSettings
 }
 
 type heldColumn struct {
@@ -87,6 +92,8 @@ type alterPayload struct {
 	HeldFamilies []json.RawMessage `json:"held_families,omitempty"`
 	HeldColumns  []heldColumn      `json:"held_columns,omitempty"`
 	HeldTTL      json.RawMessage   `json:"held_ttl,omitempty"`
+	// HeldPartitioning is kept as raw JSON so an empty object stays present.
+	HeldPartitioning json.RawMessage `json:"held_partitioning,omitempty"`
 }
 
 // CaptureAlteration builds the operation for a family change planned against a
@@ -106,6 +113,13 @@ func CaptureTTLAlteration(id string, owner *protocol.Reference, change ttlChange
 		request.TtlAction = &Ydb_Table.AlterTableRequest_SetTtlSettings{SetTtlSettings: change.set}
 	}
 	return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: map[string]string{}, HeldTTL: change.held})
+}
+
+// CapturePartitioningAlteration builds the operation for a change of the
+// automatic partitioning settings planned against a table in owner.
+func CapturePartitioningAlteration(id string, owner *protocol.Reference, change partitioningChange) (*protocol.NormalizedValue, error) {
+	request := &Ydb_Table.AlterTableRequest{AlterPartitioningSettings: change.set}
+	return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: map[string]string{}, HeldPartitioning: change.held})
 }
 
 func captureRequest(id string, owner *protocol.Reference, alteration *Alteration) (*protocol.NormalizedValue, error) {
@@ -146,6 +160,11 @@ func encodeAlteration(alteration *Alteration) ([]byte, error) {
 			return nil, err
 		}
 	}
+	if alteration.HeldPartitioning != nil {
+		if payload.HeldPartitioning, err = protojson.Marshal(alteration.HeldPartitioning); err != nil {
+			return nil, err
+		}
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -176,6 +195,8 @@ func NormalizeAlteration(input *protocol.ValueInput) (*protocol.NormalizedValue,
 	result.Payload = payload
 	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Adds column families"
 	switch {
+	case alteration.Request.AlterPartitioningSettings != nil:
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes when YDB splits and merges the table's partitions"
 	case alteration.Request.TtlAction != nil:
 		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "A TTL decides which rows YDB deletes; restoring a prior TTL cannot recover deleted rows"
 	case len(alteration.Request.DropColumns) > 0:
@@ -242,6 +263,13 @@ func decodeAlteration(raw []byte) (*Alteration, error) {
 		}
 		alteration.HeldTTL = &held
 	}
+	if payload.HeldPartitioning != nil {
+		var held Ydb_Table.PartitioningSettings
+		if err := protojson.Unmarshal(payload.HeldPartitioning, &held); err != nil {
+			return nil, fmt.Errorf("invalid held YDB partitioning")
+		}
+		alteration.HeldPartitioning = &held
+	}
 	for _, held := range payload.HeldColumns {
 		if _, duplicate := alteration.HeldColumns[held.Name]; duplicate {
 			return nil, fmt.Errorf("duplicate held YDB column")
@@ -255,7 +283,7 @@ func validateAlteration(alteration *Alteration) error {
 	request := alteration.Request
 	groups := 0
 	for _, used := range []bool{len(request.AddColumnFamilies)+len(request.AlterColumnFamilies)+len(request.AlterColumns) > 0,
-		len(request.AddColumns) > 0, len(request.DropColumns) > 0, request.TtlAction != nil} {
+		len(request.AddColumns) > 0, len(request.DropColumns) > 0, request.TtlAction != nil, request.AlterPartitioningSettings != nil} {
 		if used {
 			groups++
 		}
@@ -264,12 +292,15 @@ func validateAlteration(alteration *Alteration) error {
 		return fmt.Errorf("YDB table alteration changes nothing")
 	}
 	if groups > 1 {
-		return fmt.Errorf("YDB table alteration mixes family, column addition, column removal and TTL changes")
+		return fmt.Errorf("YDB table alteration mixes family, column addition, column removal, TTL and partitioning changes")
 	}
 	if err := validateColumnAlteration(request); err != nil {
 		return err
 	}
 	if err := validateTTLAlteration(alteration); err != nil {
+		return err
+	}
+	if err := validatePartitioningAlteration(alteration); err != nil {
 		return err
 	}
 	named := map[string]bool{}
@@ -376,6 +407,35 @@ func validateTTLAlteration(alteration *Alteration) error {
 		}
 	default:
 		return fmt.Errorf("unsupported YDB TTL action")
+	}
+	return nil
+}
+
+// validatePartitioningAlteration checks a partitioning alteration. It names
+// only the five settings that change after creation, states at least one that
+// differs from the held value, keeps a partition size beside enabled
+// partitioning by size, and leaves the minimum no higher than a nonzero
+// maximum. A request that does not touch the partitioning carries no held
+// partitioning.
+func validatePartitioningAlteration(alteration *Alteration) error {
+	set := alteration.Request.AlterPartitioningSettings
+	if set == nil {
+		if alteration.HeldPartitioning != nil {
+			return fmt.Errorf("a held YDB partitioning disagrees with the alteration")
+		}
+		return nil
+	}
+	if alteration.HeldPartitioning == nil {
+		return fmt.Errorf("YDB partitioning alteration requires the held partitioning")
+	}
+	if err := only(set, "partitioning_by_size", "partitioning_by_load", "partition_size_mb", "min_partitions_count", "max_partitions_count"); err != nil {
+		return err
+	}
+	if partitioningDelta(set, alteration.HeldPartitioning) == nil {
+		return fmt.Errorf("YDB partitioning alteration changes nothing")
+	}
+	if reason := partitioningRefusal(alteration.HeldPartitioning, set); reason != "" {
+		return fmt.Errorf("YDB partitioning alteration is invalid: %s", reason)
 	}
 	return nil
 }

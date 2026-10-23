@@ -165,7 +165,27 @@ func checkAlterationPrecondition(owner *protocol.Reference, alteration *tablecre
 			return fmt.Errorf("YDB column moves into a family the table does not hold")
 		}
 	}
-	return checkTTLPrecondition(alteration, table)
+	if err := checkTTLPrecondition(alteration, table); err != nil {
+		return err
+	}
+	return checkPartitioningPrecondition(alteration, table)
+}
+
+// checkPartitioningPrecondition requires the table to hold exactly the
+// partitioning settings the plan captured, so settings changed after planning
+// turn into a refusal.
+func checkPartitioningPrecondition(alteration *tablecreate.Alteration, table *native.DescribeTableResult) error {
+	if alteration.Request.AlterPartitioningSettings == nil {
+		return nil
+	}
+	held := table.PartitioningSettings
+	if held == nil {
+		held = &Ydb_Table.PartitioningSettings{}
+	}
+	if !proto.Equal(held, alteration.HeldPartitioning) {
+		return fmt.Errorf("YDB table partitioning settings differ from the plan")
+	}
+	return nil
 }
 
 // checkTTLPrecondition requires the table to hold exactly the TTL the plan
@@ -298,7 +318,25 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 			return fmt.Errorf("YDB added column differs from the request")
 		}
 	}
-	return confirmTTL(request, before, observed)
+	if err := confirmTTL(request, before, observed); err != nil {
+		return err
+	}
+	return confirmPartitioning(request, before, observed)
+}
+
+// confirmPartitioning requires a partitioning alteration to leave the table
+// with every setting the request names and with the partition columns it held.
+// The server derives other settings from the ones named, so those are not
+// compared. Any other request leaves the partitioning unread.
+func confirmPartitioning(request *Ydb_Table.AlterTableRequest, before, observed *native.DescribeTableResult) error {
+	if request.AlterPartitioningSettings == nil {
+		return nil
+	}
+	if !tablecreate.PartitioningHolds(observed.PartitioningSettings, request.AlterPartitioningSettings) ||
+		!slices.Equal(observed.PartitioningSettings.GetPartitionBy(), before.PartitioningSettings.GetPartitionBy()) {
+		return fmt.Errorf("YDB altered table partitioning settings differ from the request")
+	}
+	return nil
 }
 
 // confirmTTL requires the TTL read back to be the one the request sets, none

@@ -72,7 +72,7 @@ func refusedChange(index int, message string) *protocol.PlannedFeatures {
 // belongs to: the alteration derives its operations from the captured tables,
 // and the change names the property that made the table differ.
 func changeReceipt(change *protocol.PlanningChange, steps []*protocol.StepIdentity) *protocol.PlanningReceipt {
-	strategy := "The table alteration sets or drops the TTL and alters the column families and column placements through the native table service"
+	strategy := "The table alteration sets or drops the TTL, changes the automatic partitioning settings and alters the column families and column placements through the native table service"
 	if len(steps) == 0 {
 		strategy = "The captured table already satisfies the declaration, so the alteration has no step to carry out"
 	}

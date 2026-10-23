@@ -7,7 +7,7 @@ external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations.
 Offline comparison, planning, and rendering produce native coordination
-operations. Native row-table creation and alteration of column families, columns and the TTL are available through captured SDK planning requests.
+operations. Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
 
 The executable opens native YDB connections and reads row-table schemas
@@ -380,7 +380,7 @@ statistics are excluded. A missing child description refuses the entire read.
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
 Every observed model has a separate desired contract and an offline conversion.
-Comparison and planning remain limited to coordination nodes and the TTL and column families of row tables; source adapters
+Comparison and planning remain limited to coordination nodes and the TTL, partitioning settings and column families of row tables; source adapters
 for the other families remain pending.
 
 Views retain the query returned by the view service and the attributes read
@@ -736,7 +736,7 @@ exclusive ownership against another schema writer.
 Access requirements, temporary tables, indexes, changefeeds, sequence defaults,
 column compression or encoding, and richer common constraints are refused.
 Table removal and rebuild remain unsupported, and alteration covers column
-families, the addition and removal of columns, and the TTL (see below). An unknown populated
+families, the addition and removal of columns, the TTL and the automatic partitioning settings (see below). An unknown populated
 field cannot disappear during compilation. A mixed SQL/native batch is validated
 before its first unit executes.
 
@@ -751,8 +751,9 @@ complete native CLI table migration workflow.
 ## Native table alteration
 
 The same planning service (`ydb-row-table-create`) accepts captured ALTER
-lifecycles for row tables. It owns three facets of an altered table: its column
-families, the addition and removal of its columns, and its TTL. Each becomes native
+lifecycles for row tables. It owns four facets of an altered table: its column
+families, the addition and removal of its columns, its TTL, and its automatic
+partitioning settings. Each becomes native
 AlterTable calls. Everything else about an altered table stays with the host:
 other table settings, and any column step the native call cannot state.
 
@@ -841,6 +842,38 @@ table holds afterward (`set_ttl_settings`) or removes it
   are not session capabilities of this provider. The host keeps refusing a TTL
   its target cannot write.
 
+### Partitioning settings
+
+The service changes the automatic partitioning settings of an existing row
+table with one native `AlterTable` step, `row-table-partitioning/N`. The step
+carries only the settings that change, and also the whole partitioning the table
+held when the plan was made. The settings are `AUTO_PARTITIONING_BY_SIZE`,
+`AUTO_PARTITIONING_BY_LOAD`, `AUTO_PARTITIONING_PARTITION_SIZE_MB`,
+`AUTO_PARTITIONING_MIN_PARTITIONS_COUNT` and
+`AUTO_PARTITIONING_MAX_PARTITIONS_COUNT`, which the declaration spells
+`partitioningBySize`, `partitioningByLoad`, `partitionSizeMb`,
+`minPartitionsCount` and `maxPartitionsCount`.
+
+- The settings are managed when the declaration states table properties for this
+  target, and only the settings it states are compared. A setting the
+  declaration leaves out stays as the table holds it, so the defaults a table
+  reports for the settings the declaration omits never count as a difference.
+  The native call has no reset, so removing a setting from the declaration does
+  not return it to its default.
+- Partition columns are set when the table is created. A declaration that names
+  other columns than the table holds is refused; the same columns are no change.
+  `PARTITION_AT_KEYS` and `UNIFORM_PARTITIONS` are creation-only and are not read.
+- A minimum count above a nonzero maximum is refused, checked against the value
+  the table holds for a bound the declaration leaves out. A partition size beside
+  disabled partitioning by size is refused too: the server turns partitioning by
+  size on when a size is set, so the declaration has to state both.
+- When the step switches partitioning by size on, it names every setting the
+  declaration states, because the server resets the size and the minimum count
+  the call leaves out.
+- Impact is behavioral: the settings decide when YDB splits and merges
+  partitions. The step reads the table and alters its partitioning only, and does
+  not depend on the family, column or TTL steps.
+
 ### Execution
 
 Execution reads the table first. A family operation requires every touched
@@ -851,20 +884,26 @@ column or a partitioning column; the server refuses each of those only after the
 call, which would leave the outcome uncertain, so the provider reads them first.
 A TTL operation requires the table to hold exactly the TTL the plan captured, or
 none, and a TTL to set must read a column the table holds with a type its mode
-reads. A table that changed since planning is refused before the call.
+reads. A partitioning operation requires the table to hold exactly the
+partitioning settings the plan captured. A table that changed since planning is
+refused before the call.
 
 After the call the provider reads the table back and checks that the requested
 change holds and that nothing else moved: other families and columns, column
 names and types, their order, the key, and the TTL. The TTL must read back as
 the one the request sets, run interval included, or as none after a removal, and
-as before for every other operation. An added column must read back with its
+as before for every other operation. After a partitioning operation the table
+must hold every setting the request names and the partition columns it held; the
+settings the server derives from them, such as the partition size it no longer
+reports once partitioning by size is off, are not compared. An added column must read back with its
 type, nullable and in the default family. A failed reply or unconfirmed
 read remains UNKNOWN and is never retried. As for creation, these checks do not
 establish exclusive ownership against another schema writer.
 
 Live tests alter a table on YDB 25.1.4.7 and 26.2.1.14: families and column
 placements; adding columns, placing one in a family and dropping others in a
-single plan; setting, changing, moving and removing a TTL, including the move of
+single plan; changing each partitioning setting on its own and together,
+including switching partitioning by size off and on again; setting, changing, moving and removing a TTL, including the move of
 a TTL to an added column in the same plan that drops the column it read; and the
 refusal of an indexed column, of a TTL column the server would refuse, and of a
 stale alteration before the call. They plan again from the read back to show the declaration no
@@ -874,11 +913,11 @@ longer changes anything, and check that rows survive.
 
 The offline `models.compare` service `ydb-row-table-properties` compares the
 table and column properties of a row table that exists on both sides. It reports
-one `github.com/stokaro/ptah-ydb-plugin/row-table-properties-change` for a table whose TTL or column families
+one `github.com/stokaro/ptah-ydb-plugin/row-table-properties-change` for a table whose TTL, partitioning settings or column families
 differ from the declaration, and one for each column that sits in another
 family. The comparison applies the rules of the alteration planner, so a
 difference it reports is one the planner acts on, and a table that differs only
-in its TTL or its families still reaches the planner. A change carries both
+in its TTL, its partitioning settings or its families still reaches the planner. A change carries both
 complete facets, replaces no owner, removes no state and leaves access
 unchanged. A facet present on one side only states nothing to compare; the
 planner decides what the missing read means. The planner accepts exactly these

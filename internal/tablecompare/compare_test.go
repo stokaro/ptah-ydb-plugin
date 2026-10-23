@@ -24,6 +24,10 @@ func withTTL(ttl string) string {
 	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}],"ttlSettings":` + ttl + `}`
 }
 
+func withPartitioning(settings string) string {
+	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}],"partitioningSettings":` + settings + `}`
+}
+
 func withFamily(family string) string {
 	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},` + family + `]}`
 }
@@ -164,6 +168,21 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"a TTL that differs", side{table: withTTL(daily)}, side{table: withTTL(hourly)}, []string{"records"}},
 		{"a TTL the declaration leaves out", side{table: plain}, side{table: withTTL(hourly)}, []string{"records"}},
 		{"a family the table lacks", side{table: withFamily(`{"name":"archive"}`)}, side{table: plain}, []string{"records"}},
+		{"partitioning by size switched on",
+			side{table: withPartitioning(`{"partitioningBySize":"ENABLED"}`)}, side{table: withPartitioning(`{"partitioningBySize":"DISABLED"}`)}, []string{"records"}},
+		{"partitioning by load switched on",
+			side{table: withPartitioning(`{"partitioningByLoad":"ENABLED"}`)}, side{table: withPartitioning(`{"partitioningByLoad":"DISABLED"}`)}, []string{"records"}},
+		{"another partition size",
+			side{table: withPartitioning(`{"partitionSizeMb":"512"}`)}, side{table: withPartitioning(`{"partitionSizeMb":"2048"}`)}, []string{"records"}},
+		{"another minimum partition count",
+			side{table: withPartitioning(`{"minPartitionsCount":"4"}`)}, side{table: withPartitioning(`{"minPartitionsCount":"1"}`)}, []string{"records"}},
+		{"another maximum partition count",
+			side{table: withPartitioning(`{"maxPartitionsCount":"8"}`)}, side{table: withPartitioning(`{"maxPartitionsCount":"50"}`)}, []string{"records"}},
+		{"partitioning settings the table does not report",
+			side{table: withPartitioning(`{"maxPartitionsCount":"8"}`)}, side{table: plain}, []string{"records"}},
+		{"one setting among several that differs",
+			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"512","maxPartitionsCount":"8"}`)},
+			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"512","maxPartitionsCount":"50"}`)}, []string{"records"}},
 		{"a family with another compression",
 			side{table: withFamily(`{"name":"archive","compression":"COMPRESSION_LZ4"}`)},
 			side{table: withFamily(`{"name":"archive","compression":"COMPRESSION_NONE"}`)}, []string{"records"}},
@@ -212,6 +231,18 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"a run interval the declaration leaves out",
 			side{table: withTTL(hourly)},
 			side{table: withTTL(`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":900}`)}},
+		{"the same partitioning settings",
+			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"512","maxPartitionsCount":"8"}`)},
+			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"512","maxPartitionsCount":"8"}`)}},
+		{"partitioning settings the declaration leaves out", side{table: plain},
+			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","minPartitionsCount":"1","maxPartitionsCount":"50"}`)}},
+		{"a declared subset of the settings the table reports as defaults",
+			side{table: withPartitioning(`{"partitioningBySize":"ENABLED"}`)},
+			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","minPartitionsCount":"1","maxPartitionsCount":"50"}`)}},
+		{"partition columns the table holds",
+			side{table: withPartitioning(`{"partitionBy":["id"]}`)}, side{table: withPartitioning(`{"partitionBy":["id"]}`)}},
+		{"partition columns the comparison leaves to the planner",
+			side{table: withPartitioning(`{"partitionBy":["id","ts"]}`)}, side{table: withPartitioning(`{"partitionBy":["id"]}`)}},
 		{"a family the table already holds",
 			side{table: withFamily(`{"name":"archive","compression":"COMPRESSION_LZ4"}`)},
 			side{table: withFamily(`{"name":"archive","compression":"COMPRESSION_LZ4"}`)}},

@@ -61,7 +61,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("invalid YDB table parent assignment")
 		}
 		if table.Action != protocol.PlanningTable_CREATE && table.Action != protocol.PlanningTable_ALTER {
-			return refused(i, "Only native row-table creation and alteration of column families, columns and the TTL are implemented"), nil
+			return refused(i, "Only native row-table creation and alteration of column families, columns, the TTL and the partitioning settings are implemented"), nil
 		}
 		transactional, known := request.Capabilities["transactional_ddl"]
 		if !known || transactional {
@@ -75,14 +75,14 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("YDB table creation targets another database")
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			change, ttl, reason, err := planAlteration(owner, table)
+			change, ttl, partitioning, reason, err := planAlteration(owner, table)
 			if err != nil {
 				return nil, err
 			}
 			if reason != "" {
 				return refused(i, reason), nil
 			}
-			item := alteration{index: i, table: table, change: change, ttl: ttl}
+			item := alteration{index: i, table: table, change: change, ttl: ttl, partitioning: partitioning}
 			if !change.empty() {
 				if item.operation, err = CaptureAlteration("pending", owner, change); err != nil {
 					return refused(i, err.Error()), nil
@@ -90,6 +90,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			}
 			if !ttl.empty() {
 				if item.ttlOperation, err = CaptureTTLAlteration("pending", owner, ttl); err != nil {
+					return refused(i, err.Error()), nil
+				}
+			}
+			if !partitioning.empty() {
+				if item.partitioningOperation, err = CapturePartitioningAlteration("pending", owner, partitioning); err != nil {
 					return refused(i, err.Error()), nil
 				}
 			}
@@ -142,7 +147,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
 	}
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals, ttls int
+	var families, additions, removals, ttls, partitionings int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -199,6 +204,20 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			contribution.Dependencies = append(contribution.Dependencies, ttlStepDependencies(*item, request.CommonSteps)...)
 			ordered = append(ordered, item.ttlID)
 		}
+		if item.partitioningOperation != nil {
+			item.partitioningID = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-partitioning/%06d", partitionings)}
+			partitionings++
+			item.partitioningOperation.Id = item.partitioningID.Name
+			facts := item.partitioningOperation.OperationSemantics
+			partitioningSlot := proto.CloneOf(subject)
+			partitioningSlot.Kind = "ydb.partitioning"
+			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: item.partitioningID,
+				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.partitioningOperation},
+				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
+					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
+						{Subject: partitioningSlot, Action: protocol.PlanningEffect_ALTER}}}})
+			ordered = append(ordered, item.partitioningID)
+		}
 		receiptSteps[item.index] = append(ordered, dropped...)
 	}
 	// This service can replace only a complete common table creation. A column
@@ -248,9 +267,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			steps = append(steps, proto.CloneOf(id))
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			strategy = "Add and drop columns, alter the column families and their column placements, and set or drop the TTL, through the native table service; other settings and column steps the native call cannot state stay with the host"
+			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, and change the automatic partitioning settings, through the native table service; other settings and column steps the native call cannot state stay with the host"
 			if steps == nil {
-				strategy = "The column families, column placements and TTL already match the declaration, and the host has no column step this service can carry out"
+				strategy = "The column families, column placements, TTL and partitioning settings already match the declaration, and the host has no column step this service can carry out"
 			}
 		}
 		for _, kind := range request.ParentKinds {

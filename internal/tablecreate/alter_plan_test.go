@@ -258,7 +258,7 @@ func TestAlterPlan_RefusesLifecyclesItDoesNotOwn(t *testing.T) {
 		want   string
 	}{
 		{"rebuild", func(r *protocol.PlanFeaturesRequest) { r.Tables[0].Action = protocol.PlanningTable_REBUILD },
-			"Only native row-table creation and alteration of column families, columns and the TTL are implemented"},
+			"Only native row-table creation and alteration of column families, columns, the TTL and the partitioning settings are implemented"},
 		{"transactional claim", func(r *protocol.PlanFeaturesRequest) { r.Capabilities["transactional_ddl"] = true },
 			"YDB table creation requires established nontransactional DDL"},
 		{"unmeasured capabilities", func(r *protocol.PlanFeaturesRequest) { r.Capabilities = nil },
