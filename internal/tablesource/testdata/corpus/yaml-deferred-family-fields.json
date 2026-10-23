@@ -1,0 +1,19 @@
+{
+ "tables": {
+  "items": {
+   "column_families": {
+    "cold": {
+     "fields": [
+      "body"
+     ]
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

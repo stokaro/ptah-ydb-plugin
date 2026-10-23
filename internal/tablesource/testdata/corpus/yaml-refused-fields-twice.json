@@ -1,0 +1,20 @@
+{
+ "tables": {
+  "items": {
+   "column_families": {
+    "cold": {
+     "fields": [
+      "a",
+      "a"
+     ]
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

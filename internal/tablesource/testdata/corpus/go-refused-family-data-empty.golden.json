@@ -1,0 +1,36 @@
+{
+ "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid data \"\": names the kind of storage pool the family is kept in, such as ssd; leave it out to keep the database's own pool (YDB answers an empty one with `database doesn't have required storage pools`) on //ptah:schema:columnfamily at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:columnfamily",
+   "attributes": {
+    "data": "",
+    "name": "cold"
+   },
+   "struct": "Item",
+   "file": "go-refused-family-data-empty.go",
+   "file_size": 189,
+   "start": {
+    "offset": 51,
+    "line": 4,
+    "column": 1
+   },
+   "end": {
+    "offset": 97,
+    "line": 4,
+    "column": 47
+   }
+  }
+ ]
+}

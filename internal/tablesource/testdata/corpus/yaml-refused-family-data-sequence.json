@@ -1,0 +1,19 @@
+{
+ "tables": {
+  "items": {
+   "column_families": {
+    "cold": {
+     "data": [
+      "hdd"
+     ]
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

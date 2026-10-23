@@ -1,0 +1,18 @@
+{
+ "tables": {
+  "items": {
+   "changefeeds": {
+    "updates": {
+     "mode": "UPDATES",
+     "format": "JSON"
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

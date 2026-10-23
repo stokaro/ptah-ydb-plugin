@@ -1,0 +1,13 @@
+{
+ "tables": {
+  "items": {
+   "auto_partitioning_max_partitions_count": 1.5,
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

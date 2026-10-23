@@ -1,0 +1,17 @@
+{
+ "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "format": "yaml",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "items",
+   "facets": {
+    "ptah.run/ydb/table-partitioning": {
+     "max_partitions": 18446744073709551615
+    }
+   }
+  }
+ ]
+}

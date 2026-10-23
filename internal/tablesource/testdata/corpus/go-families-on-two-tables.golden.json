@@ -1,0 +1,79 @@
+{
+ "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/column-families": {
+     "families": [
+      {
+       "name": "cold",
+       "data": "hdd"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "schema": "",
+   "name": "orders",
+   "struct": "Order",
+   "facets": {
+    "ptah.run/ydb/column-families": {
+     "families": [
+      {
+       "name": "cold",
+       "compression": "lz4"
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:columnfamily",
+   "attributes": {
+    "data": "hdd",
+    "name": "cold"
+   },
+   "struct": "Item",
+   "file": "go-families-on-two-tables.go",
+   "file_size": 376,
+   "start": {
+    "offset": 51,
+    "line": 4,
+    "column": 1
+   },
+   "end": {
+    "offset": 100,
+    "line": 4,
+    "column": 50
+   }
+  },
+  {
+   "directive": "ptah:schema:columnfamily",
+   "attributes": {
+    "compression": "lz4",
+    "name": "cold"
+   },
+   "struct": "Order",
+   "file": "go-families-on-two-tables.go",
+   "file_size": 376,
+   "start": {
+    "offset": 227,
+    "line": 11,
+    "column": 1
+   },
+   "end": {
+    "offset": 283,
+    "line": 11,
+    "column": 57
+   }
+  }
+ ]
+}

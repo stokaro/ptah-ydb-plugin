@@ -1,0 +1,29 @@
+{
+ "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "format": "yaml",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "items",
+   "facets": {
+    "ptah.run/ydb/table-partitioning": {
+     "by_size": false,
+     "partition_size_mb": 512,
+     "by_load": true,
+     "min_partitions": 3,
+     "max_partitions": 9,
+     "read_replicas": "ANY_AZ:2",
+     "key_bloom_filter": true
+    }
+   }
+  },
+  {
+   "schema": "",
+   "name": "plain",
+   "struct": "plain",
+   "facets": {}
+  }
+ ]
+}

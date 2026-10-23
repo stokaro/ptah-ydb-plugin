@@ -1,0 +1,18 @@
+{
+ "tables": {
+  "items": {
+   "column_families": {
+    "Default": {
+     "compression": "lz4"
+    },
+    "DEFAULT": {}
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

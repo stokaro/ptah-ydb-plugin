@@ -1,0 +1,21 @@
+{
+ "tables": {
+  "documents": {
+   "column_families": {
+    "default": {
+     "compression": "LZ4"
+    },
+    "cold": {
+     "data": "hdd",
+     "compression": "off"
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -17,9 +18,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// DecodeSource interprets complete captured YAML coordination declarations.
-// It reads no files or environment variables and requires no database session.
-// Unsupported syntax or any invalid entry discards the complete result.
+// DecodeSource interprets complete captured YAML and Go annotation
+// declarations: coordination nodes, and the partitioning and column families of
+// row tables. It reads no files or environment variables and requires no
+// database session. Unsupported syntax or any invalid entry discards the
+// complete result.
 func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourceRequest) (*protocol.DecodedSource, error) {
 	if err := provider.ValidateSourceRequest(Description(), request); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -33,8 +36,15 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 		for _, model := range document.Models {
 			decoded.Coverage.Kinds = append(decoded.Coverage.Kinds, &protocol.ModelKindCoverage{Model: proto.CloneOf(model), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}})
 		}
+		tables, err := tablesource.Decode(ctx, document)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, status.FromContextError(ctx.Err()).Err()
+			}
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		for index, fragment := range document.Fragments {
-			values, err := coordinationSource(ctx, document, fragment, index)
+			values, err := fragmentValues(ctx, document, fragment, index, tables)
 			if err != nil {
 				if ctx.Err() != nil {
 					return nil, status.FromContextError(ctx.Err()).Err()
@@ -44,7 +54,7 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			decoded.Fragments = append(decoded.Fragments, &protocol.DecodedSourceFragment{Id: fragment.Id, Values: values})
 			for _, value := range values {
 				owner := value.Value.Value.Owner
-				decoded.Coverage.Subjects = append(decoded.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: owner.Kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}})
+				decoded.Coverage.Subjects = append(decoded.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: value.Value.Value.Kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}})
 			}
 		}
 		result.Documents = append(result.Documents, decoded)
@@ -56,6 +66,21 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	return result, nil
+}
+
+// fragmentValues returns the values one fragment declares. A table's
+// fragments declare one facet together, which its first fragment returns.
+func fragmentValues(ctx context.Context, document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int, tables []tablesource.Table) ([]*protocol.SourceModelValue, error) {
+	if !tablesource.Owns(fragment) {
+		return coordinationSource(ctx, document, fragment, index)
+	}
+	for _, table := range tables {
+		if table.Fragment == index {
+			return []*protocol.SourceModelValue{{Placement: protocol.SourceModelValue_FACET, Value: table.Value,
+				Source: &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}}}, nil
+		}
+	}
+	return nil, nil
 }
 
 func coordinationSource(ctx context.Context, document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int) ([]*protocol.SourceModelValue, error) {

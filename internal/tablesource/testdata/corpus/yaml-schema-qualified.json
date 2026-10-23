@@ -1,0 +1,19 @@
+{
+ "tables": {
+  "orders": {
+   "schema": "shop",
+   "name": "orders",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   },
+   "column_families": {
+    "cold": {
+     "compression": "lz4"
+    }
+   }
+  }
+ }
+}

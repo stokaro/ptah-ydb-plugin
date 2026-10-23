@@ -5,7 +5,8 @@ It is under development. Inspection covers row tables and their indexes and
 changefeeds, topics, views, coordination nodes, external data sources, and
 external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
-tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations.
+tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations, and
+YAML and Go annotation decoding for the partitioning and column families of row tables.
 Offline comparison, planning, and rendering produce native coordination
 operations. Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
@@ -381,7 +382,7 @@ Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
 Every observed model has a separate desired contract and an offline conversion.
 Comparison and planning remain limited to coordination nodes and the TTL, partitioning settings and column families of row tables; source adapters
-for the other families remain pending.
+for the other families remain pending, as described under row-table declarations below.
 
 Views retain the query returned by the view service and the attributes read
 through the table service on the same path. This includes comments and custom
@@ -437,9 +438,88 @@ encodings and definition digests; observation coverage contains only observed
 models.
 
 The subprocess tests exercise decoding, normalization, and representation
-conversion without a database address. HCL, Go annotation, and SQL adapters
-remain pending.
+conversion without a database address. HCL and SQL adapters remain pending.
 This service alone does not make the YAML example executable as a migration.
+
+## Offline row-table declarations
+
+The same source service decodes the table-scope settings that the host's
+bundled YDB source reads from YAML and from Go annotations, so a table written
+the way users write tables reaches the provider. The host lexes the source and
+sends the values of the keys and directives the provider claimed; the provider
+owns their meaning. The host refuses a YAML key the provider does not claim. It reads a Go
+comment that no provider claims as no declaration, so the provider claims the
+Go directives it cannot carry and refuses them by name. Nothing is dropped in
+silence.
+
+A YAML table entry takes these keys, spelled as the YDB settings are:
+
+```yaml
+tables:
+  documents:
+    auto_partitioning_by_size: ENABLED          # ENABLED or DISABLED, in either case
+    auto_partitioning_partition_size_mb: 2048   # a whole number of at least 1
+    auto_partitioning_by_load: ENABLED
+    auto_partitioning_min_partitions_count: 2
+    auto_partitioning_max_partitions_count: 16
+    read_replicas_settings: ANY_AZ:2            # PER_AZ:<n> or ANY_AZ:<n>; a count of 0 removes replicas
+    key_bloom_filter: ENABLED
+    column_families:
+      default: {compression: lz4}               # off or lz4
+      cold: {data: hdd, compression: lz4}       # data is a storage pool kind, kept as written
+```
+
+In Go, a family is declared with `//ptah:schema:columnfamily` on the table's
+struct, with the attributes `name`, `data` and `compression`. The `table`
+attribute names another table of the file (`name` or `schema.name`) and wins
+over the struct's own table.
+
+```go
+//ptah:schema:table name="documents"
+//ptah:schema:columnfamily name="default" compression="lz4"
+//ptah:schema:columnfamily name="cold" data="hdd" compression="lz4"
+type Document struct { /* ... */ }
+```
+
+All the keys and directives of one table become one desired row-table facet,
+because a document may hold only one facet of a kind for a table. The facet
+holds only what the source states. It has no primary key, which comes from the
+table's common columns; a stated key must still be distinct and ordered.
+A setting a source leaves out keeps what the table holds. A table that
+declares nothing, such as an empty `column_families` mapping, gets no facet.
+
+The values are read as the text the author wrote, so `3` and `"3"` are the
+same count, and a boolean where `ENABLED` is due is refused. The shared
+frontend normalizes the spelling of a YAML number before the provider sees it
+(`1_000` arrives as `1000`, `0x10` as `16`); the bundled decoder reads the
+written text and refuses both.
+
+Not read yet, and listed so that nobody mistakes the silence for support:
+
+| Setting | Why |
+| --- | --- |
+| `cache_mode`, `fields` of a column family | The row-table model carries no cache mode, and a source facet cannot attach to a column yet. Both are claimed and refused by name. |
+| `uniform_partitions`, `partition_at_keys` | A starting layout is a create-time setting that the row-table model does not carry. Not claimed. |
+| TTL (`platform.ydb.row_deletion_*`) | The host reads it from platform properties, which a provider cannot claim yet. Not claimed. |
+| Partitioning and TTL attributes of `ptah:schema:table` in Go | They are attributes of a host directive, which a provider cannot extend yet. |
+| `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
+| `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
+| `column_store` and the column-table attributes | Column tables have no planning yet. Not claimed. |
+| Index partitioning, vector and full-text options | They are attributes of an index, which needs index-scope Go directives and YAML index keys. Not claimed. |
+| Topics, resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` at document scope. |
+
+A table that has a facet is managed for its TTL and its partitioning: a
+comparison that finds a TTL on the table and none in the facet plans its
+removal. Until the TTL can be declared in a source, a table that declares
+families or partitioning in YAML or Go and holds a TTL on the server will plan
+that removal.
+
+`internal/tablesource/testdata/corpus` holds the inputs and the answers of the
+host's bundled decoder for them, and the differential test in
+`internal/tablesource` requires the provider to mean the same as the host for
+every input the host accepts, to refuse every input the host refuses, and to
+name every difference in the table above. `testdata/oracle` explains how the
+answers are regenerated against a host checkout.
 
 ## Coordination comparison
 

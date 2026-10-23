@@ -1,0 +1,42 @@
+{
+ "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/column-families": {
+     "families": [
+      {
+       "name": "cold"
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:columnfamily",
+   "attributes": {
+    "name": "cold"
+   },
+   "struct": "Item",
+   "file": "go-family-states-nothing.go",
+   "file_size": 181,
+   "start": {
+    "offset": 51,
+    "line": 4,
+    "column": 1
+   },
+   "end": {
+    "offset": 89,
+    "line": 4,
+    "column": 39
+   }
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+{
+ "tables": {
+  "items": {
+   "read_replicas_settings": " per_az:2 ",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}
