@@ -1,5 +1,5 @@
 {
- "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
  "format": "yaml",
  "outcome": "refused",
  "error": "table \"items\": invalid read_replicas_settings \"\": write PER_AZ:\u003cn\u003e for n replicas in every availability zone, or ANY_AZ:\u003cn\u003e for n in all of them together",

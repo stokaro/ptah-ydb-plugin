@@ -1,0 +1,50 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {},
+   "indexes": [
+    {
+     "name": "by_body",
+     "facets": {
+      "ptah.run/ydb/vector-index": "not recorded"
+     }
+    }
+   ]
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:index",
+   "attributes": {
+    "clusters": "8",
+    "distance": "cosine",
+    "levels": "2",
+    "vector_dimension": "4",
+    "vector_type": "float"
+   },
+   "struct": "Item",
+   "file": "go-deferred-index-vector.go",
+   "file_size": 361,
+   "start": {
+    "offset": 199,
+    "line": 9,
+    "column": 2
+   },
+   "end": {
+    "offset": 344,
+    "line": 9,
+    "column": 147
+   },
+   "subject": {
+    "kind": "index",
+    "name": "by_body"
+   }
+  }
+ ]
+}

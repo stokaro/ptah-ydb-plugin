@@ -1,0 +1,38 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:index",
+   "attributes": {
+    "false_positive_probability": "0.01"
+   },
+   "struct": "Item",
+   "file": "go-deferred-index-bloom.go",
+   "file_size": 318,
+   "start": {
+    "offset": 199,
+    "line": 9,
+    "column": 2
+   },
+   "end": {
+    "offset": 301,
+    "line": 9,
+    "column": 104
+   },
+   "subject": {
+    "kind": "index",
+    "name": "by_body"
+   }
+  }
+ ]
+}

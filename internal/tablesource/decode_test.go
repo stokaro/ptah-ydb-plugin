@@ -37,14 +37,46 @@ func TestClaims(t *testing.T) {
 		"auto_partitioning_max_partitions_count", "read_replicas_settings", "key_bloom_filter", "column_families",
 	})
 	directives := tablesource.GoDirectives()
-	c.Assert(len(directives), qt.Equals, 3)
+	c.Assert(len(directives), qt.Equals, 5)
+	scopes := map[string]protocol.GoSourceDirective_Scope{}
 	var names []string
 	for _, directive := range directives {
 		names = append(names, directive.Directive)
-		c.Assert(directive.Scope, qt.Equals, protocol.GoSourceDirective_TABLE)
+		scopes[directive.Directive] = directive.Scope
 		c.Assert(directive.Models, qt.DeepEquals, []string{schema.TableProperties})
 	}
-	c.Assert(names, qt.DeepEquals, []string{"ptah:schema:columnfamily", "ptah:schema:changefeed", "ptah:schema:changefeed:consumer"})
+	c.Assert(names, qt.DeepEquals, []string{"ptah:schema:table", "ptah:schema:index", "ptah:schema:columnfamily", "ptah:schema:changefeed", "ptah:schema:changefeed:consumer"})
+	// The host's own directives take the scope of the part they declare, and
+	// the provider's directives sit on a table.
+	c.Assert(scopes, qt.DeepEquals, map[string]protocol.GoSourceDirective_Scope{
+		"ptah:schema:table": protocol.GoSourceDirective_TABLE, "ptah:schema:index": protocol.GoSourceDirective_INDEX,
+		"ptah:schema:columnfamily": protocol.GoSourceDirective_TABLE, "ptah:schema:changefeed": protocol.GoSourceDirective_TABLE,
+		"ptah:schema:changefeed:consumer": protocol.GoSourceDirective_TABLE,
+	})
+}
+
+// A claim on the host's own directive lists attributes only, none of which the
+// directive reads itself, and the YAML keys and the Go table attributes spell
+// the shared settings alike.
+func TestClaims_TableAttributesAreTheYAMLKeysAndMore(t *testing.T) {
+	c := qt.New(t)
+	var table *protocol.GoSourceDirective
+	for _, directive := range tablesource.GoDirectives() {
+		if directive.Directive == tablesource.DirectiveTable {
+			table = directive
+		}
+	}
+	c.Assert(table, qt.IsNotNil)
+	for _, key := range tablesource.YAMLKeys() {
+		if key.Key != tablesource.KeyColumnFamilies {
+			c.Assert(slices.Contains(table.Attributes, key.Key), qt.IsTrue, qt.Commentf(key.Key))
+		}
+	}
+	c.Assert(table.Attributes[len(table.Attributes)-3:], qt.DeepEquals,
+		[]string{"platform.ydb.row_deletion_column", "platform.ydb.row_deletion_interval", "platform.ydb.row_deletion_unit"})
+	for _, forbidden := range []string{"name", "schema", "table", "comment", "primary_key", "custom"} {
+		c.Assert(slices.Contains(table.Attributes, forbidden), qt.IsFalse, qt.Commentf(forbidden))
+	}
 }
 
 func TestDescriptionAdvertisesTheTableClaims(t *testing.T) {
@@ -55,7 +87,7 @@ func TestDescriptionAdvertisesTheTableClaims(t *testing.T) {
 	for _, claim := range tablesource.YAMLKeys() {
 		c.Assert(slices.ContainsFunc(engine.YamlSourceKeys, func(declared *protocol.YAMLSourceKey) bool { return proto.Equal(declared, claim) }), qt.IsTrue, qt.Commentf(claim.Key))
 	}
-	c.Assert(len(engine.GoSourceDirectives), qt.Equals, 3)
+	c.Assert(len(engine.GoSourceDirectives), qt.Equals, 5)
 	for _, directive := range tablesource.GoDirectives() {
 		c.Assert(slices.ContainsFunc(engine.GoSourceDirectives, func(declared *protocol.GoSourceDirective) bool { return proto.Equal(declared, directive) }), qt.IsTrue, qt.Commentf(directive.Directive))
 	}

@@ -81,6 +81,15 @@ type GoPosition struct{ Offset, Line, Column int }
 // GoTable is a table a Go file declares.
 type GoTable struct{ Schema, Name, Struct string }
 
+// GoSubject is the part of a table a column or index directive describes, as
+// the host lexed it: the written name, and the table the directive names when
+// it is not the struct's own.
+type GoSubject struct {
+	Kind  string
+	Name  string
+	Table string
+}
+
 // GoDeclaration is one directive the host lexed from a Go comment.
 type GoDeclaration struct {
 	Directive  string
@@ -89,6 +98,8 @@ type GoDeclaration struct {
 	File       string
 	FileSize   int
 	Start, End GoPosition
+	// Subject is set for a directive of column or index scope.
+	Subject GoSubject
 }
 
 // GoDirectives captures the declarations of one Go file as the host does for a
@@ -113,7 +124,12 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 		if claim < 0 {
 			return nil, fmt.Errorf("the provider claims no Go directive %q", declaration.Directive)
 		}
-		owning := slices.IndexFunc(tables, func(table GoTable) bool { return table.Struct == declaration.Struct })
+		owning := slices.IndexFunc(tables, func(table GoTable) bool {
+			if declaration.Subject.Table != "" {
+				return table.Name == declaration.Subject.Table
+			}
+			return table.Struct == declaration.Struct
+		})
 		if owning < 0 {
 			return nil, fmt.Errorf("struct %s maps to no table in this file", declaration.Struct)
 		}
@@ -127,8 +143,12 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 				Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Text{Text: declaration.Attributes[key]}}})
 		}
 		directive := tablesource.GoDirectives()[claim]
-		document.Fragments = append(document.Fragments, &protocol.SourceFragment{Id: strconv.Itoa(i), GoDirective: directive, Selector: directive.Selector,
-			Span: span, BindingId: bindings[owning], Content: &protocol.SourceFragment_Value{Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Mapping{Mapping: mapping}}}})
+		fragment := &protocol.SourceFragment{Id: strconv.Itoa(i), GoDirective: directive, Selector: directive.Selector,
+			Span: span, BindingId: bindings[owning], Content: &protocol.SourceFragment_Value{Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Mapping{Mapping: mapping}}}}
+		if directive.Scope == protocol.GoSourceDirective_COLUMN || directive.Scope == protocol.GoSourceDirective_INDEX {
+			fragment.Subject = &protocol.Reference{Engine: "ydb", Kind: declaration.Subject.Kind, Schema: tables[owning].Schema, Path: []string{tables[owning].Name}, Name: declaration.Subject.Name}
+		}
+		document.Fragments = append(document.Fragments, fragment)
 	}
 	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{document}}, nil
 }

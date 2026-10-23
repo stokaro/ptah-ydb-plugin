@@ -29,7 +29,8 @@ import (
 //	refused-*   the host refuses the input, and so must this package
 //	deferred-*  the host accepts the input and the provider cannot carry it yet
 //	any other   the host accepts the input, and both decoders mean the same
-//	            partitioning, read replicas, bloom filter and column families
+//	            partitioning, read replicas, bloom filter, TTL and column
+//	            families
 
 // golden is what the host recorded for one input.
 type golden struct {
@@ -46,6 +47,8 @@ type goldenTable struct {
 	Name   string                     `json:"name"`
 	Struct string                     `json:"struct"`
 	Facets map[string]json.RawMessage `json:"facets"`
+	// Indexes are the indexes whose options the host's decoder read.
+	Indexes []json.RawMessage `json:"indexes"`
 }
 
 type goldenDeclaration struct {
@@ -56,6 +59,13 @@ type goldenDeclaration struct {
 	FileSize   int               `json:"file_size"`
 	Start      goldenPosition    `json:"start"`
 	End        goldenPosition    `json:"end"`
+	Subject    *goldenSubject    `json:"subject"`
+}
+
+type goldenSubject struct {
+	Kind  string `json:"kind"`
+	Name  string `json:"name"`
+	Table string `json:"table"`
 }
 
 type goldenPosition struct {
@@ -118,9 +128,15 @@ func request(c *qt.C, r row) *protocol.DecodeSourceRequest {
 	}
 	var declarations []testsource.GoDeclaration
 	for _, declaration := range r.golden.Declarations {
-		declarations = append(declarations, testsource.GoDeclaration{Directive: declaration.Directive, Attributes: declaration.Attributes,
+		replayed := testsource.GoDeclaration{Directive: declaration.Directive, Attributes: declaration.Attributes,
 			Struct: declaration.Struct, File: declaration.File, FileSize: declaration.FileSize,
-			Start: testsource.GoPosition(declaration.Start), End: testsource.GoPosition(declaration.End)})
+			Start: testsource.GoPosition(declaration.Start), End: testsource.GoPosition(declaration.End)}
+		// The host sends a subject for a column or an index directive only; the
+		// table directive's own subject is the table, which a fragment leaves out.
+		if declaration.Subject != nil && declaration.Subject.Kind != "table" {
+			replayed.Subject = testsource.GoSubject(*declaration.Subject)
+		}
+		declarations = append(declarations, replayed)
 	}
 	captured, err := testsource.GoDirectives(tables, declarations)
 	c.Assert(err, qt.IsNil)
@@ -132,7 +148,7 @@ func request(c *qt.C, r row) *protocol.DecodeSourceRequest {
 func TestCorpusShape(t *testing.T) {
 	c := qt.New(t)
 	rows := corpus(c, func(string) bool { return true })
-	c.Assert(len(rows) >= 70, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
+	c.Assert(len(rows) >= 135, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
 	hosts := map[string]bool{}
 	for _, r := range rows {
 		hosts[r.golden.Host] = true
@@ -142,9 +158,9 @@ func TestCorpusShape(t *testing.T) {
 	for _, r := range rows {
 		c.Assert(r.golden.Outcome == "refused", qt.Equals, isRefused(r.name), qt.Commentf("%s: host outcome %q", r.name, r.golden.Outcome))
 	}
-	c.Assert(len(corpus(c, isRefused)) >= 30, qt.IsTrue)
-	c.Assert(len(corpus(c, isDeferred)) >= 8, qt.IsTrue)
-	c.Assert(len(corpus(c, isAccepted)) >= 20, qt.IsTrue)
+	c.Assert(len(corpus(c, isRefused)) >= 60, qt.IsTrue)
+	c.Assert(len(corpus(c, isDeferred)) >= 18, qt.IsTrue)
+	c.Assert(len(corpus(c, isAccepted)) >= 50, qt.IsTrue)
 }
 
 // TestDifferential_HappyPath decodes every input the host accepts and requires
@@ -185,17 +201,27 @@ var unclaimed = map[string]string{
 	"yaml-deferred-partition-at-keys":  "partition_at_keys",
 	"yaml-deferred-changefeeds":        "changefeeds",
 	"yaml-deferred-column-store":       "column_store",
+	"yaml-deferred-ttl-platform":       "platform",
 }
 
 // refusals names the inputs whose key or attribute the provider claims and
 // refuses by name, with the words of the refusal.
 var refusals = map[string]string{
-	"yaml-deferred-family-cache-mode": "cache_mode is not supported by the YDB provider yet",
-	"yaml-deferred-family-fields":     "fields is not supported by the YDB provider yet",
-	"go-deferred-family-cache-mode":   "cache_mode is not supported by the YDB provider yet",
-	"go-deferred-family-fields":       "fields is not supported by the YDB provider yet",
-	"go-deferred-changefeed":          "ptah:schema:changefeed is not supported by the YDB provider yet",
-	"go-deferred-changefeed-consumer": "ptah:schema:changefeed is not supported by the YDB provider yet",
+	"yaml-deferred-family-cache-mode":      "cache_mode is not supported by the YDB provider yet",
+	"yaml-deferred-family-fields":          "fields is not supported by the YDB provider yet",
+	"go-deferred-family-cache-mode":        "cache_mode is not supported by the YDB provider yet",
+	"go-deferred-family-fields":            "fields is not supported by the YDB provider yet",
+	"go-deferred-changefeed":               "ptah:schema:changefeed is not supported by the YDB provider yet",
+	"go-deferred-changefeed-consumer":      "ptah:schema:changefeed is not supported by the YDB provider yet",
+	"go-deferred-table-uniform-partitions": "uniform_partitions is not supported by the YDB provider yet",
+	"go-deferred-table-partition-at-keys":  "partition_at_keys is not supported by the YDB provider yet",
+	"go-deferred-table-store-column":       "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-hash":  "store is not supported by the YDB provider yet",
+	"go-deferred-index-partitioning":       "auto_partitioning_by_load is not supported by the YDB provider yet",
+	"go-deferred-index-replicas":           "read_replicas_settings is not supported by the YDB provider yet",
+	"go-deferred-index-vector":             "clusters is not supported by the YDB provider yet",
+	"go-deferred-index-fulltext":           "tokenizer is not supported by the YDB provider yet",
+	"go-deferred-index-bloom":              "false_positive_probability is not supported by the YDB provider yet",
 }
 
 // TestDeferred_AreAllNamed requires every deferred row to say what the

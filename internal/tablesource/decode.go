@@ -49,6 +49,9 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 		if directive := fragment.GetGoDirective().GetDirective(); directive == DirectiveChangefeed || directive == DirectiveChangefeedConsumer {
 			return nil, &UnsupportedError{Setting: directive, Reason: "the provider plans no changefeed yet"}
 		}
+		if fragment.GetGoDirective().GetDirective() == DirectiveIndex {
+			return nil, indexRefusal(fragment)
+		}
 		binding, err := bindingOf(document, fragment)
 		if err != nil {
 			return nil, fmt.Errorf("fragment %q: %w", fragment.GetId(), err)
@@ -192,4 +195,16 @@ func splitTable(written string) (schemaName, name string, err error) {
 		return "", "", fmt.Errorf("it names no table")
 	}
 	return schemaName, name, nil
+}
+
+// indexRefusal refuses the first option an index directive writes. The bundled
+// decoder reads partitioning, local, full-text and vector options of an index;
+// the provider adds and drops only plain global indexes and compares nothing an
+// index states beyond its keys, so an option it accepted would be dropped.
+func indexRefusal(fragment *protocol.SourceFragment) error {
+	setting := DirectiveIndex
+	if entries := fragment.GetValue().GetMapping().GetEntries(); len(entries) != 0 {
+		setting = entries[0].GetKey()
+	}
+	return &UnsupportedError{Setting: setting, Reason: "an index states no settings of its own in the row-table model, and the provider adds only plain global indexes"}
 }

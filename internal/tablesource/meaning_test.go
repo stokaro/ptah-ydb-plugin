@@ -9,13 +9,14 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// meaning is what a table's declared partitioning and column families say,
+// meaning is what a table's declared partitioning, TTL and column families say,
 // stripped of how a decoder spells them. Both decoders are reduced to it, so a
 // difference in spelling cannot hide a difference in effect, and the other way.
 type meaning struct {
@@ -26,14 +27,23 @@ type meaning struct {
 	MaxPartitions   uint64
 	ReadReplicas    string
 	KeyBloomFilter  *bool
+	TTL             *ttlMeaning
 	Families        []familyMeaning
+}
+
+// ttlMeaning is a TTL as seconds: the host spells the interval as the author
+// wrote it, the provider as the server keeps it.
+type ttlMeaning struct {
+	Column  string
+	Seconds uint64
+	Unit    string
 }
 
 type familyMeaning struct{ Name, Data, Compression string }
 
 func (m meaning) empty() bool {
 	return m.BySize == nil && m.PartitionSizeMB == 0 && m.ByLoad == nil && m.MinPartitions == 0 && m.MaxPartitions == 0 &&
-		m.ReadReplicas == "" && m.KeyBloomFilter == nil && len(m.Families) == 0
+		m.ReadReplicas == "" && m.KeyBloomFilter == nil && m.TTL == nil && len(m.Families) == 0
 }
 
 // families sorts a family list and drops the default family when it states
@@ -57,6 +67,13 @@ type hostPartitioning struct {
 	MaxPartitions   uint64 `json:"max_partitions"`
 	ReadReplicas    string `json:"read_replicas"`
 	KeyBloomFilter  *bool  `json:"key_bloom_filter"`
+}
+
+// hostTTL is the host's TTL facet payload, which has no JSON tags.
+type hostTTL struct {
+	Column   string
+	Interval string
+	Unit     string
 }
 
 type hostFamilies struct {
@@ -88,6 +105,12 @@ func hostMeaning(c *qt.C, recorded golden) map[string]meaning {
 				strictJSON(c, payload, &p)
 				m.BySize, m.PartitionSizeMB, m.ByLoad, m.MinPartitions, m.MaxPartitions = p.BySize, p.PartitionSizeMB, p.ByLoad, p.MinPartitions, p.MaxPartitions
 				m.ReadReplicas, m.KeyBloomFilter = p.ReadReplicas, p.KeyBloomFilter
+			case "ptah.run/ydb/ttl":
+				var ttl hostTTL
+				strictJSON(c, payload, &ttl)
+				seconds, err := ttlgrammar.IntervalSeconds(ttl.Interval)
+				c.Assert(err, qt.IsNil)
+				m.TTL = &ttlMeaning{Column: ttl.Column, Seconds: seconds, Unit: ttl.Unit}
 			case "ptah.run/ydb/column-families":
 				var f hostFamilies
 				strictJSON(c, payload, &f)
@@ -99,6 +122,9 @@ func hostMeaning(c *qt.C, recorded golden) map[string]meaning {
 			}
 		}
 		m.Families = families(m.Families)
+		// A row the host and the provider are expected to agree on carries no
+		// index option, which the provider cannot carry.
+		c.Assert(table.Indexes, qt.HasLen, 0, qt.Commentf("table %s", table.Name))
 		if !m.empty() {
 			result[tableKey(table.Schema, table.Name)] = m
 		}
@@ -132,6 +158,7 @@ func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning 
 					MaxPartitions:   intent.GetPartitioningSettings().GetMaxPartitionsCount(),
 					KeyBloomFilter:  switches[intent.GetKeyBloomFilter()]}
 				m.ReadReplicas = replicas(intent.GetReadReplicasSettings())
+				m.TTL = ttlOf(intent.GetTtlSettings())
 				for _, family := range intent.GetColumnFamilies() {
 					m.Families = append(m.Families, familyMeaning{Name: family.GetName(), Data: family.GetData().GetMedia(), Compression: compressions[family.GetCompression()]})
 				}
@@ -143,6 +170,25 @@ func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning 
 		}
 	}
 	return result
+}
+
+var epochUnits = map[Ydb_Table.ValueSinceUnixEpochModeSettings_Unit]string{
+	Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_SECONDS:      "SECONDS",
+	Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_MILLISECONDS: "MILLISECONDS",
+	Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_MICROSECONDS: "MICROSECONDS",
+	Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_NANOSECONDS:  "NANOSECONDS",
+}
+
+func ttlOf(settings *Ydb_Table.TtlSettings) *ttlMeaning {
+	switch mode := settings.GetMode().(type) {
+	case *Ydb_Table.TtlSettings_DateTypeColumn:
+		return &ttlMeaning{Column: mode.DateTypeColumn.GetColumnName(), Seconds: uint64(mode.DateTypeColumn.GetExpireAfterSeconds())}
+	case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
+		return &ttlMeaning{Column: mode.ValueSinceUnixEpoch.GetColumnName(), Seconds: uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds()),
+			Unit: epochUnits[mode.ValueSinceUnixEpoch.GetColumnUnit()]}
+	default:
+		return nil
+	}
 }
 
 func replicas(settings *Ydb_Table.ReadReplicasSettings) string {

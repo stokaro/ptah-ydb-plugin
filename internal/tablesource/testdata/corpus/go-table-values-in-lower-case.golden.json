@@ -1,0 +1,48 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/table-partitioning": {
+     "by_size": true,
+     "by_load": false,
+     "read_replicas": "PER_AZ:2",
+     "key_bloom_filter": false
+    }
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "auto_partitioning_by_load": " Disabled ",
+    "auto_partitioning_by_size": "enabled",
+    "key_bloom_filter": "disabled",
+    "read_replicas_settings": "per_az:2"
+   },
+   "struct": "Item",
+   "file": "go-table-values-in-lower-case.go",
+   "file_size": 410,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 187,
+    "line": 3,
+    "column": 170
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

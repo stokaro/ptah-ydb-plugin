@@ -1,0 +1,38 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:index",
+   "attributes": {
+    "tokenizer": "standard"
+   },
+   "struct": "Item",
+   "file": "go-deferred-index-fulltext.go",
+   "file_size": 301,
+   "start": {
+    "offset": 199,
+    "line": 9,
+    "column": 2
+   },
+   "end": {
+    "offset": 284,
+    "line": 9,
+    "column": 87
+   },
+   "subject": {
+    "kind": "index",
+    "name": "by_body"
+   }
+  }
+ ]
+}

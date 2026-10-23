@@ -49,6 +49,9 @@ func apply(target *settings, fragment *protocol.SourceFragment) error {
 	if claim := fragment.GetYamlKey(); claim != nil {
 		return applyYAML(target, claim.GetKey(), fragment.GetValue())
 	}
+	if fragment.GetGoDirective().GetDirective() == DirectiveTable {
+		return applyTable(target, fragment.GetValue())
+	}
 	return applyGo(target, fragment.GetValue())
 }
 
@@ -156,4 +159,37 @@ func applyGo(target *settings, value *protocol.SourceValue) error {
 		return fmt.Errorf("column family %q: %w", declared.name, err)
 	}
 	return nil
+}
+
+// applyTable reads the attributes a Go source writes on ptah:schema:table.
+// Only the attributes the provider claimed arrive, each as the text the author
+// wrote.
+func applyTable(target *settings, value *protocol.SourceValue) error {
+	values := make(map[string]string)
+	for _, entry := range value.GetMapping().GetEntries() {
+		text, err := scalar(entry.GetValue())
+		if err != nil {
+			return fmt.Errorf("%s: %w", entry.GetKey(), err)
+		}
+		values[entry.GetKey()] = text
+	}
+	// A column table is checked before anything else is read, as the bundled
+	// decoder reads the storage first, so the refusal of an input that mixes
+	// row settings with column storage names the storage.
+	if err := refuseColumnStore(values); err != nil {
+		return err
+	}
+	for _, name := range partitioningKeys() {
+		if text, found := values[name]; found {
+			if err := target.setPartitioning(name, text); err != nil {
+				return err
+			}
+		}
+	}
+	for _, name := range []string{AttributeUniformPartitions, AttributePartitionAtKeys} {
+		if _, found := values[name]; found {
+			return &UnsupportedError{Setting: name, Reason: "the row-table model carries no starting partition layout, which YDB takes only when it creates a table"}
+		}
+	}
+	return target.setTTL(values)
 }

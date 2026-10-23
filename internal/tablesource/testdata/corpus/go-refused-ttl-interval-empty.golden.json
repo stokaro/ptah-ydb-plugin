@@ -1,0 +1,40 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid feature value: row_deletion_interval is empty; remove it to leave the policy undeclared",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "platform.ydb.row_deletion_column": "created_at",
+    "platform.ydb.row_deletion_interval": ""
+   },
+   "struct": "Item",
+   "file": "go-refused-ttl-interval-empty.go",
+   "file_size": 357,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 134,
+    "line": 3,
+    "column": 117
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

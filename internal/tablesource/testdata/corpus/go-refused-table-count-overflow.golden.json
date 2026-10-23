@@ -1,0 +1,39 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid auto_partitioning_partition_size_mb \"18446744073709551616\": write a whole number of at least 1; YDB refuses a count of zero on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "auto_partitioning_partition_size_mb": "18446744073709551616"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-count-overflow.go",
+   "file_size": 332,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 109,
+    "line": 3,
+    "column": 92
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

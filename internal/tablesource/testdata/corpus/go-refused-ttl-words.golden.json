@@ -1,0 +1,40 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "desired model \"ptah.run/ydb/ttl\": invalid feature value: interval \"30 days\" is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): it does not begin with P",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "platform.ydb.row_deletion_column": "created_at",
+    "platform.ydb.row_deletion_interval": "30 days"
+   },
+   "struct": "Item",
+   "file": "go-refused-ttl-words.go",
+   "file_size": 364,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 141,
+    "line": 3,
+    "column": 124
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

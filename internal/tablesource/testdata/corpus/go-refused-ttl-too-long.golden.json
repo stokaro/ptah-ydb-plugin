@@ -1,0 +1,40 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "desired model \"ptah.run/ydb/ttl\": invalid feature value: interval \"P49673D\" is longer than YDB's Interval type holds (P49672DT23H59M59S)",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "platform.ydb.row_deletion_column": "created_at",
+    "platform.ydb.row_deletion_interval": "P49673D"
+   },
+   "struct": "Item",
+   "file": "go-refused-ttl-too-long.go",
+   "file_size": 364,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 141,
+    "line": 3,
+    "column": 124
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

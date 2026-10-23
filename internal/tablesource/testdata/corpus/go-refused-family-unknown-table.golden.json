@@ -1,5 +1,5 @@
 {
- "host": "4a0d18c21b52e466994aa0ab8841a0dc2e3240fd",
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
  "format": "go",
  "outcome": "refused",
  "error": "table \"orders\" is not declared in this file, and a column family is declared beside its table on //ptah:schema:columnfamily at Item",
