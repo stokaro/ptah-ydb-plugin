@@ -72,15 +72,25 @@ func features(owner *protocol.Reference, captured *protocol.CapturedFeatures) (*
 }
 
 func normalizedDesired(record *protocol.ComparisonRecord) (*protocol.Envelope, error) {
+	return normalizedFacet(record, protocol.ValueInput_DESIRED)
+}
+
+// normalizedFacet re-normalizes a captured facet and requires the host's receipt
+// to match, so a forged receipt cannot smuggle a value past the owner's rules.
+func normalizedFacet(record *protocol.ComparisonRecord, representation protocol.ValueInput_Representation) (*protocol.Envelope, error) {
 	captured := record.Value
-	value, err := schema.NormalizeDesired(captured.GetValue())
+	normalize, format := schema.NormalizeDesired, "/desired-json-v1"
+	if representation == protocol.ValueInput_OBSERVED {
+		normalize, format = schema.Normalize, "/observed-json-v1"
+	}
+	value, err := normalize(captured.GetValue())
 	if err != nil {
 		return nil, err
 	}
 	expected := &protocol.NormalizedValue{Id: captured.Id, Value: value, NormalizedOwner: proto.CloneOf(value.Owner),
-		CanonicalFormat: value.Kind + "/desired-json-v1", CanonicalProjection: bytes.Clone(value.Payload)}
+		CanonicalFormat: value.Kind + format, CanonicalProjection: bytes.Clone(value.Payload)}
 	if !proto.Equal(expected, captured) || record.Kind != value.Kind {
-		return nil, fmt.Errorf("YDB creation facet has a forged normalization receipt")
+		return nil, fmt.Errorf("YDB facet has a forged normalization receipt")
 	}
 	if err := provider.ValidateComparisonIdentity(record.Subject); err != nil {
 		return nil, err

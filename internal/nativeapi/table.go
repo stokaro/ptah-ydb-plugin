@@ -104,3 +104,15 @@ func (s *Table) Create(ctx context.Context, request *Ydb_Table.CreateTableReques
 	}
 	return Status(response.GetOperation())
 }
+
+// Alter sends one native alter request. It does not retry: a failed reply leaves
+// the outcome unknown to the caller, which confirms by reading the table back.
+func (s *Table) Alter(ctx context.Context, request *Ydb_Table.AlterTableRequest) error {
+	request = proto.CloneOf(request)
+	request.SessionId = s.id
+	response, err := s.client.AlterTable(ctx, request)
+	if err != nil {
+		return fmt.Errorf("alter YDB table: transport failed")
+	}
+	return Status(response.GetOperation())
+}

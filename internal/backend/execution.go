@@ -92,8 +92,11 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	}
 	result := executeUnits(ctx, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
 		if unit.GetNative() != nil {
-			if unit.GetNative().GetKind() == tablecreate.OperationKind {
+			switch unit.GetNative().GetKind() {
+			case tablecreate.OperationKind:
 				return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case tablecreate.AlterOperationKind:
+				return nativeapi.NewTableAlteration(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			}
 			return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 		}

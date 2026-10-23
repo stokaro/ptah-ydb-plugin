@@ -14,6 +14,8 @@ func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, 
 		return schema.NormalizeCoordinationOperation(input)
 	case tablecreate.OperationKind:
 		return tablecreate.Normalize(input)
+	case tablecreate.AlterOperationKind:
+		return tablecreate.NormalizeAlteration(input)
 	default:
 		return nil, fmt.Errorf("unsupported YDB native operation")
 	}
