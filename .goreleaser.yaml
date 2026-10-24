@@ -4,7 +4,7 @@ project_name: ptah-plugin-ydb
 
 # Two documents are published beside the archives and listed in checksums.txt:
 # the release lines the provider declares, and ptah-provider.json, which a host
-# reads to choose the newest release whose protocol revision it speaks.
+# reads to choose the newest release whose minimum provider contract it meets.
 before:
   hooks:
     - sh -c 'mkdir -p .release && go run ./cmd/release-lines > .release/release-lines.json'

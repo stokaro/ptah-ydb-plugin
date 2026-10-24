@@ -37,17 +37,32 @@ type Artifact struct {
 	Executable string `json:"executable"`
 }
 
-// ProviderDocument is the ptah-provider.json asset of a release: who the
-// provider is, which protocol revision it speaks and which archives the
-// release carries.
-type ProviderDocument struct {
-	Schema           int        `json:"schema"`
-	ProviderID       string     `json:"provider_id"`
-	Version          string     `json:"version"`
-	ProtocolRevision uint32     `json:"protocol_revision"`
-	Engines          []string   `json:"engines"`
-	Artifacts        []Artifact `json:"artifacts"`
+// ContractVersion is a provider contract version. The major version changes
+// only on an incompatible change; the minor version grows with each
+// compatible addition.
+type ContractVersion struct {
+	Major uint32 `json:"major"`
+	Minor uint32 `json:"minor"`
 }
+
+// ProviderDocument is the ptah-provider.json asset of a release: who the
+// provider is, the oldest provider contract a host must implement to start it
+// and which archives the release carries. A host starts the release when its
+// contract has the same major version and a minor version at least
+// MinContract.Minor.
+type ProviderDocument struct {
+	Schema      int             `json:"schema"`
+	ProviderID  string          `json:"provider_id"`
+	Version     string          `json:"version"`
+	MinContract ContractVersion `json:"min_contract"`
+	Engines     []string        `json:"engines"`
+	Artifacts   []Artifact      `json:"artifacts"`
+}
+
+// minContractMinor is the lowest contract minor version this provider needs
+// from a host. provider-sdk v0.2.0 predates minor versions, so its contract is
+// minor 0; read the provider's declared minimum once the SDK pin carries one.
+const minContractMinor = 0
 
 // BuildProvider renders the ptah-provider.json document for a release.
 // version is the tag without its leading "v", as GoReleaser's .Version is;
@@ -57,10 +72,10 @@ func BuildProvider(description *protocol.Description, version, project, executab
 		return nil, fmt.Errorf("release version %q must be the tag without its leading v", version)
 	}
 	doc := ProviderDocument{
-		Schema:           1,
-		ProviderID:       description.GetProviderId(),
-		Version:          version,
-		ProtocolRevision: description.GetRevision(),
+		Schema:      1,
+		ProviderID:  description.GetProviderId(),
+		Version:     version,
+		MinContract: ContractVersion{Major: description.GetRevision(), Minor: minContractMinor},
 	}
 	for _, engine := range description.GetEngines() {
 		doc.Engines = append(doc.Engines, engine.GetId())

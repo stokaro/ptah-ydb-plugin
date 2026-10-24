@@ -1,7 +1,7 @@
 // Command provider-manifest prints the ptah-provider.json document published
-// beside each release: the provider identity, its protocol revision and the
-// archives the release carries. A host reads it to choose the newest release
-// it can start.
+// beside each release: the provider identity, the oldest provider contract a
+// host must implement to start it, and the archives the release carries. A host
+// reads it to choose the newest release it can start.
 package main
 
 import (

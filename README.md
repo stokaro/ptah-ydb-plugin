@@ -41,11 +41,13 @@ darwin and windows on amd64 and arm64. Every archive holds the
 `ptah-plugin-ydb` binary (`ptah-plugin-ydb.exe` on Windows), `README.md` and
 `LICENSE`. The binaries are built with `CGO_ENABLED=0` and `-trimpath`.
 
-`ptah-provider.json` names the provider, the release version, the protocol
-revision the provider speaks, its engines and the archive and executable for
-each platform. `ptah providers install` reads it to choose the newest release
-whose revision matches the host, without downloading an archive.
-`release-lines.json` lists the release lines the provider declares.
+`ptah-provider.json` names the provider, the release version, the oldest
+provider contract a host must implement to start it (`min_contract`, a major and
+a minor version), its engines and the archive and executable for each platform.
+A host starts the release when its contract has the same major version and a
+minor version at least `min_contract.minor`. `ptah providers install` reads the
+document to choose the newest release the host can start, without downloading an
+archive. `release-lines.json` lists the release lines the provider declares.
 
 `checksums.txt` lists the SHA-256 digest of every archive and of both documents
 in `sha256sum` format (`<hex digest>  <file name>`). A host checks the archive
