@@ -99,6 +99,15 @@ func clusterCapabilities(ctx context.Context, opened *connection.Connection) (ma
 // New constructs an isolated session service.
 func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
+// minContractMinor is the oldest minor of contract provider.Revision a host
+// must speak to start this provider. Everything the provider uses from a later
+// minor is negotiated: an RPC a host does not know is never called, and an
+// addition to an existing message travels only when the host lists its
+// feature. A host of contract 25.0 therefore keeps every service this provider
+// serves. Raise the minimum only for a provider that cannot serve such a host
+// at all.
+const minContractMinor = 0
+
 // Description advertises native runtime services, offline coordination models,
 // captured row-table creation, column family alteration of existing tables,
 // the table-scope YAML keys and Go directives that declare row-table
@@ -106,7 +115,7 @@ func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 // rule catalog.
 func Description() *protocol.Description {
 	return &protocol.Description{
-		Revision: provider.Revision, ProviderId: schema.ProviderID,
+		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: "0.0.0-dev", SemanticIdentity: "ydb-table-lifecycle-2",
 		Features: engineFeatures(),
 		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: append([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, tablesource.YAMLKeys()...), GoSourceDirectives: tablesource.GoDirectives(), LintRules: migrationlint.Rules(), Features: engineFeatures()}},

@@ -45,9 +45,12 @@ darwin and windows on amd64 and arm64. Every archive holds the
 provider contract a host must implement to start it (`min_contract`, a major and
 a minor version), its engines and the archive and executable for each platform.
 A host starts the release when its contract has the same major version and a
-minor version at least `min_contract.minor`. `ptah providers install` reads the
-document to choose the newest release the host can start, without downloading an
-archive. `release-lines.json` lists the release lines the provider declares.
+minor version at least `min_contract.minor`. The document states the minimum the
+provider declares in its `Describe` reply, so the two cannot disagree. This
+provider declares 25.0: everything it uses from a later minor is negotiated, so
+a host of contract 25.0 keeps every service it serves. `ptah providers install`
+reads the document to choose the newest release the host can start, without
+downloading an archive. `release-lines.json` lists the release lines the provider declares.
 
 `checksums.txt` lists the SHA-256 digest of every archive and of both documents
 in `sha256sum` format (`<hex digest>  <file name>`). A host checks the archive
@@ -65,9 +68,8 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.2.0, experimental protocol revision 25, which
-includes operational storage reservations and offline table preparation. Builds require neither the Ptah application source nor a
-local SDK checkout.
+The module pins `provider-sdk` v0.4.0, which speaks provider contract 25.2.
+Builds require neither the Ptah application source nor a local SDK checkout.
 
 Run the unit suite and build the executable:
 
