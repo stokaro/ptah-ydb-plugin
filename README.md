@@ -118,8 +118,11 @@ Schema changes used `--tx-mode none` for `migrations up` and a
 transactional schema changes.
 
 The host and provider are built against the published SDK pin with
-`GOWORK=off`. CI builds the host from Ptah's master branch on every change and
-nightly, so a host change that breaks this provider shows up here. This
+`GOWORK=off`. The live tests run twice per change and nightly. The blocking
+run builds the newest published Ptah release whose provider contract this
+provider can run on (`scripts/resolve-host.sh`); it is skipped with a notice
+while no release speaks that contract. A second, non-blocking run builds Ptah's
+master branch, so a host change that breaks this provider shows up early. This
 repository owns the YDB end-to-end, live and parity tests; Ptah's own CI checks
 the provider contract only on its in-tree fixture provider. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
