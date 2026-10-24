@@ -1,0 +1,5 @@
+CREATE TABLE t (id Uint64 NOT NULL, note Utf8 DEFAULT "x\"; CREATE TABLE u (id Uint64);"u, PRIMARY KEY (id));
+UPSERT INTO t (id, note) VALUES (1, 'semi;colon');
+UPSERT INTO t (id, note) VALUES (2, @@multi
+line; text@@);
+CREATE TABLE `odd;name` (id Uint64);

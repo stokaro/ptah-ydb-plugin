@@ -101,3 +101,47 @@ func TestAnnotateLintStatements_FailurePath(t *testing.T) {
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
 	c.Assert(result, qt.IsNil)
 }
+
+// A split carries the statement facts for a host that lists
+// lint.statement-facts, in a reply the SDK accepts for that host, and leaves
+// them out for one that does not.
+func TestSplitLintStatementsDescribesStatementsForAListingHost(t *testing.T) {
+	facts := []protocol.LintFact{protocol.LintFact_LINT_FACT_STATEMENT_KIND, protocol.LintFact_LINT_FACT_MISSING_PRIMARY_KEY,
+		protocol.LintFact_LINT_FACT_REQUIRED_CAPABILITY}
+	for _, test := range []struct {
+		name     string
+		features []string
+		judged   []protocol.LintFact
+		effects  int
+	}{
+		{name: "listing", features: []string{provider.LintStatementFactsFeature}, judged: facts, effects: 2},
+		{name: "not listing", judged: []protocol.LintFact{}, effects: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			ctx := provider.ContextWithHostFeatures(c.Context(), test.features)
+			request := &protocol.SplitLintRequest{Engine: "ydb", Sources: []*protocol.LintSource{{Name: "x.sql", Sql: "CREATE TABLE t (id Uint64);"}}}
+
+			result, err := backend.New().SplitLintStatements(ctx, request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateSplitLint(provider.NegotiatedDescription(backend.Description(), test.features), request, result), qt.IsNil)
+			c.Assert(result.Judged[5:], qt.DeepEquals, test.judged)
+			c.Assert(result.Files[0].Statements[0].Effects, qt.HasLen, test.effects)
+		})
+	}
+}
+
+// An annotation request that asks for the statement facts is refused unless
+// the host lists lint.statement-facts.
+func TestAnnotateLintStatementsRefusesUnnegotiatedFacts_FailurePath(t *testing.T) {
+	c := qt.New(t)
+	request := &protocol.AnnotateLintRequest{Engine: "ydb", Facts: []protocol.LintFact{protocol.LintFact_LINT_FACT_STATEMENT_KIND},
+		Sources: []*protocol.LintSource{{Name: "x.sql", Sql: "DROP TABLE t;"}},
+		Files:   []*protocol.LintFile{{Name: "x.sql", Statements: []*protocol.LintStatement{{Start: 0, End: 12, Line: 1, Sql: "DROP TABLE t"}}}}}
+
+	result, err := backend.New().AnnotateLintStatements(c.Context(), request)
+
+	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
+	c.Assert(result, qt.IsNil)
+}

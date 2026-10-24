@@ -11,14 +11,16 @@ import (
 // SDK validates a request before it arrives and a reply before it leaves.
 
 // SplitRequest answers a SplitLintRequest: one file per source, in request
-// order, and the facts every statement was judged for.
-func SplitRequest(ctx context.Context, request *protocol.SplitLintRequest) (*protocol.SplitLint, error) {
+// order, and the facts every statement was judged for. describeStatements
+// adds the statement facts, which only a host that lists
+// lint.statement-facts reads.
+func SplitRequest(ctx context.Context, request *protocol.SplitLintRequest, describeStatements bool) (*protocol.SplitLint, error) {
 	sources := sourcesOf(request.GetSources())
-	files, err := Split(ctx, sources)
+	files, err := Split(ctx, sources, describeStatements)
 	if err != nil {
 		return nil, err
 	}
-	result := &protocol.SplitLint{Judged: Judged()}
+	result := &protocol.SplitLint{Judged: Judged(describeStatements)}
 	for i, statements := range files {
 		source := request.GetSources()[i]
 		result.Files = append(result.Files, &protocol.LintFile{Name: source.GetName(), Version: source.GetVersion(), Up: source.GetUp(),
@@ -89,7 +91,8 @@ func statementsOf(statements []*protocol.LintStatement) []Statement {
 			Comments: slices.Clone(statement.GetComments())}
 		for _, effect := range statement.GetEffects() {
 			value.Effects = append(value.Effects, Effect{Fact: effect.GetFact(), Object: effect.GetObject(), Kind: effect.GetKind(), Table: effect.GetTable(),
-				Columns: slices.Clone(effect.GetColumns()), Clause: effect.GetClause(), Failure: effect.GetFailure(), Impact: effect.GetImpact(), Reason: effect.GetReason()})
+				Columns: slices.Clone(effect.GetColumns()), Clause: effect.GetClause(), Failure: effect.GetFailure(), Impact: effect.GetImpact(), Reason: effect.GetReason(),
+				Class: effect.GetStatementClass(), Capability: effect.GetCapability()})
 		}
 		result = append(result, value)
 	}
@@ -112,7 +115,8 @@ func wireEffects(effects []Effect) []*protocol.LintEffect {
 	var result []*protocol.LintEffect
 	for _, effect := range effects {
 		result = append(result, &protocol.LintEffect{Fact: effect.Fact, Object: effect.Object, Kind: effect.Kind, Table: effect.Table,
-			Columns: slices.Clone(effect.Columns), Clause: effect.Clause, Failure: effect.Failure, Impact: effect.Impact, Reason: effect.Reason})
+			Columns: slices.Clone(effect.Columns), Clause: effect.Clause, Failure: effect.Failure, Impact: effect.Impact, Reason: effect.Reason,
+			StatementClass: effect.Class, Capability: effect.Capability})
 	}
 	return result
 }

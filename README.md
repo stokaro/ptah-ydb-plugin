@@ -1564,6 +1564,42 @@ migration directories and requests, recorded at one host commit, and the tests
 require the same statements, facts, annotations and findings, message for
 message. Its README says how to record them again.
 
+### Statement facts for `ptah sql lint`
+
+For a host that lists `lint.statement-facts`, which the engine lists beside
+`lint.migrations`, a split also says what each statement is, which table it
+creates without a primary key, and which capabilities it needs. `ptah sql
+lint` reads a YDB file through these facts when this provider serves the
+engine, in place of the host's built-in YQL reading, and reports what that
+reading reports:
+
+- a CREATE TABLE or an ALTER TABLE is examined; any other CREATE, ALTER or
+  DROP is a schema statement no rule examines, named by its first two words;
+- any other statement changes no schema object and is named by its first word,
+  or as a named expression;
+- a CREATE TABLE without a PRIMARY KEY clause names its table, and a table
+  written as a named expression keeps the name as written;
+- the capabilities are those the migration lint rules read: a unique index or
+  a column with a default added to an existing table, a vector index, and a
+  vector index over bit vectors. Each names the index or the column and the
+  clause that needs it. The host compares the key with the capabilities of the
+  server version it lints for.
+
+A statement that starts with no word, such as a string or a parenthesized
+query, is an expression the linter does not lint, and the first statement of a
+file that opens with a UTF-8 byte order mark is read like any other. The
+built-in reading skips both and reports nothing, which lets such a file read as
+clean; the provider is stricter on purpose.
+
+`internal/migrationlint/testdata/statementfacts` holds YQL files with the
+built-in reading's findings on three release lines, recorded at one host
+commit. The unit tests and an end-to-end run of the host's `ptah sql lint`
+through this provider require the same rules at the same positions about the
+same tables and capabilities. Its README says how to record them again.
+
+A host that does not list the feature is offered none of these facts, and an
+annotation request that asks for them is refused.
+
 The host owns output formats, severity overrides, suppression and the rules
 every dialect shares. The host's built-in owner reports nothing from these rules
 on a run that names no dialect; the provider is only asked about its own engine,

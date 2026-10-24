@@ -66,6 +66,12 @@ type Effect struct {
 	// other fact carries them.
 	Impact protocol.LintImpact
 	Reason string
+	// Class is what a statement kind says the statement does to the schema,
+	// and no other fact carries one.
+	Class protocol.LintStatementClass
+	// Capability is the key a required capability names, and no other fact
+	// carries one.
+	Capability string
 }
 
 // File is one migration file of a lint run.

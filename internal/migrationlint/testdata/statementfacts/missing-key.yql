@@ -1,0 +1,10 @@
+CREATE TABLE `shop/notes` (id Uint64 NOT NULL, body Utf8);
+CREATE TABLE IF NOT EXISTS orders (id Uint64 NOT NULL, total Decimal(22,9), PRIMARY KEY (id));
+create table lower_case (id Uint64);
+CREATE TABLE events (
+    id Uint64 NOT NULL,
+    at Timestamp,
+    PRIMARY KEY (id)
+)
+WITH (STORE = COLUMN);
+CREATE TABLE metrics (id Uint64 NOT NULL, v Double) WITH (STORE = COLUMN);

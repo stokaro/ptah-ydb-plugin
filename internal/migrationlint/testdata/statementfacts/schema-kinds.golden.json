@@ -1,0 +1,53 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "versions": {
+    "25.1.4.7": {
+      "capabilities": {
+        "add_column_with_default": false,
+        "unique_index_on_existing_table": false,
+        "vector_bit_type": false,
+        "vector_indexes": false
+      },
+      "findings": [
+        {
+          "rule": "SQL004",
+          "line": 1,
+          "column": 1,
+          "message": "no rule examined DROP TABLE, CREATE VIEW, DROP VIEW, CREATE TOPIC, ALTER TOPIC, DROP TOPIC, ALTER SEQUENCE, CREATE ASYNC, DROP ASYNC, CREATE USER, ALTER GROUP, DROP USER, CREATE EXTERNAL, CREATE OBJECT, DROP RESOURCE, CREATE BACKUP, DROP COORDINATION in this file"
+        }
+      ]
+    },
+    "25.4.1.15": {
+      "capabilities": {
+        "add_column_with_default": false,
+        "unique_index_on_existing_table": false,
+        "vector_bit_type": false,
+        "vector_indexes": true
+      },
+      "findings": [
+        {
+          "rule": "SQL004",
+          "line": 1,
+          "column": 1,
+          "message": "no rule examined DROP TABLE, CREATE VIEW, DROP VIEW, CREATE TOPIC, ALTER TOPIC, DROP TOPIC, ALTER SEQUENCE, CREATE ASYNC, DROP ASYNC, CREATE USER, ALTER GROUP, DROP USER, CREATE EXTERNAL, CREATE OBJECT, DROP RESOURCE, CREATE BACKUP, DROP COORDINATION in this file"
+        }
+      ]
+    },
+    "26.2.1.14": {
+      "capabilities": {
+        "add_column_with_default": true,
+        "unique_index_on_existing_table": false,
+        "vector_bit_type": true,
+        "vector_indexes": true
+      },
+      "findings": [
+        {
+          "rule": "SQL004",
+          "line": 1,
+          "column": 1,
+          "message": "no rule examined DROP TABLE, CREATE VIEW, DROP VIEW, CREATE TOPIC, ALTER TOPIC, DROP TOPIC, ALTER SEQUENCE, CREATE ASYNC, DROP ASYNC, CREATE USER, ALTER GROUP, DROP USER, CREATE EXTERNAL, CREATE OBJECT, DROP RESOURCE, CREATE BACKUP, DROP COORDINATION in this file"
+        }
+      ]
+    }
+  }
+}

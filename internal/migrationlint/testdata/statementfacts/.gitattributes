@@ -1,0 +1,2 @@
+# The corpus pins byte offsets, so line endings and the byte order mark stay as written.
+*.yql -text

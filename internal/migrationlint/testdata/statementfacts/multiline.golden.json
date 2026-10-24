@@ -1,0 +1,101 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "versions": {
+    "25.1.4.7": {
+      "capabilities": {
+        "add_column_with_default": false,
+        "unique_index_on_existing_table": false,
+        "vector_bit_type": false,
+        "vector_indexes": false
+      },
+      "findings": [
+        {
+          "rule": "CAP001",
+          "line": 7,
+          "column": 9,
+          "message": "ADD COLUMN later with a default on table first requires target capability add_column_with_default, unavailable on this target"
+        },
+        {
+          "rule": "SQL002",
+          "line": 11,
+          "column": 1,
+          "message": "ptah sql lint does not lint UPSERT statements yet"
+        },
+        {
+          "rule": "DDL001",
+          "line": 11,
+          "column": 55,
+          "message": "table \"second\" has no primary key, which YDB refuses (Primary key is required for ydb tables)"
+        },
+        {
+          "rule": "SQL004",
+          "line": 1,
+          "column": 1,
+          "message": "no rule examined DROP TABLE in this file"
+        }
+      ]
+    },
+    "25.4.1.15": {
+      "capabilities": {
+        "add_column_with_default": false,
+        "unique_index_on_existing_table": false,
+        "vector_bit_type": false,
+        "vector_indexes": true
+      },
+      "findings": [
+        {
+          "rule": "CAP001",
+          "line": 7,
+          "column": 9,
+          "message": "ADD COLUMN later with a default on table first requires target capability add_column_with_default, unavailable on this target"
+        },
+        {
+          "rule": "SQL002",
+          "line": 11,
+          "column": 1,
+          "message": "ptah sql lint does not lint UPSERT statements yet"
+        },
+        {
+          "rule": "DDL001",
+          "line": 11,
+          "column": 55,
+          "message": "table \"second\" has no primary key, which YDB refuses (Primary key is required for ydb tables)"
+        },
+        {
+          "rule": "SQL004",
+          "line": 1,
+          "column": 1,
+          "message": "no rule examined DROP TABLE in this file"
+        }
+      ]
+    },
+    "26.2.1.14": {
+      "capabilities": {
+        "add_column_with_default": true,
+        "unique_index_on_existing_table": false,
+        "vector_bit_type": true,
+        "vector_indexes": true
+      },
+      "findings": [
+        {
+          "rule": "SQL002",
+          "line": 11,
+          "column": 1,
+          "message": "ptah sql lint does not lint UPSERT statements yet"
+        },
+        {
+          "rule": "DDL001",
+          "line": 11,
+          "column": 55,
+          "message": "table \"second\" has no primary key, which YDB refuses (Primary key is required for ydb tables)"
+        },
+        {
+          "rule": "SQL004",
+          "line": 1,
+          "column": 1,
+          "message": "no rule examined DROP TABLE in this file"
+        }
+      ]
+    }
+  }
+}

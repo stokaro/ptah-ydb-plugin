@@ -57,12 +57,13 @@ func providerFeatures() []string {
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
-// provider, and dev realms, a property of the engine rather than a service.
-// The description, the session it opens and the inspection snapshot all
-// report it, so the host holds one target profile for observed, desired and
-// planned values.
+// provider, dev realms, a property of the engine rather than a service, and the
+// statement facts of its migration lint, which the contract lists beside the
+// engine's lint. The description, the session it opens and the inspection
+// snapshot all report it, so the host holds one target profile for observed,
+// desired and planned values.
 func engineFeatures() []string {
-	return append(providerFeatures(), provider.DevRealmsFeature)
+	return append(providerFeatures(), provider.DevRealmsFeature, provider.LintStatementFactsFeature)
 }
 
 // negotiatedFeatures is the engine's feature list as the host holds it: the
