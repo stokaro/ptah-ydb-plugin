@@ -1678,6 +1678,71 @@ statements. Against a Ptah whose `schema apply` and `ptah seed` serve declared
 rows and seed files through a provider, the end-to-end tests run both through
 this one in a dev realm and read the table back.
 
+## Embedding store
+
+The provider serves the SDK's embedding store (`embeddings.store`, ADR 0032)
+for the `ydb` engine, for a host that lists the feature too; the engine
+declares the `immutable` consistency mode. YDB has no triggers, so the outbox
+mode, which records each source change in the transaction that makes it, is not
+offered. The host keeps the lifecycle of `ptah inference`; the provider stores
+what the host decided and refuses nothing for a lifecycle reason.
+
+The layout is the host's embedded YDB engine's (`internal/embedydb`), so a
+database either one wrote runs on through the other:
+
+- the run state is the four tables `ptah_embedding_generation`,
+  `ptah_embedding_run`, `ptah_embedding_event` and `ptah_embedding_pointer` at
+  the root of the session's database, with the host's columns, keys and
+  nullability, a timestamp as Timestamp64 on 25.2 and newer and as Timestamp
+  on 25.1; an existing table of another shape is refused with `NOT_OWNED` and
+  never altered;
+- a generation beside its source adds the vector column, a nullable `String`,
+  and four `Utf8` columns named by the suffixes `_generation`, `_input_hash`,
+  `_source_version` and `_state`; a chunked generation keeps a table of its
+  own keyed by the source key and `<column>_chunk_ordinal`, marked as the
+  generation's by its comment;
+- a vector is stored as the bytes `Knn::ToBinaryStringFloat` produces, and the
+  index is a `vector_kmeans_tree` with the metric's `distance` or `similarity`
+  and the specification's `levels` and `clusters`.
+
+A compare-and-write (`MutateEmbeddingState`, `CommitEmbeddingBatch`) is one
+serializable YDB transaction that reads what it compares, compares the token,
+writes and commits. A transaction YDB aborts, or a server that is briefly
+overloaded or unavailable, runs again, at most twelve times; a commit that fails
+any other way is `UNKNOWN`. A token is a digest of the records read, so a
+record that changed or appeared gives another one. Written records come back as
+a later read returns them: optional text empty, times in UTC to the
+microsecond.
+
+A batch makes each written key's rows equal to its set: on the source's
+columns an `UPDATE` by the key, so a key the source no longer has creates no
+row, and in a table of its own an `UPSERT` that selects the key out of the
+source, with the rows past the set's end removed and a tombstone removing them
+all. A write into a generation whose index exists is refused as `UNSUPPORTED`
+on 25.2 and older, whose vector index answers a search as the table stood at
+its build.
+
+A source is paged by its primary key, which the specification's key fields
+have to be. The verification walk reads both sides in one query per page, one
+table read once or a full join of two, and never splits a key's rows across
+pages. A search asks twice, through the index with `VIEW` and by exhaustive
+scan. Building an index needs `vector_indexes`, which 25.1 has with
+`EnableVectorIndex` on; the provider reads the flag where the address names the
+monitoring endpoint. A drop checks ownership before anything goes: a table by
+its mark, columns by their comment and by holding no other generation's rows.
+
+`internal/embedstore/testdata` holds the host's answers for the run-state
+tables on 25.1 and 26.2, a corpus of specifications and a set of vectors, and
+the tests require the same statements, objects or refusals, and bytes. Its
+README says how to record them again. The live tests run the store on both
+lines in dev realms. Against a Ptah build they read a database the host's
+embedded engine prepared, backfilled and indexed, search it through the
+engine's index, and append an event the engine then reads; and against a Ptah
+whose `ptah inference` takes `--provider-config` they run the host's YDB
+inference flows through this provider: two generations from plan to cutover, a
+rollback and a retirement, a chunked generation in a table of its own, the
+refusals, and the answers an agent reads, which carry no source content.
+
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
@@ -1686,7 +1751,7 @@ settings other than column families, table removal and rebuild, planning, render
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
 rendering, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, offline SQL analysis, migration lint, row and seed services, dev database cleanup and replay guard services. The remaining
+lock, offline SQL analysis, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations
