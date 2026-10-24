@@ -496,6 +496,8 @@ func TestAlterOperation_RefusesInvalidOwner(t *testing.T) {
 		{Engine: "ydb", Kind: "table", Schema: "app/../other", Name: "records"},
 		{Engine: "ydb", Kind: "table", Database: "local", Schema: "app", Name: "records"},
 		{Engine: "ydb", Kind: "table", Schema: "", Name: "ptah_locks"},
+		{Engine: "ydb", Kind: "table", Schema: "", Name: "ptah_dev"},
+		{Engine: "ydb", Kind: "table", Schema: "ptah_dev/r1", Name: "records"},
 	} {
 		t.Run(bad.String(), func(t *testing.T) {
 			c := qt.New(t)

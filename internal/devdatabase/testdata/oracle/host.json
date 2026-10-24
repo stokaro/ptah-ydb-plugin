@@ -1,0 +1,221 @@
+[
+  {
+    "spec": "docker://ydb",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:latest",
+    "database": "local",
+    "query": "go_balancer=disable",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable"
+  },
+  {
+    "spec": "docker://ydb/",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:latest",
+    "database": "local",
+    "query": "go_balancer=disable",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=disable",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=disable",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable"
+  },
+  {
+    "spec": "docker://ydb/25.1.4.7/local/",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:25.1.4.7",
+    "database": "local",
+    "query": "go_balancer=disable",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable"
+  },
+  {
+    "spec": "docker://ydb/latest",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:latest",
+    "database": "local",
+    "query": "go_balancer=disable",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/dev",
+    "outcome": "refused",
+    "error": "docker --dev-url database \"dev\" is not one the ydbplatform/local-ydb image serves: name local"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local/extra",
+    "outcome": "refused",
+    "error": "docker --dev-url path \"/26.2.1.14/local/extra\" has more than \u003ctag\u003e/\u003cdatabase\u003e"
+  },
+  {
+    "spec": "docker://ydb//local",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:local",
+    "database": "local",
+    "query": "go_balancer=disable",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=disable",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?go_query_mode=query",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=disable\u0026go_query_mode=query",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable\u0026go_query_mode=query"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?go_balancer=single",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=single",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=single"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?go_default_idempotent=true\u0026prefetch_query_result_parts=2",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=disable\u0026go_default_idempotent=true\u0026prefetch_query_result_parts=2",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable\u0026go_default_idempotent=true\u0026prefetch_query_result_parts=2"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?go_balancer=disable\u0026go_balancer=single",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=disable\u0026go_balancer=single",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable\u0026go_balancer=single"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?database=/other",
+    "outcome": "refused",
+    "error": "docker --dev-url parameter \"database\" would point the connection away from the container this URL provisions; remove it, or pass a directly connectable dev database URL instead"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?dev_realm=r1",
+    "outcome": "refused",
+    "error": "docker --dev-url parameter \"dev_realm\" would point the connection away from the container this URL provisions; remove it, or pass a directly connectable dev database URL instead"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?monitoring=http://h:8765",
+    "outcome": "refused",
+    "error": "docker --dev-url parameter \"monitoring\" would point the connection away from the container this URL provisions; remove it, or pass a directly connectable dev database URL instead"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?host=elsewhere",
+    "outcome": "refused",
+    "error": "docker --dev-url parameter \"host\" would point the connection away from the container this URL provisions; remove it, or pass a directly connectable dev database URL instead"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?port=1",
+    "outcome": "refused",
+    "error": "docker --dev-url parameter \"port\" would point the connection away from the container this URL provisions; remove it, or pass a directly connectable dev database URL instead"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?user=u",
+    "outcome": "refused",
+    "error": "docker --dev-url parameter \"user\" would point the connection away from the container this URL provisions; remove it, or pass a directly connectable dev database URL instead"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?password=p",
+    "outcome": "refused",
+    "error": "docker --dev-url parameter \"password\" would point the connection away from the container this URL provisions; remove it, or pass a directly connectable dev database URL instead"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?token=t",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=disable\u0026token=t",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable\u0026token=t"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?unknown=1",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=disable\u0026unknown=1",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable\u0026unknown=1"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?go_balancer=nonsense",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=nonsense",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=nonsense"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?go_fake_tx=true",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:26.2.1.14",
+    "database": "local",
+    "query": "go_balancer=disable\u0026go_fake_tx=true",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable\u0026go_fake_tx=true"
+  },
+  {
+    "spec": "docker://YDB/26.2.1.14/local",
+    "outcome": "refused",
+    "error": "unsupported docker image \"YDB\""
+  },
+  {
+    "spec": "docker://ydb:26.2.1.14/local",
+    "outcome": "refused",
+    "error": "parse docker --dev-url: parse \"docker://ydb:26.2.1.14/local\": invalid port \":26.2.1.14\" after host"
+  },
+  {
+    "spec": "docker://postgres/16/dev",
+    "outcome": "ok",
+    "image": "postgres:16",
+    "database": "dev",
+    "query": "sslmode=disable",
+    "url": "postgres://postgres:@127.0.0.1:12136/dev?sslmode=disable"
+  },
+  {
+    "spec": "docker://sqlite/dev",
+    "outcome": "refused",
+    "error": "unsupported docker image \"sqlite\""
+  },
+  {
+    "spec": "docker:///26.2.1.14",
+    "outcome": "refused",
+    "error": "unsupported docker image \"\""
+  },
+  {
+    "spec": "docker://ydb/-oops/local",
+    "outcome": "ok",
+    "image": "ydbplatform/local-ydb:-oops",
+    "database": "local",
+    "query": "go_balancer=disable",
+    "url": "ydb://127.0.0.1:12136/local?go_balancer=disable"
+  },
+  {
+    "spec": "docker://ydb/26.2.1.14/local?a%zz=1",
+    "outcome": "refused",
+    "error": "parse docker --dev-url parameters \"a%zz=1\": invalid URL escape \"%zz\""
+  },
+  {
+    "spec": "postgres://ydb/26.2.1.14/local",
+    "outcome": "refused",
+    "error": "not a docker --dev-url: \"postgres://ydb/26.2.1.14/local\""
+  }
+]

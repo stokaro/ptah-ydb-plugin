@@ -3,6 +3,7 @@ package connection
 import (
 	"context"
 	"database/sql"
+	sqldriver "database/sql/driver"
 	"errors"
 	"sync"
 	"time"
@@ -34,7 +35,14 @@ func Open(ctx context.Context, address Address) (*Connection, error) {
 	if err != nil {
 		return nil, errors.Join(err, c.Close())
 	}
-	c.DB = sql.OpenDB(connector)
+	var opened sqldriver.Connector = connector
+	if address.realm != "" {
+		opened = prefixConnector{inner: connector, prefix: pathPrefix(address.Root())}
+		if err := ensureRealm(ctx, driver, address.Root()); err != nil {
+			return nil, errors.Join(err, c.Close())
+		}
+	}
+	c.DB = sql.OpenDB(opened)
 	if err := c.DB.PingContext(ctx); err != nil {
 		return nil, errors.Join(err, c.Close())
 	}

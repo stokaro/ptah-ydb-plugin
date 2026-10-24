@@ -1,0 +1,385 @@
+[
+  {
+    "statement": "CREATE TABLE t (id Int64 NOT NULL, PRIMARY KEY (id))",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "CREATE TABLE IF NOT EXISTS `dir/t` (id Int64 NOT NULL, PRIMARY KEY (id))",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "CREATE TABLE `../escape` (id Int64 NOT NULL, PRIMARY KEY (id))",
+    "outcome": "refused",
+    "operation": "the path ../escape, which climbs out of the dev database"
+  },
+  {
+    "statement": "CREATE TABLE `/local/abs` (id Int64 NOT NULL, PRIMARY KEY (id))",
+    "outcome": "refused",
+    "operation": "the absolute path /local/abs"
+  },
+  {
+    "statement": "CREATE TABLE `a/../../b` (id Int64 NOT NULL, PRIMARY KEY (id))",
+    "outcome": "refused",
+    "operation": "the path a/../../b, which climbs out of the dev database"
+  },
+  {
+    "statement": "CREATE TABLE $name (id Int64 NOT NULL, PRIMARY KEY (id))",
+    "outcome": "refused",
+    "operation": "a target named through $name"
+  },
+  {
+    "statement": "CREATE TABLE cluster.t (id Int64 NOT NULL, PRIMARY KEY (id))",
+    "outcome": "refused",
+    "operation": "a target in the cluster cluster"
+  },
+  {
+    "statement": "CREATE TEMP TABLE t (id Int64 NOT NULL, PRIMARY KEY (id))",
+    "outcome": "refused",
+    "operation": "temporary table"
+  },
+  {
+    "statement": "CREATE TEMPORARY TABLE t (id Int64 NOT NULL, PRIMARY KEY (id))",
+    "outcome": "refused",
+    "operation": "temporary table"
+  },
+  {
+    "statement": "ALTER TABLE t ADD COLUMN c Int32",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "ALTER TABLE t RENAME TO u",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "ALTER TABLE t RENAME TO `../renamed`",
+    "outcome": "refused",
+    "operation": "the path ../renamed, which climbs out of the dev database"
+  },
+  {
+    "statement": "ALTER TABLE t RENAME TO `/abs`",
+    "outcome": "refused",
+    "operation": "the absolute path /abs"
+  },
+  {
+    "statement": "ALTER TABLE t RENAME INDEX a TO b",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "ALTER TABLE `/local/x` ADD COLUMN c Int32",
+    "outcome": "refused",
+    "operation": "the absolute path /local/x"
+  },
+  {
+    "statement": "ALTER TABLE t SET (TTL = Interval(\"P1D\") TO EXTERNAL DATA SOURCE s ON c)",
+    "outcome": "refused",
+    "operation": "an external data source"
+  },
+  {
+    "statement": "DROP TABLE t",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "DROP TABLE IF EXISTS `/local/t`",
+    "outcome": "refused",
+    "operation": "the absolute path /local/t"
+  },
+  {
+    "statement": "DROP TABLE IF EXISTS t",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "CREATE OR REPLACE VIEW v WITH (security_invoker = TRUE) AS SELECT 1",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "CREATE VIEW `../v` AS SELECT 1",
+    "outcome": "refused",
+    "operation": "the path ../v, which climbs out of the dev database"
+  },
+  {
+    "statement": "DROP VIEW v",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "CREATE TOPIC tp (CONSUMER c)",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "ALTER TOPIC tp ADD CONSUMER c2",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "DROP TOPIC `/local/tp`",
+    "outcome": "refused",
+    "operation": "the absolute path /local/tp"
+  },
+  {
+    "statement": "CREATE SEQUENCE s",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "CREATE SECRET s WITH (value = 'v')",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "CREATE OBJECT s (TYPE SECRET) WITH value = 'v'",
+    "outcome": "refused",
+    "operation": "an object of the whole database"
+  },
+  {
+    "statement": "CREATE COORDINATION NODE n",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "CREATE COORDINATION NODE `/local/n`",
+    "outcome": "refused",
+    "operation": "the absolute path /local/n"
+  },
+  {
+    "statement": "CREATE COORDINATION SEMAPHORE n",
+    "outcome": "refused",
+    "operation": "unrecognized object CREATE COORDINATION SEMAPHORE"
+  },
+  {
+    "statement": "CREATE USER u1 PASSWORD 'p'",
+    "outcome": "refused",
+    "operation": "a user of the whole database"
+  },
+  {
+    "statement": "ALTER USER u1 PASSWORD 'p'",
+    "outcome": "refused",
+    "operation": "a user of the whole database"
+  },
+  {
+    "statement": "DROP USER u1",
+    "outcome": "refused",
+    "operation": "a user of the whole database"
+  },
+  {
+    "statement": "CREATE GROUP g1",
+    "outcome": "refused",
+    "operation": "a group of the whole database"
+  },
+  {
+    "statement": "CREATE RESOURCE POOL rp WITH (CONCURRENT_QUERY_LIMIT = 1)",
+    "outcome": "refused",
+    "operation": "a resource pool of the whole database"
+  },
+  {
+    "statement": "CREATE BACKUP COLLECTION c",
+    "outcome": "refused",
+    "operation": "a backup collection of the whole database"
+  },
+  {
+    "statement": "CREATE EXTERNAL DATA SOURCE s WITH (SOURCE_TYPE = 'ObjectStorage')",
+    "outcome": "refused",
+    "operation": "an external data source"
+  },
+  {
+    "statement": "CREATE EXTERNAL TABLE e (id Int64) WITH (DATA_SOURCE = 's')",
+    "outcome": "refused",
+    "operation": "an external table"
+  },
+  {
+    "statement": "CREATE ASYNC REPLICATION r FOR t AS t2 WITH (CONNECTION_STRING = 'x')",
+    "outcome": "refused",
+    "operation": "async replication"
+  },
+  {
+    "statement": "CREATE TRANSFER x FROM tp TO t USING $l",
+    "outcome": "refused",
+    "operation": "a transfer"
+  },
+  {
+    "statement": "CREATE STREAMING QUERY q AS DO BEGIN SELECT 1; END DO",
+    "outcome": "refused",
+    "operation": "a streaming query"
+  },
+  {
+    "statement": "CREATE DATABASE d",
+    "outcome": "refused",
+    "operation": "a change to the whole database"
+  },
+  {
+    "statement": "CREATE FOO bar",
+    "outcome": "refused",
+    "operation": "unrecognized object CREATE FOO"
+  },
+  {
+    "statement": "GRANT SELECT ON t TO u1",
+    "outcome": "refused",
+    "operation": "GRANT permission change"
+  },
+  {
+    "statement": "REVOKE SELECT ON t FROM u1",
+    "outcome": "refused",
+    "operation": "REVOKE permission change"
+  },
+  {
+    "statement": "SELECT * FROM `/local/other`",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "SELECT 1",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "DECLARE $x AS Int64",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "INSERT INTO t (id) VALUES (1)",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "INSERT INTO `/local/t` (id) VALUES (1)",
+    "outcome": "refused",
+    "operation": "the absolute path /local/t"
+  },
+  {
+    "statement": "INSERT OR IGNORE INTO t (id) VALUES (1)",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "INSERT INTO $p (id) VALUES (1)",
+    "outcome": "refused",
+    "operation": "a target named through $p"
+  },
+  {
+    "statement": "UPSERT INTO `../t` (id) VALUES (1)",
+    "outcome": "refused",
+    "operation": "the path ../t, which climbs out of the dev database"
+  },
+  {
+    "statement": "REPLACE INTO t (id) VALUES (1)",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "UPDATE t SET c = 1",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "UPDATE `/local/t` SET c = 1",
+    "outcome": "refused",
+    "operation": "the absolute path /local/t"
+  },
+  {
+    "statement": "DELETE FROM t",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "DELETE FROM `../t` WHERE id = 1",
+    "outcome": "refused",
+    "operation": "the path ../t, which climbs out of the dev database"
+  },
+  {
+    "statement": "DELETE FROM $t",
+    "outcome": "refused",
+    "operation": "a target named through $t"
+  },
+  {
+    "statement": "TRUNCATE TABLE t",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "TRUNCATE TABLE `/abs`",
+    "outcome": "refused",
+    "operation": "the absolute path /abs"
+  },
+  {
+    "statement": "ANALYZE t",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "ANALYZE `/abs`",
+    "outcome": "refused",
+    "operation": "the absolute path /abs"
+  },
+  {
+    "statement": "BATCH UPDATE t SET c = 1",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "BATCH DELETE FROM `/abs`",
+    "outcome": "refused",
+    "operation": "the absolute path /abs"
+  },
+  {
+    "statement": "PRAGMA TablePathPrefix = \"/local\"",
+    "outcome": "refused",
+    "operation": "PRAGMA TablePathPrefix"
+  },
+  {
+    "statement": "PRAGMA ydb.TablePathPrefix(\"/local\")",
+    "outcome": "refused",
+    "operation": "PRAGMA TablePathPrefix"
+  },
+  {
+    "statement": "PRAGMA tablepathprefix(\"/local\")",
+    "outcome": "refused",
+    "operation": "PRAGMA TablePathPrefix"
+  },
+  {
+    "statement": "PRAGMA AnsiInForEmptyOrNullableItemsCollections",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "USE other",
+    "outcome": "refused",
+    "operation": "USE"
+  },
+  {
+    "statement": "DEFINE ACTION $a() AS SELECT 1; END DEFINE",
+    "outcome": "refused",
+    "operation": "DEFINE ACTION"
+  },
+  {
+    "statement": "DEFINE SUBQUERY $s() AS SELECT 1; END DEFINE",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "DO $a()",
+    "outcome": "refused",
+    "operation": "DO"
+  },
+  {
+    "statement": "EVALUATE FOR $i IN [1] DO $a()",
+    "outcome": "refused",
+    "operation": "EVALUATE"
+  },
+  {
+    "statement": "BACKUP c",
+    "outcome": "refused",
+    "operation": "BACKUP"
+  },
+  {
+    "statement": "RESTORE c",
+    "outcome": "refused",
+    "operation": "RESTORE"
+  },
+  {
+    "statement": "COMMIT",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "ROLLBACK",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "$x = 1",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "--!ansi_lexer SELECT 1",
+    "outcome": "refused",
+    "operation": "translation setting --!ansi_lexer SELECT 1"
+  },
+  {
+    "statement": "VALUES (1)",
+    "outcome": "accepted"
+  },
+  {
+    "statement": "PROCESS t USING $f(TableRow())",
+    "outcome": "accepted"
+  }
+]

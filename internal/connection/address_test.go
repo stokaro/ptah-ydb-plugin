@@ -65,7 +65,13 @@ func TestAddressRefusesBeforeConnecting(t *testing.T) {
 		{"repeated separator", "ydb://host/local//other"},
 		{"backslash", "ydb://host/local%5cother"},
 		{"NUL", "ydb://host/local%00other"},
-		{"unimplemented realm", "ydb://host/local?dev_realm=test-secret"},
+		{"realm with a capital", "ydb://host/local?dev_realm=Test-Secret"},
+		{"realm with a slash", "ydb://host/local?dev_realm=a/test-secret"},
+		{"realm that climbs out", "ydb://host/local?dev_realm=.."},
+		{"empty realm", "ydb://host/local?dev_realm="},
+		{"duplicate realm", "ydb://host/local?dev_realm=r1&dev_realm=r2"},
+		{"realm too long", "ydb://host/local?dev_realm=01234567890123456789012345678901234567890123456789012345678901234"},
+		{"realm without a database", "ydb://host?dev_realm=r1"},
 		{"monitoring not a URL scheme", "ydb://host/local?monitoring=ftp://host:8765"},
 		{"monitoring without a scheme", "ydb://host/local?monitoring=host:8765"},
 		{"monitoring empty", "ydb://host/local?monitoring="},
@@ -171,5 +177,24 @@ func TestAddressMonitoring_CopyIsIndependent(t *testing.T) {
 func TestAddressRefusalNamesAcceptedParameters(t *testing.T) {
 	c := qt.New(t)
 	_, err := connection.Parse("ydb://host/local?test-secret=true")
-	c.Assert(err, qt.ErrorMatches, `unsupported YDB URL parameter; supported parameters: database, monitoring, token, use_env_credentials, go_balancer, balancer, go_query_mode, query_mode, go_default_idempotent, prefetch_query_result_parts`)
+	c.Assert(err, qt.ErrorMatches, `unsupported YDB URL parameter; supported parameters: database, monitoring, dev_realm, token, use_env_credentials, go_balancer, balancer, go_query_mode, query_mode, go_default_idempotent, prefetch_query_result_parts`)
+}
+
+func TestAddressRealm(t *testing.T) {
+	for _, test := range []struct{ name, input, realm, root, dsn string }{
+		{"none", "ydb://host/local", "", "/local", "grpc://host:2136/local"},
+		{"realm", "ydb://host/local?dev_realm=r1", "r1", "/local/ptah_dev/r1", "grpc://host:2136/local"},
+		{"nested database", "ydbs://host/ru/b1g?dev_realm=abc_123", "abc_123", "/ru/b1g/ptah_dev/abc_123", "grpcs://host:2135/ru/b1g"},
+		{"longest name", "ydb://host/local?dev_realm=0123456789012345678901234567890123456789012345678901234567890123", "0123456789012345678901234567890123456789012345678901234567890123", "/local/ptah_dev/0123456789012345678901234567890123456789012345678901234567890123", "grpc://host:2136/local"},
+		{"with SDK parameters", "ydb://host/local?dev_realm=r1&go_balancer=disable&monitoring=http://host:8765", "r1", "/local/ptah_dev/r1", "grpc://host:2136/local?go_balancer=disable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			address, err := connection.Parse(test.input)
+			c.Assert(err, qt.IsNil)
+			c.Assert(address.Realm(), qt.Equals, test.realm)
+			c.Assert(address.Root(), qt.Equals, test.root)
+			c.Assert(address.String(), qt.Equals, test.dsn)
+		})
+	}
 }

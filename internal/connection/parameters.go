@@ -23,6 +23,7 @@ const (
 	paramDefaultIdempotent = "go_default_idempotent"
 	paramPrefetchParts     = "prefetch_query_result_parts"
 	paramMonitoring        = "monitoring"
+	paramRealm             = "dev_realm"
 	paramFakeTx            = "go_fake_tx"
 	paramQueryBind         = "go_query_bind"
 )
@@ -30,7 +31,7 @@ const (
 // acceptedParameters lists, in the order a refusal names them, the parameters
 // an address may carry.
 var acceptedParameters = []string{
-	"database", paramMonitoring, "token", "use_env_credentials", paramBalancer, paramLegacyBalancer,
+	"database", paramMonitoring, paramRealm, "token", "use_env_credentials", paramBalancer, paramLegacyBalancer,
 	paramQueryMode, paramLegacyQueryMode, paramDefaultIdempotent, paramPrefetchParts,
 }
 
@@ -104,4 +105,34 @@ func monitoringEndpoint(query url.Values) (*url.URL, error) {
 		return nil, errors.New("the monitoring parameter names a page; name the endpoint only, as monitoring=http://host:8765")
 	}
 	return endpoint, nil
+}
+
+// RealmDirectory is the directory, at the root of a database, that holds the
+// dev realms. A session that names no realm leaves it out of everything it
+// reads and plans, so a realm in the database a run targets is never part of
+// the target's schema. It is not a dot-directory: those belong to the server.
+const RealmDirectory = "ptah_dev"
+
+// maxRealmLength bounds a realm name.
+const maxRealmLength = 64
+
+// realmName reads the dev_realm parameter, or returns "" when the query has
+// none. A realm is a name generated for a run: 1 to 64 lowercase ASCII
+// letters, digits and underscores, so it can be neither a path of more than one
+// directory nor a segment that leaves [RealmDirectory]. A refusal never
+// repeats the value.
+func realmName(query url.Values) (string, error) {
+	if !query.Has(paramRealm) {
+		return "", nil
+	}
+	realm := query.Get(paramRealm)
+	if realm == "" || len(realm) > maxRealmLength || strings.IndexFunc(realm, notRealmRune) >= 0 {
+		return "", fmt.Errorf("the dev_realm parameter is not a realm name: use 1 to %d lowercase letters, digits and underscores", maxRealmLength)
+	}
+	return realm, nil
+}
+
+// notRealmRune reports a rune a realm name may not hold.
+func notRealmRune(r rune) bool {
+	return (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_'
 }

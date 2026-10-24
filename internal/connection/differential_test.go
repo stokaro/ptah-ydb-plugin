@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"encoding/json"
 	"os"
-	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -23,6 +22,8 @@ type hostRow struct {
 	Outcome  string `json:"outcome"`
 	Error    string `json:"error"`
 	Database string `json:"database"`
+	Root     string `json:"root"`
+	Realm    string `json:"realm"`
 	DSN      string `json:"dsn"`
 }
 
@@ -51,9 +52,6 @@ func readCorpus(c *qt.C) []hostRow {
 
 // divergenceOf returns the divergence recorded for row, or the zero value.
 func divergenceOf(row hostRow) divergence {
-	if strings.Contains(row.URL, "dev_realm") {
-		return divergence{"refused", "the address does not read a dev realm"}
-	}
 	return divergences[row.URL]
 }
 
@@ -88,7 +86,7 @@ func TestAddressAgreesWithHost_Verdict(t *testing.T) {
 func TestAddressAgreesWithHost_SDKAddress(t *testing.T) {
 	c := qt.New(t)
 	rows := agreed(readCorpus(c))
-	c.Assert(len(rows) >= 25, qt.IsTrue, qt.Commentf("the corpus holds %d accepted rows", len(rows)))
+	c.Assert(len(rows) >= 30, qt.IsTrue, qt.Commentf("the corpus holds %d accepted rows", len(rows)))
 	for _, row := range rows {
 		t.Run(row.URL, func(t *testing.T) {
 			c := qt.New(t)
@@ -98,6 +96,8 @@ func TestAddressAgreesWithHost_SDKAddress(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			c.Assert(address.String(), qt.Equals, row.DSN)
 			c.Assert(address.Database(), qt.Equals, row.Database)
+			c.Assert(address.Root(), qt.Equals, row.Root)
+			c.Assert(address.Realm(), qt.Equals, row.Realm)
 		})
 	}
 }
