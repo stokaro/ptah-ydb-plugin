@@ -26,10 +26,13 @@ unpublished names is owed. Older envelopes and plans are refused.
 
 A tag that starts with `v` runs `.github/workflows/release.yml`, which
 publishes a GitHub release through GoReleaser (`.goreleaser.yaml`). Each
-release carries one archive per platform and a `checksums.txt` file:
+release carries one archive per platform, two JSON documents and a
+`checksums.txt` file:
 
 ```text
 ptah-plugin-ydb_<version>_<os>_<arch>.tar.gz   (.zip on Windows)
+ptah-provider.json
+release-lines.json
 checksums.txt
 ```
 
@@ -38,12 +41,20 @@ darwin and windows on amd64 and arm64. Every archive holds the
 `ptah-plugin-ydb` binary (`ptah-plugin-ydb.exe` on Windows), `README.md` and
 `LICENSE`. The binaries are built with `CGO_ENABLED=0` and `-trimpath`.
 
-`checksums.txt` lists the SHA-256 digest of every archive in `sha256sum`
-format (`<hex digest>  <file name>`). A host pins a release by version and by
-the digest listed there for its platform's archive.
+`ptah-provider.json` names the provider, the release version, the protocol
+revision the provider speaks, its engines and the archive and executable for
+each platform. `ptah providers install` reads it to choose the newest release
+whose revision matches the host, without downloading an archive.
+`release-lines.json` lists the release lines the provider declares.
+
+`checksums.txt` lists the SHA-256 digest of every archive and of both documents
+in `sha256sum` format (`<hex digest>  <file name>`). A host checks the archive
+it downloads against the digest listed there.
 
 Pull requests that touch the release inputs run `goreleaser check` and a
-snapshot build, then verify the snapshot's `checksums.txt`. To try it locally:
+snapshot build, then verify the snapshot's `checksums.txt` and that
+`ptah-provider.json` names exactly the archives GoReleaser wrote. To try it
+locally:
 
 ```sh
 GOWORK=off goreleaser release --snapshot --clean

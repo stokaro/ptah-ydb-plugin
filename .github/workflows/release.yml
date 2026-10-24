@@ -56,11 +56,14 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          # Six archives and the release lines document. The document is
-          # written outside dist, so it is checked from a copy.
-          test "$(wc -l < checksums.txt)" -eq 7
-          cp ../.release/release-lines.json .
+          # Six archives and two documents. The documents are written outside
+          # dist, so they are checked from copies.
+          test "$(wc -l < checksums.txt)" -eq 8
+          cp ../.release/release-lines.json ../.release/ptah-provider.json .
           sha256sum -c checksums.txt
+          # ptah-provider.json names exactly the archives GoReleaser wrote.
+          diff <(jq -r '.artifacts[].archive' ptah-provider.json | sort) \
+            <(ls ptah-plugin-ydb_*.tar.gz ptah-plugin-ydb_*.zip | sort)
 
   release:
     name: release
