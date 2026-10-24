@@ -95,6 +95,11 @@ func Decode(body []byte, fullPath string, table *native.ColumnTableDescribeResul
 	if !slices.Equal(table.GetPartitioningSettings().GetPartitionBy(), hash.Columns) {
 		return nil, fmt.Errorf("YDB hash columns disagree across descriptions")
 	}
+	// A live table always has a shard count and data channels; the model
+	// leaves them out only for a prediction from a declaration.
+	if source.ColumnShardCount == 0 || source.GetStorageConfig().GetDataChannelCount() == 0 {
+		return nil, fmt.Errorf("YDB column table description has no shard count or data channels")
+	}
 	result := &native.ColumnStorageObservation{
 		HashColumns: slices.Clone(hash.Columns), Partitions: source.ColumnShardCount,
 		DataChannelCount: source.GetStorageConfig().GetDataChannelCount(),

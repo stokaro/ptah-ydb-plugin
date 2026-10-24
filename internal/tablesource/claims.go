@@ -1,19 +1,21 @@
 // Package tablesource decodes the table-scope declarations a YAML or Go
-// annotation source writes for a YDB row table: its automatic partitioning,
-// read replicas, key bloom filter, starting layout, TTL and column families.
+// annotation source writes for a YDB table: a row table's automatic
+// partitioning, read replicas, key bloom filter, starting layout, TTL and column
+// families, and a column table's storage, hash key, shard count and TTL.
 //
 // The host lexes the source and sends the provider the parsed values of the
 // keys, directives and attributes the provider claimed. A Go source writes the
-// partitioning and the TTL as attributes of the host's own ptah:schema:table
-// directive, and a column family as a directive of its own. This package owns
-// the claims and the meaning of the values. It turns every fragment that
-// belongs to one table into a single desired row-table facet, because a
-// document may carry only one facet of a kind for a table.
+// partitioning, the storage and the TTL as attributes of the host's own
+// ptah:schema:table directive, and a column family as a directive of its own.
+// This package owns the claims and the meaning of the values. It turns every
+// fragment that belongs to one table into a single desired facet, the row-table
+// facet or the column-storage facet, because a document may carry only one
+// facet of a kind for a table.
 //
 // What the bundled decoder in the host reads and this package does not is
 // listed in the package README of the provider and in the tests: column family
-// cache modes, the columns of a family written in YAML, changefeeds, column
-// storage and index options. The host
+// cache modes, the columns of a family written in YAML, changefeeds and index
+// options. The host
 // refuses a YAML key that no provider claims, and reads a Go comment that none
 // claims as no declaration. So the provider leaves unclaimed the YAML keys it
 // cannot carry, and claims the Go directives and attributes it cannot carry in
@@ -54,7 +56,7 @@ const (
 	AttributePartitionAtKeys   = "partition_at_keys"
 
 	// The attributes that choose a column table and describe it. A row table
-	// has none; they are claimed so that a column table is refused by name.
+	// states store=ROW or none of them.
 	AttributeStore     = "store"
 	AttributeHash      = "partition_by_hash"
 	AttributeShards    = "column_shards"
@@ -146,13 +148,22 @@ func indexAttributes() []string {
 	}
 }
 
-// YAMLKeys returns the table-scope YAML keys the provider claims. Each key
-// declares the row-table properties model.
+// YAMLKeys returns the table-scope YAML keys the provider claims. A key
+// declares the row-table properties model; column_store declares the
+// column-storage model, and the TTL of the ydb platform group is a column
+// table's TTL beside it, so the group declares both.
 func YAMLKeys() []*protocol.YAMLSourceKey {
-	keys := slices.Concat(partitioningKeys(), layoutKeys(), []string{KeyColumnFamilies, KeyPlatformYDB})
+	keys := slices.Concat(partitioningKeys(), layoutKeys(), []string{KeyColumnFamilies, KeyPlatformYDB, KeyColumnStore})
 	claims := make([]*protocol.YAMLSourceKey, 0, len(keys))
 	for _, key := range keys {
-		claims = append(claims, &protocol.YAMLSourceKey{Scope: protocol.YAMLSourceKey_TABLE, Key: key, Selector: key, Models: []string{schema.TableProperties}})
+		models := []string{schema.TableProperties}
+		switch key {
+		case KeyColumnStore:
+			models = []string{schema.ColumnStorageProperties}
+		case KeyPlatformYDB:
+			models = []string{schema.TableProperties, schema.ColumnStorageProperties}
+		}
+		claims = append(claims, &protocol.YAMLSourceKey{Scope: protocol.YAMLSourceKey_TABLE, Key: key, Selector: key, Models: models})
 	}
 	return claims
 }
@@ -172,8 +183,12 @@ func GoDirectives() []*protocol.GoSourceDirective {
 	family.Models = append(family.Models, schema.ColumnProperties)
 	index := claim(DirectiveIndex, indexAttributes()...)
 	index.Scope = protocol.GoSourceDirective_INDEX
+	// The table directive declares a row table's settings or a column table's
+	// storage.
+	table := claim(DirectiveTable, tableAttributes()...)
+	table.Models = append(table.Models, schema.ColumnStorageProperties)
 	return []*protocol.GoSourceDirective{
-		claim(DirectiveTable, tableAttributes()...),
+		table,
 		index,
 		family,
 		claim(DirectiveChangefeed, AttributeName, AttributeTable, "mode", "format", "virtual_timestamps", "resolved_timestamps", "initial_scan", "user_sids",

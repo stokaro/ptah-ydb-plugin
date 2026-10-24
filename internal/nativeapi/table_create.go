@@ -7,7 +7,6 @@ import (
 	"maps"
 	"path"
 	"slices"
-	"strings"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -59,28 +58,8 @@ func (c *TableCreation) Apply(ctx context.Context, database string, value *proto
 		return false, err
 	}
 	directory := path.Join(database, owner.Schema)
-	listing, err := c.Scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: directory})
-	if err != nil {
-		return false, fmt.Errorf("read YDB table namespace: transport failed")
-	}
-	var entries Ydb_Scheme.ListDirectoryResult
-	if err := Operation(listing.GetOperation(), &entries); err != nil {
+	if err := absent(ctx, c.Scheme, directory, owner); err != nil {
 		return false, err
-	}
-	if entries.GetSelf().GetName() != path.Base(directory) ||
-		(entries.GetSelf().GetType() != Ydb_Scheme.Entry_DIRECTORY && entries.GetSelf().GetType() != Ydb_Scheme.Entry_DATABASE) ||
-		(owner.Schema != "" && entries.GetSelf().GetType() == Ydb_Scheme.Entry_DATABASE) || len(entries.Children) > 4096 {
-		return false, fmt.Errorf("invalid YDB table namespace")
-	}
-	names := map[string]bool{}
-	for _, entry := range entries.Children {
-		if entry.GetName() == "" || strings.ContainsAny(entry.Name, "/\\\x00") || entry.Name == "." || entry.Name == ".." || names[entry.Name] {
-			return false, fmt.Errorf("invalid YDB table namespace entry")
-		}
-		names[entry.Name] = true
-		if entry.Name == owner.Name {
-			return false, fmt.Errorf("YDB table creation path is already occupied")
-		}
 	}
 	session, err := c.Open(ctx)
 	if err != nil {

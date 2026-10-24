@@ -1,0 +1,47 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/column-store": {},
+    "ptah.run/ydb/ttl": {
+     "Column": "created_at",
+     "Interval": "P30D",
+     "Unit": ""
+    }
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "platform.ydb.row_deletion_column": "created_at",
+    "platform.ydb.row_deletion_interval": "P30D",
+    "store": "COLUMN"
+   },
+   "struct": "Item",
+   "file": "go-table-store-column-with-ttl-platform.go",
+   "file_size": 376,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 153,
+    "line": 3,
+    "column": 136
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

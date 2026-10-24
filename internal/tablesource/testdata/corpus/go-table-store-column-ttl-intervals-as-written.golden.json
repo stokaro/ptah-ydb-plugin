@@ -1,0 +1,58 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/column-store": {
+     "ttl": {
+      "column": "created_at",
+      "tiers": [
+       {
+        "interval": "PT3600S",
+        "external_source": "/local/ext/hot"
+       },
+       {
+        "interval": "P1W",
+        "external_source": "/local/ext/cold"
+       },
+       {
+        "interval": "P30D"
+       }
+      ]
+     }
+    }
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "column_ttl": "{\"column\":\"created_at\",\"tiers\":[{\"interval\":\"PT3600S\",\"external_source\":\"/local/ext/hot\"},{\"interval\":\"P1W\",\"external_source\":\"/local/ext/cold\"},{\"interval\":\"P30D\"}]}",
+    "store": "COLUMN"
+   },
+   "struct": "Item",
+   "file": "go-table-store-column-ttl-intervals-as-written.go",
+   "file_size": 509,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 271,
+    "line": 3,
+    "column": 254
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

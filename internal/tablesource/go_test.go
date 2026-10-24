@@ -8,6 +8,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -259,6 +260,41 @@ func TestTableDirective_HappyPath(t *testing.T) {
 	}
 }
 
+// TestTableDirective_ColumnTable pins the column-storage facet a column
+// table's attributes make: the storage alone, the hash key and the shard
+// count, a tiered TTL with each interval in seconds, and a TTL that only
+// deletes, written as the row_deletion properties, as one deleting tier.
+func TestTableDirective_ColumnTable(t *testing.T) {
+	tests := []struct {
+		name        string
+		attributes  map[string]string
+		wantPayload string
+	}{
+		{"the storage alone", map[string]string{"store": " column "}, `{}`},
+		{"a hash key and a shard count", map[string]string{"store": "COLUMN", "partition_by_hash": " b , a ", "column_shards": "8"}, `{"hashColumns":["b","a"],"partitions":"8"}`},
+		{"a tiered TTL", map[string]string{"store": "COLUMN", "column_ttl": `{"column":"t","unit":"seconds","tiers":[{"interval":"P1D","external_source":"/local/ext"},{"interval":"P1W"}]}`},
+			`{"ttl":{"enabled":{"column":"t","columnUnit":"1","tiers":[{"applyAfterSeconds":"86400","externalStorage":"/local/ext"},{"applyAfterSeconds":"604800","delete":{}}]}}}`},
+		{"a TTL that only deletes", map[string]string{"store": "COLUMN", "platform.ydb.row_deletion_column": "t", "platform.ydb.row_deletion_interval": "PT2H"},
+			`{"ttl":{"enabled":{"column":"t","tiers":[{"applyAfterSeconds":"7200","delete":{}}]}}}`},
+		{"an epoch TTL that only deletes", map[string]string{"store": "COLUMN", "platform.ydb.row_deletion_column": "t", "platform.ydb.row_deletion_interval": "PT2H",
+			"platform.ydb.row_deletion_unit": "nanoseconds"}, `{"ttl":{"enabled":{"column":"t","columnUnit":"4","tiers":[{"applyAfterSeconds":"7200","delete":{}}]}}}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := goRequest(c, tableDeclaration(2, "Item", test.attributes))
+			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
+			c.Assert(err, qt.IsNil)
+			c.Assert(tables, qt.HasLen, 1)
+			c.Assert(tables[0].Value.Value.Kind, qt.Equals, schema.ColumnStorageProperties)
+			c.Assert(string(tables[0].Value.CanonicalProjection), qt.Equals, test.wantPayload)
+			decoded, err := backend.New().DecodeSource(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateDecodedSource(backend.Description(), request, decoded), qt.IsNil)
+		})
+	}
+}
+
 // A table that states row storage and nothing else declares nothing, so the
 // host gets no facet for it and the table's settings stay as they are.
 func TestTableDirective_RowStorageAloneDeclaresNothing(t *testing.T) {
@@ -290,8 +326,20 @@ func TestTableDirective_FailurePath(t *testing.T) {
 		{"a starting layout by count of zero", map[string]string{"uniform_partitions": "0"}, `table "items": invalid uniform_partitions "0": write a whole number of at least 1.*`},
 		{"a starting layout by key with no closing parenthesis", map[string]string{"partition_at_keys": "(10, 20"}, `table "items": invalid partition_at_keys "\(10, 20": expected a comma or a closing parenthesis at offset 7.*`},
 		{"two starting layouts", map[string]string{"uniform_partitions": "4", "partition_at_keys": "10, 20"}, `table "items": .*uniform_partitions and partition_at_keys are both declared, which YDB refuses.*`},
-		{"a column table", map[string]string{"store": "column"}, `table "items": store is not supported by the YDB provider yet: .*`},
-		{"a column table with a hash key", map[string]string{"store": "COLUMN", "partition_by_hash": "id", "column_shards": "4"}, `table "items": store is not supported by the YDB provider yet: .*`},
+		{"a column table with row partitioning", map[string]string{"store": "column", "auto_partitioning_by_load": "ENABLED"}, `table "items": row-table partitioning, column families and changefeeds cannot be applied to a column table`},
+		{"a column table with a starting layout", map[string]string{"store": "COLUMN", "uniform_partitions": "4"}, `table "items": row-table partitioning, column families and changefeeds cannot be applied to a column table`},
+		{"a column table with two TTLs", map[string]string{"store": "COLUMN", "column_ttl": `{"column":"t","tiers":[{"interval":"P1D","external_source":"/local/ext"}]}`,
+			"platform.ydb.row_deletion_column": "t", "platform.ydb.row_deletion_interval": "P2D"}, `table "items": declare either tiered TTL or a TTL that deletes rows, not both`},
+		{"a blank hash column", map[string]string{"store": "COLUMN", "partition_by_hash": "id, ,b"}, `table "items": invalid partition_by_hash "id, ,b": it names an empty column.*`},
+		{"a hash column twice", map[string]string{"store": "COLUMN", "partition_by_hash": "id,id"}, `table "items": hash partitioning column "id" is empty or repeated`},
+		{"shards with a space", map[string]string{"store": "COLUMN", "column_shards": " 4"}, `table "items": invalid column_shards " 4": write a positive 32-bit count`},
+		{"shards beyond 32 bits", map[string]string{"store": "COLUMN", "column_shards": "4294967296"}, `table "items": invalid column_shards "4294967296": write a positive 32-bit count`},
+		{"a tiered TTL that only deletes", map[string]string{"store": "COLUMN", "column_ttl": `{"column":"t","tiers":[{"interval":"P1D"}]}`},
+			`table "items": a tiered TTL requires a tier that moves rows to an external data source; a TTL that only deletes is the table's TTL`},
+		{"a tiered TTL with a field it does not read", map[string]string{"store": "COLUMN", "column_ttl": `{"column":"t","tiers":[],"extra":1}`},
+			`table "items": invalid column_ttl .*: write one JSON object with a column, an optional unit and tiers: json: unknown field "extra"`},
+		{"a tiered TTL of two objects", map[string]string{"store": "COLUMN", "column_ttl": `{} {}`}, `table "items": invalid column_ttl .*: it must hold exactly one JSON object`},
+		{"a tiered TTL that is null", map[string]string{"store": "COLUMN", "column_ttl": `null`}, `table "items": invalid column_ttl "null": it must be an object, not null`},
 		{"a storage kind that does not exist", map[string]string{"store": "colum"}, `table "items": invalid store "colum": write ROW or COLUMN`},
 		{"an empty storage kind", map[string]string{"store": " "}, `table "items": invalid store " ": write ROW or COLUMN`},
 		{"a hash key on a row table", map[string]string{"partition_by_hash": "id"}, `table "items": invalid partition_by_hash "id": it describes a column table, so write store=COLUMN`},

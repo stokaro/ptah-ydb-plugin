@@ -1,6 +1,7 @@
 package tablesource
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -9,8 +10,11 @@ import (
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // DeclarationError is an attribute whose value a declaration cannot carry.
@@ -40,20 +44,72 @@ func (e *UnsupportedError) Error() string {
 	return fmt.Sprintf("%s is not supported by the YDB provider yet: %s", e.Setting, e.Reason)
 }
 
-// settings collects the declared parts of one table's row-table facet.
+// settings collects the declared parts of one table's facet: a row table's
+// settings, or a column table's storage.
 type settings struct {
 	intent   native.RowTableIntent
 	declared bool
 	// placements are the columns the table's families list, in the order the
 	// declarations list them.
 	placements []placement
+	// column is the storage of a column table, nil for a row table.
+	column *native.ColumnStorageIntent
 }
 
 // placement puts one column in a declared family.
 type placement struct{ column, family string }
 
 // empty reports whether nothing was declared, so no facet is due.
-func (s *settings) empty() bool { return !s.declared }
+func (s *settings) empty() bool { return !s.declared && s.column == nil }
+
+// setColumnStore makes the table a column table with the storage a source
+// declares.
+func (s *settings) setColumnStore(storage *native.ColumnStorageIntent) error {
+	if s.column != nil {
+		return fmt.Errorf("it declares a column table twice")
+	}
+	s.column = storage
+	return nil
+}
+
+// finish completes a column table's facet once every fragment of the table is
+// read. A column table holds no row-table setting, so one declared beside it is
+// refused with the words the host's embedded engine plans it with. A TTL that
+// only deletes, written as the row_deletion properties, is the column table's
+// TTL setting too: it becomes the facet's one deleting tier, and a tiered TTL
+// declared beside it is refused.
+func (s *settings) finish() error {
+	if s.column == nil {
+		return nil
+	}
+	ttl := s.intent.TtlSettings
+	rows := proto.CloneOf(&s.intent)
+	rows.TtlSettings = nil
+	if !proto.Equal(rows, &native.RowTableIntent{}) || len(s.placements) != 0 {
+		return errors.New(schema.ColumnTableRowSettingsRefusal)
+	}
+	if ttl == nil {
+		return nil
+	}
+	if s.column.Ttl != nil {
+		return errors.New(schema.ColumnTableBothTTLRefusal)
+	}
+	enabled := &native.ColumnTTLEnabled{}
+	switch mode := ttl.GetMode().(type) {
+	case *Ydb_Table.TtlSettings_DateTypeColumn:
+		enabled.Column = mode.DateTypeColumn.GetColumnName()
+		enabled.Tiers = []*native.ColumnTTLTier{{ApplyAfterSeconds: uint64(mode.DateTypeColumn.GetExpireAfterSeconds()), Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}}}
+	case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
+		enabled.Column = mode.ValueSinceUnixEpoch.GetColumnName()
+		enabled.ColumnUnit = uint64(mode.ValueSinceUnixEpoch.GetColumnUnit())
+		enabled.Tiers = []*native.ColumnTTLTier{{ApplyAfterSeconds: uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds()), Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}}}
+	default:
+		return fmt.Errorf("YDB TTL requires an explicit mode")
+	}
+	s.column.Ttl = &native.ColumnTTLPolicy{State: &native.ColumnTTLPolicy_Enabled{Enabled: enabled}}
+	s.intent.TtlSettings = nil
+	return nil
+}
 
 // setPartitioning reads one partitioning attribute. A value is checked for the
 // form YDB takes, so a typo is refused where it was written: ENABLED or
@@ -271,32 +327,6 @@ func parseFields(raw string) ([]string, error) {
 		columns = append(columns, column)
 	}
 	return columns, nil
-}
-
-// refuseColumnStore checks the attributes that choose a column table and
-// refuses a column table by name. A row table states them only as store=ROW, or
-// not at all, and then they declare nothing. The checks follow the bundled
-// decoder's, so a mistake in them is refused for the reason it is refused there:
-// a storage kind other than ROW and COLUMN, and a hash key, a shard count or a
-// retention policy on a table that is not a column table.
-func refuseColumnStore(values map[string]string) error {
-	store, written := values[AttributeStore]
-	if written && strings.TrimSpace(store) == "" {
-		return &DeclarationError{Attribute: AttributeStore, Value: store, Reason: "write ROW or COLUMN"}
-	}
-	switch kind := strings.ToUpper(strings.TrimSpace(store)); kind {
-	case "COLUMN":
-		return &UnsupportedError{Setting: AttributeStore, Reason: "the provider plans no column table yet; only row tables are created and altered"}
-	case "", "ROW":
-		for _, name := range []string{AttributeHash, AttributeShards, AttributeColumnTTL} {
-			if value, found := values[name]; found {
-				return &DeclarationError{Attribute: name, Value: value, Reason: "it describes a column table, so write store=COLUMN"}
-			}
-		}
-		return nil
-	default:
-		return &DeclarationError{Attribute: AttributeStore, Value: store, Reason: "write ROW or COLUMN"}
-	}
 }
 
 // setTTL reads the three platform properties that declare a row table's TTL:

@@ -504,8 +504,8 @@ statistics are excluded. A missing child description refuses the entire read.
 Indexes, implementation tables, changefeeds, and consumers are sorted by name.
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
 Every observed model has a separate desired contract and an offline conversion.
-Comparison and planning remain limited to coordination nodes and the TTL, partitioning settings and column families of row tables; source adapters
-for the other families remain pending, as described under row-table declarations below.
+Comparison and planning remain limited to coordination nodes, the TTL, partitioning settings and column families of row tables, and the storage of
+column tables; source adapters for the other families remain pending, as described under row-table declarations below.
 
 Views retain the query returned by the view service and the attributes read
 through the table service on the same path. This includes comments and custom
@@ -669,7 +669,6 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
 | `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
 | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
-| `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables are read, and have no creation or comparison yet; see "Column tables" below. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name. YAML has no index key claim. |
 | Topics, resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` at document scope. |
 
@@ -685,14 +684,29 @@ properties were not read, leaves the TTL alone.
 
 ### Column tables
 
-A column table is declared with `store="COLUMN"` and optionally
-`partition_by_hash` (a comma separated list of key columns), `column_shards` (a
-positive 32-bit count) and `column_ttl` (a JSON object with a column, an optional
-epoch unit and ordered tiers, of which only the last may delete and at least one
-has to move rows to an absolute external data source path), or with the
-`column_store` mapping in YAML. The corpus records the facet the host's bundled
-decoder makes of each spelling and each refusal (`*-store-column-*` rows), so the
-grammar is pinned. The provider refuses every one of them by name.
+A column table is declared with `store="COLUMN"` in the Go table directive, or
+with the `column_store` mapping in YAML. The Go attributes `partition_by_hash`
+(a comma separated list of key columns), `column_shards` (a positive 32-bit
+count) and `column_ttl`, and the YAML keys `hash_columns`, `partitions` and
+`ttl`, state the hash key, the shard count and a tiered TTL. A tiered TTL names
+a column, an optional epoch unit and ordered tiers; only the last tier may
+delete rows, and every other one moves them to an absolute external data source
+path. A TTL that only deletes is written as the row TTL
+(`platform.ydb.row_deletion_*` in Go, the `row_deletion_*` keys of the YAML `ydb`
+group) and becomes the column table's one deleting tier. The declaration
+becomes one column-storage facet, and what it leaves out stays the server's
+choice. `store="ROW"` declares nothing.
+
+The corpus holds each spelling and each refusal with the host's answer
+(`*-store-column-*` rows). The host's bundled decoders also accept a column
+table beside row-table settings (partitioning, read replicas, a key bloom
+filter, a starting layout, column families) and beside both a tiered TTL and a
+row TTL, and its renderer refuses the table when it plans it. The provider
+refuses such a declaration where it is decoded, with the renderer's words:
+`row-table partitioning, column families and changefeeds cannot be applied to a
+column table`, and `declare either tiered TTL or a TTL that deletes rows, not
+both`. It is stricter in one place: the host reads a fractional YAML
+`partitions` as its whole part, and the provider refuses it.
 
 Inspection reads a column table, a `COLUMN_TABLE` directory entry, from the
 table service and from the monitoring endpoint's scheme description
@@ -721,24 +735,39 @@ never read as a row table. The SDK client passes the host the status code of a
 refused call and not its message, so the host reports `provider inspect failed
 (FailedPrecondition)`.
 
-What stands between this and declaring column tables, in the order the work has
-to go:
+Creation. The planner creates a declared column table with one YQL `CREATE
+TABLE ... PARTITION BY HASH (...) WITH (STORE = COLUMN, ...)` through the query
+service, once, outside a transaction, with the shard count as
+`AUTO_PARTITIONING_MIN_PARTITIONS_COUNT` and the TTL as YQL writes it. YQL is
+used rather than the native `CreateTable` call because the native call writes
+`HASH_FUNCTION_MODULO_N`, which the host's embedded engine does not read. Every
+key column is written NOT NULL, as the host writes it: YDB refuses a nullable
+key column in a column table, and a Go field marked primary is nullable unless
+it says `not_null`. The table is read back from the table service and the
+monitoring endpoint and must hold the declared columns and key, the declared
+hash key or, without one, the whole key, the declared shard count, the declared
+TTL and no local index. A creation in a session whose address names no
+monitoring endpoint is refused before anything is written. A tier that moves
+rows needs the `tiered_ttl` capability, which a session reads from
+`EnableTieringInColumnShard`; without it the plan is refused with the reason.
+Column defaults, Serial columns, column families, indexes, local indexes and a
+data channel count other than the server's 64 are refused.
 
-- No source decoder. The desired column storage model
-  (`ColumnStorageProperties`, `ColumnStorageIntent`) lists no source format, so a
-  claim cannot name it, and no code turns the attributes above into it. The host
-  accepts a column table beside partitioning, read replicas, a key bloom filter,
-  a starting layout and a row TTL (`platform.ydb.*`); the corpus rows show which.
-- No creation. The creation operation requires row storage, and the compiler,
-  the operation grammar and the confirmation read back a row table.
-- No comparison or planning. Only the tiered TTL of a column table changes in
-  place; the storage kind, the hash key and the shard count are fixed at creation,
-  so a declaration that differs needs a refusal with the reason. Under complete
-  coverage, a table without the column storage facet asks for row storage.
-
-Accepting the declaration before the creation and the comparison exist would turn
-a refusal that names the setting into a refusal further down the plan, so the
-declaration stays refused until the creation and the comparison land with it.
+Comparison and planning. The comparison `ydb-row-table-properties` compares the
+column-storage facet of a table that exists on both sides, and reports a
+`github.com/stokaro/ptah-ydb-plugin/column-storage-change` when the hash key,
+the shard count, the TTL or the local indexes differ, or when the table is a
+column table on one side and a row table on the other. A declaration that
+leaves out the hash key or the shard count takes what the table holds. Under
+complete coverage, a table the source states no column storage for asks for a
+row table. YDB fixes a table's storage kind, hash key and shard count when it
+creates the table and copies no column table into a new one, so the planner
+refuses each of these changes with the host's words (`changing between row and
+column storage requires an explicit data migration`, `changing a column
+table's hash key or shard count requires an explicit data migration`, with both
+values; `column-table rebuilds require an explicit data migration`). A change of
+the TTL of an existing column table, a change of its local indexes and any
+column step of a column table are refused as not planned yet.
 
 `internal/tablesource/testdata/corpus` holds the inputs and the answers of the
 host's bundled decoder for them, and the differential test in

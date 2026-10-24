@@ -182,7 +182,7 @@ func TestAlterPlan_HappyPath(t *testing.T) {
 			c.Assert(plan.Contributions, qt.HasLen, 1)
 			c.Assert(plan.Contributions[0].Steps, qt.HasLen, 1)
 			c.Assert(plan.Rewrites, qt.HasLen, 0)
-			c.Assert(plan.Parents, qt.HasLen, 4)
+			c.Assert(plan.Parents, qt.HasLen, 5)
 			step := plan.Contributions[0].Steps[0]
 			c.Assert(step.Id.Name, qt.Equals, "row-table-alter/000000")
 			c.Assert(step.Operation.Value.Value.Kind, qt.Equals, tablecreate.AlterOperationKind)
@@ -240,7 +240,7 @@ func TestAlterPlan_NoChange(t *testing.T) {
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
 			c.Assert(plan.Rewrites, qt.HasLen, 0)
-			c.Assert(plan.Parents, qt.HasLen, 4)
+			c.Assert(plan.Parents, qt.HasLen, 5)
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, 0)
 			c.Assert(plan.Parents[0].Action, qt.Equals, protocol.PlanningTable_ALTER)
 		})
@@ -284,7 +284,7 @@ func TestAlterPlan_RefusesLifecyclesItDoesNotOwn(t *testing.T) {
 		want   string
 	}{
 		{"rebuild", func(r *protocol.PlanFeaturesRequest) { r.Tables[0].Action = protocol.PlanningTable_REBUILD },
-			"Only native row-table creation and alteration of column families, columns, the TTL, the partitioning settings and the indexes are implemented"},
+			"Only native row-table creation and alteration of column families, columns, the TTL, the partitioning settings and the indexes, and column-table creation, are implemented"},
 		{"transactional claim", func(r *protocol.PlanFeaturesRequest) { r.Capabilities["transactional_ddl"] = true },
 			"YDB table creation requires established nontransactional DDL"},
 		{"unmeasured capabilities", func(r *protocol.PlanFeaturesRequest) { r.Capabilities = nil },

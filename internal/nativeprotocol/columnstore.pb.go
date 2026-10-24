@@ -2378,6 +2378,86 @@ func (x *EvictionToExternalStorageSettings) GetStorage() string {
 	return ""
 }
 
+// The creation of a column table, the payload of the provider's creation
+// operation. A column holds its name, its type and its nullability only; a
+// hash key, a shard count and a TTL the declaration leaves out are the
+// server's choice.
+type ColumnTableCreation struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Columns       []*Ydb_Table.ColumnMeta `protobuf:"bytes,1,rep,name=columns,proto3" json:"columns,omitempty"`
+	PrimaryKey    []string                `protobuf:"bytes,2,rep,name=primary_key,json=primaryKey,proto3" json:"primary_key,omitempty"`
+	HashColumns   []string                `protobuf:"bytes,3,rep,name=hash_columns,json=hashColumns,proto3" json:"hash_columns,omitempty"`
+	Partitions    uint64                  `protobuf:"varint,4,opt,name=partitions,proto3" json:"partitions,omitempty"`
+	Ttl           *ColumnTTLPolicy        `protobuf:"bytes,5,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ColumnTableCreation) Reset() {
+	*x = ColumnTableCreation{}
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ColumnTableCreation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ColumnTableCreation) ProtoMessage() {}
+
+func (x *ColumnTableCreation) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ColumnTableCreation.ProtoReflect.Descriptor instead.
+func (*ColumnTableCreation) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_columnstore_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ColumnTableCreation) GetColumns() []*Ydb_Table.ColumnMeta {
+	if x != nil {
+		return x.Columns
+	}
+	return nil
+}
+
+func (x *ColumnTableCreation) GetPrimaryKey() []string {
+	if x != nil {
+		return x.PrimaryKey
+	}
+	return nil
+}
+
+func (x *ColumnTableCreation) GetHashColumns() []string {
+	if x != nil {
+		return x.HashColumns
+	}
+	return nil
+}
+
+func (x *ColumnTableCreation) GetPartitions() uint64 {
+	if x != nil {
+		return x.Partitions
+	}
+	return 0
+}
+
+func (x *ColumnTableCreation) GetTtl() *ColumnTTLPolicy {
+	if x != nil {
+		return x.Ttl
+	}
+	return nil
+}
+
 var File_internal_nativeprotocol_columnstore_proto protoreflect.FileDescriptor
 
 const file_internal_nativeprotocol_columnstore_proto_rawDesc = "" +
@@ -2577,7 +2657,16 @@ const file_internal_nativeprotocol_columnstore_proto_rawDesc = "" +
 	"expressionB\b\n" +
 	"\x06action\"=\n" +
 	"!EvictionToExternalStorageSettings\x12\x18\n" +
-	"\astorage\x18\x01 \x01(\tR\astorageB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
+	"\astorage\x18\x01 \x01(\tR\astorage\"\xde\x01\n" +
+	"\x13ColumnTableCreation\x12/\n" +
+	"\acolumns\x18\x01 \x03(\v2\x15.Ydb.Table.ColumnMetaR\acolumns\x12\x1f\n" +
+	"\vprimary_key\x18\x02 \x03(\tR\n" +
+	"primaryKey\x12!\n" +
+	"\fhash_columns\x18\x03 \x03(\tR\vhashColumns\x12\x1e\n" +
+	"\n" +
+	"partitions\x18\x04 \x01(\x04R\n" +
+	"partitions\x122\n" +
+	"\x03ttl\x18\x05 \x01(\v2 .ptah.ydb.native.ColumnTTLPolicyR\x03ttlB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
 
 var (
 	file_internal_nativeprotocol_columnstore_proto_rawDescOnce sync.Once
@@ -2591,54 +2680,56 @@ func file_internal_nativeprotocol_columnstore_proto_rawDescGZIP() []byte {
 	return file_internal_nativeprotocol_columnstore_proto_rawDescData
 }
 
-var file_internal_nativeprotocol_columnstore_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_internal_nativeprotocol_columnstore_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_internal_nativeprotocol_columnstore_proto_goTypes = []any{
-	(*ColumnStorageObservation)(nil),          // 0: ptah.ydb.native.ColumnStorageObservation
-	(*LocalIndexObservation)(nil),             // 1: ptah.ydb.native.LocalIndexObservation
-	(*LocalBloomSettings)(nil),                // 2: ptah.ydb.native.LocalBloomSettings
-	(*LocalNGramSettings)(nil),                // 3: ptah.ydb.native.LocalNGramSettings
-	(*LocalMinMaxSettings)(nil),               // 4: ptah.ydb.native.LocalMinMaxSettings
-	(*ColumnTTLPolicy)(nil),                   // 5: ptah.ydb.native.ColumnTTLPolicy
-	(*ColumnTTLEnabled)(nil),                  // 6: ptah.ydb.native.ColumnTTLEnabled
-	(*ColumnTTLTier)(nil),                     // 7: ptah.ydb.native.ColumnTTLTier
-	(*MonitoringColumnTable)(nil),             // 8: ptah.ydb.native.MonitoringColumnTable
-	(*MonitoringStorage)(nil),                 // 9: ptah.ydb.native.MonitoringStorage
-	(*MonitoringColumnSchema)(nil),            // 10: ptah.ydb.native.MonitoringColumnSchema
-	(*MonitoringSchemaOptions)(nil),           // 11: ptah.ydb.native.MonitoringSchemaOptions
-	(*MonitoringColumn)(nil),                  // 12: ptah.ydb.native.MonitoringColumn
-	(*MonitoringFamily)(nil),                  // 13: ptah.ydb.native.MonitoringFamily
-	(*MonitoringSharding)(nil),                // 14: ptah.ydb.native.MonitoringSharding
-	(*MonitoringHash)(nil),                    // 15: ptah.ydb.native.MonitoringHash
-	(*MonitoringLocalIndex)(nil),              // 16: ptah.ydb.native.MonitoringLocalIndex
-	(*MonitoringClass)(nil),                   // 17: ptah.ydb.native.MonitoringClass
-	(*MonitoringBloom)(nil),                   // 18: ptah.ydb.native.MonitoringBloom
-	(*MonitoringNGram)(nil),                   // 19: ptah.ydb.native.MonitoringNGram
-	(*MonitoringMinMax)(nil),                  // 20: ptah.ydb.native.MonitoringMinMax
-	(*MonitoringTTL)(nil),                     // 21: ptah.ydb.native.MonitoringTTL
-	(*MonitoringTTLEnabled)(nil),              // 22: ptah.ydb.native.MonitoringTTLEnabled
-	(*MonitoringTTLTier)(nil),                 // 23: ptah.ydb.native.MonitoringTTLTier
-	(*MonitoringEviction)(nil),                // 24: ptah.ydb.native.MonitoringEviction
-	(*ColumnTableDescribeResult)(nil),         // 25: ptah.ydb.native.ColumnTableDescribeResult
-	(*TtlSettings)(nil),                       // 26: ptah.ydb.native.TtlSettings
-	(*TieredModeSettings)(nil),                // 27: ptah.ydb.native.TieredModeSettings
-	(*TtlTier)(nil),                           // 28: ptah.ydb.native.TtlTier
-	(*EvictionToExternalStorageSettings)(nil), // 29: ptah.ydb.native.EvictionToExternalStorageSettings
-	nil,                                               // 30: ptah.ydb.native.ColumnTableDescribeResult.AttributesEntry
-	(*emptypb.Empty)(nil),                             // 31: google.protobuf.Empty
-	(*Ydb_Scheme.Entry)(nil),                          // 32: Ydb.Scheme.Entry
-	(*ColumnMeta)(nil),                                // 33: ptah.ydb.native.ColumnMeta
-	(*Ydb.TypedValue)(nil),                            // 34: Ydb.TypedValue
-	(*TableIndexDescription)(nil),                     // 35: ptah.ydb.native.TableIndexDescription
-	(*Ydb_Table.TableStats)(nil),                      // 36: Ydb.Table.TableStats
-	(*Ydb_Table.StorageSettings)(nil),                 // 37: Ydb.Table.StorageSettings
-	(*Ydb_Table.ColumnFamily)(nil),                    // 38: Ydb.Table.ColumnFamily
-	(*Ydb_Table.PartitioningSettings)(nil),            // 39: Ydb.Table.PartitioningSettings
-	(Ydb.FeatureFlag_Status)(0),                       // 40: Ydb.FeatureFlag.Status
-	(*Ydb_Table.ReadReplicasSettings)(nil),            // 41: Ydb.Table.ReadReplicasSettings
-	(*ChangefeedDescription)(nil),                     // 42: ptah.ydb.native.ChangefeedDescription
-	(Ydb_Table.StoreType)(0),                          // 43: Ydb.Table.StoreType
-	(*Ydb_Table.DateTypeColumnModeSettings)(nil),      // 44: Ydb.Table.DateTypeColumnModeSettings
-	(*Ydb_Table.ValueSinceUnixEpochModeSettings)(nil), // 45: Ydb.Table.ValueSinceUnixEpochModeSettings
+	(*ColumnStorageObservation)(nil),                  // 0: ptah.ydb.native.ColumnStorageObservation
+	(*LocalIndexObservation)(nil),                     // 1: ptah.ydb.native.LocalIndexObservation
+	(*LocalBloomSettings)(nil),                        // 2: ptah.ydb.native.LocalBloomSettings
+	(*LocalNGramSettings)(nil),                        // 3: ptah.ydb.native.LocalNGramSettings
+	(*LocalMinMaxSettings)(nil),                       // 4: ptah.ydb.native.LocalMinMaxSettings
+	(*ColumnTTLPolicy)(nil),                           // 5: ptah.ydb.native.ColumnTTLPolicy
+	(*ColumnTTLEnabled)(nil),                          // 6: ptah.ydb.native.ColumnTTLEnabled
+	(*ColumnTTLTier)(nil),                             // 7: ptah.ydb.native.ColumnTTLTier
+	(*MonitoringColumnTable)(nil),                     // 8: ptah.ydb.native.MonitoringColumnTable
+	(*MonitoringStorage)(nil),                         // 9: ptah.ydb.native.MonitoringStorage
+	(*MonitoringColumnSchema)(nil),                    // 10: ptah.ydb.native.MonitoringColumnSchema
+	(*MonitoringSchemaOptions)(nil),                   // 11: ptah.ydb.native.MonitoringSchemaOptions
+	(*MonitoringColumn)(nil),                          // 12: ptah.ydb.native.MonitoringColumn
+	(*MonitoringFamily)(nil),                          // 13: ptah.ydb.native.MonitoringFamily
+	(*MonitoringSharding)(nil),                        // 14: ptah.ydb.native.MonitoringSharding
+	(*MonitoringHash)(nil),                            // 15: ptah.ydb.native.MonitoringHash
+	(*MonitoringLocalIndex)(nil),                      // 16: ptah.ydb.native.MonitoringLocalIndex
+	(*MonitoringClass)(nil),                           // 17: ptah.ydb.native.MonitoringClass
+	(*MonitoringBloom)(nil),                           // 18: ptah.ydb.native.MonitoringBloom
+	(*MonitoringNGram)(nil),                           // 19: ptah.ydb.native.MonitoringNGram
+	(*MonitoringMinMax)(nil),                          // 20: ptah.ydb.native.MonitoringMinMax
+	(*MonitoringTTL)(nil),                             // 21: ptah.ydb.native.MonitoringTTL
+	(*MonitoringTTLEnabled)(nil),                      // 22: ptah.ydb.native.MonitoringTTLEnabled
+	(*MonitoringTTLTier)(nil),                         // 23: ptah.ydb.native.MonitoringTTLTier
+	(*MonitoringEviction)(nil),                        // 24: ptah.ydb.native.MonitoringEviction
+	(*ColumnTableDescribeResult)(nil),                 // 25: ptah.ydb.native.ColumnTableDescribeResult
+	(*TtlSettings)(nil),                               // 26: ptah.ydb.native.TtlSettings
+	(*TieredModeSettings)(nil),                        // 27: ptah.ydb.native.TieredModeSettings
+	(*TtlTier)(nil),                                   // 28: ptah.ydb.native.TtlTier
+	(*EvictionToExternalStorageSettings)(nil),         // 29: ptah.ydb.native.EvictionToExternalStorageSettings
+	(*ColumnTableCreation)(nil),                       // 30: ptah.ydb.native.ColumnTableCreation
+	nil,                                               // 31: ptah.ydb.native.ColumnTableDescribeResult.AttributesEntry
+	(*emptypb.Empty)(nil),                             // 32: google.protobuf.Empty
+	(*Ydb_Scheme.Entry)(nil),                          // 33: Ydb.Scheme.Entry
+	(*ColumnMeta)(nil),                                // 34: ptah.ydb.native.ColumnMeta
+	(*Ydb.TypedValue)(nil),                            // 35: Ydb.TypedValue
+	(*TableIndexDescription)(nil),                     // 36: ptah.ydb.native.TableIndexDescription
+	(*Ydb_Table.TableStats)(nil),                      // 37: Ydb.Table.TableStats
+	(*Ydb_Table.StorageSettings)(nil),                 // 38: Ydb.Table.StorageSettings
+	(*Ydb_Table.ColumnFamily)(nil),                    // 39: Ydb.Table.ColumnFamily
+	(*Ydb_Table.PartitioningSettings)(nil),            // 40: Ydb.Table.PartitioningSettings
+	(Ydb.FeatureFlag_Status)(0),                       // 41: Ydb.FeatureFlag.Status
+	(*Ydb_Table.ReadReplicasSettings)(nil),            // 42: Ydb.Table.ReadReplicasSettings
+	(*ChangefeedDescription)(nil),                     // 43: ptah.ydb.native.ChangefeedDescription
+	(Ydb_Table.StoreType)(0),                          // 44: Ydb.Table.StoreType
+	(*Ydb_Table.DateTypeColumnModeSettings)(nil),      // 45: Ydb.Table.DateTypeColumnModeSettings
+	(*Ydb_Table.ValueSinceUnixEpochModeSettings)(nil), // 46: Ydb.Table.ValueSinceUnixEpochModeSettings
+	(*Ydb_Table.ColumnMeta)(nil),                      // 47: Ydb.Table.ColumnMeta
 }
 var file_internal_nativeprotocol_columnstore_proto_depIdxs = []int32{
 	1,  // 0: ptah.ydb.native.ColumnStorageObservation.local_indexes:type_name -> ptah.ydb.native.LocalIndexObservation
@@ -2646,10 +2737,10 @@ var file_internal_nativeprotocol_columnstore_proto_depIdxs = []int32{
 	2,  // 2: ptah.ydb.native.LocalIndexObservation.bloom:type_name -> ptah.ydb.native.LocalBloomSettings
 	3,  // 3: ptah.ydb.native.LocalIndexObservation.ngram:type_name -> ptah.ydb.native.LocalNGramSettings
 	4,  // 4: ptah.ydb.native.LocalIndexObservation.min_max:type_name -> ptah.ydb.native.LocalMinMaxSettings
-	31, // 5: ptah.ydb.native.ColumnTTLPolicy.disabled:type_name -> google.protobuf.Empty
+	32, // 5: ptah.ydb.native.ColumnTTLPolicy.disabled:type_name -> google.protobuf.Empty
 	6,  // 6: ptah.ydb.native.ColumnTTLPolicy.enabled:type_name -> ptah.ydb.native.ColumnTTLEnabled
 	7,  // 7: ptah.ydb.native.ColumnTTLEnabled.tiers:type_name -> ptah.ydb.native.ColumnTTLTier
-	31, // 8: ptah.ydb.native.ColumnTTLTier.delete:type_name -> google.protobuf.Empty
+	32, // 8: ptah.ydb.native.ColumnTTLTier.delete:type_name -> google.protobuf.Empty
 	9,  // 9: ptah.ydb.native.MonitoringColumnTable.storage_config:type_name -> ptah.ydb.native.MonitoringStorage
 	10, // 10: ptah.ydb.native.MonitoringColumnTable.schema:type_name -> ptah.ydb.native.MonitoringColumnSchema
 	14, // 11: ptah.ydb.native.MonitoringColumnTable.sharding:type_name -> ptah.ydb.native.MonitoringSharding
@@ -2658,8 +2749,8 @@ var file_internal_nativeprotocol_columnstore_proto_depIdxs = []int32{
 	16, // 14: ptah.ydb.native.MonitoringColumnSchema.indexes:type_name -> ptah.ydb.native.MonitoringLocalIndex
 	13, // 15: ptah.ydb.native.MonitoringColumnSchema.column_families:type_name -> ptah.ydb.native.MonitoringFamily
 	11, // 16: ptah.ydb.native.MonitoringColumnSchema.options:type_name -> ptah.ydb.native.MonitoringSchemaOptions
-	31, // 17: ptah.ydb.native.MonitoringColumn.type_info:type_name -> google.protobuf.Empty
-	31, // 18: ptah.ydb.native.MonitoringColumn.default_value:type_name -> google.protobuf.Empty
+	32, // 17: ptah.ydb.native.MonitoringColumn.type_info:type_name -> google.protobuf.Empty
+	32, // 18: ptah.ydb.native.MonitoringColumn.default_value:type_name -> google.protobuf.Empty
 	15, // 19: ptah.ydb.native.MonitoringSharding.hash_sharding:type_name -> ptah.ydb.native.MonitoringHash
 	18, // 20: ptah.ydb.native.MonitoringLocalIndex.bloom_filter:type_name -> ptah.ydb.native.MonitoringBloom
 	19, // 21: ptah.ydb.native.MonitoringLocalIndex.bloom_ngramm_filter:type_name -> ptah.ydb.native.MonitoringNGram
@@ -2669,38 +2760,40 @@ var file_internal_nativeprotocol_columnstore_proto_depIdxs = []int32{
 	17, // 25: ptah.ydb.native.MonitoringNGram.data_extractor:type_name -> ptah.ydb.native.MonitoringClass
 	17, // 26: ptah.ydb.native.MonitoringNGram.bits_storage:type_name -> ptah.ydb.native.MonitoringClass
 	17, // 27: ptah.ydb.native.MonitoringMinMax.data_extractor:type_name -> ptah.ydb.native.MonitoringClass
-	31, // 28: ptah.ydb.native.MonitoringTTL.disabled:type_name -> google.protobuf.Empty
+	32, // 28: ptah.ydb.native.MonitoringTTL.disabled:type_name -> google.protobuf.Empty
 	22, // 29: ptah.ydb.native.MonitoringTTL.enabled:type_name -> ptah.ydb.native.MonitoringTTLEnabled
 	23, // 30: ptah.ydb.native.MonitoringTTLEnabled.tiers:type_name -> ptah.ydb.native.MonitoringTTLTier
-	31, // 31: ptah.ydb.native.MonitoringTTLTier.delete:type_name -> google.protobuf.Empty
+	32, // 31: ptah.ydb.native.MonitoringTTLTier.delete:type_name -> google.protobuf.Empty
 	24, // 32: ptah.ydb.native.MonitoringTTLTier.evict_to_external_storage:type_name -> ptah.ydb.native.MonitoringEviction
-	32, // 33: ptah.ydb.native.ColumnTableDescribeResult.self:type_name -> Ydb.Scheme.Entry
-	33, // 34: ptah.ydb.native.ColumnTableDescribeResult.columns:type_name -> ptah.ydb.native.ColumnMeta
-	34, // 35: ptah.ydb.native.ColumnTableDescribeResult.shard_key_bounds:type_name -> Ydb.TypedValue
-	35, // 36: ptah.ydb.native.ColumnTableDescribeResult.indexes:type_name -> ptah.ydb.native.TableIndexDescription
-	36, // 37: ptah.ydb.native.ColumnTableDescribeResult.table_stats:type_name -> Ydb.Table.TableStats
+	33, // 33: ptah.ydb.native.ColumnTableDescribeResult.self:type_name -> Ydb.Scheme.Entry
+	34, // 34: ptah.ydb.native.ColumnTableDescribeResult.columns:type_name -> ptah.ydb.native.ColumnMeta
+	35, // 35: ptah.ydb.native.ColumnTableDescribeResult.shard_key_bounds:type_name -> Ydb.TypedValue
+	36, // 36: ptah.ydb.native.ColumnTableDescribeResult.indexes:type_name -> ptah.ydb.native.TableIndexDescription
+	37, // 37: ptah.ydb.native.ColumnTableDescribeResult.table_stats:type_name -> Ydb.Table.TableStats
 	26, // 38: ptah.ydb.native.ColumnTableDescribeResult.ttl_settings:type_name -> ptah.ydb.native.TtlSettings
-	37, // 39: ptah.ydb.native.ColumnTableDescribeResult.storage_settings:type_name -> Ydb.Table.StorageSettings
-	38, // 40: ptah.ydb.native.ColumnTableDescribeResult.column_families:type_name -> Ydb.Table.ColumnFamily
-	30, // 41: ptah.ydb.native.ColumnTableDescribeResult.attributes:type_name -> ptah.ydb.native.ColumnTableDescribeResult.AttributesEntry
-	39, // 42: ptah.ydb.native.ColumnTableDescribeResult.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
-	40, // 43: ptah.ydb.native.ColumnTableDescribeResult.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
-	41, // 44: ptah.ydb.native.ColumnTableDescribeResult.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
-	42, // 45: ptah.ydb.native.ColumnTableDescribeResult.changefeeds:type_name -> ptah.ydb.native.ChangefeedDescription
-	43, // 46: ptah.ydb.native.ColumnTableDescribeResult.store_type:type_name -> Ydb.Table.StoreType
-	44, // 47: ptah.ydb.native.TtlSettings.date_type_column:type_name -> Ydb.Table.DateTypeColumnModeSettings
-	45, // 48: ptah.ydb.native.TtlSettings.value_since_unix_epoch:type_name -> Ydb.Table.ValueSinceUnixEpochModeSettings
+	38, // 39: ptah.ydb.native.ColumnTableDescribeResult.storage_settings:type_name -> Ydb.Table.StorageSettings
+	39, // 40: ptah.ydb.native.ColumnTableDescribeResult.column_families:type_name -> Ydb.Table.ColumnFamily
+	31, // 41: ptah.ydb.native.ColumnTableDescribeResult.attributes:type_name -> ptah.ydb.native.ColumnTableDescribeResult.AttributesEntry
+	40, // 42: ptah.ydb.native.ColumnTableDescribeResult.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
+	41, // 43: ptah.ydb.native.ColumnTableDescribeResult.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
+	42, // 44: ptah.ydb.native.ColumnTableDescribeResult.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
+	43, // 45: ptah.ydb.native.ColumnTableDescribeResult.changefeeds:type_name -> ptah.ydb.native.ChangefeedDescription
+	44, // 46: ptah.ydb.native.ColumnTableDescribeResult.store_type:type_name -> Ydb.Table.StoreType
+	45, // 47: ptah.ydb.native.TtlSettings.date_type_column:type_name -> Ydb.Table.DateTypeColumnModeSettings
+	46, // 48: ptah.ydb.native.TtlSettings.value_since_unix_epoch:type_name -> Ydb.Table.ValueSinceUnixEpochModeSettings
 	27, // 49: ptah.ydb.native.TtlSettings.tiered_ttl:type_name -> ptah.ydb.native.TieredModeSettings
 	28, // 50: ptah.ydb.native.TieredModeSettings.tiers:type_name -> ptah.ydb.native.TtlTier
-	44, // 51: ptah.ydb.native.TtlTier.date_type_column:type_name -> Ydb.Table.DateTypeColumnModeSettings
-	45, // 52: ptah.ydb.native.TtlTier.value_since_unix_epoch:type_name -> Ydb.Table.ValueSinceUnixEpochModeSettings
-	31, // 53: ptah.ydb.native.TtlTier.delete:type_name -> google.protobuf.Empty
+	45, // 51: ptah.ydb.native.TtlTier.date_type_column:type_name -> Ydb.Table.DateTypeColumnModeSettings
+	46, // 52: ptah.ydb.native.TtlTier.value_since_unix_epoch:type_name -> Ydb.Table.ValueSinceUnixEpochModeSettings
+	32, // 53: ptah.ydb.native.TtlTier.delete:type_name -> google.protobuf.Empty
 	29, // 54: ptah.ydb.native.TtlTier.evict_to_external_storage:type_name -> ptah.ydb.native.EvictionToExternalStorageSettings
-	55, // [55:55] is the sub-list for method output_type
-	55, // [55:55] is the sub-list for method input_type
-	55, // [55:55] is the sub-list for extension type_name
-	55, // [55:55] is the sub-list for extension extendee
-	0,  // [0:55] is the sub-list for field type_name
+	47, // 55: ptah.ydb.native.ColumnTableCreation.columns:type_name -> Ydb.Table.ColumnMeta
+	5,  // 56: ptah.ydb.native.ColumnTableCreation.ttl:type_name -> ptah.ydb.native.ColumnTTLPolicy
+	57, // [57:57] is the sub-list for method output_type
+	57, // [57:57] is the sub-list for method input_type
+	57, // [57:57] is the sub-list for extension type_name
+	57, // [57:57] is the sub-list for extension extendee
+	0,  // [0:57] is the sub-list for field type_name
 }
 
 func init() { file_internal_nativeprotocol_columnstore_proto_init() }
@@ -2759,7 +2852,7 @@ func file_internal_nativeprotocol_columnstore_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_nativeprotocol_columnstore_proto_rawDesc), len(file_internal_nativeprotocol_columnstore_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

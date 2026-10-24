@@ -1,0 +1,21 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {
+    "hash_columns": [
+     "id",
+     "id"
+    ]
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    },
+    "created_at": {
+     "type": "timestamp"
+    }
+   }
+  }
+ }
+}

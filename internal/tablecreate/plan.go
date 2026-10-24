@@ -15,12 +15,12 @@ import (
 // ServiceID names the row-table lifecycle assessment.
 const ServiceID = "ydb-row-table-create"
 
-// ParentKinds assigns the native table and column settings to this assessment,
-// and the changefeeds of a table: the host plans no table whose facets no
-// planning service claims, and the comparison reports no changefeed change, so
-// an alteration keeps them as they are.
+// ParentKinds assigns the native table and column settings, the storage of a
+// column table, and the changefeeds of a table to this assessment: the host
+// plans no table whose facets no planning service claims, and the comparison
+// reports no changefeed change, so an alteration keeps them as they are.
 func ParentKinds() []string {
-	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties}
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
 }
 
 type creation struct {
@@ -55,6 +55,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	result := &protocol.PlannedFeatures{Complete: true}
 	var creations []creation
 	var alterations []alteration
+	// columnAlterations are the column tables the request alters. Each already
+	// holds what the declaration asks for, since every other change is refused.
+	var columnAlterations []int
 	for i, table := range request.Tables {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -65,8 +68,21 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		if !slices.Equal(request.ParentKinds, ParentKinds()) {
 			return nil, fmt.Errorf("invalid YDB table parent assignment")
 		}
+		if table.Action == protocol.PlanningTable_REBUILD {
+			owner, err := boundOwner(table.Subject)
+			if err != nil {
+				return nil, err
+			}
+			column, err := columnRebuild(owner, table)
+			if err != nil {
+				return nil, err
+			}
+			if column {
+				return refused(i, fmt.Sprintf("table %q: %s", tableLabel(owner), rebuildRefusal)), nil
+			}
+		}
 		if table.Action != protocol.PlanningTable_CREATE && table.Action != protocol.PlanningTable_ALTER {
-			return refused(i, "Only native row-table creation and alteration of column families, columns, the TTL, the partitioning settings and the indexes are implemented"), nil
+			return refused(i, "Only native row-table creation and alteration of column families, columns, the TTL, the partitioning settings and the indexes, and column-table creation, are implemented"), nil
 		}
 		transactional, known := request.Capabilities["transactional_ddl"]
 		if !known || transactional {
@@ -80,6 +96,17 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("YDB table creation targets another database")
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
+			column, reason, err := planColumnAlteration(owner, table, request.CommonSteps)
+			if err != nil {
+				return nil, err
+			}
+			if reason != "" {
+				return refused(i, reason), nil
+			}
+			if column {
+				columnAlterations = append(columnAlterations, i)
+				continue
+			}
 			changes, reason, err := planAlteration(owner, table)
 			if err != nil {
 				return nil, err
@@ -128,18 +155,37 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		if table.Current != nil {
 			return nil, fmt.Errorf("YDB table creation requires established absence")
 		}
-		operation, err := Capture("pending", owner, table.Desired)
+		capture := Capture
+		if IsColumnTable(table.Desired) {
+			capture = CaptureColumnTable
+		}
+		operation, err := capture("pending", owner, table.Desired)
 		if err != nil {
 			return refused(i, err.Error()), nil
+		}
+		if isColumnCreation(operation) {
+			created, err := ColumnTable(operation.Value)
+			if err != nil {
+				return nil, err
+			}
+			if reason := tieredTTLRefusal(request.Capabilities, fmt.Sprintf("column table %q", tableLabel(owner)), created.Ttl); reason != "" {
+				return refused(i, reason), nil
+			}
 		}
 		creations = append(creations, creation{index: i, table: table, operation: operation})
 	}
 	slices.SortFunc(creations, func(a, b creation) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
 	receiptSteps := make(map[int][]*protocol.StepIdentity)
+	var rowCreations, columnCreations int
 	for i := range creations {
 		item := &creations[i]
-		item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-create/%06d", i)}
+		prefix, number := "row-table-create", &rowCreations
+		if isColumnCreation(item.operation) {
+			prefix, number = "column-table-create", &columnCreations
+		}
+		item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", prefix, *number)}
+		*number++
 		item.operation.Id = item.id.Name
 		for _, other := range request.Tables {
 			if provider.CompareIdentities(other.Subject, item.table.Subject) == 0 {
@@ -297,11 +343,17 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			continue
 		}
 		strategy := "Create the complete captured row table through the native table service"
+		if slices.Contains(columnAlterations, i) {
+			strategy = "The column table already holds the declared storage: its kind, its hash key and its shard count are fixed when YDB creates it, and its TTL is the declared one"
+		}
+		if slices.ContainsFunc(creations, func(item creation) bool { return item.index == i && isColumnCreation(item.operation) }) {
+			strategy = "Create the complete captured column table with YQL's CREATE TABLE through the query service, as the host's embedded engine writes it"
+		}
 		var steps []*protocol.StepIdentity
 		for _, id := range receiptSteps[i] {
 			steps = append(steps, proto.CloneOf(id))
 		}
-		if table.Action == protocol.PlanningTable_ALTER {
+		if table.Action == protocol.PlanningTable_ALTER && !slices.Contains(columnAlterations, i) {
 			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, change the automatic partitioning settings, and add or drop global secondary indexes, through the native table service; changefeeds stay as they are, and other settings and column steps the native call cannot state stay with the host"
 			if steps == nil {
 				strategy = "The column families, column placements, TTL, partitioning settings and indexes already match the declaration, changefeeds stay as they are, and the host has no column step this service can carry out"

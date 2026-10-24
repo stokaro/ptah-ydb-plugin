@@ -1,0 +1,59 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/column-store": {
+     "hash_columns": [
+      "id"
+     ],
+     "ttl": {
+      "column": "expires",
+      "unit": "SECONDS",
+      "tiers": [
+       {
+        "interval": "PT1H",
+        "external_source": "/local/ext/bucket"
+       },
+       {
+        "interval": "P1D"
+       }
+      ]
+     }
+    }
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "column_ttl": "{\"column\":\"expires\",\"unit\":\"SECONDS\",\"tiers\":[{\"interval\":\"PT1H\",\"external_source\":\"/local/ext/bucket\"},{\"interval\":\"P1D\"}]}",
+    "partition_by_hash": "id",
+    "store": "COLUMN"
+   },
+   "struct": "Item",
+   "file": "go-table-store-column-ttl-epoch.go",
+   "file_size": 420,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 248,
+    "line": 3,
+    "column": 231
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

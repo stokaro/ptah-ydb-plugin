@@ -1,0 +1,72 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/column-families": {
+     "families": [
+      {
+       "name": "cold",
+       "data": "hdd",
+       "columns": [
+        "body"
+       ]
+      }
+     ]
+    },
+    "ptah.run/ydb/column-store": {}
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "store": "COLUMN"
+   },
+   "struct": "Item",
+   "file": "go-later-table-store-column-with-family.go",
+   "file_size": 352,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 65,
+    "line": 3,
+    "column": 48
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  },
+  {
+   "directive": "ptah:schema:columnfamily",
+   "attributes": {
+    "data": "hdd",
+    "fields": "body",
+    "name": "cold"
+   },
+   "struct": "Item",
+   "file": "go-later-table-store-column-with-family.go",
+   "file_size": 352,
+   "start": {
+    "offset": 66,
+    "line": 4,
+    "column": 1
+   },
+   "end": {
+    "offset": 129,
+    "line": 4,
+    "column": 64
+   }
+  }
+ ]
+}

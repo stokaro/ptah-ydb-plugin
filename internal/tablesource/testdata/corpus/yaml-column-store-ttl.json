@@ -1,0 +1,33 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {
+    "hash_columns": [
+     "id"
+    ],
+    "partitions": 2,
+    "ttl": {
+     "column": "created_at",
+     "tiers": [
+      {
+       "interval": "P1D",
+       "external_source": "/local/ext/bucket"
+      },
+      {
+       "interval": "P7D"
+      }
+     ]
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    },
+    "created_at": {
+     "type": "timestamp"
+    }
+   }
+  }
+ }
+}

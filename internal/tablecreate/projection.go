@@ -41,6 +41,15 @@ func projectCreation(input *protocol.TableCreationInput, index int) (*protocol.P
 	if err != nil {
 		return nil, err
 	}
+	if IsColumnTable(input.Declaration) {
+		// A column table's declared storage is its projection: the server's
+		// choices the declaration leaves out stay unspecified.
+		key, err := compiledKey(owner, input.Declaration)
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.ProjectedTableCreation{Subject: proto.CloneOf(input.Subject), ColumnPrimaryKeysPrepared: true, ColumnPrimaryKeys: key}, nil
+	}
 	compiled, err := Compile(owner, input.Declaration)
 	if err != nil {
 		return nil, err

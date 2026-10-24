@@ -77,6 +77,9 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 	var tables []Table
 	for _, id := range order {
 		target := byBinding[id]
+		if err := target.settings.finish(); err != nil {
+			return nil, fmt.Errorf("table %q: %w", tableLabel(target.binding.GetObject()), err)
+		}
 		if target.settings.empty() {
 			continue
 		}
@@ -140,11 +143,15 @@ func tableLabel(table *protocol.Reference) string {
 
 func normalized(document *protocol.SourceDocument, target *pending) (*protocol.NormalizedValue, error) {
 	owner := proto.CloneOf(target.binding.GetObject())
-	payload, err := protojson.Marshal(&target.settings.intent)
+	var facet proto.Message = &target.settings.intent
+	model := schema.TableDesiredModel()
+	if target.settings.column != nil {
+		facet, model = target.settings.column, schema.NativeDesiredModel(schema.ColumnStorageProperties)
+	}
+	payload, err := protojson.Marshal(facet)
 	if err != nil {
 		return nil, err
 	}
-	model := schema.TableDesiredModel()
 	value, err := schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion,
 		Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: owner, Payload: payload})
 	if err != nil {

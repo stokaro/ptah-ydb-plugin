@@ -133,7 +133,7 @@ func TestIndexPlan_HappyPath(t *testing.T) {
 			c.Assert(step.Metadata.Effects[1].Subject.Kind, qt.Equals, "index")
 			c.Assert(step.Metadata.Effects[1].Subject.Name.Source, qt.Equals, test.indexOwner)
 			c.Assert(step.Metadata.Effects[1].Subject.Parent.Source, qt.Equals, "records")
-			c.Assert(plan.Parents, qt.HasLen, 4)
+			c.Assert(plan.Parents, qt.HasLen, 5)
 			for _, parent := range plan.Parents {
 				c.Assert(parent.Receipt.Steps, qt.HasLen, 1)
 				c.Assert(parent.Receipt.Steps[0].Name, qt.Equals, test.step)
@@ -186,7 +186,7 @@ func TestIndexPlan_NoChange(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
-			c.Assert(plan.Parents, qt.HasLen, 4)
+			c.Assert(plan.Parents, qt.HasLen, 5)
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, 0)
 		})
 	}

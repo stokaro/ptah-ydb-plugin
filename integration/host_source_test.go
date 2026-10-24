@@ -105,6 +105,10 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 		{"starting split points in YAML", "--schema-file", "schema.yaml", "tables:\n  host_source_items:\n    partition_at_keys: \"10, 20\"\n    columns:\n      id: {type: Uint64, primary: true}\n"},
 		{"a uniform starting layout in Go", "--root-dir", "entities.go", goTable("//ptah:schema:table name=\"host_source_items\" uniform_partitions=\"4\"", "")},
 		{"starting split points in Go", "--root-dir", "entities.go", goTable("//ptah:schema:table name=\"host_source_items\" partition_at_keys=\"10, 20\"", "")},
+		{"a column table in Go", "--root-dir", "entities.go",
+			goTable("//ptah:schema:table name=\"host_source_items\" store=\"COLUMN\" partition_by_hash=\"id\" column_shards=\"2\"", "")},
+		{"a column table in YAML", "--schema-file", "schema.yaml",
+			"tables:\n  host_source_items:\n    column_store: {hash_columns: [id], partitions: 2}\n    columns:\n      id: {type: Uint64, primary: true}\n      body: {type: Utf8}\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -131,8 +135,10 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 			goTable("//ptah:schema:table name=\"host_source_items\" uniform_partitions=\"4\" partition_at_keys=\"10\"", ""), `decode Go directives of engine "ydb"`},
 		{"both starting layouts in YAML", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    uniform_partitions: 4\n    partition_at_keys: \"10\"\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
-		{"a column table in Go", "--root-dir", "entities.go",
-			goTable("//ptah:schema:table name=\"host_source_items\" store=\"COLUMN\"", ""), `decode Go directives of engine "ydb"`},
+		{"a column table beside row-table partitioning in Go", "--root-dir", "entities.go",
+			goTable("//ptah:schema:table name=\"host_source_items\" store=\"COLUMN\" auto_partitioning_by_load=\"ENABLED\"", ""), `decode Go directives of engine "ydb"`},
+		{"a column table beside row-table partitioning in YAML", "--schema-file", "schema.yaml",
+			"tables:\n  host_source_items:\n    column_store: {}\n    auto_partitioning_by_load: ENABLED\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a TTL interval in months in Go", "--root-dir", "entities.go",
 			goTable("//ptah:schema:table name=\"host_source_items\" platform.ydb.row_deletion_column=\"created_at\" platform.ydb.row_deletion_interval=\"P1M\"", ""), `decode Go directives of engine "ydb"`},
 		{"an index option in Go", "--root-dir", "entities.go",

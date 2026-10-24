@@ -1,0 +1,54 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/column-store": {
+     "ttl": {
+      "column": "created_at",
+      "tiers": [
+       {
+        "interval": "P7D",
+        "external_source": "/local/ext/bucket"
+       },
+       {
+        "interval": "P30D"
+       }
+      ]
+     }
+    }
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "column_ttl": "{\"column\":\"created_at\",\"tiers\":[{\"interval\":\"P7D\",\"external_source\":\"/local/ext/bucket\"},{\"interval\":\"P30D\"}]}",
+    "store": "COLUMN"
+   },
+   "struct": "Item",
+   "file": "go-table-store-column-ttl-tiered.go",
+   "file_size": 430,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 207,
+    "line": 3,
+    "column": 190
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

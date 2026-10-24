@@ -59,9 +59,8 @@ func TestColumnStorageRejectsInvalidModels(t *testing.T) {
 		name   string
 		change func(*native.ColumnStorageObservation)
 	}{
-		{"zero shards", func(v *native.ColumnStorageObservation) { v.Partitions = 0 }},
-		{"zero channels", func(v *native.ColumnStorageObservation) { v.DataChannelCount = 0 }},
-		{"empty hash", func(v *native.ColumnStorageObservation) { v.HashColumns = nil }},
+		{"shards beyond 32 bits", func(v *native.ColumnStorageObservation) { v.Partitions = 1 << 32 }},
+		{"blank hash column", func(v *native.ColumnStorageObservation) { v.HashColumns = []string{"a", ""} }},
 		{"duplicate hash", func(v *native.ColumnStorageObservation) { v.HashColumns = []string{"a", "a"} }},
 		{"nil index", func(v *native.ColumnStorageObservation) { v.LocalIndexes[0] = nil }},
 		{"missing kind", func(v *native.ColumnStorageObservation) { v.LocalIndexes[0].Kind = nil }},
@@ -99,6 +98,16 @@ func TestColumnStorageRejectsInvalidModels(t *testing.T) {
 			c.Assert(err, qt.IsNotNil)
 		})
 	}
+}
+
+// TestColumnStorageProjectedFromADeclaration normalizes an observation that
+// leaves the hash key, the shard count and the data channels out, as a
+// prediction from a declaration that leaves them to the server does.
+func TestColumnStorageProjectedFromADeclaration(t *testing.T) {
+	c := qt.New(t)
+	envelope, err := schema.CaptureColumnStorage(tableOwner(), &native.ColumnStorageObservation{})
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(envelope.Payload), qt.Equals, `{}`)
 }
 
 func TestColumnStorageDisabledTTLAndAbsentTTLDiffer(t *testing.T) {
