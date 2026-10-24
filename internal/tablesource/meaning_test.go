@@ -27,8 +27,11 @@ type meaning struct {
 	MaxPartitions   uint64
 	ReadReplicas    string
 	KeyBloomFilter  *bool
-	TTL             *ttlMeaning
-	Families        []familyMeaning
+	// Uniform and AtKeys are the starting layout of a new table.
+	Uniform  uint64
+	AtKeys   [][]string
+	TTL      *ttlMeaning
+	Families []familyMeaning
 }
 
 // ttlMeaning is a TTL as seconds: the host spells the interval as the author
@@ -47,7 +50,7 @@ type familyMeaning struct {
 
 func (m meaning) empty() bool {
 	return m.BySize == nil && m.PartitionSizeMB == 0 && m.ByLoad == nil && m.MinPartitions == 0 && m.MaxPartitions == 0 &&
-		m.ReadReplicas == "" && m.KeyBloomFilter == nil && m.TTL == nil && len(m.Families) == 0
+		m.ReadReplicas == "" && m.KeyBloomFilter == nil && m.Uniform == 0 && len(m.AtKeys) == 0 && m.TTL == nil && len(m.Families) == 0
 }
 
 // families sorts a family list and drops the default family when it states
@@ -61,16 +64,18 @@ func families(list []familyMeaning) []familyMeaning {
 func tableKey(schema, name string) string { return schema + "." + name }
 
 // hostPartitioning and hostFamilies are the host's facet payloads. An unknown
-// field fails the decode, so an agreement row cannot carry a starting layout or
-// a cache mode that the comparison would silently ignore.
+// field fails the decode, so an agreement row cannot carry a cache mode or any
+// other setting that the comparison would silently ignore.
 type hostPartitioning struct {
-	BySize          *bool  `json:"by_size"`
-	PartitionSizeMB uint64 `json:"partition_size_mb"`
-	ByLoad          *bool  `json:"by_load"`
-	MinPartitions   uint64 `json:"min_partitions"`
-	MaxPartitions   uint64 `json:"max_partitions"`
-	ReadReplicas    string `json:"read_replicas"`
-	KeyBloomFilter  *bool  `json:"key_bloom_filter"`
+	BySize          *bool      `json:"by_size"`
+	PartitionSizeMB uint64     `json:"partition_size_mb"`
+	ByLoad          *bool      `json:"by_load"`
+	MinPartitions   uint64     `json:"min_partitions"`
+	MaxPartitions   uint64     `json:"max_partitions"`
+	ReadReplicas    string     `json:"read_replicas"`
+	KeyBloomFilter  *bool      `json:"key_bloom_filter"`
+	Uniform         uint64     `json:"uniform_partitions"`
+	AtKeys          [][]string `json:"partition_at_keys"`
 }
 
 // hostTTL is the host's TTL facet payload, which has no JSON tags.
@@ -110,6 +115,7 @@ func hostMeaning(c *qt.C, recorded golden) map[string]meaning {
 				strictJSON(c, payload, &p)
 				m.BySize, m.PartitionSizeMB, m.ByLoad, m.MinPartitions, m.MaxPartitions = p.BySize, p.PartitionSizeMB, p.ByLoad, p.MinPartitions, p.MaxPartitions
 				m.ReadReplicas, m.KeyBloomFilter = p.ReadReplicas, p.KeyBloomFilter
+				m.Uniform, m.AtKeys = p.Uniform, p.AtKeys
 			case "ptah.run/ydb/ttl":
 				var ttl hostTTL
 				strictJSON(c, payload, &ttl)
@@ -173,6 +179,10 @@ func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning 
 					MaxPartitions:   intent.GetPartitioningSettings().GetMaxPartitionsCount(),
 					KeyBloomFilter:  switches[intent.GetKeyBloomFilter()]}
 				m.ReadReplicas = replicas(intent.GetReadReplicasSettings())
+				m.Uniform = intent.GetUniformPartitions()
+				for _, point := range intent.GetPartitionAtKeys() {
+					m.AtKeys = append(m.AtKeys, point.GetValues())
+				}
 				m.TTL = ttlOf(intent.GetTtlSettings())
 				for _, family := range intent.GetColumnFamilies() {
 					m.Families = append(m.Families, familyMeaning{Name: family.GetName(), Data: family.GetData().GetMedia(), Compression: compressions[family.GetCompression()]})

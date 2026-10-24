@@ -1,0 +1,15 @@
+{
+ "tables": {
+  "items": {
+   "uniform_partitions": {
+    "count": 4
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

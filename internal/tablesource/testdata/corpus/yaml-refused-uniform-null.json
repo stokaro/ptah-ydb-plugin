@@ -1,0 +1,13 @@
+{
+ "tables": {
+  "items": {
+   "uniform_partitions": null,
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

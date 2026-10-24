@@ -1,5 +1,5 @@
 {
- "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
  "format": "go",
  "outcome": "accepted",
  "tables": [
@@ -8,15 +8,10 @@
    "name": "items",
    "struct": "Item",
    "facets": {
+    "ptah.run/ydb/column-store": {},
     "ptah.run/ydb/table-partitioning": {
-     "partition_at_keys": [
-      [
-       "10"
-      ],
-      [
-       "20"
-      ]
-     ]
+     "by_load": true,
+     "min_partitions": 2
     }
    }
   }
@@ -25,20 +20,22 @@
   {
    "directive": "ptah:schema:table",
    "attributes": {
-    "partition_at_keys": "10, 20"
+    "auto_partitioning_by_load": "ENABLED",
+    "auto_partitioning_min_partitions_count": "2",
+    "store": "COLUMN"
    },
    "struct": "Item",
-   "file": "go-deferred-table-partition-at-keys.go",
-   "file_size": 300,
+   "file": "go-deferred-table-store-column-with-partitioning.go",
+   "file_size": 367,
    "start": {
     "offset": 18,
     "line": 3,
     "column": 1
    },
    "end": {
-    "offset": 77,
+    "offset": 144,
     "line": 3,
-    "column": 60
+    "column": 127
    },
    "subject": {
     "kind": "table",

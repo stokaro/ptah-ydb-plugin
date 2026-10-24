@@ -1,5 +1,5 @@
 {
- "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
  "format": "go",
  "outcome": "refused",
  "error": "invalid fields \"body,body\": names column \"body\" twice on //ptah:schema:columnfamily at Item",

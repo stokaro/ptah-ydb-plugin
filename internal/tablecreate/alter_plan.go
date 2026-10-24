@@ -115,18 +115,25 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable) (a
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
-	// The TTL is managed only by a declaration that states table properties.
-	// Without the table's own read, a TTL the table already holds would look
-	// absent, and a removal or a set would be planned against the wrong state.
+	// A declaration that states table properties manages the TTL. So does a
+	// source that describes the table properties of every table it declares
+	// (complete desired knowledge): a table it states no properties for then
+	// requests no TTL, and a TTL the table holds is removed. A source that
+	// could not describe them leaves the TTL alone. Without the table's own
+	// read, a TTL the table already holds would look absent, and a removal or a
+	// set would be planned against the wrong state; a stated declaration is then
+	// refused, and a table known only by its coverage is left alone.
 	managed := desired.table != nil
 	if managed && observed.table == nil {
 		return alterationChanges{}, "The table's current TTL was not captured", nil
 	}
-	ttl, reason := planTTL(ttlInput{managed: managed, desired: intent.TtlSettings, held: held.TtlSettings, declared: declaredTypes(table.Desired.GetColumns())})
+	ttlManaged := managed || observed.table != nil &&
+		FacetKnown(table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.TableProperties, table.Subject, true)
+	ttl, reason := planTTL(ttlInput{managed: ttlManaged, desired: intent.TtlSettings, held: held.TtlSettings, declared: declaredTypes(table.Desired.GetColumns())})
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
-	partitioning, reason := planPartitioning(partitioningInput{managed: managed, desired: intent.PartitioningSettings, held: held.PartitioningSettings})
+	partitioning, reason := planPartitioning(partitioningInput{managed: managed, desired: intent.PartitioningSettings, held: held.PartitioningSettings, layout: layoutOf(&intent)})
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}

@@ -31,6 +31,12 @@ type alterCase struct {
 	// desiredIndexes and heldIndexes are the index sets of both sides; empty
 	// states none.
 	desiredIndexes, heldIndexes string
+	// desiredKnowledge is what the declaring source established about the table
+	// properties of every table it declares; zero states nothing.
+	desiredKnowledge protocol.ModelKnowledge_State
+	// desiredSubjectKnowledge is what the source established about this table
+	// alone: an absence or a request for defaults, which only a subject states.
+	desiredSubjectKnowledge protocol.ModelKnowledge_State
 }
 
 const plainTable = `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}]}`
@@ -75,6 +81,16 @@ func alterRequest(c *qt.C, in alterCase) *protocol.PlanFeaturesRequest {
 		Features: &protocol.CapturedFeatures{
 			Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}},
 			Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}}}}
+	if in.desiredKnowledge != protocol.ModelKnowledge_STATE_UNSPECIFIED {
+		desired.Features.Facets.Coverage.Kinds = append(desired.Features.Facets.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: schema.TableDesiredModel(),
+			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: in.desiredKnowledge, Reason: "fixture"}}}})
+	}
+	if in.desiredSubjectKnowledge != protocol.ModelKnowledge_STATE_UNSPECIFIED {
+		desired.Features.Facets.Coverage.Kinds = append(desired.Features.Facets.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: schema.TableDesiredModel(),
+			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "fixture"}}}})
+		desired.Features.Facets.Coverage.Subjects = append(desired.Features.Facets.Coverage.Subjects, &protocol.ComparisonSubjectCoverage{Kind: schema.TableProperties,
+			Subject: tableSubject(), Knowledge: &protocol.ModelKnowledge{State: in.desiredSubjectKnowledge, Reason: "fixture"}})
+	}
 	for _, name := range in.declared {
 		kind := "Utf8"
 		if declared, found := in.types[name]; found {

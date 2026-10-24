@@ -38,6 +38,10 @@ type facetFixture struct {
 	steps []*protocol.CommonPlanningStep
 	// version is the server version the fixture connected to.
 	version string
+	// desiredKnowledge is what the declaring source established about the
+	// facet models; zero is complete knowledge, as the host reports for a
+	// source whose format describes them.
+	desiredKnowledge protocol.ModelKnowledge_State
 }
 
 // newFacetFixture creates records (id, ts, payload) with the given trailing
@@ -69,6 +73,11 @@ func newFacetFixture(c *qt.C, clauses, options string) *facetFixture {
 // facetState states the records of one side with complete knowledge of both
 // facet models in that representation.
 func facetState(representation protocol.ValueInput_Representation, records []*protocol.ComparisonRecord) *protocol.ComparisonState {
+	return knownFacetState(representation, records, protocol.ModelKnowledge_COMPLETE)
+}
+
+// knownFacetState is facetState with the given knowledge of every model.
+func knownFacetState(representation protocol.ValueInput_Representation, records []*protocol.ComparisonRecord, knowledge protocol.ModelKnowledge_State) *protocol.ComparisonState {
 	models := slices.Clone(schema.Models())
 	models = slices.DeleteFunc(models, func(model *protocol.ValueModel) bool {
 		return model.Representation != representation || !slices.Contains(tablecompare.Kinds(), model.Kind)
@@ -76,9 +85,18 @@ func facetState(representation protocol.ValueInput_Representation, records []*pr
 	state := &protocol.ComparisonState{Representation: representation, Coverage: &protocol.ComparisonCoverage{}, Records: records}
 	for _, model := range models {
 		state.Coverage.Kinds = append(state.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: model,
-			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}}}})
+			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: knowledge, Reason: "fixture"}}}})
 	}
 	return state
+}
+
+// desiredFacets states the desired records with the knowledge the fixture's
+// source established.
+func (f *facetFixture) desiredFacets(records []*protocol.ComparisonRecord) *protocol.ComparisonState {
+	if f.desiredKnowledge == protocol.ModelKnowledge_STATE_UNSPECIFIED {
+		return facetState(protocol.ValueInput_DESIRED, records)
+	}
+	return knownFacetState(protocol.ValueInput_DESIRED, records, f.desiredKnowledge)
 }
 
 // compare asks the provider to compare the declared table facet with the facet
@@ -109,7 +127,10 @@ func (f *facetFixture) compareRecords(c *qt.C, desired ...*protocol.ComparisonRe
 	}
 	request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
-		Desired:     facetState(protocol.ValueInput_DESIRED, desired), Current: facetState(protocol.ValueInput_OBSERVED, current)}
+		Desired:     f.desiredFacets(desired), Current: facetState(protocol.ValueInput_OBSERVED, current)}
+	// The table is declared whether or not its source states a facet for it.
+	tableKey := "table/" + f.owner.Name
+	held[tableKey] = sides{subject: testplanning.Subject(f.owner), desired: true, current: held[tableKey].current}
 	for _, key := range slices.Sorted(maps.Keys(held)) {
 		request.Parents = append(request.Parents, &protocol.ComparisonParent{Subject: held[key].subject, Desired: held[key].desired, Current: held[key].current})
 	}
@@ -138,7 +159,7 @@ func (f *facetFixture) plan(c *qt.C, changes []*protocol.ComparedChange, records
 	desired := &protocol.DeclaredTable{Name: "records", Schema: f.directory, PrimaryKey: []string{"id"}, Columns: columns,
 		Features: &protocol.CapturedFeatures{
 			Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
-			Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{},
+			Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: f.desiredFacets(nil).Coverage,
 				Records: records}}}
 	request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
 		Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)}, CommonSteps: f.steps,

@@ -1,5 +1,5 @@
 {
- "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
  "format": "yaml",
  "outcome": "accepted",
  "tables": [
@@ -8,9 +8,7 @@
    "name": "items",
    "struct": "items",
    "facets": {
-    "ptah.run/ydb/table-partitioning": {
-     "uniform_partitions": 4
-    }
+    "ptah.run/ydb/column-store": {}
    }
   }
  ]

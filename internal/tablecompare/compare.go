@@ -31,7 +31,10 @@ func OwnerKinds() []string { return []string{"table", "column"} }
 
 // Compare reports every table or column whose declared facet differs from the
 // one the existing table holds. A facet on only one side states nothing to
-// compare: the alteration planner decides what an absent read means. A table's
+// compare: the alteration planner decides what an absent read means. The
+// exception is the table properties of a table that exists on both sides: when
+// the desired coverage establishes them, a table with no declared facet is
+// declared to have no TTL, and a TTL it holds is reported. A table's
 // changefeeds are read and validated, and never differ: the planner does not
 // alter them. Only
 // differences the alteration planner acts on are reported, and each carries
@@ -67,6 +70,14 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 		}
 		return provider.CompareIdentities(a.GetSubject(), b.GetSubject())
 	})
+	// declared holds every table that has a desired table-properties record,
+	// valued or excluded.
+	declared := make(map[string]bool)
+	for _, record := range request.GetDesired().GetRecords() {
+		if record.GetKind() == schema.TableProperties {
+			declared[recordKey(record.GetKind(), record.GetSubject())] = true
+		}
+	}
 	result := &protocol.ComparedModels{Complete: true, Desired: proto.CloneOf(request.GetDesired())}
 	for _, want := range wanted {
 		if err := ctx.Err(); err != nil {
@@ -80,10 +91,55 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 			return nil, err
 		}
 	}
+	for _, parent := range request.GetParents() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if parent.GetSubject().GetKind() != "table" || !parent.GetDesired() || !parent.GetCurrent() || declared[recordKey(schema.TableProperties, parent.GetSubject())] {
+			continue
+		}
+		observed := held[recordKey(schema.TableProperties, parent.GetSubject())]
+		if observed == nil || !compared(request, observed) {
+			continue
+		}
+		if err := compareUnstated(request, result, parent.GetSubject(), observed); err != nil {
+			return nil, err
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+// compareUnstated compares a table the desired side carries no table properties
+// for with the properties the table holds. A source that describes the table
+// properties of every table it declares (complete desired knowledge) states the
+// TTL of a table by leaving it out: the table is declared to have none. A side
+// that could not describe them states nothing, and a record the desired side
+// carries without a value is an exclusion, so neither is compared.
+func compareUnstated(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, subject *protocol.ComparisonIdentity, observed *protocol.ComparisonRecord) error {
+	if !tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.TableProperties, subject, true) {
+		return nil
+	}
+	before, err := tablecreate.NormalizedFacet(observed, protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return err
+	}
+	after, err := tablecreate.UnstatedTableFacet(before.Owner)
+	if err != nil {
+		return err
+	}
+	differs, err := tablecreate.FacetDiffers(after, before)
+	if err != nil || !differs {
+		return err
+	}
+	change, err := schema.CaptureTablePropertiesChange("change-"+strconv.Itoa(len(result.Changes)), after.Owner, before, after)
+	if err != nil {
+		return err
+	}
+	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: schema.TableProperties, Subject: proto.CloneOf(subject), Value: change})
+	return nil
 }
 
 // compared reports whether this comparison reads a record: it owns the model,

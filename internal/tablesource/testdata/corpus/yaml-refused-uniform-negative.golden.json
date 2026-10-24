@@ -1,0 +1,7 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "yaml",
+ "outcome": "refused",
+ "error": "table \"items\": invalid uniform_partitions \"-1\": write a whole number of at least 1; YDB refuses a count of zero",
+ "tables": null
+}

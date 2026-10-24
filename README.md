@@ -525,6 +525,18 @@ frontend normalizes the spelling of a YAML number before the provider sees it
 (`1_000` arrives as `1000`, `0x10` as `16`); the bundled decoder reads the
 written text and refuses both.
 
+A starting layout is the partitions a new table is created with, and YDB takes
+it only when it creates the table. `uniform_partitions` takes a count of at
+least 1, and `partition_at_keys` takes split points in the host's grammar: a
+comma separated list whose items are a value, for a split on the first key
+column, or a parenthesized list of values for the leading key columns, such as
+`10, 20` or `(10, 'a'), (20)`. A value is a bare run of characters or a string in
+single or double quotes with backslash escapes. Both keys are claimed in YAML
+and in the Go table directive, and a table that names both is refused where it
+is decoded; the host accepts the pair when it decodes it and refuses the table
+when it plans it. The key column types are checked when the table is created
+(see "Table creation"). The corpus holds the inputs and the host's answers.
+
 Not read yet, and listed so that nobody mistakes the silence for support:
 
 | Setting | Why |
@@ -532,22 +544,57 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `fields` of a column family in YAML | The host attaches a YAML value to a table, never to a column, so a YAML family cannot place columns. Claimed and refused by name; write the family in a Go directive. |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
-| `uniform_partitions`, `partition_at_keys` | A starting layout is a create-time setting that the row-table model does not carry. In Go they are claimed and refused by name; in YAML they are not claimed, so the host refuses the key. |
 | `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
 | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
-| `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables have no planning yet. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |
+| `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables have no reader, creation or comparison yet; see "Column tables" below. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name. YAML has no index key claim. |
 | Topics, resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` at document scope. |
 
-A table that has a facet is managed for its TTL: a comparison that finds a TTL
-on the table and none in the facet plans its removal, and a table that has no
-facet keeps its TTL. The bundled source behaves the same way for the first
-case, and removes the TTL of a table that states nothing too. Measured with the
-host at the commit named in the corpus, `schema apply` over a Go file with no TTL
-plans `ALTER TABLE ... RESET (TTL)` for every table of the file, with or without
-other attributes. Until the host lets a source state a TTL for the provider, a
-table that declares families or partitioning and holds a TTL on the server
-plans that removal and cannot avoid it.
+A table is managed for its TTL when its source states table properties for it,
+or when the host reports complete knowledge of the table properties of the
+source (the knowledge a Go or YAML source carries when its format describes
+them). A comparison that finds a TTL on such a table and none declared reports a
+change, and the planner removes the TTL, as the bundled source does: measured
+with the host at the commit named in the corpus, `schema apply` over a Go file
+with no TTL plans `ALTER TABLE ... RESET (TTL)` for every table of the file. A
+source that could not describe the properties, or a table whose current
+properties were not read, leaves the TTL alone.
+
+### Column tables
+
+A column table is declared with `store="COLUMN"` and optionally
+`partition_by_hash` (a comma separated list of key columns), `column_shards` (a
+positive 32-bit count) and `column_ttl` (a JSON object with a column, an optional
+epoch unit and ordered tiers, of which only the last may delete and at least one
+has to move rows to an absolute external data source path), or with the
+`column_store` mapping in YAML. The corpus records the facet the host's bundled
+decoder makes of each spelling and each refusal (`*-store-column-*` rows), so the
+grammar is pinned. The provider refuses every one of them by name. What stands
+between that and support, in the order the work has to go:
+
+- No live reader. Inspection refuses a `COLUMN_TABLE` directory entry, so a
+  database that holds a column table cannot be inspected at all. The column
+  storage decoder (`internal/columnstore`) needs the monitoring (viewer) JSON
+  beside the table service description, and the provider has no transport for it:
+  the connection address names the gRPC endpoint only, and the CI service does not
+  publish the monitoring port. The table service description of a column table
+  carries the hash key (`partitioning_settings.partition_by`) but not the shard
+  count (measured on 26.2.1.14 for a table created with `PARTITION_COUNT = 3`).
+- No source decoder. The desired column storage model
+  (`ColumnStorageProperties`, `ColumnStorageIntent`) lists no source format, so a
+  claim cannot name it, and no code turns the attributes above into it. The host
+  accepts a column table beside partitioning, read replicas, a key bloom filter,
+  a starting layout and a row TTL (`platform.ydb.*`); the corpus rows show which.
+- No creation. The creation operation requires row storage, and the compiler,
+  the operation grammar and the confirmation read back a row table.
+- No comparison or planning. Only the tiered TTL of a column table changes in
+  place; the storage kind, the hash key and the shard count are fixed at creation,
+  so a declaration that differs needs a refusal with the reason. Under complete
+  coverage, a table without the column storage facet asks for row storage.
+
+Accepting the declaration before the reader exists would turn a refusal that names
+the setting into a refusal further down the plan, so the declaration stays refused
+until the reader, the creation and the comparison land together.
 
 `internal/tablesource/testdata/corpus` holds the inputs and the answers of the
 host's bundled decoder for them, and the differential test in
@@ -646,7 +693,10 @@ not yet advertise table or access comparison/planning.
 
 Physical shard boundaries are runtime topology. A captured value containing them
 refuses conversion rather than turning the current split points into creation
-settings. Partitioning policy remains declarative. Statistics and transient
+settings. A starting layout (`uniformPartitions`, or `partitionAtKeys` as lists
+of source text values) is a creation setting of the desired model only: a read
+finds none, and converting a desired table to the observed representation leaves
+it out. Partitioning policy remains declarative. Statistics and transient
 object identity cannot enter the property model. Conversion preserves a complete
 mixed table/column batch, works after the session closes, and establishes no
 inspection coverage.
@@ -868,10 +918,22 @@ refusal.
 
 The SDK planner accepts captured CREATE lifecycles for row tables. It retains
 ordered composite primary keys, native column types and nullability, TTL,
-storage settings, column families, attributes, partitioning settings, bloom
-filters, read replicas, and tiering. Column families and typed literal defaults
-come from native column facets. Missing creation settings request server defaults.
-The common and native primary key declarations must agree on order.
+storage settings, column families, attributes, partitioning settings, starting
+layouts, bloom filters, read replicas, and tiering. Column families and typed
+literal defaults come from native column facets. Missing creation settings
+request server defaults. The common and native primary key declarations must
+agree on order.
+
+A starting layout becomes the `partitions` of the CreateTable request, checked
+against the key columns: `uniform_partitions` needs a Uint32 or Uint64 first key
+column; a split point holds at most one value per key column, each value a whole
+number in the range of its integer column or a string for a Utf8 or String
+column, and no other key type takes one. Each value travels as an optional
+element of a tuple over the leading key columns. Split points out of order are
+left to YDB, which refuses them. The creation is confirmed by the minimum
+partition count YDB sets from the layout, unless the declaration states a
+minimum of its own. The operation payload is checked again against the same
+rules, so a forged request cannot state a layout the rules refuse.
 
 The planner can replace a complete common CREATE TABLE step in the shared graph.
 Its replacement carries table and physical-path effects and forbids SQL
@@ -970,10 +1032,14 @@ table holds afterward (`set_ttl_settings`) or removes it
 (`drop_ttl_settings`), and also the TTL the table held when the plan was made.
 
 - The TTL is managed when the declaration states table properties for this
-  target. A table the declaration leaves without a `ttlSettings` then requests
-  none, and a TTL the table holds is removed. A declaration with no table
-  properties leaves the TTL alone, and a declaration that states table
-  properties while the table's current TTL was not captured is refused.
+  target, or when the desired coverage establishes the table properties of the
+  table: complete knowledge of the kind, or an absence or a request for
+  defaults recorded for the table. A table the declaration leaves without a
+  `ttlSettings` then requests none, and a TTL the table holds is removed. Unknown
+  or unrepresentable desired knowledge with no table properties leaves the TTL
+  alone. A declaration that states table properties while the table's current
+  TTL was not captured is refused; a table managed by its coverage alone, whose
+  current properties were not captured, is left alone.
 - The declared and the held TTL are the same when the mode, the column, the
   unit and the seconds are the same. A `runIntervalSeconds` the declaration
   leaves out is not compared. A step that replaces a TTL carries the run
@@ -1017,7 +1083,15 @@ held when the plan was made. The settings are `AUTO_PARTITIONING_BY_SIZE`,
   not return it to its default.
 - Partition columns are set when the table is created. A declaration that names
   other columns than the table holds is refused; the same columns are no change.
-  `PARTITION_AT_KEYS` and `UNIFORM_PARTITIONS` are creation-only and are not read.
+- A starting layout is set when the table is created, and YDB keeps no record of
+  it except the minimum partition count it sets from it: the count of the layout,
+  unless the declaration states a minimum of its own. That minimum is the only
+  witness an existing table has, so a declaration whose layout sets the minimum
+  and whose minimum differs from the table's is a change the planner refuses
+  with `UNIFORM_PARTITIONS alter is not supported` (or the `PARTITION_AT_KEYS`
+  spelling) and the two minimums. A layout beside a declared minimum leaves no
+  witness and is not compared. The comparison reports the refused layout as a
+  difference, so that the plan reaches the planner.
 - A minimum count above a nonzero maximum is refused, checked against the value
   the table holds for a bound the declaration leaves out. A partition size beside
   disabled partitioning by size is refused too: the server turns partitioning by

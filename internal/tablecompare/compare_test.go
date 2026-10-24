@@ -29,6 +29,11 @@ func withPartitioning(settings string) string {
 	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}],"partitioningSettings":` + settings + `}`
 }
 
+// withLayout declares the given starting layout fields beside the default family.
+func withLayout(fields string) string {
+	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}],` + fields + `}`
+}
+
 func withFamily(family string) string {
 	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},` + family + `]}`
 }
@@ -42,6 +47,9 @@ type side struct {
 	indexes string
 	// changefeeds is the changefeed set of the table; empty states none.
 	changefeeds string
+	// uninspected makes the side's knowledge of every facet model unknown, as a
+	// source that could not describe them states it.
+	uninspected bool
 }
 
 // declaredIndexes and heldIndexes state index sets from native index
@@ -122,11 +130,15 @@ func record(c *qt.C, representation protocol.ValueInput_Representation, kind, na
 func state(c *qt.C, representation protocol.ValueInput_Representation, facets side) (*protocol.ComparisonState, []*protocol.ComparisonParent) {
 	c.Helper()
 	result := &protocol.ComparisonState{Representation: representation, Coverage: &protocol.ComparisonCoverage{}}
+	knowledge := protocol.ModelKnowledge_COMPLETE
+	if facets.uninspected {
+		knowledge = protocol.ModelKnowledge_UNINSPECTED
+	}
 	for _, model := range []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties} {
 		for _, candidate := range schema.Models() {
 			if candidate.Kind == model && candidate.Representation == representation {
 				result.Coverage.Kinds = append(result.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: candidate,
-					Sources: []*protocol.ComparisonKnowledgeSource{{Outside: testcomparison.Knowledge(protocol.ModelKnowledge_COMPLETE)}}})
+					Sources: []*protocol.ComparisonKnowledgeSource{{Outside: testcomparison.Knowledge(knowledge)}}})
 			}
 		}
 	}
@@ -216,6 +228,9 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"a TTL that differs", side{table: withTTL(daily)}, side{table: withTTL(hourly)}, []string{"records"}},
 		{"a TTL the declaration leaves out", side{table: plain}, side{table: withTTL(hourly)}, []string{"records"}},
 		{"a family the table lacks", side{table: withFamily(`{"name":"archive"}`)}, side{table: plain}, []string{"records"}},
+		{"a uniform layout the table was not created with", side{table: withLayout(`"uniformPartitions":"4"`)}, side{table: plain}, []string{"records"}},
+		{"a layout by split points the table was not created with",
+			side{table: withLayout(`"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`)}, side{table: withPartitioning(`{"minPartitionsCount":"2"}`)}, []string{"records"}},
 		{"partitioning by size switched on",
 			side{table: withPartitioning(`{"partitioningBySize":"ENABLED"}`)}, side{table: withPartitioning(`{"partitioningBySize":"DISABLED"}`)}, []string{"records"}},
 		{"partitioning by load switched on",
@@ -253,6 +268,7 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"an index with its key columns in another order", side{indexes: declaredIndexes(byTextAndNote)}, side{indexes: heldIndexes(byNoteAndText)}, []string{"records"}},
 		{"another index in place of the held one", side{indexes: declaredIndexes(syncByNote)}, side{indexes: heldIndexes(syncByLabel)}, []string{"records"}},
 		{"an index and a TTL in one table change", side{table: withTTL(hourly), indexes: declaredIndexes(syncByLabel)}, side{table: plain, indexes: heldIndexes()}, []string{"records", "records"}},
+		{"a TTL on a table the source states no properties for", side{}, side{table: withTTL(hourly)}, []string{"records"}},
 		{"a table and a column",
 			side{table: withTTL(hourly), columns: map[string]string{"note": `{"family":"archive"}`}},
 			side{table: plain, columns: map[string]string{"note": `{}`}}, []string{"note", "records"}},
@@ -295,6 +311,12 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"a declared subset of the settings the table reports as defaults",
 			side{table: withPartitioning(`{"partitioningBySize":"ENABLED"}`)},
 			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","minPartitionsCount":"1","maxPartitionsCount":"50"}`)}},
+		{"a uniform layout whose minimum the table holds",
+			side{table: withLayout(`"uniformPartitions":"4"`)}, side{table: withPartitioning(`{"minPartitionsCount":"4"}`)}},
+		{"a layout by split points whose minimum the table holds",
+			side{table: withLayout(`"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`)}, side{table: withPartitioning(`{"minPartitionsCount":"3"}`)}},
+		{"a layout beside a declared minimum, which leaves no witness",
+			side{table: withLayout(`"uniformPartitions":"4","partitioningSettings":{"minPartitionsCount":"1"}`)}, side{table: withPartitioning(`{"minPartitionsCount":"1"}`)}},
 		{"partition columns the table holds",
 			side{table: withPartitioning(`{"partitionBy":["id"]}`)}, side{table: withPartitioning(`{"partitionBy":["id"]}`)}},
 		{"partition columns the comparison leaves to the planner",
@@ -317,7 +339,8 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"no index on either side", side{indexes: declaredIndexes()}, side{indexes: heldIndexes()}},
 		{"an index set only the read states", side{}, side{indexes: heldIndexes(syncByLabel)}},
 		{"an index set only the declaration states", side{indexes: declaredIndexes(syncByLabel)}, side{}},
-		{"a table the declaration states no properties for", side{}, side{table: withTTL(hourly)}},
+		{"a table the source states no properties for and the table holds no TTL", side{}, side{table: plain}},
+		{"a table a source that could not describe the properties states none for", side{uninspected: true}, side{table: withTTL(hourly)}},
 		{"a table the read states no properties for", side{table: withTTL(hourly)}, side{}},
 		{"a column only the declaration states", side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}, side{table: plain}},
 		{"a column only the read states", side{table: plain}, side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}},
@@ -407,4 +430,22 @@ func TestCompare_IndexChangeNamesTheIndexSets(t *testing.T) {
 	c.Assert(result.Changes[0].Subject.Kind, qt.Equals, "table")
 	c.Assert(string(result.Changes[0].Value.Value.Payload), qt.Contains, `"facet":"`+schema.IndexProperties+`"`)
 	c.Assert(string(result.Changes[0].Value.Value.Payload), qt.Contains, `"name":"by_label"`)
+}
+
+// A source that states an absence or a request for defaults for one table
+// declares that table to have no TTL, even when it could not describe the
+// properties of the other tables it declares.
+func TestCompare_ReportsAChangeForATableTheSourceStatesKnowledgeFor(t *testing.T) {
+	for _, state := range []protocol.ModelKnowledge_State{protocol.ModelKnowledge_ABSENT, protocol.ModelKnowledge_DEFAULTED} {
+		t.Run(state.String(), func(t *testing.T) {
+			c := qt.New(t)
+			compared := request(c, side{uninspected: true}, side{table: withTTL(hourly)})
+			compared.Desired.Coverage.Subjects = []*protocol.ComparisonSubjectCoverage{{Kind: schema.TableProperties, Subject: subject("table", ""), Knowledge: testcomparison.Knowledge(state)}}
+
+			result := compare(c, compared)
+
+			c.Assert(result.Changes, qt.HasLen, 1)
+			c.Assert(result.Changes[0].Subject.Name.Normalized, qt.Equals, "records")
+		})
+	}
 }

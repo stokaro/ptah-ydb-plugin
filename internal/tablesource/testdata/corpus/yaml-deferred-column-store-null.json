@@ -1,0 +1,13 @@
+{
+ "tables": {
+  "items": {
+   "column_store": null,
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

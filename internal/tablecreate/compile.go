@@ -111,6 +111,17 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating 
 	if err := validateReferences(result, names); err != nil {
 		return nil, err
 	}
+	if wanted := layoutOf(settings); wanted.partitions() != 0 {
+		types, err := keyTypes(result.PrimaryKey, result.Columns)
+		if err != nil {
+			return nil, err
+		}
+		started, err := wanted.request(types)
+		if err != nil {
+			return nil, fmt.Errorf("the starting layout: %w", err)
+		}
+		result.Partitions = started.Partitions
+	}
 	return result, nil
 }
 

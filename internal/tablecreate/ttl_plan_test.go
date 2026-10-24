@@ -28,6 +28,20 @@ func ttlCase(desired, held string, columns ...string) alterCase {
 	return alterCase{desiredTable: desired, heldTable: held, declared: columns, types: ttlTypes, held: columns}
 }
 
+// knownCase is in with the knowledge its declaring source established about
+// the table properties of every table it declares.
+func knownCase(in alterCase, state protocol.ModelKnowledge_State) alterCase {
+	in.desiredKnowledge = state
+	return in
+}
+
+// subjectCase is in with the knowledge its source established about this table
+// alone, beside unknown knowledge of the kind.
+func subjectCase(in alterCase, state protocol.ModelKnowledge_State) alterCase {
+	in.desiredSubjectKnowledge = state
+	return in
+}
+
 func TestTTLPlan_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -62,6 +76,15 @@ func TestTTLPlan_HappyPath(t *testing.T) {
 			ttlCase(ttlTable(`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":1800}`), ttlTable(`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":900}`), "ts"),
 			`{"setTtlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":1800}}`,
 			`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":900}`, protocol.PlanningEffect_ALTER},
+		{"removes the TTL of a table the source states no properties for",
+			knownCase(ttlCase("", ttlTable(hourly), "ts"), protocol.ModelKnowledge_COMPLETE),
+			`{"dropTtlSettings":{}}`, hourly, protocol.PlanningEffect_DROP},
+		{"removes the TTL of a table a source with an explicit absence states no properties for",
+			subjectCase(ttlCase("", ttlTable(hourly), "ts"), protocol.ModelKnowledge_ABSENT),
+			`{"dropTtlSettings":{}}`, hourly, protocol.PlanningEffect_DROP},
+		{"removes the TTL of a table a source asks the defaults for",
+			subjectCase(ttlCase("", ttlTable(hourly), "ts"), protocol.ModelKnowledge_DEFAULTED),
+			`{"dropTtlSettings":{}}`, hourly, protocol.PlanningEffect_DROP},
 		{"reads the integer column of a key",
 			ttlCase(ttlTable(`{"valueSinceUnixEpoch":{"columnName":"id","columnUnit":"UNIT_SECONDS","expireAfterSeconds":60}}`), plainTable),
 			`{"setTtlSettings":{"valueSinceUnixEpoch":{"columnName":"id","columnUnit":"UNIT_SECONDS","expireAfterSeconds":60}}}`, `{}`, protocol.PlanningEffect_CREATE},
@@ -117,6 +140,12 @@ func TestTTLPlan_NoChange(t *testing.T) {
 		{"a declared run interval the table holds is not a change",
 			ttlCase(ttlTable(`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":900}`), ttlTable(`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":900}`), "ts")},
 		{"a declaration without table properties leaves the TTL alone", ttlCase("", ttlTable(hourly), "ts")},
+		{"a source that was not inspected leaves the TTL alone", knownCase(ttlCase("", ttlTable(hourly), "ts"), protocol.ModelKnowledge_UNINSPECTED)},
+		{"a source that could not represent the properties leaves the TTL alone", knownCase(ttlCase("", ttlTable(hourly), "ts"), protocol.ModelKnowledge_UNREPRESENTABLE)},
+		{"a source that could not represent this table's properties leaves the TTL alone", subjectCase(ttlCase("", ttlTable(hourly), "ts"), protocol.ModelKnowledge_UNREPRESENTABLE)},
+		{"a source that knows the properties and a table without a TTL", knownCase(ttlCase("", plainTable, "ts"), protocol.ModelKnowledge_COMPLETE)},
+		{"a source that knows the properties and a table that was not read leaves the TTL alone",
+			knownCase(alterCase{declared: []string{"ts"}, types: ttlTypes}, protocol.ModelKnowledge_COMPLETE)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
