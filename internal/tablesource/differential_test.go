@@ -29,8 +29,8 @@ import (
 //	refused-*   the host refuses the input, and so must this package
 //	deferred-*  the host accepts the input and the provider cannot carry it yet
 //	any other   the host accepts the input, and both decoders mean the same
-//	            partitioning, read replicas, bloom filter, TTL and column
-//	            families
+//	            partitioning, read replicas, bloom filter, TTL, column
+//	            families and the columns each family holds
 
 // golden is what the host recorded for one input.
 type golden struct {
@@ -201,27 +201,27 @@ var unclaimed = map[string]string{
 	"yaml-deferred-partition-at-keys":  "partition_at_keys",
 	"yaml-deferred-changefeeds":        "changefeeds",
 	"yaml-deferred-column-store":       "column_store",
-	"yaml-deferred-ttl-platform":       "platform",
 }
 
 // refusals names the inputs whose key or attribute the provider claims and
 // refuses by name, with the words of the refusal.
 var refusals = map[string]string{
-	"yaml-deferred-family-cache-mode":      "cache_mode is not supported by the YDB provider yet",
-	"yaml-deferred-family-fields":          "fields is not supported by the YDB provider yet",
-	"go-deferred-family-cache-mode":        "cache_mode is not supported by the YDB provider yet",
-	"go-deferred-family-fields":            "fields is not supported by the YDB provider yet",
-	"go-deferred-changefeed":               "ptah:schema:changefeed is not supported by the YDB provider yet",
-	"go-deferred-changefeed-consumer":      "ptah:schema:changefeed is not supported by the YDB provider yet",
-	"go-deferred-table-uniform-partitions": "uniform_partitions is not supported by the YDB provider yet",
-	"go-deferred-table-partition-at-keys":  "partition_at_keys is not supported by the YDB provider yet",
-	"go-deferred-table-store-column":       "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-hash":  "store is not supported by the YDB provider yet",
-	"go-deferred-index-partitioning":       "auto_partitioning_by_load is not supported by the YDB provider yet",
-	"go-deferred-index-replicas":           "read_replicas_settings is not supported by the YDB provider yet",
-	"go-deferred-index-vector":             "clusters is not supported by the YDB provider yet",
-	"go-deferred-index-fulltext":           "tokenizer is not supported by the YDB provider yet",
-	"go-deferred-index-bloom":              "false_positive_probability is not supported by the YDB provider yet",
+	"yaml-deferred-family-cache-mode":           "cache_mode is not supported by the YDB provider yet",
+	"yaml-deferred-family-fields":               "fields is not supported by the YDB provider yet",
+	"go-deferred-family-cache-mode":             "cache_mode is not supported by the YDB provider yet",
+	"go-deferred-family-fields-other-table":     "fields is not supported by the YDB provider yet",
+	"yaml-deferred-ttl-platform-other-property": "platform.ydb.some_other_setting is not supported by the YDB provider yet",
+	"go-deferred-changefeed":                    "ptah:schema:changefeed is not supported by the YDB provider yet",
+	"go-deferred-changefeed-consumer":           "ptah:schema:changefeed is not supported by the YDB provider yet",
+	"go-deferred-table-uniform-partitions":      "uniform_partitions is not supported by the YDB provider yet",
+	"go-deferred-table-partition-at-keys":       "partition_at_keys is not supported by the YDB provider yet",
+	"go-deferred-table-store-column":            "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-hash":       "store is not supported by the YDB provider yet",
+	"go-deferred-index-partitioning":            "auto_partitioning_by_load is not supported by the YDB provider yet",
+	"go-deferred-index-replicas":                "read_replicas_settings is not supported by the YDB provider yet",
+	"go-deferred-index-vector":                  "clusters is not supported by the YDB provider yet",
+	"go-deferred-index-fulltext":                "tokenizer is not supported by the YDB provider yet",
+	"go-deferred-index-bloom":                   "false_positive_probability is not supported by the YDB provider yet",
 }
 
 // TestDeferred_AreAllNamed requires every deferred row to say what the

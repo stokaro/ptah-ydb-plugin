@@ -6,7 +6,7 @@ changefeeds, topics, views, coordination nodes, external data sources, and
 external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations, and
-YAML and Go annotation decoding for the partitioning, column families and, in Go, the TTL of row tables.
+YAML and Go annotation decoding for the partitioning, TTL and column families of row tables, and in Go the columns of each family.
 Offline comparison, planning, and rendering produce native coordination
 operations. Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
@@ -468,19 +468,38 @@ tables:
     column_families:
       default: {compression: lz4}               # off or lz4
       cold: {data: hdd, compression: lz4}       # data is a storage pool kind, kept as written
+    platform:
+      ydb:                                      # the TTL, spelled as the Go platform properties without the prefix
+        row_deletion_column: created_at
+        row_deletion_interval: P30D
 ```
+
+The provider claims the `ydb` group of the table's `platform` key as
+`platform.ydb`, and the host keeps no copy of the group. The provider therefore
+refuses every key of the group other than `row_deletion_column`,
+`row_deletion_interval` and `row_deletion_unit`. The host refuses a group that
+holds a list or a mapping before it reaches the provider; scalar values arrive
+as written.
 
 In Go, the same settings are attributes of the host's own `ptah:schema:table`
 directive, spelled as the YAML keys are, and a TTL is written as the platform
 properties of the `ydb` engine. A family is a directive of its own,
 `//ptah:schema:columnfamily`, on the table's struct, with the attributes `name`,
-`data` and `compression`. The `table` attribute names another table of the file
-(`name` or `schema.name`) and wins over the struct's own table.
+`data`, `compression` and `fields`. The `table` attribute names another table of
+the file (`name` or `schema.name`) and wins over the struct's own table.
+`fields` lists the columns the family holds, as a comma-separated list of the
+column names (`fields="body, notes"`). The provider returns one column facet for
+each name, owned by the column under the table, and the host attaches it to the
+field of the struct the directive is written on. A family that has `fields` and
+a `table` attribute for another table is refused, because the host places only
+the columns of the directive's own struct. The default family lists no column,
+a column sits in one family, and a name the struct has no field for is refused by
+the host.
 
 ```go
 //ptah:schema:table name="documents" auto_partitioning_by_load="ENABLED" read_replicas_settings="ANY_AZ:2" platform.ydb.row_deletion_column="created_at" platform.ydb.row_deletion_interval="P30D"
 //ptah:schema:columnfamily name="default" compression="lz4"
-//ptah:schema:columnfamily name="cold" data="hdd" compression="lz4"
+//ptah:schema:columnfamily name="cold" data="hdd" compression="lz4" fields="body"
 type Document struct { /* ... */ }
 ```
 
@@ -510,11 +529,10 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 
 | Setting | Why |
 | --- | --- |
-| `fields` of a column family | A table-scope fragment may return a value owned by its table only, and the family a column sits in is a value owned by the column. Claimed and refused by name. Needs a host change: let a table-scope claim return column-owned values. |
+| `fields` of a column family in YAML | The host attaches a YAML value to a table, never to a column, so a YAML family cannot place columns. Claimed and refused by name; write the family in a Go directive. |
+| `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
 | `uniform_partitions`, `partition_at_keys` | A starting layout is a create-time setting that the row-table model does not carry. In Go they are claimed and refused by name; in YAML they are not claimed, so the host refuses the key. |
-| TTL in Go | Decoded, but the host refuses the table afterwards: it keeps a claimed `platform.ydb.*` attribute in the common table's `Overrides`, which the provider contract does not carry. Needs a host change: take a claimed platform attribute out of `Overrides`. |
-| TTL in YAML (`platform: {ydb: {row_deletion_*}}`) | `platform` is a key of the shared frontend, so it cannot be claimed. Needs a host change: let a provider claim the `platform.<engine>` group, or the properties inside it. |
 | `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
 | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
 | `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables have no planning yet. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |

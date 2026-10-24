@@ -1,0 +1,7 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "yaml",
+ "outcome": "refused",
+ "error": "invalid feature value: row_deletion_column is empty; remove it to leave the policy undeclared",
+ "tables": null
+}

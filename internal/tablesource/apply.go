@@ -3,6 +3,7 @@ package tablesource
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -56,8 +57,11 @@ func apply(target *settings, fragment *protocol.SourceFragment) error {
 }
 
 func applyYAML(target *settings, key string, value *protocol.SourceValue) error {
-	if key == KeyColumnFamilies {
+	switch key {
+	case KeyColumnFamilies:
 		return applyFamilies(target, value)
+	case KeyPlatformYDB:
+		return applyPlatform(target, value)
 	}
 	text, err := scalar(value)
 	if errors.Is(err, errNull) {
@@ -67,6 +71,42 @@ func applyYAML(target *settings, key string, value *protocol.SourceValue) error 
 		return fmt.Errorf("%s: %w", key, err)
 	}
 	return target.setPartitioning(key, text)
+}
+
+// applyPlatform reads the ydb group of a table's platform key. Its keys are the
+// names of the Go platform attributes without the engine prefix, and a value is
+// a scalar: the host refuses a group that holds anything else before it hands
+// the group over. A null or an empty group declares nothing. The group is the
+// provider's, so a key it does not read is refused instead of dropped.
+func applyPlatform(target *settings, value *protocol.SourceValue) error {
+	if _, null := value.GetValue().(*protocol.SourceValue_Null); null {
+		return nil
+	}
+	mapping := value.GetMapping()
+	if mapping == nil {
+		return fmt.Errorf("%s: expected a mapping of platform properties", KeyPlatformYDB)
+	}
+	values := make(map[string]string, len(mapping.GetEntries()))
+	for _, entry := range mapping.GetEntries() {
+		name := PlatformPrefix + entry.GetKey()
+		if !slices.Contains(ttlAttributes(), name) {
+			return &UnsupportedError{Setting: KeyPlatformYDB + "." + entry.GetKey(), Reason: "the provider reads only the row_deletion_column, row_deletion_interval and row_deletion_unit properties"}
+		}
+		text, err := scalar(entry.GetValue())
+		if errors.Is(err, errNull) {
+			text, err = "", nil
+		}
+		if err != nil {
+			return fmt.Errorf("%s.%s: %w", KeyPlatformYDB, entry.GetKey(), err)
+		}
+		values[name] = text
+	}
+	return target.setTTL(values)
+}
+
+// ttlAttributes are the platform properties that declare a TTL.
+func ttlAttributes() []string {
+	return []string{AttributeTTLColumn, AttributeTTLInterval, AttributeTTLUnit}
 }
 
 // applyFamilies reads a column_families mapping: family names to their
@@ -80,7 +120,7 @@ func applyFamilies(target *settings, value *protocol.SourceValue) error {
 		return fmt.Errorf("%s: expected a mapping of family names to settings", KeyColumnFamilies)
 	}
 	for _, entry := range mapping.GetEntries() {
-		declared := family{name: entry.GetKey()}
+		declared := family{name: entry.GetKey(), yaml: true}
 		if _, null := entry.GetValue().GetValue().(*protocol.SourceValue_Null); !null {
 			body := entry.GetValue().GetMapping()
 			if body == nil {

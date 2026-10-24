@@ -39,7 +39,11 @@ type ttlMeaning struct {
 	Unit    string
 }
 
-type familyMeaning struct{ Name, Data, Compression string }
+// familyMeaning is a family and the columns it holds, in the order the source lists them.
+type familyMeaning struct {
+	Name, Data, Compression string
+	Columns                 []string
+}
 
 func (m meaning) empty() bool {
 	return m.BySize == nil && m.PartitionSizeMB == 0 && m.ByLoad == nil && m.MinPartitions == 0 && m.MaxPartitions == 0 &&
@@ -57,8 +61,8 @@ func families(list []familyMeaning) []familyMeaning {
 func tableKey(schema, name string) string { return schema + "." + name }
 
 // hostPartitioning and hostFamilies are the host's facet payloads. An unknown
-// field fails the decode, so an agreement row cannot carry a starting layout,
-// a cache mode or a column list that the comparison would silently ignore.
+// field fails the decode, so an agreement row cannot carry a starting layout or
+// a cache mode that the comparison would silently ignore.
 type hostPartitioning struct {
 	BySize          *bool  `json:"by_size"`
 	PartitionSizeMB uint64 `json:"partition_size_mb"`
@@ -78,9 +82,10 @@ type hostTTL struct {
 
 type hostFamilies struct {
 	Families []struct {
-		Name        string `json:"name"`
-		Data        string `json:"data"`
-		Compression string `json:"compression"`
+		Name        string   `json:"name"`
+		Data        string   `json:"data"`
+		Compression string   `json:"compression"`
+		Columns     []string `json:"columns"`
 	} `json:"families"`
 }
 
@@ -115,7 +120,7 @@ func hostMeaning(c *qt.C, recorded golden) map[string]meaning {
 				var f hostFamilies
 				strictJSON(c, payload, &f)
 				for _, family := range f.Families {
-					m.Families = append(m.Families, familyMeaning{Name: family.Name, Data: family.Data, Compression: family.Compression})
+					m.Families = append(m.Families, familyMeaning{Name: family.Name, Data: family.Data, Compression: family.Compression, Columns: family.Columns})
 				}
 			default:
 				c.Fatalf("the host recorded an unexpected facet %s for %s", kind, table.Name)
@@ -143,12 +148,22 @@ var compressions = map[Ydb_Table.ColumnFamily_Compression]string{
 func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning {
 	c.Helper()
 	result := map[string]meaning{}
+	// placed are the columns the column facets put in a family, by table.
+	placed := map[string][]placement{}
 	for _, document := range decoded.Documents {
 		for _, fragment := range document.Fragments {
 			for _, value := range fragment.Values {
 				envelope := value.Value.Value
-				c.Assert(envelope.Kind, qt.Equals, "github.com/stokaro/ptah-ydb-plugin/row-table-properties")
 				c.Assert(value.Placement, qt.Equals, protocol.SourceModelValue_FACET)
+				if envelope.Kind == "github.com/stokaro/ptah-ydb-plugin/column-properties" {
+					var intent native.ColumnIntent
+					c.Assert(protojson.Unmarshal(envelope.Payload, &intent), qt.IsNil)
+					c.Assert(envelope.Owner.Path, qt.HasLen, 1)
+					key := tableKey(envelope.Owner.Schema, envelope.Owner.Path[0])
+					placed[key] = append(placed[key], placement{family: intent.GetFamily(), column: envelope.Owner.Name})
+					continue
+				}
+				c.Assert(envelope.Kind, qt.Equals, "github.com/stokaro/ptah-ydb-plugin/row-table-properties")
 				var intent native.RowTableIntent
 				c.Assert(protojson.Unmarshal(envelope.Payload, &intent), qt.IsNil)
 				m := meaning{BySize: switches[intent.GetPartitioningSettings().GetPartitioningBySize()],
@@ -169,8 +184,21 @@ func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning 
 			}
 		}
 	}
+	for key, columns := range placed {
+		m, found := result[key]
+		c.Assert(found, qt.IsTrue, qt.Commentf("a column is placed in a table that declares nothing: %s", key))
+		for _, column := range columns {
+			at := slices.IndexFunc(m.Families, func(f familyMeaning) bool { return f.Name == column.family })
+			c.Assert(at >= 0, qt.IsTrue, qt.Commentf("column %s names the family %q its table does not declare", column.column, column.family))
+			m.Families[at].Columns = append(m.Families[at].Columns, column.column)
+		}
+		result[key] = m
+	}
 	return result
 }
+
+// placement is a column a column facet puts in a family.
+type placement struct{ family, column string }
 
 var epochUnits = map[Ydb_Table.ValueSinceUnixEpochModeSettings_Unit]string{
 	Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_SECONDS:      "SECONDS",

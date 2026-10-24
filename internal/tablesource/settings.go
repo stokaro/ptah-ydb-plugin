@@ -44,7 +44,13 @@ func (e *UnsupportedError) Error() string {
 type settings struct {
 	intent   native.RowTableIntent
 	declared bool
+	// placements are the columns the table's families list, in the order the
+	// declarations list them.
+	placements []placement
 }
+
+// placement puts one column in a declared family.
+type placement struct{ column, family string }
 
 // empty reports whether nothing was declared, so no facet is due.
 func (s *settings) empty() bool { return !s.declared }
@@ -152,6 +158,9 @@ type family struct {
 	compression *string
 	cacheMode   *string
 	fields      *string
+	// yaml marks a family a YAML source wrote. The host attaches a YAML value
+	// to a table only, so such a family cannot place its columns.
+	yaml bool
 }
 
 // addFamily checks one family and adds it to the table's families. The checks
@@ -186,15 +195,54 @@ func (s *settings) addFamily(declared family) error {
 	if declared.cacheMode != nil {
 		return &UnsupportedError{Setting: AttributeCacheMode, Reason: "the row-table model carries no family cache mode"}
 	}
+	var columns []string
 	if declared.fields != nil {
-		return &UnsupportedError{Setting: AttributeFields, Reason: "a source cannot place a column in a family until a facet can attach to a column"}
+		if declared.yaml {
+			return &UnsupportedError{Setting: AttributeFields, Reason: "the host attaches a YAML value to a table, never to a column, so a YAML family cannot place columns; write the family in a Go directive"}
+		}
+		var err error
+		if columns, err = parseFields(*declared.fields); err != nil {
+			return err
+		}
+		if name == defaultFamily && len(columns) > 0 {
+			return &DeclarationError{Attribute: AttributeFields, Value: *declared.fields,
+				Reason: "the default family holds the key and every column no other family names, so it lists none"}
+		}
 	}
 	if slices.ContainsFunc(s.intent.ColumnFamilies, func(have *Ydb_Table.ColumnFamily) bool { return have.GetName() == name }) {
 		return fmt.Errorf("it declares column family %q twice", name)
 	}
+	for _, column := range columns {
+		if at := slices.IndexFunc(s.placements, func(have placement) bool { return have.column == column }); at >= 0 {
+			return fmt.Errorf("column %q is in two column families, %q and %q", column, s.placements[at].family, name)
+		}
+	}
+	for _, column := range columns {
+		s.placements = append(s.placements, placement{column: column, family: name})
+	}
 	s.intent.ColumnFamilies = append(s.intent.ColumnFamilies, result)
 	s.declared = true
 	return nil
+}
+
+// defaultFamily is the family every row table has.
+const defaultFamily = "default"
+
+// parseFields reads the comma-separated list of column names a family holds.
+// Each name is trimmed, none may be empty, and none may repeat.
+func parseFields(raw string) ([]string, error) {
+	var columns []string
+	for part := range strings.SplitSeq(raw, ",") {
+		column := strings.TrimSpace(part)
+		switch {
+		case column == "":
+			return nil, &DeclarationError{Attribute: AttributeFields, Value: raw, Reason: "takes a comma-separated list of column names, none of them empty"}
+		case slices.Contains(columns, column):
+			return nil, &DeclarationError{Attribute: AttributeFields, Value: raw, Reason: fmt.Sprintf("names column %q twice", column)}
+		}
+		columns = append(columns, column)
+	}
+	return columns, nil
 }
 
 // refuseColumnStore checks the attributes that choose a column table and
@@ -231,7 +279,7 @@ func refuseColumnStore(values map[string]string) error {
 // a time, with one it holds an integer. Whether the column's type fits the mode
 // is decided where the table's columns are known.
 func (s *settings) setTTL(values map[string]string) error {
-	names := []string{AttributeTTLColumn, AttributeTTLInterval, AttributeTTLUnit}
+	names := ttlAttributes()
 	written := false
 	for _, name := range names {
 		value, found := values[name]

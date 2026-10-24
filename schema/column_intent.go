@@ -42,7 +42,7 @@ func buildColumnDesiredModel() *protocol.ValueModel {
 	digest := sha256.Sum256(canonical)
 	return &protocol.ValueModel{Kind: ColumnProperties, DisplayName: modelDisplayName(ColumnProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
 		Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]),
-		CanonicalFormat: ColumnProperties + "/desired-json-v1"}
+		CanonicalFormat: ColumnProperties + "/desired-json-v1", SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_GO_ANNOTATIONS}}
 }
 
 func normalizeColumnIntent(value *protocol.Envelope) (*protocol.Envelope, error) {

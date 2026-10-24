@@ -1,0 +1,1 @@
+{"tables": {"items": {"platform": {"mysql": {"engine": "InnoDB"}, "ydb": {"row_deletion_column": "created_at", "row_deletion_interval": "P30D"}}, "columns": {"id": {"type": "bigint", "primary": true}, "created_at": {"type": "timestamp"}}}}}

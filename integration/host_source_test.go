@@ -66,6 +66,15 @@ const (
 		"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n\t//ptah:schema:field name=\"created_at\" type=\"Timestamp\"\n\tCreatedAt int64\n}\n"
 )
 
+const (
+	// hostYAMLPlatformTTL writes the TTL in the ydb group of the table's platform key.
+	hostYAMLPlatformTTL = "tables:\n  host_source_items:\n    platform:\n      mysql: {engine: InnoDB}\n      ydb: {row_deletion_column: created_at, row_deletion_interval: P30D}\n" +
+		"    columns:\n      id: {type: Uint64, primary: true}\n      created_at: {type: Timestamp}\n"
+	// hostGoFamilyFields puts a column in a family.
+	hostGoFamilyFields = "package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:columnfamily name=\"cold\" fields=\"body\"\n" +
+		"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n\t//ptah:schema:field name=\"body\" type=\"Utf8\"\n\tBody string\n}\n"
+)
+
 // goTable is a Go file with one table that writes attributes on its table and
 // index directives.
 func goTable(directives, index string) string {
@@ -82,6 +91,8 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 		{"a Go directive", "--root-dir", "entities.go", hostGoTable},
 		{"Go attributes of the table directive", "--root-dir", "entities.go", hostGoAttributes},
 		{"a Go TTL", "--root-dir", "entities.go", goTable("//ptah:schema:table name=\"host_source_items\" platform.ydb.row_deletion_column=\"created_at\" platform.ydb.row_deletion_interval=\"P30D\"", "")},
+		{"a YAML TTL in the platform group", "--schema-file", "schema.yaml", hostYAMLPlatformTTL},
+		{"the columns of a Go family", "--root-dir", "entities.go", hostGoFamilyFields},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -112,6 +123,17 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 			goTable("//ptah:schema:table name=\"host_source_items\" platform.ydb.row_deletion_column=\"created_at\" platform.ydb.row_deletion_interval=\"P1M\"", ""), `decode Go directives of engine "ydb"`},
 		{"an index option in Go", "--root-dir", "entities.go",
 			goTable("//ptah:schema:table name=\"host_source_items\"", "//ptah:schema:index name=\"by_body\" fields=\"body\" auto_partitioning_by_load=\"ENABLED\""), `decode Go directives of engine "ydb"`},
+		{"the columns of a family in YAML", "--schema-file", "schema.yaml",
+			"tables:\n  host_source_items:\n    column_families:\n      cold: {fields: [body]}\n    columns:\n      id: {type: Uint64, primary: true}\n      body: {type: Utf8}\n", `decode source failed`},
+		{"a platform property of the ydb group the provider does not read", "--schema-file", "schema.yaml",
+			"tables:\n  host_source_items:\n    platform:\n      ydb: {row_deletion_column: created_at, row_deletion_interval: PT1H, other: x}\n    columns:\n      id: {type: Uint64, primary: true}\n      created_at: {type: Timestamp}\n", `decode source failed`},
+		{"a column the family names and its struct lacks", "--root-dir", "entities.go",
+			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:columnfamily name=\"cold\" fields=\"missing\"\n" +
+				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n", `missing`},
+		{"the columns of a family of another table", "--root-dir", "entities.go",
+			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:columnfamily name=\"cold\" table=\"host_source_orders\" fields=\"body\"\n" +
+				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n\n//ptah:schema:table name=\"host_source_orders\"\n" +
+				"type Order struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n\t//ptah:schema:field name=\"body\" type=\"Utf8\"\n\tBody string\n}\n", `decode Go directives of engine "ydb"`},
 		{"a zstd family in Go", "--root-dir", "entities.go",
 			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:columnfamily name=\"cold\" compression=\"zstd\"\n" +
 				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n", `decode Go directives of engine "ydb"`},

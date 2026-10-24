@@ -1,0 +1,1 @@
+{"tables": {"items": {"auto_partitioning_by_size": "ENABLED", "column_families": {"cold": {"compression": "lz4"}}, "platform": {"ydb": {"row_deletion_column": "created_at", "row_deletion_interval": "PT36H"}}, "columns": {"id": {"type": "bigint", "primary": true}, "created_at": {"type": "timestamp"}}}}}

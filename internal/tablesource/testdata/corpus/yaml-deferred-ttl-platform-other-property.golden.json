@@ -1,0 +1,19 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "yaml",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "items",
+   "facets": {
+    "ptah.run/ydb/ttl": {
+     "Column": "created_at",
+     "Interval": "PT1H",
+     "Unit": ""
+    }
+   }
+  }
+ ]
+}

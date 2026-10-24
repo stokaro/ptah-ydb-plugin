@@ -7,6 +7,12 @@
    "schema": "",
    "name": "items",
    "struct": "Item",
+   "facets": {}
+  },
+  {
+   "schema": "",
+   "name": "orders",
+   "struct": "Order",
    "facets": {
     "ptah.run/ydb/column-families": {
      "families": [
@@ -26,20 +32,21 @@
    "directive": "ptah:schema:columnfamily",
    "attributes": {
     "fields": "body",
-    "name": "cold"
+    "name": "cold",
+    "table": "orders"
    },
    "struct": "Item",
-   "file": "go-deferred-family-fields.go",
-   "file_size": 195,
+   "file": "go-deferred-family-fields-other-table.go",
+   "file_size": 395,
    "start": {
     "offset": 51,
     "line": 4,
     "column": 1
    },
    "end": {
-    "offset": 103,
+    "offset": 118,
     "line": 4,
-    "column": 53
+    "column": 68
    }
   }
  ]

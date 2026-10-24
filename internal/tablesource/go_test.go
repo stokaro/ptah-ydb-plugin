@@ -1,6 +1,7 @@
 package tablesource_test
 
 import (
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -72,6 +73,36 @@ func TestGoDirectives_HappyPath(t *testing.T) {
 	}
 }
 
+// A family that lists columns places each of them, and the host attaches the
+// column facet to the field of the struct the directive is written on.
+func TestGoDirectives_FamilyPlacesItsColumns(t *testing.T) {
+	c := qt.New(t)
+	request := goRequest(c,
+		declaration(2, "Item", map[string]string{"name": "cold", "data": "hdd", "fields": "body, notes"}),
+		declaration(3, "Item", map[string]string{"name": "warm", "fields": "title"}),
+		declaration(4, "Order", map[string]string{"name": "cold", "fields": "body"}))
+
+	decoded, err := backend.New().DecodeSource(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidateDecodedSource(backend.Description(), request, decoded), qt.IsNil)
+	var placed []string
+	for _, fragment := range decoded.Documents[0].Fragments {
+		for _, value := range fragment.Values {
+			owner := value.Value.Value.Owner
+			placed = append(placed, fragment.Id+" "+value.Value.Value.Kind+" "+owner.Kind+" "+owner.Schema+"."+strings.Join(owner.Path, "/")+"."+owner.Name+" "+string(value.Value.Value.Payload))
+		}
+	}
+	c.Assert(placed, qt.DeepEquals, []string{
+		`0 github.com/stokaro/ptah-ydb-plugin/row-table-properties table ..items {"columnFamilies":[{"data":{"media":"hdd"},"name":"cold"},{"name":"warm"}]}`,
+		`0 github.com/stokaro/ptah-ydb-plugin/column-properties column .items.body {"family":"cold"}`,
+		`0 github.com/stokaro/ptah-ydb-plugin/column-properties column .items.notes {"family":"cold"}`,
+		`0 github.com/stokaro/ptah-ydb-plugin/column-properties column .items.title {"family":"warm"}`,
+		`2 github.com/stokaro/ptah-ydb-plugin/row-table-properties table shop..orders {"columnFamilies":[{"name":"cold"}]}`,
+		`2 github.com/stokaro/ptah-ydb-plugin/column-properties column shop.orders.body {"family":"cold"}`,
+	})
+}
+
 func TestGoDirectives_TablesGetTheirOwnFacets(t *testing.T) {
 	c := qt.New(t)
 	request := goRequest(c,
@@ -121,8 +152,19 @@ func TestGoDirectives_FailurePath(t *testing.T) {
 			`fragment "0": invalid table "\\"shop.orders": a quoted name is not closed`},
 		{"a cache mode", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "cache_mode": "regular"})},
 			`table "items": column family "cold": cache_mode is not supported by the YDB provider yet: .*`},
-		{"column placement", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "fields": "body"})},
-			`table "items": column family "cold": fields is not supported by the YDB provider yet: .*`},
+		{"an empty column name", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "fields": "a,,b"})},
+			`table "items": column family "cold": invalid fields "a,,b": takes a comma-separated list of column names, none of them empty`},
+		{"an empty list", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "fields": ""})},
+			`table "items": column family "cold": invalid fields "": takes a comma-separated list of column names, none of them empty`},
+		{"a column named twice", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "fields": "a, b ,a"})},
+			`table "items": column family "cold": invalid fields "a, b ,a": names column "a" twice`},
+		{"a column in two families", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "fields": "a,b"}),
+			declaration(3, "Item", map[string]string{"name": "warm", "fields": "b"})},
+			`table "items": column family "warm": column "b" is in two column families, "cold" and "warm"`},
+		{"columns in the default family", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "default", "fields": "a"})},
+			`table "items": column family "default": invalid fields "a": the default family holds the key and every column no other family names, so it lists none`},
+		{"columns of another table", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "table": "shop.orders", "fields": "a"})},
+			`table "shop.orders": fields is not supported by the YDB provider yet: a family places the columns of the table of the struct its directive is written on.*`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
