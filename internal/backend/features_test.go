@@ -15,3 +15,12 @@ func TestDescriptionListsOneFeatureSet(t *testing.T) {
 	c.Assert(description.Engines[0].Features, qt.Not(qt.HasLen), 0)
 	c.Assert(description.Engines[0].Features, qt.DeepEquals, description.Features)
 }
+
+func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
+	c := qt.New(t)
+
+	description := backend.Description()
+
+	c.Assert(description.Features, qt.Contains, "database.dev")
+	c.Assert(description.Engines[0].Features, qt.Contains, "database.dev")
+}

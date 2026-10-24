@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
@@ -321,4 +322,59 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 			c.Assert(result.Message, qt.Not(qt.Contains), "secret-marker")
 		})
 	}
+}
+
+// A statement timeout reaches the provider as the deadline of the Execute call.
+// A unit the deadline stops has been dispatched and YDB may keep running it, so
+// the outcome is unknown, no later unit runs, and the unit is not sent again.
+func TestExecutionStoppedByADeadlineIsUnknown(t *testing.T) {
+	c := qt.New(t)
+	started := make(chan struct{})
+	probe := &driverProbe{onExec: func(ctx context.Context) error { close(started); <-ctx.Done(); return ctx.Err() }}
+	p := probeProvider(c, probe)
+	ctx, cancel := context.WithTimeout(c.Context(), 100*time.Millisecond)
+	defer cancel()
+	request := sqlRequest("")
+	request.Units = append(request.Units, request.Units[0], request.Units[0])
+
+	result, err := p.Execute(ctx, request)
+
+	<-started
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(result.AppliedCount, qt.Equals, uint32(0))
+	c.Assert(result.DiagnosticCode, qt.Equals, "ydb.execution-unconfirmed")
+	c.Assert(probe.execCalls.Load(), qt.Equals, int32(1))
+}
+
+// A deadline that expires after earlier units were confirmed keeps them counted.
+func TestExecutionStoppedByADeadlineKeepsTheConfirmedPrefix(t *testing.T) {
+	c := qt.New(t)
+	var calls atomic.Int32
+	probe := &driverProbe{onExec: func(ctx context.Context) error {
+		if calls.Add(1) == 1 {
+			return nil
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}}
+	p := probeProvider(c, probe)
+	ctx, cancel := context.WithTimeout(c.Context(), 200*time.Millisecond)
+	defer cancel()
+	request := sqlRequest("")
+	request.Units = append(request.Units, request.Units[0])
+
+	result, err := p.Execute(ctx, request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(result.AppliedCount, qt.Equals, uint32(1))
+	c.Assert(probe.execCalls.Load(), qt.Equals, int32(2))
+}
+
+func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
+	c := qt.New(t)
+	c.Assert(sessionCapabilities(), qt.DeepEquals, map[string]bool{
+		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true,
+	})
 }

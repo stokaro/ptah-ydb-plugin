@@ -7,6 +7,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
@@ -59,6 +60,13 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	for _, unit := range request.Units {
 		if native := unit.GetNative(); native != nil && native.GetOwner().GetDatabase() != "" && native.GetOwner().GetDatabase() != s.database {
 			return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.foreign-database"}, nil
+		}
+	}
+	if s.realm {
+		for _, unit := range request.Units {
+			if err := yql.ConfineToRealm(unit.GetSql()); err != nil {
+				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.realm-escape", Message: err.Error()}, nil
+			}
 		}
 	}
 	if err := ctx.Err(); err != nil {

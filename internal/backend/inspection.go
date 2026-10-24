@@ -30,7 +30,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	result, err := inspect.Read(ctx, session.connection.Driver, session.database, request.GetSchemas())
+	result, err := inspect.Read(ctx, session.connection.Driver, session.database, request.GetSchemas(), session.leftOut()...)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()

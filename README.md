@@ -112,14 +112,37 @@ file input. Full native CLI planning remains pending.
 
 ## Connection addresses
 
-Use `ydb://host:2136/database` or `ydbs://host:2135/database` for TLS.
-`database`, `token`, `go_balancer`, and `use_env_credentials` are the supported
-query parameters. A token, URL user/password and `use_env_credentials` cannot be
-combined. `use_env_credentials` reads the `YDB_*` variables of the provider
-process and fails when none is set, so an environment that would connect
-anonymously is refused. An address with no credential source connects
-anonymously. Unknown or repeated
-parameters, conflicting database paths, and malformed values are refused.
+Use `ydb://host:2136/database` or `ydbs://host:2135/database` for TLS. The
+database comes from the path or from the `database` parameter; naming it twice
+is refused when the two differ.
+
+The accepted parameters follow the host's embedded engine:
+
+- `database`, `token` and `use_env_credentials` choose the database and the
+  credential. A token, URL user/password and `use_env_credentials` cannot be
+  combined. `use_env_credentials` reads the `YDB_*` variables of the provider
+  process, service-account keys and instance metadata included, and fails when
+  none is set, so an environment that would connect anonymously is refused. An
+  address with no credential source connects anonymously.
+- `go_balancer` and the older `balancer` choose the balancer; naming both is
+  refused, and so is a value the SDK does not know. `go_default_idempotent`
+  takes a boolean and `prefetch_query_result_parts` a non-negative integer.
+  The SDK reads these three.
+- `go_query_mode` and `query_mode` accept `query` only. `go_fake_tx` and
+  `go_query_bind` are refused by name, because a faked transaction would read
+  outside the snapshot read and the SDK's binders rewrite a `?` inside a YQL
+  literal.
+- `monitoring` names the cluster's monitoring endpoint, an `http://` or
+  `https://` address with no user, path, query or fragment. The address
+  validates it and keeps it. The provider protocol has no way to refine the
+  advertised capabilities from a cluster's feature flags, so nothing reads the
+  endpoint yet.
+
+Unknown or repeated parameters, conflicting database paths, and malformed
+values are refused, and a refusal names the parameter and never its value. Two
+refusals are stricter than the host's: a fragment, and a query the host reads
+as empty because it cannot unescape it. The `testdata/oracle` corpus beside
+`internal/connection` holds the host's answer for each address it covers.
 Credentials travel in the session-open request and are omitted from receipts,
 SDK addresses, and error diagnostics. Native errors currently report only the
 failed operation, which limits diagnosis until structured redaction is added.
@@ -128,6 +151,62 @@ Session close releases both the SQL pool and its parent native driver, even
 when the RPC context is canceled. Cleanup results are retained for repeated
 closes. A process accepts at most 1,024 lifetime session handles; start a new
 provider process when that bound is reached.
+
+## Dev realms
+
+SQL cannot create a YDB database, so a dev or scratch database on a server the
+run does not own is a directory. `dev_realm=<name>` on an address makes the
+provider treat `<database>/ptah_dev/<name>` as the whole database of the
+session. A name is 1 to 64 lowercase letters, digits and underscores, and the
+address must name the database that holds the realm. Opening such a session
+creates the directory when it does not exist; nothing in the protocol removes it.
+
+The session receipt reports the realm's path as its database, and inspection,
+locks, migration history, migration metadata and every native write resolve
+against it, so the realm reads as an empty database. Every SQL unit starts with
+`PRAGMA TablePathPrefix` naming the realm, which resolves a relative path inside
+it. The pragma does not confine an absolute path, a path that climbs out with
+`..`, a name written through a `$` expression, or an object the whole database
+shares, so the provider reads each unit before it dispatches any of them and
+refuses the batch with `ydb.realm-escape` when a statement writes outside the
+realm, moves the prefix, runs code it computes, or creates a user, group,
+permission, resource pool or backup. An external data source or table, an async
+replication, a transfer and a streaming query are refused too. A statement the
+guard does not recognize is refused. The rules are the host's replay guard for a
+realm; `internal/yql/testdata/realm` holds the host's answer for 83 statements,
+and `--!syntax_v1` is the one difference.
+
+A session on the database itself leaves the `ptah_dev` directory out of
+everything it reads, and a table owner may not be named `ptah_dev`.
+
+## Dev databases
+
+The provider advertises `database.dev`. A host request with the spec
+`docker://ydb[/<tag>[/local]]` starts `ydbplatform/local-ydb:<tag>` (`latest`
+without a tag) with in-memory disks, publishes its port on loopback only, waits
+until the server takes DDL, and returns a lease and the address
+`ydb://127.0.0.1:<port>/local?go_balancer=disable`. The host removes the
+container by releasing the lease; the provider also removes every lease it still
+holds when it receives SIGTERM or SIGHUP or when the host closes it. A provider
+killed outright leaves its containers, which carry the label `ptah-dev` for
+manual removal.
+
+The spec follows the host's `docker://ydb` rules: the engine is matched as
+written, one path segment is a tag, and local-ydb serves the database `local`
+alone. Parameters are merged over the default `go_balancer=disable`. Those that
+would point the connection elsewhere or hand the container a credential
+(`host`, `hostaddr`, `port`, `user`, `password`, `dbname`, `passfile`, `service`,
+`servicefile`, `database`, `dev_realm`, `monitoring`, `token`,
+`use_env_credentials`) are refused, and so is any parameter a YDB address does not accept, before a container
+starts. The host starts other engines itself, and `docker+ydb://` image specs
+never reach the provider, because the host sends it `docker://` specs only.
+
+The provider drives the `docker` command line, which it finds on `PATH`. The
+host starts the provider with an explicit environment, so pass `PATH`, and
+`DOCKER_HOST` or `DOCKER_CONTEXT` when the daemon is not the default. local-ydb
+takes every connection without a credential, so a daemon on another machine is
+refused (`UNSUPPORTED`), and a missing command or an unreachable daemon is
+`UNAVAILABLE`.
 
 ## Execution and transactions
 
@@ -142,6 +221,16 @@ dispatched unit reports UNKNOWN, even when earlier units succeeded. A unit may
 contain several SQL statements, so its error cannot prove that none ran.
 Cancellation between units reports the confirmed prefix. Diagnostics omit raw
 driver errors and SQL text.
+
+A statement timeout reaches the provider as the deadline of the Execute call,
+which the host sets for each statement of a migration. A unit the deadline stops
+reports UNKNOWN with the confirmed prefix, no later unit runs, and the unit is
+not sent again, because YDB keeps running a schema statement after its client
+stops waiting. The session receipt reports `migration_statement_timeout=true`
+for that reason. The host's own migrator also cancels the build an interrupted
+`ALTER TABLE ... ADD INDEX` started, through the operation service, and reports
+such a statement as not applied; the provider does not, so it reports UNKNOWN
+for every statement a deadline stops, a data query included.
 
 Transaction handles belong to one provider session. DEFAULT and SERIALIZABLE
 both use YDB's native serializable read/write mode; receipts retain the
@@ -1249,8 +1338,8 @@ identity contract to bypass that requirement.
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes more source formats, comparison, the alteration of table
 settings other than column families, table removal and rebuild, and planning, rendering, and operation models for other objects,
-capability detection, environment credential sources,
-monitoring, and dev-database provisioning. The provider advertises implemented
+capability detection, and reading a cluster's feature flags from the `monitoring`
+endpoint. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
 rendering, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, and offline SQL analysis services. The remaining capabilities stay

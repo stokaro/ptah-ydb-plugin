@@ -30,9 +30,13 @@ type Provider struct {
 }
 
 type session struct {
-	mu              sync.Mutex
-	connection      *connection.Connection
-	database        string
+	mu         sync.Mutex
+	connection *connection.Connection
+	// database is the root the session treats as its database: the dev realm's
+	// directory when the address names one.
+	database string
+	// realm reports a session on a dev realm, whose statements are confined to it.
+	realm           bool
 	closed          bool
 	closeErr        error
 	cleanupErr      error
@@ -47,7 +51,18 @@ type session struct {
 // session it opens and the inspection snapshot all report it, so the host holds
 // one target profile for observed, desired and planned values.
 func engineFeatures() []string {
-	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature}
+	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature}
+}
+
+// sessionCapabilities are the host capabilities a session reports.
+//
+// migration_statement_timeout is true because the host bounds each statement of
+// a migration with a deadline on the Execute call, and a unit the deadline
+// stops is reported with outcome UNKNOWN and no retry (see executeUnits): YDB
+// keeps running a schema statement after its client stops waiting, so the
+// provider never reports a stopped statement as not applied.
+func sessionCapabilities() map[string]bool {
+	return map[string]bool{"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true}
 }
 
 // New constructs an isolated session service.
@@ -109,9 +124,9 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	}
 	id := rand.Text()
 	p.mu.Lock()
-	p.sessions[id] = &session{connection: opened, database: address.Database()}
+	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != ""}
 	p.mu.Unlock()
-	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Database(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: map[string]bool{"transactional_ddl": false, "coordination_nodes": true}, Features: engineFeatures()}, nil
+	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: sessionCapabilities(), Features: engineFeatures()}, nil
 }
 
 // Close releases only the named session. Repeated closes return the original
@@ -145,4 +160,14 @@ func connectionError(ctx context.Context, operation string) error {
 	// Native authentication errors may embed credential-source details. Until
 	// structured redaction is available, return the operation without raw text.
 	return status.Error(codes.Unavailable, operation+" failed")
+}
+
+// leftOut names the directories at the session's root that belong to other
+// runs. A session on the database leaves the dev realms' directory out of what
+// it reads; a session on a realm owns everything below it.
+func (s *session) leftOut() []string {
+	if s.realm {
+		return nil
+	}
+	return []string{connection.RealmDirectory}
 }

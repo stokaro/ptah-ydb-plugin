@@ -196,6 +196,10 @@ func only(value proto.Message, allowed ...string) error {
 	return result
 }
 
+// realmDirectory is the directory at the root of a database that holds the dev
+// realms, which internal/connection names; this package links no connection code.
+const realmDirectory = "ptah_dev"
+
 func validName(value string) bool {
 	return value != "" && strings.TrimSpace(value) == value && utf8.ValidString(value) && !strings.ContainsAny(value, "\x00/\\") && value != "." && value != ".."
 }
@@ -204,8 +208,12 @@ func validateOwner(owner *protocol.Reference) error {
 	if err := only(owner, "engine", "kind", "database", "schema", "name"); err != nil {
 		return err
 	}
-	if owner.Engine != "ydb" || owner.Kind != "table" || !validName(owner.Name) || (owner.Schema == "" && owner.Name == "ptah_locks") {
+	if owner.Engine != "ydb" || owner.Kind != "table" || !validName(owner.Name) || (owner.Schema == "" && (owner.Name == "ptah_locks" || owner.Name == realmDirectory)) {
 		return fmt.Errorf("invalid YDB table owner")
+	}
+	if first, _, _ := strings.Cut(owner.Schema, "/"); first == realmDirectory {
+		// The directory of the dev realms belongs to other runs at the root of a database.
+		return fmt.Errorf("invalid YDB table namespace")
 	}
 	for _, part := range strings.Split(owner.Schema, "/") {
 		if owner.Schema != "" && !validName(part) {

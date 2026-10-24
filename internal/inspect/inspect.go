@@ -21,8 +21,12 @@ import (
 // Read captures exact common column fields and native property facets. A
 // partial traversal, unmodeled object, or incomplete native description returns
 // no snapshot. Filtered schemas are exact directories, not recursive prefixes.
-func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []string) (result *protocol.Schema, err error) {
-	schemas, bindings, err := scopes(database, selectors)
+//
+// leaveOut names the directories at the root that belong to other runs, such
+// as the directory of the dev realms in a database a realm does not select.
+// Neither the traversal nor a selector reaches them.
+func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []string, leaveOut ...string) (result *protocol.Schema, err error) {
+	schemas, bindings, err := scopes(database, selectors, leaveOut)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +78,9 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 			}
 			names[name] = true
 			if strings.HasPrefix(name, ".") && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
+				continue
+			}
+			if selected == "" && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY && slices.Contains(leaveOut, name) {
 				continue
 			}
 			switch entry.GetType() {
@@ -187,7 +194,7 @@ func component(value string) bool {
 	return utf8.ValidString(value) && value != "" && value != "." && value != ".." && !strings.ContainsAny(value, "/\\\x00")
 }
 
-func scopes(database string, selectors []string) ([]string, []*protocol.InspectionScopeBinding, error) {
+func scopes(database string, selectors, leaveOut []string) ([]string, []*protocol.InspectionScopeBinding, error) {
 	var directories []string
 	var bindings []*protocol.InspectionScopeBinding
 	seen := map[string]bool{}
@@ -201,6 +208,9 @@ func scopes(database string, selectors []string) ([]string, []*protocol.Inspecti
 				if !component(part) || strings.HasPrefix(part, ".") {
 					return nil, nil, fmt.Errorf("invalid YDB schema selector")
 				}
+			}
+			if slices.Contains(leaveOut, strings.Split(selected, "/")[0]) {
+				return nil, nil, fmt.Errorf("YDB schema selector names a directory that belongs to other runs")
 			}
 		}
 		if seen[selected] {
