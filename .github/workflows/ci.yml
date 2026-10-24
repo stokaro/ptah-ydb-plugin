@@ -3,6 +3,10 @@ on:
   push:
     branches: [master]
   pull_request:
+  # The host is built from Ptah's master branch, so a nightly run shows a host
+  # change that breaks this provider even when the provider itself is unchanged.
+  schedule:
+    - cron: "17 3 * * *"
 permissions:
   contents: read
 jobs:
@@ -79,12 +83,14 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Check out the pinned host contract
+      - name: Check out the current host
         uses: actions/checkout@v7
         with:
           repository: stokaro/ptah
-          ref: f34e22bd4ee0f1a6cf2fe9142af5bf77cf804704
+          ref: master
           path: .host-contract
+      - name: Name the host commit
+        run: git -C .host-contract log -1 --format='host %H %s'
       - name: Build the external host binary
         run: |
           host_binary="$RUNNER_TEMP/ptah-contract"
