@@ -1,0 +1,215 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of t to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD105"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of t to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD105"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of t to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD105"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (PARTITION_AT_KEYS = (10, 20))",
+       "end": 89,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "PARTITION_AT_KEYS", "=", "(", "10", ",", "20", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (PARTITION_AT_KEYS = (10, 20))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "PARTITION_AT_KEYS", "=", "(", "10", ",", "20", ")", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE T SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "end": 55,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE t SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (PARTITION_AT_KEYS = (10, 20))",
+      "end": 89,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "PARTITION_AT_KEYS", "=", "(", "10", ",", "20", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (PARTITION_AT_KEYS = (10, 20))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "PARTITION_AT_KEYS", "=", "(", "10", ",", "20", ")", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE T SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "end": 55,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE t SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE t (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (PARTITION_AT_KEYS = (10, 20));\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER TABLE t SET (AUTO_PARTITIONING_BY_SIZE = ENABLED);\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

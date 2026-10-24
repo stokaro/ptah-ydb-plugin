@@ -1,0 +1,1 @@
+{{ if eq .Env "" }}DROP TABLE old_settings;{{ end }}

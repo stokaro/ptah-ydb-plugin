@@ -1,0 +1,170 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD115",
+      "file": 0,
+      "message": "DROP ASYNC REPLICATION mirror keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION mirror SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "mirror"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD115"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD115",
+      "file": 0,
+      "message": "DROP ASYNC REPLICATION mirror keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION mirror SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "mirror"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD115"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD115",
+      "file": 0,
+      "message": "DROP ASYNC REPLICATION mirror keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION mirror SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "mirror"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD115"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP ASYNC REPLICATION MIRROR",
+       "end": 29,
+       "line": 1,
+       "source_words": ["DROP", "ASYNC", "REPLICATION", "mirror"],
+       "sql": "DROP ASYNC REPLICATION mirror",
+       "start": 0,
+       "words": ["DROP", "ASYNC", "REPLICATION", "MIRROR"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "DROP ASYNC REPLICATION MIRROR",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+       }
+      ],
+      "end": 29,
+      "line": 1,
+      "source_words": ["DROP", "ASYNC", "REPLICATION", "mirror"],
+      "sql": "DROP ASYNC REPLICATION mirror",
+      "start": 0,
+      "words": ["DROP", "ASYNC", "REPLICATION", "MIRROR"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "DROP ASYNC REPLICATION mirror;\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

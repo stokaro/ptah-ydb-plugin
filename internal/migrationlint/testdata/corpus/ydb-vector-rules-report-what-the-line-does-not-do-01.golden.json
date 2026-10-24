@@ -1,0 +1,159 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_docs.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_docs.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD130",
+      "file": 0,
+      "message": "vector index docs_bits on docs needs target capability vector_indexes, unavailable on this ydb target; YDB 25.1 keeps vector indexes behind the EnableVectorIndex feature flag (Vector index support is disabled), so turn the flag on for the cluster",
+      "statement": 0
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_docs.up.sql:1:YD130"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_docs.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "ALTER TABLE DOCS ADD INDEX DOCS_BITS GLOBAL USING VECTOR_KMEANS_TREE ON (EMB) WITH (DISTANCE=MANHATTAN, VECTOR_TYPE=\"bit\", VECTOR_DIMENSION=8, LEVELS=1, CLUSTERS=2)",
+       "end": 164,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "docs", "ADD", "INDEX", "docs_bits", "GLOBAL", "USING", "vector_kmeans_tree", "ON", "(", "emb", ")", "WITH", "(", "distance", "=", "manhattan", ",", "vector_type", "=", "\"bit\"", ",", "vector_dimension", "=", "8", ",", "levels", "=", "1", ",", "clusters", "=", "2", ")"],
+       "sql": "ALTER TABLE docs ADD INDEX docs_bits GLOBAL USING vector_kmeans_tree ON (emb) WITH (distance=manhattan, vector_type=\"bit\", vector_dimension=8, levels=1, clusters=2)",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "DOCS", "ADD", "INDEX", "DOCS_BITS", "GLOBAL", "USING", "VECTOR_KMEANS_TREE", "ON", "(", "EMB", ")", "WITH", "(", "DISTANCE", "=", "MANHATTAN", ",", "VECTOR_TYPE", "=", "\"bit\"", ",", "VECTOR_DIMENSION", "=", "8", ",", "LEVELS", "=", "1", ",", "CLUSTERS", "=", "2", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_docs.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD130",
+      "file": 0,
+      "message": "vector index docs_bits on docs stores bit vectors, which needs target capability vector_bit_type, unavailable on this ydb target, where the index is not built over rows; declare vector_type float, uint8 or int8",
+      "statement": 0
+     }
+    ],
+    "server_version": "25.4.1.15"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_docs.up.sql:1:YD130"],
+   "server_version": "25.4.1.15",
+   "split": 0
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "ALTER TABLE DOCS ADD INDEX DOCS_BITS GLOBAL USING VECTOR_KMEANS_TREE ON (EMB) WITH (DISTANCE=MANHATTAN, VECTOR_TYPE=\"bit\", VECTOR_DIMENSION=8, LEVELS=1, CLUSTERS=2)",
+      "end": 164,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "docs", "ADD", "INDEX", "docs_bits", "GLOBAL", "USING", "vector_kmeans_tree", "ON", "(", "emb", ")", "WITH", "(", "distance", "=", "manhattan", ",", "vector_type", "=", "\"bit\"", ",", "vector_dimension", "=", "8", ",", "levels", "=", "1", ",", "clusters", "=", "2", ")"],
+      "sql": "ALTER TABLE docs ADD INDEX docs_bits GLOBAL USING vector_kmeans_tree ON (emb) WITH (distance=manhattan, vector_type=\"bit\", vector_dimension=8, levels=1, clusters=2)",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "DOCS", "ADD", "INDEX", "DOCS_BITS", "GLOBAL", "USING", "VECTOR_KMEANS_TREE", "ON", "(", "EMB", ")", "WITH", "(", "DISTANCE", "=", "MANHATTAN", ",", "VECTOR_TYPE", "=", "\"bit\"", ",", "VECTOR_DIMENSION", "=", "8", ",", "LEVELS", "=", "1", ",", "CLUSTERS", "=", "2", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_docs.up.sql",
+     "sql": "ALTER TABLE docs ADD INDEX docs_bits GLOBAL USING vector_kmeans_tree ON (emb) WITH (distance=manhattan, vector_type=\"bit\", vector_dimension=8, levels=1, clusters=2);\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

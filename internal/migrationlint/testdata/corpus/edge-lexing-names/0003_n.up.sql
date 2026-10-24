@@ -1,0 +1,2 @@
+ALTER TABLE `q\`t` DROP INDEX `i\`x`;
+ALTER TABLE `q\`t` DROP COLUMN `a\\b`;

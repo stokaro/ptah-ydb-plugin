@@ -1,0 +1,1 @@
+CREATE TOPIC events (CONSUMER c WITH (type = 'shared'));

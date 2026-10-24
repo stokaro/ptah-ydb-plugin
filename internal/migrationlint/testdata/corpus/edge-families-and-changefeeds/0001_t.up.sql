@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, a Utf8 FAMILY cold, b Utf8, PRIMARY KEY (id), FAMILY cold (DATA = "rot", COMPRESSION = "lz4"), CHANGEFEED cf1 WITH (MODE = 'UPDATES', FORMAT = 'JSON'));

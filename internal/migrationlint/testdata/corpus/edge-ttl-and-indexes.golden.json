@@ -1,0 +1,534 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN ts: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "ts",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN e: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "e",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN w: index t_vw covers the column, and YDB refuses to drop it (Impossible drop column because table index covers that column); drop the index first",
+      "statement": 5,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "w",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD101",
+      "file": 1,
+      "message": "ADD INDEX t_u adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 8
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN v: index t_u keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+      "statement": 9,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "v",
+        "parent": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:BC104", "0002_t.up.sql:1:DS102", "0002_t.up.sql:1:YD104", "0002_t.up.sql:3:BC104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:5:BC104", "0002_t.up.sql:5:DS102", "0002_t.up.sql:5:YD104", "0002_t.up.sql:6:BC104", "0002_t.up.sql:6:DS102", "0002_t.up.sql:6:YD104", "0002_t.up.sql:7:BC104", "0002_t.up.sql:7:DS102", "0002_t.up.sql:8:BC104", "0002_t.up.sql:8:DS102", "0002_t.up.sql:9:YD101", "0002_t.up.sql:10:BC104", "0002_t.up.sql:10:DS102", "0002_t.up.sql:10:YD104"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN ts: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "ts",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN e: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "e",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN w: index t_vw covers the column, and YDB refuses to drop it (Impossible drop column because table index covers that column); drop the index first",
+      "statement": 5,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "w",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD101",
+      "file": 1,
+      "message": "ADD INDEX t_u adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 8
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN v: index t_u keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+      "statement": 9,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "v",
+        "parent": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:BC104", "0002_t.up.sql:1:DS102", "0002_t.up.sql:1:YD104", "0002_t.up.sql:3:BC104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:5:BC104", "0002_t.up.sql:5:DS102", "0002_t.up.sql:5:YD104", "0002_t.up.sql:6:BC104", "0002_t.up.sql:6:DS102", "0002_t.up.sql:6:YD104", "0002_t.up.sql:7:BC104", "0002_t.up.sql:7:DS102", "0002_t.up.sql:8:BC104", "0002_t.up.sql:8:DS102", "0002_t.up.sql:9:YD101", "0002_t.up.sql:10:BC104", "0002_t.up.sql:10:DS102", "0002_t.up.sql:10:YD104"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN ts: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "ts",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN e: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "e",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN w: index t_vw covers the column, and YDB refuses to drop it (Impossible drop column because table index covers that column); drop the index first",
+      "statement": 5,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "w",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD101",
+      "file": 1,
+      "message": "ADD INDEX t_u adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 8
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN v: index t_u keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+      "statement": 9,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "v",
+        "parent": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:DS102", "0002_t.up.sql:1:YD104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:5:DS102", "0002_t.up.sql:5:YD104", "0002_t.up.sql:6:DS102", "0002_t.up.sql:6:YD104", "0002_t.up.sql:7:DS102", "0002_t.up.sql:8:DS102", "0002_t.up.sql:9:YD101", "0002_t.up.sql:10:DS102", "0002_t.up.sql:10:YD104"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, TS TIMESTAMP, E UINT32, V UTF8, W UTF8, PRIMARY KEY (ID), INDEX T_VW GLOBAL ASYNC ON (V) COVER (W)) WITH (TTL = INTERVAL(\"P1D\") TO EXTERNAL DATA SOURCE `s`, INTERVAL(\"P2D\") DELETE ON TS)",
+       "end": 222,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "ts", "Timestamp", ",", "e", "Uint32", ",", "v", "Utf8", ",", "w", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "t_vw", "GLOBAL", "ASYNC", "ON", "(", "v", ")", "COVER", "(", "w", ")", ")", "WITH", "(", "TTL", "=", "Interval", "(", "\"P1D\"", ")", "TO", "EXTERNAL", "DATA", "SOURCE", "`s`", ",", "Interval", "(", "\"P2D\"", ")", "DELETE", "ON", "ts", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, ts Timestamp, e Uint32, v Utf8, w Utf8, PRIMARY KEY (id), INDEX t_vw GLOBAL ASYNC ON (v) COVER (w)) WITH (TTL = Interval(\"P1D\") TO EXTERNAL DATA SOURCE `s`, Interval(\"P2D\") DELETE ON ts)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "TS", "TIMESTAMP", ",", "E", "UINT32", ",", "V", "UTF8", ",", "W", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "T_VW", "GLOBAL", "ASYNC", "ON", "(", "V", ")", "COVER", "(", "W", ")", ")", "WITH", "(", "TTL", "=", "INTERVAL", "(", "\"P1D\"", ")", "TO", "EXTERNAL", "DATA", "SOURCE", "`s`", ",", "INTERVAL", "(", "\"P2D\"", ")", "DELETE", "ON", "TS", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN TS",
+       "end": 28,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "ts"],
+       "sql": "ALTER TABLE t DROP COLUMN ts",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "TS"]
+      },
+      {
+       "canonical": "ALTER TABLE T RESET (TTL)",
+       "end": 55,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "t", "RESET", "(", "TTL", ")"],
+       "sql": "ALTER TABLE t RESET (TTL)",
+       "start": 30,
+       "words": ["ALTER", "TABLE", "T", "RESET", "(", "TTL", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN TS",
+       "end": 85,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "ts"],
+       "sql": "ALTER TABLE t DROP COLUMN ts",
+       "start": 57,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "TS"]
+      },
+      {
+       "canonical": "ALTER TABLE T SET (TTL = INTERVAL(\"PT1H\") ON E AS SECONDS)",
+       "end": 145,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "t", "SET", "(", "TTL", "=", "Interval", "(", "\"PT1H\"", ")", "ON", "e", "AS", "SECONDS", ")"],
+       "sql": "ALTER TABLE t SET (TTL = Interval(\"PT1H\") ON e AS SECONDS)",
+       "start": 87,
+       "words": ["ALTER", "TABLE", "T", "SET", "(", "TTL", "=", "INTERVAL", "(", "\"PT1H\"", ")", "ON", "E", "AS", "SECONDS", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN E",
+       "end": 174,
+       "line": 5,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "e"],
+       "sql": "ALTER TABLE t DROP COLUMN e",
+       "start": 147,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "E"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN W",
+       "end": 203,
+       "line": 6,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "w"],
+       "sql": "ALTER TABLE t DROP COLUMN w",
+       "start": 176,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "W"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP INDEX T_VW, DROP COLUMN W",
+       "end": 249,
+       "line": 7,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "INDEX", "t_vw", ",", "DROP", "COLUMN", "w"],
+       "sql": "ALTER TABLE t DROP INDEX t_vw, DROP COLUMN w",
+       "start": 205,
+       "words": ["ALTER", "TABLE", "T", "DROP", "INDEX", "T_VW", ",", "DROP", "COLUMN", "W"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN V",
+       "end": 278,
+       "line": 8,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "v"],
+       "sql": "ALTER TABLE t DROP COLUMN v",
+       "start": 251,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "V"]
+      },
+      {
+       "canonical": "ALTER TABLE T ADD INDEX T_U GLOBAL UNIQUE SYNC ON (V, `id`), ADD INDEX T_X GLOBAL ON (V) COVER (ID)",
+       "end": 379,
+       "line": 9,
+       "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "t_u", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "v", ",", "`id`", ")", ",", "ADD", "INDEX", "t_x", "GLOBAL", "ON", "(", "v", ")", "COVER", "(", "id", ")"],
+       "sql": "ALTER TABLE t ADD INDEX t_u GLOBAL UNIQUE SYNC ON (v, `id`), ADD INDEX t_x GLOBAL ON (v) COVER (id)",
+       "start": 280,
+       "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "T_U", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "V", ",", "`id`", ")", ",", "ADD", "INDEX", "T_X", "GLOBAL", "ON", "(", "V", ")", "COVER", "(", "ID", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN V",
+       "end": 408,
+       "line": 10,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "v"],
+       "sql": "ALTER TABLE t DROP COLUMN v",
+       "start": 381,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "V"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_t.up.sql:1:BC104", "0002_t.up.sql:1:DS102", "0002_t.up.sql:3:BC104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:5:BC104", "0002_t.up.sql:5:DS102", "0002_t.up.sql:6:BC104", "0002_t.up.sql:6:DS102", "0002_t.up.sql:7:BC104", "0002_t.up.sql:7:DS102", "0002_t.up.sql:8:BC104", "0002_t.up.sql:8:DS102", "0002_t.up.sql:10:BC104", "0002_t.up.sql:10:DS102"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, TS TIMESTAMP, E UINT32, V UTF8, W UTF8, PRIMARY KEY (ID), INDEX T_VW GLOBAL ASYNC ON (V) COVER (W)) WITH (TTL = INTERVAL(\"P1D\") TO EXTERNAL DATA SOURCE `s`, INTERVAL(\"P2D\") DELETE ON TS)",
+      "end": 222,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "ts", "Timestamp", ",", "e", "Uint32", ",", "v", "Utf8", ",", "w", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "t_vw", "GLOBAL", "ASYNC", "ON", "(", "v", ")", "COVER", "(", "w", ")", ")", "WITH", "(", "TTL", "=", "Interval", "(", "\"P1D\"", ")", "TO", "EXTERNAL", "DATA", "SOURCE", "`s`", ",", "Interval", "(", "\"P2D\"", ")", "DELETE", "ON", "ts", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, ts Timestamp, e Uint32, v Utf8, w Utf8, PRIMARY KEY (id), INDEX t_vw GLOBAL ASYNC ON (v) COVER (w)) WITH (TTL = Interval(\"P1D\") TO EXTERNAL DATA SOURCE `s`, Interval(\"P2D\") DELETE ON ts)",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "TS", "TIMESTAMP", ",", "E", "UINT32", ",", "V", "UTF8", ",", "W", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "T_VW", "GLOBAL", "ASYNC", "ON", "(", "V", ")", "COVER", "(", "W", ")", ")", "WITH", "(", "TTL", "=", "INTERVAL", "(", "\"P1D\"", ")", "TO", "EXTERNAL", "DATA", "SOURCE", "`s`", ",", "INTERVAL", "(", "\"P2D\"", ")", "DELETE", "ON", "TS", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN TS",
+      "end": 28,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "ts"],
+      "sql": "ALTER TABLE t DROP COLUMN ts",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "TS"]
+     },
+     {
+      "canonical": "ALTER TABLE T RESET (TTL)",
+      "end": 55,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "t", "RESET", "(", "TTL", ")"],
+      "sql": "ALTER TABLE t RESET (TTL)",
+      "start": 30,
+      "words": ["ALTER", "TABLE", "T", "RESET", "(", "TTL", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN TS",
+      "end": 85,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "ts"],
+      "sql": "ALTER TABLE t DROP COLUMN ts",
+      "start": 57,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "TS"]
+     },
+     {
+      "canonical": "ALTER TABLE T SET (TTL = INTERVAL(\"PT1H\") ON E AS SECONDS)",
+      "end": 145,
+      "line": 4,
+      "source_words": ["ALTER", "TABLE", "t", "SET", "(", "TTL", "=", "Interval", "(", "\"PT1H\"", ")", "ON", "e", "AS", "SECONDS", ")"],
+      "sql": "ALTER TABLE t SET (TTL = Interval(\"PT1H\") ON e AS SECONDS)",
+      "start": 87,
+      "words": ["ALTER", "TABLE", "T", "SET", "(", "TTL", "=", "INTERVAL", "(", "\"PT1H\"", ")", "ON", "E", "AS", "SECONDS", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN E",
+      "end": 174,
+      "line": 5,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "e"],
+      "sql": "ALTER TABLE t DROP COLUMN e",
+      "start": 147,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "E"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN W",
+      "end": 203,
+      "line": 6,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "w"],
+      "sql": "ALTER TABLE t DROP COLUMN w",
+      "start": 176,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "W"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP INDEX T_VW, DROP COLUMN W",
+      "end": 249,
+      "line": 7,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "INDEX", "t_vw", ",", "DROP", "COLUMN", "w"],
+      "sql": "ALTER TABLE t DROP INDEX t_vw, DROP COLUMN w",
+      "start": 205,
+      "words": ["ALTER", "TABLE", "T", "DROP", "INDEX", "T_VW", ",", "DROP", "COLUMN", "W"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN V",
+      "end": 278,
+      "line": 8,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "v"],
+      "sql": "ALTER TABLE t DROP COLUMN v",
+      "start": 251,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "V"]
+     },
+     {
+      "canonical": "ALTER TABLE T ADD INDEX T_U GLOBAL UNIQUE SYNC ON (V, `id`), ADD INDEX T_X GLOBAL ON (V) COVER (ID)",
+      "effects": [
+       {
+        "clause": "ADD INDEX",
+        "columns": ["v", "`id`"],
+        "fact": "unique-index",
+        "failure": "YDB: Duplicate key found",
+        "object": "t_u",
+        "table": "t"
+       }
+      ],
+      "end": 379,
+      "line": 9,
+      "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "t_u", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "v", ",", "`id`", ")", ",", "ADD", "INDEX", "t_x", "GLOBAL", "ON", "(", "v", ")", "COVER", "(", "id", ")"],
+      "sql": "ALTER TABLE t ADD INDEX t_u GLOBAL UNIQUE SYNC ON (v, `id`), ADD INDEX t_x GLOBAL ON (v) COVER (id)",
+      "start": 280,
+      "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "T_U", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "V", ",", "`id`", ")", ",", "ADD", "INDEX", "T_X", "GLOBAL", "ON", "(", "V", ")", "COVER", "(", "ID", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN V",
+      "end": 408,
+      "line": 10,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "v"],
+      "sql": "ALTER TABLE t DROP COLUMN v",
+      "start": 381,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "V"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE t (id Uint64 NOT NULL, ts Timestamp, e Uint32, v Utf8, w Utf8, PRIMARY KEY (id), INDEX t_vw GLOBAL ASYNC ON (v) COVER (w)) WITH (TTL = Interval(\"P1D\") TO EXTERNAL DATA SOURCE `s`, Interval(\"P2D\") DELETE ON ts);\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER TABLE t DROP COLUMN ts;\nALTER TABLE t RESET (TTL);\nALTER TABLE t DROP COLUMN ts;\nALTER TABLE t SET (TTL = Interval(\"PT1H\") ON e AS SECONDS);\nALTER TABLE t DROP COLUMN e;\nALTER TABLE t DROP COLUMN w;\nALTER TABLE t DROP INDEX t_vw, DROP COLUMN w;\nALTER TABLE t DROP COLUMN v;\nALTER TABLE t ADD INDEX t_u GLOBAL UNIQUE SYNC ON (v, `id`), ADD INDEX t_x GLOBAL ON (v) COVER (id);\nALTER TABLE t DROP COLUMN v;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

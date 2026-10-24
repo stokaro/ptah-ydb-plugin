@@ -1,0 +1,385 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:BC104", "0002_t.up.sql:1:DS102", "0002_t.up.sql:2:BC104", "0002_t.up.sql:2:DS102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:BC104", "0002_t.up.sql:1:DS102", "0002_t.up.sql:2:BC104", "0002_t.up.sql:2:DS102"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:DS102", "0002_t.up.sql:2:DS102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, B UTF8, PRIMARY KEY (ID))",
+       "end": 69,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `t` IS 'no column'",
+       "end": 107,
+       "line": 2,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`t`", "IS", "'no column'"],
+       "sql": "COMMENT ON COLUMN `t` IS 'no column'",
+       "start": 71,
+       "words": ["COMMENT", "ON", "COLUMN", "`t`", "IS", "'no column'"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `t`.`a` IS 'bad escape \\q'",
+       "end": 153,
+       "line": 3,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'bad escape \\q'"],
+       "sql": "COMMENT ON COLUMN `t`.`a` IS 'bad escape \\q'",
+       "start": 109,
+       "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'bad escape \\q'"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `t`.`a` IS 'one' 'two'",
+       "end": 195,
+       "line": 4,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'one'", "'two'"],
+       "sql": "COMMENT ON COLUMN `t`.`a` IS 'one' 'two'",
+       "start": 155,
+       "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'one'", "'two'"]
+      },
+      {
+       "canonical": "COMMENT ON TABLE IS 'nothing named'",
+       "end": 232,
+       "line": 5,
+       "source_words": ["COMMENT", "ON", "TABLE", "IS", "'nothing named'"],
+       "sql": "COMMENT ON TABLE IS 'nothing named'",
+       "start": 197,
+       "words": ["COMMENT", "ON", "TABLE", "IS", "'nothing named'"]
+      },
+      {
+       "canonical": "COMMENT ON INDEX `i` `t` IS 'no on'",
+       "end": 269,
+       "line": 6,
+       "source_words": ["COMMENT", "ON", "INDEX", "`i`", "`t`", "IS", "'no on'"],
+       "sql": "COMMENT ON INDEX `i` `t` IS 'no on'",
+       "start": 234,
+       "words": ["COMMENT", "ON", "INDEX", "`i`", "`t`", "IS", "'no on'"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `t`.`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc` IS 'too long a key'",
+       "end": 405,
+       "line": 7,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`", "IS", "'too long a key'"],
+       "sql": "COMMENT ON COLUMN `t`.`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc` IS 'too long a key'",
+       "start": 271,
+       "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`", "IS", "'too long a key'"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN $T.`a` IS 'named expression'",
+       "end": 453,
+       "line": 8,
+       "source_words": ["COMMENT", "ON", "COLUMN", "$", "t", ".", "`a`", "IS", "'named expression'"],
+       "sql": "COMMENT ON COLUMN $t.`a` IS 'named expression'",
+       "start": 407,
+       "words": ["COMMENT", "ON", "COLUMN", "$", "T", ".", "`a`", "IS", "'named expression'"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `t`.`b` IS 'kept'",
+       "end": 490,
+       "line": 9,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "'kept'"],
+       "sql": "COMMENT ON COLUMN `t`.`b` IS 'kept'",
+       "start": 455,
+       "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "'kept'"]
+      },
+      {
+       "canonical": "COMMENT ON SCHEMA `t` IS 'not a kind Ptah writes'",
+       "end": 541,
+       "line": 10,
+       "source_words": ["COMMENT", "ON", "SCHEMA", "`t`", "IS", "'not a kind Ptah writes'"],
+       "sql": "COMMENT ON SCHEMA `t` IS 'not a kind Ptah writes'",
+       "start": 492,
+       "words": ["COMMENT", "ON", "SCHEMA", "`t`", "IS", "'not a kind Ptah writes'"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `t`.`b` IS NULL",
+       "end": 576,
+       "line": 11,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "NULL"],
+       "sql": "COMMENT ON COLUMN `t`.`b` IS NULL",
+       "start": 543,
+       "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "NULL"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN A",
+       "end": 27,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "a"],
+       "sql": "ALTER TABLE t DROP COLUMN a",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "A"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN B",
+       "end": 56,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "b"],
+       "sql": "ALTER TABLE t DROP COLUMN b",
+       "start": 29,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "B"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_t.up.sql:1:BC104", "0002_t.up.sql:1:DS102", "0002_t.up.sql:2:BC104", "0002_t.up.sql:2:DS102"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, B UTF8, PRIMARY KEY (ID))",
+      "end": 69,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `t` IS 'no column'",
+      "end": 107,
+      "line": 2,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`t`", "IS", "'no column'"],
+      "sql": "COMMENT ON COLUMN `t` IS 'no column'",
+      "start": 71,
+      "words": ["COMMENT", "ON", "COLUMN", "`t`", "IS", "'no column'"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `t`.`a` IS 'bad escape \\q'",
+      "end": 153,
+      "line": 3,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'bad escape \\q'"],
+      "sql": "COMMENT ON COLUMN `t`.`a` IS 'bad escape \\q'",
+      "start": 109,
+      "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'bad escape \\q'"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `t`.`a` IS 'one' 'two'",
+      "end": 195,
+      "line": 4,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'one'", "'two'"],
+      "sql": "COMMENT ON COLUMN `t`.`a` IS 'one' 'two'",
+      "start": 155,
+      "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'one'", "'two'"]
+     },
+     {
+      "canonical": "COMMENT ON TABLE IS 'nothing named'",
+      "end": 232,
+      "line": 5,
+      "source_words": ["COMMENT", "ON", "TABLE", "IS", "'nothing named'"],
+      "sql": "COMMENT ON TABLE IS 'nothing named'",
+      "start": 197,
+      "words": ["COMMENT", "ON", "TABLE", "IS", "'nothing named'"]
+     },
+     {
+      "canonical": "COMMENT ON INDEX `i` `t` IS 'no on'",
+      "end": 269,
+      "line": 6,
+      "source_words": ["COMMENT", "ON", "INDEX", "`i`", "`t`", "IS", "'no on'"],
+      "sql": "COMMENT ON INDEX `i` `t` IS 'no on'",
+      "start": 234,
+      "words": ["COMMENT", "ON", "INDEX", "`i`", "`t`", "IS", "'no on'"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `t`.`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc` IS 'too long a key'",
+      "end": 405,
+      "line": 7,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`", "IS", "'too long a key'"],
+      "sql": "COMMENT ON COLUMN `t`.`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc` IS 'too long a key'",
+      "start": 271,
+      "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc`", "IS", "'too long a key'"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN $T.`a` IS 'named expression'",
+      "end": 453,
+      "line": 8,
+      "source_words": ["COMMENT", "ON", "COLUMN", "$t", ".", "`a`", "IS", "'named expression'"],
+      "sql": "COMMENT ON COLUMN $t.`a` IS 'named expression'",
+      "start": 407,
+      "words": ["COMMENT", "ON", "COLUMN", "$T", ".", "`a`", "IS", "'named expression'"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `t`.`b` IS 'kept'",
+      "end": 490,
+      "line": 9,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "'kept'"],
+      "sql": "COMMENT ON COLUMN `t`.`b` IS 'kept'",
+      "start": 455,
+      "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "'kept'"]
+     },
+     {
+      "canonical": "COMMENT ON SCHEMA `t` IS 'not a kind Ptah writes'",
+      "end": 541,
+      "line": 10,
+      "source_words": ["COMMENT", "ON", "SCHEMA", "`t`", "IS", "'not a kind Ptah writes'"],
+      "sql": "COMMENT ON SCHEMA `t` IS 'not a kind Ptah writes'",
+      "start": 492,
+      "words": ["COMMENT", "ON", "SCHEMA", "`t`", "IS", "'not a kind Ptah writes'"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `t`.`b` IS NULL",
+      "end": 576,
+      "line": 11,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "NULL"],
+      "sql": "COMMENT ON COLUMN `t`.`b` IS NULL",
+      "start": 543,
+      "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "NULL"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN A",
+      "end": 27,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "a"],
+      "sql": "ALTER TABLE t DROP COLUMN a",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "A"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN B",
+      "end": 56,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "b"],
+      "sql": "ALTER TABLE t DROP COLUMN b",
+      "start": 29,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "B"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id));\nCOMMENT ON COLUMN `t` IS 'no column';\nCOMMENT ON COLUMN `t`.`a` IS 'bad escape \\q';\nCOMMENT ON COLUMN `t`.`a` IS 'one' 'two';\nCOMMENT ON TABLE IS 'nothing named';\nCOMMENT ON INDEX `i` `t` IS 'no on';\nCOMMENT ON COLUMN `t`.`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc` IS 'too long a key';\nCOMMENT ON COLUMN $t.`a` IS 'named expression';\nCOMMENT ON COLUMN `t`.`b` IS 'kept';\nCOMMENT ON SCHEMA `t` IS 'not a kind Ptah writes';\nCOMMENT ON COLUMN `t`.`b` IS NULL;\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER TABLE t DROP COLUMN a;\nALTER TABLE t DROP COLUMN b;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

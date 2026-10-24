@@ -1,0 +1,623 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_r.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_r.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "PASSWORD of r is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with PASSWORD_SECRET_NAME or PASSWORD_SECRET_PATH",
+      "statement": 0
+     },
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "TOKEN of r2 is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with TOKEN_SECRET_NAME or TOKEN_SECRET_PATH",
+      "statement": 3
+     },
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "TOKEN of x is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with TOKEN_SECRET_NAME or TOKEN_SECRET_PATH",
+      "statement": 4
+     },
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "PASSWORD of x is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with PASSWORD_SECRET_NAME or PASSWORD_SECRET_PATH",
+      "statement": 6
+     },
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r2 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r2 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r2"
+       }
+      ]
+     },
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r3 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r3 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r3"
+       }
+      ]
+     },
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_r.up.sql:1:YD116", "0001_r.up.sql:4:YD116", "0001_r.up.sql:5:YD116", "0001_r.up.sql:7:YD116", "0002_r.up.sql:2:YD115", "0002_r.up.sql:3:YD115", "0002_r.up.sql:5:YD115"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_r.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_r.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "PASSWORD of r is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with PASSWORD_SECRET_NAME or PASSWORD_SECRET_PATH",
+      "statement": 0
+     },
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "TOKEN of r2 is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with TOKEN_SECRET_NAME or TOKEN_SECRET_PATH",
+      "statement": 3
+     },
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "TOKEN of x is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with TOKEN_SECRET_NAME or TOKEN_SECRET_PATH",
+      "statement": 4
+     },
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "PASSWORD of x is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with PASSWORD_SECRET_NAME or PASSWORD_SECRET_PATH",
+      "statement": 6
+     },
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r2 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r2 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r2"
+       }
+      ]
+     },
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r3 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r3 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r3"
+       }
+      ]
+     },
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_r.up.sql:1:YD116", "0001_r.up.sql:4:YD116", "0001_r.up.sql:5:YD116", "0001_r.up.sql:7:YD116", "0002_r.up.sql:2:YD115", "0002_r.up.sql:3:YD115", "0002_r.up.sql:5:YD115"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_r.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_r.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "PASSWORD of r is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with PASSWORD_SECRET_NAME or PASSWORD_SECRET_PATH",
+      "statement": 0
+     },
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "TOKEN of r2 is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with TOKEN_SECRET_NAME or TOKEN_SECRET_PATH",
+      "statement": 3
+     },
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "TOKEN of x is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with TOKEN_SECRET_NAME or TOKEN_SECRET_PATH",
+      "statement": 4
+     },
+     {
+      "code": "YD116",
+      "file": 0,
+      "message": "PASSWORD of x is written in clear: the migration file now holds the secret, and YDB keeps it without reading it back; put it in a secret and name it with PASSWORD_SECRET_NAME or PASSWORD_SECRET_PATH",
+      "statement": 6
+     },
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r2 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r2 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r2"
+       }
+      ]
+     },
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r3 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r3 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r3"
+       }
+      ]
+     },
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_r.up.sql:1:YD116", "0001_r.up.sql:4:YD116", "0001_r.up.sql:5:YD116", "0001_r.up.sql:7:YD116", "0002_r.up.sql:2:YD115", "0002_r.up.sql:3:YD115", "0002_r.up.sql:5:YD115"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE ASYNC REPLICATION R FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', PASSWORD = 'p', USER = 'u')",
+       "end": 125,
+       "line": 1,
+       "source_words": ["CREATE", "ASYNC", "REPLICATION", "r", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h:2135/?database=/x'", ",", "PASSWORD", "=", "'p'", ",", "USER", "=", "'u'", ")"],
+       "sql": "CREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', PASSWORD = 'p', USER = 'u')",
+       "start": 0,
+       "words": ["CREATE", "ASYNC", "REPLICATION", "R", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h:2135/?database=/x'", ",", "PASSWORD", "=", "'p'", ",", "USER", "=", "'u'", ")"]
+      },
+      {
+       "canonical": "CREATE ASYNC REPLICATION R2 FOR `a` AS `c` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', TOKEN_SECRET_NAME = 's')",
+       "end": 250,
+       "line": 2,
+       "source_words": ["CREATE", "ASYNC", "REPLICATION", "r2", "FOR", "`a`", "AS", "`c`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h:2135/?database=/x'", ",", "TOKEN_SECRET_NAME", "=", "'s'", ")"],
+       "sql": "CREATE ASYNC REPLICATION r2 FOR `a` AS `c` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', TOKEN_SECRET_NAME = 's')",
+       "start": 127,
+       "words": ["CREATE", "ASYNC", "REPLICATION", "R2", "FOR", "`a`", "AS", "`c`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h:2135/?database=/x'", ",", "TOKEN_SECRET_NAME", "=", "'s'", ")"]
+      },
+      {
+       "canonical": "ALTER ASYNC REPLICATION R SET (STATE = \"DONE\", FAILOVER_MODE = \"FORCE\")",
+       "end": 323,
+       "line": 3,
+       "source_words": ["ALTER", "ASYNC", "REPLICATION", "r", "SET", "(", "STATE", "=", "\"DONE\"", ",", "FAILOVER_MODE", "=", "\"FORCE\"", ")"],
+       "sql": "ALTER ASYNC REPLICATION r SET (STATE = \"DONE\", FAILOVER_MODE = \"FORCE\")",
+       "start": 252,
+       "words": ["ALTER", "ASYNC", "REPLICATION", "R", "SET", "(", "STATE", "=", "\"DONE\"", ",", "FAILOVER_MODE", "=", "\"FORCE\"", ")"]
+      },
+      {
+       "canonical": "ALTER ASYNC REPLICATION R2 SET (TOKEN = 't')",
+       "end": 369,
+       "line": 4,
+       "source_words": ["ALTER", "ASYNC", "REPLICATION", "r2", "SET", "(", "TOKEN", "=", "'t'", ")"],
+       "sql": "ALTER ASYNC REPLICATION r2 SET (TOKEN = 't')",
+       "start": 325,
+       "words": ["ALTER", "ASYNC", "REPLICATION", "R2", "SET", "(", "TOKEN", "=", "'t'", ")"]
+      },
+      {
+       "canonical": "CREATE TRANSFER X FROM `topic` TO `tbl` USING ($MSG) -> { $X = 1",
+       "end": 435,
+       "line": 5,
+       "source_words": ["CREATE", "TRANSFER", "x", "FROM", "`topic`", "TO", "`tbl`", "USING", "(", "$", "msg", ")", "-", ">", "{", "$", "x", "=", "1"],
+       "sql": "CREATE TRANSFER x FROM `topic` TO `tbl` USING ($msg) -> { $x = 1",
+       "start": 371,
+       "words": ["CREATE", "TRANSFER", "X", "FROM", "`topic`", "TO", "`tbl`", "USING", "(", "$", "MSG", ")", "-", ">", "{", "$", "X", "=", "1"]
+      },
+      {
+       "canonical": "RETURN [<|ID: $X|>]",
+       "end": 456,
+       "line": 5,
+       "source_words": ["RETURN", "[", "<", "|", "id", ":", "$", "x", "|", ">", "]"],
+       "sql": "RETURN [<|id: $x|>]",
+       "start": 437,
+       "words": ["RETURN", "[", "<", "|", "ID", ":", "$", "X", "|", ">", "]"]
+      },
+      {
+       "canonical": "} WITH (CONNECTION_STRING = 'grpc://h', TOKEN = 'tk')",
+       "end": 511,
+       "line": 5,
+       "source_words": ["}", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ",", "TOKEN", "=", "'tk'", ")"],
+       "sql": "} WITH (CONNECTION_STRING = 'grpc://h', TOKEN = 'tk')",
+       "start": 458,
+       "words": ["}", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ",", "TOKEN", "=", "'tk'", ")"]
+      },
+      {
+       "canonical": "ALTER TRANSFER X SET USING ($MSG) -> { RETURN [] }",
+       "end": 563,
+       "line": 6,
+       "source_words": ["ALTER", "TRANSFER", "x", "SET", "USING", "(", "$", "msg", ")", "-", ">", "{", "RETURN", "[", "]", "}"],
+       "sql": "ALTER TRANSFER x SET USING ($msg) -> { RETURN [] }",
+       "start": 513,
+       "words": ["ALTER", "TRANSFER", "X", "SET", "USING", "(", "$", "MSG", ")", "-", ">", "{", "RETURN", "[", "]", "}"]
+      },
+      {
+       "canonical": "ALTER TRANSFER X SET (PASSWORD = 'pw')",
+       "end": 603,
+       "line": 7,
+       "source_words": ["ALTER", "TRANSFER", "x", "SET", "(", "PASSWORD", "=", "'pw'", ")"],
+       "sql": "ALTER TRANSFER x SET (PASSWORD = 'pw')",
+       "start": 565,
+       "words": ["ALTER", "TRANSFER", "X", "SET", "(", "PASSWORD", "=", "'pw'", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "DROP ASYNC REPLICATION R",
+       "end": 24,
+       "line": 1,
+       "source_words": ["DROP", "ASYNC", "REPLICATION", "r"],
+       "sql": "DROP ASYNC REPLICATION r",
+       "start": 0,
+       "words": ["DROP", "ASYNC", "REPLICATION", "R"]
+      },
+      {
+       "canonical": "DROP ASYNC REPLICATION R2",
+       "end": 51,
+       "line": 2,
+       "source_words": ["DROP", "ASYNC", "REPLICATION", "r2"],
+       "sql": "DROP ASYNC REPLICATION r2",
+       "start": 26,
+       "words": ["DROP", "ASYNC", "REPLICATION", "R2"]
+      },
+      {
+       "canonical": "DROP ASYNC REPLICATION IF EXISTS R3",
+       "end": 88,
+       "line": 3,
+       "source_words": ["DROP", "ASYNC", "REPLICATION", "IF", "EXISTS", "r3"],
+       "sql": "DROP ASYNC REPLICATION IF EXISTS r3",
+       "start": 53,
+       "words": ["DROP", "ASYNC", "REPLICATION", "IF", "EXISTS", "R3"]
+      },
+      {
+       "canonical": "CREATE ASYNC REPLICATION R FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h')",
+       "end": 169,
+       "line": 4,
+       "source_words": ["CREATE", "ASYNC", "REPLICATION", "r", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ")"],
+       "sql": "CREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h')",
+       "start": 90,
+       "words": ["CREATE", "ASYNC", "REPLICATION", "R", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ")"]
+      },
+      {
+       "canonical": "DROP ASYNC REPLICATION R",
+       "end": 195,
+       "line": 5,
+       "source_words": ["DROP", "ASYNC", "REPLICATION", "r"],
+       "sql": "DROP ASYNC REPLICATION r",
+       "start": 171,
+       "words": ["DROP", "ASYNC", "REPLICATION", "R"]
+      },
+      {
+       "canonical": "DROP ASYNC REPLICATION $R",
+       "end": 222,
+       "line": 6,
+       "source_words": ["DROP", "ASYNC", "REPLICATION", "$", "r"],
+       "sql": "DROP ASYNC REPLICATION $r",
+       "start": 197,
+       "words": ["DROP", "ASYNC", "REPLICATION", "$", "R"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE ASYNC REPLICATION R FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', PASSWORD = 'p', USER = 'u')",
+      "end": 125,
+      "line": 1,
+      "source_words": ["CREATE", "ASYNC", "REPLICATION", "r", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h:2135/?database=/x'", ",", "PASSWORD", "=", "'p'", ",", "USER", "=", "'u'", ")"],
+      "sql": "CREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', PASSWORD = 'p', USER = 'u')",
+      "start": 0,
+      "words": ["CREATE", "ASYNC", "REPLICATION", "R", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h:2135/?database=/x'", ",", "PASSWORD", "=", "'p'", ",", "USER", "=", "'u'", ")"]
+     },
+     {
+      "canonical": "CREATE ASYNC REPLICATION R2 FOR `a` AS `c` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', TOKEN_SECRET_NAME = 's')",
+      "end": 250,
+      "line": 2,
+      "source_words": ["CREATE", "ASYNC", "REPLICATION", "r2", "FOR", "`a`", "AS", "`c`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h:2135/?database=/x'", ",", "TOKEN_SECRET_NAME", "=", "'s'", ")"],
+      "sql": "CREATE ASYNC REPLICATION r2 FOR `a` AS `c` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', TOKEN_SECRET_NAME = 's')",
+      "start": 127,
+      "words": ["CREATE", "ASYNC", "REPLICATION", "R2", "FOR", "`a`", "AS", "`c`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h:2135/?database=/x'", ",", "TOKEN_SECRET_NAME", "=", "'s'", ")"]
+     },
+     {
+      "canonical": "ALTER ASYNC REPLICATION R SET (STATE = \"DONE\", FAILOVER_MODE = \"FORCE\")",
+      "end": 323,
+      "line": 3,
+      "source_words": ["ALTER", "ASYNC", "REPLICATION", "r", "SET", "(", "STATE", "=", "\"DONE\"", ",", "FAILOVER_MODE", "=", "\"FORCE\"", ")"],
+      "sql": "ALTER ASYNC REPLICATION r SET (STATE = \"DONE\", FAILOVER_MODE = \"FORCE\")",
+      "start": 252,
+      "words": ["ALTER", "ASYNC", "REPLICATION", "R", "SET", "(", "STATE", "=", "\"DONE\"", ",", "FAILOVER_MODE", "=", "\"FORCE\"", ")"]
+     },
+     {
+      "canonical": "ALTER ASYNC REPLICATION R2 SET (TOKEN = 't')",
+      "end": 369,
+      "line": 4,
+      "source_words": ["ALTER", "ASYNC", "REPLICATION", "r2", "SET", "(", "TOKEN", "=", "'t'", ")"],
+      "sql": "ALTER ASYNC REPLICATION r2 SET (TOKEN = 't')",
+      "start": 325,
+      "words": ["ALTER", "ASYNC", "REPLICATION", "R2", "SET", "(", "TOKEN", "=", "'t'", ")"]
+     },
+     {
+      "canonical": "CREATE TRANSFER X FROM `topic` TO `tbl` USING ($MSG) -> { $X = 1; RETURN [<|ID: $X|>]; } WITH (CONNECTION_STRING = 'grpc://h', TOKEN = 'tk')",
+      "end": 511,
+      "line": 5,
+      "source_words": ["CREATE", "TRANSFER", "x", "FROM", "`topic`", "TO", "`tbl`", "USING", "(", "$msg", ")", "-", ">", "{", "$x", "=", "1", ";", "RETURN", "[", "<", "|", "id", ":", "$x", "|", ">", "]", ";", "}", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ",", "TOKEN", "=", "'tk'", ")"],
+      "sql": "CREATE TRANSFER x FROM `topic` TO `tbl` USING ($msg) -> { $x = 1; RETURN [<|id: $x|>]; } WITH (CONNECTION_STRING = 'grpc://h', TOKEN = 'tk')",
+      "start": 371,
+      "words": ["CREATE", "TRANSFER", "X", "FROM", "`topic`", "TO", "`tbl`", "USING", "(", "$MSG", ")", "-", ">", "{", "$X", "=", "1", ";", "RETURN", "[", "<", "|", "ID", ":", "$X", "|", ">", "]", ";", "}", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ",", "TOKEN", "=", "'tk'", ")"]
+     },
+     {
+      "canonical": "ALTER TRANSFER X SET USING ($MSG) -> { RETURN [] }",
+      "end": 563,
+      "line": 6,
+      "source_words": ["ALTER", "TRANSFER", "x", "SET", "USING", "(", "$msg", ")", "-", ">", "{", "RETURN", "[", "]", "}"],
+      "sql": "ALTER TRANSFER x SET USING ($msg) -> { RETURN [] }",
+      "start": 513,
+      "words": ["ALTER", "TRANSFER", "X", "SET", "USING", "(", "$MSG", ")", "-", ">", "{", "RETURN", "[", "]", "}"]
+     },
+     {
+      "canonical": "ALTER TRANSFER X SET (PASSWORD = 'pw')",
+      "end": 603,
+      "line": 7,
+      "source_words": ["ALTER", "TRANSFER", "x", "SET", "(", "PASSWORD", "=", "'pw'", ")"],
+      "sql": "ALTER TRANSFER x SET (PASSWORD = 'pw')",
+      "start": 565,
+      "words": ["ALTER", "TRANSFER", "X", "SET", "(", "PASSWORD", "=", "'pw'", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "DROP ASYNC REPLICATION R",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+       }
+      ],
+      "end": 24,
+      "line": 1,
+      "source_words": ["DROP", "ASYNC", "REPLICATION", "r"],
+      "sql": "DROP ASYNC REPLICATION r",
+      "start": 0,
+      "words": ["DROP", "ASYNC", "REPLICATION", "R"]
+     },
+     {
+      "canonical": "DROP ASYNC REPLICATION R2",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+       }
+      ],
+      "end": 51,
+      "line": 2,
+      "source_words": ["DROP", "ASYNC", "REPLICATION", "r2"],
+      "sql": "DROP ASYNC REPLICATION r2",
+      "start": 26,
+      "words": ["DROP", "ASYNC", "REPLICATION", "R2"]
+     },
+     {
+      "canonical": "DROP ASYNC REPLICATION IF EXISTS R3",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+       }
+      ],
+      "end": 88,
+      "line": 3,
+      "source_words": ["DROP", "ASYNC", "REPLICATION", "IF", "EXISTS", "r3"],
+      "sql": "DROP ASYNC REPLICATION IF EXISTS r3",
+      "start": 53,
+      "words": ["DROP", "ASYNC", "REPLICATION", "IF", "EXISTS", "R3"]
+     },
+     {
+      "canonical": "CREATE ASYNC REPLICATION R FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h')",
+      "end": 169,
+      "line": 4,
+      "source_words": ["CREATE", "ASYNC", "REPLICATION", "r", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ")"],
+      "sql": "CREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h')",
+      "start": 90,
+      "words": ["CREATE", "ASYNC", "REPLICATION", "R", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ")"]
+     },
+     {
+      "canonical": "DROP ASYNC REPLICATION R",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+       }
+      ],
+      "end": 195,
+      "line": 5,
+      "source_words": ["DROP", "ASYNC", "REPLICATION", "r"],
+      "sql": "DROP ASYNC REPLICATION r",
+      "start": 171,
+      "words": ["DROP", "ASYNC", "REPLICATION", "R"]
+     },
+     {
+      "canonical": "DROP ASYNC REPLICATION $R",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+       }
+      ],
+      "end": 222,
+      "line": 6,
+      "source_words": ["DROP", "ASYNC", "REPLICATION", "$r"],
+      "sql": "DROP ASYNC REPLICATION $r",
+      "start": 197,
+      "words": ["DROP", "ASYNC", "REPLICATION", "$R"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_r.up.sql",
+     "sql": "CREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', PASSWORD = 'p', USER = 'u');\nCREATE ASYNC REPLICATION r2 FOR `a` AS `c` WITH (CONNECTION_STRING = 'grpc://h:2135/?database=/x', TOKEN_SECRET_NAME = 's');\nALTER ASYNC REPLICATION r SET (STATE = \"DONE\", FAILOVER_MODE = \"FORCE\");\nALTER ASYNC REPLICATION r2 SET (TOKEN = 't');\nCREATE TRANSFER x FROM `topic` TO `tbl` USING ($msg) -> { $x = 1; RETURN [<|id: $x|>]; } WITH (CONNECTION_STRING = 'grpc://h', TOKEN = 'tk');\nALTER TRANSFER x SET USING ($msg) -> { RETURN [] };\nALTER TRANSFER x SET (PASSWORD = 'pw');\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_r.up.sql",
+     "sql": "DROP ASYNC REPLICATION r;\nDROP ASYNC REPLICATION r2;\nDROP ASYNC REPLICATION IF EXISTS r3;\nCREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h');\nDROP ASYNC REPLICATION r;\nDROP ASYNC REPLICATION $r;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

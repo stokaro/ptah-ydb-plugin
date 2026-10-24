@@ -1,0 +1,154 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "1_drop.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["1_drop.sql:1:BC103", "1_drop.sql:1:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "1_drop.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["1_drop.sql:1:BC103", "1_drop.sql:1:DS101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "1_drop.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["1_drop.sql:1:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP TABLE ORIGINAL",
+       "end": 19,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "original"],
+       "sql": "DROP TABLE original",
+       "start": 0,
+       "words": ["DROP", "TABLE", "ORIGINAL"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["1_drop.sql:1:BC103", "1_drop.sql:1:DS101"],
+   "server_version": "",
+   "split": -1
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP TABLE ORIGINAL",
+       "end": 19,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "original"],
+       "sql": "DROP TABLE original",
+       "start": 0,
+       "words": ["DROP", "TABLE", "ORIGINAL"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "dir_format": "atlas",
+   "report": ["1_drop.sql:1:BC103", "1_drop.sql:1:DS101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "DROP TABLE ORIGINAL",
+      "end": 19,
+      "line": 1,
+      "source_words": ["DROP", "TABLE", "original"],
+      "sql": "DROP TABLE original",
+      "start": 0,
+      "words": ["DROP", "TABLE", "ORIGINAL"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "1_drop.sql",
+     "sql": "DROP TABLE original;\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

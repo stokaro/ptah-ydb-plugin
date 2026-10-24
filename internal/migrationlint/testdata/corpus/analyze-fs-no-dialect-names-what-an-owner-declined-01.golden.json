@@ -1,0 +1,232 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_u.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_u.up.sql:1:DS107"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_u.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_u.up.sql:1:DS107"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_u.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_u.up.sql:1:DS107"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {
+       "declined": true
+      },
+      {}
+     ],
+     [
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "u"
+        }
+       ]
+      }
+     ]
+    ],
+    "declined": [
+     {
+      "file": 0,
+      "statement": 1,
+      "target": "ydb"
+     }
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "SELECT 'a\\'",
+       "end": 11,
+       "line": 1,
+       "source_words": ["SELECT", "'a\\'"],
+       "sql": "SELECT 'a\\'",
+       "start": 0,
+       "words": ["SELECT", "'a\\'"]
+      },
+      {
+       "canonical": "DROP TOPIC T",
+       "end": 25,
+       "line": 2,
+       "source_words": ["DROP", "TOPIC", "t"],
+       "sql": "DROP TOPIC t",
+       "start": 13,
+       "words": ["DROP", "TOPIC", "T"]
+      },
+      {
+       "canonical": "SELECT ''",
+       "end": 36,
+       "line": 3,
+       "source_words": ["SELECT", "''"],
+       "sql": "SELECT ''",
+       "start": 27,
+       "words": ["SELECT", "''"]
+      }
+     ],
+     [
+      {
+       "canonical": "DROP TOPIC U",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "u"
+        }
+       ],
+       "end": 12,
+       "line": 1,
+       "source_words": ["DROP", "TOPIC", "u"],
+       "sql": "DROP TOPIC u",
+       "start": 0,
+       "words": ["DROP", "TOPIC", "U"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_u.up.sql:1:DS107"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "SELECT 'a\\';\nDROP TOPIC t;\nSELECT '';\n",
+      "end": 38,
+      "line": 1,
+      "source_words": ["SELECT", "'a\\';\nDROP TOPIC t;\nSELECT '", "';\n"],
+      "sql": "SELECT 'a\\';\nDROP TOPIC t;\nSELECT '';\n",
+      "start": 0,
+      "words": ["SELECT", "'a\\';\nDROP TOPIC t;\nSELECT '", "';\n"]
+     }
+    ],
+    [
+     {
+      "canonical": "DROP TOPIC U",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "TOPIC",
+        "object": "u"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+       }
+      ],
+      "end": 12,
+      "line": 1,
+      "source_words": ["DROP", "TOPIC", "u"],
+      "sql": "DROP TOPIC u",
+      "start": 0,
+      "words": ["DROP", "TOPIC", "U"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "SELECT 'a\\';\nDROP TOPIC t;\nSELECT '';\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_u.up.sql",
+     "sql": "DROP TOPIC u;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

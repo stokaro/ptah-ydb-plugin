@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
@@ -51,7 +52,7 @@ type session struct {
 // session it opens and the inspection snapshot all report it, so the host holds
 // one target profile for observed, desired and planned values.
 func engineFeatures() []string {
-	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature}
+	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature}
 }
 
 // sessionCapabilities are the host capabilities a session reports.
@@ -70,14 +71,15 @@ func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
 // Description advertises native runtime services, offline coordination models,
 // captured row-table creation, column family alteration of existing tables,
-// and the table-scope YAML keys and Go directives that declare row-table
-// partitioning and column families.
+// the table-scope YAML keys and Go directives that declare row-table
+// partitioning and column families, and offline migration lint with the YD
+// rule catalog.
 func Description() *protocol.Description {
 	return &protocol.Description{
 		Revision: provider.Revision, ProviderId: schema.ProviderID,
 		Version: "0.0.0-dev", SemanticIdentity: "ydb-table-lifecycle-2",
 		Features: engineFeatures(),
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: []string{schema.TablePropertiesChange}, OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: append([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, tablesource.YAMLKeys()...), GoSourceDirectives: tablesource.GoDirectives(), Features: engineFeatures()}},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: []string{schema.TablePropertiesChange}, OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: append([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, tablesource.YAMLKeys()...), GoSourceDirectives: tablesource.GoDirectives(), LintRules: migrationlint.Rules(), Features: engineFeatures()}},
 	}
 }
 

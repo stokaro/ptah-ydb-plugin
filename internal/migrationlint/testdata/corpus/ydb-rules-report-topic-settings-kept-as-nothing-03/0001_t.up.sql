@@ -1,0 +1,1 @@
+ALTER TOPIC events RESET (retention_period);

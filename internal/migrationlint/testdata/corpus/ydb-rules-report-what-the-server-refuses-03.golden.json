@@ -1,0 +1,335 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0001_t.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD103",
+      "file": 0,
+      "message": "ADD COLUMN a is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value); give it a DEFAULT, which existing rows take",
+      "statement": 0
+     },
+     {
+      "code": "YD101",
+      "file": 0,
+      "message": "ADD INDEX t_a adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 1
+     },
+     {
+      "code": "YD105",
+      "file": 0,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of t to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD118",
+      "file": 0,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of t to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.down.sql:1:YD103", "0001_t.down.sql:2:YD101", "0001_t.down.sql:3:YD105", "0001_t.down.sql:3:YD118", "0001_t.up.sql:1:BC104", "0001_t.up.sql:1:DS102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0001_t.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD103",
+      "file": 0,
+      "message": "ADD COLUMN a is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value), and a default needs target capability add_column_with_default, unavailable on this ydb target; add the column as nullable",
+      "statement": 0
+     },
+     {
+      "code": "YD101",
+      "file": 0,
+      "message": "ADD INDEX t_a adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 1
+     },
+     {
+      "code": "YD105",
+      "file": 0,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of t to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD118",
+      "file": 0,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of t to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.down.sql:1:YD103", "0001_t.down.sql:2:YD101", "0001_t.down.sql:3:YD105", "0001_t.down.sql:3:YD118", "0001_t.up.sql:1:BC104", "0001_t.up.sql:1:DS102"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0001_t.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD103",
+      "file": 0,
+      "message": "ADD COLUMN a is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value); give it a DEFAULT, which existing rows take",
+      "statement": 0
+     },
+     {
+      "code": "YD101",
+      "file": 0,
+      "message": "ADD INDEX t_a adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 1
+     },
+     {
+      "code": "YD105",
+      "file": 0,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of t to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD118",
+      "file": 0,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of t to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_t.down.sql:1:YD103", "0001_t.down.sql:2:YD101", "0001_t.down.sql:3:YD105", "0001_t.down.sql:3:YD118", "0001_t.up.sql:1:DS102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {}
+     ],
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "ALTER TABLE T ADD COLUMN A INT64 NOT NULL",
+       "end": 41,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "ADD", "COLUMN", "a", "Int64", "NOT", "NULL"],
+       "sql": "ALTER TABLE t ADD COLUMN a Int64 NOT NULL",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "ADD", "COLUMN", "A", "INT64", "NOT", "NULL"]
+      },
+      {
+       "canonical": "ALTER TABLE T ADD INDEX T_A GLOBAL UNIQUE ON (A)",
+       "end": 91,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "t_a", "GLOBAL", "UNIQUE", "ON", "(", "a", ")"],
+       "sql": "ALTER TABLE t ADD INDEX t_a GLOBAL UNIQUE ON (a)",
+       "start": 43,
+       "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "T_A", "GLOBAL", "UNIQUE", "ON", "(", "A", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE T SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "end": 148,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "t", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE t SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "start": 93,
+       "words": ["ALTER", "TABLE", "T", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN A",
+       "end": 27,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "a"],
+       "sql": "ALTER TABLE t DROP COLUMN a",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "A"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0001_t.up.sql:1:BC104", "0001_t.up.sql:1:DS102"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "ALTER TABLE T ADD COLUMN A INT64 NOT NULL",
+      "end": 41,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "ADD", "COLUMN", "a", "Int64", "NOT", "NULL"],
+      "sql": "ALTER TABLE t ADD COLUMN a Int64 NOT NULL",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "ADD", "COLUMN", "A", "INT64", "NOT", "NULL"]
+     },
+     {
+      "canonical": "ALTER TABLE T ADD INDEX T_A GLOBAL UNIQUE ON (A)",
+      "effects": [
+       {
+        "clause": "ADD INDEX",
+        "columns": ["a"],
+        "fact": "unique-index",
+        "failure": "YDB: Duplicate key found",
+        "object": "t_a",
+        "table": "t"
+       }
+      ],
+      "end": 91,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "t_a", "GLOBAL", "UNIQUE", "ON", "(", "a", ")"],
+      "sql": "ALTER TABLE t ADD INDEX t_a GLOBAL UNIQUE ON (a)",
+      "start": 43,
+      "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "T_A", "GLOBAL", "UNIQUE", "ON", "(", "A", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE T SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "end": 148,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "t", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE t SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "start": 93,
+      "words": ["ALTER", "TABLE", "T", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN A",
+      "end": 27,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "a"],
+      "sql": "ALTER TABLE t DROP COLUMN a",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "A"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "down": true,
+     "name": "0001_t.down.sql",
+     "sql": "ALTER TABLE t ADD COLUMN a Int64 NOT NULL;\nALTER TABLE t ADD INDEX t_a GLOBAL UNIQUE ON (a);\nALTER TABLE t SET (AUTO_PARTITIONING_BY_SIZE = ENABLED);\n",
+     "version": 1
+    },
+    {
+     "name": "0001_t.up.sql",
+     "sql": "ALTER TABLE t DROP COLUMN a;\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

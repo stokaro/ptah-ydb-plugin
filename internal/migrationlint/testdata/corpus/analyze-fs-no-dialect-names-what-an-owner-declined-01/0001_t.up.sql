@@ -1,0 +1,3 @@
+SELECT 'a\';
+DROP TOPIC t;
+SELECT '';

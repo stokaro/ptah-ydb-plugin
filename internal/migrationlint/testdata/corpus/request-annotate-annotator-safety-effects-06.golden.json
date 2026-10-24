@@ -1,0 +1,22 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "annotate",
+ "result": {
+  "declined": [
+   {
+    "file": 0,
+    "statement": 1,
+    "target": "ydb"
+   }
+  ],
+  "files": [
+   [
+    {},
+    {
+     "declined": true
+    },
+    {}
+   ]
+  ]
+ }
+}

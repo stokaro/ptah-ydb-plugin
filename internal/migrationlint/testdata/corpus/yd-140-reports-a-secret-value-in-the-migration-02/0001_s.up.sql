@@ -1,0 +1,1 @@
+CREATE OBJECT pw (TYPE SECRET) WITH value = 's3cr3t';

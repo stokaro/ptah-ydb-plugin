@@ -1,0 +1,68 @@
+{
+ "kind": "annotate",
+ "request": {
+  "facts": [
+   "stateful-drop"
+  ],
+  "sources": [
+   {
+    "name": "0000000001_drop.up.sql",
+    "sql": "DROP TOPIC t;\nSELECT 'a\\';\nDROP TOPIC u;\nSELECT '';\n"
+   }
+  ],
+  "files": [
+   [
+    {
+     "start": 0,
+     "end": 12,
+     "line": 1,
+     "sql": "DROP TOPIC t",
+     "canonical": "",
+     "words": [
+      "DROP",
+      "TOPIC",
+      "T"
+     ],
+     "source_words": null
+    },
+    {
+     "start": 14,
+     "end": 25,
+     "line": 2,
+     "sql": "SELECT 'a\\'",
+     "canonical": "",
+     "words": [
+      "SELECT",
+      "'a\\'"
+     ],
+     "source_words": null
+    },
+    {
+     "start": 27,
+     "end": 39,
+     "line": 3,
+     "sql": "DROP TOPIC u",
+     "canonical": "",
+     "words": [
+      "DROP",
+      "TOPIC",
+      "U"
+     ],
+     "source_words": null
+    },
+    {
+     "start": 41,
+     "end": 50,
+     "line": 4,
+     "sql": "SELECT ''",
+     "canonical": "",
+     "words": [
+      "SELECT",
+      "''"
+     ],
+     "source_words": null
+    }
+   ]
+  ]
+ }
+}

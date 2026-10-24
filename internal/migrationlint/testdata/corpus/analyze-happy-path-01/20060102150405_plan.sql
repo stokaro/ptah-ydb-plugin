@@ -1,0 +1,1 @@
+ALTER TABLE `shop/users` ADD INDEX users_email GLOBAL UNIQUE SYNC ON (email);

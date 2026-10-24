@@ -1,0 +1,8 @@
+[
+ {
+  "dialect": "ydb",
+  "server_version": "",
+  "compatibility": "atlas",
+  "dir_format": "atlas"
+ }
+]

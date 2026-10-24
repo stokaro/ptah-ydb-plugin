@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, a Utf8 FAMILY `cold`, PRIMARY KEY (id), FAMILY `cold` (COMPRESSION = 'lz4'));

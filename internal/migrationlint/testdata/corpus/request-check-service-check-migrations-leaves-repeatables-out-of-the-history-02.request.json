@@ -1,0 +1,115 @@
+{
+ "kind": "check",
+ "request": {
+  "target": {
+   "name": "ydb",
+   "capabilities": null
+  },
+  "codes": [
+   "YD104"
+  ],
+  "files": [
+   {
+    "name": "0001_t.up.sql",
+    "version": 1,
+    "up": true,
+    "repeatable": true,
+    "statements": [
+     {
+      "start": 0,
+      "end": 86,
+      "line": 1,
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX t_v GLOBAL ON (v))",
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, V UTF8, PRIMARY KEY (ID), INDEX T_V GLOBAL ON (V))",
+      "words": [
+       "CREATE",
+       "TABLE",
+       "T",
+       "(",
+       "ID",
+       "UINT64",
+       "NOT",
+       "NULL",
+       ",",
+       "V",
+       "UTF8",
+       ",",
+       "PRIMARY",
+       "KEY",
+       "(",
+       "ID",
+       ")",
+       ",",
+       "INDEX",
+       "T_V",
+       "GLOBAL",
+       "ON",
+       "(",
+       "V",
+       ")",
+       ")"
+      ],
+      "source_words": [
+       "CREATE",
+       "TABLE",
+       "t",
+       "(",
+       "id",
+       "Uint64",
+       "NOT",
+       "NULL",
+       ",",
+       "v",
+       "Utf8",
+       ",",
+       "PRIMARY",
+       "KEY",
+       "(",
+       "id",
+       ")",
+       ",",
+       "INDEX",
+       "t_v",
+       "GLOBAL",
+       "ON",
+       "(",
+       "v",
+       ")",
+       ")"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "0002_v.up.sql",
+    "version": 2,
+    "up": true,
+    "statements": [
+     {
+      "start": 0,
+      "end": 27,
+      "line": 1,
+      "sql": "ALTER TABLE t DROP COLUMN v",
+      "canonical": "ALTER TABLE T DROP COLUMN V",
+      "words": [
+       "ALTER",
+       "TABLE",
+       "T",
+       "DROP",
+       "COLUMN",
+       "V"
+      ],
+      "source_words": [
+       "ALTER",
+       "TABLE",
+       "t",
+       "DROP",
+       "COLUMN",
+       "v"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

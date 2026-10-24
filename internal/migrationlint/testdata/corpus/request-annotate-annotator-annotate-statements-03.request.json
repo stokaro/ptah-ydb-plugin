@@ -1,0 +1,33 @@
+{
+ "kind": "annotate",
+ "request": {
+  "facts": [
+   "stateful-drop"
+  ],
+  "sources": [
+   {
+    "name": "0001_t.up.sql",
+    "sql": "SELECT $$;\nDROP TOPIC t;\n$$;\n"
+   }
+  ],
+  "files": [
+   [
+    {
+     "start": 0,
+     "end": 27,
+     "line": 1,
+     "sql": "SELECT $$;\nDROP TOPIC t;\n$$",
+     "canonical": "SELECT $$;\nDROP TOPIC t;\n$$",
+     "words": [
+      "SELECT",
+      "$$;\nDROP TOPIC t;\n$$"
+     ],
+     "source_words": [
+      "SELECT",
+      "$$;\nDROP TOPIC t;\n$$"
+     ]
+    }
+   ]
+  ]
+ }
+}

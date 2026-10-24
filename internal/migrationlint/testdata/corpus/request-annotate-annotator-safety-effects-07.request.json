@@ -1,0 +1,57 @@
+{
+ "kind": "annotate",
+ "request": {
+  "facts": [
+   "safety-effect"
+  ],
+  "sources": [
+   {
+    "name": "0001_t.up.sql",
+    "sql": "DROP ASYNC REPLICATION r WITH (x = 'a\\', y = ' CASCADE')"
+   }
+  ],
+  "files": [
+   [
+    {
+     "start": 0,
+     "end": 56,
+     "line": 1,
+     "sql": "DROP ASYNC REPLICATION r WITH (x = 'a\\', y = ' CASCADE')",
+     "canonical": "DROP ASYNC REPLICATION R WITH (X = 'a\\', Y = ' CASCADE')",
+     "words": [
+      "DROP",
+      "ASYNC",
+      "REPLICATION",
+      "R",
+      "WITH",
+      "(",
+      "X",
+      "=",
+      "'a\\'",
+      ",",
+      "Y",
+      "=",
+      "' CASCADE'",
+      ")"
+     ],
+     "source_words": [
+      "DROP",
+      "ASYNC",
+      "REPLICATION",
+      "r",
+      "WITH",
+      "(",
+      "x",
+      "=",
+      "'a\\'",
+      ",",
+      "y",
+      "=",
+      "' CASCADE'",
+      ")"
+     ]
+    }
+   ]
+  ]
+ }
+}

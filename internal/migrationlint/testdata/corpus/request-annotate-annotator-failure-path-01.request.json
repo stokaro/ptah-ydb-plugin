@@ -1,0 +1,35 @@
+{
+ "kind": "annotate",
+ "request": {
+  "facts": [
+   "stateful-drop"
+  ],
+  "sources": [
+   {
+    "name": "",
+    "sql": "DROP TOPIC t;"
+   }
+  ],
+  "files": [
+   [
+    {
+     "start": 0,
+     "end": 12,
+     "line": 1,
+     "sql": "DROP TOPIC t",
+     "canonical": "DROP TOPIC T",
+     "words": [
+      "DROP",
+      "TOPIC",
+      "T"
+     ],
+     "source_words": [
+      "DROP",
+      "TOPIC",
+      "t"
+     ]
+    }
+   ]
+  ]
+ }
+}

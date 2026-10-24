@@ -1,0 +1,1 @@
+ALTER ASYNC REPLICATION mirror SET (PASSWORD = 'secret');

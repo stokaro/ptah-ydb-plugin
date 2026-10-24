@@ -1,0 +1,305 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_e.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD141",
+      "file": 0,
+      "message": "external data source src names its credential by AWS_ACCESS_KEY_ID_SECRET_NAME and AWS_SECRET_ACCESS_KEY_SECRET_NAME, a deprecated secret object whose value the database administrator reads in clear from .metadata/secrets; on YDB 25.4 and later, keep the value in a YDB secret and name it by AWS_ACCESS_KEY_ID_SECRET_PATH and AWS_SECRET_ACCESS_KEY_SECRET_PATH",
+      "statement": 0
+     },
+     {
+      "code": "YD141",
+      "file": 0,
+      "message": "external data source dir/src2 names its credential by PASSWORD_SECRET_NAME, a deprecated secret object whose value the database administrator reads in clear from .metadata/secrets; on YDB 25.4 and later, keep the value in a YDB secret and name it by PASSWORD_SECRET_PATH",
+      "statement": 1
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_e.up.sql:1:YD141", "0001_e.up.sql:2:YD141"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_e.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD141",
+      "file": 0,
+      "message": "external data source src names its credential by AWS_ACCESS_KEY_ID_SECRET_NAME and AWS_SECRET_ACCESS_KEY_SECRET_NAME, a deprecated secret object whose value the database administrator reads in clear from .metadata/secrets; on YDB 25.4 and later, keep the value in a YDB secret and name it by AWS_ACCESS_KEY_ID_SECRET_PATH and AWS_SECRET_ACCESS_KEY_SECRET_PATH",
+      "statement": 0
+     },
+     {
+      "code": "YD141",
+      "file": 0,
+      "message": "external data source dir/src2 names its credential by PASSWORD_SECRET_NAME, a deprecated secret object whose value the database administrator reads in clear from .metadata/secrets; on YDB 25.4 and later, keep the value in a YDB secret and name it by PASSWORD_SECRET_PATH",
+      "statement": 1
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_e.up.sql:1:YD141", "0001_e.up.sql:2:YD141"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_e.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD141",
+      "file": 0,
+      "message": "external data source src names its credential by AWS_ACCESS_KEY_ID_SECRET_NAME and AWS_SECRET_ACCESS_KEY_SECRET_NAME, a deprecated secret object whose value the database administrator reads in clear from .metadata/secrets; on YDB 25.4 and later, keep the value in a YDB secret and name it by AWS_ACCESS_KEY_ID_SECRET_PATH and AWS_SECRET_ACCESS_KEY_SECRET_PATH",
+      "statement": 0
+     },
+     {
+      "code": "YD141",
+      "file": 0,
+      "message": "external data source dir/src2 names its credential by PASSWORD_SECRET_NAME, a deprecated secret object whose value the database administrator reads in clear from .metadata/secrets; on YDB 25.4 and later, keep the value in a YDB secret and name it by PASSWORD_SECRET_PATH",
+      "statement": 1
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_e.up.sql:1:YD141", "0001_e.up.sql:2:YD141"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE EXTERNAL DATA SOURCE IF NOT EXISTS `src` WITH (SOURCE_TYPE = \"ObjectStorage\", LOCATION = \"https://s3\", AUTH_METHOD = \"AWS\", AWS_ACCESS_KEY_ID_SECRET_NAME = \"a\", AWS_SECRET_ACCESS_KEY_SECRET_NAME = \"b\", AWS_REGION = \"x\")",
+       "end": 226,
+       "line": 1,
+       "source_words": ["CREATE", "EXTERNAL", "DATA", "SOURCE", "IF", "NOT", "EXISTS", "`src`", "WITH", "(", "SOURCE_TYPE", "=", "\"ObjectStorage\"", ",", "LOCATION", "=", "\"https://s3\"", ",", "AUTH_METHOD", "=", "\"AWS\"", ",", "AWS_ACCESS_KEY_ID_SECRET_NAME", "=", "\"a\"", ",", "aws_secret_access_key_secret_name", "=", "\"b\"", ",", "AWS_REGION", "=", "\"x\"", ")"],
+       "sql": "CREATE EXTERNAL DATA SOURCE IF NOT EXISTS `src` WITH (SOURCE_TYPE = \"ObjectStorage\", LOCATION = \"https://s3\", AUTH_METHOD = \"AWS\", AWS_ACCESS_KEY_ID_SECRET_NAME = \"a\", aws_secret_access_key_secret_name = \"b\", AWS_REGION = \"x\")",
+       "start": 0,
+       "words": ["CREATE", "EXTERNAL", "DATA", "SOURCE", "IF", "NOT", "EXISTS", "`src`", "WITH", "(", "SOURCE_TYPE", "=", "\"ObjectStorage\"", ",", "LOCATION", "=", "\"https://s3\"", ",", "AUTH_METHOD", "=", "\"AWS\"", ",", "AWS_ACCESS_KEY_ID_SECRET_NAME", "=", "\"a\"", ",", "AWS_SECRET_ACCESS_KEY_SECRET_NAME", "=", "\"b\"", ",", "AWS_REGION", "=", "\"x\"", ")"]
+      },
+      {
+       "canonical": "CREATE OR REPLACE EXTERNAL DATA SOURCE `dir/src2` WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_NAME = \"p\")",
+       "end": 375,
+       "line": 2,
+       "source_words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "DATA", "SOURCE", "`dir/src2`", "WITH", "(", "SOURCE_TYPE", "=", "\"PostgreSQL\"", ",", "AUTH_METHOD", "=", "\"BASIC\"", ",", "LOGIN", "=", "\"u\"", ",", "PASSWORD_SECRET_NAME", "=", "\"p\"", ")"],
+       "sql": "CREATE OR REPLACE EXTERNAL DATA SOURCE `dir/src2` WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_NAME = \"p\")",
+       "start": 228,
+       "words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "DATA", "SOURCE", "`dir/src2`", "WITH", "(", "SOURCE_TYPE", "=", "\"PostgreSQL\"", ",", "AUTH_METHOD", "=", "\"BASIC\"", ",", "LOGIN", "=", "\"u\"", ",", "PASSWORD_SECRET_NAME", "=", "\"p\"", ")"]
+      },
+      {
+       "canonical": "CREATE EXTERNAL DATA SOURCE SRC3 WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_PATH = \"/local/p\")",
+       "end": 514,
+       "line": 3,
+       "source_words": ["CREATE", "EXTERNAL", "DATA", "SOURCE", "src3", "WITH", "(", "SOURCE_TYPE", "=", "\"PostgreSQL\"", ",", "AUTH_METHOD", "=", "\"BASIC\"", ",", "LOGIN", "=", "\"u\"", ",", "PASSWORD_SECRET_PATH", "=", "\"/local/p\"", ")"],
+       "sql": "CREATE EXTERNAL DATA SOURCE src3 WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_PATH = \"/local/p\")",
+       "start": 377,
+       "words": ["CREATE", "EXTERNAL", "DATA", "SOURCE", "SRC3", "WITH", "(", "SOURCE_TYPE", "=", "\"PostgreSQL\"", ",", "AUTH_METHOD", "=", "\"BASIC\"", ",", "LOGIN", "=", "\"u\"", ",", "PASSWORD_SECRET_PATH", "=", "\"/local/p\"", ")"]
+      },
+      {
+       "canonical": "CREATE EXTERNAL DATA SOURCE",
+       "end": 543,
+       "line": 4,
+       "source_words": ["CREATE", "EXTERNAL", "DATA", "SOURCE"],
+       "sql": "CREATE EXTERNAL DATA SOURCE",
+       "start": 516,
+       "words": ["CREATE", "EXTERNAL", "DATA", "SOURCE"]
+      },
+      {
+       "canonical": "DROP EXTERNAL DATA SOURCE SRC3",
+       "end": 575,
+       "line": 5,
+       "source_words": ["DROP", "EXTERNAL", "DATA", "SOURCE", "src3"],
+       "sql": "DROP EXTERNAL DATA SOURCE src3",
+       "start": 545,
+       "words": ["DROP", "EXTERNAL", "DATA", "SOURCE", "SRC3"]
+      },
+      {
+       "canonical": "DROP EXTERNAL TABLE `et`",
+       "end": 601,
+       "line": 6,
+       "source_words": ["DROP", "EXTERNAL", "TABLE", "`et`"],
+       "sql": "DROP EXTERNAL TABLE `et`",
+       "start": 577,
+       "words": ["DROP", "EXTERNAL", "TABLE", "`et`"]
+      },
+      {
+       "canonical": "CREATE OR REPLACE EXTERNAL TABLE `et` (A UTF8) WITH (DATA_SOURCE = \"src\", LOCATION = \"/x\", FORMAT = \"csv_with_names\")",
+       "end": 720,
+       "line": 7,
+       "source_words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "TABLE", "`et`", "(", "a", "Utf8", ")", "WITH", "(", "DATA_SOURCE", "=", "\"src\"", ",", "LOCATION", "=", "\"/x\"", ",", "FORMAT", "=", "\"csv_with_names\"", ")"],
+       "sql": "CREATE OR REPLACE EXTERNAL TABLE `et` (a Utf8) WITH (DATA_SOURCE = \"src\", LOCATION = \"/x\", FORMAT = \"csv_with_names\")",
+       "start": 603,
+       "words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "TABLE", "`et`", "(", "A", "UTF8", ")", "WITH", "(", "DATA_SOURCE", "=", "\"src\"", ",", "LOCATION", "=", "\"/x\"", ",", "FORMAT", "=", "\"csv_with_names\"", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE EXTERNAL DATA SOURCE IF NOT EXISTS `src` WITH (SOURCE_TYPE = \"ObjectStorage\", LOCATION = \"https://s3\", AUTH_METHOD = \"AWS\", AWS_ACCESS_KEY_ID_SECRET_NAME = \"a\", AWS_SECRET_ACCESS_KEY_SECRET_NAME = \"b\", AWS_REGION = \"x\")",
+      "end": 226,
+      "line": 1,
+      "source_words": ["CREATE", "EXTERNAL", "DATA", "SOURCE", "IF", "NOT", "EXISTS", "`src`", "WITH", "(", "SOURCE_TYPE", "=", "\"ObjectStorage\"", ",", "LOCATION", "=", "\"https://s3\"", ",", "AUTH_METHOD", "=", "\"AWS\"", ",", "AWS_ACCESS_KEY_ID_SECRET_NAME", "=", "\"a\"", ",", "aws_secret_access_key_secret_name", "=", "\"b\"", ",", "AWS_REGION", "=", "\"x\"", ")"],
+      "sql": "CREATE EXTERNAL DATA SOURCE IF NOT EXISTS `src` WITH (SOURCE_TYPE = \"ObjectStorage\", LOCATION = \"https://s3\", AUTH_METHOD = \"AWS\", AWS_ACCESS_KEY_ID_SECRET_NAME = \"a\", aws_secret_access_key_secret_name = \"b\", AWS_REGION = \"x\")",
+      "start": 0,
+      "words": ["CREATE", "EXTERNAL", "DATA", "SOURCE", "IF", "NOT", "EXISTS", "`src`", "WITH", "(", "SOURCE_TYPE", "=", "\"ObjectStorage\"", ",", "LOCATION", "=", "\"https://s3\"", ",", "AUTH_METHOD", "=", "\"AWS\"", ",", "AWS_ACCESS_KEY_ID_SECRET_NAME", "=", "\"a\"", ",", "AWS_SECRET_ACCESS_KEY_SECRET_NAME", "=", "\"b\"", ",", "AWS_REGION", "=", "\"x\"", ")"]
+     },
+     {
+      "canonical": "CREATE OR REPLACE EXTERNAL DATA SOURCE `dir/src2` WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_NAME = \"p\")",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "CREATE OR REPLACE changes what queries reading the external object read"
+       }
+      ],
+      "end": 375,
+      "line": 2,
+      "source_words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "DATA", "SOURCE", "`dir/src2`", "WITH", "(", "SOURCE_TYPE", "=", "\"PostgreSQL\"", ",", "AUTH_METHOD", "=", "\"BASIC\"", ",", "LOGIN", "=", "\"u\"", ",", "PASSWORD_SECRET_NAME", "=", "\"p\"", ")"],
+      "sql": "CREATE OR REPLACE EXTERNAL DATA SOURCE `dir/src2` WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_NAME = \"p\")",
+      "start": 228,
+      "words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "DATA", "SOURCE", "`dir/src2`", "WITH", "(", "SOURCE_TYPE", "=", "\"PostgreSQL\"", ",", "AUTH_METHOD", "=", "\"BASIC\"", ",", "LOGIN", "=", "\"u\"", ",", "PASSWORD_SECRET_NAME", "=", "\"p\"", ")"]
+     },
+     {
+      "canonical": "CREATE EXTERNAL DATA SOURCE SRC3 WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_PATH = \"/local/p\")",
+      "end": 514,
+      "line": 3,
+      "source_words": ["CREATE", "EXTERNAL", "DATA", "SOURCE", "src3", "WITH", "(", "SOURCE_TYPE", "=", "\"PostgreSQL\"", ",", "AUTH_METHOD", "=", "\"BASIC\"", ",", "LOGIN", "=", "\"u\"", ",", "PASSWORD_SECRET_PATH", "=", "\"/local/p\"", ")"],
+      "sql": "CREATE EXTERNAL DATA SOURCE src3 WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_PATH = \"/local/p\")",
+      "start": 377,
+      "words": ["CREATE", "EXTERNAL", "DATA", "SOURCE", "SRC3", "WITH", "(", "SOURCE_TYPE", "=", "\"PostgreSQL\"", ",", "AUTH_METHOD", "=", "\"BASIC\"", ",", "LOGIN", "=", "\"u\"", ",", "PASSWORD_SECRET_PATH", "=", "\"/local/p\"", ")"]
+     },
+     {
+      "canonical": "CREATE EXTERNAL DATA SOURCE",
+      "end": 543,
+      "line": 4,
+      "source_words": ["CREATE", "EXTERNAL", "DATA", "SOURCE"],
+      "sql": "CREATE EXTERNAL DATA SOURCE",
+      "start": 516,
+      "words": ["CREATE", "EXTERNAL", "DATA", "SOURCE"]
+     },
+     {
+      "canonical": "DROP EXTERNAL DATA SOURCE SRC3",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP EXTERNAL DATA SOURCE removes what YDB reads another system through; no data YDB stores is lost"
+       }
+      ],
+      "end": 575,
+      "line": 5,
+      "source_words": ["DROP", "EXTERNAL", "DATA", "SOURCE", "src3"],
+      "sql": "DROP EXTERNAL DATA SOURCE src3",
+      "start": 545,
+      "words": ["DROP", "EXTERNAL", "DATA", "SOURCE", "SRC3"]
+     },
+     {
+      "canonical": "DROP EXTERNAL TABLE `et`",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP EXTERNAL TABLE removes the columns YDB reads files through; the files stay"
+       }
+      ],
+      "end": 601,
+      "line": 6,
+      "source_words": ["DROP", "EXTERNAL", "TABLE", "`et`"],
+      "sql": "DROP EXTERNAL TABLE `et`",
+      "start": 577,
+      "words": ["DROP", "EXTERNAL", "TABLE", "`et`"]
+     },
+     {
+      "canonical": "CREATE OR REPLACE EXTERNAL TABLE `et` (A UTF8) WITH (DATA_SOURCE = \"src\", LOCATION = \"/x\", FORMAT = \"csv_with_names\")",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "CREATE OR REPLACE changes what queries reading the external object read"
+       }
+      ],
+      "end": 720,
+      "line": 7,
+      "source_words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "TABLE", "`et`", "(", "a", "Utf8", ")", "WITH", "(", "DATA_SOURCE", "=", "\"src\"", ",", "LOCATION", "=", "\"/x\"", ",", "FORMAT", "=", "\"csv_with_names\"", ")"],
+      "sql": "CREATE OR REPLACE EXTERNAL TABLE `et` (a Utf8) WITH (DATA_SOURCE = \"src\", LOCATION = \"/x\", FORMAT = \"csv_with_names\")",
+      "start": 603,
+      "words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "TABLE", "`et`", "(", "A", "UTF8", ")", "WITH", "(", "DATA_SOURCE", "=", "\"src\"", ",", "LOCATION", "=", "\"/x\"", ",", "FORMAT", "=", "\"csv_with_names\"", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_e.up.sql",
+     "sql": "CREATE EXTERNAL DATA SOURCE IF NOT EXISTS `src` WITH (SOURCE_TYPE = \"ObjectStorage\", LOCATION = \"https://s3\", AUTH_METHOD = \"AWS\", AWS_ACCESS_KEY_ID_SECRET_NAME = \"a\", aws_secret_access_key_secret_name = \"b\", AWS_REGION = \"x\");\nCREATE OR REPLACE EXTERNAL DATA SOURCE `dir/src2` WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_NAME = \"p\");\nCREATE EXTERNAL DATA SOURCE src3 WITH (SOURCE_TYPE = \"PostgreSQL\", AUTH_METHOD = \"BASIC\", LOGIN = \"u\", PASSWORD_SECRET_PATH = \"/local/p\");\nCREATE EXTERNAL DATA SOURCE;\nDROP EXTERNAL DATA SOURCE src3;\nDROP EXTERNAL TABLE `et`;\nCREATE OR REPLACE EXTERNAL TABLE `et` (a Utf8) WITH (DATA_SOURCE = \"src\", LOCATION = \"/x\", FORMAT = \"csv_with_names\");\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

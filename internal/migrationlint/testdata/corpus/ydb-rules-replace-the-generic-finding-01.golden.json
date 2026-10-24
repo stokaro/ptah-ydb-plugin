@@ -1,0 +1,145 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD103",
+      "file": 0,
+      "message": "ADD COLUMN a is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value); give it a DEFAULT, which existing rows take",
+      "statement": 0
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD103"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD103",
+      "file": 0,
+      "message": "ADD COLUMN a is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value), and a default needs target capability add_column_with_default, unavailable on this ydb target; add the column as nullable",
+      "statement": 0
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD103"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD103",
+      "file": 0,
+      "message": "ADD COLUMN a is NOT NULL without a default, which YDB refuses even on an empty table (Cannot add not null column without default value); give it a DEFAULT, which existing rows take",
+      "statement": 0
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD103"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "ALTER TABLE T ADD COLUMN A INT64 NOT NULL",
+       "end": 41,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "ADD", "COLUMN", "a", "Int64", "NOT", "NULL"],
+       "sql": "ALTER TABLE t ADD COLUMN a Int64 NOT NULL",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "ADD", "COLUMN", "A", "INT64", "NOT", "NULL"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0001_t.up.sql:1:DD101", "0001_t.up.sql:1:MY101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "ALTER TABLE T ADD COLUMN A INT64 NOT NULL",
+      "end": 41,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "ADD", "COLUMN", "a", "Int64", "NOT", "NULL"],
+      "sql": "ALTER TABLE t ADD COLUMN a Int64 NOT NULL",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "ADD", "COLUMN", "A", "INT64", "NOT", "NULL"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "ALTER TABLE t ADD COLUMN a Int64 NOT NULL;\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

@@ -10,6 +10,8 @@ YAML and Go annotation decoding for the partitioning, TTL and column families of
 Offline comparison, planning, and rendering produce native coordination
 operations. Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
+Offline migration lint splits YQL migrations and checks YD rules; see
+[Migration lint](#migration-lint).
 
 The executable opens native YDB connections and reads row-table schemas
 through the public Ptah SDK. It supports anonymous, URL user/password, and URL token authentication.
@@ -1333,6 +1335,46 @@ Cancellation returns no analysis. The native CLI still requires integration of
 YDB's table comparison rules; the provider does not claim the common table
 identity contract to bypass that requirement.
 
+## Migration lint
+
+The provider serves the SDK's `lint.migrations` service for the `ydb` engine
+without a database session. It publishes its rules as data, with the codes,
+titles and severities of the host's built-in YDB owner, whether a rule also
+reads the down half of a migration, and the shared rules a finding replaces on
+the same statement.
+
+A split reads each migration file as YQL, with the lexer the SQL analysis uses.
+It returns every statement's byte range, line, words and the comments directly
+above it, which the host reads suppression directives from. It also reports the
+facts the host's shared rules read: a drop that loses state (a topic, a
+transfer, a coordination node, a streaming query, a replication dropped with
+CASCADE), YQL's unique index, the steps of a table rebuild, and a safety
+judgment for the statements only YDB's owner recognizes. The splitter reads
+what a rebuilt table holds from the directory itself: the up migrations of
+lower versions in version order, then the statements of the file before the
+rebuild. An annotation judges the statements a host split without a dialect,
+and declines a statement YQL would split differently.
+
+A check judges every file of a run under the rules the request enables. A rule
+reads the statement text and the capability map the request carries, never the
+server version. The rules that need to know what a table looks like before a
+statement read it from the directory itself, as the splitter does: whether an
+index or the TTL uses a column, a table's partitioning settings, the views that
+read it, its changefeeds and column families, the Serial columns and sequence
+restarts, failed-over replications, and the comments Ptah's COMMENT ON
+statements left. A table created outside the directory is unknown and reports
+nothing.
+
+`internal/migrationlint/testdata` holds the host's answers for a corpus of
+migration directories and requests, recorded at one host commit, and the tests
+require the same statements, facts, annotations and findings, message for
+message. Its README says how to record them again.
+
+The host owns output formats, severity overrides, suppression and the rules
+every dialect shares. The host's built-in owner reports nothing from these rules
+on a run that names no dialect; the provider is only asked about its own engine,
+so a host does not send it the codes of such a run.
+
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
@@ -1342,8 +1384,8 @@ capability detection, and reading a cluster's feature flags from the `monitoring
 endpoint. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
 rendering, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, and offline SQL analysis services. The remaining capabilities stay
-unadvertised.
+lock, offline SQL analysis and migration lint services. The remaining
+capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations
 are wired through this executable. Provider release workflows, default Ptah bundling,

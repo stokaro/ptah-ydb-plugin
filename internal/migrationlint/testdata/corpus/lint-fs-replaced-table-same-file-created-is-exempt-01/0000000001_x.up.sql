@@ -1,0 +1,2 @@
+CREATE TABLE staging (id INT);
+CREATE OR REPLACE TABLE staging (id INT);

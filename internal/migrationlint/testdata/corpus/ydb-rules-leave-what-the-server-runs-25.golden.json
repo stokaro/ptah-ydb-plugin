@@ -1,0 +1,176 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_users.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_drop.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_drop.up.sql:1:BC104", "0002_drop.up.sql:1:DS102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_users.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_drop.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_drop.up.sql:1:BC104", "0002_drop.up.sql:1:DS102"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_users.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_drop.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_drop.up.sql:1:DS102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE `shop/users` ( ID UINT64 NOT NULL, EMAIL UTF8, NAME UTF8, SCORE INT32, EXPIRES TIMESTAMP, PRIMARY KEY (ID), INDEX USERS_EMAIL GLOBAL SYNC ON (EMAIL) COVER (NAME) ) WITH (TTL = INTERVAL(\"P30D\") ON EXPIRES)",
+       "end": 223,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`shop/users`", "(", "id", "Uint64", "NOT", "NULL", ",", "email", "Utf8", ",", "name", "Utf8", ",", "score", "Int32", ",", "expires", "Timestamp", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "users_email", "GLOBAL", "SYNC", "ON", "(", "email", ")", "COVER", "(", "name", ")", ")", "WITH", "(", "TTL", "=", "Interval", "(", "\"P30D\"", ")", "ON", "expires", ")"],
+       "sql": "CREATE TABLE `shop/users` (\n  id Uint64 NOT NULL, email Utf8, name Utf8, score Int32, expires Timestamp,\n  PRIMARY KEY (id),\n  INDEX users_email GLOBAL SYNC ON (email) COVER (name)\n) WITH (TTL = Interval(\"P30D\") ON expires)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`shop/users`", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMAIL", "UTF8", ",", "NAME", "UTF8", ",", "SCORE", "INT32", ",", "EXPIRES", "TIMESTAMP", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "USERS_EMAIL", "GLOBAL", "SYNC", "ON", "(", "EMAIL", ")", "COVER", "(", "NAME", ")", ")", "WITH", "(", "TTL", "=", "INTERVAL", "(", "\"P30D\"", ")", "ON", "EXPIRES", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE USERS DROP COLUMN EMAIL",
+       "end": 35,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "email"],
+       "sql": "ALTER TABLE users DROP COLUMN email",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "EMAIL"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_drop.up.sql:1:BC104", "0002_drop.up.sql:1:DS102"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE `shop/users` ( ID UINT64 NOT NULL, EMAIL UTF8, NAME UTF8, SCORE INT32, EXPIRES TIMESTAMP, PRIMARY KEY (ID), INDEX USERS_EMAIL GLOBAL SYNC ON (EMAIL) COVER (NAME) ) WITH (TTL = INTERVAL(\"P30D\") ON EXPIRES)",
+      "end": 223,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`shop/users`", "(", "id", "Uint64", "NOT", "NULL", ",", "email", "Utf8", ",", "name", "Utf8", ",", "score", "Int32", ",", "expires", "Timestamp", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "users_email", "GLOBAL", "SYNC", "ON", "(", "email", ")", "COVER", "(", "name", ")", ")", "WITH", "(", "TTL", "=", "Interval", "(", "\"P30D\"", ")", "ON", "expires", ")"],
+      "sql": "CREATE TABLE `shop/users` (\n  id Uint64 NOT NULL, email Utf8, name Utf8, score Int32, expires Timestamp,\n  PRIMARY KEY (id),\n  INDEX users_email GLOBAL SYNC ON (email) COVER (name)\n) WITH (TTL = Interval(\"P30D\") ON expires)",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`shop/users`", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMAIL", "UTF8", ",", "NAME", "UTF8", ",", "SCORE", "INT32", ",", "EXPIRES", "TIMESTAMP", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "USERS_EMAIL", "GLOBAL", "SYNC", "ON", "(", "EMAIL", ")", "COVER", "(", "NAME", ")", ")", "WITH", "(", "TTL", "=", "INTERVAL", "(", "\"P30D\"", ")", "ON", "EXPIRES", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE USERS DROP COLUMN EMAIL",
+      "end": 35,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "email"],
+      "sql": "ALTER TABLE users DROP COLUMN email",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "EMAIL"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_users.up.sql",
+     "sql": "CREATE TABLE `shop/users` (\n  id Uint64 NOT NULL, email Utf8, name Utf8, score Int32, expires Timestamp,\n  PRIMARY KEY (id),\n  INDEX users_email GLOBAL SYNC ON (email) COVER (name)\n) WITH (TTL = Interval(\"P30D\") ON expires);\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_drop.up.sql",
+     "sql": "ALTER TABLE users DROP COLUMN email;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

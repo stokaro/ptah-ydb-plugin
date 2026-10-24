@@ -1,0 +1,32 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "split",
+ "result": {
+  "files": [
+   [
+    {
+     "canonical": "DROP TOPIC T",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "TOPIC",
+       "object": "t"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+      }
+     ],
+     "end": 12,
+     "line": 1,
+     "source_words": ["DROP", "TOPIC", "t"],
+     "sql": "DROP TOPIC t",
+     "start": 0,
+     "words": ["DROP", "TOPIC", "T"]
+    }
+   ]
+  ],
+  "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"]
+ }
+}

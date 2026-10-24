@@ -1,0 +1,2 @@
+ALTER TOPIC t1 RESET (supported_codecs);
+DROP TOPIC IF EXISTS t1;

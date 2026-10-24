@@ -1,0 +1,182 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD101",
+      "file": 0,
+      "message": "ADD INDEX t_v adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 0
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD101",
+      "file": 0,
+      "message": "ADD INDEX t_v adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 0
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD101",
+      "file": 0,
+      "message": "ADD INDEX t_v adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 0
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "ALTER TABLE T ADD INDEX T_V GLOBAL UNIQUE SYNC ON (V)",
+       "end": 53,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "t_v", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "v", ")"],
+       "sql": "ALTER TABLE t ADD INDEX t_v GLOBAL UNIQUE SYNC ON (v)",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "T_V", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "V", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "overrides": {
+     "unique_index_on_existing_table": true
+    },
+    "server_version": "26.2.1.14"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "overrides": {
+    "unique_index_on_existing_table": true
+   },
+   "report": ["0001_t.up.sql:1:MF101"],
+   "server_version": "26.2.1.14",
+   "split": 0
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "ALTER TABLE T ADD INDEX T_V GLOBAL UNIQUE SYNC ON (V)",
+      "effects": [
+       {
+        "clause": "ADD INDEX",
+        "columns": ["v"],
+        "fact": "unique-index",
+        "failure": "YDB: Duplicate key found",
+        "object": "t_v",
+        "table": "t"
+       }
+      ],
+      "end": 53,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "t_v", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "v", ")"],
+      "sql": "ALTER TABLE t ADD INDEX t_v GLOBAL UNIQUE SYNC ON (v)",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "T_V", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "V", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "ALTER TABLE t ADD INDEX t_v GLOBAL UNIQUE SYNC ON (v);\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

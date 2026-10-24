@@ -1,0 +1,261 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "name": "0000000001_items.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "name": "0000000002_change.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0000000001_items.up.sql:0:MF101P", "0000000002_change.up.sql:0:MF101P"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "name": "0000000001_items.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "name": "0000000002_change.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0000000001_items.up.sql:0:MF101P", "0000000002_change.up.sql:0:MF101P"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "name": "0000000001_items.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "name": "0000000002_change.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0000000001_items.up.sql:0:MF101P", "0000000002_change.up.sql:0:MF101P", "0000000002_change.up.sql:8:DS101", "0000000002_change.up.sql:10:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE `app/other` (`id` INT64 NOT NULL, PRIMARY KEY (`id`))",
+       "end": 66,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`app/other`", "(", "`id`", "Int64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "`id`", ")", ")"],
+       "sql": "CREATE TABLE `app/other` (`id` Int64 NOT NULL, PRIMARY KEY (`id`))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`app/other`", "(", "`id`", "INT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "`id`", ")", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE `app/__ptah_rebuild_items` ( `id` INT64 NOT NULL, `n` INT64, `label` UTF8, PRIMARY KEY (`id`) )",
+       "end": 124,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`app/__ptah_rebuild_items`", "(", "`id`", "Int64", "NOT", "NULL", ",", "`n`", "Int64", ",", "`label`", "Utf8", ",", "PRIMARY", "KEY", "(", "`id`", ")", ")"],
+       "sql": "CREATE TABLE `app/__ptah_rebuild_items` (\n    `id` Int64 NOT NULL,\n    `n` Int64,\n    `label` Utf8,\n    PRIMARY KEY (`id`)\n)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`app/__ptah_rebuild_items`", "(", "`id`", "INT64", "NOT", "NULL", ",", "`n`", "INT64", ",", "`label`", "UTF8", ",", "PRIMARY", "KEY", "(", "`id`", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO `app/__ptah_rebuild_items` (`id`, `n`, `label`) SELECT UNWRAP(`id`, 'rebuilding table app.items: column id holds NULL'U) AS `id`, IF(`n` IS NULL, NULL, UNWRAP(CAST(`n` AS INT64), 'rebuilding table app.items: column n does not convert'U)) AS `n`, `label` AS `label` FROM `app/items`",
+       "end": 419,
+       "line": 7,
+       "source_words": ["INSERT", "INTO", "`app/__ptah_rebuild_items`", "(", "`id`", ",", "`n`", ",", "`label`", ")", "SELECT", "Unwrap", "(", "`id`", ",", "'rebuilding table app.items: column id holds NULL'", "u", ")", "AS", "`id`", ",", "IF", "(", "`n`", "IS", "NULL", ",", "NULL", ",", "Unwrap", "(", "CAST", "(", "`n`", "AS", "Int64", ")", ",", "'rebuilding table app.items: column n does not convert'", "u", ")", ")", "AS", "`n`", ",", "`label`", "AS", "`label`", "FROM", "`app/items`"],
+       "sql": "INSERT INTO `app/__ptah_rebuild_items` (`id`, `n`, `label`) SELECT Unwrap(`id`, 'rebuilding table app.items: column id holds NULL'u) AS `id`, IF(`n` IS NULL, NULL, Unwrap(CAST(`n` AS Int64), 'rebuilding table app.items: column n does not convert'u)) AS `n`, `label` AS `label` FROM `app/items`",
+       "start": 126,
+       "words": ["INSERT", "INTO", "`app/__ptah_rebuild_items`", "(", "`id`", ",", "`n`", ",", "`label`", ")", "SELECT", "UNWRAP", "(", "`id`", ",", "'rebuilding table app.items: column id holds NULL'", "U", ")", "AS", "`id`", ",", "IF", "(", "`n`", "IS", "NULL", ",", "NULL", ",", "UNWRAP", "(", "CAST", "(", "`n`", "AS", "INT64", ")", ",", "'rebuilding table app.items: column n does not convert'", "U", ")", ")", "AS", "`n`", ",", "`label`", "AS", "`label`", "FROM", "`app/items`"]
+      },
+      {
+       "canonical": "ALTER TABLE `app/items` RENAME TO `app/__ptah_replaced_items`",
+       "end": 482,
+       "line": 8,
+       "source_words": ["ALTER", "TABLE", "`app/items`", "RENAME", "TO", "`app/__ptah_replaced_items`"],
+       "sql": "ALTER TABLE `app/items` RENAME TO `app/__ptah_replaced_items`",
+       "start": 421,
+       "words": ["ALTER", "TABLE", "`app/items`", "RENAME", "TO", "`app/__ptah_replaced_items`"]
+      },
+      {
+       "canonical": "ALTER TABLE `app/__ptah_rebuild_items` RENAME TO `app/items`",
+       "end": 544,
+       "line": 9,
+       "source_words": ["ALTER", "TABLE", "`app/__ptah_rebuild_items`", "RENAME", "TO", "`app/items`"],
+       "sql": "ALTER TABLE `app/__ptah_rebuild_items` RENAME TO `app/items`",
+       "start": 484,
+       "words": ["ALTER", "TABLE", "`app/__ptah_rebuild_items`", "RENAME", "TO", "`app/items`"]
+      },
+      {
+       "canonical": "DROP TABLE `app/__ptah_replaced_items`",
+       "end": 584,
+       "line": 10,
+       "source_words": ["DROP", "TABLE", "`app/__ptah_replaced_items`"],
+       "sql": "DROP TABLE `app/__ptah_replaced_items`",
+       "start": 546,
+       "words": ["DROP", "TABLE", "`app/__ptah_replaced_items`"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0000000001_items.up.sql:0:MF101P", "0000000002_change.up.sql:0:MF101P"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE `app/other` (`id` INT64 NOT NULL, PRIMARY KEY (`id`))",
+      "end": 66,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`app/other`", "(", "`id`", "Int64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "`id`", ")", ")"],
+      "sql": "CREATE TABLE `app/other` (`id` Int64 NOT NULL, PRIMARY KEY (`id`))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`app/other`", "(", "`id`", "INT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "`id`", ")", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "CREATE TABLE `app/__ptah_rebuild_items` ( `id` INT64 NOT NULL, `n` INT64, `label` UTF8, PRIMARY KEY (`id`) )",
+      "end": 124,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`app/__ptah_rebuild_items`", "(", "`id`", "Int64", "NOT", "NULL", ",", "`n`", "Int64", ",", "`label`", "Utf8", ",", "PRIMARY", "KEY", "(", "`id`", ")", ")"],
+      "sql": "CREATE TABLE `app/__ptah_rebuild_items` (\n    `id` Int64 NOT NULL,\n    `n` Int64,\n    `label` Utf8,\n    PRIMARY KEY (`id`)\n)",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`app/__ptah_rebuild_items`", "(", "`id`", "INT64", "NOT", "NULL", ",", "`n`", "INT64", ",", "`label`", "UTF8", ",", "PRIMARY", "KEY", "(", "`id`", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO `app/__ptah_rebuild_items` (`id`, `n`, `label`) SELECT UNWRAP(`id`, 'rebuilding table app.items: column id holds NULL'u) AS `id`, IF(`n` IS NULL, NULL, UNWRAP(CAST(`n` AS INT64), 'rebuilding table app.items: column n does not convert'u)) AS `n`, `label` AS `label` FROM `app/items`",
+      "end": 419,
+      "line": 7,
+      "source_words": ["INSERT", "INTO", "`app/__ptah_rebuild_items`", "(", "`id`", ",", "`n`", ",", "`label`", ")", "SELECT", "Unwrap", "(", "`id`", ",", "'rebuilding table app.items: column id holds NULL'u", ")", "AS", "`id`", ",", "IF", "(", "`n`", "IS", "NULL", ",", "NULL", ",", "Unwrap", "(", "CAST", "(", "`n`", "AS", "Int64", ")", ",", "'rebuilding table app.items: column n does not convert'u", ")", ")", "AS", "`n`", ",", "`label`", "AS", "`label`", "FROM", "`app/items`"],
+      "sql": "INSERT INTO `app/__ptah_rebuild_items` (`id`, `n`, `label`) SELECT Unwrap(`id`, 'rebuilding table app.items: column id holds NULL'u) AS `id`, IF(`n` IS NULL, NULL, Unwrap(CAST(`n` AS Int64), 'rebuilding table app.items: column n does not convert'u)) AS `n`, `label` AS `label` FROM `app/items`",
+      "start": 126,
+      "words": ["INSERT", "INTO", "`app/__ptah_rebuild_items`", "(", "`id`", ",", "`n`", ",", "`label`", ")", "SELECT", "UNWRAP", "(", "`id`", ",", "'rebuilding table app.items: column id holds NULL'u", ")", "AS", "`id`", ",", "IF", "(", "`n`", "IS", "NULL", ",", "NULL", ",", "UNWRAP", "(", "CAST", "(", "`n`", "AS", "INT64", ")", ",", "'rebuilding table app.items: column n does not convert'u", ")", ")", "AS", "`n`", ",", "`label`", "AS", "`label`", "FROM", "`app/items`"]
+     },
+     {
+      "canonical": "ALTER TABLE `app/items` RENAME TO `app/__ptah_replaced_items`",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 482,
+      "line": 8,
+      "source_words": ["ALTER", "TABLE", "`app/items`", "RENAME", "TO", "`app/__ptah_replaced_items`"],
+      "sql": "ALTER TABLE `app/items` RENAME TO `app/__ptah_replaced_items`",
+      "start": 421,
+      "words": ["ALTER", "TABLE", "`app/items`", "RENAME", "TO", "`app/__ptah_replaced_items`"]
+     },
+     {
+      "canonical": "ALTER TABLE `app/__ptah_rebuild_items` RENAME TO `app/items`",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 544,
+      "line": 9,
+      "source_words": ["ALTER", "TABLE", "`app/__ptah_rebuild_items`", "RENAME", "TO", "`app/items`"],
+      "sql": "ALTER TABLE `app/__ptah_rebuild_items` RENAME TO `app/items`",
+      "start": 484,
+      "words": ["ALTER", "TABLE", "`app/__ptah_rebuild_items`", "RENAME", "TO", "`app/items`"]
+     },
+     {
+      "canonical": "DROP TABLE `app/__ptah_replaced_items`",
+      "effects": [
+       {
+        "fact": "rebuild-drop"
+       }
+      ],
+      "end": 584,
+      "line": 10,
+      "source_words": ["DROP", "TABLE", "`app/__ptah_replaced_items`"],
+      "sql": "DROP TABLE `app/__ptah_replaced_items`",
+      "start": 546,
+      "words": ["DROP", "TABLE", "`app/__ptah_replaced_items`"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0000000001_items.up.sql",
+     "sql": "CREATE TABLE `app/other` (`id` Int64 NOT NULL, PRIMARY KEY (`id`));\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0000000002_change.up.sql",
+     "sql": "CREATE TABLE `app/__ptah_rebuild_items` (\n    `id` Int64 NOT NULL,\n    `n` Int64,\n    `label` Utf8,\n    PRIMARY KEY (`id`)\n);\nINSERT INTO `app/__ptah_rebuild_items` (`id`, `n`, `label`) SELECT Unwrap(`id`, 'rebuilding table app.items: column id holds NULL'u) AS `id`, IF(`n` IS NULL, NULL, Unwrap(CAST(`n` AS Int64), 'rebuilding table app.items: column n does not convert'u)) AS `n`, `label` AS `label` FROM `app/items`;\nALTER TABLE `app/items` RENAME TO `app/__ptah_replaced_items`;\nALTER TABLE `app/__ptah_rebuild_items` RENAME TO `app/items`;\nDROP TABLE `app/__ptah_replaced_items`;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

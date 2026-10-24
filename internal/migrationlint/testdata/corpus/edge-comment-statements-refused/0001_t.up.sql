@@ -1,0 +1,11 @@
+CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id));
+COMMENT ON COLUMN `t` IS 'no column';
+COMMENT ON COLUMN `t`.`a` IS 'bad escape \q';
+COMMENT ON COLUMN `t`.`a` IS 'one' 'two';
+COMMENT ON TABLE IS 'nothing named';
+COMMENT ON INDEX `i` `t` IS 'no on';
+COMMENT ON COLUMN `t`.`cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc` IS 'too long a key';
+COMMENT ON COLUMN $t.`a` IS 'named expression';
+COMMENT ON COLUMN `t`.`b` IS 'kept';
+COMMENT ON SCHEMA `t` IS 'not a kind Ptah writes';
+COMMENT ON COLUMN `t`.`b` IS NULL;

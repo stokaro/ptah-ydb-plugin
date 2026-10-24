@@ -19,6 +19,20 @@ type reader struct {
 	pastHead bool
 }
 
+// Tokens returns every token of text read from its head, where a -- comment
+// starting with ! is a translation setting, without the end token.
+func Tokens(text string) []Token {
+	stream := reader{input: text}
+	var tokens []Token
+	for {
+		token := stream.NextToken()
+		if token.Type == TokenEOF {
+			return tokens
+		}
+		tokens = append(tokens, token)
+	}
+}
+
 // NextToken returns the next token of the text.
 func (r *reader) NextToken() Token {
 	token := r.scanToken()

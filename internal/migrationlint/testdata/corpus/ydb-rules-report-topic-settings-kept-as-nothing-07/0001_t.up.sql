@@ -1,0 +1,1 @@
+CREATE TOPIC events WITH (max_active_partitions = 5);

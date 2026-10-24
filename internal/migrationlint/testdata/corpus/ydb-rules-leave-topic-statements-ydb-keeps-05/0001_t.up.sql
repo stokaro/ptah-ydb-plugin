@@ -1,0 +1,1 @@
+CREATE TOPIC events (CONSUMER c WITH (important = TRUE, supported_codecs = 'RAW,gzip')) WITH (min_active_partitions = 2, auto_partitioning_strategy = 'scale_up', max_active_partitions = 4, retention_period = Interval('PT36H'), supported_codecs = 'raw,gzip,lzop,zstd,custom');

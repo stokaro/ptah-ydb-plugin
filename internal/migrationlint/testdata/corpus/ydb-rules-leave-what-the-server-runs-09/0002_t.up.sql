@@ -1,0 +1,5 @@
+ALTER TABLE `dir/t` ADD COLUMN `e` Uint64;
+ALTER TABLE `dir/t` SET (TTL = Interval("PT1H") ON `e` AS SECONDS);
+ALTER TABLE `dir/t` DROP COLUMN `ts`;
+ALTER TABLE `dir/t` RESET (TTL);
+ALTER TABLE `dir/t` DROP COLUMN `e`;

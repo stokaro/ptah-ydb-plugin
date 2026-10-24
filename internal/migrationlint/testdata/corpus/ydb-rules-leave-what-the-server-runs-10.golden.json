@@ -1,0 +1,221 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD103",
+      "file": 1,
+      "message": "ADD COLUMN d gives the column a default, which needs target capability add_column_with_default, unavailable on this ydb target; add the column without a default and write its values in a data statement",
+      "statement": 2
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:3:YD103"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE `t` ( `id` UINT64 NOT NULL, `a` UTF8 FAMILY `cold`, `c` INT32 FAMILY `cold` NOT NULL DEFAULT 7, PRIMARY KEY (`id`), FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'lz4'), FAMILY `default` (COMPRESSION = 'lz4') )",
+       "end": 244,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`t`", "(", "`id`", "Uint64", "NOT", "NULL", ",", "`a`", "Utf8", "FAMILY", "`cold`", ",", "`c`", "Int32", "FAMILY", "`cold`", "NOT", "NULL", "DEFAULT", "7", ",", "PRIMARY", "KEY", "(", "`id`", ")", ",", "FAMILY", "`cold`", "(", "DATA", "=", "'hdd'", ",", "COMPRESSION", "=", "'lz4'", ")", ",", "FAMILY", "`default`", "(", "COMPRESSION", "=", "'lz4'", ")", ")"],
+       "sql": "CREATE TABLE `t` (\n    `id` Uint64 NOT NULL,\n    `a` Utf8 FAMILY `cold`,\n    `c` Int32 FAMILY `cold` NOT NULL DEFAULT 7,\n    PRIMARY KEY (`id`),\n    FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'lz4'),\n    FAMILY `default` (COMPRESSION = 'lz4')\n)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`t`", "(", "`id`", "UINT64", "NOT", "NULL", ",", "`a`", "UTF8", "FAMILY", "`cold`", ",", "`c`", "INT32", "FAMILY", "`cold`", "NOT", "NULL", "DEFAULT", "7", ",", "PRIMARY", "KEY", "(", "`id`", ")", ",", "FAMILY", "`cold`", "(", "DATA", "=", "'hdd'", ",", "COMPRESSION", "=", "'lz4'", ")", ",", "FAMILY", "`default`", "(", "COMPRESSION", "=", "'lz4'", ")", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE `t` ADD COLUMN `b` UTF8",
+       "end": 35,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "`t`", "ADD", "COLUMN", "`b`", "Utf8"],
+       "sql": "ALTER TABLE `t` ADD COLUMN `b` Utf8",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "`t`", "ADD", "COLUMN", "`b`", "UTF8"]
+      },
+      {
+       "canonical": "ALTER TABLE `t` ADD FAMILY `warm` (COMPRESSION = 'lz4'), ALTER FAMILY `cold` SET COMPRESSION 'off', ALTER FAMILY `default` SET COMPRESSION 'off', ALTER COLUMN `a` SET FAMILY `default`, ALTER COLUMN `b` SET FAMILY `warm`",
+       "end": 256,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "`t`", "ADD", "FAMILY", "`warm`", "(", "COMPRESSION", "=", "'lz4'", ")", ",", "ALTER", "FAMILY", "`cold`", "SET", "COMPRESSION", "'off'", ",", "ALTER", "FAMILY", "`default`", "SET", "COMPRESSION", "'off'", ",", "ALTER", "COLUMN", "`a`", "SET", "FAMILY", "`default`", ",", "ALTER", "COLUMN", "`b`", "SET", "FAMILY", "`warm`"],
+       "sql": "ALTER TABLE `t` ADD FAMILY `warm` (COMPRESSION = 'lz4'), ALTER FAMILY `cold` SET COMPRESSION 'off', ALTER FAMILY `default` SET COMPRESSION 'off', ALTER COLUMN `a` SET FAMILY `default`, ALTER COLUMN `b` SET FAMILY `warm`",
+       "start": 37,
+       "words": ["ALTER", "TABLE", "`t`", "ADD", "FAMILY", "`warm`", "(", "COMPRESSION", "=", "'lz4'", ")", ",", "ALTER", "FAMILY", "`cold`", "SET", "COMPRESSION", "'off'", ",", "ALTER", "FAMILY", "`default`", "SET", "COMPRESSION", "'off'", ",", "ALTER", "COLUMN", "`a`", "SET", "FAMILY", "`default`", ",", "ALTER", "COLUMN", "`b`", "SET", "FAMILY", "`warm`"]
+      },
+      {
+       "canonical": "ALTER TABLE `t` ADD COLUMN `d` INT32 FAMILY `warm` NOT NULL DEFAULT 1",
+       "end": 327,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "`t`", "ADD", "COLUMN", "`d`", "Int32", "FAMILY", "`warm`", "NOT", "NULL", "DEFAULT", "1"],
+       "sql": "ALTER TABLE `t` ADD COLUMN `d` Int32 FAMILY `warm` NOT NULL DEFAULT 1",
+       "start": 258,
+       "words": ["ALTER", "TABLE", "`t`", "ADD", "COLUMN", "`d`", "INT32", "FAMILY", "`warm`", "NOT", "NULL", "DEFAULT", "1"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE `t` ( `id` UINT64 NOT NULL, `a` UTF8 FAMILY `cold`, `c` INT32 FAMILY `cold` NOT NULL DEFAULT 7, PRIMARY KEY (`id`), FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'lz4'), FAMILY `default` (COMPRESSION = 'lz4') )",
+      "end": 244,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`t`", "(", "`id`", "Uint64", "NOT", "NULL", ",", "`a`", "Utf8", "FAMILY", "`cold`", ",", "`c`", "Int32", "FAMILY", "`cold`", "NOT", "NULL", "DEFAULT", "7", ",", "PRIMARY", "KEY", "(", "`id`", ")", ",", "FAMILY", "`cold`", "(", "DATA", "=", "'hdd'", ",", "COMPRESSION", "=", "'lz4'", ")", ",", "FAMILY", "`default`", "(", "COMPRESSION", "=", "'lz4'", ")", ")"],
+      "sql": "CREATE TABLE `t` (\n    `id` Uint64 NOT NULL,\n    `a` Utf8 FAMILY `cold`,\n    `c` Int32 FAMILY `cold` NOT NULL DEFAULT 7,\n    PRIMARY KEY (`id`),\n    FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'lz4'),\n    FAMILY `default` (COMPRESSION = 'lz4')\n)",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`t`", "(", "`id`", "UINT64", "NOT", "NULL", ",", "`a`", "UTF8", "FAMILY", "`cold`", ",", "`c`", "INT32", "FAMILY", "`cold`", "NOT", "NULL", "DEFAULT", "7", ",", "PRIMARY", "KEY", "(", "`id`", ")", ",", "FAMILY", "`cold`", "(", "DATA", "=", "'hdd'", ",", "COMPRESSION", "=", "'lz4'", ")", ",", "FAMILY", "`default`", "(", "COMPRESSION", "=", "'lz4'", ")", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE `t` ADD COLUMN `b` UTF8",
+      "end": 35,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "`t`", "ADD", "COLUMN", "`b`", "Utf8"],
+      "sql": "ALTER TABLE `t` ADD COLUMN `b` Utf8",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "`t`", "ADD", "COLUMN", "`b`", "UTF8"]
+     },
+     {
+      "canonical": "ALTER TABLE `t` ADD FAMILY `warm` (COMPRESSION = 'lz4'), ALTER FAMILY `cold` SET COMPRESSION 'off', ALTER FAMILY `default` SET COMPRESSION 'off', ALTER COLUMN `a` SET FAMILY `default`, ALTER COLUMN `b` SET FAMILY `warm`",
+      "end": 256,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "`t`", "ADD", "FAMILY", "`warm`", "(", "COMPRESSION", "=", "'lz4'", ")", ",", "ALTER", "FAMILY", "`cold`", "SET", "COMPRESSION", "'off'", ",", "ALTER", "FAMILY", "`default`", "SET", "COMPRESSION", "'off'", ",", "ALTER", "COLUMN", "`a`", "SET", "FAMILY", "`default`", ",", "ALTER", "COLUMN", "`b`", "SET", "FAMILY", "`warm`"],
+      "sql": "ALTER TABLE `t` ADD FAMILY `warm` (COMPRESSION = 'lz4'), ALTER FAMILY `cold` SET COMPRESSION 'off', ALTER FAMILY `default` SET COMPRESSION 'off', ALTER COLUMN `a` SET FAMILY `default`, ALTER COLUMN `b` SET FAMILY `warm`",
+      "start": 37,
+      "words": ["ALTER", "TABLE", "`t`", "ADD", "FAMILY", "`warm`", "(", "COMPRESSION", "=", "'lz4'", ")", ",", "ALTER", "FAMILY", "`cold`", "SET", "COMPRESSION", "'off'", ",", "ALTER", "FAMILY", "`default`", "SET", "COMPRESSION", "'off'", ",", "ALTER", "COLUMN", "`a`", "SET", "FAMILY", "`default`", ",", "ALTER", "COLUMN", "`b`", "SET", "FAMILY", "`warm`"]
+     },
+     {
+      "canonical": "ALTER TABLE `t` ADD COLUMN `d` INT32 FAMILY `warm` NOT NULL DEFAULT 1",
+      "end": 327,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "`t`", "ADD", "COLUMN", "`d`", "Int32", "FAMILY", "`warm`", "NOT", "NULL", "DEFAULT", "1"],
+      "sql": "ALTER TABLE `t` ADD COLUMN `d` Int32 FAMILY `warm` NOT NULL DEFAULT 1",
+      "start": 258,
+      "words": ["ALTER", "TABLE", "`t`", "ADD", "COLUMN", "`d`", "INT32", "FAMILY", "`warm`", "NOT", "NULL", "DEFAULT", "1"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE `t` (\n    `id` Uint64 NOT NULL,\n    `a` Utf8 FAMILY `cold`,\n    `c` Int32 FAMILY `cold` NOT NULL DEFAULT 7,\n    PRIMARY KEY (`id`),\n    FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'lz4'),\n    FAMILY `default` (COMPRESSION = 'lz4')\n);\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER TABLE `t` ADD COLUMN `b` Utf8;\nALTER TABLE `t` ADD FAMILY `warm` (COMPRESSION = 'lz4'), ALTER FAMILY `cold` SET COMPRESSION 'off', ALTER FAMILY `default` SET COMPRESSION 'off', ALTER COLUMN `a` SET FAMILY `default`, ALTER COLUMN `b` SET FAMILY `warm`;\nALTER TABLE `t` ADD COLUMN `d` Int32 FAMILY `warm` NOT NULL DEFAULT 1;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}
