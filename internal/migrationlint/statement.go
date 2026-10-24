@@ -1,9 +1,7 @@
 // Package migrationlint is the YDB provider's migration lint: the splitter
 // that reads a YDB migration as YQL, the facts it reports about each
 // statement, the annotation of a split the host made without a dialect, and
-// the rules of the YD family that judge one statement, by what it says or
-// through a reader of their own, published as data and checked once per lint
-// run.
+// the YD family of rules, published as data and checked once per lint run.
 //
 // It serves the SDK's lint.migrations service. The host owns output formats,
 // severity thresholds, suppression and the rules every dialect shares; this
@@ -16,11 +14,12 @@
 // corpus of migration directories, which the tests compare with this
 // package's finding for finding (see testdata/README.md).
 //
-// The splitter reads what a table a rebuild replaces holds from the directory
-// itself, whether or not the run has a dev database: the up migrations before
-// the file's version, in version order, then the statements of the file before
-// the rebuild. A table created outside the directory is unknown, and a copy of
-// an unknown table is taken at its word.
+// The rules that need to know what a table looks like before a statement read
+// it from the directory itself, whether or not the run has a dev database: the
+// up migrations before the analyzed version, in version order, then the
+// statements of the file before the one analyzed. A table created outside the
+// directory is unknown, and an unknown table reports nothing. The splitter
+// reads the columns of a rebuilt table from the same history.
 package migrationlint
 
 import (
@@ -125,3 +124,6 @@ type checkedFile struct {
 	// Atlas-compatible one.
 	Compatibility string
 }
+
+// atlasSurface is the compatibility of the Atlas-compatible command surface.
+const atlasSurface = "atlas"

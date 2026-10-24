@@ -166,17 +166,10 @@ var severityNames = map[protocol.LintRule_Severity]string{
 	protocol.LintRule_INFO: "info", protocol.LintRule_WARNING: "warning", protocol.LintRule_ERROR: "error",
 }
 
-// pendingCodes are the rules of the host's YDB owner the provider does not
-// serve yet: the rules that read the directory's history.
-var pendingCodes = []string{
-	"YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD115", "YD118", "YD119", "YD131", "YD150",
-}
-
 // TestRules_AreTheHosts requires the provider to publish the rules the host's
 // owner publishes, in code order, each with its title, severity, reach into
-// down migrations and the rules it subsumes, apart from the pending ones.
-// Every one reads the statement text and judges YDB alone, which the wire
-// takes as given.
+// down migrations and the rules it subsumes. Every one reads the statement
+// text and judges YDB alone, which the wire takes as given.
 func TestRules_AreTheHosts(t *testing.T) {
 	c := qt.New(t)
 	var recorded struct {
@@ -188,10 +181,5 @@ func TestRules_AreTheHosts(t *testing.T) {
 		got = append(got, publishedRule{Code: rule.GetCode(), Title: rule.GetTitle(), Severity: severityNames[rule.GetSeverity()],
 			AppliesToDown: rule.GetAppliesToDown(), Subsumes: rule.GetSubsumes(), Targets: []string{"ydb"}})
 	}
-	c.Assert(got, sameAnswer, slices.DeleteFunc(recorded.Rules, func(rule publishedRule) bool { return slices.Contains(pendingCodes, rule.Code) }))
-	var codes []string
-	for _, rule := range recorded.Rules {
-		codes = append(codes, rule.Code)
-	}
-	c.Assert(codes, qt.HasLen, len(got)+len(pendingCodes))
+	c.Assert(got, sameAnswer, recorded.Rules)
 }

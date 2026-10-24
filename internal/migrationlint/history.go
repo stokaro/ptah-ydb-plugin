@@ -34,6 +34,7 @@ func newHistory(files []File) history {
 		h[file.Name] = state.clone()
 		for i := range file.Statements {
 			state.apply(yqlddl.Read(file.Statements[i].SQL))
+			state.applyComment(file.Statements[i].SQL)
 		}
 		after[file.Version] = state.clone()
 	}
@@ -59,6 +60,11 @@ func stateThrough(ups []int, files []File, after map[int64]*ydbSchema, version i
 	return latest
 }
 
+// before is a copy of the schema the file named name starts from.
+func (h history) before(name string) *ydbSchema {
+	return h[name].clone()
+}
+
 // columns says what a replaced table holds just before each statement of the
 // file named name runs: the file's starting schema with the statements before
 // it applied.
@@ -76,4 +82,13 @@ func (h history) columns(name string, statements []Statement) columnsBefore {
 		}
 		return nil, false
 	}
+}
+
+// rebuilds finds the table rebuilds of an up file on Ptah's own surface, the
+// one that recognizes them.
+func (h history) rebuilds(file checkedFile) rebuildSteps {
+	if !file.Up || file.Compatibility == atlasSurface {
+		return rebuildSteps{drops: make(map[int]bool), renames: make(map[int]bool)}
+	}
+	return rebuilds(file.Statements, h.columns(file.Name, file.Statements))
 }
