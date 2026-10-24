@@ -20,17 +20,18 @@ func TestMigrationLintOfflineSubprocess(t *testing.T) {
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	c.Assert(client.Description().Features, qt.Contains, provider.LintFeature)
-	c.Assert(client.Description().Engines[0].LintRules, qt.Not(qt.HasLen), 0)
+	c.Assert(client.Description().Engines[0].LintRules, qt.HasLen, 26)
 
 	first := "CREATE TABLE t (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id));\n"
-	second := "-- a unique index over existing rows\nALTER TABLE t ADD INDEX t_v GLOBAL UNIQUE ON (v);\nDROP TOPIC events;\n"
+	second := "-- a unique index over existing rows\nALTER TABLE t ADD INDEX t_v GLOBAL UNIQUE ON (v);\nDROP TOPIC events;\n" +
+		"ALTER TABLE t DROP COLUMN v;\n"
 	split, err := client.SplitLintStatements(c.Context(), &protocol.SplitLintRequest{Engine: "ydb", Sources: []*protocol.LintSource{
 		{Name: "0001_t.up.sql", Sql: first, Version: 1, Up: true},
 		{Name: "0002_t.up.sql", Sql: second, Version: 2, Up: true},
 	}})
 	c.Assert(err, qt.IsNil)
 	c.Assert(split.Files, qt.HasLen, 2)
-	c.Assert(split.Files[1].Statements, qt.HasLen, 2)
+	c.Assert(split.Files[1].Statements, qt.HasLen, 3)
 	c.Assert(split.Files[1].Statements[0].Comments, qt.DeepEquals, []string{"-- a unique index over existing rows"})
 	c.Assert(split.Files[1].Statements[0].Effects[0].Fact, qt.Equals, protocol.LintFact_LINT_FACT_UNIQUE_INDEX)
 	c.Assert(split.Files[1].Statements[1].Effects[0].Fact, qt.Equals, protocol.LintFact_LINT_FACT_STATEFUL_DROP)
@@ -46,6 +47,14 @@ func TestMigrationLintOfflineSubprocess(t *testing.T) {
 	c.Assert(checked.Findings, qt.HasLen, 1)
 	c.Assert(checked.Findings[0].File, qt.Equals, int32(1))
 	c.Assert(checked.Findings[0].Statement, qt.Equals, int32(0))
+
+	// The index the earlier statement added keys v, which the history the
+	// directory's files leave says.
+	used, err := client.CheckLintMigrations(c.Context(), &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD104"}, Files: files})
+	c.Assert(err, qt.IsNil)
+	c.Assert(used.Findings, qt.HasLen, 1)
+	c.Assert(used.Findings[0].Statement, qt.Equals, int32(2))
+	c.Assert(used.Findings[0].Subjects[0].Name, qt.Equals, "v")
 
 	annotated, err := client.AnnotateLintStatements(c.Context(), &protocol.AnnotateLintRequest{Engine: "ydb",
 		Facts:   []protocol.LintFact{protocol.LintFact_LINT_FACT_STATEFUL_DROP},
