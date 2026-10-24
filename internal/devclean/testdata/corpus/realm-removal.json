@@ -1,0 +1,51 @@
+{
+  "database": "/local",
+  "realm": "",
+  "remove_realm": "r1",
+  "tree": {
+    "/local": [
+      {
+        "name": "ptah_dev",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "t",
+        "type": "TABLE"
+      }
+    ],
+    "/local/ptah_dev": [
+      {
+        "name": "r1",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/ptah_dev/r1": [
+      {
+        "name": ".dot",
+        "type": "TABLE"
+      },
+      {
+        "name": "ptah_locks",
+        "type": "COORDINATION_NODE"
+      },
+      {
+        "name": "sub",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "t",
+        "type": "TABLE"
+      }
+    ],
+    "/local/ptah_dev/r1/sub": [
+      {
+        "name": "v",
+        "type": "VIEW"
+      },
+      {
+        "name": "s",
+        "type": "SECRET"
+      }
+    ]
+  }
+}

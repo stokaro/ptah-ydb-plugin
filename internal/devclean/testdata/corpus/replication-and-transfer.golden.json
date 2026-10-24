@@ -1,0 +1,47 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "objects": [
+    {
+      "kind": "table",
+      "schema": "",
+      "name": "a"
+    },
+    {
+      "kind": "transfer",
+      "schema": "",
+      "name": "feed"
+    },
+    {
+      "kind": "replication",
+      "schema": "",
+      "name": "mirror"
+    },
+    {
+      "kind": "table",
+      "schema": "",
+      "name": "replica"
+    },
+    {
+      "kind": "table",
+      "schema": "stream",
+      "name": "q"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "stream"
+    }
+  ],
+  "drop": {
+    "executed": [
+      "DROP TRANSFER `feed`",
+      "DROP ASYNC REPLICATION `mirror`",
+      "DROP TABLE `a`",
+      "DROP TABLE `replica`",
+      "DROP TABLE `stream/q`"
+    ],
+    "removed": [
+      "/local/stream"
+    ]
+  }
+}

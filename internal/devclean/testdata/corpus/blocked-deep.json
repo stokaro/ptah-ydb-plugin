@@ -1,0 +1,22 @@
+{
+  "database": "/local",
+  "realm": "",
+  "tree": {
+    "/local": [
+      {
+        "name": "a",
+        "type": "TABLE"
+      },
+      {
+        "name": "dir",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/dir": [
+      {
+        "name": "seq",
+        "type": "SEQUENCE"
+      }
+    ]
+  }
+}

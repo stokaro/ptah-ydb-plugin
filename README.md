@@ -214,7 +214,17 @@ run does not own is a directory. `dev_realm=<name>` on an address makes the
 provider treat `<database>/ptah_dev/<name>` as the whole database of the
 session. A name is 1 to 64 lowercase letters, digits and underscores, and the
 address must name the database that holds the realm. Opening such a session
-creates the directory when it does not exist; nothing in the protocol removes it.
+creates the directory when it does not exist.
+
+The engine declares `database.dev-realms`. A host that lists the feature sends
+a dev database request with the operator's address instead of a spec, and the
+provider creates a realm of the run's own in the database the address names, as
+the host's embedded engine does: a name of 16 random hexadecimal digits, and an
+address that keeps the operator's scheme, host and credentials and names the
+realm in place of any it named. Releasing the lease removes the realm with
+everything in it, and then `ptah_dev` when no realm is left in it; an object
+there is no statement to drop for stops the removal before anything is dropped.
+The provider also removes the realms it holds when its process ends.
 
 The session receipt reports the realm's path as its database, and inspection,
 locks, migration history, migration metadata and every native write resolve
@@ -228,8 +238,47 @@ realm, moves the prefix, runs code it computes, or creates a user, group,
 permission, resource pool or backup. An external data source or table, an async
 replication, a transfer and a streaming query are refused too. A statement the
 guard does not recognize is refused. The rules are the host's replay guard for a
-realm; `internal/yql/testdata/realm` holds the host's answer for 83 statements,
+realm; `internal/yql/testdata/realm` holds the host's answers for 94 statements,
 and `--!syntax_v1` is the one difference.
+
+The provider also serves the replay guard itself (`database.dev-replay-guard`):
+the host asks, without a session, about each statement it is about to replay
+into a dev database, and the provider answers as the host's YDB guard does
+(`internal/devclean/ydbreplay`). A run that owns the whole server, because the
+operator declared it disposable or the run provisioned it, may change anything
+on it but what reaches past it: an external data source or table, an async
+replication, a transfer and a streaming query, and a translation setting, which
+changes how the rest of the text is read. Every other scope confines a statement
+to the dev database, with the rules above, and refuses `--!syntax_v1` as the
+host does. `testdata/realm/scopes.json` holds the host's verdict on each
+statement under every scope.
+
+## Dev database cleanup
+
+The provider lists and empties the dev database a session selected
+(`database.dev-cleanup`), as the host's embedded engine lists and resets one.
+The list and the cleanup read one walk of the session's root, each directory's
+entries in name order and a directory after its contents, so a database the list
+finds empty is one the cleanup leaves as it is. The walk leaves alone a name
+that starts with a dot, which belongs to the server, the lock node the session
+keeps its locks on, and at the root of a database the directory of the dev
+realms. A request that names schemas walks only those directories, and keeps
+them.
+
+The cleanup drops every transfer and streaming query, then every async
+replication, then external tables and column tables, then external data sources,
+then the other objects, then secrets, and removes the directories, deepest
+first, with the host's statements. A coordination node is dropped through the
+coordination service. An object there is no statement for, such as a resource
+pool, refuses the cleanup before anything is dropped, and the reply names it. A
+cleanup that stops after its first step is `UNKNOWN`, and the host treats the
+database as not clean. One difference from the host is deliberate: the host
+drops the lock node at the root of a realm, and the provider keeps it, because a
+provider session holds its locks there.
+
+`internal/devclean/testdata` holds scheme trees and what the host's embedded
+engine listed, dropped and removed for each, recorded by an oracle program; the
+tests replay each tree through the provider's walk and cleanup.
 
 A session on the database itself leaves the `ptah_dev` directory out of
 everything it reads, and a table owner may not be named `ptah_dev`.
@@ -248,13 +297,18 @@ manual removal.
 
 The spec follows the host's `docker://ydb` rules: the engine is matched as
 written, one path segment is a tag, and local-ydb serves the database `local`
-alone. Parameters are merged over the default `go_balancer=disable`. Those that
+alone. The host also sends the image form the operator types,
+`docker+ydb://[<host>/]<image>[:<tag>][/local]`, which starts the image it
+names and is read as the host reads the image form of its other engines: the
+last path segment is the database when there are two or more and it holds no
+colon, the segments before it are the image, a host other than `_` leads the
+image, and an image with no tag is `latest`. The image has to serve the
+database `local` without a credential, as local-ydb does. Parameters are merged over the default `go_balancer=disable`. Those that
 would point the connection elsewhere or hand the container a credential
 (`host`, `hostaddr`, `port`, `user`, `password`, `dbname`, `passfile`, `service`,
 `servicefile`, `database`, `dev_realm`, `monitoring`, `token`,
 `use_env_credentials`) are refused, and so is any parameter a YDB address does not accept, before a container
-starts. The host starts other engines itself, and `docker+ydb://` image specs
-never reach the provider, because the host sends it `docker://` specs only.
+starts. The host starts other engines itself.
 
 The provider drives the `docker` command line, which it finds on `PATH`. The
 host starts the provider with an explicit environment, so pass `PATH`, and
@@ -277,15 +331,22 @@ contain several SQL statements, so its error cannot prove that none ran.
 Cancellation between units reports the confirmed prefix. Diagnostics omit raw
 driver errors and SQL text.
 
-A statement timeout reaches the provider as the deadline of the Execute call,
-which the host sets for each statement of a migration. A unit the deadline stops
-reports UNKNOWN with the confirmed prefix, no later unit runs, and the unit is
-not sent again, because YDB keeps running a schema statement after its client
-stops waiting. The session receipt reports `migration_statement_timeout=true`
-for that reason. The host's own migrator also cancels the build an interrupted
-`ALTER TABLE ... ADD INDEX` started, through the operation service, and reports
-such a statement as not applied; the provider does not, so it reports UNKNOWN
-for every statement a deadline stops, a data query included.
+The provider offers `units.statement-timeout`. A host that lists it sends a
+migration's statement timeout with each Execute call, and the provider bounds
+each unit with it and answers for what YDB does when it fires, as the host's
+embedded engine does (`migration/migrator`, `ydb_timeouts.go`); the reply says
+the timeout stopped the unit. A unit in the caller's transaction is canceled
+and the transaction never commits, so nothing of the unit is applied
+(`NOT_APPLIED`, or `PARTIAL` after a prefix), and the provider rolls the
+transaction back. An index added to a table that exists, and a column added
+with a default, run as a build that keeps running when the client stops
+waiting: the provider cancels the build through the operation service and
+waits for it to end, so a stopped build is not applied, and one that completed
+first counts as applied. Any other unit, and a build that cannot be found or
+does not end, may still be applied by the server, and its outcome is `UNKNOWN`.
+A host that does not list the feature bounds a statement with the deadline of
+the Execute call, and a unit that deadline stops is `UNKNOWN` and is not sent
+again. The session receipt reports `migration_statement_timeout=true` either way.
 
 Transaction handles belong to one provider session. DEFAULT and SERIALIZABLE
 both use YDB's native serializable read/write mode; receipts retain the
@@ -1589,7 +1650,7 @@ settings other than column families, table removal and rebuild, planning, render
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
 rendering, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, offline SQL analysis, migration lint, row and seed services. The remaining
+lock, offline SQL analysis, migration lint, row and seed services, dev database cleanup and replay guard services. The remaining
 capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

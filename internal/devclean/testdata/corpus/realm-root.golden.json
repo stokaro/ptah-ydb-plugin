@@ -1,0 +1,41 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "objects": [
+    {
+      "kind": "topic",
+      "schema": "d",
+      "name": "tp"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "d"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "ptah_dev"
+    },
+    {
+      "kind": "coordination node",
+      "schema": "",
+      "name": "ptah_locks"
+    },
+    {
+      "kind": "table",
+      "schema": "",
+      "name": "t"
+    }
+  ],
+  "drop": {
+    "executed": [
+      "DROP TOPIC `d/tp`",
+      "DROP COORDINATION NODE `ptah_locks`",
+      "DROP TABLE `t`"
+    ],
+    "removed": [
+      "/local/ptah_dev/r1/d",
+      "/local/ptah_dev/r1/ptah_dev"
+    ]
+  }
+}

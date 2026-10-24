@@ -1,0 +1,30 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "objects": [
+    {
+      "kind": "table",
+      "schema": "",
+      "name": "t"
+    }
+  ],
+  "drop": {
+    "executed": [
+      "DROP TABLE `t`"
+    ],
+    "removed": []
+  },
+  "remove_realm": {
+    "executed": [
+      "DROP TABLE `ptah_dev/r1/.dot`",
+      "DROP COORDINATION NODE `ptah_dev/r1/ptah_locks`",
+      "DROP VIEW `ptah_dev/r1/sub/v`",
+      "DROP TABLE `ptah_dev/r1/t`",
+      "DROP SECRET `ptah_dev/r1/sub/s`"
+    ],
+    "removed": [
+      "/local/ptah_dev/r1/sub",
+      "/local/ptah_dev/r1",
+      "/local/ptah_dev"
+    ]
+  }
+}

@@ -31,22 +31,32 @@ type Probe func(ctx context.Context, address string) error
 type Provisioner struct {
 	runtime Runtime
 	probe   Probe
+	realms  Realms
 	mu      sync.Mutex
-	leases  map[string]string
+	leases  map[string]lease
 }
 
-// New returns a provisioner that starts containers through runtime and waits
-// for them with probe. A nil probe waits with [Ready].
-func New(runtime Runtime, probe Probe) *Provisioner {
+// lease is what one lease holds: a container, or a realm in a database the
+// operator named.
+type lease struct {
+	container string
+	realm     *realmLease
+}
+
+// New returns a provisioner that starts containers through runtime, waits for
+// them with probe and creates realms through realms. A nil probe waits with
+// [Ready], and nil realms create none.
+func New(runtime Runtime, probe Probe, realms Realms) *Provisioner {
 	if probe == nil {
 		probe = Ready
 	}
-	return &Provisioner{runtime: runtime, probe: probe, leases: map[string]string{}}
+	return &Provisioner{runtime: runtime, probe: probe, realms: realms, leases: map[string]lease{}}
 }
 
-// NewDocker returns a provisioner that drives the docker command line.
+// NewDocker returns a provisioner that drives the docker command line and
+// creates realms through native connections.
 func NewDocker() *Provisioner {
-	return New(DockerCLI{RunLabel: "ydb-plugin-" + token(8)}, nil)
+	return New(DockerCLI{RunLabel: "ydb-plugin-" + token(8)}, nil, NativeRealms{})
 }
 
 func token(size int) string {
@@ -60,6 +70,9 @@ func token(size int) string {
 // a runtime it lacks are typed refusals, not errors. A canceled call removes
 // the container it started before it returns.
 func (p *Provisioner) ProvisionDevDatabase(ctx context.Context, request *protocol.ProvisionDevRequest) (*protocol.DevDatabase, error) {
+	if request.GetAddress() != "" {
+		return p.enterRealm(ctx, request.GetAddress())
+	}
 	spec, err := ParseSpec(request.GetSpec())
 	if err != nil {
 		return refused(err)
@@ -80,11 +93,16 @@ func (p *Provisioner) ProvisionDevDatabase(ctx context.Context, request *protoco
 		p.discard(name)
 		return nil, err
 	}
-	lease := token(16)
+	return &protocol.DevDatabase{Lease: p.hold(lease{container: name}), Url: address}, nil
+}
+
+// hold records a lease and returns its name.
+func (p *Provisioner) hold(held lease) string {
+	name := token(16)
 	p.mu.Lock()
-	p.leases[lease] = name
+	p.leases[name] = held
 	p.mu.Unlock()
-	return &protocol.DevDatabase{Lease: lease, Url: address}, nil
+	return name
 }
 
 // refused turns a refusal into the reply that carries it. Any other error is
@@ -135,12 +153,12 @@ func (p *Provisioner) discard(name string) {
 // repeated and [Provisioner.Close] tries again.
 func (p *Provisioner) ReleaseDevDatabase(ctx context.Context, request *protocol.ReleaseDevRequest) (*protocol.Empty, error) {
 	p.mu.Lock()
-	name, found := p.leases[request.GetLease()]
+	held, found := p.leases[request.GetLease()]
 	p.mu.Unlock()
 	if !found {
 		return &protocol.Empty{}, nil
 	}
-	if err := p.runtime.Remove(context.WithoutCancel(ctx), name); err != nil {
+	if err := p.remove(context.WithoutCancel(ctx), held); err != nil {
 		return nil, err
 	}
 	p.mu.Lock()
@@ -153,19 +171,27 @@ func (p *Provisioner) ReleaseDevDatabase(ctx context.Context, request *protocol.
 // process ends, because a host that crashed never releases its leases.
 func (p *Provisioner) Close() error {
 	p.mu.Lock()
-	names := make([]string, 0, len(p.leases))
-	for lease, name := range p.leases {
-		names = append(names, name)
-		delete(p.leases, lease)
+	held := make([]lease, 0, len(p.leases))
+	for name, one := range p.leases {
+		held = append(held, one)
+		delete(p.leases, name)
 	}
 	p.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), removeTimeout)
 	defer cancel()
 	var errs []error
-	for _, name := range names {
-		errs = append(errs, p.runtime.Remove(ctx, name))
+	for _, one := range held {
+		errs = append(errs, p.remove(ctx, one))
 	}
 	return errors.Join(errs...)
+}
+
+// remove removes what a lease holds.
+func (p *Provisioner) remove(ctx context.Context, held lease) error {
+	if held.realm != nil {
+		return p.removeRealm(ctx, *held.realm)
+	}
+	return p.runtime.Remove(ctx, held.container)
 }
 
 // Ready checks once that the server at address takes DDL: it connects, then

@@ -87,8 +87,14 @@ func TestParseSpec_FailurePath(t *testing.T) {
 		{"unknown parameter", "docker://ydb/26.2.1.14?test-secret=1", `the docker parameters are not accepted by a YDB address: unsupported YDB URL parameter.*`},
 		{"bad balancer", "docker://ydb/26.2.1.14?go_balancer=nonsense", `the docker parameters are not accepted by a YDB address: .*`},
 		{"bad tag", "docker://ydb/-oops", `the image tag is empty or not a Docker tag`},
-		{"not docker", "ydb://ydb/26.2.1.14", `the dev database spec is not a docker:// URL`},
+		{"not docker", "ydb://ydb/26.2.1.14", `the dev database spec is not a docker:// or docker\+ydb:// URL`},
+		{"another engine's image form", "docker+postgres://_/postgres:17/dev", `the dev database spec is not a docker:// or docker\+ydb:// URL`},
 		{"malformed", "docker://ydb/26.2.1.14?a%zz=1", `the docker parameters are malformed`},
+		{"image form without an image", "docker+ydb://_/", `the docker\+ydb spec names no image`},
+		{"image form with another database", "docker+ydb://_/ydbplatform/local-ydb:26.2.1.14/dev", `the database is not one a YDB dev image serves: name local`},
+		{"image form with a path past the database", "docker+ydb://_/ydbplatform/local-ydb:26.2.1.14/local/extra", `the database is not one a YDB dev image serves: name local`},
+		{"image form that names no image", "docker+ydb://_/Not An Image", `the docker\+ydb spec does not name a Docker image`},
+		{"image form token", "docker+ydb://_/ydbplatform/local-ydb:26.2.1.14?token=test-secret", `docker parameter "token" would point .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -110,6 +116,12 @@ func TestParseSpec_HappyPath(t *testing.T) {
 		{"no path", "docker://ydb", "ydbplatform/local-ydb:latest", "ydb://127.0.0.1:1/local?go_balancer=disable"},
 		{"tag", "docker://ydb/26.2.1.14", "ydbplatform/local-ydb:26.2.1.14", "ydb://127.0.0.1:1/local?go_balancer=disable"},
 		{"operator wins", "docker://ydb/25.1.4.7/local?go_balancer=single&go_default_idempotent=true", "ydbplatform/local-ydb:25.1.4.7", "ydb://127.0.0.1:1/local?go_balancer=single&go_default_idempotent=true"},
+		{"image form", "docker+ydb://_/ydbplatform/local-ydb:24.3/local", "ydbplatform/local-ydb:24.3", "ydb://127.0.0.1:1/local?go_balancer=disable"},
+		{"image form without a database", "docker+ydb://_/ydbplatform/local-ydb:26.2.1.14", "ydbplatform/local-ydb:26.2.1.14", "ydb://127.0.0.1:1/local?go_balancer=disable"},
+		{"image form with an empty host", "docker+ydb:///ydbplatform/local-ydb:26.2.1.14/local", "ydbplatform/local-ydb:26.2.1.14", "ydb://127.0.0.1:1/local?go_balancer=disable"},
+		{"image form with a registry", "docker+ydb://cr.yandex/yc/yandex-docker-local-ydb:24.1/local", "cr.yandex/yc/yandex-docker-local-ydb:24.1", "ydb://127.0.0.1:1/local?go_balancer=disable"},
+		{"image form without a tag", "docker+ydb://_/mirror/local-ydb/local", "mirror/local-ydb:latest", "ydb://127.0.0.1:1/local?go_balancer=disable"},
+		{"image form in upper case", "DOCKER+YDB://_/ydbplatform/local-ydb:26.2.1.14/local?go_balancer=single", "ydbplatform/local-ydb:26.2.1.14", "ydb://127.0.0.1:1/local?go_balancer=single"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)

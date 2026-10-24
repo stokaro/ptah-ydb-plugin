@@ -11,13 +11,16 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 )
 
+// TestDescriptionListsOneFeatureSet pins that the engine offers every
+// service of the provider, and dev realms, which the contract makes a feature
+// of the engine alone.
 func TestDescriptionListsOneFeatureSet(t *testing.T) {
 	c := qt.New(t)
 
 	description := backend.Description()
 
-	c.Assert(description.Engines[0].Features, qt.Not(qt.HasLen), 0)
-	c.Assert(description.Engines[0].Features, qt.DeepEquals, description.Features)
+	c.Assert(description.Features, qt.Not(qt.HasLen), 0)
+	c.Assert(description.Engines[0].Features, qt.DeepEquals, append(description.Features, "database.dev-realms"))
 }
 
 func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {

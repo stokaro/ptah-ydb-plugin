@@ -1,0 +1,16 @@
+{
+  "database": "/Root/db1",
+  "realm": "",
+  "tree": {
+    "/Root/db1": [
+      {
+        "name": "x",
+        "type": "TABLE"
+      },
+      {
+        "name": "ptah_dev",
+        "type": "DIRECTORY"
+      }
+    ]
+  }
+}

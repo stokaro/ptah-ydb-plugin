@@ -1,0 +1,2095 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "rows": [
+    {
+      "statement": "CREATE TABLE t (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TABLE IF NOT EXISTS `dir/t` (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TABLE `../escape` (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the path ../escape, which climbs out of the dev database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the path ../escape, which climbs out of the dev database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the path ../escape, which climbs out of the dev database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TABLE `/local/abs` (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/abs"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/abs"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/abs"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TABLE `a/../../b` (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the path a/../../b, which climbs out of the dev database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the path a/../../b, which climbs out of the dev database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the path a/../../b, which climbs out of the dev database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TABLE $name (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a target named through $name"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a target named through $name"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a target named through $name"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TABLE cluster.t (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a target in the cluster cluster"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a target in the cluster cluster"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a target in the cluster cluster"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TEMP TABLE t (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "temporary table"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "temporary table"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "temporary table"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TEMPORARY TABLE t (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "temporary table"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "temporary table"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "temporary table"
+        }
+      }
+    },
+    {
+      "statement": "ALTER TABLE t ADD COLUMN c Int32",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "ALTER TABLE t RENAME TO u",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "ALTER TABLE t RENAME TO `../renamed`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the path ../renamed, which climbs out of the dev database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the path ../renamed, which climbs out of the dev database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the path ../renamed, which climbs out of the dev database"
+        }
+      }
+    },
+    {
+      "statement": "ALTER TABLE t RENAME TO `/abs`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        }
+      }
+    },
+    {
+      "statement": "ALTER TABLE t RENAME INDEX a TO b",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "ALTER TABLE `/local/x` ADD COLUMN c Int32",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/x"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/x"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/x"
+        }
+      }
+    },
+    {
+      "statement": "ALTER TABLE t SET (TTL = Interval(\"P1D\") TO EXTERNAL DATA SOURCE s ON c)",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        }
+      }
+    },
+    {
+      "statement": "DROP TABLE t",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "DROP TABLE IF EXISTS `/local/t`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/t"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/t"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/t"
+        }
+      }
+    },
+    {
+      "statement": "DROP TABLE IF EXISTS t",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "CREATE OR REPLACE VIEW v WITH (security_invoker = TRUE) AS SELECT 1",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "CREATE VIEW `../v` AS SELECT 1",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the path ../v, which climbs out of the dev database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the path ../v, which climbs out of the dev database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the path ../v, which climbs out of the dev database"
+        }
+      }
+    },
+    {
+      "statement": "DROP VIEW v",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TOPIC tp (CONSUMER c)",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "ALTER TOPIC tp ADD CONSUMER c2",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "DROP TOPIC `/local/tp`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/tp"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/tp"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/tp"
+        }
+      }
+    },
+    {
+      "statement": "CREATE SEQUENCE s",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "CREATE SECRET s WITH (value = 'v')",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "CREATE OBJECT s (TYPE SECRET) WITH value = 'v'",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "an object of the whole database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "an object of the whole database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "an object of the whole database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE COORDINATION NODE n",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "CREATE COORDINATION NODE `/local/n`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/n"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/n"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/n"
+        }
+      }
+    },
+    {
+      "statement": "CREATE COORDINATION SEMAPHORE n",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "unrecognized object CREATE COORDINATION SEMAPHORE"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "unrecognized object CREATE COORDINATION SEMAPHORE"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "unrecognized object CREATE COORDINATION SEMAPHORE"
+        }
+      }
+    },
+    {
+      "statement": "CREATE USER u1 PASSWORD 'p'",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        }
+      }
+    },
+    {
+      "statement": "ALTER USER u1 PASSWORD 'p'",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        }
+      }
+    },
+    {
+      "statement": "DROP USER u1",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE GROUP g1",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a group of the whole database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a group of the whole database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a group of the whole database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE RESOURCE POOL rp WITH (CONCURRENT_QUERY_LIMIT = 1)",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a resource pool of the whole database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a resource pool of the whole database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a resource pool of the whole database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE BACKUP COLLECTION c",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a backup collection of the whole database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a backup collection of the whole database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a backup collection of the whole database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE EXTERNAL DATA SOURCE s WITH (SOURCE_TYPE = 'ObjectStorage')",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        }
+      }
+    },
+    {
+      "statement": "CREATE EXTERNAL TABLE e (id Int64) WITH (DATA_SOURCE = 's')",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "an external table"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "an external table"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "an external table"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "an external table"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "an external table"
+        }
+      }
+    },
+    {
+      "statement": "CREATE ASYNC REPLICATION r FOR t AS t2 WITH (CONNECTION_STRING = 'x')",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "async replication"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "async replication"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "async replication"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "async replication"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "async replication"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TRANSFER x FROM tp TO t USING $l",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        }
+      }
+    },
+    {
+      "statement": "CREATE STREAMING QUERY q AS DO BEGIN SELECT 1; END DO",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a streaming query"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a streaming query"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "a streaming query"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "a streaming query"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a streaming query"
+        }
+      }
+    },
+    {
+      "statement": "CREATE DATABASE d",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a change to the whole database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a change to the whole database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a change to the whole database"
+        }
+      }
+    },
+    {
+      "statement": "CREATE FOO bar",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "unrecognized object CREATE FOO"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "unrecognized object CREATE FOO"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "unrecognized object CREATE FOO"
+        }
+      }
+    },
+    {
+      "statement": "GRANT SELECT ON t TO u1",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "GRANT permission change"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "GRANT permission change"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "GRANT permission change"
+        }
+      }
+    },
+    {
+      "statement": "REVOKE SELECT ON t FROM u1",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "REVOKE permission change"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "REVOKE permission change"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "REVOKE permission change"
+        }
+      }
+    },
+    {
+      "statement": "SELECT * FROM `/local/other`",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "SELECT 1",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "DECLARE $x AS Int64",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "INSERT INTO t (id) VALUES (1)",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "INSERT INTO `/local/t` (id) VALUES (1)",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/t"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/t"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/t"
+        }
+      }
+    },
+    {
+      "statement": "INSERT OR IGNORE INTO t (id) VALUES (1)",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "INSERT INTO $p (id) VALUES (1)",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a target named through $p"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a target named through $p"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a target named through $p"
+        }
+      }
+    },
+    {
+      "statement": "UPSERT INTO `../t` (id) VALUES (1)",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the path ../t, which climbs out of the dev database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the path ../t, which climbs out of the dev database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the path ../t, which climbs out of the dev database"
+        }
+      }
+    },
+    {
+      "statement": "REPLACE INTO t (id) VALUES (1)",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "UPDATE t SET c = 1",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "UPDATE `/local/t` SET c = 1",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/t"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/t"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/t"
+        }
+      }
+    },
+    {
+      "statement": "DELETE FROM t",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "DELETE FROM `../t` WHERE id = 1",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the path ../t, which climbs out of the dev database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the path ../t, which climbs out of the dev database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the path ../t, which climbs out of the dev database"
+        }
+      }
+    },
+    {
+      "statement": "DELETE FROM $t",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a target named through $t"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a target named through $t"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a target named through $t"
+        }
+      }
+    },
+    {
+      "statement": "TRUNCATE TABLE t",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "TRUNCATE TABLE `/abs`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        }
+      }
+    },
+    {
+      "statement": "ANALYZE t",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "ANALYZE `/abs`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        }
+      }
+    },
+    {
+      "statement": "BATCH UPDATE t SET c = 1",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "BATCH DELETE FROM `/abs`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /abs"
+        }
+      }
+    },
+    {
+      "statement": "PRAGMA TablePathPrefix = \"/local\"",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        }
+      }
+    },
+    {
+      "statement": "PRAGMA ydb.TablePathPrefix(\"/local\")",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        }
+      }
+    },
+    {
+      "statement": "PRAGMA tablepathprefix(\"/local\")",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        }
+      }
+    },
+    {
+      "statement": "PRAGMA AnsiInForEmptyOrNullableItemsCollections",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "USE other",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "USE"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "USE"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "USE"
+        }
+      }
+    },
+    {
+      "statement": "DEFINE ACTION $a() AS SELECT 1; END DEFINE",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "DEFINE ACTION"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "DEFINE ACTION"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "DEFINE ACTION"
+        }
+      }
+    },
+    {
+      "statement": "DEFINE SUBQUERY $s() AS SELECT 1; END DEFINE",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "DO $a()",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "DO"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "DO"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "DO"
+        }
+      }
+    },
+    {
+      "statement": "EVALUATE FOR $i IN [1] DO $a()",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "EVALUATE"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "EVALUATE"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "EVALUATE"
+        }
+      }
+    },
+    {
+      "statement": "BACKUP c",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "BACKUP"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "BACKUP"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "BACKUP"
+        }
+      }
+    },
+    {
+      "statement": "RESTORE c",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "RESTORE"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "RESTORE"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "RESTORE"
+        }
+      }
+    },
+    {
+      "statement": "COMMIT",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "ROLLBACK",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "$x = 1",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "--!ansi_lexer SELECT 1",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "translation setting --!ansi_lexer SELECT 1"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "translation setting --!ansi_lexer SELECT 1"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "translation setting --!ansi_lexer SELECT 1"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "translation setting --!ansi_lexer SELECT 1"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "translation setting --!ansi_lexer SELECT 1"
+        }
+      }
+    },
+    {
+      "statement": "VALUES (1)",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "PROCESS t USING $f(TableRow())",
+      "scopes": {
+        "database": {
+          "outcome": "accepted"
+        },
+        "databases": {
+          "outcome": "accepted"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "accepted"
+        }
+      }
+    },
+    {
+      "statement": "--!syntax_v1\nSELECT 1",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        }
+      }
+    },
+    {
+      "statement": "--!syntax_v1\nUPSERT INTO t (id) VALUES (1)",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "translation setting --!syntax_v1"
+        }
+      }
+    },
+    {
+      "statement": "UPSERT INTO `/other/t` (id) VALUES (1)",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /other/t"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /other/t"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /other/t"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TABLE `/local/abs2` (id Int64 NOT NULL, PRIMARY KEY (id))",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/abs2"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/abs2"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the absolute path /local/abs2"
+        }
+      }
+    },
+    {
+      "statement": "CREATE USER u2 PASSWORD 'p'",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a user of the whole database"
+        }
+      }
+    },
+    {
+      "statement": "GRANT SELECT ON t TO u2",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "GRANT permission change"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "GRANT permission change"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "GRANT permission change"
+        }
+      }
+    },
+    {
+      "statement": "CREATE EXTERNAL DATA SOURCE s WITH (SOURCE_TYPE = \"ObjectStorage\", LOCATION = \"x\", AUTH_METHOD = \"NONE\")",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "an external data source"
+        }
+      }
+    },
+    {
+      "statement": "CREATE TRANSFER tr FROM a TO b USING ($x) -\u003e { RETURN $x; }",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "a transfer"
+        }
+      }
+    },
+    {
+      "statement": "CREATE ASYNC REPLICATION r FOR a AS b WITH (CONNECTION_STRING = \"grpc://x/?database=/y\")",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "async replication"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "async replication"
+        },
+        "provisioned": {
+          "outcome": "refused",
+          "operation": "async replication"
+        },
+        "server": {
+          "outcome": "refused",
+          "operation": "async replication"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "async replication"
+        }
+      }
+    },
+    {
+      "statement": "PRAGMA TablePathPrefix = \"/local\"",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "PRAGMA TablePathPrefix"
+        }
+      }
+    },
+    {
+      "statement": "DROP TABLE `../up`",
+      "scopes": {
+        "database": {
+          "outcome": "refused",
+          "operation": "the path ../up, which climbs out of the dev database"
+        },
+        "databases": {
+          "outcome": "refused",
+          "operation": "the path ../up, which climbs out of the dev database"
+        },
+        "provisioned": {
+          "outcome": "accepted"
+        },
+        "server": {
+          "outcome": "accepted"
+        },
+        "session": {
+          "outcome": "refused",
+          "operation": "the path ../up, which climbs out of the dev database"
+        }
+      }
+    }
+  ]
+}

@@ -289,7 +289,7 @@ func checkTarget(tokens []Token, index int) error {
 	case strings.HasPrefix(name, "/"):
 		return refuse("the absolute path " + name)
 	case slices.Contains(strings.Split(name, "/"), ".."):
-		return refuse("the path " + name + ", which climbs out of the dev realm")
+		return refuse("the path " + name + ", which climbs out of the dev database")
 	}
 	return nil
 }
@@ -352,4 +352,61 @@ func containsKeywords(tokens []Token, words ...string) bool {
 		}
 	}
 	return false
+}
+
+// GuardReplay judges a statement a host replays into a dev database, as the
+// host's YDB replay guard (internal/devclean/ydbreplay) does, and returns a
+// *RealmRefusal for the first statement of the text whose effects cannot be
+// confined to the scope. server reports a run that owns the whole server, the
+// operator's declaration or a server the run provisioned: there only what
+// reaches past the server stays refused, an external data source or table, an
+// async replication, a transfer and a streaming query. Every other scope
+// confines a statement to the dev database the session selected. A
+// translation setting changes how the rest of the text is read and is
+// refused, --!syntax_v1 included, as the host refuses it.
+func GuardReplay(source string, server bool) error {
+	stream := reader{input: source}
+	var tokens []Token
+	var bodies Bodies
+	judge := func() error {
+		if len(tokens) == 0 {
+			return nil
+		}
+		if tokens[0].Type == TokenUnknown && strings.HasPrefix(tokens[0].Value, "--!") {
+			return refuse("translation setting " + tokens[0].Value)
+		}
+		if operation := beyondTheServer(tokens); operation != "" {
+			return refuse(operation)
+		}
+		if server {
+			return nil
+		}
+		return confineToRealm(tokens)
+	}
+	for {
+		token := stream.NextToken()
+		switch token.Type {
+		case TokenEOF:
+			return judge()
+		case TokenWhitespace, TokenComment:
+			continue
+		case TokenSemicolon:
+			bodies.Separate()
+			if bodies.Inside() {
+				continue
+			}
+			if err := judge(); err != nil {
+				return err
+			}
+			tokens = nil
+			continue
+		case TokenIdentifier:
+			bodies.Word(strings.ToUpper(token.Value))
+		case TokenOperator:
+			bodies.Symbol(token.Value)
+		default:
+			bodies.Separate()
+		}
+		tokens = append(tokens, token)
+	}
 }

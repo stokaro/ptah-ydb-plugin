@@ -1,0 +1,20 @@
+{
+  "database": "/local",
+  "realm": "",
+  "tree": {
+    "/local": [
+      {
+        "name": "a",
+        "type": "TABLE"
+      },
+      {
+        "name": "pool",
+        "type": "RESOURCE_POOL"
+      },
+      {
+        "name": "z",
+        "type": "TABLE"
+      }
+    ]
+  }
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -98,7 +99,8 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 			runner = conn
 		}
 	}
-	result := executeUnits(ctx, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
+	stopped := s.timedOut(ctx, request)
+	result := executeUnits(ctx, time.Duration(request.GetStatementTimeoutNanoseconds()), stopped, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
 		if unit.GetNative() != nil {
 			switch unit.GetNative().GetKind() {
 			case tablecreate.OperationKind:
@@ -136,7 +138,26 @@ func (s *session) executeSchema(ctx context.Context, statement string) error {
 	return errors.Join(err, closeSQLConnection(conn))
 }
 
-func executeUnits(ctx context.Context, run func(context.Context, *protocol.Unit) (bool, error), units []*protocol.Unit) *protocol.Execution {
+// stoppedUnit answers for a unit the statement timeout stopped: whether
+// nothing of it was applied, it was applied after all, or what became of it is
+// unknown.
+type stoppedUnit func(*protocol.Unit) stopOutcome
+
+type stopOutcome uint8
+
+const (
+	// stopUnknown is a unit that may still be applied.
+	stopUnknown stopOutcome = iota
+	// stopNotApplied is a unit of which nothing was applied.
+	stopNotApplied
+	// stopApplied is a unit that completed after all.
+	stopApplied
+)
+
+// executeUnits runs units in order and stops at the first that fails. A
+// positive timeout bounds each unit; a unit it stops is answered for by
+// stopped and marked statement_timed_out.
+func executeUnits(ctx context.Context, timeout time.Duration, stopped stoppedUnit, run func(context.Context, *protocol.Unit) (bool, error), units []*protocol.Unit) *protocol.Execution {
 	var applied uint32
 	for _, unit := range units {
 		if ctx.Err() != nil {
@@ -146,7 +167,31 @@ func executeUnits(ctx context.Context, run func(context.Context, *protocol.Unit)
 			}
 			return &protocol.Execution{Outcome: outcome, AppliedCount: applied, DiagnosticCode: "ydb.canceled-before-unit"}
 		}
-		if dispatched, err := run(ctx, unit); err != nil {
+		unitCtx, cancel := ctx, context.CancelFunc(func() {})
+		if timeout > 0 {
+			unitCtx, cancel = context.WithTimeout(ctx, timeout)
+		}
+		dispatched, err := run(unitCtx, unit)
+		timedOut := err != nil && dispatched && timeout > 0 && errors.Is(unitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil
+		cancel()
+		if timedOut {
+			switch stopped(unit) {
+			case stopApplied:
+				applied++
+				continue
+			case stopNotApplied:
+				outcome := protocol.Execution_NOT_APPLIED
+				if applied > 0 {
+					outcome = protocol.Execution_PARTIAL
+				}
+				return &protocol.Execution{Outcome: outcome, AppliedCount: applied, StatementTimedOut: true, DiagnosticCode: "ydb.statement-timeout",
+					Message: "The statement timeout stopped the unit, and nothing of it was applied"}
+			default:
+				return &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: applied, StatementTimedOut: true, DiagnosticCode: "ydb.statement-timeout",
+					Message: "The statement timeout stopped waiting for the unit, which YDB may still apply; no automatic retry was attempted"}
+			}
+		}
+		if err != nil {
 			if !dispatched {
 				outcome := protocol.Execution_NOT_STARTED
 				if applied > 0 {

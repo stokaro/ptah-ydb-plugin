@@ -253,7 +253,7 @@ func TestCancellationBetweenUnitsPreservesConfirmedPrefix(t *testing.T) {
 	defer cancel()
 	runner := &cancelAfterExecution{cancel: cancel}
 	unit := sqlRequest("").Units[0]
-	result := executeUnits(ctx, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
+	result := executeUnits(ctx, 0, nil, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
 		_, err := runner.ExecContext(ctx, unit.GetSql())
 		return true, err
 	}, []*protocol.Unit{unit, unit})
@@ -309,7 +309,7 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
 			calls := 0
-			result := executeUnits(t.Context(), func(context.Context, *protocol.Unit) (bool, error) {
+			result := executeUnits(t.Context(), 0, nil, func(context.Context, *protocol.Unit) (bool, error) {
 				calls++
 				if calls > test.prefix {
 					return test.dispatched, errors.New("secret-marker")
@@ -377,4 +377,62 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 	c.Assert(sessionCapabilities(), qt.DeepEquals, map[string]bool{
 		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 	})
+}
+
+// blockUntilDone is a unit that runs until its context ends.
+func blockUntilDone(ctx context.Context, unit *protocol.Unit) (bool, error) {
+	if unit.GetChangeId() == "quick" {
+		return true, nil
+	}
+	<-ctx.Done()
+	return true, ctx.Err()
+}
+
+// TestStatementTimeoutAnswersForTheStoppedUnit pins what a unit the statement
+// timeout stops reports: what the session proves about it decides the
+// outcome, and the reply says the timeout stopped it.
+func TestStatementTimeoutAnswersForTheStoppedUnit(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		units   []*protocol.Unit
+		stopped stopOutcome
+		outcome protocol.Execution_Outcome
+		applied uint32
+		flagged bool
+	}{
+		{"nothing applied", []*protocol.Unit{{ChangeId: "slow"}}, stopNotApplied, protocol.Execution_NOT_APPLIED, 0, true},
+		{"after a prefix", []*protocol.Unit{{ChangeId: "quick"}, {ChangeId: "slow"}}, stopNotApplied, protocol.Execution_PARTIAL, 1, true},
+		{"unknown", []*protocol.Unit{{ChangeId: "quick"}, {ChangeId: "slow"}}, stopUnknown, protocol.Execution_UNKNOWN, 1, true},
+		{"applied after all", []*protocol.Unit{{ChangeId: "slow"}, {ChangeId: "quick"}}, stopApplied, protocol.Execution_APPLIED, 2, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			var asked []string
+			stopped := func(unit *protocol.Unit) stopOutcome {
+				asked = append(asked, unit.GetChangeId())
+				return test.stopped
+			}
+
+			result := executeUnits(t.Context(), 20*time.Millisecond, stopped, blockUntilDone, test.units)
+
+			c.Assert(result.Outcome, qt.Equals, test.outcome)
+			c.Assert(result.AppliedCount, qt.Equals, test.applied)
+			c.Assert(result.StatementTimedOut, qt.Equals, test.flagged)
+			c.Assert(asked, qt.DeepEquals, []string{"slow"})
+		})
+	}
+}
+
+// TestCanceledCallIsNotATimeout pins that a call the caller canceled is not
+// reported as stopped by the statement timeout.
+func TestCanceledCallIsNotATimeout(t *testing.T) {
+	c := qt.New(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	stopped := func(*protocol.Unit) stopOutcome { return stopNotApplied }
+
+	result := executeUnits(ctx, time.Hour, stopped, blockUntilDone, []*protocol.Unit{{ChangeId: "slow"}})
+
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(result.StatementTimedOut, qt.IsFalse)
 }

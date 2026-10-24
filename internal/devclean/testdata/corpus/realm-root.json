@@ -1,0 +1,35 @@
+{
+  "database": "/local",
+  "realm": "r1",
+  "tree": {
+    "/local/ptah_dev/r1": [
+      {
+        "name": "ptah_locks",
+        "type": "COORDINATION_NODE"
+      },
+      {
+        "name": "ptah_dev",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "t",
+        "type": "TABLE"
+      },
+      {
+        "name": ".dot",
+        "type": "TABLE"
+      },
+      {
+        "name": "d",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/ptah_dev/r1/ptah_dev": [],
+    "/local/ptah_dev/r1/d": [
+      {
+        "name": "tp",
+        "type": "TOPIC"
+      }
+    ]
+  }
+}
