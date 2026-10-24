@@ -1357,13 +1357,13 @@ and declines a statement YQL would split differently.
 
 A check judges every file of a run under the rules the request enables. A rule
 reads the statement text and the capability map the request carries, never the
-server version. The provider serves the rules that judge one statement: by
-what it says (YD101, YD103, YD110, YD111, YD113, YD114, YD116, YD120, YD121,
-YD122 and YD130), or through a reader of its own (YD102 reads how the migrator
-runs a block or an action call, YD140 the value a secret statement writes,
-YD141 the credential an external data source names, and YD160 what a
-streaming query keeps). The rules that read the directory's history are not
-published yet: YD104 to YD109, YD115, YD118, YD119, YD131 and YD150.
+server version. The rules that need to know what a table looks like before a
+statement read it from the directory itself, as the splitter does: whether an
+index or the TTL uses a column, a table's partitioning settings, the views that
+read it, its changefeeds and column families, the Serial columns and sequence
+restarts, failed-over replications, and the comments Ptah's COMMENT ON
+statements left. A table created outside the directory is unknown and reports
+nothing.
 
 `internal/migrationlint/testdata` holds the host's answers for a corpus of
 migration directories and requests, recorded at one host commit, and the tests

@@ -37,9 +37,9 @@ type rule struct {
 	File func(file checkedFile) []Violation
 }
 
-// rules are the provider's rules in code order.
-func rules() []rule {
-	all := append(statementRules(), readerRules()...)
+// rules are the provider's rules in code order, reading the schema history h.
+func rules(h history) []rule {
+	all := append(append(statementRules(), readerRules()...), historyRules(h)...)
 	slices.SortFunc(all, func(a, b rule) int { return cmp.Compare(a.Code, b.Code) })
 	return all
 }
@@ -47,7 +47,7 @@ func rules() []rule {
 // Rules returns the rule catalog the provider publishes, in code order. Each
 // call returns fresh values.
 func Rules() []*protocol.LintRule {
-	all := rules()
+	all := rules(nil)
 	result := make([]*protocol.LintRule, 0, len(all))
 	for _, rule := range all {
 		result = append(result, &protocol.LintRule{Code: rule.Code, Title: rule.Title, Severity: rule.Severity,
@@ -62,7 +62,7 @@ func Rules() []*protocol.LintRule {
 // is refused, and cancellation returns the context's error; either returns no
 // finding.
 func Check(ctx context.Context, target Target, compatibility string, codes []string, files []File) ([]Finding, error) {
-	all := rules()
+	all := rules(newHistory(files))
 	enabled := make([]rule, 0, len(codes))
 	for _, code := range codes {
 		position := slices.IndexFunc(all, func(rule rule) bool { return rule.Code == code })
