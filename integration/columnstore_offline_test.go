@@ -24,9 +24,10 @@ func TestColumnStorageOfflineSubprocess(t *testing.T) {
 	c := qt.New(t)
 	body, err := os.ReadFile("../internal/columnstore/testdata/26-2-indexes.json")
 	c.Assert(err, qt.IsNil)
-	observed, err := columnstore.Decode(body, "/local/col_index_probe", &native.DescribeTableResult{
+	observed, err := columnstore.Decode(body, "/local/col_index_probe", &native.ColumnTableDescribeResult{
 		Self:      &Ydb_Scheme.Entry{Name: "col_index_probe", Type: Ydb_Scheme.Entry_COLUMN_TABLE},
 		StoreType: Ydb_Table.StoreType_STORE_TYPE_COLUMN, PrimaryKey: []string{"id"},
+		PartitioningSettings: &Ydb_Table.PartitioningSettings{PartitionBy: []string{"id"}},
 		Columns: []*native.ColumnMeta{
 			{Name: "id", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UINT64}}},
 			{Name: "body", Type: &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}}}}},

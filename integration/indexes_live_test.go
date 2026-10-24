@@ -65,7 +65,7 @@ func TestNativeIndexObservationsSubprocess(t *testing.T) {
 				_, err := opened.DB.ExecContext(ctx, "ALTER TABLE `"+tablePath+"` ALTER INDEX idx SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT=4)")
 				c.Assert(err, qt.IsNil)
 			}
-			direct, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
+			direct, err := inspect.Read(ctx, opened.Driver, columnTables(opened), database, []string{directory})
 			c.Assert(err, qt.IsNil)
 			c.Assert(direct.Tables, qt.HasLen, 1)
 			session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})

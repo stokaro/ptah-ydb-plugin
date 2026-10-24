@@ -1,0 +1,91 @@
+{
+  "self":  {
+    "name":  "c3",
+    "owner":  "root@builtin",
+    "type":  "COLUMN_TABLE",
+    "effectivePermissions":  [
+      {
+        "subject":  "USERS",
+        "permissionNames":  [
+          "ydb.database.connect"
+        ]
+      },
+      {
+        "subject":  "METADATA-READERS",
+        "permissionNames":  [
+          "ydb.generic.list"
+        ]
+      },
+      {
+        "subject":  "DATA-READERS",
+        "permissionNames":  [
+          "ydb.granular.select_row"
+        ]
+      },
+      {
+        "subject":  "DATA-WRITERS",
+        "permissionNames":  [
+          "ydb.tables.modify"
+        ]
+      },
+      {
+        "subject":  "DDL-ADMINS",
+        "permissionNames":  [
+          "ydb.granular.create_directory",
+          "ydb.granular.write_attributes",
+          "ydb.granular.create_table",
+          "ydb.granular.remove_schema",
+          "ydb.granular.create_queue",
+          "ydb.granular.alter_schema"
+        ]
+      },
+      {
+        "subject":  "ACCESS-ADMINS",
+        "permissionNames":  [
+          "ydb.access.grant"
+        ]
+      },
+      {
+        "subject":  "DATABASE-ADMINS",
+        "permissionNames":  [
+          "ydb.generic.manage"
+        ]
+      }
+    ],
+    "createdAt":  {
+      "planStep":  "1792836653400",
+      "txId":  "281474976715659"
+    }
+  },
+  "columns":  [
+    {
+      "name":  "ts",
+      "type":  {
+        "typeId":  "TIMESTAMP"
+      }
+    },
+    {
+      "name":  "id",
+      "type":  {
+        "typeId":  "UINT64"
+      }
+    }
+  ],
+  "primaryKey":  [
+    "ts",
+    "id"
+  ],
+  "ttlSettings":  {
+    "dateTypeColumn":  {
+      "columnName":  "ts",
+      "expireAfterSeconds":  86400
+    }
+  },
+  "partitioningSettings":  {
+    "partitionBy":  [
+      "ts",
+      "id"
+    ]
+  },
+  "storeType":  "STORE_TYPE_COLUMN"
+}

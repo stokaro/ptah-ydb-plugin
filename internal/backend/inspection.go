@@ -3,7 +3,9 @@ package backend
 import (
 	"bytes"
 	"context"
+	"net/url"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -30,7 +32,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	result, err := inspect.Read(ctx, session.connection.Driver, session.database, request.GetSchemas(), session.leftOut()...)
+	result, err := inspect.Read(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), session.leftOut()...)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
@@ -45,6 +47,18 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		return nil, status.FromContextError(err).Err()
 	}
 	return result, nil
+}
+
+// columnTables reads a column table's monitoring description with the
+// session's credential, or is nil when the address names no monitoring
+// endpoint, so that inspection refuses a column table by naming the parameter.
+func (s *session) columnTables() inspect.ColumnTables {
+	if !s.connection.HasMonitoring() {
+		return nil
+	}
+	return func(ctx context.Context, absolute string) ([]byte, error) {
+		return s.connection.ReadMonitoring(ctx, "column table", columnstore.Page, url.Values{"path": {absolute}, "database": {s.connection.Database()}})
+	}
 }
 
 // NormalizeValues validates captured YDB schema models offline. Results

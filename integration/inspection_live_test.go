@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -42,6 +44,18 @@ func inspectionFixture(c *qt.C) (*connection.Connection, string, string) {
 		c.Check(opened.Driver.Scheme().RemoveDirectory(cleanup, absolute), qt.IsNil)
 	})
 	return opened, directory, address.Database()
+}
+
+// columnTables reads a column table's monitoring description with the
+// connection's credential, as a provider session does, or is nil when the test
+// address names no monitoring endpoint.
+func columnTables(opened *connection.Connection) inspect.ColumnTables {
+	if !opened.HasMonitoring() {
+		return nil
+	}
+	return func(ctx context.Context, absolute string) ([]byte, error) {
+		return opened.ReadMonitoring(ctx, "column table", columnstore.Page, url.Values{"path": {absolute}, "database": {opened.Database()}})
+	}
 }
 
 func createFixtureTable(c *qt.C, opened *connection.Connection, database, directory string) {
@@ -96,10 +110,10 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	defer cancel()
 	// The same native reader is checked first to retain actionable diagnostics
 	// if the subprocess's intentionally redacted RPC reports a refusal.
-	direct, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
+	direct, err := inspect.Read(ctx, opened.Driver, columnTables(opened), database, []string{directory})
 	c.Assert(err, qt.IsNil)
 	c.Assert(direct.GetTables(), qt.HasLen, 1)
-	all, err := inspect.Read(ctx, opened.Driver, database, nil)
+	all, err := inspect.Read(ctx, opened.Driver, columnTables(opened), database, nil)
 	c.Assert(err, qt.IsNil)
 	var selected []string
 	for _, table := range all.Tables {
@@ -152,36 +166,40 @@ func TestInspectionRefusesEscapingAndMissingScopes(t *testing.T) {
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	empty, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
+	empty, err := inspect.Read(ctx, opened.Driver, columnTables(opened), database, []string{directory})
 	c.Assert(err, qt.IsNil)
 	c.Assert(empty.Tables, qt.HasLen, 0)
 	c.Assert(empty.Coverage.Subjects, qt.HasLen, 0)
 	createFixtureTable(c, opened, database, directory)
 	for _, selectors := range [][]string{{"../other"}, {directory, "/" + directory}, {""}, {".sys"}, {directory + "/../other"}, {directory + "/missing"}} {
-		snapshot, err := inspect.Read(ctx, opened.Driver, database, selectors)
+		snapshot, err := inspect.Read(ctx, opened.Driver, columnTables(opened), database, selectors)
 		c.Assert(snapshot, qt.IsNil)
 		c.Assert(err, qt.IsNotNil)
 	}
 }
 
-func TestInspectionRefusesUnmodeledObjectWithoutPartialSnapshot(t *testing.T) {
+// TestInspectionRefusesAColumnTableWithoutMonitoring reads a directory that
+// holds a row table and a column table through a reader with no monitoring
+// endpoint. The column table cannot be read without the endpoint, and the
+// refusal names the parameter and returns no snapshot.
+func TestInspectionRefusesAColumnTableWithoutMonitoring(t *testing.T) {
 	c := qt.New(t)
 	opened, directory, database := inspectionFixture(c)
 	createFixtureTable(c, opened, database, directory)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	unsupported := path.Join(database, directory, "z_unmodeled")
-	_, err := opened.DB.ExecContext(ctx, "CREATE TABLE `"+unsupported+"` (id Int64 NOT NULL, PRIMARY KEY(id)) PARTITION BY HASH(id) WITH (STORE=COLUMN)")
+	columnar := path.Join(database, directory, "z_columnar")
+	_, err := opened.DB.ExecContext(ctx, "CREATE TABLE `"+columnar+"` (id Int64 NOT NULL, PRIMARY KEY(id)) PARTITION BY HASH(id) WITH (STORE=COLUMN)")
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		_, err := opened.DB.ExecContext(cleanup, "DROP TABLE `"+unsupported+"`")
+		_, err := opened.DB.ExecContext(cleanup, "DROP TABLE `"+columnar+"`")
 		c.Check(err, qt.IsNil)
 	})
-	// The supported records table sorts first. The later column table must invalidate
-	// the whole snapshot, including the already captured table and its facets.
-	snapshot, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
+	// The row table sorts first. The later column table must invalidate the
+	// whole snapshot, including the already captured table and its facets.
+	snapshot, err := inspect.Read(ctx, opened.Driver, nil, database, []string{directory})
 	c.Assert(snapshot, qt.IsNil)
-	c.Assert(err, qt.ErrorMatches, "YDB object kind COLUMN_TABLE needs an extracted reader")
+	c.Assert(err, qt.ErrorMatches, `column table `+columnar+` requires monitoring=http\(s\)://host:port in the YDB address: the table service leaves out a column table's shard count and local indexes`)
 }

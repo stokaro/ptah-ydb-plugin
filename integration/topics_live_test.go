@@ -50,7 +50,7 @@ func TestNativeStreamsSubprocess(t *testing.T) {
 		_, err := opened.DB.ExecContext(cleanup, "DROP TOPIC `"+topicPath+"`")
 		c.Check(err, qt.IsNil)
 	})
-	direct, err := inspect.Read(ctx, opened.Driver, database, []string{directory})
+	direct, err := inspect.Read(ctx, opened.Driver, columnTables(opened), database, []string{directory})
 	c.Assert(err, qt.IsNil)
 	c.Assert(direct.Tables, qt.HasLen, 1)
 	c.Assert(direct.NativeObjects, qt.HasLen, 1)

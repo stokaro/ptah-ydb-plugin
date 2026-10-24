@@ -101,6 +101,31 @@ func (s *Table) Describe(ctx context.Context, path string) (*native.DescribeTabl
 	return &result, nil
 }
 
+// DescribeColumnTable reads the table service's description of a column table
+// into the provider's column-table definition, which carries the tiered TTL
+// the pinned bindings lack. Unknown fields are refused.
+func (s *Table) DescribeColumnTable(ctx context.Context, path string) (*native.ColumnTableDescribeResult, error) {
+	response, err := s.client.DescribeTable(ctx, &Ydb_Table.DescribeTableRequest{SessionId: s.id, Path: path})
+	if err != nil {
+		return nil, fmt.Errorf("describe YDB column table: transport failed")
+	}
+	if err := Status(response.GetOperation()); err != nil {
+		return nil, err
+	}
+	payload := response.GetOperation().GetResult()
+	if !payload.MessageIs(&Ydb_Table.DescribeTableResult{}) {
+		return nil, fmt.Errorf("invalid YDB table response type")
+	}
+	var result native.ColumnTableDescribeResult
+	if err := proto.Unmarshal(payload.GetValue(), &result); err != nil {
+		return nil, fmt.Errorf("invalid YDB table response")
+	}
+	if err := schema.Known(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // Create sends one native create request, including its ownership attributes.
 func (s *Table) Create(ctx context.Context, request *Ydb_Table.CreateTableRequest) error {
 	request = proto.CloneOf(request)

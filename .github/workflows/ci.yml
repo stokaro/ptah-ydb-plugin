@@ -54,7 +54,11 @@ jobs:
             features: enable_vector_index,enable_add_unique_index,enable_external_data_sources
     env:
       GOWORK: 'off'
-      PTAH_YDB_TEST_URL: ydb://127.0.0.1:2136/local?go_balancer=disable
+      # 8765 is the server's monitoring endpoint. The address names it, so a
+      # session reads the database's feature flags there and inspection reads
+      # the description of each column table, which the table service leaves
+      # incomplete.
+      PTAH_YDB_TEST_URL: ydb://127.0.0.1:2136/local?go_balancer=disable&monitoring=http://127.0.0.1:8765
     services:
       ydb:
         image: ${{ matrix.image }}
@@ -63,6 +67,7 @@ jobs:
           YDB_FEATURE_FLAGS: ${{ matrix.features }}
         ports:
           - 2136:2136
+          - 8765:8765
         options: >-
           --hostname localhost
           --health-cmd "sh /health_check"
