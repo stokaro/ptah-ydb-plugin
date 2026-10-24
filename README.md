@@ -2,8 +2,8 @@
 
 This repository owns the executable YDB provider for [Ptah #4204](https://github.com/stokaro/ptah/issues/4204).
 It is under development. Inspection covers row tables and their indexes and
-changefeeds, topics, views, coordination nodes, external data sources, and
-external tables. Native SQL execution and session-bound data transactions are
+changefeeds, column tables, topics, views, coordination nodes, external data
+sources, and external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations, and
 YAML and Go annotation decoding for the partitioning, TTL and column families of row tables, and in Go the columns of each family.
@@ -133,10 +133,13 @@ The accepted parameters follow the host's embedded engine:
   outside the snapshot read and the SDK's binders rewrite a `?` inside a YQL
   literal.
 - `monitoring` names the cluster's monitoring endpoint, an `http://` or
-  `https://` address with no user, path, query or fragment. The address
-  validates it and keeps it. The provider protocol has no way to refine the
-  advertised capabilities from a cluster's feature flags, so nothing reads the
-  endpoint yet.
+  `https://` address with no user, path, query or fragment. A session reads
+  the database's feature flags there when it opens (see "Feature flags"), and
+  inspection reads the description of each column table there. Both reads
+  present the connection's own credential in YDB's bare `Authorization`
+  header, follow no redirect and read at most 4 MiB. A credential that travels
+  over TLS (`ydbs://`) is never sent to a plain `http://` endpoint: the session
+  is refused and asked for `https://`.
 
 Unknown or repeated parameters, conflicting database paths, and malformed
 values are refused, and a refusal names the parameter and never its value. Two
@@ -146,6 +149,29 @@ as empty because it cannot unescape it. The `testdata/oracle` corpus beside
 Credentials travel in the session-open request and are omitted from receipts,
 SDK addresses, and error diagnostics. Native errors currently report only the
 failed operation, which limits diagnosis until structured redaction is added.
+
+### Feature flags
+
+A release line runs with default feature flags, and an operator can turn a
+flag on or off, so one cluster can do more or less than its line's defaults
+say. When the address names a monitoring endpoint, opening a session reads
+`/viewer/json/feature_flags?database=<db>` and folds the flags that gate a
+capability the provider owns into the session's capabilities, `false`
+included. A failed read fails the session rather than falling back to the
+defaults, as in the host's embedded engine. Without the endpoint the session
+reports the defaults of every supported line.
+
+| Capability | Flag | Default |
+| --- | --- | --- |
+| `tiered_ttl` | `EnableTieringInColumnShard` | `false` on every line from 25.1 to 26.2 |
+
+The host maps more flags than these. The provider reports only the
+capabilities it plans with, because the host plans with the others itself: an
+`index_rename` read as true would make the host plan a `RENAME INDEX` that the
+provider's alteration does not carry out. `internal/featureflags/testdata`
+holds the pages the mapping is checked against, and a live test turns the
+flag on and off through the server's dynamic configuration and reads the
+capability each new session reports.
 
 Session close releases both the SQL pool and its parent native driver, even
 when the RPC context is canceled. Cleanup results are retained for repeated
@@ -440,7 +466,7 @@ system directories, and other namespaces remain unknown. Table and column
 facets keep subject-only coverage.
 
 Unknown native fields and enum values are refused before JSON conversion.
-Shared topic consumers, column tables, unextracted native object kinds, and
+Shared topic consumers, unextracted native object kinds, and
 replication-owned tables refuse inspection. A failed traversal returns no snapshot.
 These limitations preserve data for the remaining extraction work.
 
@@ -635,7 +661,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
 | `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
 | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
-| `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables have no reader, creation or comparison yet; see "Column tables" below. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |
+| `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables are read, and have no creation or comparison yet; see "Column tables" below. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name. YAML has no index key claim. |
 | Topics, resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` at document scope. |
 
@@ -658,17 +684,38 @@ epoch unit and ordered tiers, of which only the last may delete and at least one
 has to move rows to an absolute external data source path), or with the
 `column_store` mapping in YAML. The corpus records the facet the host's bundled
 decoder makes of each spelling and each refusal (`*-store-column-*` rows), so the
-grammar is pinned. The provider refuses every one of them by name. What stands
-between that and support, in the order the work has to go:
+grammar is pinned. The provider refuses every one of them by name.
 
-- No live reader. Inspection refuses a `COLUMN_TABLE` directory entry, so a
-  database that holds a column table cannot be inspected at all. The column
-  storage decoder (`internal/columnstore`) needs the monitoring (viewer) JSON
-  beside the table service description, and the provider has no transport for it:
-  the connection address names the gRPC endpoint only, and the CI service does not
-  publish the monitoring port. The table service description of a column table
-  carries the hash key (`partitioning_settings.partition_by`) but not the shard
-  count (measured on 26.2.1.14 for a table created with `PARTITION_COUNT = 3`).
+Inspection reads a column table, a `COLUMN_TABLE` directory entry, from the
+table service and from the monitoring endpoint's scheme description
+(`/viewer/json/describe`). The table service's description carries the
+columns, the key, the hash key (`partitioning_settings.partition_by`) and the
+TTL, and leaves out the shard count and the local indexes (measured on 25.1.4.7
+and 26.2.1.14 for a table created with `AUTO_PARTITIONING_MIN_PARTITIONS_COUNT
+= 3`); the monitoring page carries both. The two are read together and a
+disagreement refuses the inspection. The table service writes a tiered TTL in
+a field the pinned `ydb-go-genproto` lacks, so the provider reads a column
+table's description with definitions of its own (`ColumnTableDescribeResult`,
+adapted from upstream with its wire numbers). The table reads back as a common
+table with one column-storage facet (hash key, shard count, data channel
+count, local indexes and the TTL with its tiers, a TTL that only deletes
+included) and a column facet for each column; it has no row-table, index or
+changefeed facet. Its access metadata is not observed. A column table with a
+column family, a column default, attributes or row-table settings is refused.
+The hash function has to be the one YQL's `PARTITION BY HASH` writes,
+`HASH_FUNCTION_CONSISTENCY_64`: the native `CreateTable` call writes
+`HASH_FUNCTION_MODULO_N` instead, and the host's embedded engine reads no other.
+
+Without the monitoring parameter in the address, an inspection that meets a
+column table is refused with `column table <path> requires
+monitoring=http(s)://host:port in the YDB address`, and the column table is
+never read as a row table. The SDK client passes the host the status code of a
+refused call and not its message, so the host reports `provider inspect failed
+(FailedPrecondition)`.
+
+What stands between this and declaring column tables, in the order the work has
+to go:
+
 - No source decoder. The desired column storage model
   (`ColumnStorageProperties`, `ColumnStorageIntent`) lists no source format, so a
   claim cannot name it, and no code turns the attributes above into it. The host
@@ -681,9 +728,9 @@ between that and support, in the order the work has to go:
   so a declaration that differs needs a refusal with the reason. Under complete
   coverage, a table without the column storage facet asks for row storage.
 
-Accepting the declaration before the reader exists would turn a refusal that names
-the setting into a refusal further down the plan, so the declaration stays refused
-until the reader, the creation and the comparison land together.
+Accepting the declaration before the creation and the comparison exist would turn
+a refusal that names the setting into a refusal further down the plan, so the
+declaration stays refused until the creation and the comparison land with it.
 
 `internal/tablesource/testdata/corpus` holds the inputs and the answers of the
 host's bundled decoder for them, and the differential test in
@@ -885,10 +932,11 @@ unsupported type extensions, and configured column families are refused.
 Native IDs, schema versions, and shard addresses are excluded from the model.
 Local indexes are sorted by name; hash columns and TTL tiers retain order.
 
-Fixture replay covers prior YDB 25.1 and 26.2 captures. A subprocess test checks
-SDK normalization and conversion without opening a database session. Live column-table
-inspection still refuses: monitoring transport and the combined live reader
-are not connected yet. These tests do not establish live column-table support.
+Fixture replay covers YDB 25.1 and 26.2 captures: monitoring pages copied from
+the host, and pairs of a monitoring page and a table-service description read
+from one live table each (`internal/columnstore/testdata/README.md`). A
+subprocess test checks SDK normalization and conversion without opening a
+database session, and live tests inspect column tables on both lines.
 
 ## Native protocol generation
 
@@ -1337,9 +1385,8 @@ identity contract to bypass that requirement.
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes more source formats, comparison, the alteration of table
-settings other than column families, table removal and rebuild, and planning, rendering, and operation models for other objects,
-capability detection, and reading a cluster's feature flags from the `monitoring`
-endpoint. The provider advertises implemented
+settings other than column families, table removal and rebuild, planning, rendering and operation models for other objects,
+and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
 rendering, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, and offline SQL analysis services. The remaining capabilities stay

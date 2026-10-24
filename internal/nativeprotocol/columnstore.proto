@@ -3,6 +3,12 @@ syntax = "proto3";
 package ptah.ydb.native;
 option go_package = "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol";
 import "google/protobuf/empty.proto";
+import "internal/nativeprotocol/indexes.proto";
+import "internal/nativeprotocol/topics.proto";
+import "protos/ydb_common.proto";
+import "protos/ydb_scheme.proto";
+import "protos/ydb_table.proto";
+import "protos/ydb_value.proto";
 
 message ColumnStorageObservation {
     repeated string hash_columns = 1;
@@ -162,4 +168,54 @@ message MonitoringTTLTier {
 }
 message MonitoringEviction {
     string storage = 1 [json_name="Storage"];
+}
+
+// The table service's description of a column table. The messages below are
+// adapted from ydb_table.proto at the commit third_party/ydb/NOTICE.md names,
+// with its wire numbers: the pinned Go bindings have no tiered TTL, and the
+// table service reports a column table's tiered TTL in it, so the generic
+// description would refuse the table as carrying unknown fields.
+message ColumnTableDescribeResult {
+    Ydb.Scheme.Entry self = 1;
+    repeated ColumnMeta columns = 2;
+    repeated string primary_key = 3;
+    repeated Ydb.TypedValue shard_key_bounds = 4;
+    repeated TableIndexDescription indexes = 5;
+    Ydb.Table.TableStats table_stats = 6;
+    TtlSettings ttl_settings = 7;
+    Ydb.Table.StorageSettings storage_settings = 8;
+    repeated Ydb.Table.ColumnFamily column_families = 9;
+    map<string, string> attributes = 10;
+    reserved 11;
+    Ydb.Table.PartitioningSettings partitioning_settings = 12;
+    Ydb.FeatureFlag.Status key_bloom_filter = 13;
+    Ydb.Table.ReadReplicasSettings read_replicas_settings = 14;
+    repeated ChangefeedDescription changefeeds = 15;
+    string tiering = 16;
+    bool temporary = 17;
+    Ydb.Table.StoreType store_type = 18;
+}
+message TtlSettings {
+    oneof mode {
+        Ydb.Table.DateTypeColumnModeSettings date_type_column = 1;
+        Ydb.Table.ValueSinceUnixEpochModeSettings value_since_unix_epoch = 2;
+        TieredModeSettings tiered_ttl = 4;
+    }
+    uint32 run_interval_seconds = 3;
+}
+message TieredModeSettings {
+    repeated TtlTier tiers = 1;
+}
+message TtlTier {
+    oneof expression {
+        Ydb.Table.DateTypeColumnModeSettings date_type_column = 1;
+        Ydb.Table.ValueSinceUnixEpochModeSettings value_since_unix_epoch = 2;
+    }
+    oneof action {
+        google.protobuf.Empty delete = 3;
+        EvictionToExternalStorageSettings evict_to_external_storage = 4;
+    }
+}
+message EvictionToExternalStorageSettings {
+    string storage = 1;
 }

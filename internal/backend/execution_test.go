@@ -375,6 +375,6 @@ func TestExecutionStoppedByADeadlineKeepsTheConfirmedPrefix(t *testing.T) {
 func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 	c := qt.New(t)
 	c.Assert(sessionCapabilities(), qt.DeepEquals, map[string]bool{
-		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true,
+		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 	})
 }

@@ -18,14 +18,23 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// ColumnTables reads the monitoring endpoint's description of the column table
+// at an absolute path: the page columnstore.Decode reads.
+type ColumnTables func(ctx context.Context, absolute string) ([]byte, error)
+
 // Read captures exact common column fields and native property facets. A
 // partial traversal, unmodeled object, or incomplete native description returns
 // no snapshot. Filtered schemas are exact directories, not recursive prefixes.
 //
+// columns reads the monitoring description a column table needs beside the
+// table service's: the table service leaves out the shard count and the local
+// indexes. A nil columns refuses every column table, naming the monitoring
+// parameter the address lacks.
+//
 // leaveOut names the directories at the root that belong to other runs, such
 // as the directory of the dev realms in a database a realm does not select.
 // Neither the traversal nor a selector reaches them.
-func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []string, leaveOut ...string) (result *protocol.Schema, err error) {
+func Read(ctx context.Context, driver *ydb.Driver, columns ColumnTables, database string, selectors []string, leaveOut ...string) (result *protocol.Schema, err error) {
 	schemas, bindings, err := scopes(database, selectors, leaveOut)
 	if err != nil {
 		return nil, err
@@ -119,6 +128,16 @@ func Read(ctx context.Context, driver *ydb.Driver, database string, selectors []
 					return nil, err
 				}
 				table.Facets = append(table.Facets, feedFacet)
+				result.Tables = append(result.Tables, table)
+				observe(result, table.Facets)
+				for _, column := range table.Columns {
+					observe(result, column.Facets)
+				}
+			case Ydb_Scheme.Entry_COLUMN_TABLE:
+				table, err := source.readColumnTable(ctx, columns, database, selected, name)
+				if err != nil {
+					return nil, err
+				}
 				result.Tables = append(result.Tables, table)
 				observe(result, table.Facets)
 				for _, column := range table.Columns {

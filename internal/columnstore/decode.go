@@ -1,9 +1,18 @@
-// Package columnstore decodes monitoring descriptions without network access.
+// Package columnstore decodes the monitoring description of a YDB column table
+// together with the table service's description, without network access.
+//
+// The table service's description of a column table carries its columns, its
+// key, its hash key and its TTL, and leaves out the shard count and the local
+// indexes; the monitoring endpoint's scheme description carries all of them.
+// Decode reads both and refuses a disagreement, so neither page alone decides
+// what a column table is.
 package columnstore
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path"
 	"slices"
 
@@ -15,22 +24,34 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Decode checks a captured monitoring description against the table API before
-// publishing its storage facet. It returns no partial result on disagreement.
-// Native runtime metadata outside ColumnTableDescription is not schema state.
-func Decode(body []byte, fullPath string, table *native.DescribeTableResult) (*native.ColumnStorageObservation, error) {
+// Page is the monitoring page a column table's description is read from, with
+// the parameters path (the table's absolute path) and database.
+const Page = "/viewer/json/describe"
+
+// consistentHash is the hash function YQL's CREATE TABLE ... PARTITION BY HASH
+// writes, HASH_FUNCTION_CONSISTENCY_64. The native CreateTable call writes
+// HASH_FUNCTION_MODULO_N (0) instead (measured on 25.1.4.7 and 26.2.1.14), and
+// the host's embedded engine reads no other function, so neither does the
+// provider.
+const consistentHash = 2
+
+// Decode checks a captured monitoring description against the table service's
+// description before publishing the table's column-storage facet. It returns
+// no partial result on disagreement. Native IDs, versions and shard addresses
+// are checked and never become schema state.
+func Decode(body []byte, fullPath string, table *native.ColumnTableDescribeResult) (*native.ColumnStorageObservation, error) {
 	if len(body) > 4<<20 {
 		return nil, fmt.Errorf("YDB column description exceeds size limit")
 	}
-	canonical, err := modeljson.Canonical(body)
+	// The page also carries the path's access lists as raw bytes, which are not
+	// UTF-8 (measured on 25.1.4.7 and 26.2.1.14), so only the column table's
+	// own description is held to canonical JSON.
+	page, err := object(body)
 	if err != nil {
-		return nil, fmt.Errorf("invalid YDB column description JSON")
-	}
-	var page map[string]json.RawMessage
-	if err := json.Unmarshal(canonical, &page); err != nil {
 		return nil, fmt.Errorf("invalid YDB monitoring response")
 	}
 	var status, describedPath string
@@ -38,12 +59,16 @@ func Decode(body []byte, fullPath string, table *native.DescribeTableResult) (*n
 		status != "StatusSuccess" || describedPath != fullPath || fullPath == "/" || !path.IsAbs(fullPath) || path.Clean(fullPath) != fullPath {
 		return nil, fmt.Errorf("YDB monitoring response does not describe the requested path")
 	}
-	var description map[string]json.RawMessage
-	if err := json.Unmarshal(page["PathDescription"], &description); err != nil {
+	description, err := object(page["PathDescription"])
+	if err != nil {
 		return nil, fmt.Errorf("missing YDB path description")
 	}
+	canonical, err := modeljson.Canonical(description["ColumnTableDescription"])
+	if err != nil {
+		return nil, fmt.Errorf("invalid YDB column description JSON")
+	}
 	var source native.MonitoringColumnTable
-	if err := protojson.Unmarshal(description["ColumnTableDescription"], &source); err != nil {
+	if err := protojson.Unmarshal(canonical, &source); err != nil {
 		return nil, fmt.Errorf("invalid or unsupported YDB column description")
 	}
 	if err := schema.Known(table); err != nil {
@@ -53,6 +78,9 @@ func Decode(body []byte, fullPath string, table *native.DescribeTableResult) (*n
 		table.GetSelf().GetName() != path.Base(fullPath) || source.Name != path.Base(fullPath) {
 		return nil, fmt.Errorf("YDB column table identity disagrees across descriptions")
 	}
+	if err := unmodeled(table); err != nil {
+		return nil, err
+	}
 	if source.IsRestore || source.GetSchema().GetOptions().GetSchemeNeedActualization() {
 		return nil, fmt.Errorf("YDB column table schema is not ready")
 	}
@@ -61,10 +89,10 @@ func Decode(body []byte, fullPath string, table *native.DescribeTableResult) (*n
 		return nil, err
 	}
 	hash := source.GetSharding().GetHashSharding()
-	if hash.GetFunction() != 2 || !referencesKnown(hash.GetColumns(), names) {
+	if hash.GetFunction() != consistentHash || !referencesKnown(hash.GetColumns(), names) {
 		return nil, fmt.Errorf("invalid or unsupported YDB column hash sharding")
 	}
-	if nativeHash := table.GetPartitioningSettings().GetPartitionBy(); len(nativeHash) != 0 && !slices.Equal(nativeHash, hash.Columns) {
+	if !slices.Equal(table.GetPartitioningSettings().GetPartitionBy(), hash.Columns) {
 		return nil, fmt.Errorf("YDB hash columns disagree across descriptions")
 	}
 	result := &native.ColumnStorageObservation{
@@ -89,6 +117,9 @@ func Decode(body []byte, fullPath string, table *native.DescribeTableResult) (*n
 			return nil, err
 		}
 	}
+	if err := checkTTL(table.GetTtlSettings(), result.Ttl); err != nil {
+		return nil, err
+	}
 	// Apply the same semantic validation and ordering as offline normalization.
 	owner := &protocol.Reference{Engine: "ydb", Database: "/", Kind: "table", Name: source.Name}
 	envelope, err := schema.CaptureColumnStorage(owner, result)
@@ -102,7 +133,60 @@ func Decode(body []byte, fullPath string, table *native.DescribeTableResult) (*n
 	return normalized, nil
 }
 
-func checkColumns(source *native.MonitoringColumnSchema, table *native.DescribeTableResult) (map[uint64]string, map[string]bool, error) {
+// object reads one JSON object into its members and refuses a member written
+// twice, which a map would read as the last one silently.
+func object(data []byte) (map[string]json.RawMessage, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return nil, fmt.Errorf("expected a JSON object")
+	}
+	members := map[string]json.RawMessage{}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, _ := token.(string)
+		if _, repeated := members[key]; repeated {
+			return nil, fmt.Errorf("member %q is written twice", key)
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		members[key] = value
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return nil, fmt.Errorf("trailing data after the JSON object")
+	}
+	return members, nil
+}
+
+// unmodeled refuses a table-service description that states a setting the
+// column-storage model has no place for: the provider would read the table as
+// one without it and plan it away. A column table holds no global index,
+// changefeed or column family, and its partitioning is its hash key.
+func unmodeled(table *native.ColumnTableDescribeResult) error {
+	partitioning := proto.CloneOf(table.GetPartitioningSettings())
+	if partitioning != nil {
+		partitioning.PartitionBy = nil
+	}
+	switch {
+	case len(table.ShardKeyBounds)+len(table.Indexes)+len(table.ColumnFamilies)+len(table.Changefeeds) != 0:
+		return fmt.Errorf("YDB column table description carries indexes, families, changefeeds or shard bounds the provider does not model")
+	case table.StorageSettings != nil || table.ReadReplicasSettings != nil || table.KeyBloomFilter != Ydb.FeatureFlag_STATUS_UNSPECIFIED ||
+		table.Tiering != "" || table.Temporary || len(table.Attributes) != 0 || (partitioning != nil && !proto.Equal(partitioning, &Ydb_Table.PartitioningSettings{})):
+		return fmt.Errorf("YDB column table description carries settings the provider does not model")
+	case table.GetTtlSettings().GetRunIntervalSeconds() != 0:
+		return fmt.Errorf("YDB column table TTL carries a run interval the provider does not model")
+	}
+	return nil
+}
+
+func checkColumns(source *native.MonitoringColumnSchema, table *native.ColumnTableDescribeResult) (map[uint64]string, map[string]bool, error) {
 	if source == nil || len(source.Columns) == 0 || len(source.Columns) != len(table.Columns) ||
 		!slices.Equal(source.KeyColumnNames, table.PrimaryKey) {
 		return nil, nil, fmt.Errorf("YDB columns or primary key disagree across descriptions")
@@ -116,6 +200,9 @@ func checkColumns(source *native.MonitoringColumnSchema, table *native.DescribeT
 			return nil, nil, fmt.Errorf("configured YDB column storage is not modeled")
 		}
 		nativeColumn := table.Columns[i]
+		if nativeColumn.GetFamily() != "" || nativeColumn.GetDefaultValue() != nil || nativeColumn.Compression != nil || len(nativeColumn.Encoding) != 0 {
+			return nil, nil, fmt.Errorf("configured YDB column storage is not modeled")
+		}
 		spelling, nullable, err := schema.ColumnType(nativeColumn.Type)
 		if nativeColumn.GetNotNull() {
 			nullable = false
@@ -231,4 +318,61 @@ func convertTTL(source *native.MonitoringTTL, columns map[string]bool) (*native.
 		return nil, fmt.Errorf("missing YDB column TTL state")
 	}
 	return result, nil
+}
+
+// tier is one step of a TTL as either description states it.
+type tier struct {
+	column  string
+	unit    uint64
+	seconds uint64
+	storage string
+	delete  bool
+}
+
+// checkTTL requires the table service's TTL to be the one the monitoring
+// description reports. The table service writes a TTL that only deletes as a
+// date or epoch mode and any other as tiers; both read the same as tiers here.
+func checkTTL(described *native.TtlSettings, observed *native.ColumnTTLPolicy) error {
+	var held []tier
+	switch mode := described.GetMode().(type) {
+	case nil:
+	case *native.TtlSettings_DateTypeColumn:
+		held = []tier{{column: mode.DateTypeColumn.GetColumnName(), seconds: uint64(mode.DateTypeColumn.GetExpireAfterSeconds()), delete: true}}
+	case *native.TtlSettings_ValueSinceUnixEpoch:
+		held = []tier{{column: mode.ValueSinceUnixEpoch.GetColumnName(), unit: uint64(mode.ValueSinceUnixEpoch.GetColumnUnit()),
+			seconds: uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds()), delete: true}}
+	case *native.TtlSettings_TieredTtl:
+		for _, step := range mode.TieredTtl.GetTiers() {
+			var read tier
+			switch expression := step.GetExpression().(type) {
+			case *native.TtlTier_DateTypeColumn:
+				read = tier{column: expression.DateTypeColumn.GetColumnName(), seconds: uint64(expression.DateTypeColumn.GetExpireAfterSeconds())}
+			case *native.TtlTier_ValueSinceUnixEpoch:
+				read = tier{column: expression.ValueSinceUnixEpoch.GetColumnName(), unit: uint64(expression.ValueSinceUnixEpoch.GetColumnUnit()),
+					seconds: uint64(expression.ValueSinceUnixEpoch.GetExpireAfterSeconds())}
+			default:
+				return fmt.Errorf("YDB column TTL tier has no expression")
+			}
+			switch action := step.GetAction().(type) {
+			case *native.TtlTier_Delete:
+				read.delete = true
+			case *native.TtlTier_EvictToExternalStorage:
+				read.storage = action.EvictToExternalStorage.GetStorage()
+			default:
+				return fmt.Errorf("YDB column TTL tier has no action")
+			}
+			held = append(held, read)
+		}
+	}
+	var reported []tier
+	if enabled := observed.GetEnabled(); enabled != nil {
+		for _, step := range enabled.GetTiers() {
+			reported = append(reported, tier{column: enabled.Column, unit: enabled.ColumnUnit, seconds: step.ApplyAfterSeconds,
+				storage: step.GetExternalStorage(), delete: step.GetDelete() != nil})
+		}
+	}
+	if !slices.Equal(held, reported) {
+		return fmt.Errorf("YDB column TTL disagrees across descriptions")
+	}
+	return nil
 }

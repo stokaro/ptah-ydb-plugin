@@ -9,6 +9,9 @@
 package nativeprotocol
 
 import (
+	Ydb "github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	Ydb_Scheme "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+	Ydb_Table "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -1876,11 +1879,510 @@ func (x *MonitoringEviction) GetStorage() string {
 	return ""
 }
 
+// The table service's description of a column table. The messages below are
+// adapted from ydb_table.proto at the commit third_party/ydb/NOTICE.md names,
+// with its wire numbers: the pinned Go bindings have no tiered TTL, and the
+// table service reports a column table's tiered TTL in it, so the generic
+// description would refuse the table as carrying unknown fields.
+type ColumnTableDescribeResult struct {
+	state                protoimpl.MessageState          `protogen:"open.v1"`
+	Self                 *Ydb_Scheme.Entry               `protobuf:"bytes,1,opt,name=self,proto3" json:"self,omitempty"`
+	Columns              []*ColumnMeta                   `protobuf:"bytes,2,rep,name=columns,proto3" json:"columns,omitempty"`
+	PrimaryKey           []string                        `protobuf:"bytes,3,rep,name=primary_key,json=primaryKey,proto3" json:"primary_key,omitempty"`
+	ShardKeyBounds       []*Ydb.TypedValue               `protobuf:"bytes,4,rep,name=shard_key_bounds,json=shardKeyBounds,proto3" json:"shard_key_bounds,omitempty"`
+	Indexes              []*TableIndexDescription        `protobuf:"bytes,5,rep,name=indexes,proto3" json:"indexes,omitempty"`
+	TableStats           *Ydb_Table.TableStats           `protobuf:"bytes,6,opt,name=table_stats,json=tableStats,proto3" json:"table_stats,omitempty"`
+	TtlSettings          *TtlSettings                    `protobuf:"bytes,7,opt,name=ttl_settings,json=ttlSettings,proto3" json:"ttl_settings,omitempty"`
+	StorageSettings      *Ydb_Table.StorageSettings      `protobuf:"bytes,8,opt,name=storage_settings,json=storageSettings,proto3" json:"storage_settings,omitempty"`
+	ColumnFamilies       []*Ydb_Table.ColumnFamily       `protobuf:"bytes,9,rep,name=column_families,json=columnFamilies,proto3" json:"column_families,omitempty"`
+	Attributes           map[string]string               `protobuf:"bytes,10,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	PartitioningSettings *Ydb_Table.PartitioningSettings `protobuf:"bytes,12,opt,name=partitioning_settings,json=partitioningSettings,proto3" json:"partitioning_settings,omitempty"`
+	KeyBloomFilter       Ydb.FeatureFlag_Status          `protobuf:"varint,13,opt,name=key_bloom_filter,json=keyBloomFilter,proto3,enum=Ydb.FeatureFlag_Status" json:"key_bloom_filter,omitempty"`
+	ReadReplicasSettings *Ydb_Table.ReadReplicasSettings `protobuf:"bytes,14,opt,name=read_replicas_settings,json=readReplicasSettings,proto3" json:"read_replicas_settings,omitempty"`
+	Changefeeds          []*ChangefeedDescription        `protobuf:"bytes,15,rep,name=changefeeds,proto3" json:"changefeeds,omitempty"`
+	Tiering              string                          `protobuf:"bytes,16,opt,name=tiering,proto3" json:"tiering,omitempty"`
+	Temporary            bool                            `protobuf:"varint,17,opt,name=temporary,proto3" json:"temporary,omitempty"`
+	StoreType            Ydb_Table.StoreType             `protobuf:"varint,18,opt,name=store_type,json=storeType,proto3,enum=Ydb.Table.StoreType" json:"store_type,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *ColumnTableDescribeResult) Reset() {
+	*x = ColumnTableDescribeResult{}
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ColumnTableDescribeResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ColumnTableDescribeResult) ProtoMessage() {}
+
+func (x *ColumnTableDescribeResult) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ColumnTableDescribeResult.ProtoReflect.Descriptor instead.
+func (*ColumnTableDescribeResult) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_columnstore_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ColumnTableDescribeResult) GetSelf() *Ydb_Scheme.Entry {
+	if x != nil {
+		return x.Self
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetColumns() []*ColumnMeta {
+	if x != nil {
+		return x.Columns
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetPrimaryKey() []string {
+	if x != nil {
+		return x.PrimaryKey
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetShardKeyBounds() []*Ydb.TypedValue {
+	if x != nil {
+		return x.ShardKeyBounds
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetIndexes() []*TableIndexDescription {
+	if x != nil {
+		return x.Indexes
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetTableStats() *Ydb_Table.TableStats {
+	if x != nil {
+		return x.TableStats
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetTtlSettings() *TtlSettings {
+	if x != nil {
+		return x.TtlSettings
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetStorageSettings() *Ydb_Table.StorageSettings {
+	if x != nil {
+		return x.StorageSettings
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetColumnFamilies() []*Ydb_Table.ColumnFamily {
+	if x != nil {
+		return x.ColumnFamilies
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetAttributes() map[string]string {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetPartitioningSettings() *Ydb_Table.PartitioningSettings {
+	if x != nil {
+		return x.PartitioningSettings
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetKeyBloomFilter() Ydb.FeatureFlag_Status {
+	if x != nil {
+		return x.KeyBloomFilter
+	}
+	return Ydb.FeatureFlag_Status(0)
+}
+
+func (x *ColumnTableDescribeResult) GetReadReplicasSettings() *Ydb_Table.ReadReplicasSettings {
+	if x != nil {
+		return x.ReadReplicasSettings
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetChangefeeds() []*ChangefeedDescription {
+	if x != nil {
+		return x.Changefeeds
+	}
+	return nil
+}
+
+func (x *ColumnTableDescribeResult) GetTiering() string {
+	if x != nil {
+		return x.Tiering
+	}
+	return ""
+}
+
+func (x *ColumnTableDescribeResult) GetTemporary() bool {
+	if x != nil {
+		return x.Temporary
+	}
+	return false
+}
+
+func (x *ColumnTableDescribeResult) GetStoreType() Ydb_Table.StoreType {
+	if x != nil {
+		return x.StoreType
+	}
+	return Ydb_Table.StoreType(0)
+}
+
+type TtlSettings struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Mode:
+	//
+	//	*TtlSettings_DateTypeColumn
+	//	*TtlSettings_ValueSinceUnixEpoch
+	//	*TtlSettings_TieredTtl
+	Mode               isTtlSettings_Mode `protobuf_oneof:"mode"`
+	RunIntervalSeconds uint32             `protobuf:"varint,3,opt,name=run_interval_seconds,json=runIntervalSeconds,proto3" json:"run_interval_seconds,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *TtlSettings) Reset() {
+	*x = TtlSettings{}
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TtlSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TtlSettings) ProtoMessage() {}
+
+func (x *TtlSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TtlSettings.ProtoReflect.Descriptor instead.
+func (*TtlSettings) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_columnstore_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *TtlSettings) GetMode() isTtlSettings_Mode {
+	if x != nil {
+		return x.Mode
+	}
+	return nil
+}
+
+func (x *TtlSettings) GetDateTypeColumn() *Ydb_Table.DateTypeColumnModeSettings {
+	if x != nil {
+		if x, ok := x.Mode.(*TtlSettings_DateTypeColumn); ok {
+			return x.DateTypeColumn
+		}
+	}
+	return nil
+}
+
+func (x *TtlSettings) GetValueSinceUnixEpoch() *Ydb_Table.ValueSinceUnixEpochModeSettings {
+	if x != nil {
+		if x, ok := x.Mode.(*TtlSettings_ValueSinceUnixEpoch); ok {
+			return x.ValueSinceUnixEpoch
+		}
+	}
+	return nil
+}
+
+func (x *TtlSettings) GetTieredTtl() *TieredModeSettings {
+	if x != nil {
+		if x, ok := x.Mode.(*TtlSettings_TieredTtl); ok {
+			return x.TieredTtl
+		}
+	}
+	return nil
+}
+
+func (x *TtlSettings) GetRunIntervalSeconds() uint32 {
+	if x != nil {
+		return x.RunIntervalSeconds
+	}
+	return 0
+}
+
+type isTtlSettings_Mode interface {
+	isTtlSettings_Mode()
+}
+
+type TtlSettings_DateTypeColumn struct {
+	DateTypeColumn *Ydb_Table.DateTypeColumnModeSettings `protobuf:"bytes,1,opt,name=date_type_column,json=dateTypeColumn,proto3,oneof"`
+}
+
+type TtlSettings_ValueSinceUnixEpoch struct {
+	ValueSinceUnixEpoch *Ydb_Table.ValueSinceUnixEpochModeSettings `protobuf:"bytes,2,opt,name=value_since_unix_epoch,json=valueSinceUnixEpoch,proto3,oneof"`
+}
+
+type TtlSettings_TieredTtl struct {
+	TieredTtl *TieredModeSettings `protobuf:"bytes,4,opt,name=tiered_ttl,json=tieredTtl,proto3,oneof"`
+}
+
+func (*TtlSettings_DateTypeColumn) isTtlSettings_Mode() {}
+
+func (*TtlSettings_ValueSinceUnixEpoch) isTtlSettings_Mode() {}
+
+func (*TtlSettings_TieredTtl) isTtlSettings_Mode() {}
+
+type TieredModeSettings struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tiers         []*TtlTier             `protobuf:"bytes,1,rep,name=tiers,proto3" json:"tiers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TieredModeSettings) Reset() {
+	*x = TieredModeSettings{}
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TieredModeSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TieredModeSettings) ProtoMessage() {}
+
+func (x *TieredModeSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TieredModeSettings.ProtoReflect.Descriptor instead.
+func (*TieredModeSettings) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_columnstore_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *TieredModeSettings) GetTiers() []*TtlTier {
+	if x != nil {
+		return x.Tiers
+	}
+	return nil
+}
+
+type TtlTier struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Expression:
+	//
+	//	*TtlTier_DateTypeColumn
+	//	*TtlTier_ValueSinceUnixEpoch
+	Expression isTtlTier_Expression `protobuf_oneof:"expression"`
+	// Types that are valid to be assigned to Action:
+	//
+	//	*TtlTier_Delete
+	//	*TtlTier_EvictToExternalStorage
+	Action        isTtlTier_Action `protobuf_oneof:"action"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TtlTier) Reset() {
+	*x = TtlTier{}
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TtlTier) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TtlTier) ProtoMessage() {}
+
+func (x *TtlTier) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TtlTier.ProtoReflect.Descriptor instead.
+func (*TtlTier) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_columnstore_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *TtlTier) GetExpression() isTtlTier_Expression {
+	if x != nil {
+		return x.Expression
+	}
+	return nil
+}
+
+func (x *TtlTier) GetDateTypeColumn() *Ydb_Table.DateTypeColumnModeSettings {
+	if x != nil {
+		if x, ok := x.Expression.(*TtlTier_DateTypeColumn); ok {
+			return x.DateTypeColumn
+		}
+	}
+	return nil
+}
+
+func (x *TtlTier) GetValueSinceUnixEpoch() *Ydb_Table.ValueSinceUnixEpochModeSettings {
+	if x != nil {
+		if x, ok := x.Expression.(*TtlTier_ValueSinceUnixEpoch); ok {
+			return x.ValueSinceUnixEpoch
+		}
+	}
+	return nil
+}
+
+func (x *TtlTier) GetAction() isTtlTier_Action {
+	if x != nil {
+		return x.Action
+	}
+	return nil
+}
+
+func (x *TtlTier) GetDelete() *emptypb.Empty {
+	if x != nil {
+		if x, ok := x.Action.(*TtlTier_Delete); ok {
+			return x.Delete
+		}
+	}
+	return nil
+}
+
+func (x *TtlTier) GetEvictToExternalStorage() *EvictionToExternalStorageSettings {
+	if x != nil {
+		if x, ok := x.Action.(*TtlTier_EvictToExternalStorage); ok {
+			return x.EvictToExternalStorage
+		}
+	}
+	return nil
+}
+
+type isTtlTier_Expression interface {
+	isTtlTier_Expression()
+}
+
+type TtlTier_DateTypeColumn struct {
+	DateTypeColumn *Ydb_Table.DateTypeColumnModeSettings `protobuf:"bytes,1,opt,name=date_type_column,json=dateTypeColumn,proto3,oneof"`
+}
+
+type TtlTier_ValueSinceUnixEpoch struct {
+	ValueSinceUnixEpoch *Ydb_Table.ValueSinceUnixEpochModeSettings `protobuf:"bytes,2,opt,name=value_since_unix_epoch,json=valueSinceUnixEpoch,proto3,oneof"`
+}
+
+func (*TtlTier_DateTypeColumn) isTtlTier_Expression() {}
+
+func (*TtlTier_ValueSinceUnixEpoch) isTtlTier_Expression() {}
+
+type isTtlTier_Action interface {
+	isTtlTier_Action()
+}
+
+type TtlTier_Delete struct {
+	Delete *emptypb.Empty `protobuf:"bytes,3,opt,name=delete,proto3,oneof"`
+}
+
+type TtlTier_EvictToExternalStorage struct {
+	EvictToExternalStorage *EvictionToExternalStorageSettings `protobuf:"bytes,4,opt,name=evict_to_external_storage,json=evictToExternalStorage,proto3,oneof"`
+}
+
+func (*TtlTier_Delete) isTtlTier_Action() {}
+
+func (*TtlTier_EvictToExternalStorage) isTtlTier_Action() {}
+
+type EvictionToExternalStorageSettings struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Storage       string                 `protobuf:"bytes,1,opt,name=storage,proto3" json:"storage,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EvictionToExternalStorageSettings) Reset() {
+	*x = EvictionToExternalStorageSettings{}
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EvictionToExternalStorageSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EvictionToExternalStorageSettings) ProtoMessage() {}
+
+func (x *EvictionToExternalStorageSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_columnstore_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EvictionToExternalStorageSettings.ProtoReflect.Descriptor instead.
+func (*EvictionToExternalStorageSettings) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_columnstore_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *EvictionToExternalStorageSettings) GetStorage() string {
+	if x != nil {
+		return x.Storage
+	}
+	return ""
+}
+
 var File_internal_nativeprotocol_columnstore_proto protoreflect.FileDescriptor
 
 const file_internal_nativeprotocol_columnstore_proto_rawDesc = "" +
 	"\n" +
-	")internal/nativeprotocol/columnstore.proto\x12\x0fptah.ydb.native\x1a\x1bgoogle/protobuf/empty.proto\"\x8c\x02\n" +
+	")internal/nativeprotocol/columnstore.proto\x12\x0fptah.ydb.native\x1a\x1bgoogle/protobuf/empty.proto\x1a%internal/nativeprotocol/indexes.proto\x1a$internal/nativeprotocol/topics.proto\x1a\x17protos/ydb_common.proto\x1a\x17protos/ydb_scheme.proto\x1a\x16protos/ydb_table.proto\x1a\x16protos/ydb_value.proto\"\x8c\x02\n" +
 	"\x18ColumnStorageObservation\x12!\n" +
 	"\fhash_columns\x18\x01 \x03(\tR\vhashColumns\x12\x1e\n" +
 	"\n" +
@@ -2029,7 +2531,53 @@ const file_internal_nativeprotocol_columnstore_proto_rawDesc = "" +
 	"\x19evict_to_external_storage\x18\x03 \x01(\v2#.ptah.ydb.native.MonitoringEvictionH\x00R\x16EvictToExternalStorageB\b\n" +
 	"\x06action\".\n" +
 	"\x12MonitoringEviction\x12\x18\n" +
-	"\astorage\x18\x01 \x01(\tR\aStorageB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
+	"\astorage\x18\x01 \x01(\tR\aStorage\"\xe1\b\n" +
+	"\x19ColumnTableDescribeResult\x12%\n" +
+	"\x04self\x18\x01 \x01(\v2\x11.Ydb.Scheme.EntryR\x04self\x125\n" +
+	"\acolumns\x18\x02 \x03(\v2\x1b.ptah.ydb.native.ColumnMetaR\acolumns\x12\x1f\n" +
+	"\vprimary_key\x18\x03 \x03(\tR\n" +
+	"primaryKey\x129\n" +
+	"\x10shard_key_bounds\x18\x04 \x03(\v2\x0f.Ydb.TypedValueR\x0eshardKeyBounds\x12@\n" +
+	"\aindexes\x18\x05 \x03(\v2&.ptah.ydb.native.TableIndexDescriptionR\aindexes\x126\n" +
+	"\vtable_stats\x18\x06 \x01(\v2\x15.Ydb.Table.TableStatsR\n" +
+	"tableStats\x12?\n" +
+	"\fttl_settings\x18\a \x01(\v2\x1c.ptah.ydb.native.TtlSettingsR\vttlSettings\x12E\n" +
+	"\x10storage_settings\x18\b \x01(\v2\x1a.Ydb.Table.StorageSettingsR\x0fstorageSettings\x12@\n" +
+	"\x0fcolumn_families\x18\t \x03(\v2\x17.Ydb.Table.ColumnFamilyR\x0ecolumnFamilies\x12Z\n" +
+	"\n" +
+	"attributes\x18\n" +
+	" \x03(\v2:.ptah.ydb.native.ColumnTableDescribeResult.AttributesEntryR\n" +
+	"attributes\x12T\n" +
+	"\x15partitioning_settings\x18\f \x01(\v2\x1f.Ydb.Table.PartitioningSettingsR\x14partitioningSettings\x12A\n" +
+	"\x10key_bloom_filter\x18\r \x01(\x0e2\x17.Ydb.FeatureFlag.StatusR\x0ekeyBloomFilter\x12U\n" +
+	"\x16read_replicas_settings\x18\x0e \x01(\v2\x1f.Ydb.Table.ReadReplicasSettingsR\x14readReplicasSettings\x12H\n" +
+	"\vchangefeeds\x18\x0f \x03(\v2&.ptah.ydb.native.ChangefeedDescriptionR\vchangefeeds\x12\x18\n" +
+	"\atiering\x18\x10 \x01(\tR\atiering\x12\x1c\n" +
+	"\ttemporary\x18\x11 \x01(\bR\ttemporary\x123\n" +
+	"\n" +
+	"store_type\x18\x12 \x01(\x0e2\x14.Ydb.Table.StoreTypeR\tstoreType\x1a=\n" +
+	"\x0fAttributesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\v\x10\f\"\xc3\x02\n" +
+	"\vTtlSettings\x12Q\n" +
+	"\x10date_type_column\x18\x01 \x01(\v2%.Ydb.Table.DateTypeColumnModeSettingsH\x00R\x0edateTypeColumn\x12a\n" +
+	"\x16value_since_unix_epoch\x18\x02 \x01(\v2*.Ydb.Table.ValueSinceUnixEpochModeSettingsH\x00R\x13valueSinceUnixEpoch\x12D\n" +
+	"\n" +
+	"tiered_ttl\x18\x04 \x01(\v2#.ptah.ydb.native.TieredModeSettingsH\x00R\ttieredTtl\x120\n" +
+	"\x14run_interval_seconds\x18\x03 \x01(\rR\x12runIntervalSecondsB\x06\n" +
+	"\x04mode\"D\n" +
+	"\x12TieredModeSettings\x12.\n" +
+	"\x05tiers\x18\x01 \x03(\v2\x18.ptah.ydb.native.TtlTierR\x05tiers\"\xfa\x02\n" +
+	"\aTtlTier\x12Q\n" +
+	"\x10date_type_column\x18\x01 \x01(\v2%.Ydb.Table.DateTypeColumnModeSettingsH\x00R\x0edateTypeColumn\x12a\n" +
+	"\x16value_since_unix_epoch\x18\x02 \x01(\v2*.Ydb.Table.ValueSinceUnixEpochModeSettingsH\x00R\x13valueSinceUnixEpoch\x120\n" +
+	"\x06delete\x18\x03 \x01(\v2\x16.google.protobuf.EmptyH\x01R\x06delete\x12o\n" +
+	"\x19evict_to_external_storage\x18\x04 \x01(\v22.ptah.ydb.native.EvictionToExternalStorageSettingsH\x01R\x16evictToExternalStorageB\f\n" +
+	"\n" +
+	"expressionB\b\n" +
+	"\x06action\"=\n" +
+	"!EvictionToExternalStorageSettings\x12\x18\n" +
+	"\astorage\x18\x01 \x01(\tR\astorageB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
 
 var (
 	file_internal_nativeprotocol_columnstore_proto_rawDescOnce sync.Once
@@ -2043,34 +2591,54 @@ func file_internal_nativeprotocol_columnstore_proto_rawDescGZIP() []byte {
 	return file_internal_nativeprotocol_columnstore_proto_rawDescData
 }
 
-var file_internal_nativeprotocol_columnstore_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_internal_nativeprotocol_columnstore_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_internal_nativeprotocol_columnstore_proto_goTypes = []any{
-	(*ColumnStorageObservation)(nil), // 0: ptah.ydb.native.ColumnStorageObservation
-	(*LocalIndexObservation)(nil),    // 1: ptah.ydb.native.LocalIndexObservation
-	(*LocalBloomSettings)(nil),       // 2: ptah.ydb.native.LocalBloomSettings
-	(*LocalNGramSettings)(nil),       // 3: ptah.ydb.native.LocalNGramSettings
-	(*LocalMinMaxSettings)(nil),      // 4: ptah.ydb.native.LocalMinMaxSettings
-	(*ColumnTTLPolicy)(nil),          // 5: ptah.ydb.native.ColumnTTLPolicy
-	(*ColumnTTLEnabled)(nil),         // 6: ptah.ydb.native.ColumnTTLEnabled
-	(*ColumnTTLTier)(nil),            // 7: ptah.ydb.native.ColumnTTLTier
-	(*MonitoringColumnTable)(nil),    // 8: ptah.ydb.native.MonitoringColumnTable
-	(*MonitoringStorage)(nil),        // 9: ptah.ydb.native.MonitoringStorage
-	(*MonitoringColumnSchema)(nil),   // 10: ptah.ydb.native.MonitoringColumnSchema
-	(*MonitoringSchemaOptions)(nil),  // 11: ptah.ydb.native.MonitoringSchemaOptions
-	(*MonitoringColumn)(nil),         // 12: ptah.ydb.native.MonitoringColumn
-	(*MonitoringFamily)(nil),         // 13: ptah.ydb.native.MonitoringFamily
-	(*MonitoringSharding)(nil),       // 14: ptah.ydb.native.MonitoringSharding
-	(*MonitoringHash)(nil),           // 15: ptah.ydb.native.MonitoringHash
-	(*MonitoringLocalIndex)(nil),     // 16: ptah.ydb.native.MonitoringLocalIndex
-	(*MonitoringClass)(nil),          // 17: ptah.ydb.native.MonitoringClass
-	(*MonitoringBloom)(nil),          // 18: ptah.ydb.native.MonitoringBloom
-	(*MonitoringNGram)(nil),          // 19: ptah.ydb.native.MonitoringNGram
-	(*MonitoringMinMax)(nil),         // 20: ptah.ydb.native.MonitoringMinMax
-	(*MonitoringTTL)(nil),            // 21: ptah.ydb.native.MonitoringTTL
-	(*MonitoringTTLEnabled)(nil),     // 22: ptah.ydb.native.MonitoringTTLEnabled
-	(*MonitoringTTLTier)(nil),        // 23: ptah.ydb.native.MonitoringTTLTier
-	(*MonitoringEviction)(nil),       // 24: ptah.ydb.native.MonitoringEviction
-	(*emptypb.Empty)(nil),            // 25: google.protobuf.Empty
+	(*ColumnStorageObservation)(nil),          // 0: ptah.ydb.native.ColumnStorageObservation
+	(*LocalIndexObservation)(nil),             // 1: ptah.ydb.native.LocalIndexObservation
+	(*LocalBloomSettings)(nil),                // 2: ptah.ydb.native.LocalBloomSettings
+	(*LocalNGramSettings)(nil),                // 3: ptah.ydb.native.LocalNGramSettings
+	(*LocalMinMaxSettings)(nil),               // 4: ptah.ydb.native.LocalMinMaxSettings
+	(*ColumnTTLPolicy)(nil),                   // 5: ptah.ydb.native.ColumnTTLPolicy
+	(*ColumnTTLEnabled)(nil),                  // 6: ptah.ydb.native.ColumnTTLEnabled
+	(*ColumnTTLTier)(nil),                     // 7: ptah.ydb.native.ColumnTTLTier
+	(*MonitoringColumnTable)(nil),             // 8: ptah.ydb.native.MonitoringColumnTable
+	(*MonitoringStorage)(nil),                 // 9: ptah.ydb.native.MonitoringStorage
+	(*MonitoringColumnSchema)(nil),            // 10: ptah.ydb.native.MonitoringColumnSchema
+	(*MonitoringSchemaOptions)(nil),           // 11: ptah.ydb.native.MonitoringSchemaOptions
+	(*MonitoringColumn)(nil),                  // 12: ptah.ydb.native.MonitoringColumn
+	(*MonitoringFamily)(nil),                  // 13: ptah.ydb.native.MonitoringFamily
+	(*MonitoringSharding)(nil),                // 14: ptah.ydb.native.MonitoringSharding
+	(*MonitoringHash)(nil),                    // 15: ptah.ydb.native.MonitoringHash
+	(*MonitoringLocalIndex)(nil),              // 16: ptah.ydb.native.MonitoringLocalIndex
+	(*MonitoringClass)(nil),                   // 17: ptah.ydb.native.MonitoringClass
+	(*MonitoringBloom)(nil),                   // 18: ptah.ydb.native.MonitoringBloom
+	(*MonitoringNGram)(nil),                   // 19: ptah.ydb.native.MonitoringNGram
+	(*MonitoringMinMax)(nil),                  // 20: ptah.ydb.native.MonitoringMinMax
+	(*MonitoringTTL)(nil),                     // 21: ptah.ydb.native.MonitoringTTL
+	(*MonitoringTTLEnabled)(nil),              // 22: ptah.ydb.native.MonitoringTTLEnabled
+	(*MonitoringTTLTier)(nil),                 // 23: ptah.ydb.native.MonitoringTTLTier
+	(*MonitoringEviction)(nil),                // 24: ptah.ydb.native.MonitoringEviction
+	(*ColumnTableDescribeResult)(nil),         // 25: ptah.ydb.native.ColumnTableDescribeResult
+	(*TtlSettings)(nil),                       // 26: ptah.ydb.native.TtlSettings
+	(*TieredModeSettings)(nil),                // 27: ptah.ydb.native.TieredModeSettings
+	(*TtlTier)(nil),                           // 28: ptah.ydb.native.TtlTier
+	(*EvictionToExternalStorageSettings)(nil), // 29: ptah.ydb.native.EvictionToExternalStorageSettings
+	nil,                                               // 30: ptah.ydb.native.ColumnTableDescribeResult.AttributesEntry
+	(*emptypb.Empty)(nil),                             // 31: google.protobuf.Empty
+	(*Ydb_Scheme.Entry)(nil),                          // 32: Ydb.Scheme.Entry
+	(*ColumnMeta)(nil),                                // 33: ptah.ydb.native.ColumnMeta
+	(*Ydb.TypedValue)(nil),                            // 34: Ydb.TypedValue
+	(*TableIndexDescription)(nil),                     // 35: ptah.ydb.native.TableIndexDescription
+	(*Ydb_Table.TableStats)(nil),                      // 36: Ydb.Table.TableStats
+	(*Ydb_Table.StorageSettings)(nil),                 // 37: Ydb.Table.StorageSettings
+	(*Ydb_Table.ColumnFamily)(nil),                    // 38: Ydb.Table.ColumnFamily
+	(*Ydb_Table.PartitioningSettings)(nil),            // 39: Ydb.Table.PartitioningSettings
+	(Ydb.FeatureFlag_Status)(0),                       // 40: Ydb.FeatureFlag.Status
+	(*Ydb_Table.ReadReplicasSettings)(nil),            // 41: Ydb.Table.ReadReplicasSettings
+	(*ChangefeedDescription)(nil),                     // 42: ptah.ydb.native.ChangefeedDescription
+	(Ydb_Table.StoreType)(0),                          // 43: Ydb.Table.StoreType
+	(*Ydb_Table.DateTypeColumnModeSettings)(nil),      // 44: Ydb.Table.DateTypeColumnModeSettings
+	(*Ydb_Table.ValueSinceUnixEpochModeSettings)(nil), // 45: Ydb.Table.ValueSinceUnixEpochModeSettings
 }
 var file_internal_nativeprotocol_columnstore_proto_depIdxs = []int32{
 	1,  // 0: ptah.ydb.native.ColumnStorageObservation.local_indexes:type_name -> ptah.ydb.native.LocalIndexObservation
@@ -2078,10 +2646,10 @@ var file_internal_nativeprotocol_columnstore_proto_depIdxs = []int32{
 	2,  // 2: ptah.ydb.native.LocalIndexObservation.bloom:type_name -> ptah.ydb.native.LocalBloomSettings
 	3,  // 3: ptah.ydb.native.LocalIndexObservation.ngram:type_name -> ptah.ydb.native.LocalNGramSettings
 	4,  // 4: ptah.ydb.native.LocalIndexObservation.min_max:type_name -> ptah.ydb.native.LocalMinMaxSettings
-	25, // 5: ptah.ydb.native.ColumnTTLPolicy.disabled:type_name -> google.protobuf.Empty
+	31, // 5: ptah.ydb.native.ColumnTTLPolicy.disabled:type_name -> google.protobuf.Empty
 	6,  // 6: ptah.ydb.native.ColumnTTLPolicy.enabled:type_name -> ptah.ydb.native.ColumnTTLEnabled
 	7,  // 7: ptah.ydb.native.ColumnTTLEnabled.tiers:type_name -> ptah.ydb.native.ColumnTTLTier
-	25, // 8: ptah.ydb.native.ColumnTTLTier.delete:type_name -> google.protobuf.Empty
+	31, // 8: ptah.ydb.native.ColumnTTLTier.delete:type_name -> google.protobuf.Empty
 	9,  // 9: ptah.ydb.native.MonitoringColumnTable.storage_config:type_name -> ptah.ydb.native.MonitoringStorage
 	10, // 10: ptah.ydb.native.MonitoringColumnTable.schema:type_name -> ptah.ydb.native.MonitoringColumnSchema
 	14, // 11: ptah.ydb.native.MonitoringColumnTable.sharding:type_name -> ptah.ydb.native.MonitoringSharding
@@ -2090,8 +2658,8 @@ var file_internal_nativeprotocol_columnstore_proto_depIdxs = []int32{
 	16, // 14: ptah.ydb.native.MonitoringColumnSchema.indexes:type_name -> ptah.ydb.native.MonitoringLocalIndex
 	13, // 15: ptah.ydb.native.MonitoringColumnSchema.column_families:type_name -> ptah.ydb.native.MonitoringFamily
 	11, // 16: ptah.ydb.native.MonitoringColumnSchema.options:type_name -> ptah.ydb.native.MonitoringSchemaOptions
-	25, // 17: ptah.ydb.native.MonitoringColumn.type_info:type_name -> google.protobuf.Empty
-	25, // 18: ptah.ydb.native.MonitoringColumn.default_value:type_name -> google.protobuf.Empty
+	31, // 17: ptah.ydb.native.MonitoringColumn.type_info:type_name -> google.protobuf.Empty
+	31, // 18: ptah.ydb.native.MonitoringColumn.default_value:type_name -> google.protobuf.Empty
 	15, // 19: ptah.ydb.native.MonitoringSharding.hash_sharding:type_name -> ptah.ydb.native.MonitoringHash
 	18, // 20: ptah.ydb.native.MonitoringLocalIndex.bloom_filter:type_name -> ptah.ydb.native.MonitoringBloom
 	19, // 21: ptah.ydb.native.MonitoringLocalIndex.bloom_ngramm_filter:type_name -> ptah.ydb.native.MonitoringNGram
@@ -2101,16 +2669,38 @@ var file_internal_nativeprotocol_columnstore_proto_depIdxs = []int32{
 	17, // 25: ptah.ydb.native.MonitoringNGram.data_extractor:type_name -> ptah.ydb.native.MonitoringClass
 	17, // 26: ptah.ydb.native.MonitoringNGram.bits_storage:type_name -> ptah.ydb.native.MonitoringClass
 	17, // 27: ptah.ydb.native.MonitoringMinMax.data_extractor:type_name -> ptah.ydb.native.MonitoringClass
-	25, // 28: ptah.ydb.native.MonitoringTTL.disabled:type_name -> google.protobuf.Empty
+	31, // 28: ptah.ydb.native.MonitoringTTL.disabled:type_name -> google.protobuf.Empty
 	22, // 29: ptah.ydb.native.MonitoringTTL.enabled:type_name -> ptah.ydb.native.MonitoringTTLEnabled
 	23, // 30: ptah.ydb.native.MonitoringTTLEnabled.tiers:type_name -> ptah.ydb.native.MonitoringTTLTier
-	25, // 31: ptah.ydb.native.MonitoringTTLTier.delete:type_name -> google.protobuf.Empty
+	31, // 31: ptah.ydb.native.MonitoringTTLTier.delete:type_name -> google.protobuf.Empty
 	24, // 32: ptah.ydb.native.MonitoringTTLTier.evict_to_external_storage:type_name -> ptah.ydb.native.MonitoringEviction
-	33, // [33:33] is the sub-list for method output_type
-	33, // [33:33] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	32, // 33: ptah.ydb.native.ColumnTableDescribeResult.self:type_name -> Ydb.Scheme.Entry
+	33, // 34: ptah.ydb.native.ColumnTableDescribeResult.columns:type_name -> ptah.ydb.native.ColumnMeta
+	34, // 35: ptah.ydb.native.ColumnTableDescribeResult.shard_key_bounds:type_name -> Ydb.TypedValue
+	35, // 36: ptah.ydb.native.ColumnTableDescribeResult.indexes:type_name -> ptah.ydb.native.TableIndexDescription
+	36, // 37: ptah.ydb.native.ColumnTableDescribeResult.table_stats:type_name -> Ydb.Table.TableStats
+	26, // 38: ptah.ydb.native.ColumnTableDescribeResult.ttl_settings:type_name -> ptah.ydb.native.TtlSettings
+	37, // 39: ptah.ydb.native.ColumnTableDescribeResult.storage_settings:type_name -> Ydb.Table.StorageSettings
+	38, // 40: ptah.ydb.native.ColumnTableDescribeResult.column_families:type_name -> Ydb.Table.ColumnFamily
+	30, // 41: ptah.ydb.native.ColumnTableDescribeResult.attributes:type_name -> ptah.ydb.native.ColumnTableDescribeResult.AttributesEntry
+	39, // 42: ptah.ydb.native.ColumnTableDescribeResult.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
+	40, // 43: ptah.ydb.native.ColumnTableDescribeResult.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
+	41, // 44: ptah.ydb.native.ColumnTableDescribeResult.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
+	42, // 45: ptah.ydb.native.ColumnTableDescribeResult.changefeeds:type_name -> ptah.ydb.native.ChangefeedDescription
+	43, // 46: ptah.ydb.native.ColumnTableDescribeResult.store_type:type_name -> Ydb.Table.StoreType
+	44, // 47: ptah.ydb.native.TtlSettings.date_type_column:type_name -> Ydb.Table.DateTypeColumnModeSettings
+	45, // 48: ptah.ydb.native.TtlSettings.value_since_unix_epoch:type_name -> Ydb.Table.ValueSinceUnixEpochModeSettings
+	27, // 49: ptah.ydb.native.TtlSettings.tiered_ttl:type_name -> ptah.ydb.native.TieredModeSettings
+	28, // 50: ptah.ydb.native.TieredModeSettings.tiers:type_name -> ptah.ydb.native.TtlTier
+	44, // 51: ptah.ydb.native.TtlTier.date_type_column:type_name -> Ydb.Table.DateTypeColumnModeSettings
+	45, // 52: ptah.ydb.native.TtlTier.value_since_unix_epoch:type_name -> Ydb.Table.ValueSinceUnixEpochModeSettings
+	31, // 53: ptah.ydb.native.TtlTier.delete:type_name -> google.protobuf.Empty
+	29, // 54: ptah.ydb.native.TtlTier.evict_to_external_storage:type_name -> ptah.ydb.native.EvictionToExternalStorageSettings
+	55, // [55:55] is the sub-list for method output_type
+	55, // [55:55] is the sub-list for method input_type
+	55, // [55:55] is the sub-list for extension type_name
+	55, // [55:55] is the sub-list for extension extendee
+	0,  // [0:55] is the sub-list for field type_name
 }
 
 func init() { file_internal_nativeprotocol_columnstore_proto_init() }
@@ -2118,6 +2708,8 @@ func file_internal_nativeprotocol_columnstore_proto_init() {
 	if File_internal_nativeprotocol_columnstore_proto != nil {
 		return
 	}
+	file_internal_nativeprotocol_indexes_proto_init()
+	file_internal_nativeprotocol_topics_proto_init()
 	file_internal_nativeprotocol_columnstore_proto_msgTypes[1].OneofWrappers = []any{
 		(*LocalIndexObservation_Bloom)(nil),
 		(*LocalIndexObservation_Ngram)(nil),
@@ -2150,13 +2742,24 @@ func file_internal_nativeprotocol_columnstore_proto_init() {
 		(*MonitoringTTLTier_Delete)(nil),
 		(*MonitoringTTLTier_EvictToExternalStorage)(nil),
 	}
+	file_internal_nativeprotocol_columnstore_proto_msgTypes[26].OneofWrappers = []any{
+		(*TtlSettings_DateTypeColumn)(nil),
+		(*TtlSettings_ValueSinceUnixEpoch)(nil),
+		(*TtlSettings_TieredTtl)(nil),
+	}
+	file_internal_nativeprotocol_columnstore_proto_msgTypes[28].OneofWrappers = []any{
+		(*TtlTier_DateTypeColumn)(nil),
+		(*TtlTier_ValueSinceUnixEpoch)(nil),
+		(*TtlTier_Delete)(nil),
+		(*TtlTier_EvictToExternalStorage)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_nativeprotocol_columnstore_proto_rawDesc), len(file_internal_nativeprotocol_columnstore_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

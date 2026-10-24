@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	sqldriver "database/sql/driver"
 	"errors"
+	"net/url"
 	"sync"
 	"time"
 
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+	"github.com/ydb-platform/ydb-go-sdk/v3/config"
+	"google.golang.org/grpc"
 )
 
 // Connection owns the SQL pool and native scheme/table clients together.
@@ -18,6 +21,18 @@ type Connection struct {
 	Driver   *ydb.Driver
 	once     sync.Once
 	closeErr error
+	// database is the database the driver opened; a dev realm is a
+	// directory inside it.
+	database string
+	// monitoring is the endpoint the address names, nil for none.
+	monitoring *url.URL
+	// secure reports a connection over TLS.
+	secure bool
+	// authenticated reports an address that names a credential source.
+	authenticated bool
+	// ticket returns the credential the monitoring pages are read with:
+	// Ticket for a connection Open made.
+	ticket func(context.Context) (string, error)
 }
 
 // Open opens the native query-service connection. No schema is created.
@@ -26,11 +41,13 @@ func Open(ctx context.Context, address Address) (*Connection, error) {
 	if err != nil {
 		return nil, err
 	}
-	driver, err := ydb.Open(ctx, address.dsn, credentials, ydb.WithApplicationName("ptah-plugin-ydb"))
+	driver, err := ydb.Open(ctx, address.dsn, credentials, ydb.WithApplicationName("ptah-plugin-ydb"),
+		ydb.With(config.WithGrpcOptions(grpc.WithChainUnaryInterceptor(recordTicket))))
 	if err != nil {
 		return nil, err
 	}
-	c := &Connection{Driver: driver}
+	c := &Connection{Driver: driver, database: address.database, monitoring: address.Monitoring(), secure: address.secure, authenticated: address.authenticated()}
+	c.ticket = c.Ticket
 	connector, err := ydb.Connector(driver, ydb.WithQueryService(true))
 	if err != nil {
 		return nil, errors.Join(err, c.Close())
