@@ -1,0 +1,13 @@
+[
+ {
+  "dialect": "ydb",
+  "server_version": "",
+  "compatibility": "",
+  "disabled": [
+   "MF",
+   "BC",
+   "PG",
+   "MY"
+  ]
+ }
+]

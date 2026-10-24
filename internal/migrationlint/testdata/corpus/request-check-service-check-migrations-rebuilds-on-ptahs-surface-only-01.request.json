@@ -1,0 +1,277 @@
+{
+ "kind": "check",
+ "request": {
+  "target": {
+   "name": "ydb",
+   "capabilities": null
+  },
+  "codes": [
+   "YD106"
+  ],
+  "files": [
+   {
+    "name": "0001_v.up.sql",
+    "version": 1,
+    "up": true,
+    "statements": [
+     {
+      "start": 0,
+      "end": 65,
+      "line": 1,
+      "sql": "CREATE TABLE base (id Uint64 NOT NULL, n Int32, PRIMARY KEY (id))",
+      "canonical": "CREATE TABLE BASE (ID UINT64 NOT NULL, N INT32, PRIMARY KEY (ID))",
+      "words": [
+       "CREATE",
+       "TABLE",
+       "BASE",
+       "(",
+       "ID",
+       "UINT64",
+       "NOT",
+       "NULL",
+       ",",
+       "N",
+       "INT32",
+       ",",
+       "PRIMARY",
+       "KEY",
+       "(",
+       "ID",
+       ")",
+       ")"
+      ],
+      "source_words": [
+       "CREATE",
+       "TABLE",
+       "base",
+       "(",
+       "id",
+       "Uint64",
+       "NOT",
+       "NULL",
+       ",",
+       "n",
+       "Int32",
+       ",",
+       "PRIMARY",
+       "KEY",
+       "(",
+       "id",
+       ")",
+       ")"
+      ]
+     },
+     {
+      "start": 67,
+      "end": 134,
+      "line": 2,
+      "sql": "CREATE VIEW v WITH (security_invoker = TRUE) AS SELECT id FROM base",
+      "canonical": "CREATE VIEW V WITH (SECURITY_INVOKER = TRUE) AS SELECT ID FROM BASE",
+      "words": [
+       "CREATE",
+       "VIEW",
+       "V",
+       "WITH",
+       "(",
+       "SECURITY_INVOKER",
+       "=",
+       "TRUE",
+       ")",
+       "AS",
+       "SELECT",
+       "ID",
+       "FROM",
+       "BASE"
+      ],
+      "source_words": [
+       "CREATE",
+       "VIEW",
+       "v",
+       "WITH",
+       "(",
+       "security_invoker",
+       "=",
+       "TRUE",
+       ")",
+       "AS",
+       "SELECT",
+       "id",
+       "FROM",
+       "base"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "0002_rebuild.up.sql",
+    "version": 2,
+    "up": true,
+    "statements": [
+     {
+      "start": 0,
+      "end": 80,
+      "line": 1,
+      "sql": "CREATE TABLE __ptah_rebuild_base (id Uint64 NOT NULL, n Int64, PRIMARY KEY (id))",
+      "canonical": "CREATE TABLE __PTAH_REBUILD_BASE (ID UINT64 NOT NULL, N INT64, PRIMARY KEY (ID))",
+      "words": [
+       "CREATE",
+       "TABLE",
+       "__PTAH_REBUILD_BASE",
+       "(",
+       "ID",
+       "UINT64",
+       "NOT",
+       "NULL",
+       ",",
+       "N",
+       "INT64",
+       ",",
+       "PRIMARY",
+       "KEY",
+       "(",
+       "ID",
+       ")",
+       ")"
+      ],
+      "source_words": [
+       "CREATE",
+       "TABLE",
+       "__ptah_rebuild_base",
+       "(",
+       "id",
+       "Uint64",
+       "NOT",
+       "NULL",
+       ",",
+       "n",
+       "Int64",
+       ",",
+       "PRIMARY",
+       "KEY",
+       "(",
+       "id",
+       ")",
+       ")"
+      ]
+     },
+     {
+      "start": 82,
+      "end": 164,
+      "line": 2,
+      "sql": "INSERT INTO __ptah_rebuild_base (id, n) SELECT id, CAST(n AS Int64) AS n FROM base",
+      "canonical": "INSERT INTO __PTAH_REBUILD_BASE (ID, N) SELECT ID, CAST(N AS INT64) AS N FROM BASE",
+      "words": [
+       "INSERT",
+       "INTO",
+       "__PTAH_REBUILD_BASE",
+       "(",
+       "ID",
+       ",",
+       "N",
+       ")",
+       "SELECT",
+       "ID",
+       ",",
+       "CAST",
+       "(",
+       "N",
+       "AS",
+       "INT64",
+       ")",
+       "AS",
+       "N",
+       "FROM",
+       "BASE"
+      ],
+      "source_words": [
+       "INSERT",
+       "INTO",
+       "__ptah_rebuild_base",
+       "(",
+       "id",
+       ",",
+       "n",
+       ")",
+       "SELECT",
+       "id",
+       ",",
+       "CAST",
+       "(",
+       "n",
+       "AS",
+       "Int64",
+       ")",
+       "AS",
+       "n",
+       "FROM",
+       "base"
+      ]
+     },
+     {
+      "start": 166,
+      "end": 213,
+      "line": 3,
+      "sql": "ALTER TABLE base RENAME TO __ptah_replaced_base",
+      "canonical": "ALTER TABLE BASE RENAME TO __PTAH_REPLACED_BASE",
+      "words": [
+       "ALTER",
+       "TABLE",
+       "BASE",
+       "RENAME",
+       "TO",
+       "__PTAH_REPLACED_BASE"
+      ],
+      "source_words": [
+       "ALTER",
+       "TABLE",
+       "base",
+       "RENAME",
+       "TO",
+       "__ptah_replaced_base"
+      ]
+     },
+     {
+      "start": 215,
+      "end": 261,
+      "line": 4,
+      "sql": "ALTER TABLE __ptah_rebuild_base RENAME TO base",
+      "canonical": "ALTER TABLE __PTAH_REBUILD_BASE RENAME TO BASE",
+      "words": [
+       "ALTER",
+       "TABLE",
+       "__PTAH_REBUILD_BASE",
+       "RENAME",
+       "TO",
+       "BASE"
+      ],
+      "source_words": [
+       "ALTER",
+       "TABLE",
+       "__ptah_rebuild_base",
+       "RENAME",
+       "TO",
+       "base"
+      ]
+     },
+     {
+      "start": 263,
+      "end": 294,
+      "line": 5,
+      "sql": "DROP TABLE __ptah_replaced_base",
+      "canonical": "DROP TABLE __PTAH_REPLACED_BASE",
+      "words": [
+       "DROP",
+       "TABLE",
+       "__PTAH_REPLACED_BASE"
+      ],
+      "source_words": [
+       "DROP",
+       "TABLE",
+       "__ptah_replaced_base"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,566 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP INDEX t_a leaves its comment on the table as the attribute ptah.comment.index.t_a, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `t_a` ON `t` IS NULL",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "RENAME INDEX t_b TO t_b2 leaves the index's comment under the old name, as the attribute ptah.comment.index.t_b; move it with COMMENT ON INDEX `t_b2` ON `t` and COMMENT ON INDEX `t_b` ON `t` IS NULL",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP COLUMN c leaves its comment on the table as the attribute ptah.comment.column.c, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`c` IS NULL",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN b: index t_b2 keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "b",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP COLUMN b leaves its comment on the table as the attribute ptah.comment.column.b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`b` IS NULL",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP COLUMN a leaves its comment on the table as the attribute ptah.comment.column.a, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`a` IS NULL",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD150", "0002_t.up.sql:2:YD150", "0002_t.up.sql:3:BC104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:3:YD150", "0002_t.up.sql:4:BC104", "0002_t.up.sql:4:DS102", "0002_t.up.sql:5:BC104", "0002_t.up.sql:5:DS102", "0002_t.up.sql:5:YD104", "0002_t.up.sql:5:YD150", "0002_t.up.sql:5:YD150"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP INDEX t_a leaves its comment on the table as the attribute ptah.comment.index.t_a, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `t_a` ON `t` IS NULL",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "RENAME INDEX t_b TO t_b2 leaves the index's comment under the old name, as the attribute ptah.comment.index.t_b; move it with COMMENT ON INDEX `t_b2` ON `t` and COMMENT ON INDEX `t_b` ON `t` IS NULL",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP COLUMN c leaves its comment on the table as the attribute ptah.comment.column.c, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`c` IS NULL",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN b: index t_b2 keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "b",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP COLUMN b leaves its comment on the table as the attribute ptah.comment.column.b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`b` IS NULL",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP COLUMN a leaves its comment on the table as the attribute ptah.comment.column.a, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`a` IS NULL",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD150", "0002_t.up.sql:2:YD150", "0002_t.up.sql:3:BC104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:3:YD150", "0002_t.up.sql:4:BC104", "0002_t.up.sql:4:DS102", "0002_t.up.sql:5:BC104", "0002_t.up.sql:5:DS102", "0002_t.up.sql:5:YD104", "0002_t.up.sql:5:YD150", "0002_t.up.sql:5:YD150"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP INDEX t_a leaves its comment on the table as the attribute ptah.comment.index.t_a, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `t_a` ON `t` IS NULL",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "RENAME INDEX t_b TO t_b2 leaves the index's comment under the old name, as the attribute ptah.comment.index.t_b; move it with COMMENT ON INDEX `t_b2` ON `t` and COMMENT ON INDEX `t_b` ON `t` IS NULL",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP COLUMN c leaves its comment on the table as the attribute ptah.comment.column.c, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`c` IS NULL",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN b: index t_b2 keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "b",
+        "parent": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP COLUMN b leaves its comment on the table as the attribute ptah.comment.column.b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`b` IS NULL",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 1,
+      "message": "DROP COLUMN a leaves its comment on the table as the attribute ptah.comment.column.a, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `t`.`a` IS NULL",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD150", "0002_t.up.sql:2:YD150", "0002_t.up.sql:3:DS102", "0002_t.up.sql:3:YD150", "0002_t.up.sql:4:DS102", "0002_t.up.sql:5:DS102", "0002_t.up.sql:5:YD104", "0002_t.up.sql:5:YD150", "0002_t.up.sql:5:YD150"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, B UTF8, C UTF8, D UTF8, PRIMARY KEY (ID), INDEX T_A GLOBAL ON (A), INDEX T_B GLOBAL ON (B))",
+       "end": 135,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Utf8", ",", "c", "Utf8", ",", "d", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "t_a", "GLOBAL", "ON", "(", "a", ")", ",", "INDEX", "t_b", "GLOBAL", "ON", "(", "b", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, c Utf8, d Utf8, PRIMARY KEY (id), INDEX t_a GLOBAL ON (a), INDEX t_b GLOBAL ON (b))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "UTF8", ",", "C", "UTF8", ",", "D", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "T_A", "GLOBAL", "ON", "(", "A", ")", ",", "INDEX", "T_B", "GLOBAL", "ON", "(", "B", ")", ")"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `t`.`a` IS 'the a column'",
+       "end": 180,
+       "line": 2,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'the a column'"],
+       "sql": "COMMENT ON COLUMN `t`.`a` IS 'the a column'",
+       "start": 137,
+       "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'the a column'"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `t`.`b` IS \"escaped \\x41 \\n \\t \\\\ \\' \\\"\";\nCOMMENT ON INDEX `t_a` ON `t` IS 'an index comment';\nCOMMENT ON INDEX `t_b` ON `t` IS 'another';\nCOMMENT ON TABLE `t` IS 'the table';\ncomment on column `t`.`c` is 'lower case keywords';\nCOMMENT ON COLUMN `/local/t`.`d` IS 'absolute path';\nCOMMENT ON VIEW `t` IS 'a view comment on a table name';\n",
+       "end": 538,
+       "line": 3,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "\"escaped \\x41 \\n \\t \\\\ \\' \\\"\";\nCOMMENT ON INDEX `t_a` ON `t` IS 'an index comment';\nCOMMENT ON INDEX `t_b` ON `t` IS 'another';\nCOMMENT ON TABLE `t` IS 'the table';\ncomment on column `t`.`c` is 'lower case keywords';\nCOMMENT ON COLUMN `/local/t`.`d` IS 'absolute path';\nCOMMENT ON VIEW `t` IS 'a view comment on a table name';\n"],
+       "sql": "COMMENT ON COLUMN `t`.`b` IS \"escaped \\x41 \\n \\t \\\\ \\' \\\"\";\nCOMMENT ON INDEX `t_a` ON `t` IS 'an index comment';\nCOMMENT ON INDEX `t_b` ON `t` IS 'another';\nCOMMENT ON TABLE `t` IS 'the table';\ncomment on column `t`.`c` is 'lower case keywords';\nCOMMENT ON COLUMN `/local/t`.`d` IS 'absolute path';\nCOMMENT ON VIEW `t` IS 'a view comment on a table name';\n",
+       "start": 182,
+       "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "\"escaped \\x41 \\n \\t \\\\ \\' \\\"\";\nCOMMENT ON INDEX `t_a` ON `t` IS 'an index comment';\nCOMMENT ON INDEX `t_b` ON `t` IS 'another';\nCOMMENT ON TABLE `t` IS 'the table';\ncomment on column `t`.`c` is 'lower case keywords';\nCOMMENT ON COLUMN `/local/t`.`d` IS 'absolute path';\nCOMMENT ON VIEW `t` IS 'a view comment on a table name';\n"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE T DROP INDEX T_A",
+       "end": 28,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "INDEX", "t_a"],
+       "sql": "ALTER TABLE t DROP INDEX t_a",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "DROP", "INDEX", "T_A"]
+      },
+      {
+       "canonical": "ALTER TABLE T RENAME INDEX T_B TO T_B2",
+       "end": 68,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "t", "RENAME", "INDEX", "t_b", "TO", "t_b2"],
+       "sql": "ALTER TABLE t RENAME INDEX t_b TO t_b2",
+       "start": 30,
+       "words": ["ALTER", "TABLE", "T", "RENAME", "INDEX", "T_B", "TO", "T_B2"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN C",
+       "end": 97,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "c"],
+       "sql": "ALTER TABLE t DROP COLUMN c",
+       "start": 70,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "C"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN D",
+       "end": 126,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "d"],
+       "sql": "ALTER TABLE t DROP COLUMN d",
+       "start": 99,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "D"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN B, DROP COLUMN A",
+       "end": 170,
+       "line": 5,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "b", ",", "DROP", "COLUMN", "a"],
+       "sql": "ALTER TABLE t DROP COLUMN b, DROP COLUMN a",
+       "start": 128,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "B", ",", "DROP", "COLUMN", "A"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_t.up.sql:3:BC104", "0002_t.up.sql:3:DS102", "0002_t.up.sql:4:BC104", "0002_t.up.sql:4:DS102", "0002_t.up.sql:5:BC104", "0002_t.up.sql:5:DS102"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, B UTF8, C UTF8, D UTF8, PRIMARY KEY (ID), INDEX T_A GLOBAL ON (A), INDEX T_B GLOBAL ON (B))",
+      "end": 135,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Utf8", ",", "c", "Utf8", ",", "d", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "t_a", "GLOBAL", "ON", "(", "a", ")", ",", "INDEX", "t_b", "GLOBAL", "ON", "(", "b", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, c Utf8, d Utf8, PRIMARY KEY (id), INDEX t_a GLOBAL ON (a), INDEX t_b GLOBAL ON (b))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "UTF8", ",", "C", "UTF8", ",", "D", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "T_A", "GLOBAL", "ON", "(", "A", ")", ",", "INDEX", "T_B", "GLOBAL", "ON", "(", "B", ")", ")"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `t`.`a` IS 'the a column'",
+      "end": 180,
+      "line": 2,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'the a column'"],
+      "sql": "COMMENT ON COLUMN `t`.`a` IS 'the a column'",
+      "start": 137,
+      "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`a`", "IS", "'the a column'"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `t`.`b` IS \"escaped \\x41 \\n \\t \\\\ \\' \\\"\"",
+      "end": 240,
+      "line": 3,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "\"escaped \\x41 \\n \\t \\\\ \\' \\\"\""],
+      "sql": "COMMENT ON COLUMN `t`.`b` IS \"escaped \\x41 \\n \\t \\\\ \\' \\\"\"",
+      "start": 182,
+      "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`b`", "IS", "\"escaped \\x41 \\n \\t \\\\ \\' \\\"\""]
+     },
+     {
+      "canonical": "COMMENT ON INDEX `t_a` ON `t` IS 'an index comment'",
+      "end": 293,
+      "line": 4,
+      "source_words": ["COMMENT", "ON", "INDEX", "`t_a`", "ON", "`t`", "IS", "'an index comment'"],
+      "sql": "COMMENT ON INDEX `t_a` ON `t` IS 'an index comment'",
+      "start": 242,
+      "words": ["COMMENT", "ON", "INDEX", "`t_a`", "ON", "`t`", "IS", "'an index comment'"]
+     },
+     {
+      "canonical": "COMMENT ON INDEX `t_b` ON `t` IS 'another'",
+      "end": 337,
+      "line": 5,
+      "source_words": ["COMMENT", "ON", "INDEX", "`t_b`", "ON", "`t`", "IS", "'another'"],
+      "sql": "COMMENT ON INDEX `t_b` ON `t` IS 'another'",
+      "start": 295,
+      "words": ["COMMENT", "ON", "INDEX", "`t_b`", "ON", "`t`", "IS", "'another'"]
+     },
+     {
+      "canonical": "COMMENT ON TABLE `t` IS 'the table'",
+      "end": 374,
+      "line": 6,
+      "source_words": ["COMMENT", "ON", "TABLE", "`t`", "IS", "'the table'"],
+      "sql": "COMMENT ON TABLE `t` IS 'the table'",
+      "start": 339,
+      "words": ["COMMENT", "ON", "TABLE", "`t`", "IS", "'the table'"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `t`.`c` IS 'lower case keywords'",
+      "end": 426,
+      "line": 7,
+      "source_words": ["comment", "on", "column", "`t`", ".", "`c`", "is", "'lower case keywords'"],
+      "sql": "comment on column `t`.`c` is 'lower case keywords'",
+      "start": 376,
+      "words": ["COMMENT", "ON", "COLUMN", "`t`", ".", "`c`", "IS", "'lower case keywords'"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `/local/t`.`d` IS 'absolute path'",
+      "end": 479,
+      "line": 8,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`/local/t`", ".", "`d`", "IS", "'absolute path'"],
+      "sql": "COMMENT ON COLUMN `/local/t`.`d` IS 'absolute path'",
+      "start": 428,
+      "words": ["COMMENT", "ON", "COLUMN", "`/local/t`", ".", "`d`", "IS", "'absolute path'"]
+     },
+     {
+      "canonical": "COMMENT ON VIEW `t` IS 'a view comment on a table name'",
+      "end": 536,
+      "line": 9,
+      "source_words": ["COMMENT", "ON", "VIEW", "`t`", "IS", "'a view comment on a table name'"],
+      "sql": "COMMENT ON VIEW `t` IS 'a view comment on a table name'",
+      "start": 481,
+      "words": ["COMMENT", "ON", "VIEW", "`t`", "IS", "'a view comment on a table name'"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE T DROP INDEX T_A",
+      "end": 28,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "INDEX", "t_a"],
+      "sql": "ALTER TABLE t DROP INDEX t_a",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "DROP", "INDEX", "T_A"]
+     },
+     {
+      "canonical": "ALTER TABLE T RENAME INDEX T_B TO T_B2",
+      "end": 68,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "t", "RENAME", "INDEX", "t_b", "TO", "t_b2"],
+      "sql": "ALTER TABLE t RENAME INDEX t_b TO t_b2",
+      "start": 30,
+      "words": ["ALTER", "TABLE", "T", "RENAME", "INDEX", "T_B", "TO", "T_B2"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN C",
+      "end": 97,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "c"],
+      "sql": "ALTER TABLE t DROP COLUMN c",
+      "start": 70,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "C"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN D",
+      "end": 126,
+      "line": 4,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "d"],
+      "sql": "ALTER TABLE t DROP COLUMN d",
+      "start": 99,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "D"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN B, DROP COLUMN A",
+      "end": 170,
+      "line": 5,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "b", ",", "DROP", "COLUMN", "a"],
+      "sql": "ALTER TABLE t DROP COLUMN b, DROP COLUMN a",
+      "start": 128,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "B", ",", "DROP", "COLUMN", "A"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, c Utf8, d Utf8, PRIMARY KEY (id), INDEX t_a GLOBAL ON (a), INDEX t_b GLOBAL ON (b));\nCOMMENT ON COLUMN `t`.`a` IS 'the a column';\nCOMMENT ON COLUMN `t`.`b` IS \"escaped \\x41 \\n \\t \\\\ \\' \\\"\";\nCOMMENT ON INDEX `t_a` ON `t` IS 'an index comment';\nCOMMENT ON INDEX `t_b` ON `t` IS 'another';\nCOMMENT ON TABLE `t` IS 'the table';\ncomment on column `t`.`c` is 'lower case keywords';\nCOMMENT ON COLUMN `/local/t`.`d` IS 'absolute path';\nCOMMENT ON VIEW `t` IS 'a view comment on a table name';\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER TABLE t DROP INDEX t_a;\nALTER TABLE t RENAME INDEX t_b TO t_b2;\nALTER TABLE t DROP COLUMN c;\nALTER TABLE t DROP COLUMN d;\nALTER TABLE t DROP COLUMN b, DROP COLUMN a;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

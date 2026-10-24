@@ -1,0 +1,194 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_fn.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_fn.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0000000001_fn.up.sql:1:AC101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_fn.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_fn.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0000000001_fn.up.sql:1:AC101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_fn.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_fn.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0000000001_fn.up.sql:1:AC101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP FUNCTION NOOP()",
+       "end": 20,
+       "line": 1,
+       "source_words": ["DROP", "FUNCTION", "noop", "(", ")"],
+       "sql": "DROP FUNCTION noop()",
+       "start": 0,
+       "words": ["DROP", "FUNCTION", "NOOP", "(", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE FUNCTION NOOP() RETURNS VOID AS $ptah$\nBEGIN\n    -- DROP TABLE decoy; inside a dollar-quoted body and a comment\n    PERFORM 1;\nEND;\n$ptah$ LANGUAGE PLPGSQL",
+       "end": 162,
+       "line": 1,
+       "source_words": ["CREATE", "FUNCTION", "noop", "(", ")", "RETURNS", "void", "AS", "$ptah$\nBEGIN\n    -- DROP TABLE decoy; inside a dollar-quoted body and a comment\n    PERFORM 1;\nEND;\n$ptah$", "LANGUAGE", "plpgsql"],
+       "sql": "CREATE FUNCTION noop() RETURNS void AS $ptah$\nBEGIN\n    -- DROP TABLE decoy; inside a dollar-quoted body and a comment\n    PERFORM 1;\nEND;\n$ptah$ LANGUAGE plpgsql",
+       "start": 0,
+       "words": ["CREATE", "FUNCTION", "NOOP", "(", ")", "RETURNS", "VOID", "AS", "$ptah$\nBEGIN\n    -- DROP TABLE decoy; inside a dollar-quoted body and a comment\n    PERFORM 1;\nEND;\n$ptah$", "LANGUAGE", "PLPGSQL"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0000000001_fn.up.sql:1:AC101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "DROP FUNCTION NOOP()",
+      "end": 20,
+      "line": 1,
+      "source_words": ["DROP", "FUNCTION", "noop", "(", ")"],
+      "sql": "DROP FUNCTION noop()",
+      "start": 0,
+      "words": ["DROP", "FUNCTION", "NOOP", "(", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "CREATE FUNCTION NOOP() RETURNS VOID AS $PTAH$ BEGIN PERFORM 1",
+      "end": 132,
+      "line": 1,
+      "source_words": ["CREATE", "FUNCTION", "noop", "(", ")", "RETURNS", "void", "AS", "$ptah$", "BEGIN", "PERFORM", "1"],
+      "sql": "CREATE FUNCTION noop() RETURNS void AS $ptah$\nBEGIN\n    -- DROP TABLE decoy; inside a dollar-quoted body and a comment\n    PERFORM 1",
+      "start": 0,
+      "words": ["CREATE", "FUNCTION", "NOOP", "(", ")", "RETURNS", "VOID", "AS", "$PTAH$", "BEGIN", "PERFORM", "1"]
+     },
+     {
+      "canonical": "END",
+      "end": 137,
+      "line": 5,
+      "source_words": ["END"],
+      "sql": "END",
+      "start": 134,
+      "words": ["END"]
+     },
+     {
+      "canonical": "$PTAH$ LANGUAGE PLPGSQL",
+      "end": 162,
+      "line": 6,
+      "source_words": ["$ptah$", "LANGUAGE", "plpgsql"],
+      "sql": "$ptah$ LANGUAGE plpgsql",
+      "start": 139,
+      "words": ["$PTAH$", "LANGUAGE", "PLPGSQL"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "down": true,
+     "name": "0000000001_fn.down.sql",
+     "sql": "DROP FUNCTION noop();\n",
+     "version": 1
+    },
+    {
+     "name": "0000000001_fn.up.sql",
+     "sql": "CREATE FUNCTION noop() RETURNS void AS $ptah$\nBEGIN\n    -- DROP TABLE decoy; inside a dollar-quoted body and a comment\n    PERFORM 1;\nEND;\n$ptah$ LANGUAGE plpgsql;\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

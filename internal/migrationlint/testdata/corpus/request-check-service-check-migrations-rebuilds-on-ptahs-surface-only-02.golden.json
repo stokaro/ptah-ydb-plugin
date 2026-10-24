@@ -1,0 +1,21 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "check",
+ "result": {
+  "complete": true,
+  "findings": [
+   {
+    "code": "YD106",
+    "file": 1,
+    "message": "ALTER TABLE base RENAME TO __ptah_replaced_base leaves view v reading a table that does not exist: a view reads its table by path, so every read of it fails until a table takes the name base again; recreate it over __ptah_replaced_base",
+    "statement": 2,
+    "subjects": [
+     {
+      "kind": "table",
+      "name": "base"
+     }
+    ]
+   }
+  ]
+ }
+}

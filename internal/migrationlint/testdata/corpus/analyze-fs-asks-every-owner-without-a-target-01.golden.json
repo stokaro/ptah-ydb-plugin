@@ -1,0 +1,197 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_x.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_x.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_x.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_x.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_x.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_x.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "SELECT 0",
+       "end": 8,
+       "line": 1,
+       "source_words": ["SELECT", "0"],
+       "sql": "SELECT 0",
+       "start": 0,
+       "words": ["SELECT", "0"]
+      }
+     ],
+     [
+      {
+       "canonical": "SELECT 1",
+       "end": 8,
+       "line": 1,
+       "source_words": ["SELECT", "1"],
+       "sql": "SELECT 1",
+       "start": 0,
+       "words": ["SELECT", "1"]
+      },
+      {
+       "canonical": "SELECT 2",
+       "comments": ["-- the statement an owner reports"],
+       "end": 52,
+       "line": 3,
+       "source_words": ["SELECT", "2"],
+       "sql": "SELECT 2",
+       "start": 44,
+       "words": ["SELECT", "2"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "SELECT 0",
+      "end": 8,
+      "line": 1,
+      "source_words": ["SELECT", "0"],
+      "sql": "SELECT 0",
+      "start": 0,
+      "words": ["SELECT", "0"]
+     }
+    ],
+    [
+     {
+      "canonical": "SELECT 1",
+      "end": 8,
+      "line": 1,
+      "source_words": ["SELECT", "1"],
+      "sql": "SELECT 1",
+      "start": 0,
+      "words": ["SELECT", "1"]
+     },
+     {
+      "canonical": "SELECT 2",
+      "comments": ["-- the statement an owner reports"],
+      "end": 52,
+      "line": 3,
+      "source_words": ["SELECT", "2"],
+      "sql": "SELECT 2",
+      "start": 44,
+      "words": ["SELECT", "2"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "down": true,
+     "name": "0000000001_x.down.sql",
+     "sql": "SELECT 0;\n",
+     "version": 1
+    },
+    {
+     "name": "0000000001_x.up.sql",
+     "sql": "SELECT 1;\n-- the statement an owner reports\nSELECT 2;\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

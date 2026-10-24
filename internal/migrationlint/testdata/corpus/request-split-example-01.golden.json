@@ -1,0 +1,51 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "split",
+ "result": {
+  "files": [
+   [
+    {
+     "canonical": "DROP TOPIC `app/events`",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "TOPIC",
+       "object": "`app/events`"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+      }
+     ],
+     "end": 23,
+     "line": 1,
+     "source_words": ["DROP", "TOPIC", "`app/events`"],
+     "sql": "DROP TOPIC `app/events`",
+     "start": 0,
+     "words": ["DROP", "TOPIC", "`app/events`"]
+    },
+    {
+     "canonical": "ALTER TABLE USERS ADD INDEX BY_EMAIL GLOBAL UNIQUE SYNC ON (EMAIL)",
+     "effects": [
+      {
+       "clause": "ADD INDEX",
+       "columns": ["email"],
+       "fact": "unique-index",
+       "failure": "YDB: Duplicate key found",
+       "object": "by_email",
+       "table": "users"
+      }
+     ],
+     "end": 91,
+     "line": 2,
+     "source_words": ["ALTER", "TABLE", "users", "ADD", "INDEX", "by_email", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "email", ")"],
+     "sql": "ALTER TABLE users ADD INDEX by_email GLOBAL UNIQUE SYNC ON (email)",
+     "start": 25,
+     "words": ["ALTER", "TABLE", "USERS", "ADD", "INDEX", "BY_EMAIL", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "EMAIL", ")"]
+    }
+   ]
+  ],
+  "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"]
+ }
+}

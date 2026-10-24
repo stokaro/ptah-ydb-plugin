@@ -1,0 +1,1 @@
+CREATE OR REPLACE TABLE app.victim (id INT);

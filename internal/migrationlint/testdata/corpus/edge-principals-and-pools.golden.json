@@ -1,0 +1,609 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_p.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD110",
+      "file": 0,
+      "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
+      "statement": 0
+     },
+     {
+      "code": "YD110",
+      "file": 0,
+      "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
+      "statement": 1
+     },
+     {
+      "code": "YD111",
+      "file": 0,
+      "message": "DROP USER leaves the user's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
+      "statement": 3
+     },
+     {
+      "code": "YD111",
+      "file": 0,
+      "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
+      "statement": 4
+     },
+     {
+      "code": "YD111",
+      "file": 0,
+      "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
+      "statement": 5
+     },
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 6
+     },
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 7
+     },
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 8
+     },
+     {
+      "code": "YD121",
+      "file": 0,
+      "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
+      "statement": 11
+     },
+     {
+      "code": "YD121",
+      "file": 0,
+      "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
+      "statement": 12
+     },
+     {
+      "code": "YD122",
+      "file": 0,
+      "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
+      "statement": 13
+     },
+     {
+      "code": "YD122",
+      "file": 0,
+      "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
+      "statement": 14
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_p.up.sql:1:YD110", "0001_p.up.sql:2:YD110", "0001_p.up.sql:4:DS107", "0001_p.up.sql:4:YD111", "0001_p.up.sql:5:DS107", "0001_p.up.sql:5:YD111", "0001_p.up.sql:6:DS107", "0001_p.up.sql:6:YD111", "0001_p.up.sql:7:YD120", "0001_p.up.sql:8:YD120", "0001_p.up.sql:9:YD120", "0001_p.up.sql:12:YD121", "0001_p.up.sql:13:YD121", "0001_p.up.sql:14:YD122", "0001_p.up.sql:15:YD122"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_p.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD110",
+      "file": 0,
+      "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
+      "statement": 0
+     },
+     {
+      "code": "YD110",
+      "file": 0,
+      "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
+      "statement": 1
+     },
+     {
+      "code": "YD111",
+      "file": 0,
+      "message": "DROP USER leaves the user's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
+      "statement": 3
+     },
+     {
+      "code": "YD111",
+      "file": 0,
+      "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
+      "statement": 4
+     },
+     {
+      "code": "YD111",
+      "file": 0,
+      "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
+      "statement": 5
+     },
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 6
+     },
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 7
+     },
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 8
+     },
+     {
+      "code": "YD121",
+      "file": 0,
+      "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
+      "statement": 11
+     },
+     {
+      "code": "YD121",
+      "file": 0,
+      "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
+      "statement": 12
+     },
+     {
+      "code": "YD122",
+      "file": 0,
+      "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
+      "statement": 13
+     },
+     {
+      "code": "YD122",
+      "file": 0,
+      "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
+      "statement": 14
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_p.up.sql:1:YD110", "0001_p.up.sql:2:YD110", "0001_p.up.sql:4:DS107", "0001_p.up.sql:4:YD111", "0001_p.up.sql:5:DS107", "0001_p.up.sql:5:YD111", "0001_p.up.sql:6:DS107", "0001_p.up.sql:6:YD111", "0001_p.up.sql:7:YD120", "0001_p.up.sql:8:YD120", "0001_p.up.sql:9:YD120", "0001_p.up.sql:12:YD121", "0001_p.up.sql:13:YD121", "0001_p.up.sql:14:YD122", "0001_p.up.sql:15:YD122"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_p.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD110",
+      "file": 0,
+      "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
+      "statement": 0
+     },
+     {
+      "code": "YD110",
+      "file": 0,
+      "message": "REVOKE GRANT OPTION FOR takes away the permission it names as well as the right to grant it, because YDB keeps the grant option as the permission ydb.access.grant; revoke 'ydb.access.grant' alone to keep the permission",
+      "statement": 1
+     },
+     {
+      "code": "YD111",
+      "file": 0,
+      "message": "DROP USER leaves the user's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
+      "statement": 3
+     },
+     {
+      "code": "YD111",
+      "file": 0,
+      "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
+      "statement": 4
+     },
+     {
+      "code": "YD111",
+      "file": 0,
+      "message": "DROP GROUP leaves the group's permissions on every object it was granted, and a user or group created later under the same name holds them; REVOKE ALL ON each object FROM it first",
+      "statement": 5
+     },
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 6
+     },
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 7
+     },
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 8
+     },
+     {
+      "code": "YD121",
+      "file": 0,
+      "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
+      "statement": 11
+     },
+     {
+      "code": "YD121",
+      "file": 0,
+      "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
+      "statement": 12
+     },
+     {
+      "code": "YD122",
+      "file": 0,
+      "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
+      "statement": 13
+     },
+     {
+      "code": "YD122",
+      "file": 0,
+      "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
+      "statement": 14
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_p.up.sql:1:YD110", "0001_p.up.sql:2:YD110", "0001_p.up.sql:4:DS107", "0001_p.up.sql:4:YD111", "0001_p.up.sql:5:DS107", "0001_p.up.sql:5:YD111", "0001_p.up.sql:6:DS107", "0001_p.up.sql:6:YD111", "0001_p.up.sql:7:YD120", "0001_p.up.sql:8:YD120", "0001_p.up.sql:9:YD120", "0001_p.up.sql:12:YD121", "0001_p.up.sql:13:YD121", "0001_p.up.sql:14:YD122", "0001_p.up.sql:15:YD122"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "REVOKE GRANT OPTION FOR SELECT ON `t` FROM U1",
+       "end": 45,
+       "line": 1,
+       "source_words": ["REVOKE", "GRANT", "OPTION", "FOR", "SELECT", "ON", "`t`", "FROM", "u1"],
+       "sql": "REVOKE GRANT OPTION FOR SELECT ON `t` FROM u1",
+       "start": 0,
+       "words": ["REVOKE", "GRANT", "OPTION", "FOR", "SELECT", "ON", "`t`", "FROM", "U1"]
+      },
+      {
+       "canonical": "REVOKE GRANT OPTION FOR ALL ON `t` FROM U1",
+       "end": 89,
+       "line": 2,
+       "source_words": ["revoke", "grant", "option", "for", "ALL", "ON", "`t`", "FROM", "u1"],
+       "sql": "revoke grant option for ALL ON `t` FROM u1",
+       "start": 47,
+       "words": ["REVOKE", "GRANT", "OPTION", "FOR", "ALL", "ON", "`t`", "FROM", "U1"]
+      },
+      {
+       "canonical": "REVOKE 'ydb.access.grant' ON `t` FROM U1",
+       "end": 131,
+       "line": 3,
+       "source_words": ["REVOKE", "'ydb.access.grant'", "ON", "`t`", "FROM", "u1"],
+       "sql": "REVOKE 'ydb.access.grant' ON `t` FROM u1",
+       "start": 91,
+       "words": ["REVOKE", "'ydb.access.grant'", "ON", "`t`", "FROM", "U1"]
+      },
+      {
+       "canonical": "DROP USER IF EXISTS U1",
+       "end": 155,
+       "line": 4,
+       "source_words": ["DROP", "USER", "IF", "EXISTS", "u1"],
+       "sql": "DROP USER IF EXISTS u1",
+       "start": 133,
+       "words": ["DROP", "USER", "IF", "EXISTS", "U1"]
+      },
+      {
+       "canonical": "DROP GROUP G1",
+       "end": 170,
+       "line": 5,
+       "source_words": ["drop", "group", "g1"],
+       "sql": "drop group g1",
+       "start": 157,
+       "words": ["DROP", "GROUP", "G1"]
+      },
+      {
+       "canonical": "DROP GROUP IF EXISTS G2, G3",
+       "end": 199,
+       "line": 6,
+       "source_words": ["DROP", "GROUP", "IF", "EXISTS", "g2", ",", "g3"],
+       "sql": "DROP GROUP IF EXISTS g2, g3",
+       "start": 172,
+       "words": ["DROP", "GROUP", "IF", "EXISTS", "G2", ",", "G3"]
+      },
+      {
+       "canonical": "DROP RESOURCE POOL DEFAULT",
+       "end": 227,
+       "line": 7,
+       "source_words": ["DROP", "RESOURCE", "POOL", "default"],
+       "sql": "DROP RESOURCE POOL default",
+       "start": 201,
+       "words": ["DROP", "RESOURCE", "POOL", "DEFAULT"]
+      },
+      {
+       "canonical": "DROP RESOURCE POOL IF EXISTS DEFAULT",
+       "end": 265,
+       "line": 8,
+       "source_words": ["DROP", "RESOURCE", "POOL", "IF", "EXISTS", "default"],
+       "sql": "DROP RESOURCE POOL IF EXISTS default",
+       "start": 229,
+       "words": ["DROP", "RESOURCE", "POOL", "IF", "EXISTS", "DEFAULT"]
+      },
+      {
+       "canonical": "DROP RESOURCE POOL `default`",
+       "end": 295,
+       "line": 9,
+       "source_words": ["DROP", "RESOURCE", "POOL", "`default`"],
+       "sql": "DROP RESOURCE POOL `default`",
+       "start": 267,
+       "words": ["DROP", "RESOURCE", "POOL", "`default`"]
+      },
+      {
+       "canonical": "DROP RESOURCE POOL DEFAULT",
+       "end": 323,
+       "line": 10,
+       "source_words": ["DROP", "RESOURCE", "POOL", "Default"],
+       "sql": "DROP RESOURCE POOL Default",
+       "start": 297,
+       "words": ["DROP", "RESOURCE", "POOL", "DEFAULT"]
+      },
+      {
+       "canonical": "DROP RESOURCE POOL CLASSIFIER DEFAULT",
+       "end": 362,
+       "line": 11,
+       "source_words": ["DROP", "RESOURCE", "POOL", "CLASSIFIER", "default"],
+       "sql": "DROP RESOURCE POOL CLASSIFIER default",
+       "start": 325,
+       "words": ["DROP", "RESOURCE", "POOL", "CLASSIFIER", "DEFAULT"]
+      },
+      {
+       "canonical": "DROP BACKUP COLLECTION `bc`",
+       "end": 391,
+       "line": 12,
+       "source_words": ["DROP", "BACKUP", "COLLECTION", "`bc`"],
+       "sql": "DROP BACKUP COLLECTION `bc`",
+       "start": 364,
+       "words": ["DROP", "BACKUP", "COLLECTION", "`bc`"]
+      },
+      {
+       "canonical": "DROP BACKUP COLLECTION IF EXISTS BC2",
+       "end": 429,
+       "line": 13,
+       "source_words": ["DROP", "BACKUP", "COLLECTION", "IF", "EXISTS", "bc2"],
+       "sql": "DROP BACKUP COLLECTION IF EXISTS bc2",
+       "start": 393,
+       "words": ["DROP", "BACKUP", "COLLECTION", "IF", "EXISTS", "BC2"]
+      },
+      {
+       "canonical": "ANALYZE `t`, `u`",
+       "end": 447,
+       "line": 14,
+       "source_words": ["ANALYZE", "`t`", ",", "`u`"],
+       "sql": "ANALYZE `t`, `u`",
+       "start": 431,
+       "words": ["ANALYZE", "`t`", ",", "`u`"]
+      },
+      {
+       "canonical": "ANALYZE T (A, B)",
+       "end": 465,
+       "line": 15,
+       "source_words": ["analyze", "t", "(", "a", ",", "b", ")"],
+       "sql": "analyze t (a, b)",
+       "start": 449,
+       "words": ["ANALYZE", "T", "(", "A", ",", "B", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "REVOKE GRANT OPTION FOR SELECT ON `t` FROM U1",
+      "end": 45,
+      "line": 1,
+      "source_words": ["REVOKE", "GRANT", "OPTION", "FOR", "SELECT", "ON", "`t`", "FROM", "u1"],
+      "sql": "REVOKE GRANT OPTION FOR SELECT ON `t` FROM u1",
+      "start": 0,
+      "words": ["REVOKE", "GRANT", "OPTION", "FOR", "SELECT", "ON", "`t`", "FROM", "U1"]
+     },
+     {
+      "canonical": "REVOKE GRANT OPTION FOR ALL ON `t` FROM U1",
+      "end": 89,
+      "line": 2,
+      "source_words": ["revoke", "grant", "option", "for", "ALL", "ON", "`t`", "FROM", "u1"],
+      "sql": "revoke grant option for ALL ON `t` FROM u1",
+      "start": 47,
+      "words": ["REVOKE", "GRANT", "OPTION", "FOR", "ALL", "ON", "`t`", "FROM", "U1"]
+     },
+     {
+      "canonical": "REVOKE 'ydb.access.grant' ON `t` FROM U1",
+      "end": 131,
+      "line": 3,
+      "source_words": ["REVOKE", "'ydb.access.grant'", "ON", "`t`", "FROM", "u1"],
+      "sql": "REVOKE 'ydb.access.grant' ON `t` FROM u1",
+      "start": 91,
+      "words": ["REVOKE", "'ydb.access.grant'", "ON", "`t`", "FROM", "U1"]
+     },
+     {
+      "canonical": "DROP USER IF EXISTS U1",
+      "end": 155,
+      "line": 4,
+      "source_words": ["DROP", "USER", "IF", "EXISTS", "u1"],
+      "sql": "DROP USER IF EXISTS u1",
+      "start": 133,
+      "words": ["DROP", "USER", "IF", "EXISTS", "U1"]
+     },
+     {
+      "canonical": "DROP GROUP G1",
+      "end": 170,
+      "line": 5,
+      "source_words": ["drop", "group", "g1"],
+      "sql": "drop group g1",
+      "start": 157,
+      "words": ["DROP", "GROUP", "G1"]
+     },
+     {
+      "canonical": "DROP GROUP IF EXISTS G2, G3",
+      "end": 199,
+      "line": 6,
+      "source_words": ["DROP", "GROUP", "IF", "EXISTS", "g2", ",", "g3"],
+      "sql": "DROP GROUP IF EXISTS g2, g3",
+      "start": 172,
+      "words": ["DROP", "GROUP", "IF", "EXISTS", "G2", ",", "G3"]
+     },
+     {
+      "canonical": "DROP RESOURCE POOL DEFAULT",
+      "end": 227,
+      "line": 7,
+      "source_words": ["DROP", "RESOURCE", "POOL", "default"],
+      "sql": "DROP RESOURCE POOL default",
+      "start": 201,
+      "words": ["DROP", "RESOURCE", "POOL", "DEFAULT"]
+     },
+     {
+      "canonical": "DROP RESOURCE POOL IF EXISTS DEFAULT",
+      "end": 265,
+      "line": 8,
+      "source_words": ["DROP", "RESOURCE", "POOL", "IF", "EXISTS", "default"],
+      "sql": "DROP RESOURCE POOL IF EXISTS default",
+      "start": 229,
+      "words": ["DROP", "RESOURCE", "POOL", "IF", "EXISTS", "DEFAULT"]
+     },
+     {
+      "canonical": "DROP RESOURCE POOL `default`",
+      "end": 295,
+      "line": 9,
+      "source_words": ["DROP", "RESOURCE", "POOL", "`default`"],
+      "sql": "DROP RESOURCE POOL `default`",
+      "start": 267,
+      "words": ["DROP", "RESOURCE", "POOL", "`default`"]
+     },
+     {
+      "canonical": "DROP RESOURCE POOL DEFAULT",
+      "end": 323,
+      "line": 10,
+      "source_words": ["DROP", "RESOURCE", "POOL", "Default"],
+      "sql": "DROP RESOURCE POOL Default",
+      "start": 297,
+      "words": ["DROP", "RESOURCE", "POOL", "DEFAULT"]
+     },
+     {
+      "canonical": "DROP RESOURCE POOL CLASSIFIER DEFAULT",
+      "end": 362,
+      "line": 11,
+      "source_words": ["DROP", "RESOURCE", "POOL", "CLASSIFIER", "default"],
+      "sql": "DROP RESOURCE POOL CLASSIFIER default",
+      "start": 325,
+      "words": ["DROP", "RESOURCE", "POOL", "CLASSIFIER", "DEFAULT"]
+     },
+     {
+      "canonical": "DROP BACKUP COLLECTION `bc`",
+      "end": 391,
+      "line": 12,
+      "source_words": ["DROP", "BACKUP", "COLLECTION", "`bc`"],
+      "sql": "DROP BACKUP COLLECTION `bc`",
+      "start": 364,
+      "words": ["DROP", "BACKUP", "COLLECTION", "`bc`"]
+     },
+     {
+      "canonical": "DROP BACKUP COLLECTION IF EXISTS BC2",
+      "end": 429,
+      "line": 13,
+      "source_words": ["DROP", "BACKUP", "COLLECTION", "IF", "EXISTS", "bc2"],
+      "sql": "DROP BACKUP COLLECTION IF EXISTS bc2",
+      "start": 393,
+      "words": ["DROP", "BACKUP", "COLLECTION", "IF", "EXISTS", "BC2"]
+     },
+     {
+      "canonical": "ANALYZE `t`, `u`",
+      "end": 447,
+      "line": 14,
+      "source_words": ["ANALYZE", "`t`", ",", "`u`"],
+      "sql": "ANALYZE `t`, `u`",
+      "start": 431,
+      "words": ["ANALYZE", "`t`", ",", "`u`"]
+     },
+     {
+      "canonical": "ANALYZE T (A, B)",
+      "end": 465,
+      "line": 15,
+      "source_words": ["analyze", "t", "(", "a", ",", "b", ")"],
+      "sql": "analyze t (a, b)",
+      "start": 449,
+      "words": ["ANALYZE", "T", "(", "A", ",", "B", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_p.up.sql",
+     "sql": "REVOKE GRANT OPTION FOR SELECT ON `t` FROM u1;\nrevoke grant option for ALL ON `t` FROM u1;\nREVOKE 'ydb.access.grant' ON `t` FROM u1;\nDROP USER IF EXISTS u1;\ndrop group g1;\nDROP GROUP IF EXISTS g2, g3;\nDROP RESOURCE POOL default;\nDROP RESOURCE POOL IF EXISTS default;\nDROP RESOURCE POOL `default`;\nDROP RESOURCE POOL Default;\nDROP RESOURCE POOL CLASSIFIER default;\nDROP BACKUP COLLECTION `bc`;\nDROP BACKUP COLLECTION IF EXISTS bc2;\nANALYZE `t`, `u`;\nanalyze t (a, b);\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

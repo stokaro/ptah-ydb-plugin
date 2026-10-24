@@ -1,0 +1,219 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_ops.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 0
+     },
+     {
+      "code": "YD121",
+      "file": 0,
+      "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
+      "statement": 1
+     },
+     {
+      "code": "YD122",
+      "file": 0,
+      "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
+      "statement": 2
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_ops.up.sql:1:YD120", "0001_ops.up.sql:2:YD121", "0001_ops.up.sql:3:YD122"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_ops.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 0
+     },
+     {
+      "code": "YD121",
+      "file": 0,
+      "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
+      "statement": 1
+     },
+     {
+      "code": "YD122",
+      "file": 0,
+      "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
+      "statement": 2
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_ops.up.sql:1:YD120", "0001_ops.up.sql:2:YD121", "0001_ops.up.sql:3:YD122"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_ops.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD120",
+      "file": 0,
+      "message": "DROP RESOURCE POOL default drops the pool YDB runs every query in that no classifier sends elsewhere; YDB takes it, and every later query of the database, CREATE RESOURCE POOL default included, fails with `Resource pool default not found`. Change its settings with ALTER RESOURCE POOL default instead",
+      "statement": 0
+     },
+     {
+      "code": "YD121",
+      "file": 0,
+      "message": "DROP BACKUP COLLECTION deletes every backup the collection holds, and a YDB 25.1 server stops on it: measured on 25.1.4.7, the server process exits; copy or restore the backups first, and run it only on a later line",
+      "statement": 1
+     },
+     {
+      "code": "YD122",
+      "file": 0,
+      "message": "ANALYZE collects column statistics and changes no schema; YDB runs it only with the EnableColumnStatistics flag on, which is off by default, and refuses it on a row table on 25.1, so on such a cluster the migration stops here after the statements before it applied. Collect statistics outside the migration",
+      "statement": 2
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_ops.up.sql:1:YD120", "0001_ops.up.sql:2:YD121", "0001_ops.up.sql:3:YD122"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP RESOURCE POOL DEFAULT",
+       "end": 26,
+       "line": 1,
+       "source_words": ["DROP", "RESOURCE", "POOL", "default"],
+       "sql": "DROP RESOURCE POOL default",
+       "start": 0,
+       "words": ["DROP", "RESOURCE", "POOL", "DEFAULT"]
+      },
+      {
+       "canonical": "DROP BACKUP COLLECTION NIGHTLY",
+       "end": 58,
+       "line": 2,
+       "source_words": ["DROP", "BACKUP", "COLLECTION", "nightly"],
+       "sql": "DROP BACKUP COLLECTION nightly",
+       "start": 28,
+       "words": ["DROP", "BACKUP", "COLLECTION", "NIGHTLY"]
+      },
+      {
+       "canonical": "ANALYZE T",
+       "end": 69,
+       "line": 3,
+       "source_words": ["ANALYZE", "t"],
+       "sql": "ANALYZE t",
+       "start": 60,
+       "words": ["ANALYZE", "T"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "DROP RESOURCE POOL DEFAULT",
+      "end": 26,
+      "line": 1,
+      "source_words": ["DROP", "RESOURCE", "POOL", "default"],
+      "sql": "DROP RESOURCE POOL default",
+      "start": 0,
+      "words": ["DROP", "RESOURCE", "POOL", "DEFAULT"]
+     },
+     {
+      "canonical": "DROP BACKUP COLLECTION NIGHTLY",
+      "end": 58,
+      "line": 2,
+      "source_words": ["DROP", "BACKUP", "COLLECTION", "nightly"],
+      "sql": "DROP BACKUP COLLECTION nightly",
+      "start": 28,
+      "words": ["DROP", "BACKUP", "COLLECTION", "NIGHTLY"]
+     },
+     {
+      "canonical": "ANALYZE T",
+      "end": 69,
+      "line": 3,
+      "source_words": ["ANALYZE", "t"],
+      "sql": "ANALYZE t",
+      "start": 60,
+      "words": ["ANALYZE", "T"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_ops.up.sql",
+     "sql": "DROP RESOURCE POOL default;\nDROP BACKUP COLLECTION nightly;\nANALYZE t;\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,2 @@
+UPSERT INTO t (id) VALUES (1);
+CREATE TABLE m (id Uint64 NOT NULL, PRIMARY KEY (id));

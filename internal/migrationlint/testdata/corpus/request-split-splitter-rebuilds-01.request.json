@@ -1,0 +1,20 @@
+{
+ "kind": "split",
+ "request": {
+  "target": "ydb",
+  "sources": [
+   {
+    "name": "0001_items.up.sql",
+    "sql": "CREATE TABLE items (id Uint64 NOT NULL, n Int64, PRIMARY KEY (id));\n",
+    "version": 1,
+    "up": true
+   },
+   {
+    "name": "0002_rebuild.up.sql",
+    "sql": "CREATE TABLE items_new (id Uint64 NOT NULL, n Int64, PRIMARY KEY (id));\nINSERT INTO items_new (id, n) SELECT id, n FROM items;\nALTER TABLE items RENAME TO items_old;\nALTER TABLE items_new RENAME TO items;\nDROP TABLE items_old;\n",
+    "version": 2,
+    "up": true
+   }
+  ]
+ }
+}

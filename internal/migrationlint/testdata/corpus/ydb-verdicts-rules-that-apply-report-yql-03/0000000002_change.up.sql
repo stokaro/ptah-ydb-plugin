@@ -1,0 +1,1 @@
+ALTER TABLE `shop/users` ADD COLUMN Score Int32;

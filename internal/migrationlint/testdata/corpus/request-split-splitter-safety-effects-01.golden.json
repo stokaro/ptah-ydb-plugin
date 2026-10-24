@@ -1,0 +1,296 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "split",
+ "result": {
+  "files": [
+   [
+    {
+     "canonical": "DROP ASYNC REPLICATION R CASCADE",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "ASYNC REPLICATION",
+       "object": "r"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP ASYNC REPLICATION ... CASCADE drops the replica tables with the replication"
+      }
+     ],
+     "end": 32,
+     "line": 1,
+     "source_words": ["DROP", "ASYNC", "REPLICATION", "r", "CASCADE"],
+     "sql": "DROP ASYNC REPLICATION r CASCADE",
+     "start": 0,
+     "words": ["DROP", "ASYNC", "REPLICATION", "R", "CASCADE"]
+    },
+    {
+     "canonical": "DROP ASYNC REPLICATION R",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "behavioral",
+       "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+      }
+     ],
+     "end": 58,
+     "line": 2,
+     "source_words": ["DROP", "ASYNC", "REPLICATION", "r"],
+     "sql": "DROP ASYNC REPLICATION r",
+     "start": 34,
+     "words": ["DROP", "ASYNC", "REPLICATION", "R"]
+    },
+    {
+     "canonical": "DROP ASYNC REPLICATION `cascade`",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "behavioral",
+       "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+      }
+     ],
+     "end": 92,
+     "line": 3,
+     "source_words": ["drop", "async", "replication", "`cascade`"],
+     "sql": "drop async replication `cascade`",
+     "start": 60,
+     "words": ["DROP", "ASYNC", "REPLICATION", "`cascade`"]
+    },
+    {
+     "canonical": "DROP TOPIC IF EXISTS `app/events`",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "TOPIC",
+       "object": "`app/events`"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+      }
+     ],
+     "end": 127,
+     "line": 4,
+     "source_words": ["DROP", "TOPIC", "IF", "EXISTS", "`app/events`"],
+     "sql": "DROP TOPIC IF EXISTS `app/events`",
+     "start": 94,
+     "words": ["DROP", "TOPIC", "IF", "EXISTS", "`app/events`"]
+    },
+    {
+     "canonical": "ALTER TOPIC `app/events` ADD CONSUMER A, DROP CONSUMER B",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP CONSUMER removes a topic consumer and its position in the topic"
+      }
+     ],
+     "end": 185,
+     "line": 5,
+     "source_words": ["ALTER", "TOPIC", "`app/events`", "ADD", "CONSUMER", "a", ",", "DROP", "CONSUMER", "b"],
+     "sql": "ALTER TOPIC `app/events` ADD CONSUMER a, DROP CONSUMER b",
+     "start": 129,
+     "words": ["ALTER", "TOPIC", "`app/events`", "ADD", "CONSUMER", "A", ",", "DROP", "CONSUMER", "B"]
+    },
+    {
+     "canonical": "ALTER TOPIC `app/events` ADD CONSUMER A",
+     "end": 226,
+     "line": 6,
+     "source_words": ["ALTER", "TOPIC", "`app/events`", "ADD", "CONSUMER", "a"],
+     "sql": "ALTER TOPIC `app/events` ADD CONSUMER a",
+     "start": 187,
+     "words": ["ALTER", "TOPIC", "`app/events`", "ADD", "CONSUMER", "A"]
+    },
+    {
+     "canonical": "DROP TRANSFER T",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "TRANSFER",
+       "object": "t"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP TRANSFER stops the transfer and drops the topic consumer YDB created for it, with its position in the topic"
+      }
+     ],
+     "end": 243,
+     "line": 7,
+     "source_words": ["DROP", "TRANSFER", "t"],
+     "sql": "DROP TRANSFER t",
+     "start": 228,
+     "words": ["DROP", "TRANSFER", "T"]
+    },
+    {
+     "canonical": "DROP COORDINATION NODE `app/locks`",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "COORDINATION NODE",
+       "object": "`app/locks`"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP COORDINATION NODE removes the node with its semaphores and rate limiter resources, even while a session holds a lock on it"
+      }
+     ],
+     "end": 279,
+     "line": 8,
+     "source_words": ["DROP", "COORDINATION", "NODE", "`app/locks`"],
+     "sql": "DROP COORDINATION NODE `app/locks`",
+     "start": 245,
+     "words": ["DROP", "COORDINATION", "NODE", "`app/locks`"]
+    },
+    {
+     "canonical": "DROP SECRET `app/token`",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP SECRET removes a YDB secret whose value nothing can read back"
+      }
+     ],
+     "end": 304,
+     "line": 9,
+     "source_words": ["DROP", "SECRET", "`app/token`"],
+     "sql": "DROP SECRET `app/token`",
+     "start": 281,
+     "words": ["DROP", "SECRET", "`app/token`"]
+    },
+    {
+     "canonical": "DROP STREAMING QUERY Q",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "STREAMING QUERY",
+       "object": "q"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "the operation removes or resets streaming-query checkpoint state; a rollback restores the declaration, not the discarded state"
+      }
+     ],
+     "end": 328,
+     "line": 10,
+     "source_words": ["DROP", "STREAMING", "QUERY", "q"],
+     "sql": "DROP STREAMING QUERY q",
+     "start": 306,
+     "words": ["DROP", "STREAMING", "QUERY", "Q"]
+    },
+    {
+     "canonical": "ALTER STREAMING QUERY Q SET (RUN = FALSE)",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "behavioral",
+       "reason": "ALTER STREAMING QUERY changes continuous query execution"
+      }
+     ],
+     "end": 371,
+     "line": 11,
+     "source_words": ["ALTER", "STREAMING", "QUERY", "q", "SET", "(", "RUN", "=", "FALSE", ")"],
+     "sql": "ALTER STREAMING QUERY q SET (RUN = FALSE)",
+     "start": 330,
+     "words": ["ALTER", "STREAMING", "QUERY", "Q", "SET", "(", "RUN", "=", "FALSE", ")"]
+    },
+    {
+     "canonical": "ALTER STREAMING QUERY Q SET (FORCE = TRUE) AS DO BEGIN SELECT 1; END DO",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "the operation removes or resets streaming-query checkpoint state; a rollback restores the declaration, not the discarded state"
+      }
+     ],
+     "end": 444,
+     "line": 12,
+     "source_words": ["ALTER", "STREAMING", "QUERY", "q", "SET", "(", "FORCE", "=", "TRUE", ")", "AS", "DO", "BEGIN", "SELECT", "1", ";", "END", "DO"],
+     "sql": "ALTER STREAMING QUERY q SET (FORCE = TRUE) AS DO BEGIN SELECT 1; END DO",
+     "start": 373,
+     "words": ["ALTER", "STREAMING", "QUERY", "Q", "SET", "(", "FORCE", "=", "TRUE", ")", "AS", "DO", "BEGIN", "SELECT", "1", ";", "END", "DO"]
+    },
+    {
+     "canonical": "DROP EXTERNAL DATA SOURCE S",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "behavioral",
+       "reason": "DROP EXTERNAL DATA SOURCE removes what YDB reads another system through; no data YDB stores is lost"
+      }
+     ],
+     "end": 473,
+     "line": 13,
+     "source_words": ["DROP", "EXTERNAL", "DATA", "SOURCE", "s"],
+     "sql": "DROP EXTERNAL DATA SOURCE s",
+     "start": 446,
+     "words": ["DROP", "EXTERNAL", "DATA", "SOURCE", "S"]
+    },
+    {
+     "canonical": "DROP EXTERNAL TABLE E",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "behavioral",
+       "reason": "DROP EXTERNAL TABLE removes the columns YDB reads files through; the files stay"
+      }
+     ],
+     "end": 496,
+     "line": 14,
+     "source_words": ["DROP", "EXTERNAL", "TABLE", "e"],
+     "sql": "DROP EXTERNAL TABLE e",
+     "start": 475,
+     "words": ["DROP", "EXTERNAL", "TABLE", "E"]
+    },
+    {
+     "canonical": "CREATE OR REPLACE EXTERNAL TABLE E (A INT32) WITH (DATA_SOURCE = \"s\", LOCATION = \"/\")",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "behavioral",
+       "reason": "CREATE OR REPLACE changes what queries reading the external object read"
+      }
+     ],
+     "end": 583,
+     "line": 15,
+     "source_words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "TABLE", "e", "(", "a", "Int32", ")", "WITH", "(", "DATA_SOURCE", "=", "\"s\"", ",", "LOCATION", "=", "\"/\"", ")"],
+     "sql": "CREATE OR REPLACE EXTERNAL TABLE e (a Int32) WITH (DATA_SOURCE = \"s\", LOCATION = \"/\")",
+     "start": 498,
+     "words": ["CREATE", "OR", "REPLACE", "EXTERNAL", "TABLE", "E", "(", "A", "INT32", ")", "WITH", "(", "DATA_SOURCE", "=", "\"s\"", ",", "LOCATION", "=", "\"/\"", ")"]
+    },
+    {
+     "canonical": "DROP TABLE T",
+     "end": 597,
+     "line": 16,
+     "source_words": ["DROP", "TABLE", "t"],
+     "sql": "DROP TABLE t",
+     "start": 585,
+     "words": ["DROP", "TABLE", "T"]
+    },
+    {
+     "canonical": "DROP COORDINATION SEMAPHORE `app/locks`",
+     "end": 638,
+     "line": 17,
+     "source_words": ["DROP", "COORDINATION", "SEMAPHORE", "`app/locks`"],
+     "sql": "DROP COORDINATION SEMAPHORE `app/locks`",
+     "start": 599,
+     "words": ["DROP", "COORDINATION", "SEMAPHORE", "`app/locks`"]
+    },
+    {
+     "canonical": "ALTER TABLE T DROP CONSUMER",
+     "end": 667,
+     "line": 18,
+     "source_words": ["ALTER", "TABLE", "t", "DROP", "CONSUMER"],
+     "sql": "ALTER TABLE t DROP CONSUMER",
+     "start": 640,
+     "words": ["ALTER", "TABLE", "T", "DROP", "CONSUMER"]
+    }
+   ]
+  ],
+  "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"]
+ }
+}

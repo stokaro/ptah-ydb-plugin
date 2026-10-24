@@ -1,0 +1,397 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_b.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "supported_codecs of consumer c naming codec \"brotli\" of topic t7: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 0
+     },
+     {
+      "code": "YD115",
+      "file": 0,
+      "message": "DROP ASYNC REPLICATION r keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 8,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r"
+       }
+      ]
+     },
+     {
+      "code": "YD102",
+      "file": 0,
+      "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
+      "statement": 9
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_b.up.sql:1:YD114", "0001_b.up.sql:5:DS102", "0001_b.up.sql:9:YD115", "0001_b.up.sql:10:YD102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_b.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "supported_codecs of consumer c naming codec \"brotli\" of topic t7: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 0
+     },
+     {
+      "code": "YD115",
+      "file": 0,
+      "message": "DROP ASYNC REPLICATION r keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 8,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r"
+       }
+      ]
+     },
+     {
+      "code": "YD102",
+      "file": 0,
+      "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
+      "statement": 9
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_b.up.sql:1:YD114", "0001_b.up.sql:5:DS102", "0001_b.up.sql:9:YD115", "0001_b.up.sql:10:YD102"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_b.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "supported_codecs of consumer c naming codec \"brotli\" of topic t7: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 0
+     },
+     {
+      "code": "YD115",
+      "file": 0,
+      "message": "DROP ASYNC REPLICATION r keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 8,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r"
+       }
+      ]
+     },
+     {
+      "code": "YD102",
+      "file": 0,
+      "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
+      "statement": 9
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_b.up.sql:1:YD114", "0001_b.up.sql:5:DS102", "0001_b.up.sql:9:YD115", "0001_b.up.sql:10:YD102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TOPIC T7 (CONSUMER C WITH (SUPPORTED_CODECS = 'raw,brotli'))",
+       "end": 67,
+       "line": 1,
+       "source_words": ["CREATE", "TOPIC", "t7", "(", "CONSUMER", "c", "WITH", "(", "supported_codecs", "=", "'raw,brotli'", ")", ")"],
+       "sql": "CREATE TOPIC t7 (CONSUMER c WITH (supported_codecs = 'raw,brotli'))",
+       "start": 0,
+       "words": ["CREATE", "TOPIC", "T7", "(", "CONSUMER", "C", "WITH", "(", "SUPPORTED_CODECS", "=", "'raw,brotli'", ")", ")"]
+      },
+      {
+       "canonical": "REVOKE GRANT ON `t` FROM U1",
+       "end": 96,
+       "line": 2,
+       "source_words": ["REVOKE", "GRANT", "ON", "`t`", "FROM", "u1"],
+       "sql": "REVOKE GRANT ON `t` FROM u1",
+       "start": 69,
+       "words": ["REVOKE", "GRANT", "ON", "`t`", "FROM", "U1"]
+      },
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, PRIMARY KEY (ID), INDEX T_A GLOBAL ON (A))",
+       "end": 184,
+       "line": 3,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "t_a", "GLOBAL", "ON", "(", "a", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id), INDEX t_a GLOBAL ON (a))",
+       "start": 98,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "T_A", "GLOBAL", "ON", "(", "A", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, PRIMARY KEY (ID))",
+       "end": 247,
+       "line": 4,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id))",
+       "start": 186,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN A",
+       "end": 276,
+       "line": 5,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "a"],
+       "sql": "ALTER TABLE t DROP COLUMN a",
+       "start": 249,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "A"]
+      },
+      {
+       "canonical": "ALTER TABLE T DROP COLUMN $C",
+       "end": 306,
+       "line": 6,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "$", "c"],
+       "sql": "ALTER TABLE t DROP COLUMN $c",
+       "start": 278,
+       "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "$", "C"]
+      },
+      {
+       "canonical": "ALTER ASYNC REPLICATION R SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE')",
+       "end": 379,
+       "line": 7,
+       "source_words": ["ALTER", "ASYNC", "REPLICATION", "r", "SET", "(", "STATE", "=", "'DONE'", ",", "FAILOVER_MODE", "=", "'FORCE'", ")"],
+       "sql": "ALTER ASYNC REPLICATION r SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE')",
+       "start": 308,
+       "words": ["ALTER", "ASYNC", "REPLICATION", "R", "SET", "(", "STATE", "=", "'DONE'", ",", "FAILOVER_MODE", "=", "'FORCE'", ")"]
+      },
+      {
+       "canonical": "CREATE ASYNC REPLICATION R FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h')",
+       "end": 460,
+       "line": 8,
+       "source_words": ["CREATE", "ASYNC", "REPLICATION", "r", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ")"],
+       "sql": "CREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h')",
+       "start": 381,
+       "words": ["CREATE", "ASYNC", "REPLICATION", "R", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ")"]
+      },
+      {
+       "canonical": "DROP ASYNC REPLICATION R",
+       "end": 486,
+       "line": 9,
+       "source_words": ["DROP", "ASYNC", "REPLICATION", "r"],
+       "sql": "DROP ASYNC REPLICATION r",
+       "start": 462,
+       "words": ["DROP", "ASYNC", "REPLICATION", "R"]
+      },
+      {
+       "canonical": "DO BEGIN REPLACE OBJECT O (TYPE SECRET) WITH VALUE = 'x'",
+       "end": 544,
+       "line": 10,
+       "source_words": ["DO", "BEGIN", "REPLACE", "OBJECT", "o", "(", "TYPE", "SECRET", ")", "WITH", "value", "=", "'x'"],
+       "sql": "DO BEGIN REPLACE OBJECT o (TYPE SECRET) WITH value = 'x'",
+       "start": 488,
+       "words": ["DO", "BEGIN", "REPLACE", "OBJECT", "O", "(", "TYPE", "SECRET", ")", "WITH", "VALUE", "=", "'x'"]
+      },
+      {
+       "canonical": "SELECT * FROM T",
+       "end": 561,
+       "line": 10,
+       "source_words": ["SELECT", "*", "FROM", "t"],
+       "sql": "SELECT * FROM t",
+       "start": 546,
+       "words": ["SELECT", "*", "FROM", "T"]
+      },
+      {
+       "canonical": "END DO",
+       "end": 569,
+       "line": 10,
+       "source_words": ["END", "DO"],
+       "sql": "END DO",
+       "start": 563,
+       "words": ["END", "DO"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0001_b.up.sql:5:DS102"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TOPIC T7 (CONSUMER C WITH (SUPPORTED_CODECS = 'raw,brotli'))",
+      "end": 67,
+      "line": 1,
+      "source_words": ["CREATE", "TOPIC", "t7", "(", "CONSUMER", "c", "WITH", "(", "supported_codecs", "=", "'raw,brotli'", ")", ")"],
+      "sql": "CREATE TOPIC t7 (CONSUMER c WITH (supported_codecs = 'raw,brotli'))",
+      "start": 0,
+      "words": ["CREATE", "TOPIC", "T7", "(", "CONSUMER", "C", "WITH", "(", "SUPPORTED_CODECS", "=", "'raw,brotli'", ")", ")"]
+     },
+     {
+      "canonical": "REVOKE GRANT ON `t` FROM U1",
+      "end": 96,
+      "line": 2,
+      "source_words": ["REVOKE", "GRANT", "ON", "`t`", "FROM", "u1"],
+      "sql": "REVOKE GRANT ON `t` FROM u1",
+      "start": 69,
+      "words": ["REVOKE", "GRANT", "ON", "`t`", "FROM", "U1"]
+     },
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, PRIMARY KEY (ID), INDEX T_A GLOBAL ON (A))",
+      "end": 184,
+      "line": 3,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "t_a", "GLOBAL", "ON", "(", "a", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id), INDEX t_a GLOBAL ON (a))",
+      "start": 98,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "T_A", "GLOBAL", "ON", "(", "A", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, PRIMARY KEY (ID))",
+      "end": 247,
+      "line": 4,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id))",
+      "start": 186,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN A",
+      "end": 276,
+      "line": 5,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "a"],
+      "sql": "ALTER TABLE t DROP COLUMN a",
+      "start": 249,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "A"]
+     },
+     {
+      "canonical": "ALTER TABLE T DROP COLUMN $C",
+      "end": 306,
+      "line": 6,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "COLUMN", "$c"],
+      "sql": "ALTER TABLE t DROP COLUMN $c",
+      "start": 278,
+      "words": ["ALTER", "TABLE", "T", "DROP", "COLUMN", "$C"]
+     },
+     {
+      "canonical": "ALTER ASYNC REPLICATION R SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE')",
+      "end": 379,
+      "line": 7,
+      "source_words": ["ALTER", "ASYNC", "REPLICATION", "r", "SET", "(", "STATE", "=", "'DONE'", ",", "FAILOVER_MODE", "=", "'FORCE'", ")"],
+      "sql": "ALTER ASYNC REPLICATION r SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE')",
+      "start": 308,
+      "words": ["ALTER", "ASYNC", "REPLICATION", "R", "SET", "(", "STATE", "=", "'DONE'", ",", "FAILOVER_MODE", "=", "'FORCE'", ")"]
+     },
+     {
+      "canonical": "CREATE ASYNC REPLICATION R FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h')",
+      "end": 460,
+      "line": 8,
+      "source_words": ["CREATE", "ASYNC", "REPLICATION", "r", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ")"],
+      "sql": "CREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h')",
+      "start": 381,
+      "words": ["CREATE", "ASYNC", "REPLICATION", "R", "FOR", "`a`", "AS", "`b`", "WITH", "(", "CONNECTION_STRING", "=", "'grpc://h'", ")"]
+     },
+     {
+      "canonical": "DROP ASYNC REPLICATION R",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+       }
+      ],
+      "end": 486,
+      "line": 9,
+      "source_words": ["DROP", "ASYNC", "REPLICATION", "r"],
+      "sql": "DROP ASYNC REPLICATION r",
+      "start": 462,
+      "words": ["DROP", "ASYNC", "REPLICATION", "R"]
+     },
+     {
+      "canonical": "DO BEGIN REPLACE OBJECT O (TYPE SECRET) WITH VALUE = 'x'; SELECT * FROM T; END DO",
+      "end": 569,
+      "line": 10,
+      "source_words": ["DO", "BEGIN", "REPLACE", "OBJECT", "o", "(", "TYPE", "SECRET", ")", "WITH", "value", "=", "'x'", ";", "SELECT", "*", "FROM", "t", ";", "END", "DO"],
+      "sql": "DO BEGIN REPLACE OBJECT o (TYPE SECRET) WITH value = 'x'; SELECT * FROM t; END DO",
+      "start": 488,
+      "words": ["DO", "BEGIN", "REPLACE", "OBJECT", "O", "(", "TYPE", "SECRET", ")", "WITH", "VALUE", "=", "'x'", ";", "SELECT", "*", "FROM", "T", ";", "END", "DO"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_b.up.sql",
+     "sql": "CREATE TOPIC t7 (CONSUMER c WITH (supported_codecs = 'raw,brotli'));\nREVOKE GRANT ON `t` FROM u1;\nCREATE TABLE t (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id), INDEX t_a GLOBAL ON (a));\nCREATE TABLE t (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id));\nALTER TABLE t DROP COLUMN a;\nALTER TABLE t DROP COLUMN $c;\nALTER ASYNC REPLICATION r SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE');\nCREATE ASYNC REPLICATION r FOR `a` AS `b` WITH (CONNECTION_STRING = 'grpc://h');\nDROP ASYNC REPLICATION r;\nDO BEGIN REPLACE OBJECT o (TYPE SECRET) WITH value = 'x'; SELECT * FROM t; END DO;\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

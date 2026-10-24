@@ -1,0 +1,1 @@
+ALTER TABLE `shop/users` ALTER COLUMN email DROP NOT NULL;

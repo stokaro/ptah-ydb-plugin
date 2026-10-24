@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, ts Timestamp, e Uint32, v Utf8, w Utf8, PRIMARY KEY (id), INDEX t_vw GLOBAL ASYNC ON (v) COVER (w)) WITH (TTL = Interval("P1D") TO EXTERNAL DATA SOURCE `s`, Interval("P2D") DELETE ON ts);

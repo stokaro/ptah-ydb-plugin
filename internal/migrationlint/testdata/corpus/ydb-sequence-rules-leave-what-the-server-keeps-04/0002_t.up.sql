@@ -1,0 +1,1 @@
+ALTER SEQUENCE `/local/shop/orders/_serial_column_id` INCREMENT BY 10 RESTART WITH 1000;

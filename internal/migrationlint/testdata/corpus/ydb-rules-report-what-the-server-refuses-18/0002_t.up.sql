@@ -1,0 +1,3 @@
+ALTER TABLE t ADD INDEX t_a GLOBAL ON (a);
+ALTER TABLE t SET (TTL = Interval("P1D") ON b);
+ALTER TABLE t RENAME TO `dir/u`;

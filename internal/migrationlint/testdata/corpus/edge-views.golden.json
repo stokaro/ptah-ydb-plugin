@@ -1,0 +1,441 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_v.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_v.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "ALTER TABLE u RENAME TO w leaves views v1, v2 reading a table that does not exist: a view reads its table by path, so every read of it fails until a table takes the name u again; recreate them over w",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "DROP TABLE u leaves view v2 reading a table that does not exist: YDB keeps a view whose table is dropped, and every read of it fails; drop or recreate it first",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_v.up.sql:1:BC101", "0002_v.up.sql:1:YD106", "0002_v.up.sql:2:BC101", "0002_v.up.sql:4:BC103", "0002_v.up.sql:4:DS101", "0002_v.up.sql:4:YD106", "0002_v.up.sql:5:BC101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_v.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_v.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "ALTER TABLE u RENAME TO w leaves views v1, v2 reading a table that does not exist: a view reads its table by path, so every read of it fails until a table takes the name u again; recreate them over w",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "DROP TABLE u leaves view v2 reading a table that does not exist: YDB keeps a view whose table is dropped, and every read of it fails; drop or recreate it first",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_v.up.sql:1:BC101", "0002_v.up.sql:1:YD106", "0002_v.up.sql:2:BC101", "0002_v.up.sql:4:BC103", "0002_v.up.sql:4:DS101", "0002_v.up.sql:4:YD106", "0002_v.up.sql:5:BC101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_v.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_v.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "ALTER TABLE u RENAME TO w leaves views v1, v2 reading a table that does not exist: a view reads its table by path, so every read of it fails until a table takes the name u again; recreate them over w",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "DROP TABLE u leaves view v2 reading a table that does not exist: YDB keeps a view whose table is dropped, and every read of it fails; drop or recreate it first",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_v.up.sql:1:DS101", "0002_v.up.sql:1:YD106", "0002_v.up.sql:2:DS101", "0002_v.up.sql:4:DS101", "0002_v.up.sql:4:YD106", "0002_v.up.sql:5:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 53,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE U (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 108,
+       "line": 2,
+       "source_words": ["CREATE", "TABLE", "u", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE u (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 55,
+       "words": ["CREATE", "TABLE", "U", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "CREATE VIEW V1 WITH (SECURITY_INVOKER = TRUE) AS SELECT T.ID FROM T JOIN U ON T.ID = U.ID",
+       "end": 199,
+       "line": 3,
+       "source_words": ["CREATE", "VIEW", "v1", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "t", ".", "id", "FROM", "t", "JOIN", "u", "ON", "t", ".", "id", "=", "u", ".", "id"],
+       "sql": "CREATE VIEW v1 WITH (security_invoker = TRUE) AS SELECT t.id FROM t JOIN u ON t.id = u.id",
+       "start": 110,
+       "words": ["CREATE", "VIEW", "V1", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "T", ".", "ID", "FROM", "T", "JOIN", "U", "ON", "T", ".", "ID", "=", "U", ".", "ID"]
+      },
+      {
+       "canonical": "CREATE VIEW V2 WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM U",
+       "end": 265,
+       "line": 4,
+       "source_words": ["CREATE", "VIEW", "v2", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "u"],
+       "sql": "CREATE VIEW v2 WITH (security_invoker = TRUE) AS SELECT * FROM u",
+       "start": 201,
+       "words": ["CREATE", "VIEW", "V2", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "U"]
+      },
+      {
+       "canonical": "CREATE VIEW IF NOT EXISTS V2 WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM T",
+       "end": 345,
+       "line": 5,
+       "source_words": ["CREATE", "VIEW", "IF", "NOT", "EXISTS", "v2", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "t"],
+       "sql": "CREATE VIEW IF NOT EXISTS v2 WITH (security_invoker = TRUE) AS SELECT * FROM t",
+       "start": 267,
+       "words": ["CREATE", "VIEW", "IF", "NOT", "EXISTS", "V2", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "T"]
+      },
+      {
+       "canonical": "CREATE VIEW V3 WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM $SRC",
+       "end": 414,
+       "line": 6,
+       "source_words": ["CREATE", "VIEW", "v3", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "$", "src"],
+       "sql": "CREATE VIEW v3 WITH (security_invoker = TRUE) AS SELECT * FROM $src",
+       "start": 347,
+       "words": ["CREATE", "VIEW", "V3", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "$", "SRC"]
+      },
+      {
+       "canonical": "CREATE VIEW V4 WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM AS_TABLE($ROWS)",
+       "end": 494,
+       "line": 7,
+       "source_words": ["CREATE", "VIEW", "v4", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "AS_TABLE", "(", "$", "rows", ")"],
+       "sql": "CREATE VIEW v4 WITH (security_invoker = TRUE) AS SELECT * FROM AS_TABLE($rows)",
+       "start": 416,
+       "words": ["CREATE", "VIEW", "V4", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "AS_TABLE", "(", "$", "ROWS", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE U RENAME TO W",
+       "end": 25,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "u", "RENAME", "TO", "w"],
+       "sql": "ALTER TABLE u RENAME TO w",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "U", "RENAME", "TO", "W"]
+      },
+      {
+       "canonical": "ALTER TABLE W RENAME TO U",
+       "end": 52,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "w", "RENAME", "TO", "u"],
+       "sql": "ALTER TABLE w RENAME TO u",
+       "start": 27,
+       "words": ["ALTER", "TABLE", "W", "RENAME", "TO", "U"]
+      },
+      {
+       "canonical": "DROP VIEW V1",
+       "end": 66,
+       "line": 3,
+       "source_words": ["DROP", "VIEW", "v1"],
+       "sql": "DROP VIEW v1",
+       "start": 54,
+       "words": ["DROP", "VIEW", "V1"]
+      },
+      {
+       "canonical": "DROP TABLE U",
+       "end": 80,
+       "line": 4,
+       "source_words": ["DROP", "TABLE", "u"],
+       "sql": "DROP TABLE u",
+       "start": 68,
+       "words": ["DROP", "TABLE", "U"]
+      },
+      {
+       "canonical": "ALTER TABLE T RENAME TO T2",
+       "end": 108,
+       "line": 5,
+       "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "t2"],
+       "sql": "ALTER TABLE t RENAME TO t2",
+       "start": 82,
+       "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "T2"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_v.up.sql:1:BC101", "0002_v.up.sql:2:BC101", "0002_v.up.sql:4:BC103", "0002_v.up.sql:4:DS101", "0002_v.up.sql:5:BC101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "end": 53,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE U (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "end": 108,
+      "line": 2,
+      "source_words": ["CREATE", "TABLE", "u", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE u (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 55,
+      "words": ["CREATE", "TABLE", "U", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "CREATE VIEW V1 WITH (SECURITY_INVOKER = TRUE) AS SELECT T.ID FROM T JOIN U ON T.ID = U.ID",
+      "end": 199,
+      "line": 3,
+      "source_words": ["CREATE", "VIEW", "v1", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "t", ".", "id", "FROM", "t", "JOIN", "u", "ON", "t", ".", "id", "=", "u", ".", "id"],
+      "sql": "CREATE VIEW v1 WITH (security_invoker = TRUE) AS SELECT t.id FROM t JOIN u ON t.id = u.id",
+      "start": 110,
+      "words": ["CREATE", "VIEW", "V1", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "T", ".", "ID", "FROM", "T", "JOIN", "U", "ON", "T", ".", "ID", "=", "U", ".", "ID"]
+     },
+     {
+      "canonical": "CREATE VIEW V2 WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM U",
+      "end": 265,
+      "line": 4,
+      "source_words": ["CREATE", "VIEW", "v2", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "u"],
+      "sql": "CREATE VIEW v2 WITH (security_invoker = TRUE) AS SELECT * FROM u",
+      "start": 201,
+      "words": ["CREATE", "VIEW", "V2", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "U"]
+     },
+     {
+      "canonical": "CREATE VIEW IF NOT EXISTS V2 WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM T",
+      "end": 345,
+      "line": 5,
+      "source_words": ["CREATE", "VIEW", "IF", "NOT", "EXISTS", "v2", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "t"],
+      "sql": "CREATE VIEW IF NOT EXISTS v2 WITH (security_invoker = TRUE) AS SELECT * FROM t",
+      "start": 267,
+      "words": ["CREATE", "VIEW", "IF", "NOT", "EXISTS", "V2", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "T"]
+     },
+     {
+      "canonical": "CREATE VIEW V3 WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM $SRC",
+      "end": 414,
+      "line": 6,
+      "source_words": ["CREATE", "VIEW", "v3", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "$src"],
+      "sql": "CREATE VIEW v3 WITH (security_invoker = TRUE) AS SELECT * FROM $src",
+      "start": 347,
+      "words": ["CREATE", "VIEW", "V3", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "$SRC"]
+     },
+     {
+      "canonical": "CREATE VIEW V4 WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM AS_TABLE($ROWS)",
+      "end": 494,
+      "line": 7,
+      "source_words": ["CREATE", "VIEW", "v4", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "AS_TABLE", "(", "$rows", ")"],
+      "sql": "CREATE VIEW v4 WITH (security_invoker = TRUE) AS SELECT * FROM AS_TABLE($rows)",
+      "start": 416,
+      "words": ["CREATE", "VIEW", "V4", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "AS_TABLE", "(", "$ROWS", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE U RENAME TO W",
+      "end": 25,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "u", "RENAME", "TO", "w"],
+      "sql": "ALTER TABLE u RENAME TO w",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "U", "RENAME", "TO", "W"]
+     },
+     {
+      "canonical": "ALTER TABLE W RENAME TO U",
+      "end": 52,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "w", "RENAME", "TO", "u"],
+      "sql": "ALTER TABLE w RENAME TO u",
+      "start": 27,
+      "words": ["ALTER", "TABLE", "W", "RENAME", "TO", "U"]
+     },
+     {
+      "canonical": "DROP VIEW V1",
+      "end": 66,
+      "line": 3,
+      "source_words": ["DROP", "VIEW", "v1"],
+      "sql": "DROP VIEW v1",
+      "start": 54,
+      "words": ["DROP", "VIEW", "V1"]
+     },
+     {
+      "canonical": "DROP TABLE U",
+      "end": 80,
+      "line": 4,
+      "source_words": ["DROP", "TABLE", "u"],
+      "sql": "DROP TABLE u",
+      "start": 68,
+      "words": ["DROP", "TABLE", "U"]
+     },
+     {
+      "canonical": "ALTER TABLE T RENAME TO T2",
+      "end": 108,
+      "line": 5,
+      "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "t2"],
+      "sql": "ALTER TABLE t RENAME TO t2",
+      "start": 82,
+      "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "T2"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_v.up.sql",
+     "sql": "CREATE TABLE t (id Uint64 NOT NULL, PRIMARY KEY (id));\nCREATE TABLE u (id Uint64 NOT NULL, PRIMARY KEY (id));\nCREATE VIEW v1 WITH (security_invoker = TRUE) AS SELECT t.id FROM t JOIN u ON t.id = u.id;\nCREATE VIEW v2 WITH (security_invoker = TRUE) AS SELECT * FROM u;\nCREATE VIEW IF NOT EXISTS v2 WITH (security_invoker = TRUE) AS SELECT * FROM t;\nCREATE VIEW v3 WITH (security_invoker = TRUE) AS SELECT * FROM $src;\nCREATE VIEW v4 WITH (security_invoker = TRUE) AS SELECT * FROM AS_TABLE($rows);\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_v.up.sql",
+     "sql": "ALTER TABLE u RENAME TO w;\nALTER TABLE w RENAME TO u;\nDROP VIEW v1;\nDROP TABLE u;\nALTER TABLE t RENAME TO t2;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

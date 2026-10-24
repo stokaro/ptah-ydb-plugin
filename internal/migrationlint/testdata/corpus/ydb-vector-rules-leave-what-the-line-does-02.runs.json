@@ -1,0 +1,7 @@
+[
+ {
+  "dialect": "ydb",
+  "server_version": "25.2.1.24",
+  "compatibility": ""
+ }
+]

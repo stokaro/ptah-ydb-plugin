@@ -1,0 +1,10 @@
+ALTER TOPIC t1 ALTER CONSUMER c1 SET (read_from = Timestamp('2025-01-01T00:00:00Z'));
+ALTER TOPIC t1 ALTER CONSUMER c1 RESET (availability_period);
+ALTER TOPIC t1 ALTER CONSUMER c1 RESET (availability_period, important);
+ALTER TOPIC t1 ALTER CONSUMER c1;
+ALTER TOPIC IF EXISTS t1 ADD CONSUMER c4 WITH (supported_codecs = 'lzop,custom'), ADD CONSUMER c5 WITH (type = 'shared');
+ALTER TOPIC t1 ADD CONSUMER c6 WITH (supported_codecs = 'snappy');
+ALTER TOPIC t1 SET (metering_mode = 'reserved_capacity');
+ALTER TOPIC t1 SET (partition_count_limit = 10);
+ALTER TOPIC t1 RESET (retention_period, retention_storage_mb);
+ALTER TOPIC t1 DROP CONSUMER c3;

@@ -1,0 +1,5 @@
+# The corpus holds migration files byte for byte, line endings and byte order
+# marks included, as the host read them when it recorded its answers.
+corpus/** -text
+# The golden files are what the oracle records; README.md says how.
+*.golden.json linguist-generated=true

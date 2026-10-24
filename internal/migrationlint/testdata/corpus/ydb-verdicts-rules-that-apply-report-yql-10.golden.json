@@ -1,0 +1,301 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_users.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_users.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000002_change.down.sql",
+      "source": 2,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0000000002_change.up.sql",
+      "source": 3,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0000000002_change.up.sql:1:BC103", "0000000002_change.up.sql:1:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_users.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_users.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000002_change.down.sql",
+      "source": 2,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0000000002_change.up.sql",
+      "source": 3,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0000000002_change.up.sql:1:BC103", "0000000002_change.up.sql:1:DS101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_users.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_users.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000002_change.down.sql",
+      "source": 2,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0000000002_change.up.sql",
+      "source": 3,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0000000002_change.up.sql:1:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {}
+     ],
+     [],
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP TABLE `shop/users`",
+       "end": 23,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "`shop/users`"],
+       "sql": "DROP TABLE `shop/users`",
+       "start": 0,
+       "words": ["DROP", "TABLE", "`shop/users`"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE `shop/users` (ID UINT64 NOT NULL, EMAIL UTF8 NOT NULL, NAME UTF8, PRIMARY KEY (ID), INDEX USERS_NAME GLOBAL ON (NAME))",
+       "end": 131,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`shop/users`", "(", "id", "Uint64", "NOT", "NULL", ",", "email", "Utf8", "NOT", "NULL", ",", "name", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "users_name", "GLOBAL", "ON", "(", "name", ")", ")"],
+       "sql": "CREATE TABLE `shop/users` (id Uint64 NOT NULL, email Utf8 NOT NULL, name Utf8, PRIMARY KEY (id), INDEX users_name GLOBAL ON (name))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`shop/users`", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMAIL", "UTF8", "NOT", "NULL", ",", "NAME", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "USERS_NAME", "GLOBAL", "ON", "(", "NAME", ")", ")"]
+      }
+     ],
+     null,
+     [
+      {
+       "canonical": "DROP TABLE `shop/users`",
+       "end": 23,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "`shop/users`"],
+       "sql": "DROP TABLE `shop/users`",
+       "start": 0,
+       "words": ["DROP", "TABLE", "`shop/users`"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0000000002_change.up.sql:1:BC103", "0000000002_change.up.sql:1:DS101"],
+   "server_version": "",
+   "split": -1
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_users.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_users.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000002_change.down.sql",
+      "source": 2,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0000000002_change.up.sql",
+      "source": 3,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "dir_format": "ptah",
+   "report": ["0000000002_change.up.sql:1:BC103", "0000000002_change.up.sql:1:DS101"],
+   "server_version": "",
+   "split": 0
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "DROP TABLE `shop/users`",
+      "end": 23,
+      "line": 1,
+      "source_words": ["DROP", "TABLE", "`shop/users`"],
+      "sql": "DROP TABLE `shop/users`",
+      "start": 0,
+      "words": ["DROP", "TABLE", "`shop/users`"]
+     }
+    ],
+    [
+     {
+      "canonical": "CREATE TABLE `shop/users` (ID UINT64 NOT NULL, EMAIL UTF8 NOT NULL, NAME UTF8, PRIMARY KEY (ID), INDEX USERS_NAME GLOBAL ON (NAME))",
+      "end": 131,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`shop/users`", "(", "id", "Uint64", "NOT", "NULL", ",", "email", "Utf8", "NOT", "NULL", ",", "name", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "users_name", "GLOBAL", "ON", "(", "name", ")", ")"],
+      "sql": "CREATE TABLE `shop/users` (id Uint64 NOT NULL, email Utf8 NOT NULL, name Utf8, PRIMARY KEY (id), INDEX users_name GLOBAL ON (name))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`shop/users`", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMAIL", "UTF8", "NOT", "NULL", ",", "NAME", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "USERS_NAME", "GLOBAL", "ON", "(", "NAME", ")", ")"]
+     }
+    ],
+    null,
+    [
+     {
+      "canonical": "DROP TABLE `shop/users`",
+      "end": 23,
+      "line": 1,
+      "source_words": ["DROP", "TABLE", "`shop/users`"],
+      "sql": "DROP TABLE `shop/users`",
+      "start": 0,
+      "words": ["DROP", "TABLE", "`shop/users`"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "down": true,
+     "name": "0000000001_users.down.sql",
+     "sql": "DROP TABLE `shop/users`;\n",
+     "version": 1
+    },
+    {
+     "name": "0000000001_users.up.sql",
+     "sql": "CREATE TABLE `shop/users` (id Uint64 NOT NULL, email Utf8 NOT NULL, name Utf8, PRIMARY KEY (id), INDEX users_name GLOBAL ON (name));\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "down": true,
+     "name": "0000000002_change.down.sql",
+     "sql": "-- nothing\n",
+     "version": 2
+    },
+    {
+     "name": "0000000002_change.up.sql",
+     "sql": "DROP TABLE `shop/users`;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

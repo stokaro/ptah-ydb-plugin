@@ -1,0 +1,150 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "split",
+ "result": {
+  "files": [
+   [
+    {
+     "canonical": "DROP TOPIC IF EXISTS `app/events`",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "TOPIC",
+       "object": "`app/events`"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+      }
+     ],
+     "end": 33,
+     "line": 1,
+     "source_words": ["DROP", "TOPIC", "IF", "EXISTS", "`app/events`"],
+     "sql": "DROP TOPIC IF EXISTS `app/events`",
+     "start": 0,
+     "words": ["DROP", "TOPIC", "IF", "EXISTS", "`app/events`"]
+    },
+    {
+     "canonical": "DROP TRANSFER T",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "TRANSFER",
+       "object": "t"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP TRANSFER stops the transfer and drops the topic consumer YDB created for it, with its position in the topic"
+      }
+     ],
+     "end": 50,
+     "line": 2,
+     "source_words": ["DROP", "TRANSFER", "t"],
+     "sql": "DROP TRANSFER t",
+     "start": 35,
+     "words": ["DROP", "TRANSFER", "T"]
+    },
+    {
+     "canonical": "DROP ASYNC REPLICATION R CASCADE",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "ASYNC REPLICATION",
+       "object": "r"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP ASYNC REPLICATION ... CASCADE drops the replica tables with the replication"
+      }
+     ],
+     "end": 84,
+     "line": 3,
+     "source_words": ["DROP", "ASYNC", "REPLICATION", "r", "CASCADE"],
+     "sql": "DROP ASYNC REPLICATION r CASCADE",
+     "start": 52,
+     "words": ["DROP", "ASYNC", "REPLICATION", "R", "CASCADE"]
+    },
+    {
+     "canonical": "DROP ASYNC REPLICATION R",
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "behavioral",
+       "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+      }
+     ],
+     "end": 110,
+     "line": 4,
+     "source_words": ["DROP", "ASYNC", "REPLICATION", "r"],
+     "sql": "DROP ASYNC REPLICATION r",
+     "start": 86,
+     "words": ["DROP", "ASYNC", "REPLICATION", "R"]
+    },
+    {
+     "canonical": "DROP COORDINATION NODE `app/locks`",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "COORDINATION NODE",
+       "object": "`app/locks`"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP COORDINATION NODE removes the node with its semaphores and rate limiter resources, even while a session holds a lock on it"
+      }
+     ],
+     "end": 146,
+     "line": 5,
+     "source_words": ["DROP", "COORDINATION", "NODE", "`app/locks`"],
+     "sql": "DROP COORDINATION NODE `app/locks`",
+     "start": 112,
+     "words": ["DROP", "COORDINATION", "NODE", "`app/locks`"]
+    },
+    {
+     "canonical": "DROP COORDINATION SEMAPHORE `app/locks`",
+     "end": 187,
+     "line": 6,
+     "source_words": ["DROP", "COORDINATION", "SEMAPHORE", "`app/locks`"],
+     "sql": "DROP COORDINATION SEMAPHORE `app/locks`",
+     "start": 148,
+     "words": ["DROP", "COORDINATION", "SEMAPHORE", "`app/locks`"]
+    },
+    {
+     "canonical": "DROP STREAMING QUERY Q",
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "STREAMING QUERY",
+       "object": "q"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "the operation removes or resets streaming-query checkpoint state; a rollback restores the declaration, not the discarded state"
+      }
+     ],
+     "end": 211,
+     "line": 7,
+     "source_words": ["DROP", "STREAMING", "QUERY", "q"],
+     "sql": "DROP STREAMING QUERY q",
+     "start": 189,
+     "words": ["DROP", "STREAMING", "QUERY", "Q"]
+    },
+    {
+     "canonical": "DROP TABLE T",
+     "end": 225,
+     "line": 8,
+     "source_words": ["DROP", "TABLE", "t"],
+     "sql": "DROP TABLE t",
+     "start": 213,
+     "words": ["DROP", "TABLE", "T"]
+    }
+   ]
+  ],
+  "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"]
+ }
+}

@@ -1,0 +1,1 @@
+{{ define "shared/drop" }}DROP TABLE users;{{ end }}

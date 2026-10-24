@@ -1,0 +1,2 @@
+DROP VIEW v;
+DROP TABLE base;

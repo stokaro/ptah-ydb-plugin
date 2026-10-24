@@ -1,0 +1,10 @@
+[
+ {
+  "dialect": "ydb",
+  "server_version": "26.2.1.14",
+  "compatibility": "",
+  "overrides": {
+   "unique_index_on_existing_table": true
+  }
+ }
+]

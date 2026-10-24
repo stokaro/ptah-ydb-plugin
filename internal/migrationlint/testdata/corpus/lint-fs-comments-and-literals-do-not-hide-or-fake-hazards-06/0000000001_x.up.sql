@@ -1,0 +1,1 @@
+DROP/*hidden*/TABLE users;

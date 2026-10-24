@@ -1,0 +1,290 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_notes.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_change.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_change.up.sql:2:BC104", "0002_change.up.sql:2:DS102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_notes.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_change.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_change.up.sql:2:BC104", "0002_change.up.sql:2:DS102"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_notes.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_change.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_change.up.sql:2:DS102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE `app/notes` (ID UINT64 NOT NULL, BODY UTF8, TAG UTF8, PRIMARY KEY (ID), INDEX NOTES_TAG GLOBAL ON (TAG))",
+       "end": 117,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`app/notes`", "(", "id", "Uint64", "NOT", "NULL", ",", "body", "Utf8", ",", "tag", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "notes_tag", "GLOBAL", "ON", "(", "tag", ")", ")"],
+       "sql": "CREATE TABLE `app/notes` (id Uint64 NOT NULL, body Utf8, tag Utf8, PRIMARY KEY (id), INDEX notes_tag GLOBAL ON (tag))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`app/notes`", "(", "ID", "UINT64", "NOT", "NULL", ",", "BODY", "UTF8", ",", "TAG", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "NOTES_TAG", "GLOBAL", "ON", "(", "TAG", ")", ")"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `app/notes`.`body` IS 'The text'",
+       "end": 169,
+       "line": 2,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`app/notes`", ".", "`body`", "IS", "'The text'"],
+       "sql": "COMMENT ON COLUMN `app/notes`.`body` IS 'The text'",
+       "start": 119,
+       "words": ["COMMENT", "ON", "COLUMN", "`app/notes`", ".", "`body`", "IS", "'The text'"]
+      },
+      {
+       "canonical": "COMMENT ON INDEX `notes_tag` ON `app/notes` IS 'By tag'",
+       "end": 226,
+       "line": 3,
+       "source_words": ["COMMENT", "ON", "INDEX", "`notes_tag`", "ON", "`app/notes`", "IS", "'By tag'"],
+       "sql": "COMMENT ON INDEX `notes_tag` ON `app/notes` IS 'By tag'",
+       "start": 171,
+       "words": ["COMMENT", "ON", "INDEX", "`notes_tag`", "ON", "`app/notes`", "IS", "'By tag'"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE `app/notes` RENAME INDEX `notes_tag` TO `notes_by_tag`",
+       "end": 66,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "`app/notes`", "RENAME", "INDEX", "`notes_tag`", "TO", "`notes_by_tag`"],
+       "sql": "ALTER TABLE `app/notes` RENAME INDEX `notes_tag` TO `notes_by_tag`",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "`app/notes`", "RENAME", "INDEX", "`notes_tag`", "TO", "`notes_by_tag`"]
+      },
+      {
+       "canonical": "ALTER TABLE `app/notes` DROP COLUMN `body`",
+       "end": 110,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "`app/notes`", "DROP", "COLUMN", "`body`"],
+       "sql": "ALTER TABLE `app/notes` DROP COLUMN `body`",
+       "start": 68,
+       "words": ["ALTER", "TABLE", "`app/notes`", "DROP", "COLUMN", "`body`"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `app/notes`.`body` IS NULL",
+       "end": 156,
+       "line": 3,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`app/notes`", ".", "`body`", "IS", "NULL"],
+       "sql": "COMMENT ON COLUMN `app/notes`.`body` IS NULL",
+       "start": 112,
+       "words": ["COMMENT", "ON", "COLUMN", "`app/notes`", ".", "`body`", "IS", "NULL"]
+      },
+      {
+       "canonical": "COMMENT ON INDEX `notes_by_tag` ON `app/notes` IS 'By tag'",
+       "end": 216,
+       "line": 4,
+       "source_words": ["COMMENT", "ON", "INDEX", "`notes_by_tag`", "ON", "`app/notes`", "IS", "'By tag'"],
+       "sql": "COMMENT ON INDEX `notes_by_tag` ON `app/notes` IS 'By tag'",
+       "start": 158,
+       "words": ["COMMENT", "ON", "INDEX", "`notes_by_tag`", "ON", "`app/notes`", "IS", "'By tag'"]
+      },
+      {
+       "canonical": "COMMENT ON INDEX `notes_tag` ON `app/notes` IS NULL",
+       "end": 269,
+       "line": 5,
+       "source_words": ["COMMENT", "ON", "INDEX", "`notes_tag`", "ON", "`app/notes`", "IS", "NULL"],
+       "sql": "COMMENT ON INDEX `notes_tag` ON `app/notes` IS NULL",
+       "start": 218,
+       "words": ["COMMENT", "ON", "INDEX", "`notes_tag`", "ON", "`app/notes`", "IS", "NULL"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_change.up.sql:2:BC104", "0002_change.up.sql:2:DS102"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE `app/notes` (ID UINT64 NOT NULL, BODY UTF8, TAG UTF8, PRIMARY KEY (ID), INDEX NOTES_TAG GLOBAL ON (TAG))",
+      "end": 117,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`app/notes`", "(", "id", "Uint64", "NOT", "NULL", ",", "body", "Utf8", ",", "tag", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "notes_tag", "GLOBAL", "ON", "(", "tag", ")", ")"],
+      "sql": "CREATE TABLE `app/notes` (id Uint64 NOT NULL, body Utf8, tag Utf8, PRIMARY KEY (id), INDEX notes_tag GLOBAL ON (tag))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`app/notes`", "(", "ID", "UINT64", "NOT", "NULL", ",", "BODY", "UTF8", ",", "TAG", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "NOTES_TAG", "GLOBAL", "ON", "(", "TAG", ")", ")"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `app/notes`.`body` IS 'The text'",
+      "end": 169,
+      "line": 2,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`app/notes`", ".", "`body`", "IS", "'The text'"],
+      "sql": "COMMENT ON COLUMN `app/notes`.`body` IS 'The text'",
+      "start": 119,
+      "words": ["COMMENT", "ON", "COLUMN", "`app/notes`", ".", "`body`", "IS", "'The text'"]
+     },
+     {
+      "canonical": "COMMENT ON INDEX `notes_tag` ON `app/notes` IS 'By tag'",
+      "end": 226,
+      "line": 3,
+      "source_words": ["COMMENT", "ON", "INDEX", "`notes_tag`", "ON", "`app/notes`", "IS", "'By tag'"],
+      "sql": "COMMENT ON INDEX `notes_tag` ON `app/notes` IS 'By tag'",
+      "start": 171,
+      "words": ["COMMENT", "ON", "INDEX", "`notes_tag`", "ON", "`app/notes`", "IS", "'By tag'"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE `app/notes` RENAME INDEX `notes_tag` TO `notes_by_tag`",
+      "end": 66,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "`app/notes`", "RENAME", "INDEX", "`notes_tag`", "TO", "`notes_by_tag`"],
+      "sql": "ALTER TABLE `app/notes` RENAME INDEX `notes_tag` TO `notes_by_tag`",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "`app/notes`", "RENAME", "INDEX", "`notes_tag`", "TO", "`notes_by_tag`"]
+     },
+     {
+      "canonical": "ALTER TABLE `app/notes` DROP COLUMN `body`",
+      "end": 110,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "`app/notes`", "DROP", "COLUMN", "`body`"],
+      "sql": "ALTER TABLE `app/notes` DROP COLUMN `body`",
+      "start": 68,
+      "words": ["ALTER", "TABLE", "`app/notes`", "DROP", "COLUMN", "`body`"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `app/notes`.`body` IS NULL",
+      "end": 156,
+      "line": 3,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`app/notes`", ".", "`body`", "IS", "NULL"],
+      "sql": "COMMENT ON COLUMN `app/notes`.`body` IS NULL",
+      "start": 112,
+      "words": ["COMMENT", "ON", "COLUMN", "`app/notes`", ".", "`body`", "IS", "NULL"]
+     },
+     {
+      "canonical": "COMMENT ON INDEX `notes_by_tag` ON `app/notes` IS 'By tag'",
+      "end": 216,
+      "line": 4,
+      "source_words": ["COMMENT", "ON", "INDEX", "`notes_by_tag`", "ON", "`app/notes`", "IS", "'By tag'"],
+      "sql": "COMMENT ON INDEX `notes_by_tag` ON `app/notes` IS 'By tag'",
+      "start": 158,
+      "words": ["COMMENT", "ON", "INDEX", "`notes_by_tag`", "ON", "`app/notes`", "IS", "'By tag'"]
+     },
+     {
+      "canonical": "COMMENT ON INDEX `notes_tag` ON `app/notes` IS NULL",
+      "end": 269,
+      "line": 5,
+      "source_words": ["COMMENT", "ON", "INDEX", "`notes_tag`", "ON", "`app/notes`", "IS", "NULL"],
+      "sql": "COMMENT ON INDEX `notes_tag` ON `app/notes` IS NULL",
+      "start": 218,
+      "words": ["COMMENT", "ON", "INDEX", "`notes_tag`", "ON", "`app/notes`", "IS", "NULL"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_notes.up.sql",
+     "sql": "CREATE TABLE `app/notes` (id Uint64 NOT NULL, body Utf8, tag Utf8, PRIMARY KEY (id), INDEX notes_tag GLOBAL ON (tag));\nCOMMENT ON COLUMN `app/notes`.`body` IS 'The text';\nCOMMENT ON INDEX `notes_tag` ON `app/notes` IS 'By tag';\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_change.up.sql",
+     "sql": "ALTER TABLE `app/notes` RENAME INDEX `notes_tag` TO `notes_by_tag`;\nALTER TABLE `app/notes` DROP COLUMN `body`;\nCOMMENT ON COLUMN `app/notes`.`body` IS NULL;\nCOMMENT ON INDEX `notes_by_tag` ON `app/notes` IS 'By tag';\nCOMMENT ON INDEX `notes_tag` ON `app/notes` IS NULL;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

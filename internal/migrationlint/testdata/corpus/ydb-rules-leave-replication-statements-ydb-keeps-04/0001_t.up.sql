@@ -1,0 +1,1 @@
+CREATE TRANSFER ingest FROM tp TO t USING ($m) -> { return [<| PASSWORD: 'x' |>]; };

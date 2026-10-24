@@ -1,0 +1,626 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id alters a sequence an earlier statement restarted at 10, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes 10 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m alters a sequence an earlier statement restarted at its start, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes its start again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD107", "0002_t.up.sql:2:YD107", "0002_t.up.sql:2:YD108", "0002_t.up.sql:3:YD107", "0002_t.up.sql:4:YD107", "0002_t.up.sql:4:YD108"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id alters a sequence an earlier statement restarted at 10, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes 10 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m alters a sequence an earlier statement restarted at its start, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes its start again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD107", "0002_t.up.sql:2:YD107", "0002_t.up.sql:2:YD108", "0002_t.up.sql:3:YD107", "0002_t.up.sql:4:YD107", "0002_t.up.sql:4:YD108"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id raises the maximum of the sequence of SmallSerial column dir/t.id to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id alters a sequence an earlier statement restarted at 10, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes 10 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD107",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m raises the maximum of the sequence of Serial column dir/t.m to the Int64 maximum, and the column then stores the value past its own maximum as a negative number without an error; declare the column BigSerial to give its sequence a start or an increment",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m alters a sequence an earlier statement restarted at its start, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes its start again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD107", "0002_t.up.sql:2:YD107", "0002_t.up.sql:2:YD108", "0002_t.up.sql:3:YD107", "0002_t.up.sql:4:YD107", "0002_t.up.sql:4:YD108"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE `dir/t` (ID SERIAL2, N BIGSERIAL, M SERIAL, PRIMARY KEY (ID))",
+       "end": 74,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`dir/t`", "(", "id", "serial2", ",", "n", "BIGSERIAL", ",", "m", "SERIAL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE `dir/t` (id serial2, n BIGSERIAL, m SERIAL, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`dir/t`", "(", "ID", "SERIAL2", ",", "N", "BIGSERIAL", ",", "M", "SERIAL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE T (ID SERIAL8, PRIMARY KEY (ID))",
+       "end": 121,
+       "line": 2,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Serial8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE t (id Serial8, PRIMARY KEY (id))",
+       "start": 76,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "SERIAL8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER SEQUENCE IF EXISTS `/local/dir/t/_serial_column_id` RESTART WITH 10",
+       "end": 73,
+       "line": 1,
+       "source_words": ["ALTER", "SEQUENCE", "IF", "EXISTS", "`/local/dir/t/_serial_column_id`", "RESTART", "WITH", "10"],
+       "sql": "ALTER SEQUENCE IF EXISTS `/local/dir/t/_serial_column_id` RESTART WITH 10",
+       "start": 0,
+       "words": ["ALTER", "SEQUENCE", "IF", "EXISTS", "`/local/dir/t/_serial_column_id`", "RESTART", "WITH", "10"]
+      },
+      {
+       "canonical": "ALTER SEQUENCE `/local/dir/t/_serial_column_id` INCREMENT BY 2",
+       "end": 137,
+       "line": 2,
+       "source_words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_id`", "INCREMENT", "BY", "2"],
+       "sql": "ALTER SEQUENCE `/local/dir/t/_serial_column_id` INCREMENT BY 2",
+       "start": 75,
+       "words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_id`", "INCREMENT", "BY", "2"]
+      },
+      {
+       "canonical": "ALTER SEQUENCE `/local/dir/t/_serial_column_m` RESTART",
+       "end": 193,
+       "line": 3,
+       "source_words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_m`", "RESTART"],
+       "sql": "ALTER SEQUENCE `/local/dir/t/_serial_column_m` RESTART",
+       "start": 139,
+       "words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_m`", "RESTART"]
+      },
+      {
+       "canonical": "ALTER SEQUENCE `/local/dir/t/_serial_column_m` START WITH 5",
+       "end": 254,
+       "line": 4,
+       "source_words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_m`", "START", "WITH", "5"],
+       "sql": "ALTER SEQUENCE `/local/dir/t/_serial_column_m` START WITH 5",
+       "start": 195,
+       "words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_m`", "START", "WITH", "5"]
+      },
+      {
+       "canonical": "ALTER SEQUENCE `/local/t/_serial_column_id` INCREMENT 1",
+       "end": 311,
+       "line": 5,
+       "source_words": ["ALTER", "SEQUENCE", "`/local/t/_serial_column_id`", "INCREMENT", "1"],
+       "sql": "ALTER SEQUENCE `/local/t/_serial_column_id` INCREMENT 1",
+       "start": 256,
+       "words": ["ALTER", "SEQUENCE", "`/local/t/_serial_column_id`", "INCREMENT", "1"]
+      },
+      {
+       "canonical": "ALTER SEQUENCE `/local/other/_serial_column_id` INCREMENT 1",
+       "end": 372,
+       "line": 6,
+       "source_words": ["ALTER", "SEQUENCE", "`/local/other/_serial_column_id`", "INCREMENT", "1"],
+       "sql": "ALTER SEQUENCE `/local/other/_serial_column_id` INCREMENT 1",
+       "start": 313,
+       "words": ["ALTER", "SEQUENCE", "`/local/other/_serial_column_id`", "INCREMENT", "1"]
+      },
+      {
+       "canonical": "ALTER SEQUENCE `_serial_column_id` INCREMENT 1",
+       "end": 420,
+       "line": 7,
+       "source_words": ["ALTER", "SEQUENCE", "`_serial_column_id`", "INCREMENT", "1"],
+       "sql": "ALTER SEQUENCE `_serial_column_id` INCREMENT 1",
+       "start": 374,
+       "words": ["ALTER", "SEQUENCE", "`_serial_column_id`", "INCREMENT", "1"]
+      },
+      {
+       "canonical": "ALTER SEQUENCE `/local/dir/t/_serial_column_` INCREMENT 1",
+       "end": 479,
+       "line": 8,
+       "source_words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_`", "INCREMENT", "1"],
+       "sql": "ALTER SEQUENCE `/local/dir/t/_serial_column_` INCREMENT 1",
+       "start": 422,
+       "words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_`", "INCREMENT", "1"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_id alters a sequence an earlier statement restarted at 10, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes 10 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "dir/t"
+       }
+      ]
+     },
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/dir/t/_serial_column_m alters a sequence an earlier statement restarted at its start, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of dir/t takes its start again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "m",
+        "parent": "dir/t"
+       }
+      ]
+     }
+    ],
+    "overrides": {
+     "serial_sequence_keeps_range": true
+    },
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "overrides": {
+    "serial_sequence_keeps_range": true
+   },
+   "report": ["0002_t.up.sql:2:YD108", "0002_t.up.sql:4:YD108"],
+   "server_version": "",
+   "split": 0
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE `dir/t` (ID SERIAL2, N BIGSERIAL, M SERIAL, PRIMARY KEY (ID))",
+      "end": 74,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`dir/t`", "(", "id", "serial2", ",", "n", "BIGSERIAL", ",", "m", "SERIAL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE `dir/t` (id serial2, n BIGSERIAL, m SERIAL, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`dir/t`", "(", "ID", "SERIAL2", ",", "N", "BIGSERIAL", ",", "M", "SERIAL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE T (ID SERIAL8, PRIMARY KEY (ID))",
+      "end": 121,
+      "line": 2,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Serial8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE t (id Serial8, PRIMARY KEY (id))",
+      "start": 76,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "SERIAL8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER SEQUENCE IF EXISTS `/local/dir/t/_serial_column_id` RESTART WITH 10",
+      "end": 73,
+      "line": 1,
+      "source_words": ["ALTER", "SEQUENCE", "IF", "EXISTS", "`/local/dir/t/_serial_column_id`", "RESTART", "WITH", "10"],
+      "sql": "ALTER SEQUENCE IF EXISTS `/local/dir/t/_serial_column_id` RESTART WITH 10",
+      "start": 0,
+      "words": ["ALTER", "SEQUENCE", "IF", "EXISTS", "`/local/dir/t/_serial_column_id`", "RESTART", "WITH", "10"]
+     },
+     {
+      "canonical": "ALTER SEQUENCE `/local/dir/t/_serial_column_id` INCREMENT BY 2",
+      "end": 137,
+      "line": 2,
+      "source_words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_id`", "INCREMENT", "BY", "2"],
+      "sql": "ALTER SEQUENCE `/local/dir/t/_serial_column_id` INCREMENT BY 2",
+      "start": 75,
+      "words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_id`", "INCREMENT", "BY", "2"]
+     },
+     {
+      "canonical": "ALTER SEQUENCE `/local/dir/t/_serial_column_m` RESTART",
+      "end": 193,
+      "line": 3,
+      "source_words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_m`", "RESTART"],
+      "sql": "ALTER SEQUENCE `/local/dir/t/_serial_column_m` RESTART",
+      "start": 139,
+      "words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_m`", "RESTART"]
+     },
+     {
+      "canonical": "ALTER SEQUENCE `/local/dir/t/_serial_column_m` START WITH 5",
+      "end": 254,
+      "line": 4,
+      "source_words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_m`", "START", "WITH", "5"],
+      "sql": "ALTER SEQUENCE `/local/dir/t/_serial_column_m` START WITH 5",
+      "start": 195,
+      "words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_m`", "START", "WITH", "5"]
+     },
+     {
+      "canonical": "ALTER SEQUENCE `/local/t/_serial_column_id` INCREMENT 1",
+      "end": 311,
+      "line": 5,
+      "source_words": ["ALTER", "SEQUENCE", "`/local/t/_serial_column_id`", "INCREMENT", "1"],
+      "sql": "ALTER SEQUENCE `/local/t/_serial_column_id` INCREMENT 1",
+      "start": 256,
+      "words": ["ALTER", "SEQUENCE", "`/local/t/_serial_column_id`", "INCREMENT", "1"]
+     },
+     {
+      "canonical": "ALTER SEQUENCE `/local/other/_serial_column_id` INCREMENT 1",
+      "end": 372,
+      "line": 6,
+      "source_words": ["ALTER", "SEQUENCE", "`/local/other/_serial_column_id`", "INCREMENT", "1"],
+      "sql": "ALTER SEQUENCE `/local/other/_serial_column_id` INCREMENT 1",
+      "start": 313,
+      "words": ["ALTER", "SEQUENCE", "`/local/other/_serial_column_id`", "INCREMENT", "1"]
+     },
+     {
+      "canonical": "ALTER SEQUENCE `_serial_column_id` INCREMENT 1",
+      "end": 420,
+      "line": 7,
+      "source_words": ["ALTER", "SEQUENCE", "`_serial_column_id`", "INCREMENT", "1"],
+      "sql": "ALTER SEQUENCE `_serial_column_id` INCREMENT 1",
+      "start": 374,
+      "words": ["ALTER", "SEQUENCE", "`_serial_column_id`", "INCREMENT", "1"]
+     },
+     {
+      "canonical": "ALTER SEQUENCE `/local/dir/t/_serial_column_` INCREMENT 1",
+      "end": 479,
+      "line": 8,
+      "source_words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_`", "INCREMENT", "1"],
+      "sql": "ALTER SEQUENCE `/local/dir/t/_serial_column_` INCREMENT 1",
+      "start": 422,
+      "words": ["ALTER", "SEQUENCE", "`/local/dir/t/_serial_column_`", "INCREMENT", "1"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE `dir/t` (id serial2, n BIGSERIAL, m SERIAL, PRIMARY KEY (id));\nCREATE TABLE t (id Serial8, PRIMARY KEY (id));\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER SEQUENCE IF EXISTS `/local/dir/t/_serial_column_id` RESTART WITH 10;\nALTER SEQUENCE `/local/dir/t/_serial_column_id` INCREMENT BY 2;\nALTER SEQUENCE `/local/dir/t/_serial_column_m` RESTART;\nALTER SEQUENCE `/local/dir/t/_serial_column_m` START WITH 5;\nALTER SEQUENCE `/local/t/_serial_column_id` INCREMENT 1;\nALTER SEQUENCE `/local/other/_serial_column_id` INCREMENT 1;\nALTER SEQUENCE `_serial_column_id` INCREMENT 1;\nALTER SEQUENCE `/local/dir/t/_serial_column_` INCREMENT 1;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

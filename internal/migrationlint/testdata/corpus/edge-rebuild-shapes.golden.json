@@ -1,0 +1,920 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0002_t.down.sql",
+      "source": 1,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "DROP TABLE t leaves view vt reading a table that does not exist: YDB keeps a view whose table is dropped, and every read of it fails; drop or recreate it first",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 2,
+      "message": "ALTER TABLE t RENAME TO t_gone leaves view vt reading a table that does not exist: a view reads its table by path, so every read of it fails until a table takes the name t again; recreate it over t_gone",
+      "statement": 7,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.down.sql:3:YD106", "0002_t.up.sql:8:BC101", "0002_t.up.sql:8:YD106", "0002_t.up.sql:10:BC103", "0002_t.up.sql:10:DS101", "0002_t.up.sql:17:BC103", "0002_t.up.sql:17:DS101", "0002_t.up.sql:21:BC103", "0002_t.up.sql:21:DS101", "0002_t.up.sql:25:BC103", "0002_t.up.sql:25:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0002_t.down.sql",
+      "source": 1,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "DROP TABLE t leaves view vt reading a table that does not exist: YDB keeps a view whose table is dropped, and every read of it fails; drop or recreate it first",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 2,
+      "message": "ALTER TABLE t RENAME TO t_gone leaves view vt reading a table that does not exist: a view reads its table by path, so every read of it fails until a table takes the name t again; recreate it over t_gone",
+      "statement": 7,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.down.sql:3:YD106", "0002_t.up.sql:8:BC101", "0002_t.up.sql:8:YD106", "0002_t.up.sql:10:BC103", "0002_t.up.sql:10:DS101", "0002_t.up.sql:17:BC103", "0002_t.up.sql:17:DS101", "0002_t.up.sql:21:BC103", "0002_t.up.sql:21:DS101", "0002_t.up.sql:25:BC103", "0002_t.up.sql:25:DS101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0002_t.down.sql",
+      "source": 1,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "DROP TABLE t leaves view vt reading a table that does not exist: YDB keeps a view whose table is dropped, and every read of it fails; drop or recreate it first",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 2,
+      "message": "ALTER TABLE t RENAME TO t_old leaves view vt reading a table that does not exist: a view reads its table by path, so every read of it fails until a table takes the name t again; recreate it over t_old",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 2,
+      "message": "ALTER TABLE t RENAME TO t_gone leaves view vt reading a table that does not exist: a view reads its table by path, so every read of it fails until a table takes the name t again; recreate it over t_gone",
+      "statement": 7,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.down.sql:3:YD106", "0002_t.up.sql:3:DS101", "0002_t.up.sql:3:YD106", "0002_t.up.sql:5:DS101", "0002_t.up.sql:8:DS101", "0002_t.up.sql:8:YD106", "0002_t.up.sql:10:DS101", "0002_t.up.sql:13:DS101", "0002_t.up.sql:17:DS101", "0002_t.up.sql:21:DS101", "0002_t.up.sql:25:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, B UTF8, PRIMARY KEY (ID))",
+       "end": 69,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE R (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 124,
+       "line": 2,
+       "source_words": ["CREATE", "TABLE", "r", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE r (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 71,
+       "words": ["CREATE", "TABLE", "R", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "CREATE VIEW VT WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM T",
+       "end": 190,
+       "line": 3,
+       "source_words": ["CREATE", "VIEW", "vt", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "t"],
+       "sql": "CREATE VIEW vt WITH (security_invoker = TRUE) AS SELECT * FROM t",
+       "start": 126,
+       "words": ["CREATE", "VIEW", "VT", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "T"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE T_BACK (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 58,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t_back", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE t_back (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T_BACK", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO T_BACK SELECT * FROM T",
+       "end": 94,
+       "line": 2,
+       "source_words": ["INSERT", "INTO", "t_back", "SELECT", "*", "FROM", "t"],
+       "sql": "INSERT INTO t_back SELECT * FROM t",
+       "start": 60,
+       "words": ["INSERT", "INTO", "T_BACK", "SELECT", "*", "FROM", "T"]
+      },
+      {
+       "canonical": "DROP TABLE T",
+       "end": 108,
+       "line": 3,
+       "source_words": ["DROP", "TABLE", "t"],
+       "sql": "DROP TABLE t",
+       "start": 96,
+       "words": ["DROP", "TABLE", "T"]
+      },
+      {
+       "canonical": "ALTER TABLE T_BACK RENAME TO T",
+       "end": 140,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "t_back", "RENAME", "TO", "t"],
+       "sql": "ALTER TABLE t_back RENAME TO t",
+       "start": 110,
+       "words": ["ALTER", "TABLE", "T_BACK", "RENAME", "TO", "T"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE T_NEW (ID UINT64 NOT NULL, A UTF8, B UTF8, PRIMARY KEY (ID, A))",
+       "end": 76,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t_new", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ",", "a", ")", ")"],
+       "sql": "CREATE TABLE t_new (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id, a))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T_NEW", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ",", "A", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO T_NEW (ID, A, B) SELECT ID, A, B FROM T",
+       "end": 129,
+       "line": 2,
+       "source_words": ["INSERT", "INTO", "t_new", "(", "id", ",", "a", ",", "b", ")", "SELECT", "id", ",", "a", ",", "b", "FROM", "t"],
+       "sql": "INSERT INTO t_new (id, a, b) SELECT id, a, b FROM t",
+       "start": 78,
+       "words": ["INSERT", "INTO", "T_NEW", "(", "ID", ",", "A", ",", "B", ")", "SELECT", "ID", ",", "A", ",", "B", "FROM", "T"]
+      },
+      {
+       "canonical": "ALTER TABLE T RENAME TO T_OLD",
+       "end": 160,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "t_old"],
+       "sql": "ALTER TABLE t RENAME TO t_old",
+       "start": 131,
+       "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "T_OLD"]
+      },
+      {
+       "canonical": "ALTER TABLE T_NEW RENAME TO T",
+       "end": 191,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "t_new", "RENAME", "TO", "t"],
+       "sql": "ALTER TABLE t_new RENAME TO t",
+       "start": 162,
+       "words": ["ALTER", "TABLE", "T_NEW", "RENAME", "TO", "T"]
+      },
+      {
+       "canonical": "DROP TABLE T_OLD",
+       "end": 209,
+       "line": 5,
+       "source_words": ["DROP", "TABLE", "t_old"],
+       "sql": "DROP TABLE t_old",
+       "start": 193,
+       "words": ["DROP", "TABLE", "T_OLD"]
+      },
+      {
+       "canonical": "CREATE TABLE T_LOSSY (ID UINT64 NOT NULL, A UTF8, PRIMARY KEY (ID))",
+       "end": 278,
+       "line": 6,
+       "source_words": ["CREATE", "TABLE", "t_lossy", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE t_lossy (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id))",
+       "start": 211,
+       "words": ["CREATE", "TABLE", "T_LOSSY", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO T_LOSSY (ID, A) SELECT ID, A FROM T",
+       "end": 327,
+       "line": 7,
+       "source_words": ["INSERT", "INTO", "t_lossy", "(", "id", ",", "a", ")", "SELECT", "id", ",", "a", "FROM", "t"],
+       "sql": "INSERT INTO t_lossy (id, a) SELECT id, a FROM t",
+       "start": 280,
+       "words": ["INSERT", "INTO", "T_LOSSY", "(", "ID", ",", "A", ")", "SELECT", "ID", ",", "A", "FROM", "T"]
+      },
+      {
+       "canonical": "ALTER TABLE T RENAME TO T_GONE",
+       "end": 359,
+       "line": 8,
+       "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "t_gone"],
+       "sql": "ALTER TABLE t RENAME TO t_gone",
+       "start": 329,
+       "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "T_GONE"]
+      },
+      {
+       "canonical": "ALTER TABLE T_LOSSY RENAME TO T",
+       "end": 392,
+       "line": 9,
+       "source_words": ["ALTER", "TABLE", "t_lossy", "RENAME", "TO", "t"],
+       "sql": "ALTER TABLE t_lossy RENAME TO t",
+       "start": 361,
+       "words": ["ALTER", "TABLE", "T_LOSSY", "RENAME", "TO", "T"]
+      },
+      {
+       "canonical": "DROP TABLE T_GONE",
+       "end": 411,
+       "line": 10,
+       "source_words": ["DROP", "TABLE", "t_gone"],
+       "sql": "DROP TABLE t_gone",
+       "start": 394,
+       "words": ["DROP", "TABLE", "T_GONE"]
+      },
+      {
+       "canonical": "CREATE TABLE R2 (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 467,
+       "line": 11,
+       "source_words": ["CREATE", "TABLE", "r2", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE r2 (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 413,
+       "words": ["CREATE", "TABLE", "R2", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO R2 SELECT * FROM R",
+       "end": 499,
+       "line": 12,
+       "source_words": ["INSERT", "INTO", "r2", "SELECT", "*", "FROM", "r"],
+       "sql": "INSERT INTO r2 SELECT * FROM r",
+       "start": 469,
+       "words": ["INSERT", "INTO", "R2", "SELECT", "*", "FROM", "R"]
+      },
+      {
+       "canonical": "DROP TABLE R",
+       "end": 513,
+       "line": 13,
+       "source_words": ["DROP", "TABLE", "r"],
+       "sql": "DROP TABLE r",
+       "start": 501,
+       "words": ["DROP", "TABLE", "R"]
+      },
+      {
+       "canonical": "ALTER TABLE R2 RENAME TO R",
+       "end": 541,
+       "line": 14,
+       "source_words": ["ALTER", "TABLE", "r2", "RENAME", "TO", "r"],
+       "sql": "ALTER TABLE r2 RENAME TO r",
+       "start": 515,
+       "words": ["ALTER", "TABLE", "R2", "RENAME", "TO", "R"]
+      },
+      {
+       "canonical": "CREATE TABLE R3 (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 597,
+       "line": 15,
+       "source_words": ["CREATE", "TABLE", "r3", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE r3 (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 543,
+       "words": ["CREATE", "TABLE", "R3", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO R3 SELECT DISTINCT * FROM R",
+       "end": 638,
+       "line": 16,
+       "source_words": ["INSERT", "INTO", "r3", "SELECT", "DISTINCT", "*", "FROM", "r"],
+       "sql": "INSERT INTO r3 SELECT DISTINCT * FROM r",
+       "start": 599,
+       "words": ["INSERT", "INTO", "R3", "SELECT", "DISTINCT", "*", "FROM", "R"]
+      },
+      {
+       "canonical": "DROP TABLE R",
+       "end": 652,
+       "line": 17,
+       "source_words": ["DROP", "TABLE", "r"],
+       "sql": "DROP TABLE r",
+       "start": 640,
+       "words": ["DROP", "TABLE", "R"]
+      },
+      {
+       "canonical": "ALTER TABLE R3 RENAME TO R",
+       "end": 680,
+       "line": 18,
+       "source_words": ["ALTER", "TABLE", "r3", "RENAME", "TO", "r"],
+       "sql": "ALTER TABLE r3 RENAME TO r",
+       "start": 654,
+       "words": ["ALTER", "TABLE", "R3", "RENAME", "TO", "R"]
+      },
+      {
+       "canonical": "CREATE TABLE R4 (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 736,
+       "line": 19,
+       "source_words": ["CREATE", "TABLE", "r4", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE r4 (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 682,
+       "words": ["CREATE", "TABLE", "R4", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO R4 SELECT * FROM R WHERE ID > 1",
+       "end": 781,
+       "line": 20,
+       "source_words": ["INSERT", "INTO", "r4", "SELECT", "*", "FROM", "r", "WHERE", "id", ">", "1"],
+       "sql": "INSERT INTO r4 SELECT * FROM r WHERE id > 1",
+       "start": 738,
+       "words": ["INSERT", "INTO", "R4", "SELECT", "*", "FROM", "R", "WHERE", "ID", ">", "1"]
+      },
+      {
+       "canonical": "DROP TABLE R",
+       "end": 795,
+       "line": 21,
+       "source_words": ["DROP", "TABLE", "r"],
+       "sql": "DROP TABLE r",
+       "start": 783,
+       "words": ["DROP", "TABLE", "R"]
+      },
+      {
+       "canonical": "ALTER TABLE R4 RENAME TO R",
+       "end": 823,
+       "line": 22,
+       "source_words": ["ALTER", "TABLE", "r4", "RENAME", "TO", "r"],
+       "sql": "ALTER TABLE r4 RENAME TO r",
+       "start": 797,
+       "words": ["ALTER", "TABLE", "R4", "RENAME", "TO", "R"]
+      },
+      {
+       "canonical": "CREATE TABLE R5 (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 879,
+       "line": 23,
+       "source_words": ["CREATE", "TABLE", "r5", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE r5 (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 825,
+       "words": ["CREATE", "TABLE", "R5", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO R5 SELECT * FROM R",
+       "end": 911,
+       "line": 24,
+       "source_words": ["INSERT", "INTO", "r5", "SELECT", "*", "FROM", "r"],
+       "sql": "INSERT INTO r5 SELECT * FROM r",
+       "start": 881,
+       "words": ["INSERT", "INTO", "R5", "SELECT", "*", "FROM", "R"]
+      },
+      {
+       "canonical": "DROP TABLE R, R5",
+       "end": 929,
+       "line": 25,
+       "source_words": ["DROP", "TABLE", "r", ",", "r5"],
+       "sql": "DROP TABLE r, r5",
+       "start": 913,
+       "words": ["DROP", "TABLE", "R", ",", "R5"]
+      },
+      {
+       "canonical": "ALTER TABLE R5 RENAME TO R",
+       "end": 957,
+       "line": 26,
+       "source_words": ["ALTER", "TABLE", "r5", "RENAME", "TO", "r"],
+       "sql": "ALTER TABLE r5 RENAME TO r",
+       "start": 931,
+       "words": ["ALTER", "TABLE", "R5", "RENAME", "TO", "R"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_t.up.sql:17:BC103", "0002_t.up.sql:17:DS101", "0002_t.up.sql:21:BC103", "0002_t.up.sql:21:DS101", "0002_t.up.sql:25:BC103", "0002_t.up.sql:25:DS101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, B UTF8, PRIMARY KEY (ID))",
+      "end": 69,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE R (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "end": 124,
+      "line": 2,
+      "source_words": ["CREATE", "TABLE", "r", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE r (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 71,
+      "words": ["CREATE", "TABLE", "R", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "CREATE VIEW VT WITH (SECURITY_INVOKER = TRUE) AS SELECT * FROM T",
+      "end": 190,
+      "line": 3,
+      "source_words": ["CREATE", "VIEW", "vt", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "t"],
+      "sql": "CREATE VIEW vt WITH (security_invoker = TRUE) AS SELECT * FROM t",
+      "start": 126,
+      "words": ["CREATE", "VIEW", "VT", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "*", "FROM", "T"]
+     }
+    ],
+    [
+     {
+      "canonical": "CREATE TABLE T_BACK (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "end": 58,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t_back", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE t_back (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T_BACK", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO T_BACK SELECT * FROM T",
+      "end": 94,
+      "line": 2,
+      "source_words": ["INSERT", "INTO", "t_back", "SELECT", "*", "FROM", "t"],
+      "sql": "INSERT INTO t_back SELECT * FROM t",
+      "start": 60,
+      "words": ["INSERT", "INTO", "T_BACK", "SELECT", "*", "FROM", "T"]
+     },
+     {
+      "canonical": "DROP TABLE T",
+      "effects": [
+       {
+        "fact": "rebuild-drop"
+       }
+      ],
+      "end": 108,
+      "line": 3,
+      "source_words": ["DROP", "TABLE", "t"],
+      "sql": "DROP TABLE t",
+      "start": 96,
+      "words": ["DROP", "TABLE", "T"]
+     },
+     {
+      "canonical": "ALTER TABLE T_BACK RENAME TO T",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 140,
+      "line": 4,
+      "source_words": ["ALTER", "TABLE", "t_back", "RENAME", "TO", "t"],
+      "sql": "ALTER TABLE t_back RENAME TO t",
+      "start": 110,
+      "words": ["ALTER", "TABLE", "T_BACK", "RENAME", "TO", "T"]
+     }
+    ],
+    [
+     {
+      "canonical": "CREATE TABLE T_NEW (ID UINT64 NOT NULL, A UTF8, B UTF8, PRIMARY KEY (ID, A))",
+      "end": 76,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t_new", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ",", "a", ")", ")"],
+      "sql": "CREATE TABLE t_new (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id, a))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T_NEW", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ",", "A", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO T_NEW (ID, A, B) SELECT ID, A, B FROM T",
+      "end": 129,
+      "line": 2,
+      "source_words": ["INSERT", "INTO", "t_new", "(", "id", ",", "a", ",", "b", ")", "SELECT", "id", ",", "a", ",", "b", "FROM", "t"],
+      "sql": "INSERT INTO t_new (id, a, b) SELECT id, a, b FROM t",
+      "start": 78,
+      "words": ["INSERT", "INTO", "T_NEW", "(", "ID", ",", "A", ",", "B", ")", "SELECT", "ID", ",", "A", ",", "B", "FROM", "T"]
+     },
+     {
+      "canonical": "ALTER TABLE T RENAME TO T_OLD",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 160,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "t_old"],
+      "sql": "ALTER TABLE t RENAME TO t_old",
+      "start": 131,
+      "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "T_OLD"]
+     },
+     {
+      "canonical": "ALTER TABLE T_NEW RENAME TO T",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 191,
+      "line": 4,
+      "source_words": ["ALTER", "TABLE", "t_new", "RENAME", "TO", "t"],
+      "sql": "ALTER TABLE t_new RENAME TO t",
+      "start": 162,
+      "words": ["ALTER", "TABLE", "T_NEW", "RENAME", "TO", "T"]
+     },
+     {
+      "canonical": "DROP TABLE T_OLD",
+      "effects": [
+       {
+        "fact": "rebuild-drop"
+       }
+      ],
+      "end": 209,
+      "line": 5,
+      "source_words": ["DROP", "TABLE", "t_old"],
+      "sql": "DROP TABLE t_old",
+      "start": 193,
+      "words": ["DROP", "TABLE", "T_OLD"]
+     },
+     {
+      "canonical": "CREATE TABLE T_LOSSY (ID UINT64 NOT NULL, A UTF8, PRIMARY KEY (ID))",
+      "end": 278,
+      "line": 6,
+      "source_words": ["CREATE", "TABLE", "t_lossy", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE t_lossy (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id))",
+      "start": 211,
+      "words": ["CREATE", "TABLE", "T_LOSSY", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO T_LOSSY (ID, A) SELECT ID, A FROM T",
+      "end": 327,
+      "line": 7,
+      "source_words": ["INSERT", "INTO", "t_lossy", "(", "id", ",", "a", ")", "SELECT", "id", ",", "a", "FROM", "t"],
+      "sql": "INSERT INTO t_lossy (id, a) SELECT id, a FROM t",
+      "start": 280,
+      "words": ["INSERT", "INTO", "T_LOSSY", "(", "ID", ",", "A", ")", "SELECT", "ID", ",", "A", "FROM", "T"]
+     },
+     {
+      "canonical": "ALTER TABLE T RENAME TO T_GONE",
+      "end": 359,
+      "line": 8,
+      "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "t_gone"],
+      "sql": "ALTER TABLE t RENAME TO t_gone",
+      "start": 329,
+      "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "T_GONE"]
+     },
+     {
+      "canonical": "ALTER TABLE T_LOSSY RENAME TO T",
+      "end": 392,
+      "line": 9,
+      "source_words": ["ALTER", "TABLE", "t_lossy", "RENAME", "TO", "t"],
+      "sql": "ALTER TABLE t_lossy RENAME TO t",
+      "start": 361,
+      "words": ["ALTER", "TABLE", "T_LOSSY", "RENAME", "TO", "T"]
+     },
+     {
+      "canonical": "DROP TABLE T_GONE",
+      "end": 411,
+      "line": 10,
+      "source_words": ["DROP", "TABLE", "t_gone"],
+      "sql": "DROP TABLE t_gone",
+      "start": 394,
+      "words": ["DROP", "TABLE", "T_GONE"]
+     },
+     {
+      "canonical": "CREATE TABLE R2 (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "end": 467,
+      "line": 11,
+      "source_words": ["CREATE", "TABLE", "r2", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE r2 (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 413,
+      "words": ["CREATE", "TABLE", "R2", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO R2 SELECT * FROM R",
+      "end": 499,
+      "line": 12,
+      "source_words": ["INSERT", "INTO", "r2", "SELECT", "*", "FROM", "r"],
+      "sql": "INSERT INTO r2 SELECT * FROM r",
+      "start": 469,
+      "words": ["INSERT", "INTO", "R2", "SELECT", "*", "FROM", "R"]
+     },
+     {
+      "canonical": "DROP TABLE R",
+      "effects": [
+       {
+        "fact": "rebuild-drop"
+       }
+      ],
+      "end": 513,
+      "line": 13,
+      "source_words": ["DROP", "TABLE", "r"],
+      "sql": "DROP TABLE r",
+      "start": 501,
+      "words": ["DROP", "TABLE", "R"]
+     },
+     {
+      "canonical": "ALTER TABLE R2 RENAME TO R",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 541,
+      "line": 14,
+      "source_words": ["ALTER", "TABLE", "r2", "RENAME", "TO", "r"],
+      "sql": "ALTER TABLE r2 RENAME TO r",
+      "start": 515,
+      "words": ["ALTER", "TABLE", "R2", "RENAME", "TO", "R"]
+     },
+     {
+      "canonical": "CREATE TABLE R3 (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "end": 597,
+      "line": 15,
+      "source_words": ["CREATE", "TABLE", "r3", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE r3 (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 543,
+      "words": ["CREATE", "TABLE", "R3", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO R3 SELECT DISTINCT * FROM R",
+      "end": 638,
+      "line": 16,
+      "source_words": ["INSERT", "INTO", "r3", "SELECT", "DISTINCT", "*", "FROM", "r"],
+      "sql": "INSERT INTO r3 SELECT DISTINCT * FROM r",
+      "start": 599,
+      "words": ["INSERT", "INTO", "R3", "SELECT", "DISTINCT", "*", "FROM", "R"]
+     },
+     {
+      "canonical": "DROP TABLE R",
+      "end": 652,
+      "line": 17,
+      "source_words": ["DROP", "TABLE", "r"],
+      "sql": "DROP TABLE r",
+      "start": 640,
+      "words": ["DROP", "TABLE", "R"]
+     },
+     {
+      "canonical": "ALTER TABLE R3 RENAME TO R",
+      "end": 680,
+      "line": 18,
+      "source_words": ["ALTER", "TABLE", "r3", "RENAME", "TO", "r"],
+      "sql": "ALTER TABLE r3 RENAME TO r",
+      "start": 654,
+      "words": ["ALTER", "TABLE", "R3", "RENAME", "TO", "R"]
+     },
+     {
+      "canonical": "CREATE TABLE R4 (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "end": 736,
+      "line": 19,
+      "source_words": ["CREATE", "TABLE", "r4", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE r4 (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 682,
+      "words": ["CREATE", "TABLE", "R4", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO R4 SELECT * FROM R WHERE ID > 1",
+      "end": 781,
+      "line": 20,
+      "source_words": ["INSERT", "INTO", "r4", "SELECT", "*", "FROM", "r", "WHERE", "id", ">", "1"],
+      "sql": "INSERT INTO r4 SELECT * FROM r WHERE id > 1",
+      "start": 738,
+      "words": ["INSERT", "INTO", "R4", "SELECT", "*", "FROM", "R", "WHERE", "ID", ">", "1"]
+     },
+     {
+      "canonical": "DROP TABLE R",
+      "end": 795,
+      "line": 21,
+      "source_words": ["DROP", "TABLE", "r"],
+      "sql": "DROP TABLE r",
+      "start": 783,
+      "words": ["DROP", "TABLE", "R"]
+     },
+     {
+      "canonical": "ALTER TABLE R4 RENAME TO R",
+      "end": 823,
+      "line": 22,
+      "source_words": ["ALTER", "TABLE", "r4", "RENAME", "TO", "r"],
+      "sql": "ALTER TABLE r4 RENAME TO r",
+      "start": 797,
+      "words": ["ALTER", "TABLE", "R4", "RENAME", "TO", "R"]
+     },
+     {
+      "canonical": "CREATE TABLE R5 (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "end": 879,
+      "line": 23,
+      "source_words": ["CREATE", "TABLE", "r5", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE r5 (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 825,
+      "words": ["CREATE", "TABLE", "R5", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO R5 SELECT * FROM R",
+      "end": 911,
+      "line": 24,
+      "source_words": ["INSERT", "INTO", "r5", "SELECT", "*", "FROM", "r"],
+      "sql": "INSERT INTO r5 SELECT * FROM r",
+      "start": 881,
+      "words": ["INSERT", "INTO", "R5", "SELECT", "*", "FROM", "R"]
+     },
+     {
+      "canonical": "DROP TABLE R, R5",
+      "end": 929,
+      "line": 25,
+      "source_words": ["DROP", "TABLE", "r", ",", "r5"],
+      "sql": "DROP TABLE r, r5",
+      "start": 913,
+      "words": ["DROP", "TABLE", "R", ",", "R5"]
+     },
+     {
+      "canonical": "ALTER TABLE R5 RENAME TO R",
+      "end": 957,
+      "line": 26,
+      "source_words": ["ALTER", "TABLE", "r5", "RENAME", "TO", "r"],
+      "sql": "ALTER TABLE r5 RENAME TO r",
+      "start": 931,
+      "words": ["ALTER", "TABLE", "R5", "RENAME", "TO", "R"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id));\nCREATE TABLE r (id Uint64 NOT NULL, PRIMARY KEY (id));\nCREATE VIEW vt WITH (security_invoker = TRUE) AS SELECT * FROM t;\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "down": true,
+     "name": "0002_t.down.sql",
+     "sql": "CREATE TABLE t_back (id Uint64 NOT NULL, PRIMARY KEY (id));\nINSERT INTO t_back SELECT * FROM t;\nDROP TABLE t;\nALTER TABLE t_back RENAME TO t;\n",
+     "version": 2
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "CREATE TABLE t_new (id Uint64 NOT NULL, a Utf8, b Utf8, PRIMARY KEY (id, a));\nINSERT INTO t_new (id, a, b) SELECT id, a, b FROM t;\nALTER TABLE t RENAME TO t_old;\nALTER TABLE t_new RENAME TO t;\nDROP TABLE t_old;\nCREATE TABLE t_lossy (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id));\nINSERT INTO t_lossy (id, a) SELECT id, a FROM t;\nALTER TABLE t RENAME TO t_gone;\nALTER TABLE t_lossy RENAME TO t;\nDROP TABLE t_gone;\nCREATE TABLE r2 (id Uint64 NOT NULL, PRIMARY KEY (id));\nINSERT INTO r2 SELECT * FROM r;\nDROP TABLE r;\nALTER TABLE r2 RENAME TO r;\nCREATE TABLE r3 (id Uint64 NOT NULL, PRIMARY KEY (id));\nINSERT INTO r3 SELECT DISTINCT * FROM r;\nDROP TABLE r;\nALTER TABLE r3 RENAME TO r;\nCREATE TABLE r4 (id Uint64 NOT NULL, PRIMARY KEY (id));\nINSERT INTO r4 SELECT * FROM r WHERE id > 1;\nDROP TABLE r;\nALTER TABLE r4 RENAME TO r;\nCREATE TABLE r5 (id Uint64 NOT NULL, PRIMARY KEY (id));\nINSERT INTO r5 SELECT * FROM r;\nDROP TABLE r, r5;\nALTER TABLE r5 RENAME TO r;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}
