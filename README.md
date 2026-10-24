@@ -52,8 +52,8 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins published experimental SDK revision 23, including operational
-storage reservations and offline table preparation. Builds require neither the Ptah application source nor a
+The module pins `provider-sdk` v0.2.0, experimental protocol revision 25, which
+includes operational storage reservations and offline table preparation. Builds require neither the Ptah application source nor a
 local SDK checkout.
 
 Run the unit suite and build the executable:
@@ -104,8 +104,8 @@ Schema changes used `--tx-mode none` for `migrations up` and a
 `-- +ptah no_transaction` directive in the down file. YDB does not provide
 transactional schema changes.
 
-The host and provider were built against the published SDK revision 21 pin
-with `GOWORK=off`. These are source-build checks; packaged installation and
+The host and provider are built against the published SDK pin with
+`GOWORK=off`. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
 Host `schema inspect --format json` exports the native desired model, including
 provider-owned values and coverage. Common collections use names such as
@@ -1326,7 +1326,7 @@ translation settings refuse the whole batch. Only the default lexer and
 `--!syntax_v1` are accepted; ANSI mode is refused even when its directive appears
 later in a source, because splitting could move it to a new query's head.
 Whitespace-only sources are accepted. A source containing only comments or
-terminators is refused because SDK revision 21 requires tokens for every
+terminators is refused because the SDK requires tokens for every
 non-whitespace source range. No prefix of a refused batch is returned.
 
 A request contains at most 256 sources and 3 MiB. Each source contains at most
