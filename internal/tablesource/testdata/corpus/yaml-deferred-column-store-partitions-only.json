@@ -1,0 +1,15 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {
+    "partitions": 4
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

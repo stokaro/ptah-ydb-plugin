@@ -8,7 +8,7 @@
    "name": "items",
    "struct": "Item",
    "facets": {
-    "ptah.run/ydb/column-store": "not recorded"
+    "ptah.run/ydb/column-store": {}
    }
   }
  ],

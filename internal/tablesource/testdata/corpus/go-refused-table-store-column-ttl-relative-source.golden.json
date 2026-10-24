@@ -1,0 +1,40 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "refused",
+ "error": "TTL tier external source must be an absolute database path on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "column_ttl": "{\"column\":\"created_at\",\"tiers\":[{\"interval\":\"P7D\",\"external_source\":\"ext/bucket\"}]}",
+    "store": "COLUMN"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-store-column-ttl-relative-source.go",
+   "file_size": 399,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 176,
+    "line": 3,
+    "column": 159
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "refused",
+ "error": "a tiered TTL requires a tier that moves rows to an external data source; a TTL that only deletes is the table's TTL on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "column_ttl": "{\"column\":\"created_at\",\"tiers\":[{\"interval\":\"P30D\"}]}",
+    "store": "COLUMN"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-store-column-ttl-delete.go",
+   "file_size": 365,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 142,
+    "line": 3,
+    "column": 125
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

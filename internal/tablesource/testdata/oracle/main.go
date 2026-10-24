@@ -259,8 +259,13 @@ func tables(db *schemamodel.Database) []table {
 		} else if found {
 			entry.Facets[string(ydbschema.TTLKind)] = marshal(ttl.Policy)
 		}
+		if store, found, err := schemaext.FacetAs[*ydbschema.DesiredColumnStore](t.Facets, ydbschema.ColumnStoreKind); err != nil {
+			check(err)
+		} else if found {
+			entry.Facets[string(ydbschema.ColumnStoreKind)] = marshal(store.ColumnStore)
+		}
 		for _, kind := range t.Facets.Kinds() {
-			if kind != ydbschema.TablePartitioningKind && kind != ydbschema.ColumnFamiliesKind && kind != ydbschema.TTLKind {
+			if kind != ydbschema.TablePartitioningKind && kind != ydbschema.ColumnFamiliesKind && kind != ydbschema.TTLKind && kind != ydbschema.ColumnStoreKind {
 				entry.Facets[string(kind)] = json.RawMessage(`"not recorded"`)
 			}
 		}

@@ -8,7 +8,12 @@
    "name": "items",
    "struct": "items",
    "facets": {
-    "ptah.run/ydb/column-store": "not recorded"
+    "ptah.run/ydb/column-store": {
+     "hash_columns": [
+      "id"
+     ],
+     "partitions": 1
+    }
    }
   }
  ]

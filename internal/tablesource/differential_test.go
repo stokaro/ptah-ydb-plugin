@@ -151,7 +151,7 @@ func request(c *qt.C, r row) *protocol.DecodeSourceRequest {
 func TestCorpusShape(t *testing.T) {
 	c := qt.New(t)
 	rows := corpus(c, func(string) bool { return true })
-	c.Assert(len(rows) >= 200, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
+	c.Assert(len(rows) >= 240, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
 	hosts := map[string]bool{}
 	for _, r := range rows {
 		hosts[r.golden.Host] = true
@@ -161,8 +161,8 @@ func TestCorpusShape(t *testing.T) {
 	for _, r := range rows {
 		c.Assert(r.golden.Outcome == "refused", qt.Equals, isRefused(r.name), qt.Commentf("%s: host outcome %q", r.name, r.golden.Outcome))
 	}
-	c.Assert(len(corpus(c, isRefused)) >= 80, qt.IsTrue)
-	c.Assert(len(corpus(c, isDeferred)) >= 14, qt.IsTrue)
+	c.Assert(len(corpus(c, isRefused)) >= 110, qt.IsTrue)
+	c.Assert(len(corpus(c, isDeferred)) >= 28, qt.IsTrue)
 	c.Assert(len(corpus(c, isAccepted)) >= 70, qt.IsTrue)
 }
 
@@ -200,27 +200,41 @@ func TestDifferential_FailurePath(t *testing.T) {
 // unclaimed Go comment as no declaration at all, so the provider claims the
 // Go directives it cannot carry and refuses them itself.)
 var unclaimed = map[string]string{
-	"yaml-deferred-changefeeds":  "changefeeds",
-	"yaml-deferred-column-store": "column_store",
+	"yaml-deferred-changefeeds":                  "changefeeds",
+	"yaml-deferred-column-store":                 "column_store",
+	"yaml-deferred-column-store-empty":           "column_store",
+	"yaml-deferred-column-store-hash-only":       "column_store",
+	"yaml-deferred-column-store-null":            "column_store",
+	"yaml-deferred-column-store-partitions-only": "column_store",
 }
 
 // refusals names the inputs whose key or attribute the provider claims and
 // refuses by name, with the words of the refusal.
 var refusals = map[string]string{
-	"yaml-deferred-family-cache-mode":           "cache_mode is not supported by the YDB provider yet",
-	"yaml-deferred-family-fields":               "fields is not supported by the YDB provider yet",
-	"go-deferred-family-cache-mode":             "cache_mode is not supported by the YDB provider yet",
-	"go-deferred-family-fields-other-table":     "fields is not supported by the YDB provider yet",
-	"yaml-deferred-ttl-platform-other-property": "platform.ydb.some_other_setting is not supported by the YDB provider yet",
-	"go-deferred-changefeed":                    "ptah:schema:changefeed is not supported by the YDB provider yet",
-	"go-deferred-changefeed-consumer":           "ptah:schema:changefeed is not supported by the YDB provider yet",
-	"go-deferred-table-store-column":            "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-hash":       "store is not supported by the YDB provider yet",
-	"go-deferred-index-partitioning":            "auto_partitioning_by_load is not supported by the YDB provider yet",
-	"go-deferred-index-replicas":                "read_replicas_settings is not supported by the YDB provider yet",
-	"go-deferred-index-vector":                  "clusters is not supported by the YDB provider yet",
-	"go-deferred-index-fulltext":                "tokenizer is not supported by the YDB provider yet",
-	"go-deferred-index-bloom":                   "false_positive_probability is not supported by the YDB provider yet",
+	"yaml-deferred-family-cache-mode":                  "cache_mode is not supported by the YDB provider yet",
+	"yaml-deferred-family-fields":                      "fields is not supported by the YDB provider yet",
+	"go-deferred-family-cache-mode":                    "cache_mode is not supported by the YDB provider yet",
+	"go-deferred-family-fields-other-table":            "fields is not supported by the YDB provider yet",
+	"yaml-deferred-ttl-platform-other-property":        "platform.ydb.some_other_setting is not supported by the YDB provider yet",
+	"go-deferred-changefeed":                           "ptah:schema:changefeed is not supported by the YDB provider yet",
+	"go-deferred-changefeed-consumer":                  "ptah:schema:changefeed is not supported by the YDB provider yet",
+	"go-deferred-table-store-column":                   "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-hash":              "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-hash-composite":    "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-hash-spaces":       "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-shards":            "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-shards-at-limit":   "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-ttl-tiered":        "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-with-bloom":        "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-with-partitioning": "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-with-replicas":     "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-with-ttl-platform": "store is not supported by the YDB provider yet",
+	"go-deferred-table-store-column-with-uniform":      "store is not supported by the YDB provider yet",
+	"go-deferred-index-partitioning":                   "auto_partitioning_by_load is not supported by the YDB provider yet",
+	"go-deferred-index-replicas":                       "read_replicas_settings is not supported by the YDB provider yet",
+	"go-deferred-index-vector":                         "clusters is not supported by the YDB provider yet",
+	"go-deferred-index-fulltext":                       "tokenizer is not supported by the YDB provider yet",
+	"go-deferred-index-bloom":                          "false_positive_probability is not supported by the YDB provider yet",
 }
 
 // laterRefusals names the inputs the host accepts when it decodes them and

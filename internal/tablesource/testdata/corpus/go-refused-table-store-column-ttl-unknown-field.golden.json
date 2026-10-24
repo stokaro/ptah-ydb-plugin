@@ -1,0 +1,40 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "refused",
+ "error": "column_ttl: json: unknown field \"extra\" on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "column_ttl": "{\"column\":\"created_at\",\"tiers\":[{\"interval\":\"P30D\"}],\"extra\":1}",
+    "store": "COLUMN"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-store-column-ttl-unknown-field.go",
+   "file_size": 377,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 154,
+    "line": 3,
+    "column": 137
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

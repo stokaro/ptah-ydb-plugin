@@ -1,0 +1,40 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "refused",
+ "error": "partition_by_hash contains an empty column name on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "partition_by_hash": "id,",
+    "store": "COLUMN"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-store-column-hash-trailing-comma.go",
+   "file_size": 312,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 89,
+    "line": 3,
+    "column": 72
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

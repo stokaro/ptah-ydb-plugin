@@ -546,7 +546,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
 | `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
 | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
-| `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables have no planning yet. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |
+| `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables have no reader, creation or comparison yet; see "Column tables" below. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name. YAML has no index key claim. |
 | Topics, resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` at document scope. |
 
@@ -559,6 +559,42 @@ with the host at the commit named in the corpus, `schema apply` over a Go file
 with no TTL plans `ALTER TABLE ... RESET (TTL)` for every table of the file. A
 source that could not describe the properties, or a table whose current
 properties were not read, leaves the TTL alone.
+
+### Column tables
+
+A column table is declared with `store="COLUMN"` and optionally
+`partition_by_hash` (a comma separated list of key columns), `column_shards` (a
+positive 32-bit count) and `column_ttl` (a JSON object with a column, an optional
+epoch unit and ordered tiers, of which only the last may delete and at least one
+has to move rows to an absolute external data source path), or with the
+`column_store` mapping in YAML. The corpus records the facet the host's bundled
+decoder makes of each spelling and each refusal (`*-store-column-*` rows), so the
+grammar is pinned. The provider refuses every one of them by name. What stands
+between that and support, in the order the work has to go:
+
+- No live reader. Inspection refuses a `COLUMN_TABLE` directory entry, so a
+  database that holds a column table cannot be inspected at all. The column
+  storage decoder (`internal/columnstore`) needs the monitoring (viewer) JSON
+  beside the table service description, and the provider has no transport for it:
+  the connection address names the gRPC endpoint only, and the CI service does not
+  publish the monitoring port. The table service description of a column table
+  carries the hash key (`partitioning_settings.partition_by`) but not the shard
+  count (measured on 26.2.1.14 for a table created with `PARTITION_COUNT = 3`).
+- No source decoder. The desired column storage model
+  (`ColumnStorageProperties`, `ColumnStorageIntent`) lists no source format, so a
+  claim cannot name it, and no code turns the attributes above into it. The host
+  accepts a column table beside partitioning, read replicas, a key bloom filter,
+  a starting layout and a row TTL (`platform.ydb.*`); the corpus rows show which.
+- No creation. The creation operation requires row storage, and the compiler,
+  the operation grammar and the confirmation read back a row table.
+- No comparison or planning. Only the tiered TTL of a column table changes in
+  place; the storage kind, the hash key and the shard count are fixed at creation,
+  so a declaration that differs needs a refusal with the reason. Under complete
+  coverage, a table without the column storage facet asks for row storage.
+
+Accepting the declaration before the reader exists would turn a refusal that names
+the setting into a refusal further down the plan, so the declaration stays refused
+until the reader, the creation and the comparison land together.
 
 `internal/tablesource/testdata/corpus` holds the inputs and the answers of the
 host's bundled decoder for them, and the differential test in
