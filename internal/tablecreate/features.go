@@ -96,6 +96,15 @@ func normalizedFacet(record *protocol.ComparisonRecord, representation protocol.
 		return nil, err
 	}
 	subject, owner := record.Subject, value.Owner
+	if subject.GetDatabase().GetSource() == "" && owner.Database != "" {
+		// The host names a table and its columns without a database: they live
+		// in the session's, which a read owner names and a declared owner leaves
+		// out. The facet is read in the subject's terms, so both sides of one
+		// table name the same owner.
+		value = proto.CloneOf(value)
+		value.Owner.Database = ""
+		owner = value.Owner
+	}
 	if subject.Kind != owner.Kind || subject.GetDatabase().GetSource() != owner.Database ||
 		subject.GetSchema().GetSource() != owner.Schema || subject.GetName().GetSource() != owner.Name ||
 		subject.GetCatalog().GetSource() != "" || len(subject.Path)+len(subject.Signature) != 0 {

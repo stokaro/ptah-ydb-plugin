@@ -15,9 +15,12 @@ import (
 // ServiceID names the row-table lifecycle assessment.
 const ServiceID = "ydb-row-table-create"
 
-// ParentKinds assigns the native table and column settings to this assessment.
+// ParentKinds assigns the native table and column settings to this assessment,
+// and the changefeeds of a table: the host plans no table whose facets no
+// planning service claims, and the comparison reports no changefeed change, so
+// an alteration keeps them as they are.
 func ParentKinds() []string {
-	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties}
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties}
 }
 
 type creation struct {
@@ -299,9 +302,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			steps = append(steps, proto.CloneOf(id))
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, change the automatic partitioning settings, and add or drop global secondary indexes, through the native table service; other settings and column steps the native call cannot state stay with the host"
+			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, change the automatic partitioning settings, and add or drop global secondary indexes, through the native table service; changefeeds stay as they are, and other settings and column steps the native call cannot state stay with the host"
 			if steps == nil {
-				strategy = "The column families, column placements, TTL, partitioning settings and indexes already match the declaration, and the host has no column step this service can carry out"
+				strategy = "The column families, column placements, TTL, partitioning settings and indexes already match the declaration, changefeeds stay as they are, and the host has no column step this service can carry out"
 			}
 		}
 		for _, kind := range request.ParentKinds {
