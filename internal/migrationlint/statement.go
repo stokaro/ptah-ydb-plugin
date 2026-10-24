@@ -1,8 +1,9 @@
 // Package migrationlint is the YDB provider's migration lint: the splitter
 // that reads a YDB migration as YQL, the facts it reports about each
 // statement, the annotation of a split the host made without a dialect, and
-// the rules of the YD family that judge one statement by what it says,
-// published as data and checked once per lint run.
+// the rules of the YD family that judge one statement, by what it says or
+// through a reader of their own, published as data and checked once per lint
+// run.
 //
 // It serves the SDK's lint.migrations service. The host owns output formats,
 // severity thresholds, suppression and the rules every dialect shares; this

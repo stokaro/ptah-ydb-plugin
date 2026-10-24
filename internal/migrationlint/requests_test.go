@@ -167,10 +167,9 @@ var severityNames = map[protocol.LintRule_Severity]string{
 }
 
 // pendingCodes are the rules of the host's YDB owner the provider does not
-// serve yet: the rules that read a statement through a reader of their own,
-// and the rules that read the directory's history.
+// serve yet: the rules that read the directory's history.
 var pendingCodes = []string{
-	"YD102", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD115", "YD118", "YD119", "YD131", "YD140", "YD141", "YD150", "YD160",
+	"YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD115", "YD118", "YD119", "YD131", "YD150",
 }
 
 // TestRules_AreTheHosts requires the provider to publish the rules the host's
