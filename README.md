@@ -112,6 +112,12 @@ provider-owned values and coverage. Common collections use names such as
 `Tables`, `Fields`, and `Indexes`. This JSON is diagnostic output, not a schema
 file input. Full native CLI planning remains pending.
 
+`TestHostAppliesAndAltersARowTable_HappyPath` drives `ptah schema apply` of the
+pinned host through this provider: it creates a row table from a Go source,
+finds nothing to change on the next run, sets a TTL in place, and finds nothing
+to change again. The run passes `--tx-mode none`, because the host refuses a
+provider step that forbids a transaction under the default mode.
+
 ## Connection addresses
 
 Use `ydb://host:2136/database` or `ydbs://host:2135/database` for TLS. The
@@ -1063,7 +1069,10 @@ lifecycles for row tables. It owns five facets of an altered table: its column
 families, the addition and removal of its columns, its TTL, its automatic
 partitioning settings, and its global secondary indexes. Each becomes native
 AlterTable calls. Everything else about an altered table stays with the host:
-other table settings, and any column step the native call cannot state.
+other table settings, and any column step the native call cannot state. The
+service also claims the changefeeds of an altered table and keeps them as they
+are: the host plans no table that holds a facet no planning service claims, and
+the comparison reports no changefeed change.
 
 ### Column families
 
@@ -1299,6 +1308,13 @@ unchanged. A facet present on one side only states nothing to compare; the
 planner decides what the missing read means. The planner accepts exactly these
 changes, accounts for each one with the steps of its table alteration, and
 refuses every other change kind.
+
+The host names a table and its columns without a database, because they live in
+the session's, while the provider's inspection names that database in the owner
+of every facet it reads. The comparison and the planner read a facet whose
+subject names no database without its owner's, so both sides of one table name
+one owner. A facet whose owner is another table than its subject names is
+refused.
 
 ## Offline SQL analysis
 

@@ -182,7 +182,7 @@ func TestAlterPlan_HappyPath(t *testing.T) {
 			c.Assert(plan.Contributions, qt.HasLen, 1)
 			c.Assert(plan.Contributions[0].Steps, qt.HasLen, 1)
 			c.Assert(plan.Rewrites, qt.HasLen, 0)
-			c.Assert(plan.Parents, qt.HasLen, 3)
+			c.Assert(plan.Parents, qt.HasLen, 4)
 			step := plan.Contributions[0].Steps[0]
 			c.Assert(step.Id.Name, qt.Equals, "row-table-alter/000000")
 			c.Assert(step.Operation.Value.Value.Kind, qt.Equals, tablecreate.AlterOperationKind)
@@ -240,7 +240,7 @@ func TestAlterPlan_NoChange(t *testing.T) {
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
 			c.Assert(plan.Rewrites, qt.HasLen, 0)
-			c.Assert(plan.Parents, qt.HasLen, 3)
+			c.Assert(plan.Parents, qt.HasLen, 4)
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, 0)
 			c.Assert(plan.Parents[0].Action, qt.Equals, protocol.PlanningTable_ALTER)
 		})
