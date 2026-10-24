@@ -26,19 +26,8 @@ import (
 // host package.
 func hostSource(c *qt.C, flag, name, content string) string {
 	c.Helper()
-	host := os.Getenv("PTAH_HOST_TEST_BIN")
-	if host == "" {
-		c.Skip("PTAH_HOST_TEST_BIN is required for the external host contract")
-	}
-	binary, digest := providerBinary(c)
-	configuration := map[string]any{"format_version": 2, "providers": []any{map[string]any{
-		"executable": binary, "sha256": digest, "provider_id": schema.ProviderID, "engines": []any{map[string]any{"id": "ydb", "aliases": []string{"ydbs"}}}, "environment": []string{},
-	}}}
-	encoded, err := json.Marshal(configuration)
-	c.Assert(err, qt.IsNil)
+	host, manifest := hostManifest(c)
 	directory := c.TempDir()
-	manifest := filepath.Join(directory, "providers.json")
-	c.Assert(os.WriteFile(manifest, encoded, 0o600), qt.IsNil)
 	source := filepath.Join(directory, "source", name)
 	c.Assert(os.MkdirAll(filepath.Dir(source), 0o700), qt.IsNil)
 	c.Assert(os.WriteFile(source, []byte(content), 0o600), qt.IsNil)
@@ -54,6 +43,25 @@ func hostSource(c *qt.C, flag, name, content string) string {
 	cmd.Stdout, cmd.Stderr = &output, &output
 	_ = cmd.Run() // The plan may fail for reasons that are not the subject.
 	return output.String()
+}
+
+// hostManifest returns the pinned host binary and a provider manifest that
+// selects this provider for ydb. The test is skipped without the host binary.
+func hostManifest(c *qt.C) (string, string) {
+	c.Helper()
+	host := os.Getenv("PTAH_HOST_TEST_BIN")
+	if host == "" {
+		c.Skip("PTAH_HOST_TEST_BIN is required for the external host contract")
+	}
+	binary, digest := providerBinary(c)
+	configuration := map[string]any{"format_version": 2, "providers": []any{map[string]any{
+		"executable": binary, "sha256": digest, "provider_id": schema.ProviderID, "engines": []any{map[string]any{"id": "ydb", "aliases": []string{"ydbs"}}}, "environment": []string{},
+	}}}
+	encoded, err := json.Marshal(configuration)
+	c.Assert(err, qt.IsNil)
+	manifest := filepath.Join(c.TempDir(), "providers.json")
+	c.Assert(os.WriteFile(manifest, encoded, 0o600), qt.IsNil)
+	return host, manifest
 }
 
 const (
