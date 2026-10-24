@@ -766,8 +766,27 @@ refuses each of these changes with the host's words (`changing between row and
 column storage requires an explicit data migration`, `changing a column
 table's hash key or shard count requires an explicit data migration`, with both
 values; `column-table rebuilds require an explicit data migration`). A change of
-the TTL of an existing column table, a change of its local indexes and any
-column step of a column table are refused as not planned yet.
+its local indexes and any column step of a column table are refused as not
+planned yet.
+
+The TTL changes in place, as the host's embedded engine changes it: `ALTER
+TABLE ... RESET (TTL)` removes the TTL the table holds and `ALTER TABLE ... SET
+(TTL = ...)` installs the declared one, each a step of its own
+(`column-table-ttl/<n>/reset` and `.../set`, the RESET placed early and ordered
+before the SET). YDB keeps no external data source a TTL names, so the held TTL
+lets go of its sources before their owner drops or replaces them, and the
+declared one is set once they exist. A table without a TTL takes the SET alone,
+and a declaration without one the RESET alone. A lone RESET drops the table's
+TTL setting and a lone SET creates it; a pair alters it twice, because the host
+refuses a provider step that creates what another provider step drops (it runs
+every creation of a phase before every drop), and the dependency orders the
+pair. The declaration is held to the
+rules of a creation, and a tier that moves rows needs `tiered_ttl`. Each step
+reads the table from the table service and the monitoring endpoint, refuses
+before it writes when the table holds another TTL than the plan saw or when the
+TTL to set reads a column that is absent, not first in the key or of a type its
+mode does not read, runs its statement once through the query service and reads
+the TTL back.
 
 `internal/tablesource/testdata/corpus` holds the inputs and the answers of the
 host's bundled decoder for them, and the differential test in

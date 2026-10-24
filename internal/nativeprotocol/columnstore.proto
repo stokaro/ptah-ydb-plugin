@@ -231,3 +231,13 @@ message ColumnTableCreation {
     uint64 partitions = 4;
     ColumnTTLPolicy ttl = 5;
 }
+
+// One step of an in-place change of a column table's TTL, the payload of the
+// provider's TTL operation: `ALTER TABLE ... RESET (TTL)` when set is absent,
+// `ALTER TABLE ... SET (TTL = ...)` when it is present. held is the TTL the
+// table holds when the step runs, absent for none; a table that holds another
+// one refuses the step before it is written.
+message ColumnTableTTLAlteration {
+    ColumnTTLPolicy held = 1;
+    ColumnTTLPolicy set = 2;
+}

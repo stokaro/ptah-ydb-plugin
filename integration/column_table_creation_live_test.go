@@ -136,6 +136,33 @@ func (f *columnTableFixture) alter(c *qt.C, storage string, changes []*protocol.
 	return plan
 }
 
+// change compares the declared column storage with records, plans the change
+// the comparison reports, renders it and executes it in the fixture's session.
+// It returns the plan and the outcome.
+func (f *columnTableFixture) change(c *qt.C, id, storage string) (*protocol.PlannedFeatures, *protocol.Execution, error) {
+	c.Helper()
+	changes := f.compare(c, storage).Changes
+	c.Assert(changes, qt.HasLen, 1)
+	plan := f.alter(c, storage, changes)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
+	c.Assert(plan.Contributions, qt.HasLen, 1)
+	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
+	defer cancel()
+	rendered, err := f.client.Render(ctx, testplanning.RenderRequest(plan, f.session.Capabilities))
+	c.Assert(err, qt.IsNil)
+	execution, err := f.client.Execute(ctx, &protocol.ExecuteRequest{SessionId: f.session.Id, RequestId: id, Units: rendered.Units})
+	return plan, execution, err
+}
+
+// stepNames are the names of a plan's steps, in order.
+func stepNames(plan *protocol.PlannedFeatures) []string {
+	var names []string
+	for _, step := range plan.GetContributions()[0].GetSteps() {
+		names = append(names, step.Id.Name)
+	}
+	return names
+}
+
 const columnStorage = `{"hashColumns":["id"],"partitions":"3","ttl":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}}}`
 
 // TestColumnTableCreationSubprocess creates a column table with a hash key, a
@@ -240,4 +267,66 @@ func TestColumnTableTieredTTLCreationSubprocess(t *testing.T) {
 	c.Assert(tiers[0].GetApplyAfterSeconds(), qt.Equals, uint64(86400))
 	c.Assert(tiers[1].GetDelete(), qt.IsNotNil)
 	c.Assert(fixture.compare(c, storage).Changes, qt.HasLen, 0)
+	// The tiered TTL changes in place: the held policy lets go of its source,
+	// and the declared one moves rows to it after two days.
+	moved := `{"hashColumns":["id"],"ttl":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"172800","externalStorage":"` + source + `"},` +
+		`{"applyAfterSeconds":"604800","delete":{}}]}}}`
+	plan, execution, err := fixture.change(c, "move-tiered-ttl", moved)
+	c.Assert(err, qt.IsNil)
+	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
+	c.Assert(stepNames(plan), qt.DeepEquals, []string{"column-table-ttl/000000/reset", "column-table-ttl/000000/set"})
+	tiers = fixture.held(c).GetTtl().GetEnabled().GetTiers()
+	c.Assert(tiers, qt.HasLen, 2)
+	c.Assert(tiers[0].GetExternalStorage(), qt.Equals, source)
+	c.Assert(tiers[0].GetApplyAfterSeconds(), qt.Equals, uint64(172800))
+	c.Assert(fixture.compare(c, moved).Changes, qt.HasLen, 0)
+}
+
+// TestColumnTableTTLChangeSubprocess changes the TTL of a column table in place
+// through the native planning path, as the host's embedded engine does: a
+// RESET of the held TTL, then a SET of the declared one. It removes the TTL,
+// sets one on the table without it, and refuses a step planned against a TTL
+// the table no longer holds before anything is written.
+func TestColumnTableTTLChangeSubprocess(t *testing.T) {
+	c := qt.New(t)
+	fixture := newColumnTableFixture(c, monitoredAddress(c))
+	execution, err := fixture.create(c, fixture.session, "create-column-table", columnStorage)
+	c.Assert(err, qt.IsNil)
+	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
+	const (
+		twoDays = `{"hashColumns":["id"],"partitions":"3","ttl":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"172800","delete":{}}]}}}`
+		noTTL   = `{"hashColumns":["id"],"partitions":"3"}`
+	)
+	for _, test := range []struct {
+		name, storage string
+		steps         []string
+		seconds       []uint64
+	}{
+		{"another interval", twoDays, []string{"column-table-ttl/000000/reset", "column-table-ttl/000000/set"}, []uint64{172800}},
+		{"no TTL", noTTL, []string{"column-table-ttl/000000/reset"}, nil},
+		{"a TTL on a table without one", columnStorage, []string{"column-table-ttl/000000/set"}, []uint64{86400}},
+	} {
+		plan, execution, err := fixture.change(c, "ttl-"+test.name, test.storage)
+		c.Assert(err, qt.IsNil, qt.Commentf("%s", test.name))
+		c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s: %s", test.name, execution))
+		c.Assert(stepNames(plan), qt.DeepEquals, test.steps, qt.Commentf("%s", test.name))
+		var seconds []uint64
+		for _, tier := range fixture.held(c).GetTtl().GetEnabled().GetTiers() {
+			seconds = append(seconds, tier.GetApplyAfterSeconds())
+		}
+		c.Assert(seconds, qt.DeepEquals, test.seconds, qt.Commentf("%s", test.name))
+		c.Assert(fixture.compare(c, test.storage).Changes, qt.HasLen, 0, qt.Commentf("%s", test.name))
+	}
+	// A step planned against the daily TTL, run after another plan changed it.
+	changes := fixture.compare(c, twoDays).Changes
+	stale := fixture.alter(c, twoDays, changes)
+	_, execution, err = fixture.change(c, "ttl-moved-on", noTTL)
+	c.Assert(err, qt.IsNil)
+	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
+	rendered, err := fixture.client.Render(c.Context(), testplanning.RenderRequest(stale, fixture.session.Capabilities))
+	c.Assert(err, qt.IsNil)
+	execution, err = fixture.client.Execute(c.Context(), &protocol.ExecuteRequest{SessionId: fixture.session.Id, RequestId: "ttl-stale", Units: rendered.Units})
+	c.Assert(err, qt.ErrorIs, provider.ErrExecution)
+	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
+	c.Assert(fixture.held(c).GetTtl().GetEnabled(), qt.IsNil)
 }

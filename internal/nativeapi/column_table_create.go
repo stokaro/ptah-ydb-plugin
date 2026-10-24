@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -19,11 +18,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ErrNoMonitoring refuses a column table's creation in a session whose address
-// names no monitoring endpoint: the shard count the creation is confirmed by
-// is read there.
-var ErrNoMonitoring = errors.New("creating a column table requires monitoring=http(s)://host:port in the YDB address: " +
-	"the table service leaves out the shard count the creation is confirmed by")
+// ErrNoMonitoring refuses a column table's creation or TTL change in a session
+// whose address names no monitoring endpoint: the provider reads the table
+// there, since the table service leaves out its shard count and local indexes.
+var ErrNoMonitoring = errors.New("creating a column table or changing its TTL requires monitoring=http(s)://host:port in the YDB address: " +
+	"the table service leaves out the shard count and the local indexes the provider reads the table with")
 
 // ColumnDescriber reads a column table's descriptions from the table service.
 type ColumnDescriber interface {
@@ -93,15 +92,7 @@ func (c *ColumnTableCreation) Apply(ctx context.Context, database string, value 
 	if err := c.Execute(ctx, tablecreate.ColumnTableStatement(absolute, creation)); err != nil {
 		return true, err
 	}
-	described, err := session.DescribeColumnTable(ctx, absolute)
-	if err != nil {
-		return true, err
-	}
-	body, err := c.Monitoring(ctx, absolute)
-	if err != nil {
-		return true, err
-	}
-	observed, err := columnstore.Decode(body, absolute, described)
+	described, observed, err := readColumnTable(ctx, session, c.Monitoring, absolute)
 	if err != nil {
 		return true, err
 	}
