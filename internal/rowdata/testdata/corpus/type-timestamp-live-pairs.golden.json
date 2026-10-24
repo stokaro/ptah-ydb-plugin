@@ -1,0 +1,46 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "at",
+      "type": "Timestamp"
+    },
+    {
+      "name": "dt",
+      "type": "Datetime"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "timestamp": {
+          "nanos": 1000,
+          "seconds": 1767323045
+        }
+      },
+      {
+        "timestamp": {
+          "nanos": 0,
+          "seconds": 1767323045
+        }
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "timestamp": {
+          "nanos": 1000,
+          "seconds": 1767323045
+        }
+      },
+      {
+        "timestamp": {
+          "nanos": 0,
+          "seconds": 1767323045
+        }
+      }
+    ]
+  ]
+}

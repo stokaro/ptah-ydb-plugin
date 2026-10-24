@@ -1,0 +1,48 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "INSERT",
+      "table": "t",
+      "columns": [
+        "a",
+        "b",
+        "c",
+        "d"
+      ],
+      "key_columns": [
+        "a"
+      ],
+      "values": [
+        {
+          "timestamp": {
+            "seconds": -2208988800,
+            "nanos": 0
+          }
+        },
+        {
+          "date": -25567
+        },
+        {
+          "interval": {
+            "months": 0,
+            "days": 0,
+            "nanoseconds": "-1000000000"
+          }
+        },
+        {
+          "timestamp": {
+            "seconds": 1767323045,
+            "nanos": 0
+          }
+        }
+      ],
+      "column_types": {
+        "a": "Timestamp64",
+        "b": "Date32",
+        "c": "Interval64",
+        "d": "Datetime64"
+      }
+    }
+  ]
+}

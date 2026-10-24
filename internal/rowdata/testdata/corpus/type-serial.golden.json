@@ -1,0 +1,31 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "id",
+      "type": "Serial"
+    },
+    {
+      "name": "big",
+      "type": "BigSerial"
+    },
+    {
+      "name": "small",
+      "type": "SmallSerial"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "1"
+      },
+      {
+        "int64": "9223372036854775807"
+      },
+      {
+        "int64": "32767"
+      }
+    ]
+  ]
+}

@@ -1,0 +1,5 @@
+DEFINE ACTION $a($v) AS
+  UPSERT INTO t (id) VALUES ($v);
+END DEFINE;
+DO $a(1);
+UPSERT INTO t (id) VALUES (2);

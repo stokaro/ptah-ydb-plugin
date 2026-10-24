@@ -1,0 +1,43 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "n",
+      "type": "DyNumber"
+    }
+  ],
+  "columns": [
+    {
+      "name": "n",
+      "declared_type": "DYNUMBER"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "1.50"
+      }
+    ],
+    [
+      {
+        "double": 1.5
+      }
+    ],
+    [
+      {
+        "int64": "7"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "string": ".15e1"
+      }
+    ]
+  ]
+}

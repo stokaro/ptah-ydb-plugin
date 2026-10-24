@@ -1,0 +1,9 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "statement": "UPDATE `regions` SET `name` = 'South'u, `rank` = 3ut WHERE `id` = 1l;"
+    }
+  ]
+}

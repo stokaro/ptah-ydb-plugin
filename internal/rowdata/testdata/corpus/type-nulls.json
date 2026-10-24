@@ -1,0 +1,68 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "i",
+      "declared_type": "INT"
+    },
+    {
+      "name": "d",
+      "declared_type": "DATE"
+    },
+    {
+      "name": "j",
+      "declared_type": "JSONB"
+    },
+    {
+      "name": "b",
+      "declared_type": "BYTEA"
+    },
+    {
+      "name": "x",
+      "declared_type": "DECIMAL(5,1)"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      }
+    ]
+  ]
+}

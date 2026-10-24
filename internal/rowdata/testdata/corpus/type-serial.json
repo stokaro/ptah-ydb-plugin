@@ -1,0 +1,36 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "id",
+      "declared_type": "SERIAL"
+    },
+    {
+      "name": "big",
+      "declared_type": "BIGSERIAL"
+    },
+    {
+      "name": "small",
+      "declared_type": "SMALLSERIAL"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "1"
+      },
+      {
+        "int64": "9223372036854775807"
+      },
+      {
+        "int64": "32767"
+      }
+    ]
+  ],
+  "live": null
+}

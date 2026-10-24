@@ -1,0 +1,16 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "v",
+      "declared_type": "VECTOR(16385)"
+    }
+  ],
+  "declared": [],
+  "live": null
+}

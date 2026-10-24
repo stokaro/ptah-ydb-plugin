@@ -1,0 +1,2 @@
+-- atlas:delimiter $$
+SELECT 1$$

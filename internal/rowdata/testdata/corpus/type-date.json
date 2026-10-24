@@ -1,0 +1,50 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "d",
+      "declared_type": "DATE"
+    },
+    {
+      "name": "n",
+      "declared_type": "Date"
+    },
+    {
+      "name": "w",
+      "declared_type": "DATE32"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "2026-01-02"
+      },
+      {
+        "date": 20000
+      },
+      {
+        "string": "1900-01-01"
+      }
+    ],
+    [
+      {
+        "timestamp": {
+          "seconds": 1767312000,
+          "nanos": 0
+        }
+      },
+      {
+        "string": "1970-01-01"
+      },
+      {
+        "date": -1
+      }
+    ]
+  ],
+  "live": null
+}

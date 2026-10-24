@@ -1,0 +1,60 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "a",
+      "type": "Timestamp64"
+    },
+    {
+      "name": "b",
+      "type": "Timestamp64"
+    },
+    {
+      "name": "c",
+      "type": "Timestamp64"
+    },
+    {
+      "name": "d",
+      "type": "Timestamp"
+    },
+    {
+      "name": "e",
+      "type": "Timestamp64"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "timestamp": {
+          "nanos": 0,
+          "seconds": 1767323045
+        }
+      },
+      {
+        "timestamp": {
+          "nanos": 0,
+          "seconds": 1767323045
+        }
+      },
+      {
+        "timestamp": {
+          "nanos": 123456000,
+          "seconds": 1767323045
+        }
+      },
+      {
+        "timestamp": {
+          "nanos": 500000000,
+          "seconds": 1767315845
+        }
+      },
+      {
+        "timestamp": {
+          "nanos": 0,
+          "seconds": 1767312000
+        }
+      }
+    ]
+  ]
+}

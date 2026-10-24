@@ -1,0 +1,9 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "statement": "DELETE FROM `t` WHERE `j` IS NULL AND `k` = 2l;"
+    }
+  ]
+}

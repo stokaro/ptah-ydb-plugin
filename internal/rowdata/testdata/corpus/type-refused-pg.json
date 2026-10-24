@@ -1,0 +1,16 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "a",
+      "declared_type": "pgint4"
+    }
+  ],
+  "declared": [],
+  "live": null
+}

@@ -1,0 +1,42 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "d",
+      "type": "Date32"
+    },
+    {
+      "name": "n",
+      "type": "Date"
+    },
+    {
+      "name": "w",
+      "type": "Date32"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "date": 20455
+      },
+      {
+        "date": 20000
+      },
+      {
+        "date": -25567
+      }
+    ],
+    [
+      {
+        "date": 20455
+      },
+      {
+        "date": 0
+      },
+      {
+        "date": -1
+      }
+    ]
+  ]
+}

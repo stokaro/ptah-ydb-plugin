@@ -1,0 +1,12 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "queries": [
+    {
+      "kind": "data",
+      "text": "$f = ($x) -\u003e { $y = $x + 1; RETURN $y; };\nSELECT $f(1)",
+      "statements": [
+        "SELECT $f(1)"
+      ]
+    }
+  ]
+}

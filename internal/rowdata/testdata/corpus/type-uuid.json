@@ -1,0 +1,33 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "id",
+      "type": "Uuid"
+    }
+  ],
+  "columns": [
+    {
+      "name": "id",
+      "declared_type": "UUID"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "6F9619FF-8B86-D011-B42D-00C04FC964FF"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "string": "6f9619ff-8b86-d011-b42d-00c04fc964ff"
+      }
+    ]
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "error": "datadiff: column \"d\": Date cannot hold 2026-01-02T03:04:05Z: it has a time of day, and a Date holds a day"
+    }
+  ]
+}

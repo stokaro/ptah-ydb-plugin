@@ -1,0 +1,29 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "INSERT",
+      "table": "we`ird\\name",
+      "columns": [
+        "co`l",
+        "pl\\ain"
+      ],
+      "key_columns": [
+        "co`l"
+      ],
+      "values": [
+        {
+          "string": "a"
+        },
+        {
+          "string": "b"
+        }
+      ],
+      "column_types": {
+        "co`l": "Utf8",
+        "pl\\ain": "Utf8"
+      },
+      "schema": "app/sub/"
+    }
+  ]
+}

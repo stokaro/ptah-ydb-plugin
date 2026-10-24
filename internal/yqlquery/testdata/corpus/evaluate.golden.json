@@ -1,0 +1,12 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "queries": [
+    {
+      "kind": "data",
+      "text": "EVALUATE FOR $i IN AsList(7, 8) DO BEGIN UPSERT INTO t (id) VALUES ($i); END DO",
+      "statements": [
+        "EVALUATE FOR $i IN AsList(7, 8) DO BEGIN UPSERT INTO t (id) VALUES ($i); END DO"
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-package migrationlint
+package yqlquery
 
 import (
 	"slices"
@@ -8,13 +8,9 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlddl"
 )
 
-// YDB cannot run an arbitrary script as one query. A scheme statement is
-// refused inside a transaction and cannot share a query with a data
-// statement, so the migrator makes each scheme statement a query of its own,
-// and so is a block or an action call that runs one. Such a block or call that
-// also reads or writes a table is refused whole. The reader here classifies
-// the statements of one text in order, as the host's internal/yqlquery does,
-// remembering the actions the text defines for the calls after them.
+// definition classifies a statement that defines something for the
+// statements after it in the same query.
+const definition Kind = 0
 
 // schemeVerbs are the first keywords of a YQL scheme statement. COMMENT is
 // Ptah's own statement, which runs as a change of a table's attributes.
@@ -26,23 +22,34 @@ var schemeVerbs = []string{
 // a setting for the rest of its query.
 var definitionVerbs = []string{"PRAGMA", "DECLARE", "DEFINE", "IMPORT"}
 
+// Defines reports whether token is the first keyword of a statement that
+// defines a name or a setting for the rest of its query: PRAGMA, DECLARE,
+// DEFINE or IMPORT.
+func Defines(token yql.Token) bool {
+	return slices.ContainsFunc(definitionVerbs, token.IsWord)
+}
+
 // writeVerbs are the first keywords of a statement that writes rows.
 var writeVerbs = []string{"INSERT", "UPSERT", "REPLACE", "UPDATE", "DELETE"}
 
-// queryReader reads the statements of one YQL text in order. The zero value
-// reads a text from its start.
-type queryReader struct {
+// Reader reads the statements of one YQL text in order and says how YDB runs
+// each, remembering the actions the text defines for the statements that run
+// them. [Split] reads a text through it, so a caller that walks the same
+// statements one at a time gets the answers the split acted on. The zero
+// value reads a text from its start.
+type Reader struct {
 	// actions are what the actions the text defined so far run, by name.
 	actions map[string]body
 }
 
-// mixed reports whether YDB refuses statement for running, as one query, a
+// Mixed reports whether YDB refuses statement for running, as one query, a
 // scheme statement and a statement that reads or writes a table. Only a block
 // or an action call can. A DEFINE ACTION statement is recorded for the calls
 // after it and is not run itself.
 //
-// Measured on YDB 26.2.1.14 and 25.1.4.7, each of these is refused whole with
-// `Queries with mixed data and scheme operations are not supported`:
+// Measured by the host on YDB 26.2.1.14 and 25.1.4.7, each of these is
+// refused whole with `Queries with mixed data and scheme operations are not
+// supported`:
 //
 //	DO BEGIN UPSERT INTO t ...; CREATE TABLE m ...; END DO
 //	DO BEGIN SELECT * FROM t; CREATE TABLE m ...; END DO
@@ -51,37 +58,45 @@ type queryReader struct {
 //
 // A statement that reads no table does not count: `DO BEGIN SELECT 1; CREATE
 // TABLE m ...; END DO` creates m.
-func (r *queryReader) mixed(statement string) bool {
+func (r *Reader) Mixed(statement string) bool {
 	return r.read(statement).mixed
+}
+
+// Scheme reports whether statement runs as a scheme query: a scheme statement,
+// or a block or an action call that runs one.
+func (r *Reader) Scheme(statement string) bool {
+	return r.read(statement).kind == Scheme
 }
 
 // shape is how one statement runs.
 type shape struct {
-	scheme bool
-	mixed  bool
+	kind  Kind
+	mixed bool
 }
 
 // read classifies a statement. A definition of an action records what running
 // the action runs.
-func (r *queryReader) read(statement string) shape {
-	tokens := queryTokens(statement)
+func (r *Reader) read(statement string) shape {
+	tokens := significantTokens(statement)
 	if len(tokens) == 0 {
-		return shape{}
+		return shape{kind: Data}
 	}
 	first := tokens[0]
 	switch {
 	case isNamedExpression(first):
-		return shape{}
+		// A statement that starts with a named expression assigns it; YQL
+		// has no other statement that opens with one.
+		return shape{kind: definition}
 	case first.IsWord("DEFINE"):
 		r.defineAction(tokens)
-		return shape{}
+		return shape{kind: definition}
 	case slices.ContainsFunc(definitionVerbs, first.IsWord):
-		return shape{}
+		return shape{kind: definition}
 	case first.IsWord("DO") || first.IsWord("EVALUATE"):
 		runs := r.blockBody(tokens)
-		return shape{scheme: runs.scheme, mixed: runs.scheme && runs.tables}
+		return shape{kind: runs.kind(), mixed: runs.mixed()}
 	default:
-		return shape{scheme: startBody(tokens).scheme}
+		return shape{kind: startBody(tokens).kind()}
 	}
 }
 
@@ -95,11 +110,31 @@ type body struct {
 	tables bool
 }
 
+// kind is the kind of query a body runs as: a scheme statement decides it,
+// then a BATCH statement, and anything else is data.
+func (b body) kind() Kind {
+	switch {
+	case b.scheme:
+		return Scheme
+	case b.batch:
+		return Batch
+	default:
+		return Data
+	}
+}
+
+// mixed reports whether a body runs a scheme statement and a statement that
+// reads or writes a table in one query.
+func (b body) mixed() bool {
+	return b.scheme && b.tables
+}
+
 func (b body) union(other body) body {
 	return body{scheme: b.scheme || other.scheme, batch: b.batch || other.batch, tables: b.tables || other.tables}
 }
 
-// startBody is what the statement tokens start runs.
+// startBody is what the statement tokens start runs: a scheme statement, a
+// BATCH statement, a statement that reads or writes a table, or none of them.
 func startBody(tokens []yql.Token) body {
 	first := tokens[0]
 	objectWrite := len(tokens) > 1 && tokens[1].IsWord("OBJECT")
@@ -114,6 +149,7 @@ func startBody(tokens []yql.Token) body {
 	case slices.ContainsFunc(writeVerbs, first.IsWord):
 		return body{tables: true}
 	default:
+		// A statement reads a table when it names one after FROM or JOIN.
 		return body{tables: len(yqlddl.TablesRead(tokens)) > 0}
 	}
 }
@@ -121,7 +157,8 @@ func startBody(tokens []yql.Token) body {
 // blockBody is what the statements a block or an action body holds run. A
 // statement starts the body, follows a semicolon, or follows BEGIN; an action
 // is run by the name that follows DO, and runs what its definition recorded.
-func (r *queryReader) blockBody(tokens []yql.Token) body {
+// An action the text did not define runs nothing known.
+func (r *Reader) blockBody(tokens []yql.Token) body {
 	var runs body
 	starts := true
 	for i, token := range tokens {
@@ -138,7 +175,7 @@ func (r *queryReader) blockBody(tokens []yql.Token) body {
 
 // defineAction records what the body of a DEFINE ACTION statement runs. The
 // body starts after the AS that ends the parameter list.
-func (r *queryReader) defineAction(tokens []yql.Token) {
+func (r *Reader) defineAction(tokens []yql.Token) {
 	if len(tokens) < 3 || !tokens[1].IsWord("ACTION") || !isNamedExpression(tokens[2]) {
 		return
 	}
@@ -158,9 +195,9 @@ func isNamedExpression(token yql.Token) bool {
 	return token.Type == yql.TokenIdentifier && strings.HasPrefix(token.Value, "$")
 }
 
-// queryTokens returns the tokens of statement that are not whitespace or
+// significantTokens returns the tokens of statement that are not whitespace or
 // comments. A translation setting is kept, as the host's reader keeps it.
-func queryTokens(statement string) []yql.Token {
+func significantTokens(statement string) []yql.Token {
 	var tokens []yql.Token
 	for _, token := range yql.Tokens(statement) {
 		switch token.Type {

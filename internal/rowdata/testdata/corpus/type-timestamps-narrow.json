@@ -1,0 +1,32 @@
+{
+  "capabilities": {
+    "wide_date_time_types": false,
+    "parameterized_decimal": false,
+    "serial_columns": false
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "a",
+      "declared_type": "TIMESTAMP"
+    },
+    {
+      "name": "c",
+      "declared_type": "DATETIME"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "2026-01-02T03:04:05Z"
+      },
+      {
+        "timestamp": {
+          "seconds": 0,
+          "nanos": 0
+        }
+      }
+    ]
+  ],
+  "live": null
+}

@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 )
 
 // readerRules are the rules that read a statement through a reader of their
@@ -22,7 +24,7 @@ func readerRules() []rule {
 
 // ydbMixedQueryRule reports a block or an action call that runs a scheme
 // statement and a statement that reads or writes a table in one query, which
-// YDB refuses whole; [queryReader.mixed] has the measurements. The
+// YDB refuses whole; [yqlquery.Reader.Mixed] has the measurements. The
 // migrator runs every other scheme statement as a query of its own, so only
 // those two shapes can mix.
 func ydbMixedQueryRule() rule {
@@ -33,11 +35,11 @@ func ydbMixedQueryRule() rule {
 			Severity: protocol.LintRule_ERROR,
 		},
 		File: func(file checkedFile) []Violation {
-			var reader queryReader
+			var reader yqlquery.Reader
 			var findings []Violation
 			for i := range file.Statements {
 				stmt := &file.Statements[i]
-				if !reader.mixed(stmt.SQL) {
+				if !reader.Mixed(stmt.SQL) {
 					continue
 				}
 				findings = append(findings, Violation{

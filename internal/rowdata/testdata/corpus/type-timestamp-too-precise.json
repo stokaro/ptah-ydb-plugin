@@ -1,0 +1,25 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "at",
+      "declared_type": "TIMESTAMP"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "timestamp": {
+          "seconds": 1767323045,
+          "nanos": 1
+        }
+      }
+    ]
+  ],
+  "live": null
+}

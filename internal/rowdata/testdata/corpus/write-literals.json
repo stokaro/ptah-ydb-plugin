@@ -1,0 +1,94 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "INSERT",
+      "table": "t",
+      "columns": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h",
+        "i",
+        "j",
+        "k",
+        "l",
+        "m"
+      ],
+      "key_columns": [
+        "a"
+      ],
+      "values": [
+        {
+          "bytes": "AP8nXA=="
+        },
+        {
+          "string": "y"
+        },
+        {
+          "timestamp": {
+            "seconds": 1767323045,
+            "nanos": 123456000
+          }
+        },
+        {
+          "date": 20000
+        },
+        {
+          "interval": {
+            "months": 0,
+            "days": 0,
+            "nanoseconds": "93600000000000"
+          }
+        },
+        {
+          "decimal": {
+            "digits": "1250",
+            "precision": 10,
+            "scale": 2
+          }
+        },
+        {
+          "string": "{\"b\": 2, \"a\": 1}"
+        },
+        {
+          "string": "{\"b\": 2}"
+        },
+        {
+          "string": "6F9619FF-8B86-D011-B42D-00C04FC964FF"
+        },
+        {
+          "double": 0.1
+        },
+        {
+          "double": 1.5
+        },
+        {
+          "string": "1.50"
+        },
+        {
+          "string": "{a=1}"
+        }
+      ],
+      "column_types": {
+        "a": "String",
+        "b": "Utf8",
+        "c": "Timestamp",
+        "d": "Date",
+        "e": "Interval",
+        "f": "Decimal(10,2)",
+        "g": "JsonDocument",
+        "h": "Json",
+        "i": "Uuid",
+        "j": "Float",
+        "k": "Double",
+        "l": "DyNumber",
+        "m": "Yson"
+      }
+    }
+  ]
+}

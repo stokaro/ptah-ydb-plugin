@@ -1,0 +1,28 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "INSERT",
+      "table": "t",
+      "columns": [
+        "id",
+        "v"
+      ],
+      "key_columns": [
+        "id"
+      ],
+      "values": [
+        {
+          "int64": "1"
+        },
+        {
+          "string": "tab\tnew\nline\u0001"
+        }
+      ],
+      "column_types": {
+        "id": "Int64",
+        "v": "Utf8"
+      }
+    }
+  ]
+}

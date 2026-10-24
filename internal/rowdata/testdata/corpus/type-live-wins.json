@@ -1,0 +1,27 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "n",
+      "type": "Int32"
+    }
+  ],
+  "columns": [
+    {
+      "name": "n",
+      "declared_type": "BIGINT"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "5000000000"
+      }
+    ]
+  ],
+  "live": null
+}

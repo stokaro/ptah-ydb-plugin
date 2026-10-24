@@ -1,0 +1,51 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "id",
+      "type": "Int64"
+    },
+    {
+      "name": "v",
+      "type": "Utf8"
+    }
+  ],
+  "columns": [
+    {
+      "name": "id",
+      "declared_type": "BIGINT"
+    },
+    {
+      "name": "v",
+      "declared_type": "TEXT"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "1"
+      },
+      {}
+    ],
+    [
+      {
+        "int64": "2"
+      },
+      {
+        "string": "two"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "int64": "1"
+      },
+      {}
+    ]
+  ]
+}

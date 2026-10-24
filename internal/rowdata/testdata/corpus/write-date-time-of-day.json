@@ -1,0 +1,31 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "INSERT",
+      "table": "t",
+      "columns": [
+        "id",
+        "d"
+      ],
+      "key_columns": [
+        "id"
+      ],
+      "values": [
+        {
+          "int64": "1"
+        },
+        {
+          "timestamp": {
+            "seconds": 1767323045,
+            "nanos": 0
+          }
+        }
+      ],
+      "column_types": {
+        "id": "Int64",
+        "d": "Date"
+      }
+    }
+  ]
+}

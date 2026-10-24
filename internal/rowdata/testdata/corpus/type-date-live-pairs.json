@@ -1,0 +1,33 @@
+{
+  "capabilities": {
+    "wide_date_time_types": false,
+    "parameterized_decimal": false,
+    "serial_columns": false
+  },
+  "live_table": [
+    {
+      "name": "d",
+      "type": "Date"
+    }
+  ],
+  "columns": [
+    {
+      "name": "d",
+      "declared_type": "DATE"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "2024-10-04"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "date": 20000
+      }
+    ]
+  ]
+}

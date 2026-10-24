@@ -1,0 +1,29 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "DELETE_BY_KEY",
+      "table": "t",
+      "columns": [
+        "k",
+        "j"
+      ],
+      "key_columns": [
+        "k",
+        "j"
+      ],
+      "values": [
+        {
+          "int64": "2"
+        },
+        {
+          "null": true
+        }
+      ],
+      "column_types": {
+        "k": "Int64",
+        "j": "Utf8"
+      }
+    }
+  ]
+}

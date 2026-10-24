@@ -1,0 +1,22 @@
+{
+  "capabilities": {
+    "wide_date_time_types": false,
+    "parameterized_decimal": false,
+    "serial_columns": false
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "at",
+      "declared_type": "TIMESTAMP"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "1969-12-31T23:59:59Z"
+      }
+    ]
+  ],
+  "live": null
+}

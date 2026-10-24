@@ -1,0 +1,28 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "INSERT",
+      "table": "t",
+      "columns": [
+        "id",
+        "v"
+      ],
+      "key_columns": [
+        "id"
+      ],
+      "values": [
+        {
+          "int64": "5"
+        },
+        {
+          "string": "x"
+        }
+      ],
+      "column_types": {
+        "id": "Serial",
+        "v": "Utf8"
+      }
+    }
+  ]
+}

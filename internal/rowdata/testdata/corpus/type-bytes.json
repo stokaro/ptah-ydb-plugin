@@ -1,0 +1,43 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "blob",
+      "declared_type": "BYTEA"
+    },
+    {
+      "name": "raw",
+      "declared_type": "String"
+    },
+    {
+      "name": "y",
+      "declared_type": "YSON"
+    },
+    {
+      "name": "bin",
+      "declared_type": "VARBINARY(16)"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "abc"
+      },
+      {
+        "bytes": "AP8Q"
+      },
+      {
+        "string": "{a=1}"
+      },
+      {
+        "bytes": "AQ=="
+      }
+    ]
+  ],
+  "live": null
+}

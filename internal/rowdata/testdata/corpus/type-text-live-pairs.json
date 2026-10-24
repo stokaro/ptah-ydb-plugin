@@ -1,0 +1,55 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "k",
+      "type": "Utf8"
+    },
+    {
+      "name": "v",
+      "type": "Utf8"
+    }
+  ],
+  "columns": [
+    {
+      "name": "k",
+      "declared_type": "VARCHAR(10)"
+    },
+    {
+      "name": "v",
+      "declared_type": "TEXT"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "a"
+      },
+      {
+        "string": "one"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "string": "a"
+      },
+      {
+        "string": "one"
+      }
+    ],
+    [
+      {
+        "string": "b"
+      },
+      {
+        "null": true
+      }
+    ]
+  ]
+}

@@ -1,0 +1,3 @@
+-- a; comment
+UPSERT INTO t (v) VALUES ('a;b'); /* c; d */
+UPSERT INTO t (v) VALUES (@@x;y@@);

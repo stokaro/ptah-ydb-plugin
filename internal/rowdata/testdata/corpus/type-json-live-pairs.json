@@ -1,0 +1,33 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "doc",
+      "type": "JsonDocument"
+    }
+  ],
+  "columns": [
+    {
+      "name": "doc",
+      "declared_type": "JSONB"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "{\"b\": 2, \"a\": 1.50}"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "json": "{\"a\":1.5,\"b\":2}"
+      }
+    ]
+  ]
+}

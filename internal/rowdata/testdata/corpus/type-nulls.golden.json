@@ -1,0 +1,64 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "i",
+      "type": "Int32"
+    },
+    {
+      "name": "d",
+      "type": "Date32"
+    },
+    {
+      "name": "j",
+      "type": "JsonDocument"
+    },
+    {
+      "name": "b",
+      "type": "String"
+    },
+    {
+      "name": "x",
+      "type": "Decimal(5,1)"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      },
+      {
+        "null": true
+      }
+    ]
+  ]
+}

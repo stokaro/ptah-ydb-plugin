@@ -1,0 +1,67 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "v",
+      "declared_type": "VARCHAR(255)"
+    },
+    {
+      "name": "t",
+      "declared_type": "TEXT"
+    },
+    {
+      "name": "c",
+      "declared_type": "CHAR(2)"
+    },
+    {
+      "name": "u",
+      "declared_type": "Utf8"
+    },
+    {
+      "name": "cs",
+      "declared_type": "STRING"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "hello"
+      },
+      {
+        "string": "multi\nline 'quoted'"
+      },
+      {
+        "string": "ab"
+      },
+      {
+        "string": "été"
+      },
+      {
+        "string": "x"
+      }
+    ],
+    [
+      {
+        "bytes": "Ynl0ZXMgYXMgdGV4dA=="
+      },
+      {
+        "string": ""
+      },
+      {
+        "null": true
+      },
+      {
+        "string": "\\"
+      },
+      {
+        "string": "y"
+      }
+    ]
+  ],
+  "live": null
+}

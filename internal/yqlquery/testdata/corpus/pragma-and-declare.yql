@@ -1,0 +1,4 @@
+PRAGMA AnsiInForEmptyOrNullableItemsCollections;
+DECLARE $p AS Int64;
+SELECT $p;
+DROP TABLE x;

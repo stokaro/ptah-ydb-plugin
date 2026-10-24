@@ -1,0 +1,37 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "f",
+      "declared_type": "BOOLEAN"
+    },
+    {
+      "name": "g",
+      "declared_type": "BOOL"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "bool": true
+      },
+      {
+        "string": "yes"
+      }
+    ],
+    [
+      {
+        "string": "OFF"
+      },
+      {
+        "string": "0"
+      }
+    ]
+  ],
+  "live": null
+}

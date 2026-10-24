@@ -1,0 +1,36 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "id",
+      "type": "Uint64"
+    },
+    {
+      "name": "note",
+      "type": "Utf8"
+    }
+  ],
+  "columns": [
+    {
+      "name": "id"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "1"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "uint64": "1"
+      }
+    ]
+  ]
+}

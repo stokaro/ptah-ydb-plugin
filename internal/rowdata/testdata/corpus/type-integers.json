@@ -1,0 +1,87 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "i8",
+      "declared_type": "TINYINT"
+    },
+    {
+      "name": "i16",
+      "declared_type": "SMALLINT"
+    },
+    {
+      "name": "i32",
+      "declared_type": "INTEGER"
+    },
+    {
+      "name": "i64",
+      "declared_type": "BIGINT"
+    },
+    {
+      "name": "u32",
+      "declared_type": "INT UNSIGNED"
+    },
+    {
+      "name": "u64",
+      "declared_type": "BIGINT UNSIGNED"
+    },
+    {
+      "name": "w",
+      "declared_type": "INT(11)"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "-128"
+      },
+      {
+        "int64": "-32768"
+      },
+      {
+        "int64": "2147483647"
+      },
+      {
+        "int64": "-9223372036854775808"
+      },
+      {
+        "int64": "4294967295"
+      },
+      {
+        "uint64": "18446744073709551615"
+      },
+      {
+        "int64": "7"
+      }
+    ],
+    [
+      {
+        "string": "05"
+      },
+      {
+        "string": "+12"
+      },
+      {
+        "string": " 42 "
+      },
+      {
+        "string": "9"
+      },
+      {
+        "uint64": "3"
+      },
+      {
+        "string": "18446744073709551615"
+      },
+      {
+        "string": "-3"
+      }
+    ]
+  ],
+  "live": []
+}

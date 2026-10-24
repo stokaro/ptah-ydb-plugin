@@ -1,0 +1,42 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "INSERT",
+      "table": "t",
+      "columns": [
+        "id"
+      ],
+      "key_columns": [
+        "id"
+      ],
+      "values": [
+        {
+          "int64": "1"
+        }
+      ],
+      "column_types": {
+        "id": "Int8"
+      }
+    },
+    {
+      "change_id": "w2",
+      "mode": "INSERT",
+      "table": "t",
+      "columns": [
+        "id"
+      ],
+      "key_columns": [
+        "id"
+      ],
+      "values": [
+        {
+          "int64": "1000"
+        }
+      ],
+      "column_types": {
+        "id": "Int8"
+      }
+    }
+  ]
+}

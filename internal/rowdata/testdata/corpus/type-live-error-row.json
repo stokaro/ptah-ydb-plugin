@@ -1,0 +1,38 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "n",
+      "type": "Int8"
+    }
+  ],
+  "columns": [
+    {
+      "name": "n",
+      "declared_type": "TINYINT"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "1"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "int64": "1"
+      }
+    ],
+    [
+      {
+        "int64": "300"
+      }
+    ]
+  ]
+}

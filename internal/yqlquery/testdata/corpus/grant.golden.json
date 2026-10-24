@@ -1,0 +1,19 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "queries": [
+    {
+      "kind": "scheme",
+      "text": "GRANT SELECT ON t TO u",
+      "statements": [
+        "GRANT SELECT ON t TO u"
+      ]
+    },
+    {
+      "kind": "data",
+      "text": "INSERT INTO t (id) VALUES (1)",
+      "statements": [
+        "INSERT INTO t (id) VALUES (1)"
+      ]
+    }
+  ]
+}

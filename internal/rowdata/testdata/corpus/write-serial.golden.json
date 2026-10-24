@@ -1,0 +1,9 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "statement": "INSERT INTO `t` (`id`, `v`) VALUES (5, 'x'u);"
+    }
+  ]
+}

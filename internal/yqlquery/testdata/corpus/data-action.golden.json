@@ -1,0 +1,13 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "queries": [
+    {
+      "kind": "data",
+      "text": "DEFINE ACTION $a($v) AS\n  UPSERT INTO t (id) VALUES ($v);\nEND DEFINE;\nDO $a(1);\nUPSERT INTO t (id) VALUES (2)",
+      "statements": [
+        "DO $a(1)",
+        "UPSERT INTO t (id) VALUES (2)"
+      ]
+    }
+  ]
+}

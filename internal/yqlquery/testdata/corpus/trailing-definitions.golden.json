@@ -1,0 +1,20 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "queries": [
+    {
+      "kind": "data",
+      "text": "UPSERT INTO t (id) VALUES (1)",
+      "statements": [
+        "UPSERT INTO t (id) VALUES (1)"
+      ]
+    },
+    {
+      "kind": "scheme",
+      "text": "CREATE TABLE m (id Int64, PRIMARY KEY (id));\n$x = 1",
+      "statements": [
+        "CREATE TABLE m (id Int64, PRIMARY KEY (id))",
+        "$x = 1"
+      ]
+    }
+  ]
+}

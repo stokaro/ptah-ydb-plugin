@@ -1,0 +1,12 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "queries": [
+    {
+      "kind": "scheme",
+      "text": "UPSERT OBJECT s (TYPE SECRET) WITH value = 'v'",
+      "statements": [
+        "UPSERT OBJECT s (TYPE SECRET) WITH value = 'v'"
+      ]
+    }
+  ]
+}

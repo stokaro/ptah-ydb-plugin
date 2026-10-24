@@ -1,0 +1,9 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "statement": "INSERT INTO `t` (`a`, `b`, `c`, `d`) VALUES (Timestamp64('1900-01-01T00:00:00Z'), Date32('1900-01-01'), Interval64('-PT1S'), Datetime64('2026-01-02T03:04:05Z'));"
+    }
+  ]
+}
