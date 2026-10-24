@@ -3,8 +3,8 @@ on:
   push:
     branches: [master]
   pull_request:
-  # The host is built from Ptah's master branch, so a nightly run shows a host
-  # change that breaks this provider even when the provider itself is unchanged.
+  # The live master leg builds Ptah's master branch, so a nightly run shows a
+  # host change that breaks this provider even when the provider is unchanged.
   schedule:
     - cron: "17 3 * * *"
 permissions:
@@ -48,16 +48,28 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test ./internal/metadata ./internal/history ./internal/backend
+  # The provider is compatible with the provider contract, not with particular
+  # Ptah versions. The release leg builds the newest published Ptah whose
+  # contract this provider can run on and blocks the merge and the release. The
+  # master leg builds Ptah's master to show a host change that breaks this
+  # provider early; it does not block, because a red Ptah master is not this
+  # repository's defect.
   live:
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.host == 'master' }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - image: ydbplatform/local-ydb:25.1.4.7
             features: enable_vector_index,enable_external_data_sources
+            host: release
           - image: ydbplatform/local-ydb:26.2.1.14
             features: enable_vector_index,enable_add_unique_index,enable_external_data_sources
+            host: release
+          - image: ydbplatform/local-ydb:26.2.1.14
+            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources
+            host: master
     env:
       GOWORK: 'off'
       # 8765 is the server's monitoring endpoint. The address names it, so a
@@ -85,17 +97,26 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Check out the current host
+      - name: Resolve the host
+        id: host
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/resolve-host.sh '${{ matrix.host }}'
+      - name: Check out the host
+        if: steps.host.outputs.skip != 'true'
         uses: actions/checkout@v7
         with:
           repository: stokaro/ptah
-          ref: master
+          ref: ${{ steps.host.outputs.ref }}
           path: .host-contract
       - name: Name the host commit
+        if: steps.host.outputs.skip != 'true'
         run: git -C .host-contract log -1 --format='host %H %s'
       - name: Build the external host binary
+        if: steps.host.outputs.skip != 'true'
         run: |
           host_binary="$RUNNER_TEMP/ptah-contract"
           CGO_ENABLED=0 go build -C .host-contract -o "$host_binary" ./cmd/ptah
           printf 'PTAH_HOST_TEST_BIN=%s\n' "$host_binary" >> "$GITHUB_ENV"
-      - run: go test -race -tags integration ./integration -count=1 -v -timeout 45m
+      - if: steps.host.outputs.skip != 'true'
+        run: go test -race -tags integration ./integration -count=1 -v -timeout 45m
