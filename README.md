@@ -539,15 +539,15 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name. YAML has no index key claim. |
 | Topics, resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` at document scope. |
 
-A table that has a facet is managed for its TTL: a comparison that finds a TTL
-on the table and none in the facet plans its removal, and a table that has no
-facet keeps its TTL. The bundled source behaves the same way for the first
-case, and removes the TTL of a table that states nothing too. Measured with the
-host at the commit named in the corpus, `schema apply` over a Go file with no TTL
-plans `ALTER TABLE ... RESET (TTL)` for every table of the file, with or without
-other attributes. Until the host lets a source state a TTL for the provider, a
-table that declares families or partitioning and holds a TTL on the server
-plans that removal and cannot avoid it.
+A table is managed for its TTL when its source states table properties for it,
+or when the host reports complete knowledge of the table properties of the
+source (the knowledge a Go or YAML source carries when its format describes
+them). A comparison that finds a TTL on such a table and none declared reports a
+change, and the planner removes the TTL, as the bundled source does: measured
+with the host at the commit named in the corpus, `schema apply` over a Go file
+with no TTL plans `ALTER TABLE ... RESET (TTL)` for every table of the file. A
+source that could not describe the properties, or a table whose current
+properties were not read, leaves the TTL alone.
 
 `internal/tablesource/testdata/corpus` holds the inputs and the answers of the
 host's bundled decoder for them, and the differential test in
@@ -970,10 +970,14 @@ table holds afterward (`set_ttl_settings`) or removes it
 (`drop_ttl_settings`), and also the TTL the table held when the plan was made.
 
 - The TTL is managed when the declaration states table properties for this
-  target. A table the declaration leaves without a `ttlSettings` then requests
-  none, and a TTL the table holds is removed. A declaration with no table
-  properties leaves the TTL alone, and a declaration that states table
-  properties while the table's current TTL was not captured is refused.
+  target, or when the desired coverage establishes the table properties of the
+  table: complete knowledge of the kind, or an absence or a request for
+  defaults recorded for the table. A table the declaration leaves without a
+  `ttlSettings` then requests none, and a TTL the table holds is removed. Unknown
+  or unrepresentable desired knowledge with no table properties leaves the TTL
+  alone. A declaration that states table properties while the table's current
+  TTL was not captured is refused; a table managed by its coverage alone, whose
+  current properties were not captured, is left alone.
 - The declared and the held TTL are the same when the mode, the column, the
   unit and the seconds are the same. A `runIntervalSeconds` the declaration
   leaves out is not compared. A step that replaces a TTL carries the run

@@ -120,14 +120,15 @@ func TestTableSourceGoTableAttributesReachAlterationSubprocess(t *testing.T) {
 	}
 }
 
-// A source that states table settings and no TTL removes the TTL the table
-// holds, and a table the source states nothing for keeps it. The bundled
-// source does the same: its Go and YAML sources claim the TTL of every table
-// they describe, so `ptah schema apply` over a file without a TTL plans
+// A source that states no TTL for a table removes the TTL the table holds,
+// whether or not it states other settings for the table. The bundled source
+// does the same: its Go and YAML sources claim the TTL of every table they
+// describe, so `ptah schema apply` over a file without a TTL plans
 // `ALTER TABLE ... RESET (TTL)`, measured with the host built from
 // 7076368bcb2093fd0d074765dd5c597dccdc1491 on 25.1.4.7 and 26.2.1.14. The
-// provider removes it for a table that has a facet, the one it can see, and
-// leaves the TTL of a table that has none.
+// provider reads the host's knowledge of the source: complete knowledge of the
+// table properties makes a missing TTL a declared absence, and a source that
+// could not describe them leaves the TTL alone.
 func TestTableSourceStatingNoTTLRemovesTheTTLSubprocess(t *testing.T) {
 	t.Run("a table with a facet", func(t *testing.T) {
 		c := qt.New(t)
@@ -139,10 +140,29 @@ func TestTableSourceStatingNoTTLRemovesTheTTLSubprocess(t *testing.T) {
 		c.Assert(fixture.heldTTL(c), qt.Equals, "null")
 		c.Assert(string(fixture.heldTable(c)), qt.Contains, `"partitioningByLoad":"ENABLED"`)
 	})
-	t.Run("a table without one", func(t *testing.T) {
+	t.Run("a table the source states nothing for", func(t *testing.T) {
 		c := qt.New(t)
 		fixture := newFacetFixture(c, "", ` WITH (TTL = Interval("PT1H") ON ts)`)
+		found := fixture.compareRecords(c)
+		c.Assert(found.Changes, qt.HasLen, 1)
+		fixture.applyRecords(c, "no-declaration", found.Changes)
+		c.Assert(fixture.heldTTL(c), qt.Equals, "null")
 		c.Assert(fixture.compareRecords(c).Changes, qt.HasLen, 0)
+	})
+	t.Run("a table that holds no TTL", func(t *testing.T) {
+		c := qt.New(t)
+		fixture := newFacetFixture(c, "", "")
+		c.Assert(fixture.compareRecords(c).Changes, qt.HasLen, 0)
+		c.Assert(fixture.heldTTL(c), qt.Equals, "null")
+	})
+	t.Run("a source that could not describe the table properties", func(t *testing.T) {
+		c := qt.New(t)
+		fixture := newFacetFixture(c, "", ` WITH (TTL = Interval("PT1H") ON ts)`)
+		fixture.desiredKnowledge = protocol.ModelKnowledge_UNINSPECTED
+		c.Assert(fixture.compareRecords(c).Changes, qt.HasLen, 0)
+		plan := fixture.plan(c, nil)
+		c.Assert(plan.Diagnostics, qt.HasLen, 0)
+		c.Assert(plan.Contributions, qt.HasLen, 0)
 		c.Assert(fixture.heldTTL(c), qt.JSONEquals, json.RawMessage(hourlyTTL))
 	})
 }

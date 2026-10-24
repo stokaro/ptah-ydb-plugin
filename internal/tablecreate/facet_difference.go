@@ -8,6 +8,7 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // NormalizedFacet re-normalizes the value a comparison or planning record
@@ -15,6 +16,23 @@ import (
 // envelope of a table or column facet.
 func NormalizedFacet(record *protocol.ComparisonRecord, representation protocol.ValueInput_Representation) (*protocol.Envelope, error) {
 	return normalizedFacet(record, representation)
+}
+
+// UnstatedTableFacet returns the desired table properties of a table whose
+// source states none: the intent with no setting, which the comparison reads as
+// a request for no TTL.
+func UnstatedTableFacet(owner *protocol.Reference) (*protocol.Envelope, error) {
+	payload, err := protojson.Marshal(&native.RowTableIntent{})
+	if err != nil {
+		return nil, err
+	}
+	model := schema.TableDesiredModel()
+	value, err := schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion,
+		Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: proto.CloneOf(owner), Payload: payload})
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
 }
 
 // FacetDiffers reports whether the table the observed facet describes does not
@@ -67,9 +85,10 @@ func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
 	}
 }
 
-// tableDiffers applies the TTL, partitioning and family rules to the table properties. A
-// declaration that states table properties manages the TTL, so one without a TTL
-// differs from a table that holds one.
+// tableDiffers applies the TTL, partitioning and family rules to the table properties. The
+// declaration it reads manages the TTL, so one without a TTL differs from a
+// table that holds one. The caller decides that the table is managed: either the
+// declaration states properties, or the source established them.
 func tableDiffers(want *native.RowTableIntent, held *native.DescribeTableResult) bool {
 	if want.TtlSettings == nil && held.TtlSettings != nil || want.TtlSettings != nil && !sameTTL(want.TtlSettings, held.TtlSettings) {
 		return true

@@ -23,8 +23,9 @@ type ttlChange struct {
 func (c ttlChange) empty() bool { return c.set == nil && !c.drop }
 
 // ttlInput is what the TTL rule reads. managed is true when the declaration
-// states table properties for this target: a table it leaves without a TTL
-// then requests none. A declaration with no table properties leaves the TTL
+// states table properties for this target, or when its source established the
+// table properties of the table (see [FacetKnown]): a table left without a TTL
+// then requests none. A table the source could not describe leaves the TTL
 // alone.
 type ttlInput struct {
 	managed  bool
