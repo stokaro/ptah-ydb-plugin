@@ -222,6 +222,16 @@ contain several SQL statements, so its error cannot prove that none ran.
 Cancellation between units reports the confirmed prefix. Diagnostics omit raw
 driver errors and SQL text.
 
+A statement timeout reaches the provider as the deadline of the Execute call,
+which the host sets for each statement of a migration. A unit the deadline stops
+reports UNKNOWN with the confirmed prefix, no later unit runs, and the unit is
+not sent again, because YDB keeps running a schema statement after its client
+stops waiting. The session receipt reports `migration_statement_timeout=true`
+for that reason. The host's own migrator also cancels the build an interrupted
+`ALTER TABLE ... ADD INDEX` started, through the operation service, and reports
+such a statement as not applied; the provider does not, so it reports UNKNOWN
+for every statement a deadline stops, a data query included.
+
 Transaction handles belong to one provider session. DEFAULT and SERIALIZABLE
 both use YDB's native serializable read/write mode; receipts retain the
 requested isolation. Begin cancellation remains connected while the database

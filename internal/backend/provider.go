@@ -54,6 +54,17 @@ func engineFeatures() []string {
 	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature}
 }
 
+// sessionCapabilities are the host capabilities a session reports.
+//
+// migration_statement_timeout is true because the host bounds each statement of
+// a migration with a deadline on the Execute call, and a unit the deadline
+// stops is reported with outcome UNKNOWN and no retry (see executeUnits): YDB
+// keeps running a schema statement after its client stops waiting, so the
+// provider never reports a stopped statement as not applied.
+func sessionCapabilities() map[string]bool {
+	return map[string]bool{"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true}
+}
+
 // New constructs an isolated session service.
 func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
@@ -115,7 +126,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	p.mu.Lock()
 	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != ""}
 	p.mu.Unlock()
-	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: map[string]bool{"transactional_ddl": false, "coordination_nodes": true}, Features: engineFeatures()}, nil
+	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: sessionCapabilities(), Features: engineFeatures()}, nil
 }
 
 // Close releases only the named session. Repeated closes return the original
