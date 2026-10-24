@@ -251,6 +251,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	// step or a mixed footprint needs its own lifecycle, never a partial rewrite.
 	claimed := make(map[int]bool)
 	for _, step := range request.CommonSteps {
+		if step.Parent == nil && step.AddedColumn == nil && len(step.GetMetadata().GetEffects()) == 0 {
+			// An ordering marker such as common/prerequisite-creations belongs to no
+			// table and changes nothing. The host keeps it.
+			continue
+		}
 		if slices.ContainsFunc(alterations, func(item alteration) bool { return provider.CompareIdentities(step.Parent, item.table.Subject) == 0 }) {
 			// The host keeps the column and setting steps of a table this service only alters.
 			continue

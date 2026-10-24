@@ -1,0 +1,1 @@
+{"tables": {"items": {"platform": {"ydb": {"row_deletion_column": null, "row_deletion_interval": "PT1H"}}, "columns": {"id": {"type": "bigint", "primary": true}, "created_at": {"type": "timestamp"}}}}}

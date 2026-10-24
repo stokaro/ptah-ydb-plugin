@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -23,6 +24,10 @@ type Table struct {
 	Fragment int
 	// Value is the normalized desired facet.
 	Value *protocol.NormalizedValue
+	// Columns are the column facets of the columns the table's families list,
+	// in the order the declarations list them. The first fragment returns them
+	// with the table's facet.
+	Columns []*protocol.NormalizedValue
 }
 
 type pending struct {
@@ -62,6 +67,9 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 			byBinding[binding.GetId()] = target
 			order = append(order, binding.GetId())
 		}
+		if err := refuseOtherTableColumns(binding, fragment); err != nil {
+			return nil, fmt.Errorf("table %q: %w", tableLabel(binding.GetObject()), err)
+		}
 		if err := apply(&target.settings, fragment); err != nil {
 			return nil, fmt.Errorf("table %q: %w", tableLabel(binding.GetObject()), err)
 		}
@@ -76,9 +84,51 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 		if err != nil {
 			return nil, fmt.Errorf("table %q: %w", tableLabel(target.binding.GetObject()), err)
 		}
-		tables = append(tables, Table{Binding: target.binding, Fragment: target.fragment, Value: value})
+		columns, err := placedColumns(document, target)
+		if err != nil {
+			return nil, fmt.Errorf("table %q: %w", tableLabel(target.binding.GetObject()), err)
+		}
+		tables = append(tables, Table{Binding: target.binding, Fragment: target.fragment, Value: value, Columns: columns})
 	}
 	return tables, nil
+}
+
+// refuseOtherTableColumns refuses a family that lists columns and names a table
+// other than the one of its struct. The host places a column of the table of
+// the struct the directive is written on, and refuses a column of any other
+// table, so a family of another table cannot place its columns.
+func refuseOtherTableColumns(binding *protocol.SourceBinding, fragment *protocol.SourceFragment) error {
+	if fragment.GetGoDirective().GetDirective() != DirectiveColumnFamily || binding.GetId() == fragment.GetBindingId() {
+		return nil
+	}
+	if _, listed := goAttribute(fragment, AttributeFields); !listed {
+		return nil
+	}
+	return &UnsupportedError{Setting: AttributeFields, Reason: "a family places the columns of the table of the struct its directive is written on, and the table attribute names another table"}
+}
+
+// placedColumns builds the column facet of every column a family of the table
+// lists. The owner is the column under the table, which must be a field of the
+// struct the directive is written on; the host refuses any other.
+func placedColumns(document *protocol.SourceDocument, target *pending) ([]*protocol.NormalizedValue, error) {
+	var columns []*protocol.NormalizedValue
+	model := schema.ColumnDesiredModel()
+	for _, placed := range target.settings.placements {
+		owner := proto.CloneOf(target.binding.GetObject())
+		owner.Kind, owner.Path, owner.Name = "column", []string{target.binding.GetObject().GetName()}, placed.column
+		payload, err := protojson.Marshal(&native.ColumnIntent{Family: placed.family})
+		if err != nil {
+			return nil, err
+		}
+		value, err := schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion,
+			Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: owner, Payload: payload})
+		if err != nil {
+			return nil, fmt.Errorf("column %q: %w", placed.column, err)
+		}
+		columns = append(columns, &protocol.NormalizedValue{Id: "column." + document.GetId() + "." + strconv.Itoa(target.fragment) + "." + placed.column, Value: value,
+			NormalizedOwner: proto.CloneOf(owner), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)})
+	}
+	return columns, nil
 }
 
 func tableLabel(table *protocol.Reference) string {

@@ -1,0 +1,36 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid fields \"body,body\": names column \"body\" twice on //ptah:schema:columnfamily at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:columnfamily",
+   "attributes": {
+    "fields": "body,body",
+    "name": "cold"
+   },
+   "struct": "Item",
+   "file": "go-refused-family-fields-twice-in-family.go",
+   "file_size": 258,
+   "start": {
+    "offset": 51,
+    "line": 4,
+    "column": 1
+   },
+   "end": {
+    "offset": 108,
+    "line": 4,
+    "column": 58
+   }
+  }
+ ]
+}

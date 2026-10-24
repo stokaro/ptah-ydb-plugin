@@ -34,7 +34,7 @@ func TestClaims(t *testing.T) {
 	}
 	c.Assert(keys, qt.DeepEquals, []string{
 		"auto_partitioning_by_size", "auto_partitioning_partition_size_mb", "auto_partitioning_by_load", "auto_partitioning_min_partitions_count",
-		"auto_partitioning_max_partitions_count", "read_replicas_settings", "key_bloom_filter", "column_families",
+		"auto_partitioning_max_partitions_count", "read_replicas_settings", "key_bloom_filter", "column_families", "platform.ydb",
 	})
 	directives := tablesource.GoDirectives()
 	c.Assert(len(directives), qt.Equals, 5)
@@ -43,7 +43,12 @@ func TestClaims(t *testing.T) {
 	for _, directive := range directives {
 		names = append(names, directive.Directive)
 		scopes[directive.Directive] = directive.Scope
-		c.Assert(directive.Models, qt.DeepEquals, []string{schema.TableProperties})
+		// A family lists the columns it holds, so it answers for them too.
+		want := []string{schema.TableProperties}
+		if directive.Directive == tablesource.DirectiveColumnFamily {
+			want = append(want, schema.ColumnProperties)
+		}
+		c.Assert(directive.Models, qt.DeepEquals, want, qt.Commentf(directive.Directive))
 	}
 	c.Assert(names, qt.DeepEquals, []string{"ptah:schema:table", "ptah:schema:index", "ptah:schema:columnfamily", "ptah:schema:changefeed", "ptah:schema:changefeed:consumer"})
 	// The host's own directives take the scope of the part they declare, and
@@ -68,7 +73,7 @@ func TestClaims_TableAttributesAreTheYAMLKeysAndMore(t *testing.T) {
 	}
 	c.Assert(table, qt.IsNotNil)
 	for _, key := range tablesource.YAMLKeys() {
-		if key.Key != tablesource.KeyColumnFamilies {
+		if key.Key != tablesource.KeyColumnFamilies && key.Key != tablesource.KeyPlatformYDB {
 			c.Assert(slices.Contains(table.Attributes, key.Key), qt.IsTrue, qt.Commentf(key.Key))
 		}
 	}
@@ -92,6 +97,7 @@ func TestDescriptionAdvertisesTheTableClaims(t *testing.T) {
 		c.Assert(slices.ContainsFunc(engine.GoSourceDirectives, func(declared *protocol.GoSourceDirective) bool { return proto.Equal(declared, directive) }), qt.IsTrue, qt.Commentf(directive.Directive))
 	}
 	c.Assert(schema.TableDesiredModel().SourceFormats, qt.DeepEquals, []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS})
+	c.Assert(schema.ColumnDesiredModel().SourceFormats, qt.DeepEquals, []protocol.SourceDocument_Format{protocol.SourceDocument_GO_ANNOTATIONS})
 }
 
 func TestDecode_HappyPath(t *testing.T) {
@@ -107,6 +113,15 @@ func TestDecode_HappyPath(t *testing.T) {
 				`"keyBloomFilter":"ENABLED","partitioningSettings":{"maxPartitionsCount":"9","minPartitionsCount":"3","partitionSizeMb":"512","partitioningByLoad":"ENABLED",` +
 				`"partitioningBySize":"DISABLED"},"readReplicasSettings":{"anyAzReadReplicasCount":"2"}}`},
 		{"no replicas stays a statement", `{"tables":{"items":{"read_replicas_settings":"per_az:0"}}}`, `{"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`},
+		{"a TTL in the platform group", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":"created_at","row_deletion_interval":"PT1H"}}}}}`,
+			`{"ttlSettings":{"dateTypeColumn":{"columnName":"created_at","expireAfterSeconds":3600}}}`},
+		{"a TTL on an integer column", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":"created_at","row_deletion_interval":"P1D","row_deletion_unit":"milliseconds"}}}}}`,
+			`{"ttlSettings":{"valueSinceUnixEpoch":{"columnName":"created_at","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":86400}}}`},
+		{"a TTL beside the groups of other engines", `{"tables":{"items":{"platform":{"mysql":{"engine":"InnoDB"},"ydb":{"row_deletion_column":"created_at","row_deletion_interval":"PT1H"}}}}}`,
+			`{"ttlSettings":{"dateTypeColumn":{"columnName":"created_at","expireAfterSeconds":3600}}}`},
+		{"a TTL beside partitioning and a family", `{"tables":{"items":{"key_bloom_filter":"ENABLED","column_families":{"cold":{}},` +
+			`"platform":{"ydb":{"row_deletion_column":"created_at","row_deletion_interval":"PT1H"}}}}}`,
+			`{"columnFamilies":[{"name":"cold"}],"keyBloomFilter":"ENABLED","ttlSettings":{"dateTypeColumn":{"columnName":"created_at","expireAfterSeconds":3600}}}`},
 		{"a family that states nothing", `{"tables":{"items":{"column_families":{"default":{}}}}}`, `{"columnFamilies":[{"name":"default"}]}`},
 		{"a storage pool keeps its case", `{"tables":{"items":{"column_families":{" Cold ":{"data":" HDD "}}}}}`, `{"columnFamilies":[{"data":{"media":"HDD"},"name":"Cold"}]}`},
 	}
@@ -204,6 +219,21 @@ func TestDecode_FailurePath(t *testing.T) {
 		{"a family without a name", `{"tables":{"items":{"column_families":{" ":{}}}}}`, `table "items": column family " ": invalid name "": a column family needs a name`},
 		{"a cache mode", `{"tables":{"items":{"column_families":{"cold":{"cache_mode":"regular"}}}}}`, `table "items": column family "cold": cache_mode is not supported by the YDB provider yet: .*`},
 		{"column placement", `{"tables":{"items":{"column_families":{"cold":{"fields":["body"]}}}}}`, `table "items": column family "cold": fields is not supported by the YDB provider yet: .*`},
+		{"a platform property the provider does not read", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":"c","row_deletion_interval":"PT1H","other":"x"}}}}}`,
+			`table "items": platform.ydb.other is not supported by the YDB provider yet: .*`},
+		{"a TTL without an interval", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":"created_at"}}}}}`,
+			`table "items": invalid platform.ydb.row_deletion_interval "": a TTL needs the interval after which a row is deleted`},
+		{"a TTL without a column", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_interval":"PT1H"}}}}}`,
+			`table "items": invalid platform.ydb.row_deletion_column "": a TTL needs the column its interval is measured from`},
+		{"a null property", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":null,"row_deletion_interval":"PT1H"}}}}}`,
+			`table "items": invalid platform.ydb.row_deletion_column "": it is empty; remove it to leave the TTL undeclared`},
+		{"an interval in months", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":"c","row_deletion_interval":"P1M"}}}}}`,
+			`table "items": invalid platform.ydb.row_deletion_interval "P1M": .*`},
+		{"an unknown unit", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":"c","row_deletion_interval":"PT1H","row_deletion_unit":"hours"}}}}}`,
+			`table "items": invalid platform.ydb.row_deletion_unit "hours": .*`},
+		{"a group that is not a mapping", `{"tables":{"items":{"platform":{"ydb":"PT1H"}}}}`, `table "items": platform.ydb: expected a mapping of platform properties`},
+		{"a value that is not a scalar", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":["c"],"row_deletion_interval":"PT1H"}}}}}`,
+			`table "items": platform.ydb.row_deletion_column: expected a scalar`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

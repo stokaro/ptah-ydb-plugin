@@ -40,6 +40,8 @@ type side struct {
 	columns map[string]string
 	// indexes is the index set of the table; empty states none.
 	indexes string
+	// changefeeds is the changefeed set of the table; empty states none.
+	changefeeds string
 }
 
 // declaredIndexes and heldIndexes state index sets from native index
@@ -70,6 +72,11 @@ const (
 	uniqueByLabel = `"name":"by_label","indexColumns":["label"],"globalUniqueIndex":{}`
 	byNoteAndText = `"name":"by_both","indexColumns":["note","text"],"globalIndex":{}`
 	byTextAndNote = `"name":"by_both","indexColumns":["text","note"],"globalIndex":{}`
+)
+
+const (
+	declaredFeed = `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","topic":{"partitioningSettings":{}}}]}`
+	heldFeed     = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED"},"topic":{"partitioningSettings":{}}}]}`
 )
 
 func owner(kind, name string) *protocol.Reference {
@@ -115,7 +122,7 @@ func record(c *qt.C, representation protocol.ValueInput_Representation, kind, na
 func state(c *qt.C, representation protocol.ValueInput_Representation, facets side) (*protocol.ComparisonState, []*protocol.ComparisonParent) {
 	c.Helper()
 	result := &protocol.ComparisonState{Representation: representation, Coverage: &protocol.ComparisonCoverage{}}
-	for _, model := range []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties} {
+	for _, model := range []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties} {
 		for _, candidate := range schema.Models() {
 			if candidate.Kind == model && candidate.Representation == representation {
 				result.Coverage.Kinds = append(result.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: candidate,
@@ -130,6 +137,10 @@ func state(c *qt.C, representation protocol.ValueInput_Representation, facets si
 	}
 	if facets.indexes != "" {
 		result.Records = append(result.Records, record(c, representation, schema.IndexProperties, "", facets.indexes))
+		parents = append(parents, &protocol.ComparisonParent{Subject: subject("table", "")})
+	}
+	if facets.changefeeds != "" {
+		result.Records = append(result.Records, record(c, representation, schema.ChangefeedProperties, "", facets.changefeeds))
 		parents = append(parents, &protocol.ComparisonParent{Subject: subject("table", "")})
 	}
 	for _, name := range []string{"note", "title"} {
@@ -187,7 +198,7 @@ func TestDescription_DeclaresTheFacetComparison(t *testing.T) {
 	}
 	c.Assert(service, qt.IsNotNil)
 	c.Assert(service.Placement, qt.Equals, protocol.ModelComparison_FACETS)
-	c.Assert(service.Kinds, qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties})
+	c.Assert(service.Kinds, qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties})
 	c.Assert(service.ChangeKinds, qt.DeepEquals, []string{schema.TablePropertiesChange})
 	c.Assert(service.OwnerKinds, qt.DeepEquals, []string{"table", "column"})
 	c.Assert(service.Actions, qt.HasLen, 0)
@@ -311,6 +322,10 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"a column only the declaration states", side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}, side{table: plain}},
 		{"a column only the read states", side{table: plain}, side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}},
 		{"no facets at all", side{}, side{}},
+		{"changefeeds on both sides", side{changefeeds: declaredFeed}, side{changefeeds: heldFeed}},
+		{"a changefeed only the read states", side{}, side{changefeeds: heldFeed}},
+		{"a changefeed the declaration adds", side{changefeeds: declaredFeed}, side{changefeeds: `{"changefeeds":[]}`}},
+		{"changefeeds beside a table that differs in no setting", side{table: plain, changefeeds: declaredFeed}, side{table: plain, changefeeds: heldFeed}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)

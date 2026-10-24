@@ -76,8 +76,12 @@ func fragmentValues(ctx context.Context, document *protocol.SourceDocument, frag
 	}
 	for _, table := range tables {
 		if table.Fragment == index {
-			return []*protocol.SourceModelValue{{Placement: protocol.SourceModelValue_FACET, Value: table.Value,
-				Source: &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}}}, nil
+			trace := &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}
+			values := []*protocol.SourceModelValue{{Placement: protocol.SourceModelValue_FACET, Value: table.Value, Source: trace}}
+			for _, column := range table.Columns {
+				values = append(values, &protocol.SourceModelValue{Placement: protocol.SourceModelValue_FACET, Value: column, Source: proto.CloneOf(trace)})
+			}
+			return values, nil
 		}
 	}
 	return nil, nil

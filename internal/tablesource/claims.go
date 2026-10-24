@@ -12,8 +12,8 @@
 //
 // What the bundled decoder in the host reads and this package does not is
 // listed in the package README of the provider and in the tests: starting
-// partition layouts, column family cache modes and column placement, a TTL
-// written in YAML, changefeeds, column storage and index options. The host
+// partition layouts, column family cache modes, the columns of a family written
+// in YAML, changefeeds, column storage and index options. The host
 // refuses a YAML key that no provider claims, and reads a Go comment that none
 // claims as no declaration. So the provider leaves unclaimed the YAML keys it
 // cannot carry, and claims the Go directives and attributes it cannot carry in
@@ -62,10 +62,25 @@ const (
 
 	// The platform properties that carry a row table's TTL, spelled as the host
 	// spells a platform property of the ydb engine.
-	AttributeTTLColumn   = "platform.ydb.row_deletion_column"
-	AttributeTTLInterval = "platform.ydb.row_deletion_interval"
-	AttributeTTLUnit     = "platform.ydb.row_deletion_unit"
+	AttributeTTLColumn   = PlatformPrefix + "row_deletion_column"
+	AttributeTTLInterval = PlatformPrefix + "row_deletion_interval"
+	AttributeTTLUnit     = PlatformPrefix + "row_deletion_unit"
 )
+
+// PlatformPrefix starts the name of a Go attribute that sets a platform
+// property of the ydb engine.
+const PlatformPrefix = "platform.ydb."
+
+// KeyPlatformYDB is the YAML table key that claims the ydb group of a table's
+// platform key. The host hands the provider the mapping of the group with its
+// keys unprefixed, so a table that writes
+//
+//	platform:
+//	  ydb: {row_deletion_column: created_at, row_deletion_interval: PT1H}
+//
+// declares the same TTL as the three Go attributes above. The host keeps no copy
+// of the group, so every key the provider does not read is refused by name.
+const KeyPlatformYDB = "platform.ydb"
 
 // DirectiveIndex is the host's directive that declares an index. The bundled
 // decoder reads partitioning, vector and full-text options on it.
@@ -90,9 +105,10 @@ const (
 	AttributeTable       = "table"
 	AttributeData        = "data"
 	AttributeCompression = "compression"
-	// AttributeCacheMode and AttributeFields are claimed so that the provider
-	// can refuse them by name: the row-table model has no cache mode, and a
-	// facet cannot attach to a column yet.
+	// AttributeCacheMode is claimed so that the provider can refuse it by name:
+	// the row-table model has no cache mode. AttributeFields lists the columns
+	// of the family. A Go directive places them; a YAML family cannot, because
+	// the host attaches a YAML value to a table only.
 	AttributeCacheMode = "cache_mode"
 	AttributeFields    = "fields"
 )
@@ -129,7 +145,7 @@ func indexAttributes() []string {
 // YAMLKeys returns the table-scope YAML keys the provider claims. Each key
 // declares the row-table properties model.
 func YAMLKeys() []*protocol.YAMLSourceKey {
-	keys := slices.Concat(partitioningKeys(), []string{KeyColumnFamilies})
+	keys := slices.Concat(partitioningKeys(), []string{KeyColumnFamilies, KeyPlatformYDB})
 	claims := make([]*protocol.YAMLSourceKey, 0, len(keys))
 	for _, key := range keys {
 		claims = append(claims, &protocol.YAMLSourceKey{Scope: protocol.YAMLSourceKey_TABLE, Key: key, Selector: key, Models: []string{schema.TableProperties}})
@@ -146,12 +162,16 @@ func GoDirectives() []*protocol.GoSourceDirective {
 		return &protocol.GoSourceDirective{Scope: protocol.GoSourceDirective_TABLE, Directive: directive, Selector: directive, Attributes: attributes,
 			Models: []string{schema.TableProperties}}
 	}
+	// A column family lists the columns it holds, and each column carries the
+	// family it sits in, so the directive also answers for column properties.
+	family := claim(DirectiveColumnFamily, AttributeName, AttributeTable, AttributeData, AttributeCompression, AttributeCacheMode, AttributeFields)
+	family.Models = append(family.Models, schema.ColumnProperties)
 	index := claim(DirectiveIndex, indexAttributes()...)
 	index.Scope = protocol.GoSourceDirective_INDEX
 	return []*protocol.GoSourceDirective{
 		claim(DirectiveTable, tableAttributes()...),
 		index,
-		claim(DirectiveColumnFamily, AttributeName, AttributeTable, AttributeData, AttributeCompression, AttributeCacheMode, AttributeFields),
+		family,
 		claim(DirectiveChangefeed, AttributeName, AttributeTable, "mode", "format", "virtual_timestamps", "resolved_timestamps", "initial_scan", "user_sids",
 			"schema_changes", "topic_min_active_partitions", "topic_auto_partitioning", "retention_period"),
 		claim(DirectiveChangefeedConsumer, AttributeName, "changefeed", AttributeTable, "important", "read_from", "supported_codecs", "availability_period"),

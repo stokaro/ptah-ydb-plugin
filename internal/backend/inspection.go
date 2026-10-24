@@ -37,6 +37,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		}
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
+	result.TargetFeatures = engineFeatures()
 	if _, err := provider.InspectionValues(Description(), request, result); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}

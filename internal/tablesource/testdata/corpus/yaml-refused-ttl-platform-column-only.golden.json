@@ -1,0 +1,7 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "yaml",
+ "outcome": "refused",
+ "error": "invalid feature value: a row deletion policy needs row_deletion_interval, the interval after which a row is deleted",
+ "tables": null
+}

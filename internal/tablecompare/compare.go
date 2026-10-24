@@ -1,6 +1,7 @@
 // Package tablecompare compares the table and column facets of captured YDB row
 // tables offline: the TTL, the automatic partitioning settings, the column
 // families, the family each column sits in and the set of secondary indexes.
+// The changefeeds of a table are accepted and never reported as a difference.
 package tablecompare
 
 import (
@@ -22,7 +23,7 @@ const ServiceID = "ydb-row-table-properties"
 
 // Kinds lists the facet models this comparison owns.
 func Kinds() []string {
-	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties}
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties}
 }
 
 // OwnerKinds lists the subject kinds that carry those facets.
@@ -30,7 +31,9 @@ func OwnerKinds() []string { return []string{"table", "column"} }
 
 // Compare reports every table or column whose declared facet differs from the
 // one the existing table holds. A facet on only one side states nothing to
-// compare: the alteration planner decides what an absent read means. Only
+// compare: the alteration planner decides what an absent read means. A table's
+// changefeeds are read and validated, and never differ: the planner does not
+// alter them. Only
 // differences the alteration planner acts on are reported, and each carries
 // both complete operands. The backend validates the request and the result
 // around this call.

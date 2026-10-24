@@ -1,0 +1,36 @@
+{
+ "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid fields \"body,,notes\": takes a comma-separated list of column names, none of them empty on //ptah:schema:columnfamily at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:columnfamily",
+   "attributes": {
+    "fields": "body,,notes",
+    "name": "cold"
+   },
+   "struct": "Item",
+   "file": "go-refused-family-fields-empty-entry.go",
+   "file_size": 320,
+   "start": {
+    "offset": 51,
+    "line": 4,
+    "column": 1
+   },
+   "end": {
+    "offset": 110,
+    "line": 4,
+    "column": 60
+   }
+  }
+ ]
+}

@@ -54,6 +54,10 @@ func YAMLTables(source string) (*protocol.DecodeSourceRequest, error) {
 		for _, entry := range section.Value.GetMapping().GetEntries() {
 			binding := &protocol.SourceBinding{Id: entry.Key, EntryKey: entry.Key, Object: &protocol.Reference{Engine: "ydb", Kind: "table", Name: entry.Key}}
 			var written []*protocol.SourceEntry
+			// The host hands a claimed platform group as a fragment of its own:
+			// the key is platform. and the group's name, and the value is the
+			// group's mapping.
+			var groups []*protocol.SourceEntry
 			for _, field := range entry.Value.GetMapping().GetEntries() {
 				switch field.Key {
 				case "name":
@@ -64,9 +68,16 @@ func YAMLTables(source string) (*protocol.DecodeSourceRequest, error) {
 				if _, claimed := claims[field.Key]; claimed {
 					written = append(written, field)
 				}
+				if field.Key == "platform" {
+					for _, group := range field.Value.GetMapping().GetEntries() {
+						if _, claimed := claims["platform."+group.Key]; claimed {
+							groups = append(groups, &protocol.SourceEntry{Key: "platform." + group.Key, KeySpan: group.KeySpan, Value: group.Value})
+						}
+					}
+				}
 			}
 			document.Bindings = append(document.Bindings, binding)
-			for _, field := range written {
+			for _, field := range append(written, groups...) {
 				document.Fragments = append(document.Fragments, &protocol.SourceFragment{Id: entry.Key + "/" + field.Key, Selector: field.Key,
 					YamlKey: proto.CloneOf(claims[field.Key]), BindingId: entry.Key, Span: field.Value.Span, Content: &protocol.SourceFragment_Value{Value: field.Value}})
 			}
