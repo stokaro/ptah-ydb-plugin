@@ -1,0 +1,528 @@
+[
+  {
+    "url": "ydb://host/local",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydbs://host/local",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpcs://host:2135/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host:2137/local",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2137/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host?database=/local",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host?database=local",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?database=/local/",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?database=/other",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the URL names database /local in its path and /other in the database parameter; name it once"
+  },
+  {
+    "url": "ydb://host/local?database=",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the database parameter is empty"
+  },
+  {
+    "url": "ydb://host/local?database=/a\u0026database=/a",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the database parameter is given more than once"
+  },
+  {
+    "url": "ydb://host",
+    "outcome": "refused",
+    "error": "invalid YDB URL: name the database"
+  },
+  {
+    "url": "ydb:///local",
+    "outcome": "refused",
+    "error": "invalid YDB URL: a YDB URL needs a host: write ydb://host:2136/database"
+  },
+  {
+    "url": "ydb:host/local",
+    "outcome": "refused",
+    "error": "invalid YDB URL: a YDB URL needs a host: write ydb://host:2136/database"
+  },
+  {
+    "url": "postgres://host/local",
+    "outcome": "refused",
+    "error": "invalid YDB URL: not a ydb:// or ydbs:// URL: \"postgres\""
+  },
+  {
+    "url": "ydb://host/local?go_balancer=disable",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local?go_balancer=disable",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?go_balancer=single",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local?go_balancer=single",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?go_balancer=nonsense",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter go_balancer=\"nonsense\" is not a balancer ydb-go-sdk knows: use disable, single, random_choice, round_robin or a JSON balancer config"
+  },
+  {
+    "url": "ydb://host/local?go_balancer=",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter go_balancer=\"\" is not a balancer ydb-go-sdk knows: use disable, single, random_choice, round_robin or a JSON balancer config"
+  },
+  {
+    "url": "ydb://host/local?balancer=disable",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local?balancer=disable",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?balancer=nonsense",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter balancer=\"nonsense\" is not a balancer ydb-go-sdk knows: use disable, single, random_choice, round_robin or a JSON balancer config"
+  },
+  {
+    "url": "ydb://host/local?balancer=disable\u0026go_balancer=disable",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameters go_balancer and balancer both choose a balancer; give one"
+  },
+  {
+    "url": "ydb://host/local?go_balancer=disable\u0026go_balancer=disable",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter go_balancer is given 2 times"
+  },
+  {
+    "url": "ydb://host/local?go_default_idempotent=true",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local?go_default_idempotent=true",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?go_default_idempotent=false",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local?go_default_idempotent=false",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?go_default_idempotent=1",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local?go_default_idempotent=1",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?go_default_idempotent=maybe",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter go_default_idempotent=\"maybe\" is not a boolean"
+  },
+  {
+    "url": "ydb://host/local?go_default_idempotent=",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter go_default_idempotent=\"\" is not a boolean"
+  },
+  {
+    "url": "ydb://host/local?go_default_idempotent=true\u0026go_default_idempotent=false",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter go_default_idempotent is given 2 times"
+  },
+  {
+    "url": "ydb://host/local?prefetch_query_result_parts=0",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local?prefetch_query_result_parts=0",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?prefetch_query_result_parts=3",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local?prefetch_query_result_parts=3",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?prefetch_query_result_parts=-1",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter prefetch_query_result_parts=\"-1\" is not a non-negative integer"
+  },
+  {
+    "url": "ydb://host/local?prefetch_query_result_parts=x",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter prefetch_query_result_parts=\"x\" is not a non-negative integer"
+  },
+  {
+    "url": "ydb://host/local?prefetch_query_result_parts=",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter prefetch_query_result_parts=\"\" is not a non-negative integer"
+  },
+  {
+    "url": "ydb://host/local?go_query_mode=query",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?go_query_mode=data",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter go_query_mode=\"data\" is refused: Ptah runs its reads and DDL through the query service, and the table-service modes run one kind of statement each; use go_query_mode=query or leave it out"
+  },
+  {
+    "url": "ydb://host/local?query_mode=query",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?query_mode=scripting",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter query_mode=\"scripting\" is refused: Ptah runs its reads and DDL through the query service, and the table-service modes run one kind of statement each; use query_mode=query or leave it out"
+  },
+  {
+    "url": "ydb://host/local?go_fake_tx=true",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter go_fake_tx is refused: Ptah reads a schema in a snapshot read-only transaction, and a faked transaction would read outside it"
+  },
+  {
+    "url": "ydb://host/local?go_query_bind=declare",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter go_query_bind is refused: Ptah binds parameters itself, and ydb-go-sdk's binders rewrite a ? inside a YQL literal"
+  },
+  {
+    "url": "ydb://host/local?unknown=1",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter \"unknown\" is not one Ptah reads on a YDB URL; accepted: database, monitoring, dev_realm, token, use_env_credentials, go_balancer, balancer, go_query_mode, query_mode, go_default_idempotent, prefetch_query_result_parts"
+  },
+  {
+    "url": "ydb://host/local?token=t1",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "token"
+  },
+  {
+    "url": "ydb://host/local?token=",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter token is empty"
+  },
+  {
+    "url": "ydb://host/local?token=t1\u0026token=t2",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter token is given 2 times"
+  },
+  {
+    "url": "ydb://alice:pw@host/local",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "static"
+  },
+  {
+    "url": "ydb://alice:pw@host/local?token=t1",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the URL names more than one credential source (the URL's user, the token parameter); give one"
+  },
+  {
+    "url": "ydb://host/local?use_env_credentials=true",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "environment"
+  },
+  {
+    "url": "ydb://host/local?use_env_credentials",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "environment"
+  },
+  {
+    "url": "ydb://host/local?use_env_credentials=false",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?use_env_credentials=maybe",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parameter use_env_credentials=\"maybe\" is not a boolean"
+  },
+  {
+    "url": "ydb://host/local?use_env_credentials=true\u0026token=t1",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the URL names more than one credential source (the token parameter, use_env_credentials); give one"
+  },
+  {
+    "url": "ydb://host/local?use_env_credentials=false\u0026token=t1",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "token"
+  },
+  {
+    "url": "ydb://alice:pw@host/local?use_env_credentials=true",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the URL names more than one credential source (the URL's user, use_env_credentials); give one"
+  },
+  {
+    "url": "ydb://alice:pw@host/local?use_env_credentials=false",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "static"
+  },
+  {
+    "url": "ydb://host/local?monitoring=http://host:8765",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "monitoring": "http://host:8765",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?monitoring=https://host:8765",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "monitoring": "https://host:8765",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?monitoring=http://host:8765/",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "monitoring": "http://host:8765",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?monitoring=http://host",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "monitoring": "http://host",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?monitoring=ftp://host:8765",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter names no http:// or https:// endpoint: write monitoring=http://host:8765"
+  },
+  {
+    "url": "ydb://host/local?monitoring=host:8765",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter names no http:// or https:// endpoint: write monitoring=http://host:8765"
+  },
+  {
+    "url": "ydb://host/local?monitoring=//host:8765",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter names no http:// or https:// endpoint: write monitoring=http://host:8765"
+  },
+  {
+    "url": "ydb://host/local?monitoring=",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter is empty: write monitoring=http://host:8765"
+  },
+  {
+    "url": "ydb://host/local?monitoring=http://",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter names no host: write monitoring=http://host:8765"
+  },
+  {
+    "url": "ydb://host/local?monitoring=http://user:pw@host:8765",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter for http://host:8765 carries a user; Ptah reads that endpoint with the connection's own credential, so name the endpoint only, as monitoring=http://host:8765"
+  },
+  {
+    "url": "ydb://host/local?monitoring=http://host:8765/viewer",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter for http://host:8765 names a page; name the endpoint only, as monitoring=http://host:8765"
+  },
+  {
+    "url": "ydb://host/local?monitoring=http://host:8765?x=1",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter for http://host:8765 names a page; name the endpoint only, as monitoring=http://host:8765"
+  },
+  {
+    "url": "ydb://host/local?monitoring=http://host:8765%23frag",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter for http://host:8765 names a page; name the endpoint only, as monitoring=http://host:8765"
+  },
+  {
+    "url": "ydb://host/local?monitoring=http://host:8765\u0026monitoring=http://host:8766",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the monitoring parameter is given more than once"
+  },
+  {
+    "url": "ydbs://host/local?monitoring=http://host:8765",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "monitoring": "http://host:8765",
+    "dsn": "grpcs://host:2135/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=r1",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local/ptah_dev/r1",
+    "realm": "r1",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=abc_123",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local/ptah_dev/abc_123",
+    "realm": "abc_123",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=ABC",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the dev_realm parameter \"ABC\" is not a realm name: use 1 to 64 lowercase letters, digits and underscores"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=a/b",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the dev_realm parameter \"a/b\" is not a realm name: use 1 to 64 lowercase letters, digits and underscores"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=..",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the dev_realm parameter \"..\" is not a realm name: use 1 to 64 lowercase letters, digits and underscores"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the dev_realm parameter \"\" is not a realm name: use 1 to 64 lowercase letters, digits and underscores"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=r1\u0026dev_realm=r2",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the dev_realm parameter is given more than once"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=0123456789012345678901234567890123456789012345678901234567890123",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local/ptah_dev/0123456789012345678901234567890123456789012345678901234567890123",
+    "realm": "0123456789012345678901234567890123456789012345678901234567890123",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=01234567890123456789012345678901234567890123456789012345678901234",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the dev_realm parameter \"01234567890123456789012345678901234567890123456789012345678901234\" is not a realm name: use 1 to 64 lowercase letters, digits and underscores"
+  },
+  {
+    "url": "ydb://host?dev_realm=r1",
+    "outcome": "refused",
+    "error": "invalid YDB URL: the URL names a dev realm and no database to hold it"
+  },
+  {
+    "url": "ydb://host/local?dev_realm=r1\u0026monitoring=http://host:8765\u0026go_balancer=disable",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local/ptah_dev/r1",
+    "realm": "r1",
+    "monitoring": "http://host:8765",
+    "dsn": "grpc://host:2136/local?go_balancer=disable",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?database=/local\u0026dev_realm=r1",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local/ptah_dev/r1",
+    "realm": "r1",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local#frag",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host/local?token=a%zz",
+    "outcome": "ok",
+    "database": "/local",
+    "root": "/local",
+    "dsn": "grpc://host:2136/local",
+    "credential": "anonymous"
+  },
+  {
+    "url": "ydb://host:abc/local",
+    "outcome": "refused",
+    "error": "invalid YDB URL: parse \"ydb://host:abc/local\": invalid port \":abc\" after host"
+  }
+]

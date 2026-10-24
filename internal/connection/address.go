@@ -12,17 +12,17 @@ import (
 
 	environ "github.com/ydb-platform/ydb-go-sdk-auth-environ"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
-	"github.com/ydb-platform/ydb-go-sdk/v3/balancers"
 )
 
 // Address separates the credential-free SDK address from authentication.
 // Its fields are private so formatting it cannot reveal a connection URL.
 type Address struct {
-	dsn      string
-	database string
-	user     *url.Userinfo
-	token    string
-	useEnv   bool
+	dsn        string
+	database   string
+	user       *url.Userinfo
+	token      string
+	useEnv     bool
+	monitoring *url.URL
 }
 
 // Parse validates the provider's connection address before any network call.
@@ -56,10 +56,8 @@ func Parse(raw string) (Address, error) {
 		if len(values) != 1 {
 			return Address{}, errors.New("YDB URL parameters must appear once")
 		}
-		switch key {
-		case "database", "token", "go_balancer", "use_env_credentials":
-		default:
-			return Address{}, errors.New("unsupported YDB URL parameter; supported parameters: database, token, go_balancer, use_env_credentials")
+		if !slices.Contains(acceptedParameters, key) {
+			return Address{}, errors.New("unsupported YDB URL parameter; supported parameters: " + strings.Join(acceptedParameters, ", "))
 		}
 	}
 	database := strings.Trim(u.Path, "/")
@@ -104,20 +102,29 @@ func Parse(raw string) (Address, error) {
 			return Address{}, errors.New("YDB static credentials require a user and password")
 		}
 	}
-	passed := url.Values{}
-	if q.Has("go_balancer") {
-		value := q.Get("go_balancer")
-		if value == "" {
-			return Address{}, errors.New("invalid YDB balancer")
-		}
-		if _, err := balancers.CreateFromConfig(value); err != nil {
-			return Address{}, errors.New("invalid YDB balancer")
-		}
-		passed.Set("go_balancer", value)
+	passed, err := sdkParameters(q)
+	if err != nil {
+		return Address{}, err
+	}
+	monitoring, err := monitoringEndpoint(q)
+	if err != nil {
+		return Address{}, err
 	}
 	database = "/" + database
 	dsn := url.URL{Scheme: scheme, Host: net.JoinHostPort(u.Hostname(), port), Path: database, RawQuery: passed.Encode()}
-	return Address{dsn: dsn.String(), database: database, user: u.User, token: token, useEnv: useEnv}, nil
+	return Address{dsn: dsn.String(), database: database, user: u.User, token: token, useEnv: useEnv, monitoring: monitoring}, nil
+}
+
+// Monitoring returns the cluster's monitoring endpoint the URL names, an http://
+// or https:// address with no path, or nil when it names none. The provider
+// protocol has no way to refine the advertised capabilities from a cluster's
+// feature flags, so nothing reads the endpoint yet.
+func (a Address) Monitoring() *url.URL {
+	if a.monitoring == nil {
+		return nil
+	}
+	endpoint := *a.monitoring
+	return &endpoint
 }
 
 // String identifies the address without exposing its credentials.

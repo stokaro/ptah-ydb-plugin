@@ -112,14 +112,37 @@ file input. Full native CLI planning remains pending.
 
 ## Connection addresses
 
-Use `ydb://host:2136/database` or `ydbs://host:2135/database` for TLS.
-`database`, `token`, `go_balancer`, and `use_env_credentials` are the supported
-query parameters. A token, URL user/password and `use_env_credentials` cannot be
-combined. `use_env_credentials` reads the `YDB_*` variables of the provider
-process and fails when none is set, so an environment that would connect
-anonymously is refused. An address with no credential source connects
-anonymously. Unknown or repeated
-parameters, conflicting database paths, and malformed values are refused.
+Use `ydb://host:2136/database` or `ydbs://host:2135/database` for TLS. The
+database comes from the path or from the `database` parameter; naming it twice
+is refused when the two differ.
+
+The accepted parameters follow the host's embedded engine:
+
+- `database`, `token` and `use_env_credentials` choose the database and the
+  credential. A token, URL user/password and `use_env_credentials` cannot be
+  combined. `use_env_credentials` reads the `YDB_*` variables of the provider
+  process, service-account keys and instance metadata included, and fails when
+  none is set, so an environment that would connect anonymously is refused. An
+  address with no credential source connects anonymously.
+- `go_balancer` and the older `balancer` choose the balancer; naming both is
+  refused, and so is a value the SDK does not know. `go_default_idempotent`
+  takes a boolean and `prefetch_query_result_parts` a non-negative integer.
+  The SDK reads these three.
+- `go_query_mode` and `query_mode` accept `query` only. `go_fake_tx` and
+  `go_query_bind` are refused by name, because a faked transaction would read
+  outside the snapshot read and the SDK's binders rewrite a `?` inside a YQL
+  literal.
+- `monitoring` names the cluster's monitoring endpoint, an `http://` or
+  `https://` address with no user, path, query or fragment. The address
+  validates it and keeps it. The provider protocol has no way to refine the
+  advertised capabilities from a cluster's feature flags, so nothing reads the
+  endpoint yet.
+
+Unknown or repeated parameters, conflicting database paths, and malformed
+values are refused, and a refusal names the parameter and never its value. Two
+refusals are stricter than the host's: a fragment, and a query the host reads
+as empty because it cannot unescape it. The `testdata/oracle` corpus beside
+`internal/connection` holds the host's answer for each address it covers.
 Credentials travel in the session-open request and are omitted from receipts,
 SDK addresses, and error diagnostics. Native errors currently report only the
 failed operation, which limits diagnosis until structured redaction is added.
