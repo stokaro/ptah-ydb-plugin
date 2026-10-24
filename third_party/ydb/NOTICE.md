@@ -28,3 +28,10 @@ adapted from the same table protocol, using the provider's complete column
 grammar. `ViewObservation` is a Ptah-owned composition of the view and table
 API descriptions. View and coordination API descriptors otherwise come from
 the Go dependency pinned in `go.mod`.
+
+The column-table description, TTL, tier and eviction messages in
+`internal/nativeprotocol/columnstore.proto` (`ColumnTableDescribeResult`,
+`TtlSettings`, `TieredModeSettings`, `TtlTier` and
+`EvictionToExternalStorageSettings`) are adapted from the same table protocol
+with their wire numbers. The pinned Go bindings have no tiered TTL, and the
+table service reports a column table's tiered TTL in it.

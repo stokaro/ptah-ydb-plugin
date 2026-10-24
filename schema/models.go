@@ -107,8 +107,8 @@ func buildModel(kind string) *protocol.ValueModel {
 		definition["row_storage"] = "unspecified storage on a row-table observation normalizes to STORE_TYPE_ROW"
 	}
 	if kind == ColumnStorageProperties {
-		definition["not_observed"] = []string{"live_column_storage", "shared_topic_consumers"}
-		definition["column_storage"] = "hash column order and TTL tier order retained; local indexes sorted by name; native IDs and versions excluded; omitted index defaults remain absent; offline only until live monitoring is connected"
+		definition["not_observed"] = []string{"column_table_access", "shared_topic_consumers"}
+		definition["column_storage"] = "hash column order and TTL tier order retained; local indexes sorted by name; native IDs and versions excluded; omitted index defaults remain absent; a live read combines the table service and the monitoring scheme description"
 	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {

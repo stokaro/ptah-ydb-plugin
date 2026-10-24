@@ -78,7 +78,7 @@ func TestNativeObjectsAndNamespaceCoverageSubprocess(t *testing.T) {
 			c.Check(dropped.GetOperation().GetStatus(), qt.Equals, Ydb.StatusIds_SUCCESS)
 		})
 	}
-	direct, err := inspect.Read(ctx, opened.Driver, database, []string{directory, child})
+	direct, err := inspect.Read(ctx, opened.Driver, columnTables(opened), database, []string{directory, child})
 	c.Assert(err, qt.IsNil)
 	c.Assert(direct.NativeObjects, qt.HasLen, 5)
 	binary, digest := providerBinary(c)
@@ -182,7 +182,7 @@ func assertExactObjectRegions(c *qt.C, snapshot *protocol.Schema, database strin
 func TestEmptyDirectoryHasBoundedObjectAbsence(t *testing.T) {
 	c := qt.New(t)
 	opened, directory, database := inspectionFixture(c)
-	snapshot, err := inspect.Read(c.Context(), opened.Driver, database, []string{directory})
+	snapshot, err := inspect.Read(c.Context(), opened.Driver, columnTables(opened), database, []string{directory})
 	c.Assert(err, qt.IsNil)
 	c.Assert(snapshot.NativeObjects, qt.HasLen, 0)
 	c.Assert(snapshot.Tables, qt.HasLen, 0)

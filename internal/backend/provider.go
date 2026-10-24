@@ -5,11 +5,14 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
+	"net/url"
 	"sync"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -55,15 +58,42 @@ func engineFeatures() []string {
 	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature}
 }
 
-// sessionCapabilities are the host capabilities a session reports.
+// sessionCapabilities are the host capabilities a session reports before the
+// cluster's feature flags are read: what every supported release line does
+// with its default flags.
 //
 // migration_statement_timeout is true because the host bounds each statement of
 // a migration with a deadline on the Execute call, and a unit the deadline
 // stops is reported with outcome UNKNOWN and no retry (see executeUnits): YDB
 // keeps running a schema statement after its client stops waiting, so the
 // provider never reports a stopped statement as not applied.
+//
+// tiered_ttl is false, because EnableTieringInColumnShard is off by default
+// on every line from 25.1 to 26.2. An address that names the monitoring
+// endpoint replaces it with the flag's value (see featureflags).
 func sessionCapabilities() map[string]bool {
-	return map[string]bool{"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true}
+	return map[string]bool{"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false}
+}
+
+// clusterCapabilities refines the preset with the feature flags of the
+// database, read from the monitoring endpoint when the address names one.
+// Without the endpoint the preset stands. A failed read fails the session
+// rather than falling back to the preset: the operator asked for the cluster's
+// answer, and planning without it would be planning with an answer nobody
+// asked for.
+func clusterCapabilities(ctx context.Context, opened *connection.Connection) (map[string]bool, error) {
+	if !opened.HasMonitoring() {
+		return sessionCapabilities(), nil
+	}
+	body, err := opened.ReadMonitoring(ctx, "feature flags", featureflags.Path, url.Values{"database": {opened.Database()}})
+	if err != nil {
+		return nil, err
+	}
+	flags, err := featureflags.Decode(body, opened.Database())
+	if err != nil {
+		return nil, fmt.Errorf("read the YDB feature flags: %w", err)
+	}
+	return flags.Refine(sessionCapabilities()), nil
 }
 
 // New constructs an isolated session service.
@@ -120,6 +150,14 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 		_ = opened.Close()
 		return nil, connectionError(ctx, "read YDB server version")
 	}
+	capabilities, err := clusterCapabilities(ctx, opened)
+	if err != nil {
+		_ = opened.Close()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, status.FromContextError(ctxErr).Err()
+		}
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
 	if err := ctx.Err(); err != nil {
 		_ = opened.Close()
 		return nil, status.FromContextError(err).Err()
@@ -128,7 +166,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	p.mu.Lock()
 	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != ""}
 	p.mu.Unlock()
-	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: sessionCapabilities(), Features: engineFeatures()}, nil
+	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: capabilities, Features: engineFeatures()}, nil
 }
 
 // Close releases only the named session. Repeated closes return the original

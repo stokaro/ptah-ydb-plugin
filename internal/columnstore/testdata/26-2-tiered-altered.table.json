@@ -1,0 +1,102 @@
+{
+  "self":  {
+    "name":  "c4",
+    "owner":  "root@builtin",
+    "type":  "COLUMN_TABLE",
+    "effectivePermissions":  [
+      {
+        "subject":  "USERS",
+        "permissionNames":  [
+          "ydb.database.connect"
+        ]
+      },
+      {
+        "subject":  "METADATA-READERS",
+        "permissionNames":  [
+          "ydb.generic.list"
+        ]
+      },
+      {
+        "subject":  "DATA-READERS",
+        "permissionNames":  [
+          "ydb.granular.select_row"
+        ]
+      },
+      {
+        "subject":  "DATA-WRITERS",
+        "permissionNames":  [
+          "ydb.tables.modify"
+        ]
+      },
+      {
+        "subject":  "DDL-ADMINS",
+        "permissionNames":  [
+          "ydb.granular.create_directory",
+          "ydb.granular.write_attributes",
+          "ydb.granular.create_table",
+          "ydb.granular.remove_schema",
+          "ydb.granular.create_queue",
+          "ydb.granular.alter_schema"
+        ]
+      },
+      {
+        "subject":  "ACCESS-ADMINS",
+        "permissionNames":  [
+          "ydb.access.grant"
+        ]
+      },
+      {
+        "subject":  "DATABASE-ADMINS",
+        "permissionNames":  [
+          "ydb.generic.manage"
+        ]
+      }
+    ],
+    "createdAt":  {
+      "planStep":  "1792836604120",
+      "txId":  "281474976710759"
+    }
+  },
+  "columns":  [
+    {
+      "name":  "id",
+      "type":  {
+        "typeId":  "UINT64"
+      },
+      "notNull":  true
+    },
+    {
+      "name":  "ts",
+      "type":  {
+        "typeId":  "TIMESTAMP"
+      },
+      "notNull":  true
+    }
+  ],
+  "primaryKey":  [
+    "ts",
+    "id"
+  ],
+  "ttlSettings":  {
+    "tieredTtl":  {
+      "tiers":  [
+        {
+          "dateTypeColumn":  {
+            "columnName":  "ts",
+            "expireAfterSeconds":  86400
+          },
+          "evictToExternalStorage":  {
+            "storage":  "/local/probe/ext"
+          }
+        }
+      ]
+    }
+  },
+  "partitioningSettings":  {
+    "partitionBy":  [
+      "ts",
+      "id"
+    ]
+  },
+  "storeType":  "STORE_TYPE_COLUMN"
+}
