@@ -55,9 +55,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	result := &protocol.PlannedFeatures{Complete: true}
 	var creations []creation
 	var alterations []alteration
-	// columnAlterations are the column tables the request alters. Each already
-	// holds what the declaration asks for, since every other change is refused.
+	// columnAlterations are the column tables the request alters. Each holds
+	// what the declaration asks for, or differs from it in its TTL alone, since
+	// every other change is refused. columnTTLs are the TTL changes.
 	var columnAlterations []int
+	var columnTTLs []columnTTLStep
 	for i, table := range request.Tables {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -96,7 +98,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("YDB table creation targets another database")
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			column, reason, err := planColumnAlteration(owner, table, request.CommonSteps)
+			column, reason, columnTTL, err := planColumnAlteration(owner, table, request.CommonSteps, request.Capabilities)
 			if err != nil {
 				return nil, err
 			}
@@ -105,6 +107,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			}
 			if column {
 				columnAlterations = append(columnAlterations, i)
+				if columnTTL != nil {
+					columnTTLs = append(columnTTLs, columnTTLStep{index: i, table: table, owner: owner, change: *columnTTL})
+				}
 				continue
 			}
 			changes, reason, err := planAlteration(owner, table)
@@ -296,6 +301,18 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		receiptSteps[item.index] = append(ordered, dropped...)
 	}
+	slices.SortFunc(columnTTLs, func(a, b columnTTLStep) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
+	for number, item := range columnTTLs {
+		steps, dependencies, err := item.plan(number)
+		if err != nil {
+			return refused(item.index, err.Error()), nil
+		}
+		contribution.Steps = append(contribution.Steps, steps...)
+		contribution.Dependencies = append(contribution.Dependencies, dependencies...)
+		for _, step := range steps {
+			receiptSteps[item.index] = append(receiptSteps[item.index], step.Id)
+		}
+	}
 	// This service can replace only a complete common table creation. A column
 	// step or a mixed footprint needs its own lifecycle, never a partial rewrite.
 	claimed := make(map[int]bool)
@@ -345,6 +362,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		strategy := "Create the complete captured row table through the native table service"
 		if slices.Contains(columnAlterations, i) {
 			strategy = "The column table already holds the declared storage: its kind, its hash key and its shard count are fixed when YDB creates it, and its TTL is the declared one"
+			if len(receiptSteps[i]) != 0 {
+				strategy = "Reset the column table's TTL and set the declared one with YQL's ALTER TABLE through the query service; its kind, its hash key and its shard count are fixed when YDB creates it and already match"
+			}
 		}
 		if slices.ContainsFunc(creations, func(item creation) bool { return item.index == i && isColumnCreation(item.operation) }) {
 			strategy = "Create the complete captured column table with YQL's CREATE TABLE through the query service, as the host's embedded engine writes it"

@@ -308,9 +308,6 @@ func TestColumnTablePlan_AlterRefusals(t *testing.T) {
 		{"another hash key", func(c *qt.C) *protocol.PlanFeaturesRequest {
 			return columnAlterRequest(c, desired(c, `{"hashColumns":["ts","id"],"ttl":`+deleteDaily+`}`), held(c))
 		}, `table "app/records": changing a column table's hash key or shard count requires an explicit data migration \(the table is hashed by \["id"\], and the declaration asks for \["ts" "id"\]\)`},
-		{"another TTL", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			return columnAlterRequest(c, desired(c, `{}`), held(c))
-		}, `table "app/records": changing the TTL of an existing column table is not planned by the provider yet`},
 		{"local indexes the declaration states otherwise", func(c *qt.C) *protocol.PlanFeaturesRequest {
 			return columnAlterRequest(c, desired(c, `{"ttl":`+deleteDaily+`,"localIndexes":[{"name":"mm","columns":["ts"],"storageId":"__LOCAL_METADATA","minMax":{}}]}`), held(c))
 		}, `table "app/records": the local indexes of a column table are not added or dropped by the provider yet`},

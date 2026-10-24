@@ -39,26 +39,28 @@ func hostColumnFixture(c *qt.C) string {
 	return directory
 }
 
-// The host creates a column table from a Go source through the provider and
-// finds it as declared on the next run: the key the Go fields leave nullable
-// is created NOT NULL, as the host's embedded engine creates it, and the read
-// table matches the declaration.
+// The host creates a column table from a Go source through the provider, finds
+// it as declared on the next run, and changes its TTL in place. The key the Go
+// fields leave nullable is created NOT NULL, as the host's embedded engine
+// creates it, and the read table matches the declaration.
 func TestHostAppliesAColumnTable_HappyPath(t *testing.T) {
 	c := qt.New(t)
 	directory := hostColumnFixture(c)
-	for _, run := range []struct{ name, want string }{
-		{"creation", `(?s).*column-table-create-operation.*Schema apply completed successfully.*`},
-		{"a second run", `(?s).*No changes planned.*`},
+	const twoDays = ` store="COLUMN" partition_by_hash="id" column_shards="3" platform.ydb.row_deletion_column="ts" platform.ydb.row_deletion_interval="P2D"`
+	for _, run := range []struct{ name, attributes, want string }{
+		{"creation", hostColumnTable, `(?s).*column-table-create-operation.*Schema apply completed successfully.*`},
+		{"a second run", hostColumnTable, `(?s).*No changes planned.*`},
+		{"another TTL", twoDays, `(?s).*column-table-ttl-operation.*Schema apply completed successfully.*`},
+		{"a run after the TTL", twoDays, `(?s).*No changes planned.*`},
 	} {
-		output, err := hostApply(c, directory, hostEvents(directory, hostColumnTable))
+		output, err := hostApply(c, directory, hostEvents(directory, run.attributes))
 		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", run.name, output))
 		c.Assert(output, qt.Matches, run.want, qt.Commentf("%s", run.name))
 	}
 }
 
 // What YDB fixes when it creates a column table is refused with the reason
-// when a later declaration changes it, and so is a TTL change, which the
-// provider does not plan yet.
+// when a later declaration changes it.
 func TestHostRefusesAColumnTableChange_FailurePath(t *testing.T) {
 	c := qt.New(t)
 	directory := hostColumnFixture(c)
@@ -71,8 +73,6 @@ func TestHostRefusesAColumnTableChange_FailurePath(t *testing.T) {
 			`changing a column table's hash key or shard count requires an explicit data migration`},
 		{"a row table", ` platform.ydb.row_deletion_column="ts" platform.ydb.row_deletion_interval="P1D"`,
 			`changing between row and column storage requires an explicit data migration`},
-		{"another TTL", ` store="COLUMN" partition_by_hash="id" column_shards="3" platform.ydb.row_deletion_column="ts" platform.ydb.row_deletion_interval="P2D"`,
-			`changing the TTL of an existing column table is not planned by the provider yet`},
 	} {
 		output, err := hostApply(c, directory, hostEvents(directory, test.attributes))
 		c.Assert(err, qt.IsNotNil, qt.Commentf("%s: %s", test.name, output))
