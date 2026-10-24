@@ -1,0 +1,1057 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_s.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_s.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0003_s.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 3
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r2 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r2 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 6,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r2"
+       }
+      ]
+     },
+     {
+      "code": "YD102",
+      "file": 2,
+      "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
+      "statement": 2
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_s.up.sql:3:DS107", "0002_s.up.sql:3:DS107", "0002_s.up.sql:5:DS107", "0002_s.up.sql:7:DS107", "0002_s.up.sql:8:DS107", "0002_s.up.sql:9:DS107", "0002_s.up.sql:10:YD115", "0003_s.up.sql:6:YD102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_s.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_s.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0003_s.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 3
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r2 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r2 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 6,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r2"
+       }
+      ]
+     },
+     {
+      "code": "YD102",
+      "file": 2,
+      "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
+      "statement": 2
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_s.up.sql:3:DS107", "0002_s.up.sql:3:DS107", "0002_s.up.sql:5:DS107", "0002_s.up.sql:7:DS107", "0002_s.up.sql:8:DS107", "0002_s.up.sql:9:DS107", "0002_s.up.sql:10:YD115", "0003_s.up.sql:6:YD102"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_s.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_s.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0003_s.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 3
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD115",
+      "file": 1,
+      "message": "DROP ASYNC REPLICATION r2 keeps its replica tables, and YDB keeps a replica of a replication that was not failed over read-only for good (path is an async replica table); fail it over first with ALTER ASYNC REPLICATION r2 SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE') to keep writable tables, or drop it with CASCADE to drop them",
+      "statement": 6,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "r2"
+       }
+      ]
+     },
+     {
+      "code": "YD102",
+      "file": 2,
+      "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
+      "statement": 2
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_s.up.sql:3:DS107", "0002_s.up.sql:3:DS107", "0002_s.up.sql:5:DS107", "0002_s.up.sql:7:DS107", "0002_s.up.sql:8:DS107", "0002_s.up.sql:9:DS107", "0002_s.up.sql:10:YD115", "0003_s.up.sql:6:YD102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ],
+     [
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "t"
+        }
+       ]
+      },
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "u"
+        }
+       ]
+      },
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TRANSFER",
+         "object": "x"
+        }
+       ]
+      },
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "COORDINATION NODE",
+         "object": "`dir/node`"
+        }
+       ]
+      },
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "STREAMING QUERY",
+         "object": "q"
+        }
+       ]
+      },
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "ASYNC REPLICATION",
+         "object": "r"
+        }
+       ]
+      },
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE `a\\`B` (id Uint64 NOT NULL, PRIMARY KEY (id)); -- trails the first statement\n/* a block comment\n   on two lines */\nUPSERT INTO `A\\`b` (ID) VALUES (1U)",
+       "comments": ["-- attached to the first statement"],
+       "end": 235,
+       "line": 5,
+       "source_words": ["CREATE", "TABLE", "`a\\`", "b", "` (id Uint64 NOT NULL, PRIMARY KEY (id)); -- trails the first statement\n/* a block comment\n   on two lines */\nUPSERT INTO `", "a", "\\", "`b`", "(", "id", ")", "VALUES", "(", "1u", ")"],
+       "sql": "CREATE TABLE `a\\`b` (id Uint64 NOT NULL, PRIMARY KEY (id)); -- trails the first statement\n/* a block comment\n   on two lines */\nUPSERT INTO `a\\`b` (id) VALUES (1u)",
+       "start": 72,
+       "words": ["CREATE", "TABLE", "`a\\`", "B", "` (id Uint64 NOT NULL, PRIMARY KEY (id)); -- trails the first statement\n/* a block comment\n   on two lines */\nUPSERT INTO `", "A", "\\", "`b`", "(", "ID", ")", "VALUES", "(", "1U", ")"]
+      },
+      {
+       "canonical": "$TEXT = @@LINE ONE",
+       "end": 255,
+       "line": 9,
+       "source_words": ["$", "text", "=", "@", "@", "line", "one"],
+       "sql": "$text = @@line one",
+       "start": 237,
+       "words": ["$", "TEXT", "=", "@", "@", "LINE", "ONE"]
+      },
+      {
+       "canonical": "STILL THE LITERAL @@@@ AND AN ESCAPED MARKER@@",
+       "end": 303,
+       "line": 9,
+       "source_words": ["still", "the", "literal", "@", "@", "@", "@", "and", "an", "escaped", "marker", "@", "@"],
+       "sql": "still the literal\n@@@@ and an escaped marker@@",
+       "start": 257,
+       "words": ["STILL", "THE", "LITERAL", "@", "@", "@", "@", "AND", "AN", "ESCAPED", "MARKER", "@", "@"]
+      },
+      {
+       "canonical": "$F = ($X) -> { $Y = $X + 1",
+       "end": 331,
+       "line": 11,
+       "source_words": ["$", "f", "=", "(", "$", "x", ")", "-", ">", "{", "$", "y", "=", "$", "x", "+", "1"],
+       "sql": "$f = ($x) -> { $y = $x + 1",
+       "start": 305,
+       "words": ["$", "F", "=", "(", "$", "X", ")", "-", ">", "{", "$", "Y", "=", "$", "X", "+", "1"]
+      },
+      {
+       "canonical": "RETURN $Y",
+       "end": 342,
+       "line": 11,
+       "source_words": ["RETURN", "$", "y"],
+       "sql": "RETURN $y",
+       "start": 333,
+       "words": ["RETURN", "$", "Y"]
+      },
+      {
+       "canonical": "}",
+       "end": 345,
+       "line": 11,
+       "source_words": ["}"],
+       "sql": "}",
+       "start": 344,
+       "words": ["}"]
+      },
+      {
+       "canonical": "DEFINE ACTION $ACT($N) AS DO BEGIN SELECT CASE WHEN $N > 1 THEN 'a;b' ELSE \"c;d\" END AS CASE",
+       "end": 445,
+       "line": 12,
+       "source_words": ["DEFINE", "ACTION", "$", "act", "(", "$", "n", ")", "AS", "DO", "BEGIN", "SELECT", "CASE", "WHEN", "$", "n", ">", "1", "THEN", "'a;b'", "ELSE", "\"c;d\"", "END", "AS", "case"],
+       "sql": "DEFINE ACTION $act($n) AS\n  DO BEGIN\n    SELECT CASE WHEN $n > 1 THEN 'a;b' ELSE \"c;d\" END AS case",
+       "start": 347,
+       "words": ["DEFINE", "ACTION", "$", "ACT", "(", "$", "N", ")", "AS", "DO", "BEGIN", "SELECT", "CASE", "WHEN", "$", "N", ">", "1", "THEN", "'a;b'", "ELSE", "\"c;d\"", "END", "AS", "CASE"]
+      },
+      {
+       "canonical": "END DO",
+       "end": 455,
+       "line": 15,
+       "source_words": ["END", "DO"],
+       "sql": "END DO",
+       "start": 449,
+       "words": ["END", "DO"]
+      },
+      {
+       "canonical": "SELECT 1 AS END",
+       "end": 474,
+       "line": 16,
+       "source_words": ["SELECT", "1", "AS", "end"],
+       "sql": "SELECT 1 AS end",
+       "start": 459,
+       "words": ["SELECT", "1", "AS", "END"]
+      },
+      {
+       "canonical": "END DEFINE",
+       "end": 486,
+       "line": 17,
+       "source_words": ["END", "DEFINE"],
+       "sql": "END DEFINE",
+       "start": 476,
+       "words": ["END", "DEFINE"]
+      },
+      {
+       "canonical": "EVALUATE FOR $I IN ASLIST(1, 2) DO $ACT($I)",
+       "end": 531,
+       "line": 18,
+       "source_words": ["EVALUATE", "FOR", "$", "i", "IN", "AsList", "(", "1", ",", "2", ")", "DO", "$", "act", "(", "$", "i", ")"],
+       "sql": "EVALUATE FOR $i IN AsList(1, 2) DO $act($i)",
+       "start": 488,
+       "words": ["EVALUATE", "FOR", "$", "I", "IN", "ASLIST", "(", "1", ",", "2", ")", "DO", "$", "ACT", "(", "$", "I", ")"]
+      },
+      {
+       "canonical": "EVALUATE IF TRUE DO BEGIN SELECT 1",
+       "end": 567,
+       "line": 19,
+       "source_words": ["EVALUATE", "IF", "true", "DO", "BEGIN", "SELECT", "1"],
+       "sql": "EVALUATE IF true DO BEGIN SELECT 1",
+       "start": 533,
+       "words": ["EVALUATE", "IF", "TRUE", "DO", "BEGIN", "SELECT", "1"]
+      },
+      {
+       "canonical": "END DO",
+       "end": 575,
+       "line": 19,
+       "source_words": ["END", "DO"],
+       "sql": "END DO",
+       "start": 569,
+       "words": ["END", "DO"]
+      },
+      {
+       "canonical": "SELECT 'unterminated;\n",
+       "end": 602,
+       "line": 21,
+       "source_words": ["SELECT", "'unterminated;\n"],
+       "sql": "SELECT 'unterminated;\n",
+       "start": 580,
+       "words": ["SELECT", "'unterminated;\n"]
+      }
+     ],
+     [
+      {
+       "canonical": "DROP TOPIC T",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "t"
+        }
+       ],
+       "end": 41,
+       "line": 3,
+       "source_words": ["DROP", "TOPIC", "t"],
+       "sql": "DROP TOPIC t",
+       "start": 29,
+       "words": ["DROP", "TOPIC", "T"]
+      },
+      {
+       "canonical": "DROP TOPIC U",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "u"
+        }
+       ],
+       "end": 55,
+       "line": 3,
+       "source_words": ["DROP", "TOPIC", "u"],
+       "sql": "DROP TOPIC u",
+       "start": 43,
+       "words": ["DROP", "TOPIC", "U"]
+      },
+      {
+       "canonical": "DROP TRANSFER X",
+       "comments": ["-- right above the next one"],
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TRANSFER",
+         "object": "x"
+        }
+       ],
+       "end": 140,
+       "line": 5,
+       "source_words": ["DROP", "TRANSFER", "x"],
+       "sql": "DROP TRANSFER x",
+       "start": 125,
+       "words": ["DROP", "TRANSFER", "X"]
+      },
+      {
+       "canonical": "DROP COORDINATION NODE IF EXISTS `dir/node`",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "COORDINATION NODE",
+         "object": "`dir/node`"
+        }
+       ],
+       "end": 188,
+       "line": 7,
+       "source_words": ["DROP", "COORDINATION", "NODE", "IF", "EXISTS", "`dir/node`"],
+       "sql": "DROP COORDINATION NODE IF EXISTS `dir/node`",
+       "start": 145,
+       "words": ["DROP", "COORDINATION", "NODE", "IF", "EXISTS", "`dir/node`"]
+      },
+      {
+       "canonical": "DROP STREAMING QUERY Q",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "STREAMING QUERY",
+         "object": "q"
+        }
+       ],
+       "end": 212,
+       "line": 8,
+       "source_words": ["DROP", "STREAMING", "QUERY", "q"],
+       "sql": "DROP STREAMING QUERY q",
+       "start": 190,
+       "words": ["DROP", "STREAMING", "QUERY", "Q"]
+      },
+      {
+       "canonical": "DROP ASYNC REPLICATION R CASCADE",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "ASYNC REPLICATION",
+         "object": "r"
+        }
+       ],
+       "end": 246,
+       "line": 9,
+       "source_words": ["DROP", "ASYNC", "REPLICATION", "r", "CASCADE"],
+       "sql": "DROP ASYNC REPLICATION r CASCADE",
+       "start": 214,
+       "words": ["DROP", "ASYNC", "REPLICATION", "R", "CASCADE"]
+      },
+      {
+       "canonical": "DROP ASYNC REPLICATION R2",
+       "end": 273,
+       "line": 10,
+       "source_words": ["DROP", "ASYNC", "REPLICATION", "r2"],
+       "sql": "DROP ASYNC REPLICATION r2",
+       "start": 248,
+       "words": ["DROP", "ASYNC", "REPLICATION", "R2"]
+      }
+     ],
+     [
+      {
+       "canonical": "DO BEGIN CREATE TABLE M (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 64,
+       "line": 1,
+       "source_words": ["DO", "BEGIN", "CREATE", "TABLE", "m", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "DO BEGIN\n  CREATE TABLE m (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["DO", "BEGIN", "CREATE", "TABLE", "M", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "SELECT * FROM AS_TABLE([<|ID: 1|>])",
+       "end": 103,
+       "line": 3,
+       "source_words": ["SELECT", "*", "FROM", "AS_TABLE", "(", "[", "<", "|", "id", ":", "1", "|", ">", "]", ")"],
+       "sql": "SELECT * FROM AS_TABLE([<|id: 1|>])",
+       "start": 68,
+       "words": ["SELECT", "*", "FROM", "AS_TABLE", "(", "[", "<", "|", "ID", ":", "1", "|", ">", "]", ")"]
+      },
+      {
+       "canonical": "END DO",
+       "end": 111,
+       "line": 4,
+       "source_words": ["END", "DO"],
+       "sql": "END DO",
+       "start": 105,
+       "words": ["END", "DO"]
+      },
+      {
+       "canonical": "DO BEGIN SELECT 1",
+       "end": 130,
+       "line": 5,
+       "source_words": ["DO", "BEGIN", "SELECT", "1"],
+       "sql": "DO BEGIN SELECT 1",
+       "start": 113,
+       "words": ["DO", "BEGIN", "SELECT", "1"]
+      },
+      {
+       "canonical": "CREATE TABLE N (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 185,
+       "line": 5,
+       "source_words": ["CREATE", "TABLE", "n", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE n (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 132,
+       "words": ["CREATE", "TABLE", "N", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "END DO",
+       "end": 193,
+       "line": 5,
+       "source_words": ["END", "DO"],
+       "sql": "END DO",
+       "start": 187,
+       "words": ["END", "DO"]
+      },
+      {
+       "canonical": "DO BEGIN SELECT * FROM M JOIN N ON M.ID = N.ID",
+       "end": 241,
+       "line": 6,
+       "source_words": ["DO", "BEGIN", "SELECT", "*", "FROM", "m", "JOIN", "n", "ON", "m", ".", "id", "=", "n", ".", "id"],
+       "sql": "DO BEGIN SELECT * FROM m JOIN n ON m.id = n.id",
+       "start": 195,
+       "words": ["DO", "BEGIN", "SELECT", "*", "FROM", "M", "JOIN", "N", "ON", "M", ".", "ID", "=", "N", ".", "ID"]
+      },
+      {
+       "canonical": "DROP TABLE N",
+       "end": 255,
+       "line": 6,
+       "source_words": ["DROP", "TABLE", "n"],
+       "sql": "DROP TABLE n",
+       "start": 243,
+       "words": ["DROP", "TABLE", "N"]
+      },
+      {
+       "canonical": "END DO",
+       "end": 263,
+       "line": 6,
+       "source_words": ["END", "DO"],
+       "sql": "END DO",
+       "start": 257,
+       "words": ["END", "DO"]
+      },
+      {
+       "canonical": "DEFINE ACTION $W() AS UPSERT INTO M (ID) VALUES (1)",
+       "end": 316,
+       "line": 7,
+       "source_words": ["DEFINE", "ACTION", "$", "w", "(", ")", "AS", "UPSERT", "INTO", "m", "(", "id", ")", "VALUES", "(", "1", ")"],
+       "sql": "DEFINE ACTION $w() AS UPSERT INTO m (id) VALUES (1)",
+       "start": 265,
+       "words": ["DEFINE", "ACTION", "$", "W", "(", ")", "AS", "UPSERT", "INTO", "M", "(", "ID", ")", "VALUES", "(", "1", ")"]
+      },
+      {
+       "canonical": "END DEFINE",
+       "end": 328,
+       "line": 7,
+       "source_words": ["END", "DEFINE"],
+       "sql": "END DEFINE",
+       "start": 318,
+       "words": ["END", "DEFINE"]
+      },
+      {
+       "canonical": "DEFINE ACTION $S() AS DROP TABLE M",
+       "end": 364,
+       "line": 8,
+       "source_words": ["DEFINE", "ACTION", "$", "s", "(", ")", "AS", "DROP", "TABLE", "m"],
+       "sql": "DEFINE ACTION $s() AS DROP TABLE m",
+       "start": 330,
+       "words": ["DEFINE", "ACTION", "$", "S", "(", ")", "AS", "DROP", "TABLE", "M"]
+      },
+      {
+       "canonical": "END DEFINE",
+       "end": 376,
+       "line": 8,
+       "source_words": ["END", "DEFINE"],
+       "sql": "END DEFINE",
+       "start": 366,
+       "words": ["END", "DEFINE"]
+      },
+      {
+       "canonical": "DO $W()",
+       "end": 385,
+       "line": 9,
+       "source_words": ["DO", "$", "w", "(", ")"],
+       "sql": "DO $w()",
+       "start": 378,
+       "words": ["DO", "$", "W", "(", ")"]
+      },
+      {
+       "canonical": "DO $S()",
+       "end": 394,
+       "line": 10,
+       "source_words": ["DO", "$", "s", "(", ")"],
+       "sql": "DO $s()",
+       "start": 387,
+       "words": ["DO", "$", "S", "(", ")"]
+      },
+      {
+       "canonical": "DO $MISSING()",
+       "end": 409,
+       "line": 11,
+       "source_words": ["DO", "$", "missing", "(", ")"],
+       "sql": "DO $missing()",
+       "start": 396,
+       "words": ["DO", "$", "MISSING", "(", ")"]
+      },
+      {
+       "canonical": "EVALUATE FOR $I IN ASLIST(1) DO BEGIN BATCH UPDATE M SET ID = 2",
+       "end": 474,
+       "line": 12,
+       "source_words": ["EVALUATE", "FOR", "$", "i", "IN", "AsList", "(", "1", ")", "DO", "BEGIN", "BATCH", "UPDATE", "m", "SET", "id", "=", "2"],
+       "sql": "EVALUATE FOR $i IN AsList(1) DO BEGIN BATCH UPDATE m SET id = 2",
+       "start": 411,
+       "words": ["EVALUATE", "FOR", "$", "I", "IN", "ASLIST", "(", "1", ")", "DO", "BEGIN", "BATCH", "UPDATE", "M", "SET", "ID", "=", "2"]
+      },
+      {
+       "canonical": "DROP TABLE M",
+       "end": 488,
+       "line": 12,
+       "source_words": ["DROP", "TABLE", "m"],
+       "sql": "DROP TABLE m",
+       "start": 476,
+       "words": ["DROP", "TABLE", "M"]
+      },
+      {
+       "canonical": "END DO",
+       "end": 496,
+       "line": 12,
+       "source_words": ["END", "DO"],
+       "sql": "END DO",
+       "start": 490,
+       "words": ["END", "DO"]
+      },
+      {
+       "canonical": "DO BEGIN UPSERT OBJECT O (TYPE SECRET) WITH VALUE = 'x'",
+       "end": 553,
+       "line": 13,
+       "source_words": ["DO", "BEGIN", "UPSERT", "OBJECT", "o", "(", "TYPE", "SECRET", ")", "WITH", "value", "=", "'x'"],
+       "sql": "DO BEGIN UPSERT OBJECT o (TYPE SECRET) WITH value = 'x'",
+       "start": 498,
+       "words": ["DO", "BEGIN", "UPSERT", "OBJECT", "O", "(", "TYPE", "SECRET", ")", "WITH", "VALUE", "=", "'x'"]
+      },
+      {
+       "canonical": "SELECT 1",
+       "end": 563,
+       "line": 13,
+       "source_words": ["SELECT", "1"],
+       "sql": "SELECT 1",
+       "start": 555,
+       "words": ["SELECT", "1"]
+      },
+      {
+       "canonical": "END DO",
+       "end": 571,
+       "line": 13,
+       "source_words": ["END", "DO"],
+       "sql": "END DO",
+       "start": 565,
+       "words": ["END", "DO"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_s.up.sql:3:DS107", "0002_s.up.sql:3:DS107", "0002_s.up.sql:5:DS107", "0002_s.up.sql:7:DS107", "0002_s.up.sql:8:DS107", "0002_s.up.sql:9:DS107", "0003_s.up.sql:12:BC103", "0003_s.up.sql:12:DS101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE `a\\`b` (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "comments": ["-- attached to the first statement"],
+      "end": 130,
+      "line": 5,
+      "source_words": ["CREATE", "TABLE", "`a\\`b`", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE `a\\`b` (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 72,
+      "words": ["CREATE", "TABLE", "`a\\`b`", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "UPSERT INTO `a\\`b` (ID) VALUES (1U)",
+      "comments": ["/* a block comment\n   on two lines */"],
+      "end": 235,
+      "line": 8,
+      "source_words": ["UPSERT", "INTO", "`a\\`b`", "(", "id", ")", "VALUES", "(", "1u", ")"],
+      "sql": "UPSERT INTO `a\\`b` (id) VALUES (1u)",
+      "start": 200,
+      "words": ["UPSERT", "INTO", "`a\\`b`", "(", "ID", ")", "VALUES", "(", "1U", ")"]
+     },
+     {
+      "canonical": "$TEXT = @@line one; still the literal\n@@@@ and an escaped marker@@",
+      "end": 303,
+      "line": 9,
+      "source_words": ["$text", "=", "@@line one; still the literal\n@@@@ and an escaped marker@@"],
+      "sql": "$text = @@line one; still the literal\n@@@@ and an escaped marker@@",
+      "start": 237,
+      "words": ["$TEXT", "=", "@@line one; still the literal\n@@@@ and an escaped marker@@"]
+     },
+     {
+      "canonical": "$F = ($X) -> { $Y = $X + 1; RETURN $Y; }",
+      "end": 345,
+      "line": 11,
+      "source_words": ["$f", "=", "(", "$x", ")", "-", ">", "{", "$y", "=", "$x", "+", "1", ";", "RETURN", "$y", ";", "}"],
+      "sql": "$f = ($x) -> { $y = $x + 1; RETURN $y; }",
+      "start": 305,
+      "words": ["$F", "=", "(", "$X", ")", "-", ">", "{", "$Y", "=", "$X", "+", "1", ";", "RETURN", "$Y", ";", "}"]
+     },
+     {
+      "canonical": "DEFINE ACTION $ACT($N) AS DO BEGIN SELECT CASE WHEN $N > 1 THEN 'a;b' ELSE \"c;d\" END AS CASE; END DO; SELECT 1 AS END; END DEFINE",
+      "end": 486,
+      "line": 12,
+      "source_words": ["DEFINE", "ACTION", "$act", "(", "$n", ")", "AS", "DO", "BEGIN", "SELECT", "CASE", "WHEN", "$n", ">", "1", "THEN", "'a;b'", "ELSE", "\"c;d\"", "END", "AS", "case", ";", "END", "DO", ";", "SELECT", "1", "AS", "end", ";", "END", "DEFINE"],
+      "sql": "DEFINE ACTION $act($n) AS\n  DO BEGIN\n    SELECT CASE WHEN $n > 1 THEN 'a;b' ELSE \"c;d\" END AS case;\n  END DO;\n  SELECT 1 AS end;\nEND DEFINE",
+      "start": 347,
+      "words": ["DEFINE", "ACTION", "$ACT", "(", "$N", ")", "AS", "DO", "BEGIN", "SELECT", "CASE", "WHEN", "$N", ">", "1", "THEN", "'a;b'", "ELSE", "\"c;d\"", "END", "AS", "CASE", ";", "END", "DO", ";", "SELECT", "1", "AS", "END", ";", "END", "DEFINE"]
+     },
+     {
+      "canonical": "EVALUATE FOR $I IN ASLIST(1, 2) DO $ACT($I)",
+      "end": 531,
+      "line": 18,
+      "source_words": ["EVALUATE", "FOR", "$i", "IN", "AsList", "(", "1", ",", "2", ")", "DO", "$act", "(", "$i", ")"],
+      "sql": "EVALUATE FOR $i IN AsList(1, 2) DO $act($i)",
+      "start": 488,
+      "words": ["EVALUATE", "FOR", "$I", "IN", "ASLIST", "(", "1", ",", "2", ")", "DO", "$ACT", "(", "$I", ")"]
+     },
+     {
+      "canonical": "EVALUATE IF TRUE DO BEGIN SELECT 1; END DO",
+      "end": 575,
+      "line": 19,
+      "source_words": ["EVALUATE", "IF", "true", "DO", "BEGIN", "SELECT", "1", ";", "END", "DO"],
+      "sql": "EVALUATE IF true DO BEGIN SELECT 1; END DO",
+      "start": 533,
+      "words": ["EVALUATE", "IF", "TRUE", "DO", "BEGIN", "SELECT", "1", ";", "END", "DO"]
+     },
+     {
+      "canonical": "SELECT 'unterminated;\n",
+      "end": 602,
+      "line": 21,
+      "source_words": ["SELECT", "'unterminated;\n"],
+      "sql": "SELECT 'unterminated;\n",
+      "start": 580,
+      "words": ["SELECT", "'unterminated;\n"]
+     }
+    ],
+    [
+     {
+      "canonical": "DROP TOPIC T",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "TOPIC",
+        "object": "t"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+       }
+      ],
+      "end": 41,
+      "line": 3,
+      "source_words": ["DROP", "TOPIC", "t"],
+      "sql": "DROP TOPIC t",
+      "start": 29,
+      "words": ["DROP", "TOPIC", "T"]
+     },
+     {
+      "canonical": "DROP TOPIC U",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "TOPIC",
+        "object": "u"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+       }
+      ],
+      "end": 55,
+      "line": 3,
+      "source_words": ["DROP", "TOPIC", "u"],
+      "sql": "DROP TOPIC u",
+      "start": 43,
+      "words": ["DROP", "TOPIC", "U"]
+     },
+     {
+      "canonical": "DROP TRANSFER X",
+      "comments": ["-- right above the next one"],
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "TRANSFER",
+        "object": "x"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP TRANSFER stops the transfer and drops the topic consumer YDB created for it, with its position in the topic"
+       }
+      ],
+      "end": 140,
+      "line": 5,
+      "source_words": ["DROP", "TRANSFER", "x"],
+      "sql": "DROP TRANSFER x",
+      "start": 125,
+      "words": ["DROP", "TRANSFER", "X"]
+     },
+     {
+      "canonical": "DROP COORDINATION NODE IF EXISTS `dir/node`",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "COORDINATION NODE",
+        "object": "`dir/node`"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP COORDINATION NODE removes the node with its semaphores and rate limiter resources, even while a session holds a lock on it"
+       }
+      ],
+      "end": 188,
+      "line": 7,
+      "source_words": ["DROP", "COORDINATION", "NODE", "IF", "EXISTS", "`dir/node`"],
+      "sql": "DROP COORDINATION NODE IF EXISTS `dir/node`",
+      "start": 145,
+      "words": ["DROP", "COORDINATION", "NODE", "IF", "EXISTS", "`dir/node`"]
+     },
+     {
+      "canonical": "DROP STREAMING QUERY Q",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "STREAMING QUERY",
+        "object": "q"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "the operation removes or resets streaming-query checkpoint state; a rollback restores the declaration, not the discarded state"
+       }
+      ],
+      "end": 212,
+      "line": 8,
+      "source_words": ["DROP", "STREAMING", "QUERY", "q"],
+      "sql": "DROP STREAMING QUERY q",
+      "start": 190,
+      "words": ["DROP", "STREAMING", "QUERY", "Q"]
+     },
+     {
+      "canonical": "DROP ASYNC REPLICATION R CASCADE",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "ASYNC REPLICATION",
+        "object": "r"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP ASYNC REPLICATION ... CASCADE drops the replica tables with the replication"
+       }
+      ],
+      "end": 246,
+      "line": 9,
+      "source_words": ["DROP", "ASYNC", "REPLICATION", "r", "CASCADE"],
+      "sql": "DROP ASYNC REPLICATION r CASCADE",
+      "start": 214,
+      "words": ["DROP", "ASYNC", "REPLICATION", "R", "CASCADE"]
+     },
+     {
+      "canonical": "DROP ASYNC REPLICATION R2",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "behavioral",
+        "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+       }
+      ],
+      "end": 273,
+      "line": 10,
+      "source_words": ["DROP", "ASYNC", "REPLICATION", "r2"],
+      "sql": "DROP ASYNC REPLICATION r2",
+      "start": 248,
+      "words": ["DROP", "ASYNC", "REPLICATION", "R2"]
+     }
+    ],
+    [
+     {
+      "canonical": "DO BEGIN CREATE TABLE M (ID UINT64 NOT NULL, PRIMARY KEY (ID)); SELECT * FROM AS_TABLE([<|ID: 1|>]); END DO",
+      "end": 111,
+      "line": 1,
+      "source_words": ["DO", "BEGIN", "CREATE", "TABLE", "m", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", ";", "SELECT", "*", "FROM", "AS_TABLE", "(", "[", "<", "|", "id", ":", "1", "|", ">", "]", ")", ";", "END", "DO"],
+      "sql": "DO BEGIN\n  CREATE TABLE m (id Uint64 NOT NULL, PRIMARY KEY (id));\n  SELECT * FROM AS_TABLE([<|id: 1|>]);\nEND DO",
+      "start": 0,
+      "words": ["DO", "BEGIN", "CREATE", "TABLE", "M", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", ";", "SELECT", "*", "FROM", "AS_TABLE", "(", "[", "<", "|", "ID", ":", "1", "|", ">", "]", ")", ";", "END", "DO"]
+     },
+     {
+      "canonical": "DO BEGIN SELECT 1; CREATE TABLE N (ID UINT64 NOT NULL, PRIMARY KEY (ID)); END DO",
+      "end": 193,
+      "line": 5,
+      "source_words": ["DO", "BEGIN", "SELECT", "1", ";", "CREATE", "TABLE", "n", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", ";", "END", "DO"],
+      "sql": "DO BEGIN SELECT 1; CREATE TABLE n (id Uint64 NOT NULL, PRIMARY KEY (id)); END DO",
+      "start": 113,
+      "words": ["DO", "BEGIN", "SELECT", "1", ";", "CREATE", "TABLE", "N", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", ";", "END", "DO"]
+     },
+     {
+      "canonical": "DO BEGIN SELECT * FROM M JOIN N ON M.ID = N.ID; DROP TABLE N; END DO",
+      "end": 263,
+      "line": 6,
+      "source_words": ["DO", "BEGIN", "SELECT", "*", "FROM", "m", "JOIN", "n", "ON", "m", ".", "id", "=", "n", ".", "id", ";", "DROP", "TABLE", "n", ";", "END", "DO"],
+      "sql": "DO BEGIN SELECT * FROM m JOIN n ON m.id = n.id; DROP TABLE n; END DO",
+      "start": 195,
+      "words": ["DO", "BEGIN", "SELECT", "*", "FROM", "M", "JOIN", "N", "ON", "M", ".", "ID", "=", "N", ".", "ID", ";", "DROP", "TABLE", "N", ";", "END", "DO"]
+     },
+     {
+      "canonical": "DEFINE ACTION $W() AS UPSERT INTO M (ID) VALUES (1); END DEFINE",
+      "end": 328,
+      "line": 7,
+      "source_words": ["DEFINE", "ACTION", "$w", "(", ")", "AS", "UPSERT", "INTO", "m", "(", "id", ")", "VALUES", "(", "1", ")", ";", "END", "DEFINE"],
+      "sql": "DEFINE ACTION $w() AS UPSERT INTO m (id) VALUES (1); END DEFINE",
+      "start": 265,
+      "words": ["DEFINE", "ACTION", "$W", "(", ")", "AS", "UPSERT", "INTO", "M", "(", "ID", ")", "VALUES", "(", "1", ")", ";", "END", "DEFINE"]
+     },
+     {
+      "canonical": "DEFINE ACTION $S() AS DROP TABLE M; END DEFINE",
+      "end": 376,
+      "line": 8,
+      "source_words": ["DEFINE", "ACTION", "$s", "(", ")", "AS", "DROP", "TABLE", "m", ";", "END", "DEFINE"],
+      "sql": "DEFINE ACTION $s() AS DROP TABLE m; END DEFINE",
+      "start": 330,
+      "words": ["DEFINE", "ACTION", "$S", "(", ")", "AS", "DROP", "TABLE", "M", ";", "END", "DEFINE"]
+     },
+     {
+      "canonical": "DO $W()",
+      "end": 385,
+      "line": 9,
+      "source_words": ["DO", "$w", "(", ")"],
+      "sql": "DO $w()",
+      "start": 378,
+      "words": ["DO", "$W", "(", ")"]
+     },
+     {
+      "canonical": "DO $S()",
+      "end": 394,
+      "line": 10,
+      "source_words": ["DO", "$s", "(", ")"],
+      "sql": "DO $s()",
+      "start": 387,
+      "words": ["DO", "$S", "(", ")"]
+     },
+     {
+      "canonical": "DO $MISSING()",
+      "end": 409,
+      "line": 11,
+      "source_words": ["DO", "$missing", "(", ")"],
+      "sql": "DO $missing()",
+      "start": 396,
+      "words": ["DO", "$MISSING", "(", ")"]
+     },
+     {
+      "canonical": "EVALUATE FOR $I IN ASLIST(1) DO BEGIN BATCH UPDATE M SET ID = 2; DROP TABLE M; END DO",
+      "end": 496,
+      "line": 12,
+      "source_words": ["EVALUATE", "FOR", "$i", "IN", "AsList", "(", "1", ")", "DO", "BEGIN", "BATCH", "UPDATE", "m", "SET", "id", "=", "2", ";", "DROP", "TABLE", "m", ";", "END", "DO"],
+      "sql": "EVALUATE FOR $i IN AsList(1) DO BEGIN BATCH UPDATE m SET id = 2; DROP TABLE m; END DO",
+      "start": 411,
+      "words": ["EVALUATE", "FOR", "$I", "IN", "ASLIST", "(", "1", ")", "DO", "BEGIN", "BATCH", "UPDATE", "M", "SET", "ID", "=", "2", ";", "DROP", "TABLE", "M", ";", "END", "DO"]
+     },
+     {
+      "canonical": "DO BEGIN UPSERT OBJECT O (TYPE SECRET) WITH VALUE = 'x'; SELECT 1; END DO",
+      "end": 571,
+      "line": 13,
+      "source_words": ["DO", "BEGIN", "UPSERT", "OBJECT", "o", "(", "TYPE", "SECRET", ")", "WITH", "value", "=", "'x'", ";", "SELECT", "1", ";", "END", "DO"],
+      "sql": "DO BEGIN UPSERT OBJECT o (TYPE SECRET) WITH value = 'x'; SELECT 1; END DO",
+      "start": 498,
+      "words": ["DO", "BEGIN", "UPSERT", "OBJECT", "O", "(", "TYPE", "SECRET", ")", "WITH", "VALUE", "=", "'x'", ";", "SELECT", "1", ";", "END", "DO"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_s.up.sql",
+     "sql": "﻿--!syntax_v1\n-- a header comment\n\n-- attached to the first statement\nCREATE TABLE `a\\`b` (id Uint64 NOT NULL, PRIMARY KEY (id)); -- trails the first statement\n/* a block comment\n   on two lines */\nUPSERT INTO `a\\`b` (id) VALUES (1u);\n$text = @@line one; still the literal\n@@@@ and an escaped marker@@;\n$f = ($x) -> { $y = $x + 1; RETURN $y; };\nDEFINE ACTION $act($n) AS\n  DO BEGIN\n    SELECT CASE WHEN $n > 1 THEN 'a;b' ELSE \"c;d\" END AS case;\n  END DO;\n  SELECT 1 AS end;\nEND DEFINE;\nEVALUATE FOR $i IN AsList(1, 2) DO $act($i);\nEVALUATE IF true DO BEGIN SELECT 1; END DO;\n;;\nSELECT 'unterminated;\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_s.up.sql",
+     "sql": "-- detached by a blank line\n\nDROP TOPIC t; DROP TOPIC u; -- after the last statement on its line\n-- right above the next one\nDROP TRANSFER x\r\n;\r\nDROP COORDINATION NODE IF EXISTS `dir/node`;\nDROP STREAMING QUERY q;\nDROP ASYNC REPLICATION r CASCADE;\nDROP ASYNC REPLICATION r2;\n/* unterminated block comment ; DROP TOPIC hidden;",
+     "up": true,
+     "version": 2
+    },
+    {
+     "name": "0003_s.up.sql",
+     "sql": "DO BEGIN\n  CREATE TABLE m (id Uint64 NOT NULL, PRIMARY KEY (id));\n  SELECT * FROM AS_TABLE([<|id: 1|>]);\nEND DO;\nDO BEGIN SELECT 1; CREATE TABLE n (id Uint64 NOT NULL, PRIMARY KEY (id)); END DO;\nDO BEGIN SELECT * FROM m JOIN n ON m.id = n.id; DROP TABLE n; END DO;\nDEFINE ACTION $w() AS UPSERT INTO m (id) VALUES (1); END DEFINE;\nDEFINE ACTION $s() AS DROP TABLE m; END DEFINE;\nDO $w();\nDO $s();\nDO $missing();\nEVALUATE FOR $i IN AsList(1) DO BEGIN BATCH UPDATE m SET id = 2; DROP TABLE m; END DO;\nDO BEGIN UPSERT OBJECT o (TYPE SECRET) WITH value = 'x'; SELECT 1; END DO;\n",
+     "up": true,
+     "version": 3
+    }
+   ]
+  }
+ ]
+}

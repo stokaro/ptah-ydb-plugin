@@ -1,0 +1,11 @@
+[
+ {
+  "dialect": "ydb",
+  "server_version": "",
+  "compatibility": "",
+  "dir_format": "ptah",
+  "overrides": {
+   "unique_index_on_existing_table": true
+  }
+ }
+]

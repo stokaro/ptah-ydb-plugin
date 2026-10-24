@@ -1,0 +1,79 @@
+{
+ "kind": "annotate",
+ "request": {
+  "facts": [
+   "safety-effect"
+  ],
+  "sources": [
+   {
+    "name": "0001_t.up.sql",
+    "sql": "SELECT 'a\\';\nALTER STREAMING QUERY q SET (RUN = FALSE);\nSELECT '';\n"
+   }
+  ],
+  "files": [
+   [
+    {
+     "start": 0,
+     "end": 11,
+     "line": 1,
+     "sql": "SELECT 'a\\'",
+     "canonical": "SELECT 'a\\'",
+     "words": [
+      "SELECT",
+      "'a\\'"
+     ],
+     "source_words": [
+      "SELECT",
+      "'a\\'"
+     ]
+    },
+    {
+     "start": 13,
+     "end": 54,
+     "line": 2,
+     "sql": "ALTER STREAMING QUERY q SET (RUN = FALSE)",
+     "canonical": "ALTER STREAMING QUERY Q SET (RUN = FALSE)",
+     "words": [
+      "ALTER",
+      "STREAMING",
+      "QUERY",
+      "Q",
+      "SET",
+      "(",
+      "RUN",
+      "=",
+      "FALSE",
+      ")"
+     ],
+     "source_words": [
+      "ALTER",
+      "STREAMING",
+      "QUERY",
+      "q",
+      "SET",
+      "(",
+      "RUN",
+      "=",
+      "FALSE",
+      ")"
+     ]
+    },
+    {
+     "start": 56,
+     "end": 65,
+     "line": 3,
+     "sql": "SELECT ''",
+     "canonical": "SELECT ''",
+     "words": [
+      "SELECT",
+      "''"
+     ],
+     "source_words": [
+      "SELECT",
+      "''"
+     ]
+    }
+   ]
+  ]
+ }
+}

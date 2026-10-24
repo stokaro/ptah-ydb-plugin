@@ -6,6 +6,7 @@ toolchain go1.27.3
 
 require (
 	github.com/frankban/quicktest v1.14.6
+	github.com/google/go-cmp v0.7.0
 	github.com/stokaro/ptah/provider-sdk v0.1.0
 	github.com/ydb-platform/ydb-go-genproto v0.0.0-20260810123728-f0c151ab31b9
 	github.com/ydb-platform/ydb-go-sdk-auth-environ v0.5.3
@@ -19,7 +20,6 @@ require (
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.8.0 // indirect

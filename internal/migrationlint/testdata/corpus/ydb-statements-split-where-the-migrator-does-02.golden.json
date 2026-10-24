@@ -1,0 +1,184 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD102",
+      "file": 0,
+      "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
+      "statement": 1
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:5:YD102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD102",
+      "file": 0,
+      "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
+      "statement": 1
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:5:YD102"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD102",
+      "file": 0,
+      "message": "this statement runs a scheme statement and a statement that reads or writes a table in one query, which YDB refuses whole (Queries with mixed data and scheme operations are not supported); move the scheme statement out of the block or action into a statement of its own",
+      "statement": 1
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:5:YD102"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DEFINE ACTION $A() AS UPSERT INTO T (ID) VALUES (1)",
+       "end": 53,
+       "line": 1,
+       "source_words": ["DEFINE", "ACTION", "$", "a", "(", ")", "AS", "UPSERT", "INTO", "t", "(", "id", ")", "VALUES", "(", "1", ")"],
+       "sql": "DEFINE ACTION $a() AS\n  UPSERT INTO t (id) VALUES (1)",
+       "start": 0,
+       "words": ["DEFINE", "ACTION", "$", "A", "(", ")", "AS", "UPSERT", "INTO", "T", "(", "ID", ")", "VALUES", "(", "1", ")"]
+      },
+      {
+       "canonical": "DROP TABLE OLD",
+       "end": 71,
+       "line": 3,
+       "source_words": ["DROP", "TABLE", "old"],
+       "sql": "DROP TABLE old",
+       "start": 57,
+       "words": ["DROP", "TABLE", "OLD"]
+      },
+      {
+       "canonical": "END DEFINE",
+       "end": 83,
+       "line": 4,
+       "source_words": ["END", "DEFINE"],
+       "sql": "END DEFINE",
+       "start": 73,
+       "words": ["END", "DEFINE"]
+      },
+      {
+       "canonical": "DO $A()",
+       "end": 92,
+       "line": 5,
+       "source_words": ["DO", "$", "a", "(", ")"],
+       "sql": "DO $a()",
+       "start": 85,
+       "words": ["DO", "$", "A", "(", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0001_t.up.sql:3:BC103", "0001_t.up.sql:3:DS101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "DEFINE ACTION $A() AS UPSERT INTO T (ID) VALUES (1); DROP TABLE OLD; END DEFINE",
+      "end": 83,
+      "line": 1,
+      "source_words": ["DEFINE", "ACTION", "$a", "(", ")", "AS", "UPSERT", "INTO", "t", "(", "id", ")", "VALUES", "(", "1", ")", ";", "DROP", "TABLE", "old", ";", "END", "DEFINE"],
+      "sql": "DEFINE ACTION $a() AS\n  UPSERT INTO t (id) VALUES (1);\n  DROP TABLE old;\nEND DEFINE",
+      "start": 0,
+      "words": ["DEFINE", "ACTION", "$A", "(", ")", "AS", "UPSERT", "INTO", "T", "(", "ID", ")", "VALUES", "(", "1", ")", ";", "DROP", "TABLE", "OLD", ";", "END", "DEFINE"]
+     },
+     {
+      "canonical": "DO $A()",
+      "end": 92,
+      "line": 5,
+      "source_words": ["DO", "$a", "(", ")"],
+      "sql": "DO $a()",
+      "start": 85,
+      "words": ["DO", "$A", "(", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "DEFINE ACTION $a() AS\n  UPSERT INTO t (id) VALUES (1);\n  DROP TABLE old;\nEND DEFINE;\nDO $a();\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,535 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_n.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_n.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0003_n.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 3
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD101",
+      "file": 0,
+      "message": "ADD INDEX 1 adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 3
+     },
+     {
+      "code": "YD150",
+      "file": 2,
+      "message": "DROP INDEX i`x leaves its comment on the table as the attribute ptah.comment.index.i`x, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `i\\`x` ON `q\\`t` IS NULL",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "q`t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 2,
+      "message": "DROP COLUMN a\\b leaves its comment on the table as the attribute ptah.comment.column.a\\b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `q\\`t`.`a\\\\b` IS NULL",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "q`t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_n.up.sql:2:DS107", "0001_n.up.sql:3:DS107", "0001_n.up.sql:4:YD101", "0001_n.up.sql:5:DS107", "0003_n.up.sql:1:YD150", "0003_n.up.sql:2:BC104", "0003_n.up.sql:2:DS102", "0003_n.up.sql:2:YD150"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_n.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_n.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0003_n.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 3
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD101",
+      "file": 0,
+      "message": "ADD INDEX 1 adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 3
+     },
+     {
+      "code": "YD150",
+      "file": 2,
+      "message": "DROP INDEX i`x leaves its comment on the table as the attribute ptah.comment.index.i`x, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `i\\`x` ON `q\\`t` IS NULL",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "q`t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 2,
+      "message": "DROP COLUMN a\\b leaves its comment on the table as the attribute ptah.comment.column.a\\b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `q\\`t`.`a\\\\b` IS NULL",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "q`t"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_n.up.sql:2:DS107", "0001_n.up.sql:3:DS107", "0001_n.up.sql:4:YD101", "0001_n.up.sql:5:DS107", "0003_n.up.sql:1:YD150", "0003_n.up.sql:2:BC104", "0003_n.up.sql:2:DS102", "0003_n.up.sql:2:YD150"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_n.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_n.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0003_n.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 3
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD101",
+      "file": 0,
+      "message": "ADD INDEX 1 adds a unique index to t, a table that exists already, which needs target capability unique_index_on_existing_table, unavailable on this ydb target; declare the unique index in the CREATE TABLE that creates the table",
+      "statement": 3
+     },
+     {
+      "code": "YD150",
+      "file": 2,
+      "message": "DROP INDEX i`x leaves its comment on the table as the attribute ptah.comment.index.i`x, which YDB keeps after the index is gone and an index added later under the name reads as its own; remove it with COMMENT ON INDEX `i\\`x` ON `q\\`t` IS NULL",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "q`t"
+       }
+      ]
+     },
+     {
+      "code": "YD150",
+      "file": 2,
+      "message": "DROP COLUMN a\\b leaves its comment on the table as the attribute ptah.comment.column.a\\b, which YDB keeps after the column is gone and a column added later under the name reads as its own; remove it with COMMENT ON COLUMN `q\\`t`.`a\\\\b` IS NULL",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "q`t"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_n.up.sql:2:DS107", "0001_n.up.sql:3:DS107", "0001_n.up.sql:4:YD101", "0001_n.up.sql:5:DS107", "0003_n.up.sql:1:YD150", "0003_n.up.sql:2:DS102", "0003_n.up.sql:2:YD150"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "t"
+        }
+       ]
+      },
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "123"
+        }
+       ]
+      },
+      {},
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TRANSFER",
+         "object": "`dir/x`"
+        }
+       ]
+      }
+     ],
+     [
+      {},
+      {}
+     ],
+     [
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "SELECT DO `x` BEGIN FROM T",
+       "end": 26,
+       "line": 1,
+       "source_words": ["SELECT", "do", "`x`", "begin", "FROM", "t"],
+       "sql": "SELECT do `x` begin FROM t",
+       "start": 0,
+       "words": ["SELECT", "DO", "`x`", "BEGIN", "FROM", "T"]
+      },
+      {
+       "canonical": "DROP TOPIC T",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "t"
+        }
+       ],
+       "end": 40,
+       "line": 2,
+       "source_words": ["DROP", "TOPIC", "t"],
+       "sql": "DROP TOPIC t",
+       "start": 28,
+       "words": ["DROP", "TOPIC", "T"]
+      },
+      {
+       "canonical": "DROP TOPIC 123",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "123"
+        }
+       ],
+       "end": 56,
+       "line": 3,
+       "source_words": ["DROP", "TOPIC", "123"],
+       "sql": "DROP TOPIC 123",
+       "start": 42,
+       "words": ["DROP", "TOPIC", "123"]
+      },
+      {
+       "canonical": "ALTER TABLE T ADD INDEX 1X GLOBAL UNIQUE ON (A)",
+       "end": 105,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "1x", "GLOBAL", "UNIQUE", "ON", "(", "a", ")"],
+       "sql": "ALTER TABLE t ADD INDEX 1x GLOBAL UNIQUE ON (a)",
+       "start": 58,
+       "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "1X", "GLOBAL", "UNIQUE", "ON", "(", "A", ")"]
+      },
+      {
+       "canonical": "DROP TRANSFER `dir/x`",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TRANSFER",
+         "object": "`dir/x`"
+        }
+       ],
+       "end": 128,
+       "line": 5,
+       "source_words": ["DROP", "TRANSFER", "`dir/x`"],
+       "sql": "DROP TRANSFER `dir/x`",
+       "start": 107,
+       "words": ["DROP", "TRANSFER", "`dir/x`"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE `q\\`T` (id Uint64 NOT NULL, `A\\\\B` Utf8, PRIMARY KEY (id), INDEX `I\\`x` GLOBAL ON (`a\\\\b`))",
+       "end": 104,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`q\\`", "t", "` (id Uint64 NOT NULL, `", "a", "\\", "\\", "b", "` Utf8, PRIMARY KEY (id), INDEX `", "i", "\\", "`x`", "GLOBAL", "ON", "(", "`a\\\\b`", ")", ")"],
+       "sql": "CREATE TABLE `q\\`t` (id Uint64 NOT NULL, `a\\\\b` Utf8, PRIMARY KEY (id), INDEX `i\\`x` GLOBAL ON (`a\\\\b`))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`q\\`", "T", "` (id Uint64 NOT NULL, `", "A", "\\", "\\", "B", "` Utf8, PRIMARY KEY (id), INDEX `", "I", "\\", "`x`", "GLOBAL", "ON", "(", "`a\\\\b`", ")", ")"]
+      },
+      {
+       "canonical": "COMMENT ON COLUMN `q\\`T`.`A\\\\B` IS 'x';\nCOMMENT ON INDEX `I\\`x` ON `q\\`T` IS 'y';\n",
+       "end": 188,
+       "line": 2,
+       "source_words": ["COMMENT", "ON", "COLUMN", "`q\\`", "t", "`.`", "a", "\\", "\\", "b", "` IS 'x';\nCOMMENT ON INDEX `", "i", "\\", "`x`", "ON", "`q\\`", "t", "` IS 'y';\n"],
+       "sql": "COMMENT ON COLUMN `q\\`t`.`a\\\\b` IS 'x';\nCOMMENT ON INDEX `i\\`x` ON `q\\`t` IS 'y';\n",
+       "start": 106,
+       "words": ["COMMENT", "ON", "COLUMN", "`q\\`", "T", "`.`", "A", "\\", "\\", "B", "` IS 'x';\nCOMMENT ON INDEX `", "I", "\\", "`x`", "ON", "`q\\`", "T", "` IS 'y';\n"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE `q\\`T` DROP INDEX `I\\`x`",
+       "end": 36,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "`q\\`", "t", "` DROP INDEX `", "i", "\\", "`x`"],
+       "sql": "ALTER TABLE `q\\`t` DROP INDEX `i\\`x`",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "`q\\`", "T", "` DROP INDEX `", "I", "\\", "`x`"]
+      },
+      {
+       "canonical": "ALTER TABLE `q\\`T` DROP COLUMN `A\\\\B`;\n",
+       "end": 77,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "`q\\`", "t", "` DROP COLUMN `", "a", "\\", "\\", "b", "`;\n"],
+       "sql": "ALTER TABLE `q\\`t` DROP COLUMN `a\\\\b`;\n",
+       "start": 38,
+       "words": ["ALTER", "TABLE", "`q\\`", "T", "` DROP COLUMN `", "A", "\\", "\\", "B", "`;\n"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0001_n.up.sql:2:DS107", "0001_n.up.sql:3:DS107", "0001_n.up.sql:5:DS107"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "SELECT DO `x` BEGIN FROM T",
+      "end": 26,
+      "line": 1,
+      "source_words": ["SELECT", "do", "`x`", "begin", "FROM", "t"],
+      "sql": "SELECT do `x` begin FROM t",
+      "start": 0,
+      "words": ["SELECT", "DO", "`x`", "BEGIN", "FROM", "T"]
+     },
+     {
+      "canonical": "DROP TOPIC T",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "TOPIC",
+        "object": "t"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+       }
+      ],
+      "end": 40,
+      "line": 2,
+      "source_words": ["DROP", "TOPIC", "t"],
+      "sql": "DROP TOPIC t",
+      "start": 28,
+      "words": ["DROP", "TOPIC", "T"]
+     },
+     {
+      "canonical": "DROP TOPIC 123",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "TOPIC",
+        "object": "123"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+       }
+      ],
+      "end": 56,
+      "line": 3,
+      "source_words": ["DROP", "TOPIC", "123"],
+      "sql": "DROP TOPIC 123",
+      "start": 42,
+      "words": ["DROP", "TOPIC", "123"]
+     },
+     {
+      "canonical": "ALTER TABLE T ADD INDEX 1X GLOBAL UNIQUE ON (A)",
+      "effects": [
+       {
+        "clause": "ADD INDEX",
+        "columns": ["a"],
+        "fact": "unique-index",
+        "failure": "YDB: Duplicate key found",
+        "object": "1",
+        "table": "t"
+       }
+      ],
+      "end": 105,
+      "line": 4,
+      "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "1", "x", "GLOBAL", "UNIQUE", "ON", "(", "a", ")"],
+      "sql": "ALTER TABLE t ADD INDEX 1x GLOBAL UNIQUE ON (a)",
+      "start": 58,
+      "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "1", "X", "GLOBAL", "UNIQUE", "ON", "(", "A", ")"]
+     },
+     {
+      "canonical": "DROP TRANSFER `dir/x`",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "TRANSFER",
+        "object": "`dir/x`"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP TRANSFER stops the transfer and drops the topic consumer YDB created for it, with its position in the topic"
+       }
+      ],
+      "end": 128,
+      "line": 5,
+      "source_words": ["DROP", "TRANSFER", "`dir/x`"],
+      "sql": "DROP TRANSFER `dir/x`",
+      "start": 107,
+      "words": ["DROP", "TRANSFER", "`dir/x`"]
+     }
+    ],
+    [
+     {
+      "canonical": "CREATE TABLE `q\\`t` (ID UINT64 NOT NULL, `a\\\\b` UTF8, PRIMARY KEY (ID), INDEX `i\\`x` GLOBAL ON (`a\\\\b`))",
+      "end": 104,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`q\\`t`", "(", "id", "Uint64", "NOT", "NULL", ",", "`a\\\\b`", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "`i\\`x`", "GLOBAL", "ON", "(", "`a\\\\b`", ")", ")"],
+      "sql": "CREATE TABLE `q\\`t` (id Uint64 NOT NULL, `a\\\\b` Utf8, PRIMARY KEY (id), INDEX `i\\`x` GLOBAL ON (`a\\\\b`))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`q\\`t`", "(", "ID", "UINT64", "NOT", "NULL", ",", "`a\\\\b`", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "`i\\`x`", "GLOBAL", "ON", "(", "`a\\\\b`", ")", ")"]
+     },
+     {
+      "canonical": "COMMENT ON COLUMN `q\\`t`.`a\\\\b` IS 'x'",
+      "end": 144,
+      "line": 2,
+      "source_words": ["COMMENT", "ON", "COLUMN", "`q\\`t`", ".", "`a\\\\b`", "IS", "'x'"],
+      "sql": "COMMENT ON COLUMN `q\\`t`.`a\\\\b` IS 'x'",
+      "start": 106,
+      "words": ["COMMENT", "ON", "COLUMN", "`q\\`t`", ".", "`a\\\\b`", "IS", "'x'"]
+     },
+     {
+      "canonical": "COMMENT ON INDEX `i\\`x` ON `q\\`t` IS 'y'",
+      "end": 186,
+      "line": 3,
+      "source_words": ["COMMENT", "ON", "INDEX", "`i\\`x`", "ON", "`q\\`t`", "IS", "'y'"],
+      "sql": "COMMENT ON INDEX `i\\`x` ON `q\\`t` IS 'y'",
+      "start": 146,
+      "words": ["COMMENT", "ON", "INDEX", "`i\\`x`", "ON", "`q\\`t`", "IS", "'y'"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE `q\\`t` DROP INDEX `i\\`x`",
+      "end": 36,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "`q\\`t`", "DROP", "INDEX", "`i\\`x`"],
+      "sql": "ALTER TABLE `q\\`t` DROP INDEX `i\\`x`",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "`q\\`t`", "DROP", "INDEX", "`i\\`x`"]
+     },
+     {
+      "canonical": "ALTER TABLE `q\\`t` DROP COLUMN `a\\\\b`",
+      "end": 75,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "`q\\`t`", "DROP", "COLUMN", "`a\\\\b`"],
+      "sql": "ALTER TABLE `q\\`t` DROP COLUMN `a\\\\b`",
+      "start": 38,
+      "words": ["ALTER", "TABLE", "`q\\`t`", "DROP", "COLUMN", "`a\\\\b`"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_n.up.sql",
+     "sql": "SELECT do `x` begin FROM t;\nDROP TOPIC t;\nDROP TOPIC 123;\nALTER TABLE t ADD INDEX 1x GLOBAL UNIQUE ON (a);\nDROP TRANSFER `dir/x`;\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_n.up.sql",
+     "sql": "CREATE TABLE `q\\`t` (id Uint64 NOT NULL, `a\\\\b` Utf8, PRIMARY KEY (id), INDEX `i\\`x` GLOBAL ON (`a\\\\b`));\nCOMMENT ON COLUMN `q\\`t`.`a\\\\b` IS 'x';\nCOMMENT ON INDEX `i\\`x` ON `q\\`t` IS 'y';\n",
+     "up": true,
+     "version": 2
+    },
+    {
+     "name": "0003_n.up.sql",
+     "sql": "ALTER TABLE `q\\`t` DROP INDEX `i\\`x`;\nALTER TABLE `q\\`t` DROP COLUMN `a\\\\b`;\n",
+     "up": true,
+     "version": 3
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,233 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:BC104", "0002_t.up.sql:1:DS102", "0002_t.up.sql:2:BC101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:BC104", "0002_t.up.sql:1:DS102", "0002_t.up.sql:2:BC101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:DS102", "0002_t.up.sql:2:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+       "end": 53,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE T ADD CHANGEFEED FEED WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+       "end": 129,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "t", "ADD", "CHANGEFEED", "feed", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"],
+       "sql": "ALTER TABLE t ADD CHANGEFEED feed WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+       "start": 55,
+       "words": ["ALTER", "TABLE", "T", "ADD", "CHANGEFEED", "FEED", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE T DROP CHANGEFEED FEED",
+       "end": 34,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "DROP", "CHANGEFEED", "feed"],
+       "sql": "ALTER TABLE t DROP CHANGEFEED feed",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "DROP", "CHANGEFEED", "FEED"]
+      },
+      {
+       "canonical": "ALTER TABLE T RENAME TO U",
+       "end": 61,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "u"],
+       "sql": "ALTER TABLE t RENAME TO u",
+       "start": 36,
+       "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "U"]
+      },
+      {
+       "canonical": "ALTER TABLE U ADD CHANGEFEED FEED WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+       "end": 137,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "u", "ADD", "CHANGEFEED", "feed", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"],
+       "sql": "ALTER TABLE u ADD CHANGEFEED feed WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+       "start": 63,
+       "words": ["ALTER", "TABLE", "U", "ADD", "CHANGEFEED", "FEED", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_t.up.sql:1:BC104", "0002_t.up.sql:1:DS102", "0002_t.up.sql:2:BC101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, PRIMARY KEY (ID))",
+      "end": 53,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE T ADD CHANGEFEED FEED WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+      "end": 129,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "t", "ADD", "CHANGEFEED", "feed", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"],
+      "sql": "ALTER TABLE t ADD CHANGEFEED feed WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+      "start": 55,
+      "words": ["ALTER", "TABLE", "T", "ADD", "CHANGEFEED", "FEED", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE T DROP CHANGEFEED FEED",
+      "end": 34,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "DROP", "CHANGEFEED", "feed"],
+      "sql": "ALTER TABLE t DROP CHANGEFEED feed",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "DROP", "CHANGEFEED", "FEED"]
+     },
+     {
+      "canonical": "ALTER TABLE T RENAME TO U",
+      "end": 61,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "u"],
+      "sql": "ALTER TABLE t RENAME TO u",
+      "start": 36,
+      "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "U"]
+     },
+     {
+      "canonical": "ALTER TABLE U ADD CHANGEFEED FEED WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+      "end": 137,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "u", "ADD", "CHANGEFEED", "feed", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"],
+      "sql": "ALTER TABLE u ADD CHANGEFEED feed WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+      "start": 63,
+      "words": ["ALTER", "TABLE", "U", "ADD", "CHANGEFEED", "FEED", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE t (id Uint64 NOT NULL, PRIMARY KEY (id));\nALTER TABLE t ADD CHANGEFEED feed WITH (MODE = 'UPDATES', FORMAT = 'JSON');\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER TABLE t DROP CHANGEFEED feed;\nALTER TABLE t RENAME TO u;\nALTER TABLE u ADD CHANGEFEED feed WITH (MODE = 'UPDATES', FORMAT = 'JSON');\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

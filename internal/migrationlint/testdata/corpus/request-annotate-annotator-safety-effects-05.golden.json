@@ -1,0 +1,24 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "annotate",
+ "result": {
+  "files": [
+   [
+    {
+     "effects": [
+      {
+       "fact": "stateful-drop",
+       "kind": "TOPIC",
+       "object": "t"
+      },
+      {
+       "fact": "safety-effect",
+       "impact": "destructive",
+       "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+      }
+     ]
+    }
+   ]
+  ]
+ }
+}

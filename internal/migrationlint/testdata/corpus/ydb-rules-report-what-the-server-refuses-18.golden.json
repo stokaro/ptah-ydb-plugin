@@ -1,0 +1,366 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0003_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 3
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD104",
+      "file": 2,
+      "message": "DROP COLUMN a: index t_a keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "a",
+        "parent": "dir/u"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 2,
+      "message": "DROP COLUMN b: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "b",
+        "parent": "dir/u"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:3:BC101", "0003_t.up.sql:1:BC104", "0003_t.up.sql:1:DS102", "0003_t.up.sql:1:YD104", "0003_t.up.sql:2:BC104", "0003_t.up.sql:2:DS102", "0003_t.up.sql:2:YD104"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0003_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 3
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD104",
+      "file": 2,
+      "message": "DROP COLUMN a: index t_a keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "a",
+        "parent": "dir/u"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 2,
+      "message": "DROP COLUMN b: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "b",
+        "parent": "dir/u"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:3:BC101", "0003_t.up.sql:1:BC104", "0003_t.up.sql:1:DS102", "0003_t.up.sql:1:YD104", "0003_t.up.sql:2:BC104", "0003_t.up.sql:2:DS102", "0003_t.up.sql:2:YD104"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0003_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 3
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD104",
+      "file": 2,
+      "message": "DROP COLUMN a: index t_a keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "a",
+        "parent": "dir/u"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 2,
+      "message": "DROP COLUMN b: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "b",
+        "parent": "dir/u"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:3:DS101", "0003_t.up.sql:1:DS102", "0003_t.up.sql:1:YD104", "0003_t.up.sql:2:DS102", "0003_t.up.sql:2:YD104"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, B TIMESTAMP, PRIMARY KEY (ID))",
+       "end": 74,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Timestamp", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Timestamp, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "TIMESTAMP", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE T ADD INDEX T_A GLOBAL ON (A)",
+       "end": 41,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "t_a", "GLOBAL", "ON", "(", "a", ")"],
+       "sql": "ALTER TABLE t ADD INDEX t_a GLOBAL ON (a)",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "T_A", "GLOBAL", "ON", "(", "A", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE T SET (TTL = INTERVAL(\"P1D\") ON B)",
+       "end": 89,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "t", "SET", "(", "TTL", "=", "Interval", "(", "\"P1D\"", ")", "ON", "b", ")"],
+       "sql": "ALTER TABLE t SET (TTL = Interval(\"P1D\") ON b)",
+       "start": 43,
+       "words": ["ALTER", "TABLE", "T", "SET", "(", "TTL", "=", "INTERVAL", "(", "\"P1D\"", ")", "ON", "B", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE T RENAME TO `dir/u`",
+       "end": 122,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "`dir/u`"],
+       "sql": "ALTER TABLE t RENAME TO `dir/u`",
+       "start": 91,
+       "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "`dir/u`"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE `dir/u` DROP COLUMN A",
+       "end": 33,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "`dir/u`", "DROP", "COLUMN", "a"],
+       "sql": "ALTER TABLE `dir/u` DROP COLUMN a",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "`dir/u`", "DROP", "COLUMN", "A"]
+      },
+      {
+       "canonical": "ALTER TABLE `dir/u` DROP COLUMN B",
+       "end": 68,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "`dir/u`", "DROP", "COLUMN", "b"],
+       "sql": "ALTER TABLE `dir/u` DROP COLUMN b",
+       "start": 35,
+       "words": ["ALTER", "TABLE", "`dir/u`", "DROP", "COLUMN", "B"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_t.up.sql:3:BC101", "0003_t.up.sql:1:BC104", "0003_t.up.sql:1:DS102", "0003_t.up.sql:2:BC104", "0003_t.up.sql:2:DS102"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, A UTF8, B TIMESTAMP, PRIMARY KEY (ID))",
+      "end": 74,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "a", "Utf8", ",", "b", "Timestamp", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Timestamp, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "A", "UTF8", ",", "B", "TIMESTAMP", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE T ADD INDEX T_A GLOBAL ON (A)",
+      "end": 41,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "t", "ADD", "INDEX", "t_a", "GLOBAL", "ON", "(", "a", ")"],
+      "sql": "ALTER TABLE t ADD INDEX t_a GLOBAL ON (a)",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "T", "ADD", "INDEX", "T_A", "GLOBAL", "ON", "(", "A", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE T SET (TTL = INTERVAL(\"P1D\") ON B)",
+      "end": 89,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "t", "SET", "(", "TTL", "=", "Interval", "(", "\"P1D\"", ")", "ON", "b", ")"],
+      "sql": "ALTER TABLE t SET (TTL = Interval(\"P1D\") ON b)",
+      "start": 43,
+      "words": ["ALTER", "TABLE", "T", "SET", "(", "TTL", "=", "INTERVAL", "(", "\"P1D\"", ")", "ON", "B", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE T RENAME TO `dir/u`",
+      "end": 122,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "t", "RENAME", "TO", "`dir/u`"],
+      "sql": "ALTER TABLE t RENAME TO `dir/u`",
+      "start": 91,
+      "words": ["ALTER", "TABLE", "T", "RENAME", "TO", "`dir/u`"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE `dir/u` DROP COLUMN A",
+      "end": 33,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "`dir/u`", "DROP", "COLUMN", "a"],
+      "sql": "ALTER TABLE `dir/u` DROP COLUMN a",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "`dir/u`", "DROP", "COLUMN", "A"]
+     },
+     {
+      "canonical": "ALTER TABLE `dir/u` DROP COLUMN B",
+      "end": 68,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "`dir/u`", "DROP", "COLUMN", "b"],
+      "sql": "ALTER TABLE `dir/u` DROP COLUMN b",
+      "start": 35,
+      "words": ["ALTER", "TABLE", "`dir/u`", "DROP", "COLUMN", "B"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Timestamp, PRIMARY KEY (id));\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER TABLE t ADD INDEX t_a GLOBAL ON (a);\nALTER TABLE t SET (TTL = Interval(\"P1D\") ON b);\nALTER TABLE t RENAME TO `dir/u`;\n",
+     "up": true,
+     "version": 2
+    },
+    {
+     "name": "0003_t.up.sql",
+     "sql": "ALTER TABLE `dir/u` DROP COLUMN a;\nALTER TABLE `dir/u` DROP COLUMN b;\n",
+     "up": true,
+     "version": 3
+    }
+   ]
+  }
+ ]
+}

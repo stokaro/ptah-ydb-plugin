@@ -1,0 +1,17 @@
+[
+ {
+  "dialect": "",
+  "server_version": "",
+  "compatibility": "",
+  "dir_format": "auto"
+ },
+ {
+  "dialect": "",
+  "server_version": "",
+  "compatibility": "",
+  "dir_format": "auto",
+  "disabled": [
+   "DS"
+  ]
+ }
+]

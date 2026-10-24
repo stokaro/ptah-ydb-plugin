@@ -1,0 +1,1 @@
+DROP TOPIC u;

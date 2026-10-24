@@ -1,0 +1,167 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "20060102150405_plan.sql",
+      "source": 0,
+      "up": true,
+      "version": 20060102150405
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "20060102150405_plan.sql",
+      "source": 0,
+      "up": true,
+      "version": 20060102150405
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "20060102150405_plan.sql",
+      "source": 0,
+      "up": true,
+      "version": 20060102150405
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "UPSERT INTO NOTES (ID, BODY) VALUES (1, \"x\\\"",
+       "end": 44,
+       "line": 1,
+       "source_words": ["UPSERT", "INTO", "notes", "(", "id", ",", "body", ")", "VALUES", "(", "1", ",", "\"x\\\""],
+       "sql": "UPSERT INTO notes (id, body) VALUES (1, \"x\\\"",
+       "start": 0,
+       "words": ["UPSERT", "INTO", "NOTES", "(", "ID", ",", "BODY", ")", "VALUES", "(", "1", ",", "\"x\\\""]
+      },
+      {
+       "canonical": "DROP TABLE USERS",
+       "end": 62,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "users"],
+       "sql": "DROP TABLE users",
+       "start": 46,
+       "words": ["DROP", "TABLE", "USERS"]
+      },
+      {
+       "canonical": "\"u);\n",
+       "end": 68,
+       "line": 1,
+       "source_words": ["\"u);\n"],
+       "sql": "\"u);\n",
+       "start": 63,
+       "words": ["\"u);\n"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["20060102150405_plan.sql:1:BC103", "20060102150405_plan.sql:1:DS101"],
+   "server_version": "",
+   "split": -1
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "20060102150405_plan.sql",
+      "source": 0,
+      "up": true,
+      "version": 20060102150405
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "dir_format": "atlas",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "UPSERT INTO NOTES (ID, BODY) VALUES (1, \"x\\\"; DROP TABLE users;\"u)",
+      "end": 66,
+      "line": 1,
+      "source_words": ["UPSERT", "INTO", "notes", "(", "id", ",", "body", ")", "VALUES", "(", "1", ",", "\"x\\\"; DROP TABLE users;\"u", ")"],
+      "sql": "UPSERT INTO notes (id, body) VALUES (1, \"x\\\"; DROP TABLE users;\"u)",
+      "start": 0,
+      "words": ["UPSERT", "INTO", "NOTES", "(", "ID", ",", "BODY", ")", "VALUES", "(", "1", ",", "\"x\\\"; DROP TABLE users;\"u", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "20060102150405_plan.sql",
+     "sql": "UPSERT INTO notes (id, body) VALUES (1, \"x\\\"; DROP TABLE users;\"u);\n",
+     "up": true,
+     "version": 20060102150405
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,14 @@
+{
+ "kind": "split",
+ "request": {
+  "target": "ydb",
+  "sources": [
+   {
+    "name": "0001_index.up.sql",
+    "sql": "ALTER TABLE `shop/users` ADD INDEX by_email GLOBAL UNIQUE SYNC ON (email, tenant);\nALTER TABLE `shop/users` ADD INDEX by_name GLOBAL SYNC ON (name);\n",
+    "version": 1,
+    "up": true
+   }
+  ]
+ }
+}

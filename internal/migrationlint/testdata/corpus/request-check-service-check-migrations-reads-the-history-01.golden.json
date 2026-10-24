@@ -1,0 +1,35 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "check",
+ "result": {
+  "complete": true,
+  "findings": [
+   {
+    "code": "YD104",
+    "file": 1,
+    "message": "DROP COLUMN v: index t_v keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+    "statement": 0,
+    "subjects": [
+     {
+      "kind": "column",
+      "name": "v",
+      "parent": "t"
+     }
+    ]
+   },
+   {
+    "code": "YD104",
+    "file": 2,
+    "message": "DROP COLUMN v: index t_v keys the column, and YDB refuses to drop it (Impossible drop column because table has an index with that column); drop the index first",
+    "statement": 0,
+    "subjects": [
+     {
+      "kind": "column",
+      "name": "v",
+      "parent": "t"
+     }
+    ]
+   }
+  ]
+ }
+}

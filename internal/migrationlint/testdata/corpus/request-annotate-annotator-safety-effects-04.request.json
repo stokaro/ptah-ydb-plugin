@@ -1,0 +1,52 @@
+{
+ "kind": "annotate",
+ "request": {
+  "facts": [
+   "safety-effect"
+  ],
+  "sources": [
+   {
+    "name": "0001_t.up.sql",
+    "sql": "SELECT 1;\nDROP ASYNC REPLICATION r;\n"
+   }
+  ],
+  "files": [
+   [
+    {
+     "start": 0,
+     "end": 8,
+     "line": 1,
+     "sql": "SELECT 1",
+     "canonical": "SELECT 1",
+     "words": [
+      "SELECT",
+      "1"
+     ],
+     "source_words": [
+      "SELECT",
+      "1"
+     ]
+    },
+    {
+     "start": 10,
+     "end": 34,
+     "line": 2,
+     "sql": "DROP ASYNC REPLICATION r",
+     "canonical": "DROP ASYNC REPLICATION R",
+     "words": [
+      "DROP",
+      "ASYNC",
+      "REPLICATION",
+      "R"
+     ],
+     "source_words": [
+      "DROP",
+      "ASYNC",
+      "REPLICATION",
+      "r"
+     ]
+    }
+   ]
+  ]
+ }
+}

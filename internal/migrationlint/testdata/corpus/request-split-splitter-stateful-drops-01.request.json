@@ -1,0 +1,14 @@
+{
+ "kind": "split",
+ "request": {
+  "target": "ydb",
+  "sources": [
+   {
+    "name": "0001_drop.up.sql",
+    "sql": "DROP TOPIC IF EXISTS `app/events`;\nDROP TRANSFER t;\nDROP ASYNC REPLICATION r CASCADE;\nDROP ASYNC REPLICATION r;\nDROP COORDINATION NODE `app/locks`;\nDROP COORDINATION SEMAPHORE `app/locks`;\nDROP STREAMING QUERY q;\nDROP TABLE t;\n",
+    "version": 1,
+    "up": true
+   }
+  ]
+ }
+}

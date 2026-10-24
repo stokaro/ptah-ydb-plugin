@@ -1,0 +1,5 @@
+DEFINE ACTION $seed() AS
+  UPSERT INTO t (id) VALUES (1);
+  DROP TABLE old;
+END DEFINE;
+DO $seed();

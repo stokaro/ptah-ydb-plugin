@@ -1,0 +1,20 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "annotate",
+ "result": {
+  "files": [
+   [
+    {},
+    {
+     "effects": [
+      {
+       "fact": "safety-effect",
+       "impact": "behavioral",
+       "reason": "DROP ASYNC REPLICATION without CASCADE ends the replication and keeps its tables, read-only for good unless it was failed over first"
+      }
+     ]
+    }
+   ]
+  ]
+ }
+}

@@ -1,0 +1,1 @@
+ALTER TOPIC events SET (retention_period = Interval('P1D'));

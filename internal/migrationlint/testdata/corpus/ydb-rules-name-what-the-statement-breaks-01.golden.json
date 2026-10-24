@@ -1,0 +1,369 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_users.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_drop.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN name: index users_email covers the column, and YDB refuses to drop it (Impossible drop column because table index covers that column); drop the index first",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "name",
+        "parent": "shop/users"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN expires: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "expires",
+        "parent": "shop/users"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "DROP TABLE shop/users leaves views shop/active, shop/named reading a table that does not exist: YDB keeps a view whose table is dropped, and every read of it fails; drop or recreate them first",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "shop/users"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_drop.up.sql:1:BC104", "0002_drop.up.sql:1:DS102", "0002_drop.up.sql:1:YD104", "0002_drop.up.sql:2:BC104", "0002_drop.up.sql:2:DS102", "0002_drop.up.sql:2:YD104", "0002_drop.up.sql:3:BC103", "0002_drop.up.sql:3:DS101", "0002_drop.up.sql:3:YD106"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_users.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_drop.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN name: index users_email covers the column, and YDB refuses to drop it (Impossible drop column because table index covers that column); drop the index first",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "name",
+        "parent": "shop/users"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN expires: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "expires",
+        "parent": "shop/users"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "DROP TABLE shop/users leaves views shop/active, shop/named reading a table that does not exist: YDB keeps a view whose table is dropped, and every read of it fails; drop or recreate them first",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "shop/users"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_drop.up.sql:1:BC104", "0002_drop.up.sql:1:DS102", "0002_drop.up.sql:1:YD104", "0002_drop.up.sql:2:BC104", "0002_drop.up.sql:2:DS102", "0002_drop.up.sql:2:YD104", "0002_drop.up.sql:3:BC103", "0002_drop.up.sql:3:DS101", "0002_drop.up.sql:3:YD106"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_users.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_drop.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN name: index users_email covers the column, and YDB refuses to drop it (Impossible drop column because table index covers that column); drop the index first",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "name",
+        "parent": "shop/users"
+       }
+      ]
+     },
+     {
+      "code": "YD104",
+      "file": 1,
+      "message": "DROP COLUMN expires: the table's TTL reads the column, and YDB refuses to drop it (Can't drop TTL column, disable TTL first); run ALTER TABLE ... RESET (TTL) first",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "expires",
+        "parent": "shop/users"
+       }
+      ]
+     },
+     {
+      "code": "YD106",
+      "file": 1,
+      "message": "DROP TABLE shop/users leaves views shop/active, shop/named reading a table that does not exist: YDB keeps a view whose table is dropped, and every read of it fails; drop or recreate them first",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "shop/users"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_drop.up.sql:1:DS102", "0002_drop.up.sql:1:YD104", "0002_drop.up.sql:2:DS102", "0002_drop.up.sql:2:YD104", "0002_drop.up.sql:3:DS101", "0002_drop.up.sql:3:YD106"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE `shop/users` ( ID UINT64 NOT NULL, EMAIL UTF8, NAME UTF8, SCORE INT32, EXPIRES TIMESTAMP, PRIMARY KEY (ID), INDEX USERS_EMAIL GLOBAL SYNC ON (EMAIL) COVER (NAME) ) WITH (TTL = INTERVAL(\"P30D\") ON EXPIRES)",
+       "end": 223,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`shop/users`", "(", "id", "Uint64", "NOT", "NULL", ",", "email", "Utf8", ",", "name", "Utf8", ",", "score", "Int32", ",", "expires", "Timestamp", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "users_email", "GLOBAL", "SYNC", "ON", "(", "email", ")", "COVER", "(", "name", ")", ")", "WITH", "(", "TTL", "=", "Interval", "(", "\"P30D\"", ")", "ON", "expires", ")"],
+       "sql": "CREATE TABLE `shop/users` (\n  id Uint64 NOT NULL, email Utf8, name Utf8, score Int32, expires Timestamp,\n  PRIMARY KEY (id),\n  INDEX users_email GLOBAL SYNC ON (email) COVER (name)\n) WITH (TTL = Interval(\"P30D\") ON expires)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`shop/users`", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMAIL", "UTF8", ",", "NAME", "UTF8", ",", "SCORE", "INT32", ",", "EXPIRES", "TIMESTAMP", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "USERS_EMAIL", "GLOBAL", "SYNC", "ON", "(", "EMAIL", ")", "COVER", "(", "NAME", ")", ")", "WITH", "(", "TTL", "=", "INTERVAL", "(", "\"P30D\"", ")", "ON", "EXPIRES", ")"]
+      },
+      {
+       "canonical": "CREATE VIEW `shop/active` WITH (SECURITY_INVOKER = TRUE) AS SELECT ID FROM `shop/users`",
+       "end": 312,
+       "line": 6,
+       "source_words": ["CREATE", "VIEW", "`shop/active`", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "id", "FROM", "`shop/users`"],
+       "sql": "CREATE VIEW `shop/active` WITH (security_invoker = TRUE) AS SELECT id FROM `shop/users`",
+       "start": 225,
+       "words": ["CREATE", "VIEW", "`shop/active`", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "ID", "FROM", "`shop/users`"]
+      },
+      {
+       "canonical": "CREATE VIEW `shop/named` WITH (SECURITY_INVOKER = TRUE) AS SELECT ID, NAME FROM `shop/users`",
+       "end": 406,
+       "line": 7,
+       "source_words": ["CREATE", "VIEW", "`shop/named`", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "id", ",", "name", "FROM", "`shop/users`"],
+       "sql": "CREATE VIEW `shop/named` WITH (security_invoker = TRUE) AS SELECT id, name FROM `shop/users`",
+       "start": 314,
+       "words": ["CREATE", "VIEW", "`shop/named`", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "ID", ",", "NAME", "FROM", "`shop/users`"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE `shop/users` DROP COLUMN NAME",
+       "end": 41,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "`shop/users`", "DROP", "COLUMN", "name"],
+       "sql": "ALTER TABLE `shop/users` DROP COLUMN name",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "`shop/users`", "DROP", "COLUMN", "NAME"]
+      },
+      {
+       "canonical": "ALTER TABLE `shop/users` DROP COLUMN EXPIRES",
+       "end": 87,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "`shop/users`", "DROP", "COLUMN", "expires"],
+       "sql": "ALTER TABLE `shop/users` DROP COLUMN expires",
+       "start": 43,
+       "words": ["ALTER", "TABLE", "`shop/users`", "DROP", "COLUMN", "EXPIRES"]
+      },
+      {
+       "canonical": "DROP TABLE `shop/users`",
+       "end": 112,
+       "line": 3,
+       "source_words": ["DROP", "TABLE", "`shop/users`"],
+       "sql": "DROP TABLE `shop/users`",
+       "start": 89,
+       "words": ["DROP", "TABLE", "`shop/users`"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_drop.up.sql:1:BC104", "0002_drop.up.sql:1:DS102", "0002_drop.up.sql:2:BC104", "0002_drop.up.sql:2:DS102", "0002_drop.up.sql:3:BC103", "0002_drop.up.sql:3:DS101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE `shop/users` ( ID UINT64 NOT NULL, EMAIL UTF8, NAME UTF8, SCORE INT32, EXPIRES TIMESTAMP, PRIMARY KEY (ID), INDEX USERS_EMAIL GLOBAL SYNC ON (EMAIL) COVER (NAME) ) WITH (TTL = INTERVAL(\"P30D\") ON EXPIRES)",
+      "end": 223,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`shop/users`", "(", "id", "Uint64", "NOT", "NULL", ",", "email", "Utf8", ",", "name", "Utf8", ",", "score", "Int32", ",", "expires", "Timestamp", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "users_email", "GLOBAL", "SYNC", "ON", "(", "email", ")", "COVER", "(", "name", ")", ")", "WITH", "(", "TTL", "=", "Interval", "(", "\"P30D\"", ")", "ON", "expires", ")"],
+      "sql": "CREATE TABLE `shop/users` (\n  id Uint64 NOT NULL, email Utf8, name Utf8, score Int32, expires Timestamp,\n  PRIMARY KEY (id),\n  INDEX users_email GLOBAL SYNC ON (email) COVER (name)\n) WITH (TTL = Interval(\"P30D\") ON expires)",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`shop/users`", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMAIL", "UTF8", ",", "NAME", "UTF8", ",", "SCORE", "INT32", ",", "EXPIRES", "TIMESTAMP", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "USERS_EMAIL", "GLOBAL", "SYNC", "ON", "(", "EMAIL", ")", "COVER", "(", "NAME", ")", ")", "WITH", "(", "TTL", "=", "INTERVAL", "(", "\"P30D\"", ")", "ON", "EXPIRES", ")"]
+     },
+     {
+      "canonical": "CREATE VIEW `shop/active` WITH (SECURITY_INVOKER = TRUE) AS SELECT ID FROM `shop/users`",
+      "end": 312,
+      "line": 6,
+      "source_words": ["CREATE", "VIEW", "`shop/active`", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "id", "FROM", "`shop/users`"],
+      "sql": "CREATE VIEW `shop/active` WITH (security_invoker = TRUE) AS SELECT id FROM `shop/users`",
+      "start": 225,
+      "words": ["CREATE", "VIEW", "`shop/active`", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "ID", "FROM", "`shop/users`"]
+     },
+     {
+      "canonical": "CREATE VIEW `shop/named` WITH (SECURITY_INVOKER = TRUE) AS SELECT ID, NAME FROM `shop/users`",
+      "end": 406,
+      "line": 7,
+      "source_words": ["CREATE", "VIEW", "`shop/named`", "WITH", "(", "security_invoker", "=", "TRUE", ")", "AS", "SELECT", "id", ",", "name", "FROM", "`shop/users`"],
+      "sql": "CREATE VIEW `shop/named` WITH (security_invoker = TRUE) AS SELECT id, name FROM `shop/users`",
+      "start": 314,
+      "words": ["CREATE", "VIEW", "`shop/named`", "WITH", "(", "SECURITY_INVOKER", "=", "TRUE", ")", "AS", "SELECT", "ID", ",", "NAME", "FROM", "`shop/users`"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE `shop/users` DROP COLUMN NAME",
+      "end": 41,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "`shop/users`", "DROP", "COLUMN", "name"],
+      "sql": "ALTER TABLE `shop/users` DROP COLUMN name",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "`shop/users`", "DROP", "COLUMN", "NAME"]
+     },
+     {
+      "canonical": "ALTER TABLE `shop/users` DROP COLUMN EXPIRES",
+      "end": 87,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "`shop/users`", "DROP", "COLUMN", "expires"],
+      "sql": "ALTER TABLE `shop/users` DROP COLUMN expires",
+      "start": 43,
+      "words": ["ALTER", "TABLE", "`shop/users`", "DROP", "COLUMN", "EXPIRES"]
+     },
+     {
+      "canonical": "DROP TABLE `shop/users`",
+      "end": 112,
+      "line": 3,
+      "source_words": ["DROP", "TABLE", "`shop/users`"],
+      "sql": "DROP TABLE `shop/users`",
+      "start": 89,
+      "words": ["DROP", "TABLE", "`shop/users`"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_users.up.sql",
+     "sql": "CREATE TABLE `shop/users` (\n  id Uint64 NOT NULL, email Utf8, name Utf8, score Int32, expires Timestamp,\n  PRIMARY KEY (id),\n  INDEX users_email GLOBAL SYNC ON (email) COVER (name)\n) WITH (TTL = Interval(\"P30D\") ON expires);\nCREATE VIEW `shop/active` WITH (security_invoker = TRUE) AS SELECT id FROM `shop/users`;\nCREATE VIEW `shop/named` WITH (security_invoker = TRUE) AS SELECT id, name FROM `shop/users`;\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_drop.up.sql",
+     "sql": "ALTER TABLE `shop/users` DROP COLUMN name;\nALTER TABLE `shop/users` DROP COLUMN expires;\nDROP TABLE `shop/users`;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

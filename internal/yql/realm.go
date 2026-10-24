@@ -58,7 +58,7 @@ func refuse(operation string) error { return &RealmRefusal{Operation: operation}
 func ConfineToRealm(source string) error {
 	stream := reader{input: source}
 	var tokens []Token
-	var bodies yqlBodies
+	var bodies Bodies
 	for {
 		token := stream.NextToken()
 		switch token.Type {
@@ -73,8 +73,8 @@ func ConfineToRealm(source string) error {
 				continue
 			}
 		case TokenSemicolon:
-			bodies.separate()
-			if bodies.inside() {
+			bodies.Separate()
+			if bodies.Inside() {
 				continue
 			}
 			if err := confineStatement(tokens); err != nil {
@@ -83,11 +83,11 @@ func ConfineToRealm(source string) error {
 			tokens = nil
 			continue
 		case TokenIdentifier:
-			bodies.word(strings.ToUpper(token.Value))
+			bodies.Word(strings.ToUpper(token.Value))
 		case TokenOperator:
-			bodies.symbol(token.Value)
+			bodies.Symbol(token.Value)
 		default:
-			bodies.separate()
+			bodies.Separate()
 		}
 		tokens = append(tokens, token)
 	}

@@ -1,0 +1,2 @@
+DROP USER app;
+DROP GROUP IF EXISTS readers;

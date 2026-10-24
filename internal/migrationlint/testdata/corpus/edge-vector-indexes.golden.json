@@ -1,0 +1,499 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD130",
+      "file": 0,
+      "message": "vector index t_emb on t needs target capability vector_indexes, unavailable on this ydb target; YDB 25.1 keeps vector indexes behind the EnableVectorIndex feature flag (Vector index support is disabled), so turn the flag on for the cluster",
+      "statement": 0
+     },
+     {
+      "code": "YD130",
+      "file": 0,
+      "message": "vector index u_emb on u needs target capability vector_indexes, unavailable on this ydb target; YDB 25.1 keeps vector indexes behind the EnableVectorIndex feature flag (Vector index support is disabled), so turn the flag on for the cluster",
+      "statement": 2
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD130", "0001_t.up.sql:3:YD130"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, EMB STRING, PRIMARY KEY (ID), INDEX T_EMB GLOBAL USING VECTOR_KMEANS_TREE ON (EMB) WITH (DISTANCE = COSINE, VECTOR_TYPE = \"bit\", VECTOR_DIMENSION = 8, LEVELS = 1, CLUSTERS = 2))",
+       "end": 213,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "emb", "String", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "t_emb", "GLOBAL", "USING", "vector_kmeans_tree", "ON", "(", "emb", ")", "WITH", "(", "distance", "=", "cosine", ",", "vector_type", "=", "\"bit\"", ",", "vector_dimension", "=", "8", ",", "levels", "=", "1", ",", "clusters", "=", "2", ")", ")"],
+       "sql": "CREATE TABLE t (id Uint64 NOT NULL, emb String, PRIMARY KEY (id), INDEX t_emb GLOBAL USING vector_kmeans_tree ON (emb) WITH (distance = cosine, vector_type = \"bit\", vector_dimension = 8, levels = 1, clusters = 2))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMB", "STRING", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "T_EMB", "GLOBAL", "USING", "VECTOR_KMEANS_TREE", "ON", "(", "EMB", ")", "WITH", "(", "DISTANCE", "=", "COSINE", ",", "VECTOR_TYPE", "=", "\"bit\"", ",", "VECTOR_DIMENSION", "=", "8", ",", "LEVELS", "=", "1", ",", "CLUSTERS", "=", "2", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE U (ID UINT64 NOT NULL, EMB STRING, PRIMARY KEY (ID))",
+       "end": 280,
+       "line": 2,
+       "source_words": ["CREATE", "TABLE", "u", "(", "id", "Uint64", "NOT", "NULL", ",", "emb", "String", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE u (id Uint64 NOT NULL, emb String, PRIMARY KEY (id))",
+       "start": 215,
+       "words": ["CREATE", "TABLE", "U", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMB", "STRING", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE U ADD INDEX U_EMB GLOBAL USING VECTOR_KMEANS_TREE ON (EMB) WITH (SIMILARITY = INNER_PRODUCT, VECTOR_TYPE = 'float', VECTOR_DIMENSION = 3, LEVELS = 1, CLUSTERS = 2)",
+       "end": 457,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "u", "ADD", "INDEX", "u_emb", "GLOBAL", "USING", "Vector_KMeans_Tree", "ON", "(", "emb", ")", "WITH", "(", "similarity", "=", "inner_product", ",", "vector_type", "=", "'float'", ",", "vector_dimension", "=", "3", ",", "levels", "=", "1", ",", "clusters", "=", "2", ")"],
+       "sql": "ALTER TABLE u ADD INDEX u_emb GLOBAL USING Vector_KMeans_Tree ON (emb) WITH (similarity = inner_product, vector_type = 'float', vector_dimension = 3, levels = 1, clusters = 2)",
+       "start": 282,
+       "words": ["ALTER", "TABLE", "U", "ADD", "INDEX", "U_EMB", "GLOBAL", "USING", "VECTOR_KMEANS_TREE", "ON", "(", "EMB", ")", "WITH", "(", "SIMILARITY", "=", "INNER_PRODUCT", ",", "VECTOR_TYPE", "=", "'float'", ",", "VECTOR_DIMENSION", "=", "3", ",", "LEVELS", "=", "1", ",", "CLUSTERS", "=", "2", ")"]
+      },
+      {
+       "canonical": "UPSERT INTO U (ID, EMB) VALUES (1, 'x')",
+       "end": 498,
+       "line": 4,
+       "source_words": ["UPSERT", "INTO", "u", "(", "id", ",", "emb", ")", "VALUES", "(", "1", ",", "'x'", ")"],
+       "sql": "UPSERT INTO u (id, emb) VALUES (1, 'x')",
+       "start": 459,
+       "words": ["UPSERT", "INTO", "U", "(", "ID", ",", "EMB", ")", "VALUES", "(", "1", ",", "'x'", ")"]
+      },
+      {
+       "canonical": "BATCH UPDATE U SET EMB = 'y'",
+       "end": 528,
+       "line": 5,
+       "source_words": ["BATCH", "UPDATE", "u", "SET", "emb", "=", "'y'"],
+       "sql": "BATCH UPDATE u SET emb = 'y'",
+       "start": 500,
+       "words": ["BATCH", "UPDATE", "U", "SET", "EMB", "=", "'y'"]
+      },
+      {
+       "canonical": "DELETE FROM U WHERE ID = 1",
+       "end": 556,
+       "line": 6,
+       "source_words": ["DELETE", "FROM", "u", "WHERE", "id", "=", "1"],
+       "sql": "DELETE FROM u WHERE id = 1",
+       "start": 530,
+       "words": ["DELETE", "FROM", "U", "WHERE", "ID", "=", "1"]
+      },
+      {
+       "canonical": "REPLACE INTO `u` (ID) VALUES (2)",
+       "end": 590,
+       "line": 7,
+       "source_words": ["REPLACE", "INTO", "`u`", "(", "id", ")", "VALUES", "(", "2", ")"],
+       "sql": "REPLACE INTO `u` (id) VALUES (2)",
+       "start": 558,
+       "words": ["REPLACE", "INTO", "`u`", "(", "ID", ")", "VALUES", "(", "2", ")"]
+      },
+      {
+       "canonical": "INSERT INTO $T (ID) VALUES (3)",
+       "end": 622,
+       "line": 8,
+       "source_words": ["INSERT", "INTO", "$", "t", "(", "id", ")", "VALUES", "(", "3", ")"],
+       "sql": "INSERT INTO $t (id) VALUES (3)",
+       "start": 592,
+       "words": ["INSERT", "INTO", "$", "T", "(", "ID", ")", "VALUES", "(", "3", ")"]
+      },
+      {
+       "canonical": "UPDATE T SET EMB = 'z'",
+       "end": 646,
+       "line": 9,
+       "source_words": ["UPDATE", "t", "SET", "emb", "=", "'z'"],
+       "sql": "UPDATE t SET emb = 'z'",
+       "start": 624,
+       "words": ["UPDATE", "T", "SET", "EMB", "=", "'z'"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD130",
+      "file": 0,
+      "message": "vector index t_emb on t stores bit vectors, which needs target capability vector_bit_type, unavailable on this ydb target, where the index is not built over rows; declare vector_type float, uint8 or int8",
+      "statement": 0
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 5,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 6,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into t, whose vector index t_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 8,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.2.1.24"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD130", "0001_t.up.sql:4:YD131", "0001_t.up.sql:5:YD131", "0001_t.up.sql:6:YD131", "0001_t.up.sql:7:YD131", "0001_t.up.sql:9:YD131"],
+   "server_version": "25.2.1.24",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD130",
+      "file": 0,
+      "message": "vector index t_emb on t stores bit vectors, which needs target capability vector_bit_type, unavailable on this ydb target, where the index is not built over rows; declare vector_type float, uint8 or int8",
+      "statement": 0
+     }
+    ],
+    "server_version": "25.4.1.15"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD130"],
+   "server_version": "25.4.1.15",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD130",
+      "file": 0,
+      "message": "vector index t_emb on t stores bit vectors, which needs target capability vector_bit_type, unavailable on this ydb target, where the index is not built over rows; declare vector_type float, uint8 or int8",
+      "statement": 0
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 3,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 5,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into u, whose vector index u_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 6,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "u"
+       }
+      ]
+     },
+     {
+      "code": "YD131",
+      "file": 0,
+      "message": "this statement writes rows into t, whose vector index t_emb does not take them on this target (needs target capability vector_index_maintained_on_write): a search through the index answers as the table stood when the index was built; write the rows before the index is added, or drop and add the index after them. Rows the application writes later meet the same, and YDB 25.3 and later keep the index current",
+      "statement": 8,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "t"
+       }
+      ]
+     }
+    ],
+    "overrides": {
+     "vector_indexes": true
+    },
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "overrides": {
+    "vector_indexes": true
+   },
+   "report": ["0001_t.up.sql:1:YD130", "0001_t.up.sql:4:YD131", "0001_t.up.sql:5:YD131", "0001_t.up.sql:6:YD131", "0001_t.up.sql:7:YD131", "0001_t.up.sql:9:YD131"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE T (ID UINT64 NOT NULL, EMB STRING, PRIMARY KEY (ID), INDEX T_EMB GLOBAL USING VECTOR_KMEANS_TREE ON (EMB) WITH (DISTANCE = COSINE, VECTOR_TYPE = \"bit\", VECTOR_DIMENSION = 8, LEVELS = 1, CLUSTERS = 2))",
+      "end": 213,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "t", "(", "id", "Uint64", "NOT", "NULL", ",", "emb", "String", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "t_emb", "GLOBAL", "USING", "vector_kmeans_tree", "ON", "(", "emb", ")", "WITH", "(", "distance", "=", "cosine", ",", "vector_type", "=", "\"bit\"", ",", "vector_dimension", "=", "8", ",", "levels", "=", "1", ",", "clusters", "=", "2", ")", ")"],
+      "sql": "CREATE TABLE t (id Uint64 NOT NULL, emb String, PRIMARY KEY (id), INDEX t_emb GLOBAL USING vector_kmeans_tree ON (emb) WITH (distance = cosine, vector_type = \"bit\", vector_dimension = 8, levels = 1, clusters = 2))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "T", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMB", "STRING", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "T_EMB", "GLOBAL", "USING", "VECTOR_KMEANS_TREE", "ON", "(", "EMB", ")", "WITH", "(", "DISTANCE", "=", "COSINE", ",", "VECTOR_TYPE", "=", "\"bit\"", ",", "VECTOR_DIMENSION", "=", "8", ",", "LEVELS", "=", "1", ",", "CLUSTERS", "=", "2", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE U (ID UINT64 NOT NULL, EMB STRING, PRIMARY KEY (ID))",
+      "end": 280,
+      "line": 2,
+      "source_words": ["CREATE", "TABLE", "u", "(", "id", "Uint64", "NOT", "NULL", ",", "emb", "String", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE u (id Uint64 NOT NULL, emb String, PRIMARY KEY (id))",
+      "start": 215,
+      "words": ["CREATE", "TABLE", "U", "(", "ID", "UINT64", "NOT", "NULL", ",", "EMB", "STRING", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE U ADD INDEX U_EMB GLOBAL USING VECTOR_KMEANS_TREE ON (EMB) WITH (SIMILARITY = INNER_PRODUCT, VECTOR_TYPE = 'float', VECTOR_DIMENSION = 3, LEVELS = 1, CLUSTERS = 2)",
+      "end": 457,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "u", "ADD", "INDEX", "u_emb", "GLOBAL", "USING", "Vector_KMeans_Tree", "ON", "(", "emb", ")", "WITH", "(", "similarity", "=", "inner_product", ",", "vector_type", "=", "'float'", ",", "vector_dimension", "=", "3", ",", "levels", "=", "1", ",", "clusters", "=", "2", ")"],
+      "sql": "ALTER TABLE u ADD INDEX u_emb GLOBAL USING Vector_KMeans_Tree ON (emb) WITH (similarity = inner_product, vector_type = 'float', vector_dimension = 3, levels = 1, clusters = 2)",
+      "start": 282,
+      "words": ["ALTER", "TABLE", "U", "ADD", "INDEX", "U_EMB", "GLOBAL", "USING", "VECTOR_KMEANS_TREE", "ON", "(", "EMB", ")", "WITH", "(", "SIMILARITY", "=", "INNER_PRODUCT", ",", "VECTOR_TYPE", "=", "'float'", ",", "VECTOR_DIMENSION", "=", "3", ",", "LEVELS", "=", "1", ",", "CLUSTERS", "=", "2", ")"]
+     },
+     {
+      "canonical": "UPSERT INTO U (ID, EMB) VALUES (1, 'x')",
+      "end": 498,
+      "line": 4,
+      "source_words": ["UPSERT", "INTO", "u", "(", "id", ",", "emb", ")", "VALUES", "(", "1", ",", "'x'", ")"],
+      "sql": "UPSERT INTO u (id, emb) VALUES (1, 'x')",
+      "start": 459,
+      "words": ["UPSERT", "INTO", "U", "(", "ID", ",", "EMB", ")", "VALUES", "(", "1", ",", "'x'", ")"]
+     },
+     {
+      "canonical": "BATCH UPDATE U SET EMB = 'y'",
+      "end": 528,
+      "line": 5,
+      "source_words": ["BATCH", "UPDATE", "u", "SET", "emb", "=", "'y'"],
+      "sql": "BATCH UPDATE u SET emb = 'y'",
+      "start": 500,
+      "words": ["BATCH", "UPDATE", "U", "SET", "EMB", "=", "'y'"]
+     },
+     {
+      "canonical": "DELETE FROM U WHERE ID = 1",
+      "end": 556,
+      "line": 6,
+      "source_words": ["DELETE", "FROM", "u", "WHERE", "id", "=", "1"],
+      "sql": "DELETE FROM u WHERE id = 1",
+      "start": 530,
+      "words": ["DELETE", "FROM", "U", "WHERE", "ID", "=", "1"]
+     },
+     {
+      "canonical": "REPLACE INTO `u` (ID) VALUES (2)",
+      "end": 590,
+      "line": 7,
+      "source_words": ["REPLACE", "INTO", "`u`", "(", "id", ")", "VALUES", "(", "2", ")"],
+      "sql": "REPLACE INTO `u` (id) VALUES (2)",
+      "start": 558,
+      "words": ["REPLACE", "INTO", "`u`", "(", "ID", ")", "VALUES", "(", "2", ")"]
+     },
+     {
+      "canonical": "INSERT INTO $T (ID) VALUES (3)",
+      "end": 622,
+      "line": 8,
+      "source_words": ["INSERT", "INTO", "$t", "(", "id", ")", "VALUES", "(", "3", ")"],
+      "sql": "INSERT INTO $t (id) VALUES (3)",
+      "start": 592,
+      "words": ["INSERT", "INTO", "$T", "(", "ID", ")", "VALUES", "(", "3", ")"]
+     },
+     {
+      "canonical": "UPDATE T SET EMB = 'z'",
+      "end": 646,
+      "line": 9,
+      "source_words": ["UPDATE", "t", "SET", "emb", "=", "'z'"],
+      "sql": "UPDATE t SET emb = 'z'",
+      "start": 624,
+      "words": ["UPDATE", "T", "SET", "EMB", "=", "'z'"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE t (id Uint64 NOT NULL, emb String, PRIMARY KEY (id), INDEX t_emb GLOBAL USING vector_kmeans_tree ON (emb) WITH (distance = cosine, vector_type = \"bit\", vector_dimension = 8, levels = 1, clusters = 2));\nCREATE TABLE u (id Uint64 NOT NULL, emb String, PRIMARY KEY (id));\nALTER TABLE u ADD INDEX u_emb GLOBAL USING Vector_KMeans_Tree ON (emb) WITH (similarity = inner_product, vector_type = 'float', vector_dimension = 3, levels = 1, clusters = 2);\nUPSERT INTO u (id, emb) VALUES (1, 'x');\nBATCH UPDATE u SET emb = 'y';\nDELETE FROM u WHERE id = 1;\nREPLACE INTO `u` (id) VALUES (2);\nINSERT INTO $t (id) VALUES (3);\nUPDATE t SET emb = 'z';\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

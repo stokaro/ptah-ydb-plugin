@@ -1,0 +1,1 @@
+DROP COORDINATION NODE `app/locks`;

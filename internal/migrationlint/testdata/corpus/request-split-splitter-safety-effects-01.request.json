@@ -1,0 +1,14 @@
+{
+ "kind": "split",
+ "request": {
+  "target": "ydb",
+  "sources": [
+   {
+    "name": "0001_drop.up.sql",
+    "sql": "DROP ASYNC REPLICATION r CASCADE;\nDROP ASYNC REPLICATION r;\ndrop async replication `cascade`;\nDROP TOPIC IF EXISTS `app/events`;\nALTER TOPIC `app/events` ADD CONSUMER a, DROP CONSUMER b;\nALTER TOPIC `app/events` ADD CONSUMER a;\nDROP TRANSFER t;\nDROP COORDINATION NODE `app/locks`;\nDROP SECRET `app/token`;\nDROP STREAMING QUERY q;\nALTER STREAMING QUERY q SET (RUN = FALSE);\nALTER STREAMING QUERY q SET (FORCE = TRUE) AS DO BEGIN SELECT 1; END DO;\nDROP EXTERNAL DATA SOURCE s;\nDROP EXTERNAL TABLE e;\nCREATE OR REPLACE EXTERNAL TABLE e (a Int32) WITH (DATA_SOURCE = \"s\", LOCATION = \"/\");\nDROP TABLE t;\nDROP COORDINATION SEMAPHORE `app/locks`;\nALTER TABLE t DROP CONSUMER;\n",
+    "version": 1,
+    "up": true
+   }
+  ]
+ }
+}

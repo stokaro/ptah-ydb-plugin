@@ -1,0 +1,39 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "kind": "split",
+ "result": {
+  "files": [
+   [
+    {
+     "canonical": "ALTER TABLE `shop/users` ADD INDEX BY_EMAIL GLOBAL UNIQUE SYNC ON (EMAIL, TENANT)",
+     "effects": [
+      {
+       "clause": "ADD INDEX",
+       "columns": ["email", "tenant"],
+       "fact": "unique-index",
+       "failure": "YDB: Duplicate key found",
+       "object": "by_email",
+       "table": "`shop/users`"
+      }
+     ],
+     "end": 81,
+     "line": 1,
+     "source_words": ["ALTER", "TABLE", "`shop/users`", "ADD", "INDEX", "by_email", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "email", ",", "tenant", ")"],
+     "sql": "ALTER TABLE `shop/users` ADD INDEX by_email GLOBAL UNIQUE SYNC ON (email, tenant)",
+     "start": 0,
+     "words": ["ALTER", "TABLE", "`shop/users`", "ADD", "INDEX", "BY_EMAIL", "GLOBAL", "UNIQUE", "SYNC", "ON", "(", "EMAIL", ",", "TENANT", ")"]
+    },
+    {
+     "canonical": "ALTER TABLE `shop/users` ADD INDEX BY_NAME GLOBAL SYNC ON (NAME)",
+     "end": 147,
+     "line": 2,
+     "source_words": ["ALTER", "TABLE", "`shop/users`", "ADD", "INDEX", "by_name", "GLOBAL", "SYNC", "ON", "(", "name", ")"],
+     "sql": "ALTER TABLE `shop/users` ADD INDEX by_name GLOBAL SYNC ON (name)",
+     "start": 83,
+     "words": ["ALTER", "TABLE", "`shop/users`", "ADD", "INDEX", "BY_NAME", "GLOBAL", "SYNC", "ON", "(", "NAME", ")"]
+    }
+   ]
+  ],
+  "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"]
+ }
+}

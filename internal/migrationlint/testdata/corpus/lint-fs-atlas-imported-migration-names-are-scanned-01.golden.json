@@ -1,0 +1,228 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "1_initial.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "1_initial.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "2.10.x-20_next.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["1_initial.up.sql:1:BC103", "1_initial.up.sql:1:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "1_initial.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "1_initial.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "2.10.x-20_next.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["1_initial.up.sql:1:BC103", "1_initial.up.sql:1:DS101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "1_initial.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "1_initial.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "2.10.x-20_next.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["1_initial.up.sql:1:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {}
+     ],
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP TABLE USERS",
+       "end": 16,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "users"],
+       "sql": "DROP TABLE users",
+       "start": 0,
+       "words": ["DROP", "TABLE", "USERS"]
+      }
+     ],
+     [
+      {
+       "canonical": "DROP TABLE USERS",
+       "end": 16,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "users"],
+       "sql": "DROP TABLE users",
+       "start": 0,
+       "words": ["DROP", "TABLE", "USERS"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE NEXT_STEP (ID INT)",
+       "end": 31,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "next_step", "(", "id", "INT", ")"],
+       "sql": "CREATE TABLE next_step (id INT)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "NEXT_STEP", "(", "ID", "INT", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["1_initial.up.sql:1:BC103", "1_initial.up.sql:1:DS101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "DROP TABLE USERS",
+      "end": 16,
+      "line": 1,
+      "source_words": ["DROP", "TABLE", "users"],
+      "sql": "DROP TABLE users",
+      "start": 0,
+      "words": ["DROP", "TABLE", "USERS"]
+     }
+    ],
+    [
+     {
+      "canonical": "DROP TABLE USERS",
+      "end": 16,
+      "line": 1,
+      "source_words": ["DROP", "TABLE", "users"],
+      "sql": "DROP TABLE users",
+      "start": 0,
+      "words": ["DROP", "TABLE", "USERS"]
+     }
+    ],
+    [
+     {
+      "canonical": "CREATE TABLE NEXT_STEP (ID INT)",
+      "end": 31,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "next_step", "(", "id", "INT", ")"],
+      "sql": "CREATE TABLE next_step (id INT)",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "NEXT_STEP", "(", "ID", "INT", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "down": true,
+     "name": "1_initial.down.sql",
+     "sql": "DROP TABLE users;\n",
+     "version": 1
+    },
+    {
+     "name": "1_initial.up.sql",
+     "sql": "DROP TABLE users;\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "2.10.x-20_next.sql",
+     "sql": "CREATE TABLE next_step (id INT);\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

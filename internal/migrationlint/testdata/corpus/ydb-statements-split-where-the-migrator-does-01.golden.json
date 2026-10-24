@@ -1,0 +1,163 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "$F = ($X) -> { $Y = $X + 1",
+       "end": 26,
+       "line": 1,
+       "source_words": ["$", "f", "=", "(", "$", "x", ")", "-", ">", "{", "$", "y", "=", "$", "x", "+", "1"],
+       "sql": "$f = ($x) -> { $y = $x + 1",
+       "start": 0,
+       "words": ["$", "F", "=", "(", "$", "X", ")", "-", ">", "{", "$", "Y", "=", "$", "X", "+", "1"]
+      },
+      {
+       "canonical": "RETURN $Y",
+       "end": 37,
+       "line": 1,
+       "source_words": ["RETURN", "$", "y"],
+       "sql": "RETURN $y",
+       "start": 28,
+       "words": ["RETURN", "$", "Y"]
+      },
+      {
+       "canonical": "}",
+       "end": 40,
+       "line": 1,
+       "source_words": ["}"],
+       "sql": "}",
+       "start": 39,
+       "words": ["}"]
+      },
+      {
+       "canonical": "SELECT $F(1)",
+       "end": 54,
+       "line": 2,
+       "source_words": ["SELECT", "$", "f", "(", "1", ")"],
+       "sql": "SELECT $f(1)",
+       "start": 42,
+       "words": ["SELECT", "$", "F", "(", "1", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "$F = ($X) -> { $Y = $X + 1; RETURN $Y; }",
+      "end": 40,
+      "line": 1,
+      "source_words": ["$f", "=", "(", "$x", ")", "-", ">", "{", "$y", "=", "$x", "+", "1", ";", "RETURN", "$y", ";", "}"],
+      "sql": "$f = ($x) -> { $y = $x + 1; RETURN $y; }",
+      "start": 0,
+      "words": ["$F", "=", "(", "$X", ")", "-", ">", "{", "$Y", "=", "$X", "+", "1", ";", "RETURN", "$Y", ";", "}"]
+     },
+     {
+      "canonical": "SELECT $F(1)",
+      "end": 54,
+      "line": 2,
+      "source_words": ["SELECT", "$f", "(", "1", ")"],
+      "sql": "SELECT $f(1)",
+      "start": 42,
+      "words": ["SELECT", "$F", "(", "1", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "$f = ($x) -> { $y = $x + 1; RETURN $y; };\nSELECT $f(1);\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

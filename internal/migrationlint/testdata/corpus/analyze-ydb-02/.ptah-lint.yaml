@@ -1,0 +1,4 @@
+dialect: ydbs
+server-version: "25.1.4.7"
+gate:
+  families: [YD]

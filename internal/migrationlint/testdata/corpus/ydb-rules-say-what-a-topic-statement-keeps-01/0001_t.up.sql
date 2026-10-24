@@ -1,0 +1,1 @@
+ALTER TOPIC `app/events` RESET (retention_period, supported_codecs);

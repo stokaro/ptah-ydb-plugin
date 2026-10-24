@@ -1,0 +1,694 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0002_t.down.sql",
+      "source": 1,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "consumer c1 of type shared of topic t1: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 0
+     },
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "max_active_partitions without an auto_partitioning_strategy that enables auto-partitioning of topic t3: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 2
+     },
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "metering_mode outside a serverless database of topic t6: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 5
+     },
+     {
+      "code": "YD113",
+      "file": 1,
+      "message": "RESET (supported_codecs) of topic t1 changes nothing on YDB 26.2, which keeps every value as it was, and is refused on 25.1; SET each setting to the value it is to hold instead",
+      "statement": 0
+     },
+     {
+      "code": "YD113",
+      "file": 2,
+      "message": "RESET (important) of consumer c1 of topic t1 changes nothing on YDB 26.2, which keeps every value as it was, and is refused on 25.1; SET each setting to the value it is to hold instead",
+      "statement": 2
+     },
+     {
+      "code": "YD114",
+      "file": 2,
+      "message": "supported_codecs of consumer c6 naming codec \"snappy\" of topic t1: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 5
+     },
+     {
+      "code": "YD114",
+      "file": 2,
+      "message": "partition_count_limit of topic t1: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 7
+     },
+     {
+      "code": "YD113",
+      "file": 2,
+      "message": "RESET (retention_period, retention_storage_mb) of topic t1 changes nothing on YDB 26.2, which keeps every value as it was, and is refused on 25.1; SET each setting to the value it is to hold instead",
+      "statement": 8
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD114", "0001_t.up.sql:3:YD114", "0001_t.up.sql:6:YD114", "0002_t.down.sql:1:YD113", "0002_t.up.sql:3:YD113", "0002_t.up.sql:6:YD114", "0002_t.up.sql:8:YD114", "0002_t.up.sql:9:YD113"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0002_t.down.sql",
+      "source": 1,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "consumer c1 of type shared of topic t1: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 0
+     },
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "max_active_partitions without an auto_partitioning_strategy that enables auto-partitioning of topic t3: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 2
+     },
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "metering_mode outside a serverless database of topic t6: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 5
+     },
+     {
+      "code": "YD113",
+      "file": 1,
+      "message": "RESET (supported_codecs) of topic t1 changes nothing on YDB 26.2, which keeps every value as it was, and is refused on 25.1; SET each setting to the value it is to hold instead",
+      "statement": 0
+     },
+     {
+      "code": "YD113",
+      "file": 2,
+      "message": "RESET (important) of consumer c1 of topic t1 changes nothing on YDB 26.2, which keeps every value as it was, and is refused on 25.1; SET each setting to the value it is to hold instead",
+      "statement": 2
+     },
+     {
+      "code": "YD114",
+      "file": 2,
+      "message": "supported_codecs of consumer c6 naming codec \"snappy\" of topic t1: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 5
+     },
+     {
+      "code": "YD114",
+      "file": 2,
+      "message": "partition_count_limit of topic t1: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 7
+     },
+     {
+      "code": "YD113",
+      "file": 2,
+      "message": "RESET (retention_period, retention_storage_mb) of topic t1 changes nothing on YDB 26.2, which keeps every value as it was, and is refused on 25.1; SET each setting to the value it is to hold instead",
+      "statement": 8
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD114", "0001_t.up.sql:3:YD114", "0001_t.up.sql:6:YD114", "0002_t.down.sql:1:YD113", "0002_t.up.sql:3:YD113", "0002_t.up.sql:6:YD114", "0002_t.up.sql:8:YD114", "0002_t.up.sql:9:YD113"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0002_t.down.sql",
+      "source": 1,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "consumer c1 of type shared of topic t1: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 0
+     },
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "max_active_partitions without an auto_partitioning_strategy that enables auto-partitioning of topic t3: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 2
+     },
+     {
+      "code": "YD114",
+      "file": 0,
+      "message": "metering_mode outside a serverless database of topic t6: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 5
+     },
+     {
+      "code": "YD113",
+      "file": 1,
+      "message": "RESET (supported_codecs) of topic t1 changes nothing on YDB 26.2, which keeps every value as it was, and is refused on 25.1; SET each setting to the value it is to hold instead",
+      "statement": 0
+     },
+     {
+      "code": "YD113",
+      "file": 2,
+      "message": "RESET (important) of consumer c1 of topic t1 changes nothing on YDB 26.2, which keeps every value as it was, and is refused on 25.1; SET each setting to the value it is to hold instead",
+      "statement": 2
+     },
+     {
+      "code": "YD114",
+      "file": 2,
+      "message": "supported_codecs of consumer c6 naming codec \"snappy\" of topic t1: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 5
+     },
+     {
+      "code": "YD114",
+      "file": 2,
+      "message": "partition_count_limit of topic t1: YDB accepts the statement and keeps nothing of it, so the topic does not hold what the statement says",
+      "statement": 7
+     },
+     {
+      "code": "YD113",
+      "file": 2,
+      "message": "RESET (retention_period, retention_storage_mb) of topic t1 changes nothing on YDB 26.2, which keeps every value as it was, and is refused on 25.1; SET each setting to the value it is to hold instead",
+      "statement": 8
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0001_t.up.sql:1:YD114", "0001_t.up.sql:3:YD114", "0001_t.up.sql:6:YD114", "0002_t.down.sql:1:YD113", "0002_t.up.sql:3:YD113", "0002_t.up.sql:6:YD114", "0002_t.up.sql:8:YD114", "0002_t.up.sql:9:YD113"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "t1"
+        }
+       ]
+      }
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TOPIC T1 (CONSUMER C1 WITH (TYPE = 'shared'), CONSUMER C2 WITH (SUPPORTED_CODECS = 'raw,brotli'), CONSUMER C3) WITH (MIN_ACTIVE_PARTITIONS = 1)",
+       "end": 150,
+       "line": 1,
+       "source_words": ["CREATE", "TOPIC", "t1", "(", "CONSUMER", "c1", "WITH", "(", "type", "=", "'shared'", ")", ",", "CONSUMER", "c2", "WITH", "(", "supported_codecs", "=", "'raw,brotli'", ")", ",", "CONSUMER", "c3", ")", "WITH", "(", "min_active_partitions", "=", "1", ")"],
+       "sql": "CREATE TOPIC t1 (CONSUMER c1 WITH (type = 'shared'), CONSUMER c2 WITH (supported_codecs = 'raw,brotli'), CONSUMER c3) WITH (min_active_partitions = 1)",
+       "start": 0,
+       "words": ["CREATE", "TOPIC", "T1", "(", "CONSUMER", "C1", "WITH", "(", "TYPE", "=", "'shared'", ")", ",", "CONSUMER", "C2", "WITH", "(", "SUPPORTED_CODECS", "=", "'raw,brotli'", ")", ",", "CONSUMER", "C3", ")", "WITH", "(", "MIN_ACTIVE_PARTITIONS", "=", "1", ")"]
+      },
+      {
+       "canonical": "CREATE TOPIC IF NOT EXISTS T2 WITH (MAX_ACTIVE_PARTITIONS = 5, AUTO_PARTITIONING_STRATEGY = 'scale_up')",
+       "end": 255,
+       "line": 2,
+       "source_words": ["CREATE", "TOPIC", "IF", "NOT", "EXISTS", "t2", "WITH", "(", "max_active_partitions", "=", "5", ",", "auto_partitioning_strategy", "=", "'scale_up'", ")"],
+       "sql": "CREATE TOPIC IF NOT EXISTS t2 WITH (max_active_partitions = 5, auto_partitioning_strategy = 'scale_up')",
+       "start": 152,
+       "words": ["CREATE", "TOPIC", "IF", "NOT", "EXISTS", "T2", "WITH", "(", "MAX_ACTIVE_PARTITIONS", "=", "5", ",", "AUTO_PARTITIONING_STRATEGY", "=", "'scale_up'", ")"]
+      },
+      {
+       "canonical": "CREATE TOPIC T3 WITH (MAX_ACTIVE_PARTITIONS = 5, AUTO_PARTITIONING_STRATEGY = 'disabled')",
+       "end": 346,
+       "line": 3,
+       "source_words": ["CREATE", "TOPIC", "t3", "WITH", "(", "max_active_partitions", "=", "5", ",", "auto_partitioning_strategy", "=", "'disabled'", ")"],
+       "sql": "CREATE TOPIC t3 WITH (max_active_partitions = 5, auto_partitioning_strategy = 'disabled')",
+       "start": 257,
+       "words": ["CREATE", "TOPIC", "T3", "WITH", "(", "MAX_ACTIVE_PARTITIONS", "=", "5", ",", "AUTO_PARTITIONING_STRATEGY", "=", "'disabled'", ")"]
+      },
+      {
+       "canonical": "CREATE TOPIC T4 WITH (SUPPORTED_CODECS = '  ')",
+       "end": 394,
+       "line": 4,
+       "source_words": ["CREATE", "TOPIC", "t4", "WITH", "(", "supported_codecs", "=", "'  '", ")"],
+       "sql": "CREATE TOPIC t4 WITH (supported_codecs = '  ')",
+       "start": 348,
+       "words": ["CREATE", "TOPIC", "T4", "WITH", "(", "SUPPORTED_CODECS", "=", "'  '", ")"]
+      },
+      {
+       "canonical": "CREATE TOPIC T5 WITH (SUPPORTED_CODECS = 'RAW, Gzip ,zstd', RETENTION_PERIOD = INTERVAL('PT1H'))",
+       "end": 492,
+       "line": 5,
+       "source_words": ["CREATE", "TOPIC", "t5", "WITH", "(", "supported_codecs", "=", "'RAW, Gzip ,zstd'", ",", "retention_period", "=", "Interval", "(", "'PT1H'", ")", ")"],
+       "sql": "CREATE TOPIC t5 WITH (supported_codecs = 'RAW, Gzip ,zstd', retention_period = Interval('PT1H'))",
+       "start": 396,
+       "words": ["CREATE", "TOPIC", "T5", "WITH", "(", "SUPPORTED_CODECS", "=", "'RAW, Gzip ,zstd'", ",", "RETENTION_PERIOD", "=", "INTERVAL", "(", "'PT1H'", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TOPIC T6 WITH (METERING_MODE = 'request_units')",
+       "end": 548,
+       "line": 6,
+       "source_words": ["CREATE", "TOPIC", "t6", "WITH", "(", "metering_mode", "=", "'request_units'", ")"],
+       "sql": "CREATE TOPIC t6 WITH (metering_mode = 'request_units')",
+       "start": 494,
+       "words": ["CREATE", "TOPIC", "T6", "WITH", "(", "METERING_MODE", "=", "'request_units'", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TOPIC T1 RESET (SUPPORTED_CODECS)",
+       "end": 39,
+       "line": 1,
+       "source_words": ["ALTER", "TOPIC", "t1", "RESET", "(", "supported_codecs", ")"],
+       "sql": "ALTER TOPIC t1 RESET (supported_codecs)",
+       "start": 0,
+       "words": ["ALTER", "TOPIC", "T1", "RESET", "(", "SUPPORTED_CODECS", ")"]
+      },
+      {
+       "canonical": "DROP TOPIC IF EXISTS T1",
+       "effects": [
+        {
+         "fact": "stateful-drop",
+         "kind": "TOPIC",
+         "object": "t1"
+        }
+       ],
+       "end": 64,
+       "line": 2,
+       "source_words": ["DROP", "TOPIC", "IF", "EXISTS", "t1"],
+       "sql": "DROP TOPIC IF EXISTS t1",
+       "start": 41,
+       "words": ["DROP", "TOPIC", "IF", "EXISTS", "T1"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TOPIC T1 ALTER CONSUMER C1 SET (READ_FROM = TIMESTAMP('2025-01-01T00:00:00Z'))",
+       "end": 84,
+       "line": 1,
+       "source_words": ["ALTER", "TOPIC", "t1", "ALTER", "CONSUMER", "c1", "SET", "(", "read_from", "=", "Timestamp", "(", "'2025-01-01T00:00:00Z'", ")", ")"],
+       "sql": "ALTER TOPIC t1 ALTER CONSUMER c1 SET (read_from = Timestamp('2025-01-01T00:00:00Z'))",
+       "start": 0,
+       "words": ["ALTER", "TOPIC", "T1", "ALTER", "CONSUMER", "C1", "SET", "(", "READ_FROM", "=", "TIMESTAMP", "(", "'2025-01-01T00:00:00Z'", ")", ")"]
+      },
+      {
+       "canonical": "ALTER TOPIC T1 ALTER CONSUMER C1 RESET (AVAILABILITY_PERIOD)",
+       "end": 146,
+       "line": 2,
+       "source_words": ["ALTER", "TOPIC", "t1", "ALTER", "CONSUMER", "c1", "RESET", "(", "availability_period", ")"],
+       "sql": "ALTER TOPIC t1 ALTER CONSUMER c1 RESET (availability_period)",
+       "start": 86,
+       "words": ["ALTER", "TOPIC", "T1", "ALTER", "CONSUMER", "C1", "RESET", "(", "AVAILABILITY_PERIOD", ")"]
+      },
+      {
+       "canonical": "ALTER TOPIC T1 ALTER CONSUMER C1 RESET (AVAILABILITY_PERIOD, IMPORTANT)",
+       "end": 219,
+       "line": 3,
+       "source_words": ["ALTER", "TOPIC", "t1", "ALTER", "CONSUMER", "c1", "RESET", "(", "availability_period", ",", "important", ")"],
+       "sql": "ALTER TOPIC t1 ALTER CONSUMER c1 RESET (availability_period, important)",
+       "start": 148,
+       "words": ["ALTER", "TOPIC", "T1", "ALTER", "CONSUMER", "C1", "RESET", "(", "AVAILABILITY_PERIOD", ",", "IMPORTANT", ")"]
+      },
+      {
+       "canonical": "ALTER TOPIC T1 ALTER CONSUMER C1",
+       "end": 253,
+       "line": 4,
+       "source_words": ["ALTER", "TOPIC", "t1", "ALTER", "CONSUMER", "c1"],
+       "sql": "ALTER TOPIC t1 ALTER CONSUMER c1",
+       "start": 221,
+       "words": ["ALTER", "TOPIC", "T1", "ALTER", "CONSUMER", "C1"]
+      },
+      {
+       "canonical": "ALTER TOPIC IF EXISTS T1 ADD CONSUMER C4 WITH (SUPPORTED_CODECS = 'lzop,custom'), ADD CONSUMER C5 WITH (TYPE = 'shared')",
+       "end": 375,
+       "line": 5,
+       "source_words": ["ALTER", "TOPIC", "IF", "EXISTS", "t1", "ADD", "CONSUMER", "c4", "WITH", "(", "supported_codecs", "=", "'lzop,custom'", ")", ",", "ADD", "CONSUMER", "c5", "WITH", "(", "type", "=", "'shared'", ")"],
+       "sql": "ALTER TOPIC IF EXISTS t1 ADD CONSUMER c4 WITH (supported_codecs = 'lzop,custom'), ADD CONSUMER c5 WITH (type = 'shared')",
+       "start": 255,
+       "words": ["ALTER", "TOPIC", "IF", "EXISTS", "T1", "ADD", "CONSUMER", "C4", "WITH", "(", "SUPPORTED_CODECS", "=", "'lzop,custom'", ")", ",", "ADD", "CONSUMER", "C5", "WITH", "(", "TYPE", "=", "'shared'", ")"]
+      },
+      {
+       "canonical": "ALTER TOPIC T1 ADD CONSUMER C6 WITH (SUPPORTED_CODECS = 'snappy')",
+       "end": 442,
+       "line": 6,
+       "source_words": ["ALTER", "TOPIC", "t1", "ADD", "CONSUMER", "c6", "WITH", "(", "supported_codecs", "=", "'snappy'", ")"],
+       "sql": "ALTER TOPIC t1 ADD CONSUMER c6 WITH (supported_codecs = 'snappy')",
+       "start": 377,
+       "words": ["ALTER", "TOPIC", "T1", "ADD", "CONSUMER", "C6", "WITH", "(", "SUPPORTED_CODECS", "=", "'snappy'", ")"]
+      },
+      {
+       "canonical": "ALTER TOPIC T1 SET (METERING_MODE = 'reserved_capacity')",
+       "end": 500,
+       "line": 7,
+       "source_words": ["ALTER", "TOPIC", "t1", "SET", "(", "metering_mode", "=", "'reserved_capacity'", ")"],
+       "sql": "ALTER TOPIC t1 SET (metering_mode = 'reserved_capacity')",
+       "start": 444,
+       "words": ["ALTER", "TOPIC", "T1", "SET", "(", "METERING_MODE", "=", "'reserved_capacity'", ")"]
+      },
+      {
+       "canonical": "ALTER TOPIC T1 SET (PARTITION_COUNT_LIMIT = 10)",
+       "end": 549,
+       "line": 8,
+       "source_words": ["ALTER", "TOPIC", "t1", "SET", "(", "partition_count_limit", "=", "10", ")"],
+       "sql": "ALTER TOPIC t1 SET (partition_count_limit = 10)",
+       "start": 502,
+       "words": ["ALTER", "TOPIC", "T1", "SET", "(", "PARTITION_COUNT_LIMIT", "=", "10", ")"]
+      },
+      {
+       "canonical": "ALTER TOPIC T1 RESET (RETENTION_PERIOD, RETENTION_STORAGE_MB)",
+       "end": 612,
+       "line": 9,
+       "source_words": ["ALTER", "TOPIC", "t1", "RESET", "(", "retention_period", ",", "retention_storage_mb", ")"],
+       "sql": "ALTER TOPIC t1 RESET (retention_period, retention_storage_mb)",
+       "start": 551,
+       "words": ["ALTER", "TOPIC", "T1", "RESET", "(", "RETENTION_PERIOD", ",", "RETENTION_STORAGE_MB", ")"]
+      },
+      {
+       "canonical": "ALTER TOPIC T1 DROP CONSUMER C3",
+       "end": 645,
+       "line": 10,
+       "source_words": ["ALTER", "TOPIC", "t1", "DROP", "CONSUMER", "c3"],
+       "sql": "ALTER TOPIC t1 DROP CONSUMER c3",
+       "start": 614,
+       "words": ["ALTER", "TOPIC", "T1", "DROP", "CONSUMER", "C3"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TOPIC T1 (CONSUMER C1 WITH (TYPE = 'shared'), CONSUMER C2 WITH (SUPPORTED_CODECS = 'raw,brotli'), CONSUMER C3) WITH (MIN_ACTIVE_PARTITIONS = 1)",
+      "end": 150,
+      "line": 1,
+      "source_words": ["CREATE", "TOPIC", "t1", "(", "CONSUMER", "c1", "WITH", "(", "type", "=", "'shared'", ")", ",", "CONSUMER", "c2", "WITH", "(", "supported_codecs", "=", "'raw,brotli'", ")", ",", "CONSUMER", "c3", ")", "WITH", "(", "min_active_partitions", "=", "1", ")"],
+      "sql": "CREATE TOPIC t1 (CONSUMER c1 WITH (type = 'shared'), CONSUMER c2 WITH (supported_codecs = 'raw,brotli'), CONSUMER c3) WITH (min_active_partitions = 1)",
+      "start": 0,
+      "words": ["CREATE", "TOPIC", "T1", "(", "CONSUMER", "C1", "WITH", "(", "TYPE", "=", "'shared'", ")", ",", "CONSUMER", "C2", "WITH", "(", "SUPPORTED_CODECS", "=", "'raw,brotli'", ")", ",", "CONSUMER", "C3", ")", "WITH", "(", "MIN_ACTIVE_PARTITIONS", "=", "1", ")"]
+     },
+     {
+      "canonical": "CREATE TOPIC IF NOT EXISTS T2 WITH (MAX_ACTIVE_PARTITIONS = 5, AUTO_PARTITIONING_STRATEGY = 'scale_up')",
+      "end": 255,
+      "line": 2,
+      "source_words": ["CREATE", "TOPIC", "IF", "NOT", "EXISTS", "t2", "WITH", "(", "max_active_partitions", "=", "5", ",", "auto_partitioning_strategy", "=", "'scale_up'", ")"],
+      "sql": "CREATE TOPIC IF NOT EXISTS t2 WITH (max_active_partitions = 5, auto_partitioning_strategy = 'scale_up')",
+      "start": 152,
+      "words": ["CREATE", "TOPIC", "IF", "NOT", "EXISTS", "T2", "WITH", "(", "MAX_ACTIVE_PARTITIONS", "=", "5", ",", "AUTO_PARTITIONING_STRATEGY", "=", "'scale_up'", ")"]
+     },
+     {
+      "canonical": "CREATE TOPIC T3 WITH (MAX_ACTIVE_PARTITIONS = 5, AUTO_PARTITIONING_STRATEGY = 'disabled')",
+      "end": 346,
+      "line": 3,
+      "source_words": ["CREATE", "TOPIC", "t3", "WITH", "(", "max_active_partitions", "=", "5", ",", "auto_partitioning_strategy", "=", "'disabled'", ")"],
+      "sql": "CREATE TOPIC t3 WITH (max_active_partitions = 5, auto_partitioning_strategy = 'disabled')",
+      "start": 257,
+      "words": ["CREATE", "TOPIC", "T3", "WITH", "(", "MAX_ACTIVE_PARTITIONS", "=", "5", ",", "AUTO_PARTITIONING_STRATEGY", "=", "'disabled'", ")"]
+     },
+     {
+      "canonical": "CREATE TOPIC T4 WITH (SUPPORTED_CODECS = '  ')",
+      "end": 394,
+      "line": 4,
+      "source_words": ["CREATE", "TOPIC", "t4", "WITH", "(", "supported_codecs", "=", "'  '", ")"],
+      "sql": "CREATE TOPIC t4 WITH (supported_codecs = '  ')",
+      "start": 348,
+      "words": ["CREATE", "TOPIC", "T4", "WITH", "(", "SUPPORTED_CODECS", "=", "'  '", ")"]
+     },
+     {
+      "canonical": "CREATE TOPIC T5 WITH (SUPPORTED_CODECS = 'RAW, Gzip ,zstd', RETENTION_PERIOD = INTERVAL('PT1H'))",
+      "end": 492,
+      "line": 5,
+      "source_words": ["CREATE", "TOPIC", "t5", "WITH", "(", "supported_codecs", "=", "'RAW, Gzip ,zstd'", ",", "retention_period", "=", "Interval", "(", "'PT1H'", ")", ")"],
+      "sql": "CREATE TOPIC t5 WITH (supported_codecs = 'RAW, Gzip ,zstd', retention_period = Interval('PT1H'))",
+      "start": 396,
+      "words": ["CREATE", "TOPIC", "T5", "WITH", "(", "SUPPORTED_CODECS", "=", "'RAW, Gzip ,zstd'", ",", "RETENTION_PERIOD", "=", "INTERVAL", "(", "'PT1H'", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TOPIC T6 WITH (METERING_MODE = 'request_units')",
+      "end": 548,
+      "line": 6,
+      "source_words": ["CREATE", "TOPIC", "t6", "WITH", "(", "metering_mode", "=", "'request_units'", ")"],
+      "sql": "CREATE TOPIC t6 WITH (metering_mode = 'request_units')",
+      "start": 494,
+      "words": ["CREATE", "TOPIC", "T6", "WITH", "(", "METERING_MODE", "=", "'request_units'", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TOPIC T1 RESET (SUPPORTED_CODECS)",
+      "end": 39,
+      "line": 1,
+      "source_words": ["ALTER", "TOPIC", "t1", "RESET", "(", "supported_codecs", ")"],
+      "sql": "ALTER TOPIC t1 RESET (supported_codecs)",
+      "start": 0,
+      "words": ["ALTER", "TOPIC", "T1", "RESET", "(", "SUPPORTED_CODECS", ")"]
+     },
+     {
+      "canonical": "DROP TOPIC IF EXISTS T1",
+      "effects": [
+       {
+        "fact": "stateful-drop",
+        "kind": "TOPIC",
+        "object": "t1"
+       },
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP TOPIC removes the topic, every message it holds and every consumer's position in it"
+       }
+      ],
+      "end": 64,
+      "line": 2,
+      "source_words": ["DROP", "TOPIC", "IF", "EXISTS", "t1"],
+      "sql": "DROP TOPIC IF EXISTS t1",
+      "start": 41,
+      "words": ["DROP", "TOPIC", "IF", "EXISTS", "T1"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TOPIC T1 ALTER CONSUMER C1 SET (READ_FROM = TIMESTAMP('2025-01-01T00:00:00Z'))",
+      "end": 84,
+      "line": 1,
+      "source_words": ["ALTER", "TOPIC", "t1", "ALTER", "CONSUMER", "c1", "SET", "(", "read_from", "=", "Timestamp", "(", "'2025-01-01T00:00:00Z'", ")", ")"],
+      "sql": "ALTER TOPIC t1 ALTER CONSUMER c1 SET (read_from = Timestamp('2025-01-01T00:00:00Z'))",
+      "start": 0,
+      "words": ["ALTER", "TOPIC", "T1", "ALTER", "CONSUMER", "C1", "SET", "(", "READ_FROM", "=", "TIMESTAMP", "(", "'2025-01-01T00:00:00Z'", ")", ")"]
+     },
+     {
+      "canonical": "ALTER TOPIC T1 ALTER CONSUMER C1 RESET (AVAILABILITY_PERIOD)",
+      "end": 146,
+      "line": 2,
+      "source_words": ["ALTER", "TOPIC", "t1", "ALTER", "CONSUMER", "c1", "RESET", "(", "availability_period", ")"],
+      "sql": "ALTER TOPIC t1 ALTER CONSUMER c1 RESET (availability_period)",
+      "start": 86,
+      "words": ["ALTER", "TOPIC", "T1", "ALTER", "CONSUMER", "C1", "RESET", "(", "AVAILABILITY_PERIOD", ")"]
+     },
+     {
+      "canonical": "ALTER TOPIC T1 ALTER CONSUMER C1 RESET (AVAILABILITY_PERIOD, IMPORTANT)",
+      "end": 219,
+      "line": 3,
+      "source_words": ["ALTER", "TOPIC", "t1", "ALTER", "CONSUMER", "c1", "RESET", "(", "availability_period", ",", "important", ")"],
+      "sql": "ALTER TOPIC t1 ALTER CONSUMER c1 RESET (availability_period, important)",
+      "start": 148,
+      "words": ["ALTER", "TOPIC", "T1", "ALTER", "CONSUMER", "C1", "RESET", "(", "AVAILABILITY_PERIOD", ",", "IMPORTANT", ")"]
+     },
+     {
+      "canonical": "ALTER TOPIC T1 ALTER CONSUMER C1",
+      "end": 253,
+      "line": 4,
+      "source_words": ["ALTER", "TOPIC", "t1", "ALTER", "CONSUMER", "c1"],
+      "sql": "ALTER TOPIC t1 ALTER CONSUMER c1",
+      "start": 221,
+      "words": ["ALTER", "TOPIC", "T1", "ALTER", "CONSUMER", "C1"]
+     },
+     {
+      "canonical": "ALTER TOPIC IF EXISTS T1 ADD CONSUMER C4 WITH (SUPPORTED_CODECS = 'lzop,custom'), ADD CONSUMER C5 WITH (TYPE = 'shared')",
+      "end": 375,
+      "line": 5,
+      "source_words": ["ALTER", "TOPIC", "IF", "EXISTS", "t1", "ADD", "CONSUMER", "c4", "WITH", "(", "supported_codecs", "=", "'lzop,custom'", ")", ",", "ADD", "CONSUMER", "c5", "WITH", "(", "type", "=", "'shared'", ")"],
+      "sql": "ALTER TOPIC IF EXISTS t1 ADD CONSUMER c4 WITH (supported_codecs = 'lzop,custom'), ADD CONSUMER c5 WITH (type = 'shared')",
+      "start": 255,
+      "words": ["ALTER", "TOPIC", "IF", "EXISTS", "T1", "ADD", "CONSUMER", "C4", "WITH", "(", "SUPPORTED_CODECS", "=", "'lzop,custom'", ")", ",", "ADD", "CONSUMER", "C5", "WITH", "(", "TYPE", "=", "'shared'", ")"]
+     },
+     {
+      "canonical": "ALTER TOPIC T1 ADD CONSUMER C6 WITH (SUPPORTED_CODECS = 'snappy')",
+      "end": 442,
+      "line": 6,
+      "source_words": ["ALTER", "TOPIC", "t1", "ADD", "CONSUMER", "c6", "WITH", "(", "supported_codecs", "=", "'snappy'", ")"],
+      "sql": "ALTER TOPIC t1 ADD CONSUMER c6 WITH (supported_codecs = 'snappy')",
+      "start": 377,
+      "words": ["ALTER", "TOPIC", "T1", "ADD", "CONSUMER", "C6", "WITH", "(", "SUPPORTED_CODECS", "=", "'snappy'", ")"]
+     },
+     {
+      "canonical": "ALTER TOPIC T1 SET (METERING_MODE = 'reserved_capacity')",
+      "end": 500,
+      "line": 7,
+      "source_words": ["ALTER", "TOPIC", "t1", "SET", "(", "metering_mode", "=", "'reserved_capacity'", ")"],
+      "sql": "ALTER TOPIC t1 SET (metering_mode = 'reserved_capacity')",
+      "start": 444,
+      "words": ["ALTER", "TOPIC", "T1", "SET", "(", "METERING_MODE", "=", "'reserved_capacity'", ")"]
+     },
+     {
+      "canonical": "ALTER TOPIC T1 SET (PARTITION_COUNT_LIMIT = 10)",
+      "end": 549,
+      "line": 8,
+      "source_words": ["ALTER", "TOPIC", "t1", "SET", "(", "partition_count_limit", "=", "10", ")"],
+      "sql": "ALTER TOPIC t1 SET (partition_count_limit = 10)",
+      "start": 502,
+      "words": ["ALTER", "TOPIC", "T1", "SET", "(", "PARTITION_COUNT_LIMIT", "=", "10", ")"]
+     },
+     {
+      "canonical": "ALTER TOPIC T1 RESET (RETENTION_PERIOD, RETENTION_STORAGE_MB)",
+      "end": 612,
+      "line": 9,
+      "source_words": ["ALTER", "TOPIC", "t1", "RESET", "(", "retention_period", ",", "retention_storage_mb", ")"],
+      "sql": "ALTER TOPIC t1 RESET (retention_period, retention_storage_mb)",
+      "start": 551,
+      "words": ["ALTER", "TOPIC", "T1", "RESET", "(", "RETENTION_PERIOD", ",", "RETENTION_STORAGE_MB", ")"]
+     },
+     {
+      "canonical": "ALTER TOPIC T1 DROP CONSUMER C3",
+      "effects": [
+       {
+        "fact": "safety-effect",
+        "impact": "destructive",
+        "reason": "DROP CONSUMER removes a topic consumer and its position in the topic"
+       }
+      ],
+      "end": 645,
+      "line": 10,
+      "source_words": ["ALTER", "TOPIC", "t1", "DROP", "CONSUMER", "c3"],
+      "sql": "ALTER TOPIC t1 DROP CONSUMER c3",
+      "start": 614,
+      "words": ["ALTER", "TOPIC", "T1", "DROP", "CONSUMER", "C3"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TOPIC t1 (CONSUMER c1 WITH (type = 'shared'), CONSUMER c2 WITH (supported_codecs = 'raw,brotli'), CONSUMER c3) WITH (min_active_partitions = 1);\nCREATE TOPIC IF NOT EXISTS t2 WITH (max_active_partitions = 5, auto_partitioning_strategy = 'scale_up');\nCREATE TOPIC t3 WITH (max_active_partitions = 5, auto_partitioning_strategy = 'disabled');\nCREATE TOPIC t4 WITH (supported_codecs = '  ');\nCREATE TOPIC t5 WITH (supported_codecs = 'RAW, Gzip ,zstd', retention_period = Interval('PT1H'));\nCREATE TOPIC t6 WITH (metering_mode = 'request_units');\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "down": true,
+     "name": "0002_t.down.sql",
+     "sql": "ALTER TOPIC t1 RESET (supported_codecs);\nDROP TOPIC IF EXISTS t1;\n",
+     "version": 2
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER TOPIC t1 ALTER CONSUMER c1 SET (read_from = Timestamp('2025-01-01T00:00:00Z'));\nALTER TOPIC t1 ALTER CONSUMER c1 RESET (availability_period);\nALTER TOPIC t1 ALTER CONSUMER c1 RESET (availability_period, important);\nALTER TOPIC t1 ALTER CONSUMER c1;\nALTER TOPIC IF EXISTS t1 ADD CONSUMER c4 WITH (supported_codecs = 'lzop,custom'), ADD CONSUMER c5 WITH (type = 'shared');\nALTER TOPIC t1 ADD CONSUMER c6 WITH (supported_codecs = 'snappy');\nALTER TOPIC t1 SET (metering_mode = 'reserved_capacity');\nALTER TOPIC t1 SET (partition_count_limit = 10);\nALTER TOPIC t1 RESET (retention_period, retention_storage_mb);\nALTER TOPIC t1 DROP CONSUMER c3;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

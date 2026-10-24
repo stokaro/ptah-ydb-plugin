@@ -1,0 +1,124 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": [],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TOPIC EVENTS (CONSUMER C WITH (IMPORTANT = TRUE, SUPPORTED_CODECS = 'RAW,gzip')) WITH (MIN_ACTIVE_PARTITIONS = 2, AUTO_PARTITIONING_STRATEGY = 'scale_up', MAX_ACTIVE_PARTITIONS = 4, RETENTION_PERIOD = INTERVAL('PT36H'), SUPPORTED_CODECS = 'raw,gzip,lzop,zstd,custom')",
+       "end": 274,
+       "line": 1,
+       "source_words": ["CREATE", "TOPIC", "events", "(", "CONSUMER", "c", "WITH", "(", "important", "=", "TRUE", ",", "supported_codecs", "=", "'RAW,gzip'", ")", ")", "WITH", "(", "min_active_partitions", "=", "2", ",", "auto_partitioning_strategy", "=", "'scale_up'", ",", "max_active_partitions", "=", "4", ",", "retention_period", "=", "Interval", "(", "'PT36H'", ")", ",", "supported_codecs", "=", "'raw,gzip,lzop,zstd,custom'", ")"],
+       "sql": "CREATE TOPIC events (CONSUMER c WITH (important = TRUE, supported_codecs = 'RAW,gzip')) WITH (min_active_partitions = 2, auto_partitioning_strategy = 'scale_up', max_active_partitions = 4, retention_period = Interval('PT36H'), supported_codecs = 'raw,gzip,lzop,zstd,custom')",
+       "start": 0,
+       "words": ["CREATE", "TOPIC", "EVENTS", "(", "CONSUMER", "C", "WITH", "(", "IMPORTANT", "=", "TRUE", ",", "SUPPORTED_CODECS", "=", "'RAW,gzip'", ")", ")", "WITH", "(", "MIN_ACTIVE_PARTITIONS", "=", "2", ",", "AUTO_PARTITIONING_STRATEGY", "=", "'scale_up'", ",", "MAX_ACTIVE_PARTITIONS", "=", "4", ",", "RETENTION_PERIOD", "=", "INTERVAL", "(", "'PT36H'", ")", ",", "SUPPORTED_CODECS", "=", "'raw,gzip,lzop,zstd,custom'", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TOPIC EVENTS (CONSUMER C WITH (IMPORTANT = TRUE, SUPPORTED_CODECS = 'RAW,gzip')) WITH (MIN_ACTIVE_PARTITIONS = 2, AUTO_PARTITIONING_STRATEGY = 'scale_up', MAX_ACTIVE_PARTITIONS = 4, RETENTION_PERIOD = INTERVAL('PT36H'), SUPPORTED_CODECS = 'raw,gzip,lzop,zstd,custom')",
+      "end": 274,
+      "line": 1,
+      "source_words": ["CREATE", "TOPIC", "events", "(", "CONSUMER", "c", "WITH", "(", "important", "=", "TRUE", ",", "supported_codecs", "=", "'RAW,gzip'", ")", ")", "WITH", "(", "min_active_partitions", "=", "2", ",", "auto_partitioning_strategy", "=", "'scale_up'", ",", "max_active_partitions", "=", "4", ",", "retention_period", "=", "Interval", "(", "'PT36H'", ")", ",", "supported_codecs", "=", "'raw,gzip,lzop,zstd,custom'", ")"],
+      "sql": "CREATE TOPIC events (CONSUMER c WITH (important = TRUE, supported_codecs = 'RAW,gzip')) WITH (min_active_partitions = 2, auto_partitioning_strategy = 'scale_up', max_active_partitions = 4, retention_period = Interval('PT36H'), supported_codecs = 'raw,gzip,lzop,zstd,custom')",
+      "start": 0,
+      "words": ["CREATE", "TOPIC", "EVENTS", "(", "CONSUMER", "C", "WITH", "(", "IMPORTANT", "=", "TRUE", ",", "SUPPORTED_CODECS", "=", "'RAW,gzip'", ")", ")", "WITH", "(", "MIN_ACTIVE_PARTITIONS", "=", "2", ",", "AUTO_PARTITIONING_STRATEGY", "=", "'scale_up'", ",", "MAX_ACTIVE_PARTITIONS", "=", "4", ",", "RETENTION_PERIOD", "=", "INTERVAL", "(", "'PT36H'", ")", ",", "SUPPORTED_CODECS", "=", "'raw,gzip,lzop,zstd,custom'", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TOPIC events (CONSUMER c WITH (important = TRUE, supported_codecs = 'RAW,gzip')) WITH (min_active_partitions = 2, auto_partitioning_strategy = 'scale_up', max_active_partitions = 4, retention_period = Interval('PT36H'), supported_codecs = 'raw,gzip,lzop,zstd,custom');\n",
+     "up": true,
+     "version": 1
+    }
+   ]
+  }
+ ]
+}

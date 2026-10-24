@@ -1,0 +1,195 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "001_prompt.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "002_template.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["001_prompt.sql:2:BC103", "001_prompt.sql:2:DS101", "002_template.sql:1:BC103", "002_template.sql:1:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "001_prompt.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "002_template.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["001_prompt.sql:2:BC103", "001_prompt.sql:2:DS101", "002_template.sql:1:BC103", "002_template.sql:1:DS101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "001_prompt.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "002_template.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["001_prompt.sql:2:DS101", "002_template.sql:1:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {}
+     ],
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "UPDATE PROMPTS SET BODY = '{{DATE}}; {{ ... }}' WHERE ID = 1",
+       "end": 60,
+       "line": 1,
+       "source_words": ["UPDATE", "prompts", "SET", "body", "=", "'{{DATE}}; {{ ... }}'", "WHERE", "id", "=", "1"],
+       "sql": "UPDATE prompts SET body = '{{DATE}}; {{ ... }}' WHERE id = 1",
+       "start": 0,
+       "words": ["UPDATE", "PROMPTS", "SET", "BODY", "=", "'{{DATE}}; {{ ... }}'", "WHERE", "ID", "=", "1"]
+      },
+      {
+       "canonical": "DROP TABLE OLD_PROMPTS",
+       "end": 84,
+       "line": 2,
+       "source_words": ["DROP", "TABLE", "old_prompts"],
+       "sql": "DROP TABLE old_prompts",
+       "start": 62,
+       "words": ["DROP", "TABLE", "OLD_PROMPTS"]
+      }
+     ],
+     [
+      {
+       "canonical": "DROP TABLE OLD_SETTINGS",
+       "end": 23,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "old_settings"],
+       "sql": "DROP TABLE old_settings",
+       "start": 0,
+       "words": ["DROP", "TABLE", "OLD_SETTINGS"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["001_prompt.sql:2:BC103", "001_prompt.sql:2:DS101", "002_template.sql:1:BC103", "002_template.sql:1:DS101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "UPDATE PROMPTS SET BODY = '{{DATE}}; {{ ... }}' WHERE ID = 1",
+      "end": 60,
+      "line": 1,
+      "source_words": ["UPDATE", "prompts", "SET", "body", "=", "'{{DATE}}; {{ ... }}'", "WHERE", "id", "=", "1"],
+      "sql": "UPDATE prompts SET body = '{{DATE}}; {{ ... }}' WHERE id = 1",
+      "start": 0,
+      "words": ["UPDATE", "PROMPTS", "SET", "BODY", "=", "'{{DATE}}; {{ ... }}'", "WHERE", "ID", "=", "1"]
+     },
+     {
+      "canonical": "DROP TABLE OLD_PROMPTS",
+      "end": 84,
+      "line": 2,
+      "source_words": ["DROP", "TABLE", "old_prompts"],
+      "sql": "DROP TABLE old_prompts",
+      "start": 62,
+      "words": ["DROP", "TABLE", "OLD_PROMPTS"]
+     }
+    ],
+    [
+     {
+      "canonical": "DROP TABLE OLD_SETTINGS",
+      "end": 23,
+      "line": 1,
+      "source_words": ["DROP", "TABLE", "old_settings"],
+      "sql": "DROP TABLE old_settings",
+      "start": 0,
+      "words": ["DROP", "TABLE", "OLD_SETTINGS"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "001_prompt.sql",
+     "sql": "UPDATE prompts SET body = '{{DATE}}; {{ ... }}' WHERE id = 1;\nDROP TABLE old_prompts;\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "002_template.sql",
+     "sql": "DROP TABLE old_settings;",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

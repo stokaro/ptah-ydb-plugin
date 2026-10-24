@@ -1,0 +1,14 @@
+{
+ "kind": "split",
+ "request": {
+  "target": "ydb",
+  "sources": [
+   {
+    "name": "0000000002_events.up.sql",
+    "sql": "DROP TOPIC `app/events`;\nALTER TABLE users ADD INDEX by_email GLOBAL UNIQUE SYNC ON (email);\n",
+    "version": 2,
+    "up": true
+   }
+  ]
+ }
+}

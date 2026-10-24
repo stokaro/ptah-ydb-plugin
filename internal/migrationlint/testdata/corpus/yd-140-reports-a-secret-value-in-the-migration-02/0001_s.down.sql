@@ -1,0 +1,1 @@
+UPSERT OBJECT pw (TYPE SECRET) WITH value = 'old';

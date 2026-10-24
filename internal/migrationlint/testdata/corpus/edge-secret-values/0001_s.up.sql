@@ -1,0 +1,14 @@
+CREATE SECRET `s1` WITH (value = $PTAH_SECRET_ONE);
+CREATE SECRET `s2` WITH (value = $ptah_secret_two);
+CREATE SECRET `s3` WITH (value = $PTAH_SECRET_);
+CREATE OR REPLACE SECRET IF NOT EXISTS `s4` WITH (value = 'in clear');
+ALTER SECRET IF EXISTS `s5` WITH (value = $PTAH_SECRET_FIVE);
+ALTER SECRET `s6` WITH (value = ($PTAH_SECRET_SIX));
+CREATE SECRET `s7` WITH (value = $PTAH_SECRET_SEVEN, inherit_permissions = TRUE);
+CREATE SECRET `s8` WITH (inherit_permissions = TRUE, value = 'x', value = $PTAH_SECRET_EIGHT);
+CREATE SECRET `s9`;
+CREATE OBJECT IF NOT EXISTS `legacy` (TYPE SECRET) WITH value = 'old';
+UPSERT OBJECT `legacy2` (TYPE SECRET) WITH value = 'old';
+ALTER OBJECT legacy3 (TYPE SECRET) SET value = 'old';
+DROP OBJECT legacy3 (TYPE SECRET);
+CREATE OBJECT `other` (TYPE SECRET_ACCESS) WITH value = 'old';

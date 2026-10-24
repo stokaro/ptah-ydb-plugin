@@ -1,6 +1,6 @@
 package yql
 
-// yqlBodies tracks the YQL constructs whose body holds statements:
+// Bodies tracks the YQL constructs whose body holds statements:
 //
 //   - DEFINE ACTION and DEFINE SUBQUERY, closed by END DEFINE;
 //   - DO BEGIN, the inline action that EVALUATE FOR, EVALUATE IF, a plain DO
@@ -15,7 +15,7 @@ package yql
 // CASE expressions are counted and their END pairs with nothing. Measured on
 // YDB 26.2.1.14, CASE and END are also names after AS and after a dot
 // (SELECT 1 AS case; SELECT t.case FROM ...), where they count for nothing.
-type yqlBodies struct {
+type Bodies struct {
 	blocks   int
 	braces   int
 	cases    int
@@ -25,7 +25,8 @@ type yqlBodies struct {
 	named bool
 }
 
-func (b *yqlBodies) word(word string) {
+// Word records one identifier, upper-cased by the caller.
+func (b *Bodies) Word(word string) {
 	previous, named := b.previous, b.named
 	b.previous, b.named = word, word == "AS"
 	if named && (word == "CASE" || word == "END") {
@@ -47,18 +48,18 @@ func (b *yqlBodies) word(word string) {
 	}
 }
 
-// separate records a semicolon, which ends a statement inside a body, so the
+// Separate records a semicolon, which ends a statement inside a body, so the
 // words on either side of it pair with nothing.
-func (b *yqlBodies) separate() {
+func (b *Bodies) Separate() {
 	b.previous = ""
 	b.named = false
 }
 
-// symbol records punctuation. It separates the words on either side of it as
+// Symbol records punctuation. It separates the words on either side of it as
 // a semicolon does: measured on YDB 26.2.1.14, SELECT do, begin FROM ... is
 // two columns, and SELECT end, define FROM ... inside an action closes
 // nothing.
-func (b *yqlBodies) symbol(value string) {
+func (b *Bodies) Symbol(value string) {
 	b.previous = ""
 	b.named = value == "."
 	switch value {
@@ -71,6 +72,8 @@ func (b *yqlBodies) symbol(value string) {
 	}
 }
 
-func (b *yqlBodies) inside() bool {
+// Inside reports that a semicolon read now ends a statement of a body rather
+// than the statement that holds the body.
+func (b *Bodies) Inside() bool {
 	return b.blocks > 0 || b.braces > 0
 }

@@ -1,0 +1,771 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of a to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "a"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of b to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "b"
+       }
+      ]
+     },
+     {
+      "code": "YD118",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of c to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "c"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of e to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "e"
+       }
+      ]
+     },
+     {
+      "code": "YD118",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of e to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "e"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 5,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "f"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 10,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "f"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of unknown to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 11,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "unknown"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD105", "0002_t.up.sql:2:YD105", "0002_t.up.sql:3:YD118", "0002_t.up.sql:5:YD105", "0002_t.up.sql:5:YD118", "0002_t.up.sql:6:YD105", "0002_t.up.sql:11:YD105", "0002_t.up.sql:12:YD105"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of a to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "a"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of b to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "b"
+       }
+      ]
+     },
+     {
+      "code": "YD118",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of c to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "c"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of e to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "e"
+       }
+      ]
+     },
+     {
+      "code": "YD118",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of e to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "e"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 5,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "f"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 10,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "f"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of unknown to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 11,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "unknown"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD105", "0002_t.up.sql:2:YD105", "0002_t.up.sql:3:YD118", "0002_t.up.sql:5:YD105", "0002_t.up.sql:5:YD118", "0002_t.up.sql:6:YD105", "0002_t.up.sql:11:YD105", "0002_t.up.sql:12:YD105"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of a to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "a"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of b to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 1,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "b"
+       }
+      ]
+     },
+     {
+      "code": "YD118",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of c to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
+      "statement": 2,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "c"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of e to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "e"
+       }
+      ]
+     },
+     {
+      "code": "YD118",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_PARTITION_SIZE_MB of e to 2048, whatever size it held; set AUTO_PARTITIONING_PARTITION_SIZE_MB in the same ALTER TABLE to keep it",
+      "statement": 4,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "e"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 5,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "f"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_LOAD = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of f to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 10,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "f"
+       }
+      ]
+     },
+     {
+      "code": "YD105",
+      "file": 1,
+      "message": "setting AUTO_PARTITIONING_BY_SIZE = ENABLED resets AUTO_PARTITIONING_MIN_PARTITIONS_COUNT of unknown to 1, so YDB may merge its partitions down to one; set AUTO_PARTITIONING_MIN_PARTITIONS_COUNT in the same ALTER TABLE to keep it",
+      "statement": 11,
+      "subjects": [
+       {
+        "kind": "table",
+        "name": "unknown"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD105", "0002_t.up.sql:2:YD105", "0002_t.up.sql:3:YD118", "0002_t.up.sql:5:YD105", "0002_t.up.sql:5:YD118", "0002_t.up.sql:6:YD105", "0002_t.up.sql:11:YD105", "0002_t.up.sql:12:YD105"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE A (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = MANY)",
+       "end": 106,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "a", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "many", ")"],
+       "sql": "CREATE TABLE a (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = many)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "A", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "MANY", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE B (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (UNIFORM_PARTITIONS = 4, PARTITION_AT_KEYS = (10))",
+       "end": 217,
+       "line": 2,
+       "source_words": ["CREATE", "TABLE", "b", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "UNIFORM_PARTITIONS", "=", "4", ",", "PARTITION_AT_KEYS", "=", "(", "10", ")", ")"],
+       "sql": "CREATE TABLE b (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (UNIFORM_PARTITIONS = 4, PARTITION_AT_KEYS = (10))",
+       "start": 108,
+       "words": ["CREATE", "TABLE", "B", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "UNIFORM_PARTITIONS", "=", "4", ",", "PARTITION_AT_KEYS", "=", "(", "10", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE C (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 'big')",
+       "end": 323,
+       "line": 3,
+       "source_words": ["CREATE", "TABLE", "c", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "'big'", ")"],
+       "sql": "CREATE TABLE c (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 'big')",
+       "start": 219,
+       "words": ["CREATE", "TABLE", "C", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "'big'", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE D (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (AUTO_PARTITIONING_BY_SIZE = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1)",
+       "end": 466,
+       "line": 4,
+       "source_words": ["CREATE", "TABLE", "d", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "DISABLED", ",", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "1", ")"],
+       "sql": "CREATE TABLE d (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_BY_SIZE = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1)",
+       "start": 325,
+       "words": ["CREATE", "TABLE", "D", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "DISABLED", ",", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "1", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE E (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 100, UNIFORM_PARTITIONS = 0)",
+       "end": 594,
+       "line": 5,
+       "source_words": ["CREATE", "TABLE", "e", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "100", ",", "UNIFORM_PARTITIONS", "=", "0", ")"],
+       "sql": "CREATE TABLE e (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 100, UNIFORM_PARTITIONS = 0)",
+       "start": 468,
+       "words": ["CREATE", "TABLE", "E", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "100", ",", "UNIFORM_PARTITIONS", "=", "0", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE F (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (PARTITION_AT_KEYS = ((1, 'a'), (2, 'b'), (3, 'c')), AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048)",
+       "end": 751,
+       "line": 6,
+       "source_words": ["CREATE", "TABLE", "f", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "PARTITION_AT_KEYS", "=", "(", "(", "1", ",", "'a'", ")", ",", "(", "2", ",", "'b'", ")", ",", "(", "3", ",", "'c'", ")", ")", ",", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "2048", ")"],
+       "sql": "CREATE TABLE f (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (PARTITION_AT_KEYS = ((1, 'a'), (2, 'b'), (3, 'c')), AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048)",
+       "start": 596,
+       "words": ["CREATE", "TABLE", "F", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "PARTITION_AT_KEYS", "=", "(", "(", "1", ",", "'a'", ")", ",", "(", "2", ",", "'b'", ")", ",", "(", "3", ",", "'c'", ")", ")", ",", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "2048", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE A SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "end": 55,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "a", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE a SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "A", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE B SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+       "end": 112,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "b", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE b SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+       "start": 57,
+       "words": ["ALTER", "TABLE", "B", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE C SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "end": 169,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "c", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE c SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "start": 114,
+       "words": ["ALTER", "TABLE", "C", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE D SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "end": 226,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "d", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE d SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "start": 171,
+       "words": ["ALTER", "TABLE", "D", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE E SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "end": 283,
+       "line": 5,
+       "source_words": ["ALTER", "TABLE", "e", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE e SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "start": 228,
+       "words": ["ALTER", "TABLE", "E", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_BY_SIZE = ENABLED), SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+       "end": 383,
+       "line": 6,
+       "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")", ",", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_BY_SIZE = ENABLED), SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+       "start": 285,
+       "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")", ",", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_PARTITION_SIZE_MB = 512)",
+       "end": 446,
+       "line": 7,
+       "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "512", ")"],
+       "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_PARTITION_SIZE_MB = 512)",
+       "start": 385,
+       "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "512", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_BY_SIZE = DISABLED)",
+       "end": 504,
+       "line": 8,
+       "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "DISABLED", ")"],
+       "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_BY_SIZE = DISABLED)",
+       "start": 448,
+       "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "DISABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "end": 561,
+       "line": 9,
+       "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+       "start": 506,
+       "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 0, AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+       "end": 662,
+       "line": 10,
+       "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "0", ",", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 0, AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+       "start": 563,
+       "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "0", ",", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+       "end": 719,
+       "line": 11,
+       "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"],
+       "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+       "start": 664,
+       "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE `unknown` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 10)",
+       "end": 826,
+       "line": 12,
+       "source_words": ["ALTER", "TABLE", "`unknown`", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ",", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "10", ")"],
+       "sql": "ALTER TABLE `unknown` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 10)",
+       "start": 721,
+       "words": ["ALTER", "TABLE", "`unknown`", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ",", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "10", ")"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE A (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = MANY)",
+      "end": 106,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "a", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "many", ")"],
+      "sql": "CREATE TABLE a (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = many)",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "A", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "MANY", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE B (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (UNIFORM_PARTITIONS = 4, PARTITION_AT_KEYS = (10))",
+      "end": 217,
+      "line": 2,
+      "source_words": ["CREATE", "TABLE", "b", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "UNIFORM_PARTITIONS", "=", "4", ",", "PARTITION_AT_KEYS", "=", "(", "10", ")", ")"],
+      "sql": "CREATE TABLE b (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (UNIFORM_PARTITIONS = 4, PARTITION_AT_KEYS = (10))",
+      "start": 108,
+      "words": ["CREATE", "TABLE", "B", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "UNIFORM_PARTITIONS", "=", "4", ",", "PARTITION_AT_KEYS", "=", "(", "10", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE C (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 'big')",
+      "end": 323,
+      "line": 3,
+      "source_words": ["CREATE", "TABLE", "c", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "'big'", ")"],
+      "sql": "CREATE TABLE c (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 'big')",
+      "start": 219,
+      "words": ["CREATE", "TABLE", "C", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "'big'", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE D (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (AUTO_PARTITIONING_BY_SIZE = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1)",
+      "end": 466,
+      "line": 4,
+      "source_words": ["CREATE", "TABLE", "d", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "DISABLED", ",", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "1", ")"],
+      "sql": "CREATE TABLE d (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_BY_SIZE = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1)",
+      "start": 325,
+      "words": ["CREATE", "TABLE", "D", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "DISABLED", ",", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "1", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE E (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 100, UNIFORM_PARTITIONS = 0)",
+      "end": 594,
+      "line": 5,
+      "source_words": ["CREATE", "TABLE", "e", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "100", ",", "UNIFORM_PARTITIONS", "=", "0", ")"],
+      "sql": "CREATE TABLE e (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 100, UNIFORM_PARTITIONS = 0)",
+      "start": 468,
+      "words": ["CREATE", "TABLE", "E", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "100", ",", "UNIFORM_PARTITIONS", "=", "0", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE F (ID UINT64 NOT NULL, PRIMARY KEY (ID)) WITH (PARTITION_AT_KEYS = ((1, 'a'), (2, 'b'), (3, 'c')), AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048)",
+      "end": 751,
+      "line": 6,
+      "source_words": ["CREATE", "TABLE", "f", "(", "id", "Uint64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")", "WITH", "(", "PARTITION_AT_KEYS", "=", "(", "(", "1", ",", "'a'", ")", ",", "(", "2", ",", "'b'", ")", ",", "(", "3", ",", "'c'", ")", ")", ",", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "2048", ")"],
+      "sql": "CREATE TABLE f (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (PARTITION_AT_KEYS = ((1, 'a'), (2, 'b'), (3, 'c')), AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048)",
+      "start": 596,
+      "words": ["CREATE", "TABLE", "F", "(", "ID", "UINT64", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")", "WITH", "(", "PARTITION_AT_KEYS", "=", "(", "(", "1", ",", "'a'", ")", ",", "(", "2", ",", "'b'", ")", ",", "(", "3", ",", "'c'", ")", ")", ",", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "2048", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE A SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "end": 55,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "a", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE a SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "A", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE B SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+      "end": 112,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "b", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE b SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+      "start": 57,
+      "words": ["ALTER", "TABLE", "B", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE C SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "end": 169,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "c", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE c SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "start": 114,
+      "words": ["ALTER", "TABLE", "C", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE D SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "end": 226,
+      "line": 4,
+      "source_words": ["ALTER", "TABLE", "d", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE d SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "start": 171,
+      "words": ["ALTER", "TABLE", "D", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE E SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "end": 283,
+      "line": 5,
+      "source_words": ["ALTER", "TABLE", "e", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE e SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "start": 228,
+      "words": ["ALTER", "TABLE", "E", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_BY_SIZE = ENABLED), SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+      "end": 383,
+      "line": 6,
+      "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")", ",", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_BY_SIZE = ENABLED), SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+      "start": 285,
+      "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")", ",", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_PARTITION_SIZE_MB = 512)",
+      "end": 446,
+      "line": 7,
+      "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "512", ")"],
+      "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_PARTITION_SIZE_MB = 512)",
+      "start": 385,
+      "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "512", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_BY_SIZE = DISABLED)",
+      "end": 504,
+      "line": 8,
+      "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "DISABLED", ")"],
+      "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_BY_SIZE = DISABLED)",
+      "start": 448,
+      "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "DISABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "end": 561,
+      "line": 9,
+      "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)",
+      "start": 506,
+      "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 0, AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+      "end": 662,
+      "line": 10,
+      "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "0", ",", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 0, AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+      "start": 563,
+      "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "0", ",", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE F SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+      "end": 719,
+      "line": 11,
+      "source_words": ["ALTER", "TABLE", "f", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"],
+      "sql": "ALTER TABLE f SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+      "start": 664,
+      "words": ["ALTER", "TABLE", "F", "SET", "(", "AUTO_PARTITIONING_BY_LOAD", "=", "ENABLED", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE `unknown` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 10)",
+      "end": 826,
+      "line": 12,
+      "source_words": ["ALTER", "TABLE", "`unknown`", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ",", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "10", ")"],
+      "sql": "ALTER TABLE `unknown` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 10)",
+      "start": 721,
+      "words": ["ALTER", "TABLE", "`unknown`", "SET", "(", "AUTO_PARTITIONING_BY_SIZE", "=", "ENABLED", ",", "AUTO_PARTITIONING_PARTITION_SIZE_MB", "=", "10", ")"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE a (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = many);\nCREATE TABLE b (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (UNIFORM_PARTITIONS = 4, PARTITION_AT_KEYS = (10));\nCREATE TABLE c (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 'big');\nCREATE TABLE d (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_BY_SIZE = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1);\nCREATE TABLE e (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (AUTO_PARTITIONING_PARTITION_SIZE_MB = 100, UNIFORM_PARTITIONS = 0);\nCREATE TABLE f (id Uint64 NOT NULL, PRIMARY KEY (id)) WITH (PARTITION_AT_KEYS = ((1, 'a'), (2, 'b'), (3, 'c')), AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048);\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER TABLE a SET (AUTO_PARTITIONING_BY_SIZE = ENABLED);\nALTER TABLE b SET (AUTO_PARTITIONING_BY_LOAD = ENABLED);\nALTER TABLE c SET (AUTO_PARTITIONING_BY_SIZE = ENABLED);\nALTER TABLE d SET (AUTO_PARTITIONING_BY_SIZE = ENABLED);\nALTER TABLE e SET (AUTO_PARTITIONING_BY_SIZE = ENABLED);\nALTER TABLE f SET (AUTO_PARTITIONING_BY_SIZE = ENABLED), SET (AUTO_PARTITIONING_BY_LOAD = ENABLED);\nALTER TABLE f SET (AUTO_PARTITIONING_PARTITION_SIZE_MB = 512);\nALTER TABLE f SET (AUTO_PARTITIONING_BY_SIZE = DISABLED);\nALTER TABLE f SET (AUTO_PARTITIONING_BY_SIZE = ENABLED);\nALTER TABLE f SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 0, AUTO_PARTITIONING_BY_LOAD = ENABLED);\nALTER TABLE f SET (AUTO_PARTITIONING_BY_LOAD = ENABLED);\nALTER TABLE `unknown` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 10);\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

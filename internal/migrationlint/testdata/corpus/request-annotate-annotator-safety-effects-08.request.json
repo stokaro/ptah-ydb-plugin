@@ -1,0 +1,49 @@
+{
+ "kind": "annotate",
+ "request": {
+  "facts": [
+   "safety-effect"
+  ],
+  "sources": [
+   {
+    "name": "0001_t.up.sql",
+    "sql": "ALTER STREAMING QUERY q SET (RUN = FALSE);\n"
+   }
+  ],
+  "files": [
+   [
+    {
+     "start": 0,
+     "end": 41,
+     "line": 1,
+     "sql": "ALTER STREAMING QUERY q SET (RUN = FALSE)",
+     "canonical": "ALTER STREAMING QUERY Q SET (RUN = FALSE)",
+     "words": [
+      "ALTER",
+      "STREAMING",
+      "QUERY",
+      "Q",
+      "SET",
+      "(",
+      "RUN",
+      "=",
+      "FALSE",
+      ")"
+     ],
+     "source_words": [
+      "ALTER",
+      "STREAMING",
+      "QUERY",
+      "q",
+      "SET",
+      "(",
+      "RUN",
+      "=",
+      "FALSE",
+      ")"
+     ]
+    }
+   ]
+  ]
+ }
+}

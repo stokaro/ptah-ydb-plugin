@@ -1,0 +1,12 @@
+{
+ "kind": "split",
+ "request": {
+  "target": "ydb",
+  "sources": [
+   {
+    "name": "1.up.sql",
+    "sql": "DROP TOPIC t;"
+   }
+  ]
+ }
+}

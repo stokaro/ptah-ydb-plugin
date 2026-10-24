@@ -1,0 +1,14 @@
+[
+ {
+  "dialect": "ydb",
+  "server_version": "25.1.4.7",
+  "compatibility": "",
+  "dir_format": "auto"
+ },
+ {
+  "dialect": "ydb",
+  "server_version": "26.2.1.14",
+  "compatibility": "",
+  "dir_format": "auto"
+ }
+]

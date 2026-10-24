@@ -1,0 +1,621 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_create_users.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_create_users.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "name": "0000000002_bad_stuff.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000003_noop.down.sql",
+      "source": 3,
+      "version": 3
+     },
+     {
+      "has_pair": true,
+      "name": "0000000003_noop.up.sql",
+      "source": 4,
+      "up": true,
+      "version": 3
+     },
+     {
+      "name": "misnamed.sql",
+      "source": -1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0000000002_bad_stuff.up.sql:0:MF101P", "0000000002_bad_stuff.up.sql:2:BC103", "0000000002_bad_stuff.up.sql:2:DS101", "0000000002_bad_stuff.up.sql:4:BC104", "0000000002_bad_stuff.up.sql:4:DS102", "0000000002_bad_stuff.up.sql:6:BC101", "0000000002_bad_stuff.up.sql:8:DS103", "0000000003_noop.up.sql:0:MF102P", "misnamed.sql:0:MF103"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_create_users.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_create_users.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "name": "0000000002_bad_stuff.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000003_noop.down.sql",
+      "source": 3,
+      "version": 3
+     },
+     {
+      "has_pair": true,
+      "name": "0000000003_noop.up.sql",
+      "source": 4,
+      "up": true,
+      "version": 3
+     },
+     {
+      "name": "misnamed.sql",
+      "source": -1
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0000000002_bad_stuff.up.sql:0:MF101P", "0000000002_bad_stuff.up.sql:2:BC103", "0000000002_bad_stuff.up.sql:2:DS101", "0000000002_bad_stuff.up.sql:4:BC104", "0000000002_bad_stuff.up.sql:4:DS102", "0000000002_bad_stuff.up.sql:6:BC101", "0000000002_bad_stuff.up.sql:8:DS103", "0000000003_noop.up.sql:0:MF102P", "misnamed.sql:0:MF103"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000001_create_users.down.sql",
+      "source": 0,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0000000001_create_users.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 1
+     },
+     {
+      "name": "0000000002_bad_stuff.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0000000003_noop.down.sql",
+      "source": 3,
+      "version": 3
+     },
+     {
+      "has_pair": true,
+      "name": "0000000003_noop.up.sql",
+      "source": 4,
+      "up": true,
+      "version": 3
+     },
+     {
+      "name": "misnamed.sql",
+      "source": -1
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0000000002_bad_stuff.up.sql:0:MF101P", "0000000002_bad_stuff.up.sql:2:DS101", "0000000002_bad_stuff.up.sql:4:DS102", "0000000002_bad_stuff.up.sql:6:DS102", "0000000002_bad_stuff.up.sql:8:DS103", "0000000003_noop.up.sql:0:MF102P", "misnamed.sql:0:MF103"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ],
+     [],
+     []
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP TABLE IF EXISTS USERS",
+       "end": 26,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "IF", "EXISTS", "users"],
+       "sql": "DROP TABLE IF EXISTS users",
+       "start": 0,
+       "words": ["DROP", "TABLE", "IF", "EXISTS", "USERS"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE USERS ( ID SERIAL PRIMARY KEY, EMAIL VARCHAR(255) NOT NULL )",
+       "end": 81,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "users", "(", "id", "SERIAL", "PRIMARY", "KEY", ",", "email", "VARCHAR", "(", "255", ")", "NOT", "NULL", ")"],
+       "sql": "CREATE TABLE users (\n    id SERIAL PRIMARY KEY,\n    email VARCHAR(255) NOT NULL\n)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "USERS", "(", "ID", "SERIAL", "PRIMARY", "KEY", ",", "EMAIL", "VARCHAR", "(", "255", ")", "NOT", "NULL", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "DROP TABLE AUDIT_LOG",
+       "comments": ["-- A curated pile of production hazards; -- semicolons in comments must not split statements."],
+       "end": 114,
+       "line": 2,
+       "source_words": ["DROP", "TABLE", "audit_log"],
+       "sql": "DROP TABLE audit_log",
+       "start": 94,
+       "words": ["DROP", "TABLE", "AUDIT_LOG"]
+      },
+      {
+       "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY_FLAGS",
+       "end": 159,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy_flags"],
+       "sql": "ALTER TABLE users DROP COLUMN legacy_flags",
+       "start": 117,
+       "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY_FLAGS"]
+      },
+      {
+       "canonical": "ALTER TABLE USERS RENAME COLUMN EMAIL TO EMAIL_ADDRESS",
+       "end": 216,
+       "line": 6,
+       "source_words": ["ALTER", "TABLE", "users", "RENAME", "COLUMN", "email", "TO", "email_address"],
+       "sql": "ALTER TABLE users RENAME COLUMN email TO email_address",
+       "start": 162,
+       "words": ["ALTER", "TABLE", "USERS", "RENAME", "COLUMN", "EMAIL", "TO", "EMAIL_ADDRESS"]
+      },
+      {
+       "canonical": "ALTER TABLE USERS MODIFY COLUMN EMAIL VARCHAR(64) NOT NULL",
+       "end": 277,
+       "line": 8,
+       "source_words": ["ALTER", "TABLE", "users", "MODIFY", "COLUMN", "email", "VARCHAR", "(", "64", ")", "NOT", "NULL"],
+       "sql": "ALTER TABLE users MODIFY COLUMN email VARCHAR(64) NOT NULL",
+       "start": 219,
+       "words": ["ALTER", "TABLE", "USERS", "MODIFY", "COLUMN", "EMAIL", "VARCHAR", "(", "64", ")", "NOT", "NULL"]
+      },
+      {
+       "canonical": "CREATE INDEX IDX_USERS_EMAIL ON USERS (EMAIL)",
+       "end": 325,
+       "line": 10,
+       "source_words": ["CREATE", "INDEX", "idx_users_email", "ON", "users", "(", "email", ")"],
+       "sql": "CREATE INDEX idx_users_email ON users (email)",
+       "start": 280,
+       "words": ["CREATE", "INDEX", "IDX_USERS_EMAIL", "ON", "USERS", "(", "EMAIL", ")"]
+      },
+      {
+       "canonical": "ALTER TYPE MOOD ADD VALUE 'ambivalent'",
+       "end": 366,
+       "line": 12,
+       "source_words": ["ALTER", "TYPE", "mood", "ADD", "VALUE", "'ambivalent'"],
+       "sql": "ALTER TYPE mood ADD VALUE 'ambivalent'",
+       "start": 328,
+       "words": ["ALTER", "TYPE", "MOOD", "ADD", "VALUE", "'ambivalent'"]
+      }
+     ],
+     null,
+     null
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0000000002_bad_stuff.up.sql:0:MF101P", "0000000002_bad_stuff.up.sql:2:BC103", "0000000002_bad_stuff.up.sql:2:DS101", "0000000002_bad_stuff.up.sql:4:BC104", "0000000002_bad_stuff.up.sql:4:DS102", "0000000002_bad_stuff.up.sql:6:BC101", "0000000002_bad_stuff.up.sql:8:DS103", "0000000002_bad_stuff.up.sql:8:MY101", "0000000002_bad_stuff.up.sql:10:PG101", "0000000002_bad_stuff.up.sql:12:PG102", "0000000003_noop.up.sql:0:MF102P", "misnamed.sql:0:MF103"],
+   "server_version": "",
+   "split": -1
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ],
+     [],
+     []
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP TABLE IF EXISTS USERS",
+       "end": 26,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "IF", "EXISTS", "users"],
+       "sql": "DROP TABLE IF EXISTS users",
+       "start": 0,
+       "words": ["DROP", "TABLE", "IF", "EXISTS", "USERS"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE USERS ( ID SERIAL PRIMARY KEY, EMAIL VARCHAR(255) NOT NULL )",
+       "end": 81,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "users", "(", "id", "SERIAL", "PRIMARY", "KEY", ",", "email", "VARCHAR", "(", "255", ")", "NOT", "NULL", ")"],
+       "sql": "CREATE TABLE users (\n    id SERIAL PRIMARY KEY,\n    email VARCHAR(255) NOT NULL\n)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "USERS", "(", "ID", "SERIAL", "PRIMARY", "KEY", ",", "EMAIL", "VARCHAR", "(", "255", ")", "NOT", "NULL", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "DROP TABLE AUDIT_LOG",
+       "comments": ["-- A curated pile of production hazards; -- semicolons in comments must not split statements."],
+       "end": 114,
+       "line": 2,
+       "source_words": ["DROP", "TABLE", "audit_log"],
+       "sql": "DROP TABLE audit_log",
+       "start": 94,
+       "words": ["DROP", "TABLE", "AUDIT_LOG"]
+      },
+      {
+       "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY_FLAGS",
+       "end": 159,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy_flags"],
+       "sql": "ALTER TABLE users DROP COLUMN legacy_flags",
+       "start": 117,
+       "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY_FLAGS"]
+      },
+      {
+       "canonical": "ALTER TABLE USERS RENAME COLUMN EMAIL TO EMAIL_ADDRESS",
+       "end": 216,
+       "line": 6,
+       "source_words": ["ALTER", "TABLE", "users", "RENAME", "COLUMN", "email", "TO", "email_address"],
+       "sql": "ALTER TABLE users RENAME COLUMN email TO email_address",
+       "start": 162,
+       "words": ["ALTER", "TABLE", "USERS", "RENAME", "COLUMN", "EMAIL", "TO", "EMAIL_ADDRESS"]
+      },
+      {
+       "canonical": "ALTER TABLE USERS MODIFY COLUMN EMAIL VARCHAR(64) NOT NULL",
+       "end": 277,
+       "line": 8,
+       "source_words": ["ALTER", "TABLE", "users", "MODIFY", "COLUMN", "email", "VARCHAR", "(", "64", ")", "NOT", "NULL"],
+       "sql": "ALTER TABLE users MODIFY COLUMN email VARCHAR(64) NOT NULL",
+       "start": 219,
+       "words": ["ALTER", "TABLE", "USERS", "MODIFY", "COLUMN", "EMAIL", "VARCHAR", "(", "64", ")", "NOT", "NULL"]
+      },
+      {
+       "canonical": "CREATE INDEX IDX_USERS_EMAIL ON USERS (EMAIL)",
+       "end": 325,
+       "line": 10,
+       "source_words": ["CREATE", "INDEX", "idx_users_email", "ON", "users", "(", "email", ")"],
+       "sql": "CREATE INDEX idx_users_email ON users (email)",
+       "start": 280,
+       "words": ["CREATE", "INDEX", "IDX_USERS_EMAIL", "ON", "USERS", "(", "EMAIL", ")"]
+      },
+      {
+       "canonical": "ALTER TYPE MOOD ADD VALUE 'ambivalent'",
+       "end": 366,
+       "line": 12,
+       "source_words": ["ALTER", "TYPE", "mood", "ADD", "VALUE", "'ambivalent'"],
+       "sql": "ALTER TYPE mood ADD VALUE 'ambivalent'",
+       "start": 328,
+       "words": ["ALTER", "TYPE", "MOOD", "ADD", "VALUE", "'ambivalent'"]
+      }
+     ],
+     null,
+     null
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "dir_format": "auto",
+   "report": ["0000000002_bad_stuff.up.sql:0:MF101P", "0000000002_bad_stuff.up.sql:2:BC103", "0000000002_bad_stuff.up.sql:2:DS101", "0000000002_bad_stuff.up.sql:4:BC104", "0000000002_bad_stuff.up.sql:4:DS102", "0000000002_bad_stuff.up.sql:6:BC101", "0000000002_bad_stuff.up.sql:8:DS103", "0000000002_bad_stuff.up.sql:8:MY101", "0000000002_bad_stuff.up.sql:10:PG101", "0000000002_bad_stuff.up.sql:12:PG102", "0000000003_noop.up.sql:0:MF102P", "misnamed.sql:0:MF103"],
+   "server_version": "",
+   "split": -1
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {}
+     ],
+     [
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ],
+     [],
+     []
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "DROP TABLE IF EXISTS USERS",
+       "end": 26,
+       "line": 1,
+       "source_words": ["DROP", "TABLE", "IF", "EXISTS", "users"],
+       "sql": "DROP TABLE IF EXISTS users",
+       "start": 0,
+       "words": ["DROP", "TABLE", "IF", "EXISTS", "USERS"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE USERS ( ID SERIAL PRIMARY KEY, EMAIL VARCHAR(255) NOT NULL )",
+       "end": 81,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "users", "(", "id", "SERIAL", "PRIMARY", "KEY", ",", "email", "VARCHAR", "(", "255", ")", "NOT", "NULL", ")"],
+       "sql": "CREATE TABLE users (\n    id SERIAL PRIMARY KEY,\n    email VARCHAR(255) NOT NULL\n)",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "USERS", "(", "ID", "SERIAL", "PRIMARY", "KEY", ",", "EMAIL", "VARCHAR", "(", "255", ")", "NOT", "NULL", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "DROP TABLE AUDIT_LOG",
+       "comments": ["-- A curated pile of production hazards; -- semicolons in comments must not split statements."],
+       "end": 114,
+       "line": 2,
+       "source_words": ["DROP", "TABLE", "audit_log"],
+       "sql": "DROP TABLE audit_log",
+       "start": 94,
+       "words": ["DROP", "TABLE", "AUDIT_LOG"]
+      },
+      {
+       "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY_FLAGS",
+       "end": 159,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy_flags"],
+       "sql": "ALTER TABLE users DROP COLUMN legacy_flags",
+       "start": 117,
+       "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY_FLAGS"]
+      },
+      {
+       "canonical": "ALTER TABLE USERS RENAME COLUMN EMAIL TO EMAIL_ADDRESS",
+       "end": 216,
+       "line": 6,
+       "source_words": ["ALTER", "TABLE", "users", "RENAME", "COLUMN", "email", "TO", "email_address"],
+       "sql": "ALTER TABLE users RENAME COLUMN email TO email_address",
+       "start": 162,
+       "words": ["ALTER", "TABLE", "USERS", "RENAME", "COLUMN", "EMAIL", "TO", "EMAIL_ADDRESS"]
+      },
+      {
+       "canonical": "ALTER TABLE USERS MODIFY COLUMN EMAIL VARCHAR(64) NOT NULL",
+       "end": 277,
+       "line": 8,
+       "source_words": ["ALTER", "TABLE", "users", "MODIFY", "COLUMN", "email", "VARCHAR", "(", "64", ")", "NOT", "NULL"],
+       "sql": "ALTER TABLE users MODIFY COLUMN email VARCHAR(64) NOT NULL",
+       "start": 219,
+       "words": ["ALTER", "TABLE", "USERS", "MODIFY", "COLUMN", "EMAIL", "VARCHAR", "(", "64", ")", "NOT", "NULL"]
+      },
+      {
+       "canonical": "CREATE INDEX IDX_USERS_EMAIL ON USERS (EMAIL)",
+       "end": 325,
+       "line": 10,
+       "source_words": ["CREATE", "INDEX", "idx_users_email", "ON", "users", "(", "email", ")"],
+       "sql": "CREATE INDEX idx_users_email ON users (email)",
+       "start": 280,
+       "words": ["CREATE", "INDEX", "IDX_USERS_EMAIL", "ON", "USERS", "(", "EMAIL", ")"]
+      },
+      {
+       "canonical": "ALTER TYPE MOOD ADD VALUE 'ambivalent'",
+       "end": 366,
+       "line": 12,
+       "source_words": ["ALTER", "TYPE", "mood", "ADD", "VALUE", "'ambivalent'"],
+       "sql": "ALTER TYPE mood ADD VALUE 'ambivalent'",
+       "start": 328,
+       "words": ["ALTER", "TYPE", "MOOD", "ADD", "VALUE", "'ambivalent'"]
+      }
+     ],
+     null,
+     null
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "dir_format": "auto",
+   "disabled": ["DS"],
+   "report": ["0000000002_bad_stuff.up.sql:0:MF101P", "0000000002_bad_stuff.up.sql:2:BC103", "0000000002_bad_stuff.up.sql:4:BC104", "0000000002_bad_stuff.up.sql:6:BC101", "0000000002_bad_stuff.up.sql:8:MY101", "0000000002_bad_stuff.up.sql:10:PG101", "0000000002_bad_stuff.up.sql:12:PG102", "0000000003_noop.up.sql:0:MF102P", "misnamed.sql:0:MF103"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "DROP TABLE IF EXISTS USERS",
+      "end": 26,
+      "line": 1,
+      "source_words": ["DROP", "TABLE", "IF", "EXISTS", "users"],
+      "sql": "DROP TABLE IF EXISTS users",
+      "start": 0,
+      "words": ["DROP", "TABLE", "IF", "EXISTS", "USERS"]
+     }
+    ],
+    [
+     {
+      "canonical": "CREATE TABLE USERS ( ID SERIAL PRIMARY KEY, EMAIL VARCHAR(255) NOT NULL )",
+      "end": 81,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "users", "(", "id", "SERIAL", "PRIMARY", "KEY", ",", "email", "VARCHAR", "(", "255", ")", "NOT", "NULL", ")"],
+      "sql": "CREATE TABLE users (\n    id SERIAL PRIMARY KEY,\n    email VARCHAR(255) NOT NULL\n)",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "USERS", "(", "ID", "SERIAL", "PRIMARY", "KEY", ",", "EMAIL", "VARCHAR", "(", "255", ")", "NOT", "NULL", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "DROP TABLE AUDIT_LOG",
+      "comments": ["-- A curated pile of production hazards; -- semicolons in comments must not split statements."],
+      "end": 114,
+      "line": 2,
+      "source_words": ["DROP", "TABLE", "audit_log"],
+      "sql": "DROP TABLE audit_log",
+      "start": 94,
+      "words": ["DROP", "TABLE", "AUDIT_LOG"]
+     },
+     {
+      "canonical": "ALTER TABLE USERS DROP COLUMN LEGACY_FLAGS",
+      "end": 159,
+      "line": 4,
+      "source_words": ["ALTER", "TABLE", "users", "DROP", "COLUMN", "legacy_flags"],
+      "sql": "ALTER TABLE users DROP COLUMN legacy_flags",
+      "start": 117,
+      "words": ["ALTER", "TABLE", "USERS", "DROP", "COLUMN", "LEGACY_FLAGS"]
+     },
+     {
+      "canonical": "ALTER TABLE USERS RENAME COLUMN EMAIL TO EMAIL_ADDRESS",
+      "end": 216,
+      "line": 6,
+      "source_words": ["ALTER", "TABLE", "users", "RENAME", "COLUMN", "email", "TO", "email_address"],
+      "sql": "ALTER TABLE users RENAME COLUMN email TO email_address",
+      "start": 162,
+      "words": ["ALTER", "TABLE", "USERS", "RENAME", "COLUMN", "EMAIL", "TO", "EMAIL_ADDRESS"]
+     },
+     {
+      "canonical": "ALTER TABLE USERS MODIFY COLUMN EMAIL VARCHAR(64) NOT NULL",
+      "end": 277,
+      "line": 8,
+      "source_words": ["ALTER", "TABLE", "users", "MODIFY", "COLUMN", "email", "VARCHAR", "(", "64", ")", "NOT", "NULL"],
+      "sql": "ALTER TABLE users MODIFY COLUMN email VARCHAR(64) NOT NULL",
+      "start": 219,
+      "words": ["ALTER", "TABLE", "USERS", "MODIFY", "COLUMN", "EMAIL", "VARCHAR", "(", "64", ")", "NOT", "NULL"]
+     },
+     {
+      "canonical": "CREATE INDEX IDX_USERS_EMAIL ON USERS (EMAIL)",
+      "end": 325,
+      "line": 10,
+      "source_words": ["CREATE", "INDEX", "idx_users_email", "ON", "users", "(", "email", ")"],
+      "sql": "CREATE INDEX idx_users_email ON users (email)",
+      "start": 280,
+      "words": ["CREATE", "INDEX", "IDX_USERS_EMAIL", "ON", "USERS", "(", "EMAIL", ")"]
+     },
+     {
+      "canonical": "ALTER TYPE MOOD ADD VALUE 'ambivalent'",
+      "end": 366,
+      "line": 12,
+      "source_words": ["ALTER", "TYPE", "mood", "ADD", "VALUE", "'ambivalent'"],
+      "sql": "ALTER TYPE mood ADD VALUE 'ambivalent'",
+      "start": 328,
+      "words": ["ALTER", "TYPE", "MOOD", "ADD", "VALUE", "'ambivalent'"]
+     }
+    ],
+    null,
+    null
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "down": true,
+     "name": "0000000001_create_users.down.sql",
+     "sql": "DROP TABLE IF EXISTS users;\n",
+     "version": 1
+    },
+    {
+     "name": "0000000001_create_users.up.sql",
+     "sql": "CREATE TABLE users (\n    id SERIAL PRIMARY KEY,\n    email VARCHAR(255) NOT NULL\n);\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0000000002_bad_stuff.up.sql",
+     "sql": "-- A curated pile of production hazards; -- semicolons in comments must not split statements.\nDROP TABLE audit_log;\n\nALTER TABLE users DROP COLUMN legacy_flags;\n\nALTER TABLE users RENAME COLUMN email TO email_address;\n\nALTER TABLE users MODIFY COLUMN email VARCHAR(64) NOT NULL;\n\nCREATE INDEX idx_users_email ON users (email);\n\nALTER TYPE mood ADD VALUE 'ambivalent';\n",
+     "up": true,
+     "version": 2
+    },
+    {
+     "down": true,
+     "name": "0000000003_noop.down.sql",
+     "sql": "-- nothing to undo\n",
+     "version": 3
+    },
+    {
+     "name": "0000000003_noop.up.sql",
+     "sql": "-- placeholder migration\n-- nothing here yet\n",
+     "up": true,
+     "version": 3
+    }
+   ]
+  }
+ ]
+}

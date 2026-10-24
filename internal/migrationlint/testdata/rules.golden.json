@@ -1,0 +1,189 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "rules": [
+  {
+   "applies_to_down": true,
+   "code": "YD101",
+   "severity": "error",
+   "subsumes": ["MF101", "MF102"],
+   "targets": ["ydb"],
+   "title": "unique index added to an existing table"
+  },
+  {
+   "applies_to_down": false,
+   "code": "YD102",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "scheme and data statements in one query"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD103",
+   "severity": "error",
+   "subsumes": ["DD101"],
+   "targets": ["ydb"],
+   "title": "column added in a form YDB refuses"
+  },
+  {
+   "applies_to_down": false,
+   "code": "YD104",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "column dropped while an index or the TTL uses it"
+  },
+  {
+   "applies_to_down": false,
+   "code": "YD105",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "partitioning change resets the minimum partition count"
+  },
+  {
+   "applies_to_down": false,
+   "code": "YD106",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "table dropped or renamed while a view reads it"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD107",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "ALTER SEQUENCE widens a 16-bit or 32-bit Serial"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD108",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "ALTER SEQUENCE replays an earlier RESTART"
+  },
+  {
+   "applies_to_down": false,
+   "code": "YD109",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "table renamed while it carries a changefeed"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD110",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "REVOKE GRANT OPTION FOR revokes the permission too"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD111",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "dropped user or group keeps its permissions"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD113",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "topic setting reset"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD114",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "topic setting YDB keeps as nothing"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD115",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "async replication dropped without failover"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD116",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "secret written in clear"
+  },
+  {
+   "applies_to_down": false,
+   "code": "YD118",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "partitioning change resets the partition size"
+  },
+  {
+   "applies_to_down": false,
+   "code": "YD119",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "column family the table does not have"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD120",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "the resource pool default dropped"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD121",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "backup collection dropped"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD122",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "ANALYZE in a migration"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD130",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "vector index the target does not build"
+  },
+  {
+   "applies_to_down": false,
+   "code": "YD131",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "rows written past a vector index that does not take them"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD140",
+   "severity": "error",
+   "targets": ["ydb"],
+   "title": "secret value written in the migration"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD141",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "external data source credential in a deprecated secret object"
+  },
+  {
+   "applies_to_down": false,
+   "code": "YD150",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "comment left behind by a drop or a rename"
+  },
+  {
+   "applies_to_down": true,
+   "code": "YD160",
+   "severity": "warning",
+   "targets": ["ydb"],
+   "title": "streaming query checkpoint state discarded"
+  }
+ ]
+}

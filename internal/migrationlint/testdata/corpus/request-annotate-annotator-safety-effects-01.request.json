@@ -1,0 +1,69 @@
+{
+ "kind": "annotate",
+ "request": {
+  "facts": [
+   "safety-effect"
+  ],
+  "sources": [
+   {
+    "name": "0001_t.up.sql",
+    "sql": "CREATE OR REPLACE EXTERNAL TABLE e (a Int32) WITH (DATA_SOURCE = \"s\", LOCATION = \"/\");\n"
+   }
+  ],
+  "files": [
+   [
+    {
+     "start": 0,
+     "end": 85,
+     "line": 1,
+     "sql": "CREATE OR REPLACE EXTERNAL TABLE e (a Int32) WITH (DATA_SOURCE = \"s\", LOCATION = \"/\")",
+     "canonical": "CREATE OR REPLACE EXTERNAL TABLE E (A INT32) WITH (DATA_SOURCE = \"s\", LOCATION = \"/\")",
+     "words": [
+      "CREATE",
+      "OR",
+      "REPLACE",
+      "EXTERNAL",
+      "TABLE",
+      "E",
+      "(",
+      "A",
+      "INT32",
+      ")",
+      "WITH",
+      "(",
+      "DATA_SOURCE",
+      "=",
+      "\"s\"",
+      ",",
+      "LOCATION",
+      "=",
+      "\"/\"",
+      ")"
+     ],
+     "source_words": [
+      "CREATE",
+      "OR",
+      "REPLACE",
+      "EXTERNAL",
+      "TABLE",
+      "e",
+      "(",
+      "a",
+      "Int32",
+      ")",
+      "WITH",
+      "(",
+      "DATA_SOURCE",
+      "=",
+      "\"s\"",
+      ",",
+      "LOCATION",
+      "=",
+      "\"/\"",
+      ")"
+     ]
+    }
+   ]
+  ]
+ }
+}

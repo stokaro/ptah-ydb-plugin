@@ -1,0 +1,275 @@
+{
+ "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/shop/orders/_serial_column_id alters a sequence an earlier statement restarted at 100, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of shop/orders takes 100 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "shop/orders"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD108"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/shop/orders/_serial_column_id alters a sequence an earlier statement restarted at 100, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of shop/orders takes 100 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "shop/orders"
+       }
+      ]
+     }
+    ],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD108"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 1,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [
+     {
+      "code": "YD108",
+      "file": 1,
+      "message": "ALTER SEQUENCE /local/shop/orders/_serial_column_id alters a sequence an earlier statement restarted at 100, and YDB replays that restart on every later ALTER SEQUENCE, so the next row of shop/orders takes 100 again and fails on a key a row already holds (Conflict with existing key); restart it in this statement at a value past every row, or leave it as it is",
+      "statement": 0,
+      "subjects": [
+       {
+        "kind": "column",
+        "name": "id",
+        "parent": "shop/orders"
+       }
+      ]
+     }
+    ],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:1:YD108"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {}
+     ],
+     [
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE `shop/orders` (ID BIGSERIAL NOT NULL, PRIMARY KEY (ID))",
+       "end": 68,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "`shop/orders`", "(", "id", "BigSerial", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE `shop/orders` (id BigSerial NOT NULL, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "`shop/orders`", "(", "ID", "BIGSERIAL", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE COUNTERS (ID SERIAL4 NOT NULL, N SMALLSERIAL, PRIMARY KEY (ID))",
+       "end": 146,
+       "line": 2,
+       "source_words": ["CREATE", "TABLE", "counters", "(", "id", "serial4", "NOT", "NULL", ",", "n", "SmallSerial", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE counters (id serial4 NOT NULL, n SmallSerial, PRIMARY KEY (id))",
+       "start": 70,
+       "words": ["CREATE", "TABLE", "COUNTERS", "(", "ID", "SERIAL4", "NOT", "NULL", ",", "N", "SMALLSERIAL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE TAGS (ID SERIAL2 NOT NULL, PRIMARY KEY (ID))",
+       "end": 205,
+       "line": 3,
+       "source_words": ["CREATE", "TABLE", "tags", "(", "id", "Serial2", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE tags (id Serial2 NOT NULL, PRIMARY KEY (id))",
+       "start": 148,
+       "words": ["CREATE", "TABLE", "TAGS", "(", "ID", "SERIAL2", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "ALTER SEQUENCE `/local/shop/orders/_serial_column_id` START WITH 100 INCREMENT BY 5 RESTART WITH 100",
+       "end": 307,
+       "line": 4,
+       "source_words": ["ALTER", "SEQUENCE", "`/local/shop/orders/_serial_column_id`", "START", "WITH", "100", "INCREMENT", "BY", "5", "RESTART", "WITH", "100"],
+       "sql": "ALTER SEQUENCE `/local/shop/orders/_serial_column_id` START WITH 100 INCREMENT BY 5 RESTART WITH 100",
+       "start": 207,
+       "words": ["ALTER", "SEQUENCE", "`/local/shop/orders/_serial_column_id`", "START", "WITH", "100", "INCREMENT", "BY", "5", "RESTART", "WITH", "100"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER SEQUENCE `/local/shop/orders/_serial_column_id` INCREMENT BY 10",
+       "end": 69,
+       "line": 1,
+       "source_words": ["ALTER", "SEQUENCE", "`/local/shop/orders/_serial_column_id`", "INCREMENT", "BY", "10"],
+       "sql": "ALTER SEQUENCE `/local/shop/orders/_serial_column_id` INCREMENT BY 10",
+       "start": 0,
+       "words": ["ALTER", "SEQUENCE", "`/local/shop/orders/_serial_column_id`", "INCREMENT", "BY", "10"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": [],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE `shop/orders` (ID BIGSERIAL NOT NULL, PRIMARY KEY (ID))",
+      "end": 68,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "`shop/orders`", "(", "id", "BigSerial", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE `shop/orders` (id BigSerial NOT NULL, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "`shop/orders`", "(", "ID", "BIGSERIAL", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE COUNTERS (ID SERIAL4 NOT NULL, N SMALLSERIAL, PRIMARY KEY (ID))",
+      "end": 146,
+      "line": 2,
+      "source_words": ["CREATE", "TABLE", "counters", "(", "id", "serial4", "NOT", "NULL", ",", "n", "SmallSerial", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE counters (id serial4 NOT NULL, n SmallSerial, PRIMARY KEY (id))",
+      "start": 70,
+      "words": ["CREATE", "TABLE", "COUNTERS", "(", "ID", "SERIAL4", "NOT", "NULL", ",", "N", "SMALLSERIAL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE TAGS (ID SERIAL2 NOT NULL, PRIMARY KEY (ID))",
+      "end": 205,
+      "line": 3,
+      "source_words": ["CREATE", "TABLE", "tags", "(", "id", "Serial2", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE tags (id Serial2 NOT NULL, PRIMARY KEY (id))",
+      "start": 148,
+      "words": ["CREATE", "TABLE", "TAGS", "(", "ID", "SERIAL2", "NOT", "NULL", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "ALTER SEQUENCE `/local/shop/orders/_serial_column_id` START WITH 100 INCREMENT BY 5 RESTART WITH 100",
+      "end": 307,
+      "line": 4,
+      "source_words": ["ALTER", "SEQUENCE", "`/local/shop/orders/_serial_column_id`", "START", "WITH", "100", "INCREMENT", "BY", "5", "RESTART", "WITH", "100"],
+      "sql": "ALTER SEQUENCE `/local/shop/orders/_serial_column_id` START WITH 100 INCREMENT BY 5 RESTART WITH 100",
+      "start": 207,
+      "words": ["ALTER", "SEQUENCE", "`/local/shop/orders/_serial_column_id`", "START", "WITH", "100", "INCREMENT", "BY", "5", "RESTART", "WITH", "100"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER SEQUENCE `/local/shop/orders/_serial_column_id` INCREMENT BY 10",
+      "end": 69,
+      "line": 1,
+      "source_words": ["ALTER", "SEQUENCE", "`/local/shop/orders/_serial_column_id`", "INCREMENT", "BY", "10"],
+      "sql": "ALTER SEQUENCE `/local/shop/orders/_serial_column_id` INCREMENT BY 10",
+      "start": 0,
+      "words": ["ALTER", "SEQUENCE", "`/local/shop/orders/_serial_column_id`", "INCREMENT", "BY", "10"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE `shop/orders` (id BigSerial NOT NULL, PRIMARY KEY (id));\nCREATE TABLE counters (id serial4 NOT NULL, n SmallSerial, PRIMARY KEY (id));\nCREATE TABLE tags (id Serial2 NOT NULL, PRIMARY KEY (id));\nALTER SEQUENCE `/local/shop/orders/_serial_column_id` START WITH 100 INCREMENT BY 5 RESTART WITH 100;\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "ALTER SEQUENCE `/local/shop/orders/_serial_column_id` INCREMENT BY 10;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}

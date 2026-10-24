@@ -1,0 +1,10 @@
+[
+ {
+  "dialect": "ydb",
+  "server_version": "",
+  "compatibility": "",
+  "overrides": {
+   "serial_sequence_keeps_range": true
+  }
+ }
+]

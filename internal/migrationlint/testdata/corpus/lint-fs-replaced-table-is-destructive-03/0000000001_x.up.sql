@@ -1,0 +1,1 @@
+CREATE OR REPLACE TABLE victim AS SELECT id FROM source;

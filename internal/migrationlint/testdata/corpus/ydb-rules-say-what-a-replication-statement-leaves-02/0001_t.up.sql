@@ -1,0 +1,1 @@
+DROP ASYNC REPLICATION `dr/mirror`;

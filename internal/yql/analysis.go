@@ -54,7 +54,7 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 	}
 	stream := reader{input: source}
 	file := &protocol.SQLFile{}
-	bodies := yqlBodies{}
+	bodies := Bodies{}
 	start, startLine, line := -1, 0, 1
 	var words, original []string
 	tokenCount := 0
@@ -64,7 +64,7 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 		start = -1
 		words = nil
 		original = nil
-		bodies = yqlBodies{}
+		bodies = Bodies{}
 	}
 	for {
 		if err := ctx.Err(); err != nil {
@@ -89,23 +89,23 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 		case TokenComment, TokenUnknown:
 			continue
 		case TokenSemicolon:
-			bodies.separate()
-			if !bodies.inside() {
+			bodies.Separate()
+			if !bodies.Inside() {
 				if len(words) > 0 {
 					emit(token.End)
 				}
 				continue
 			}
 		case TokenIdentifier:
-			bodies.word(strings.ToUpper(token.Value))
+			bodies.Word(strings.ToUpper(token.Value))
 		case TokenOperator:
 			if token.Value == "}" && bodies.braces == 0 {
 				return nil, invalidSource()
 			}
-			bodies.symbol(token.Value)
+			bodies.Symbol(token.Value)
 		default:
 			// A literal separates keyword pairs just as punctuation does.
-			bodies.separate()
+			bodies.Separate()
 		}
 		tokenCount++
 		if tokenCount > maxSourceTokens {
@@ -118,7 +118,7 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 		words = append(words, word)
 		original = append(original, token.Value)
 	}
-	if bodies.inside() {
+	if bodies.Inside() {
 		return nil, invalidSource()
 	}
 	if start >= 0 {
