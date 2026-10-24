@@ -39,7 +39,7 @@ type rule struct {
 
 // rules are the provider's rules in code order.
 func rules() []rule {
-	all := statementRules()
+	all := append(statementRules(), readerRules()...)
 	slices.SortFunc(all, func(a, b rule) int { return cmp.Compare(a.Code, b.Code) })
 	return all
 }
