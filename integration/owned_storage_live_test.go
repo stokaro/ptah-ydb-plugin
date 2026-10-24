@@ -102,7 +102,7 @@ func TestAlteredHistoryRefusesInspectionBeforeChildProjection(t *testing.T) {
 		_, err := opened.DB.ExecContext(context.Background(), "DROP TABLE `"+badPath+"`")
 		c.Check(err, qt.IsNil)
 	})
-	snapshot, err := inspect.Read(c.Context(), opened.Driver, database, []string{directory})
+	snapshot, err := inspect.Read(c.Context(), opened.Driver, columnTables(opened), database, []string{directory})
 	c.Assert(err, qt.ErrorMatches, ".*storage has incompatible layout.*")
 	c.Assert(snapshot, qt.IsNil)
 	// Unknown marker versions must not fall back to an ordinary managed table.

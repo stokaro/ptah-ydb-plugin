@@ -25,6 +25,8 @@ type Address struct {
 	useEnv     bool
 	monitoring *url.URL
 	realm      string
+	// secure reports a ydbs:// address, whose connection runs over TLS.
+	secure bool
 }
 
 // Parse validates the provider's connection address before any network call.
@@ -118,13 +120,13 @@ func Parse(raw string) (Address, error) {
 	}
 	database = "/" + database
 	dsn := url.URL{Scheme: scheme, Host: net.JoinHostPort(u.Hostname(), port), Path: database, RawQuery: passed.Encode()}
-	return Address{dsn: dsn.String(), database: database, user: u.User, token: token, useEnv: useEnv, monitoring: monitoring, realm: realm}, nil
+	return Address{dsn: dsn.String(), database: database, user: u.User, token: token, useEnv: useEnv, monitoring: monitoring, realm: realm, secure: scheme == "grpcs"}, nil
 }
 
 // Monitoring returns the cluster's monitoring endpoint the URL names, an http://
-// or https:// address with no path, or nil when it names none. The provider
-// protocol has no way to refine the advertised capabilities from a cluster's
-// feature flags, so nothing reads the endpoint yet.
+// or https:// address with no path, or nil when it names none. A session reads
+// the database's feature flags there when it opens, and the description of each
+// column table it inspects or creates.
 func (a Address) Monitoring() *url.URL {
 	if a.monitoring == nil {
 		return nil
@@ -141,6 +143,13 @@ func (a Address) GoString() string { return a.String() }
 
 // Database returns the database the SDK opens.
 func (a Address) Database() string { return a.database }
+
+// Secure reports an address whose connection runs over TLS, ydbs://.
+func (a Address) Secure() bool { return a.secure }
+
+// authenticated reports an address that names a credential source. An address
+// that names none connects anonymously and presents no credential.
+func (a Address) authenticated() bool { return a.user != nil || a.token != "" || a.useEnv }
 
 // Realm returns the dev realm the address names, or "" when it names none.
 func (a Address) Realm() string { return a.realm }
