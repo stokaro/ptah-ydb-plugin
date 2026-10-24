@@ -133,7 +133,7 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 		{"the columns of a family of another table", "--root-dir", "entities.go",
 			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:columnfamily name=\"cold\" table=\"host_source_orders\" fields=\"body\"\n" +
 				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n\n//ptah:schema:table name=\"host_source_orders\"\n" +
-				"type Order struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n\t//ptah:schema:field name=\"body\" type=\"Utf8\"\n\tBody string\n}\n", `decode Go directives of engine "ydb"`},
+				"type Order struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n\t//ptah:schema:field name=\"body\" type=\"Utf8\"\n\tBody string\n}\n", `column "body" of struct Item is not declared in this file`},
 		{"a zstd family in Go", "--root-dir", "entities.go",
 			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:columnfamily name=\"cold\" compression=\"zstd\"\n" +
 				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n", `decode Go directives of engine "ydb"`},
