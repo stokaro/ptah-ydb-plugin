@@ -118,7 +118,10 @@ Schema changes used `--tx-mode none` for `migrations up` and a
 transactional schema changes.
 
 The host and provider are built against the published SDK pin with
-`GOWORK=off`. These are source-build checks; packaged installation and
+`GOWORK=off`. CI builds the host from Ptah's master branch on every change and
+nightly, so a host change that breaks this provider shows up here. This
+repository owns the YDB end-to-end, live and parity tests; Ptah's own CI checks
+the provider contract only on its in-tree fixture provider. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
 Host `schema inspect --format json` exports the native desired model, including
 provider-owned values and coverage. Common collections use names such as
@@ -126,7 +129,7 @@ provider-owned values and coverage. Common collections use names such as
 file input. Full native CLI planning remains pending.
 
 `TestHostAppliesAndAltersARowTable_HappyPath` drives `ptah schema apply` of the
-pinned host through this provider: it creates a row table from a Go source,
+current host through this provider: it creates a row table from a Go source,
 finds nothing to change on the next run, sets a TTL in place, and finds nothing
 to change again. The run passes `--tx-mode none`, because the host refuses a
 provider step that forbids a transaction under the default mode.
