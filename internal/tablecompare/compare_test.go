@@ -210,8 +210,8 @@ func TestDescription_DeclaresTheFacetComparison(t *testing.T) {
 	}
 	c.Assert(service, qt.IsNotNil)
 	c.Assert(service.Placement, qt.Equals, protocol.ModelComparison_FACETS)
-	c.Assert(service.Kinds, qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties})
-	c.Assert(service.ChangeKinds, qt.DeepEquals, []string{schema.TablePropertiesChange})
+	c.Assert(service.Kinds, qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties})
+	c.Assert(service.ChangeKinds, qt.DeepEquals, []string{schema.TablePropertiesChange, schema.ColumnStorageChange})
 	c.Assert(service.OwnerKinds, qt.DeepEquals, []string{"table", "column"})
 	c.Assert(service.Actions, qt.HasLen, 0)
 }

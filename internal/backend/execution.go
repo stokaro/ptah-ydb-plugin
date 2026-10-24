@@ -105,6 +105,8 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.AlterOperationKind:
 				return nativeapi.NewTableAlteration(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case tablecreate.ColumnOperationKind:
+				return nativeapi.NewColumnTableCreation(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			}
 			return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 		}
@@ -119,6 +121,17 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		result.DiagnosticCode = "ydb.lock-guarantee-lost"
 	}
 	return result, nil
+}
+
+// executeSchema runs one schema statement on a connection of its own, once.
+// A pinned connection keeps database/sql from replaying it on another.
+func (s *session) executeSchema(ctx context.Context, statement string) error {
+	conn, err := s.connection.DB.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = conn.ExecContext(ctx, statement)
+	return errors.Join(err, closeSQLConnection(conn))
 }
 
 func executeUnits(ctx context.Context, run func(context.Context, *protocol.Unit) (bool, error), units []*protocol.Unit) *protocol.Execution {

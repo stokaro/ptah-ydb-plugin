@@ -1,0 +1,7 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "yaml",
+ "outcome": "refused",
+ "error": "parse YAML schema: yaml: unmarshal errors:\n  line 11: field delete not found in type ydbsource.ttlTierSpec",
+ "tables": null
+}

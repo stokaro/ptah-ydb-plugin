@@ -62,6 +62,8 @@ func applyYAML(target *settings, key string, value *protocol.SourceValue) error 
 		return applyFamilies(target, value)
 	case KeyPlatformYDB:
 		return applyPlatform(target, value)
+	case KeyColumnStore:
+		return applyColumnStore(target, value)
 	}
 	text, err := scalar(value)
 	if errors.Is(err, errNull) {
@@ -216,12 +218,6 @@ func applyTable(target *settings, value *protocol.SourceValue) error {
 		}
 		values[entry.GetKey()] = text
 	}
-	// A column table is checked before anything else is read, as the bundled
-	// decoder reads the storage first, so the refusal of an input that mixes
-	// row settings with column storage names the storage.
-	if err := refuseColumnStore(values); err != nil {
-		return err
-	}
 	for _, name := range partitioningKeys() {
 		if text, found := values[name]; found {
 			if err := target.setPartitioning(name, text); err != nil {
@@ -234,6 +230,17 @@ func applyTable(target *settings, value *protocol.SourceValue) error {
 			if err := target.setLayout(name, text); err != nil {
 				return err
 			}
+		}
+	}
+	// The storage is read after the partitioning, as the bundled decoder reads
+	// it, so a mistake in both is refused for the partitioning.
+	storage, err := parseStore(values)
+	if err != nil {
+		return err
+	}
+	if storage != nil {
+		if err := target.setColumnStore(storage); err != nil {
+			return err
 		}
 	}
 	return target.setTTL(values)

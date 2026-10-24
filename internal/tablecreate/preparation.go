@@ -24,17 +24,34 @@ func PrepareTables(ctx context.Context, request *protocol.PrepareTablesRequest) 
 		if err != nil {
 			return nil, err
 		}
-		compiled, err := Compile(owner, input.Desired)
+		key, err := compiledKey(owner, input.Desired)
 		if err != nil {
 			return nil, err
 		}
 		result.Tables = append(result.Tables, &protocol.PreparedTable{
 			Subject: proto.CloneOf(input.Subject), ColumnPrimaryKeysPrepared: true,
-			ColumnPrimaryKeys: slices.Clone(compiled.PrimaryKey),
+			ColumnPrimaryKeys: key,
 		})
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+// compiledKey returns the ordered key the CREATE of a declaration writes, a
+// row table's or a column table's.
+func compiledKey(owner *protocol.Reference, table *protocol.DeclaredTable) ([]string, error) {
+	if IsColumnTable(table) {
+		created, err := CompileColumnTable(owner, table)
+		if err != nil {
+			return nil, err
+		}
+		return slices.Clone(created.PrimaryKey), nil
+	}
+	compiled, err := Compile(owner, table)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Clone(compiled.PrimaryKey), nil
 }

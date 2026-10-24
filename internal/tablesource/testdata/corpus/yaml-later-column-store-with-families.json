@@ -1,0 +1,21 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {},
+   "column_families": {
+    "cold": {
+     "data": "hdd"
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    },
+    "created_at": {
+     "type": "timestamp"
+    }
+   }
+  }
+ }
+}

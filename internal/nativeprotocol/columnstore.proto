@@ -219,3 +219,15 @@ message TtlTier {
 message EvictionToExternalStorageSettings {
     string storage = 1;
 }
+
+// The creation of a column table, the payload of the provider's creation
+// operation. A column holds its name, its type and its nullability only; a
+// hash key, a shard count and a TTL the declaration leaves out are the
+// server's choice.
+message ColumnTableCreation {
+    repeated Ydb.Table.ColumnMeta columns = 1;
+    repeated string primary_key = 2;
+    repeated string hash_columns = 3;
+    uint64 partitions = 4;
+    ColumnTTLPolicy ttl = 5;
+}

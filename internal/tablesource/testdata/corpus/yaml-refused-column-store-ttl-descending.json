@@ -1,0 +1,29 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {
+    "ttl": {
+     "column": "created_at",
+     "tiers": [
+      {
+       "interval": "P7D",
+       "external_source": "/local/ext/bucket"
+      },
+      {
+       "interval": "P1D"
+      }
+     ]
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    },
+    "created_at": {
+     "type": "timestamp"
+    }
+   }
+  }
+ }
+}

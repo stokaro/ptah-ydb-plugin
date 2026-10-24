@@ -78,7 +78,17 @@ func TestDesiredObjectsRefuseInvalidValues(t *testing.T) {
 		{"external no columns", schema.ExternalTableProperties, `{"sourceType":"ObjectStorage","dataSourcePath":"/local/bucket","location":""}`},
 		{"external missing type", schema.ExternalTableProperties, `{"sourceType":"ObjectStorage","dataSourcePath":"/local/bucket","location":"","columns":[{"name":"id","settings":{}}]}`},
 		{"external sequence position", schema.ExternalTableProperties, `{"sourceType":"ObjectStorage","dataSourcePath":"/local/bucket","location":"","columns":[{"name":"id","type":{"typeId":"INT64"},"settings":{"sequence":{"setVal":{}}}}]}`},
-		{"storage no hash", schema.ColumnStorageProperties, `{"partitions":"1","dataChannelCount":"64"}`},
+		{"storage repeated hash", schema.ColumnStorageProperties, `{"hashColumns":["id","id"]}`},
+		{"storage shards beyond 32 bits", schema.ColumnStorageProperties, `{"partitions":"4294967296"}`},
+		{"storage TTL expiration", schema.ColumnStorageProperties, `{"ttl":{"enabled":{"column":"at","expireAfterSeconds":"60","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`},
+		{"storage TTL without tiers", schema.ColumnStorageProperties, `{"ttl":{"enabled":{"column":"at"}}}`},
+		{"storage TTL without column", schema.ColumnStorageProperties, `{"ttl":{"enabled":{"tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`},
+		{"storage TTL unit", schema.ColumnStorageProperties, `{"ttl":{"enabled":{"column":"at","columnUnit":"5","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`},
+		{"storage TTL deletes first", schema.ColumnStorageProperties, `{"ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"60","delete":{}},{"applyAfterSeconds":"120","externalStorage":"/local/ext"}]}}}`},
+		{"storage TTL descending", schema.ColumnStorageProperties, `{"ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"120","externalStorage":"/local/ext"},{"applyAfterSeconds":"60","delete":{}}]}}}`},
+		{"storage TTL relative source", schema.ColumnStorageProperties, `{"ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"60","externalStorage":"local/ext"}]}}}`},
+		{"storage TTL beyond 32 bits", schema.ColumnStorageProperties, `{"ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"4294967296","delete":{}}]}}}`},
+		{"storage TTL no action", schema.ColumnStorageProperties, `{"ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"60"}]}}}`},
 		{"storage runtime id", schema.ColumnStorageProperties, `{"hashColumns":["id"],"partitions":"1","dataChannelCount":"64","columnShards":["1"]}`},
 		{"storage malformed TTL", schema.ColumnStorageProperties, `{"hashColumns":["id"],"partitions":"1","dataChannelCount":"64","ttl":{}}`},
 	} {
@@ -93,6 +103,32 @@ func TestDesiredObjectsRefuseInvalidValues(t *testing.T) {
 			result, err := schema.NormalizeDesired(value)
 			c.Assert(result, qt.IsNil)
 			c.Assert(err, qt.IsNotNil)
+		})
+	}
+}
+
+// TestDesiredColumnStorageLeavesServerChoicesOut accepts declarations that
+// leave the hash key, the shard count and the data channels to the server, and
+// a TTL of any shape YDB keeps.
+func TestDesiredColumnStorageLeavesServerChoicesOut(t *testing.T) {
+	for _, payload := range []string{
+		`{}`,
+		`{"hashColumns":["b","a"]}`,
+		`{"partitions":"4294967295"}`,
+		`{"ttl":{"disabled":{}}}`,
+		`{"ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"0","delete":{}}]}}}`,
+		`{"ttl":{"enabled":{"column":"at","columnUnit":"4","tiers":[{"applyAfterSeconds":"60","externalStorage":"/local/a"},{"applyAfterSeconds":"120","externalStorage":"/local/b"},{"applyAfterSeconds":"4294967295","delete":{}}]}}}`,
+	} {
+		t.Run(payload, func(t *testing.T) {
+			c := qt.New(t)
+			definition := schema.NativeDesiredModel(schema.ColumnStorageProperties)
+			value := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: schema.ColumnStorageProperties, Owner: tableOwner(), SchemaVersion: definition.SchemaVersion,
+				Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: []byte(payload)}
+			result, err := schema.NormalizeDesired(value)
+			c.Assert(err, qt.IsNil)
+			again, err := schema.NormalizeDesired(result)
+			c.Assert(err, qt.IsNil)
+			c.Assert(string(again.Payload), qt.Equals, string(result.Payload))
 		})
 	}
 }

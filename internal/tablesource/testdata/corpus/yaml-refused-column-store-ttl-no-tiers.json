@@ -1,0 +1,21 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {
+    "ttl": {
+     "column": "created_at",
+     "tiers": []
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    },
+    "created_at": {
+     "type": "timestamp"
+    }
+   }
+  }
+ }
+}

@@ -12,7 +12,9 @@ import (
 // ChangeKinds lists the comparison changes this service accepts. Each one
 // reports that a table or a column of a table differs in a property the
 // alteration reads from the captured table, so the alteration owns its plan.
-func ChangeKinds() []string { return []string{schema.TablePropertiesChange} }
+func ChangeKinds() []string {
+	return []string{schema.TablePropertiesChange, schema.ColumnStorageChange}
+}
 
 // validateChange re-normalizes a captured change and requires the host's receipt
 // to match, so a forged change cannot reach the alteration.
@@ -21,10 +23,15 @@ func validateChange(change *protocol.PlanningChange) error {
 		return err
 	}
 	value := change.GetValue()
-	if value.GetValue().GetKind() != schema.TablePropertiesChange {
+	normalize := schema.NormalizeTablePropertiesChange
+	switch value.GetValue().GetKind() {
+	case schema.TablePropertiesChange:
+	case schema.ColumnStorageChange:
+		normalize = schema.NormalizeColumnStorageChange
+	default:
 		return fmt.Errorf("YDB table planning received an unowned change")
 	}
-	expected, err := schema.NormalizeTablePropertiesChange(&protocol.ValueInput{Id: value.GetId(), Representation: protocol.ValueInput_CHANGE, Value: value.GetValue()})
+	expected, err := normalize(&protocol.ValueInput{Id: value.GetId(), Representation: protocol.ValueInput_CHANGE, Value: value.GetValue()})
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,20 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "yaml",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "items",
+   "facets": {
+    "ptah.run/ydb/column-store": {},
+    "ptah.run/ydb/ttl": {
+     "Column": "created_at",
+     "Interval": "P30D",
+     "Unit": ""
+    }
+   }
+  }
+ ]
+}

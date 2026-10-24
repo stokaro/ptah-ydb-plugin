@@ -1,0 +1,17 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {},
+   "auto_partitioning_by_load": "ENABLED",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    },
+    "created_at": {
+     "type": "timestamp"
+    }
+   }
+  }
+ }
+}

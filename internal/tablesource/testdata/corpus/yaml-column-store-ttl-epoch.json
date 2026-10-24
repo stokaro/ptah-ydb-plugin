@@ -1,0 +1,27 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {
+    "ttl": {
+     "column": "id",
+     "unit": "seconds",
+     "tiers": [
+      {
+       "interval": "PT1H",
+       "external_source": "/local/ext/bucket"
+      }
+     ]
+    }
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    },
+    "created_at": {
+     "type": "timestamp"
+    }
+   }
+  }
+ }
+}

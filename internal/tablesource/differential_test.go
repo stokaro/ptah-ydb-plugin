@@ -30,9 +30,12 @@ import (
 //	deferred-*  the host accepts the input and the provider cannot carry it yet
 //	later-*     the host accepts the input when it decodes it and refuses the
 //	            table when it plans it; the provider refuses it when it decodes it
+//	stricter-*  the host accepts the input and loses what the author wrote; the
+//	            provider refuses it
 //	any other   the host accepts the input, and both decoders mean the same
 //	            partitioning, starting layout, read replicas, bloom filter, TTL,
-//	            column families and the columns each family holds
+//	            column families and the columns each family holds, and the
+//	            storage, hash key, shard count and TTL tiers of a column table
 
 // golden is what the host recorded for one input.
 type golden struct {
@@ -115,7 +118,10 @@ func inputName(name string) string {
 func isRefused(name string) bool  { return strings.Contains(name, "refused-") }
 func isDeferred(name string) bool { return strings.Contains(name, "deferred-") }
 func isLater(name string) bool    { return strings.Contains(name, "later-") }
-func isAccepted(name string) bool { return !isRefused(name) && !isDeferred(name) && !isLater(name) }
+func isStricter(name string) bool { return strings.Contains(name, "stricter-") }
+func isAccepted(name string) bool {
+	return !isRefused(name) && !isDeferred(name) && !isLater(name) && !isStricter(name)
+}
 
 // request replays a row as the captured document the host would send.
 func request(c *qt.C, r row) *protocol.DecodeSourceRequest {
@@ -161,9 +167,10 @@ func TestCorpusShape(t *testing.T) {
 	for _, r := range rows {
 		c.Assert(r.golden.Outcome == "refused", qt.Equals, isRefused(r.name), qt.Commentf("%s: host outcome %q", r.name, r.golden.Outcome))
 	}
-	c.Assert(len(corpus(c, isRefused)) >= 110, qt.IsTrue)
-	c.Assert(len(corpus(c, isDeferred)) >= 28, qt.IsTrue)
-	c.Assert(len(corpus(c, isAccepted)) >= 70, qt.IsTrue)
+	c.Assert(len(corpus(c, isRefused)) >= 150, qt.IsTrue)
+	c.Assert(len(corpus(c, isDeferred)) >= 13, qt.IsTrue)
+	c.Assert(len(corpus(c, isLater)) >= 11, qt.IsTrue)
+	c.Assert(len(corpus(c, isAccepted)) >= 100, qt.IsTrue)
 }
 
 // TestDifferential_HappyPath decodes every input the host accepts and requires
@@ -200,49 +207,78 @@ func TestDifferential_FailurePath(t *testing.T) {
 // unclaimed Go comment as no declaration at all, so the provider claims the
 // Go directives it cannot carry and refuses them itself.)
 var unclaimed = map[string]string{
-	"yaml-deferred-changefeeds":                  "changefeeds",
-	"yaml-deferred-column-store":                 "column_store",
-	"yaml-deferred-column-store-empty":           "column_store",
-	"yaml-deferred-column-store-hash-only":       "column_store",
-	"yaml-deferred-column-store-null":            "column_store",
-	"yaml-deferred-column-store-partitions-only": "column_store",
+	"yaml-deferred-changefeeds": "changefeeds",
 }
 
 // refusals names the inputs whose key or attribute the provider claims and
 // refuses by name, with the words of the refusal.
 var refusals = map[string]string{
-	"yaml-deferred-family-cache-mode":                  "cache_mode is not supported by the YDB provider yet",
-	"yaml-deferred-family-fields":                      "fields is not supported by the YDB provider yet",
-	"go-deferred-family-cache-mode":                    "cache_mode is not supported by the YDB provider yet",
-	"go-deferred-family-fields-other-table":            "fields is not supported by the YDB provider yet",
-	"yaml-deferred-ttl-platform-other-property":        "platform.ydb.some_other_setting is not supported by the YDB provider yet",
-	"go-deferred-changefeed":                           "ptah:schema:changefeed is not supported by the YDB provider yet",
-	"go-deferred-changefeed-consumer":                  "ptah:schema:changefeed is not supported by the YDB provider yet",
-	"go-deferred-table-store-column":                   "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-hash":              "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-hash-composite":    "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-hash-spaces":       "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-shards":            "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-shards-at-limit":   "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-ttl-tiered":        "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-with-bloom":        "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-with-partitioning": "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-with-replicas":     "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-with-ttl-platform": "store is not supported by the YDB provider yet",
-	"go-deferred-table-store-column-with-uniform":      "store is not supported by the YDB provider yet",
-	"go-deferred-index-partitioning":                   "auto_partitioning_by_load is not supported by the YDB provider yet",
-	"go-deferred-index-replicas":                       "read_replicas_settings is not supported by the YDB provider yet",
-	"go-deferred-index-vector":                         "clusters is not supported by the YDB provider yet",
-	"go-deferred-index-fulltext":                       "tokenizer is not supported by the YDB provider yet",
-	"go-deferred-index-bloom":                          "false_positive_probability is not supported by the YDB provider yet",
+	"yaml-deferred-family-cache-mode":           "cache_mode is not supported by the YDB provider yet",
+	"yaml-deferred-family-fields":               "fields is not supported by the YDB provider yet",
+	"go-deferred-family-cache-mode":             "cache_mode is not supported by the YDB provider yet",
+	"go-deferred-family-fields-other-table":     "fields is not supported by the YDB provider yet",
+	"yaml-deferred-ttl-platform-other-property": "platform.ydb.some_other_setting is not supported by the YDB provider yet",
+	"go-deferred-changefeed":                    "ptah:schema:changefeed is not supported by the YDB provider yet",
+	"go-deferred-changefeed-consumer":           "ptah:schema:changefeed is not supported by the YDB provider yet",
+	"go-deferred-index-partitioning":            "auto_partitioning_by_load is not supported by the YDB provider yet",
+	"go-deferred-index-replicas":                "read_replicas_settings is not supported by the YDB provider yet",
+	"go-deferred-index-vector":                  "clusters is not supported by the YDB provider yet",
+	"go-deferred-index-fulltext":                "tokenizer is not supported by the YDB provider yet",
+	"go-deferred-index-bloom":                   "false_positive_probability is not supported by the YDB provider yet",
 }
 
 // laterRefusals names the inputs the host accepts when it decodes them and
 // refuses when it plans the table, with the words of the provider's refusal at
 // decode. The provider cannot carry the input, so it refuses it where it can.
 var laterRefusals = map[string]string{
-	"go-later-table-both-layouts": "uniform_partitions and partition_at_keys are both declared, which YDB refuses",
-	"yaml-later-both-layouts":     "uniform_partitions and partition_at_keys are both declared, which YDB refuses",
+	"go-later-table-both-layouts":                   "uniform_partitions and partition_at_keys are both declared, which YDB refuses",
+	"yaml-later-both-layouts":                       "uniform_partitions and partition_at_keys are both declared, which YDB refuses",
+	"go-later-table-store-column-with-bloom":        rowTableRefusal,
+	"go-later-table-store-column-with-partitioning": rowTableRefusal,
+	"go-later-table-store-column-with-replicas":     rowTableRefusal,
+	"go-later-table-store-column-with-uniform":      rowTableRefusal,
+	"go-later-table-store-column-with-family":       rowTableRefusal,
+	"yaml-later-column-store-with-partitioning":     rowTableRefusal,
+	"yaml-later-column-store-with-families":         rowTableRefusal,
+	"go-later-table-store-column-ttl-both":          bothTTLRefusal,
+	"yaml-later-column-store-ttl-both":              bothTTLRefusal,
+}
+
+// The words the host's embedded engine plans a column table with, measured by
+// rendering each later row's input with the host at the commit the corpus
+// names (`ptah schema render --dialect ydb`).
+const (
+	rowTableRefusal = "row-table partitioning, column families and changefeeds cannot be applied to a column table"
+	bothTTLRefusal  = "declare either tiered TTL or a TTL that deletes rows, not both"
+)
+
+// stricterRefusals names the inputs the host accepts by losing what the author
+// wrote, with the words of the provider's refusal.
+var stricterRefusals = map[string]string{
+	// yaml.v3 reads 2.5 into an unsigned integer as 2 and says nothing.
+	"yaml-stricter-column-store-partitions-fraction": "partitions: expected a whole number of shards",
+}
+
+// TestStricter_AreRefusedAtDecode requires every stricter row to be named, the
+// host to have accepted it, and the provider to refuse it with the stated words.
+func TestStricter_AreRefusedAtDecode(t *testing.T) {
+	c := qt.New(t)
+	var rows []string
+	for _, r := range corpus(c, isStricter) {
+		rows = append(rows, r.name)
+		c.Assert(r.golden.Outcome, qt.Equals, "accepted", qt.Commentf(r.name))
+	}
+	c.Assert(slices.Sorted(slices.Values(rows)), qt.DeepEquals, slices.Sorted(maps.Keys(stricterRefusals)))
+	for name, words := range stricterRefusals {
+		t.Run(name, func(t *testing.T) {
+			c := qt.New(t)
+			rows := corpus(c, func(candidate string) bool { return candidate == name })
+			c.Assert(len(rows), qt.Equals, 1)
+			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
+			c.Assert(err, qt.ErrorMatches, `(?s).*`+words+`.*`)
+			c.Assert(decoded == nil, qt.IsTrue)
+		})
+	}
 }
 
 // TestLater_AreRefusedAtDecode requires every later row to be named, the host

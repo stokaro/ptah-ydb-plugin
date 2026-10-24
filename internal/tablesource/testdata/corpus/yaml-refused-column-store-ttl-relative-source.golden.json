@@ -1,0 +1,7 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "yaml",
+ "outcome": "refused",
+ "error": "table \"items\": TTL tier external source must be an absolute database path",
+ "tables": null
+}

@@ -27,15 +27,25 @@ func yamlRequest(c *qt.C, source string) *protocol.DecodeSourceRequest {
 func TestClaims(t *testing.T) {
 	c := qt.New(t)
 	var keys []string
+	models := map[string][]string{}
 	for _, claim := range tablesource.YAMLKeys() {
 		keys = append(keys, claim.Key)
 		c.Assert(claim.Scope, qt.Equals, protocol.YAMLSourceKey_TABLE)
-		c.Assert(claim.Models, qt.DeepEquals, []string{schema.TableProperties})
+		models[claim.Key] = claim.Models
 	}
 	c.Assert(keys, qt.DeepEquals, []string{
 		"auto_partitioning_by_size", "auto_partitioning_partition_size_mb", "auto_partitioning_by_load", "auto_partitioning_min_partitions_count",
 		"auto_partitioning_max_partitions_count", "read_replicas_settings", "key_bloom_filter", "uniform_partitions", "partition_at_keys", "column_families", "platform.ydb",
+		"column_store",
 	})
+	// column_store declares a column table, and the TTL of the platform group
+	// is a column table's TTL beside it; every other key declares row-table
+	// settings.
+	for _, key := range keys[:10] {
+		c.Assert(models[key], qt.DeepEquals, []string{schema.TableProperties}, qt.Commentf(key))
+	}
+	c.Assert(models["platform.ydb"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnStorageProperties})
+	c.Assert(models["column_store"], qt.DeepEquals, []string{schema.ColumnStorageProperties})
 	directives := tablesource.GoDirectives()
 	c.Assert(len(directives), qt.Equals, 5)
 	scopes := map[string]protocol.GoSourceDirective_Scope{}
@@ -43,10 +53,14 @@ func TestClaims(t *testing.T) {
 	for _, directive := range directives {
 		names = append(names, directive.Directive)
 		scopes[directive.Directive] = directive.Scope
-		// A family lists the columns it holds, so it answers for them too.
+		// A family lists the columns it holds, so it answers for them too, and
+		// the table directive declares a row table or a column table.
 		want := []string{schema.TableProperties}
-		if directive.Directive == tablesource.DirectiveColumnFamily {
+		switch directive.Directive {
+		case tablesource.DirectiveColumnFamily:
 			want = append(want, schema.ColumnProperties)
+		case tablesource.DirectiveTable:
+			want = append(want, schema.ColumnStorageProperties)
 		}
 		c.Assert(directive.Models, qt.DeepEquals, want, qt.Commentf(directive.Directive))
 	}
@@ -73,7 +87,7 @@ func TestClaims_TableAttributesAreTheYAMLKeysAndMore(t *testing.T) {
 	}
 	c.Assert(table, qt.IsNotNil)
 	for _, key := range tablesource.YAMLKeys() {
-		if key.Key != tablesource.KeyColumnFamilies && key.Key != tablesource.KeyPlatformYDB {
+		if key.Key != tablesource.KeyColumnFamilies && key.Key != tablesource.KeyPlatformYDB && key.Key != tablesource.KeyColumnStore {
 			c.Assert(slices.Contains(table.Attributes, key.Key), qt.IsTrue, qt.Commentf(key.Key))
 		}
 	}
@@ -136,6 +150,74 @@ func TestDecode_HappyPath(t *testing.T) {
 			c.Assert(string(tables[0].Value.Value.Payload), qt.Equals, test.want)
 			c.Assert(tables[0].Value.Value.Kind, qt.Equals, schema.TableProperties)
 			c.Assert(tables[0].Value.CanonicalFormat, qt.Equals, schema.TableDesiredModel().CanonicalFormat)
+		})
+	}
+}
+
+// TestDecode_ColumnStore pins the column-storage facet the column_store key
+// makes, and the TTL of the platform group beside it, whichever comes first.
+func TestDecode_ColumnStore(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{"an empty mapping", `{"tables":{"items":{"column_store":{}}}}`, `{}`},
+		{"every setting", `{"tables":{"items":{"column_store":{"hash_columns":["b","a"],"partitions":3,"ttl":{"column":"t","unit":"MILLISECONDS",` +
+			`"tiers":[{"interval":"PT1H","external_source":"/local/ext"}]}}}}}`,
+			`{"hashColumns":["b","a"],"partitions":"3","ttl":{"enabled":{"column":"t","columnUnit":"2","tiers":[{"applyAfterSeconds":"3600","externalStorage":"/local/ext"}]}}}`},
+		{"null settings and zero shards leave the server's choice", `{"tables":{"items":{"column_store":{"hash_columns":null,"partitions":0,"ttl":null}}}}`, `{}`},
+		{"a TTL in the platform group after the storage", `{"tables":{"items":{"column_store":{"partitions":2},"platform":{"ydb":{"row_deletion_column":"t","row_deletion_interval":"P1D"}}}}}`,
+			`{"partitions":"2","ttl":{"enabled":{"column":"t","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}}}`},
+		{"a TTL in the platform group before the storage", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":"t","row_deletion_interval":"P1D"}},"column_store":{}}}}`,
+			`{"ttl":{"enabled":{"column":"t","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}}}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := yamlRequest(c, test.source)
+			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
+			c.Assert(err, qt.IsNil)
+			c.Assert(len(tables), qt.Equals, 1)
+			c.Assert(tables[0].Value.Value.Kind, qt.Equals, schema.ColumnStorageProperties)
+			c.Assert(string(tables[0].Value.CanonicalProjection), qt.Equals, test.want)
+			decoded, err := backend.New().DecodeSource(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateDecodedSource(backend.Description(), request, decoded), qt.IsNil)
+		})
+	}
+}
+
+// TestDecode_ColumnStoreFailurePath refuses a column_store mapping whose
+// values the bundled decoder refuses too.
+func TestDecode_ColumnStoreFailurePath(t *testing.T) {
+	tests := []struct{ name, source, wantErr string }{
+		{"not a mapping", `{"tables":{"items":{"column_store":"COLUMN"}}}`, `table "items": column_store: expected a mapping of hash_columns, partitions and ttl`},
+		{"an unknown key", `{"tables":{"items":{"column_store":{"shards":4}}}}`, `table "items": column_store: shards: unknown key`},
+		{"shards as text", `{"tables":{"items":{"column_store":{"partitions":"4"}}}}`, `table "items": column_store: partitions: expected a number of shards`},
+		{"negative shards", `{"tables":{"items":{"column_store":{"partitions":-1}}}}`, `table "items": column_store: partitions: expected a whole number of shards`},
+		{"shards beyond 32 bits", `{"tables":{"items":{"column_store":{"partitions":4294967296}}}}`, `table "items": column_store: partitions: column shard count exceeds a 32-bit integer`},
+		{"a hash key as one name", `{"tables":{"items":{"column_store":{"hash_columns":"id"}}}}`, `table "items": column_store: hash_columns: expected a list of column names`},
+		{"a hash column twice", `{"tables":{"items":{"column_store":{"hash_columns":["id","id"]}}}}`, `table "items": hash partitioning column "id" is empty or repeated`},
+		{"a TTL tier with an unknown key", `{"tables":{"items":{"column_store":{"ttl":{"column":"t","tiers":[{"interval":"P1D","delete":true}]}}}}}`,
+			`table "items": column_store: ttl: tiers: tier 1: delete: unknown key`},
+		{"a TTL that is a list", `{"tables":{"items":{"column_store":{"ttl":["t"]}}}}`, `table "items": column_store: ttl: expected a mapping of column, unit and tiers`},
+		{"a TTL that only deletes", `{"tables":{"items":{"column_store":{"ttl":{"column":"t","tiers":[{"interval":"P1D"}]}}}}}`,
+			`table "items": column_store: ttl: a tiered TTL requires a tier that moves rows to an external data source; a TTL that only deletes is the table's TTL`},
+		{"row partitioning beside the storage", `{"tables":{"items":{"column_store":{},"key_bloom_filter":"ENABLED"}}}`,
+			`table "items": row-table partitioning, column families and changefeeds cannot be applied to a column table`},
+		{"a family beside the storage", `{"tables":{"items":{"column_store":{},"column_families":{"cold":{}}}}}`,
+			`table "items": row-table partitioning, column families and changefeeds cannot be applied to a column table`},
+		{"two TTLs", `{"tables":{"items":{"column_store":{"ttl":{"column":"t","tiers":[{"interval":"P1D","external_source":"/local/ext"}]}},` +
+			`"platform":{"ydb":{"row_deletion_column":"t","row_deletion_interval":"P2D"}}}}}`, `table "items": declare either tiered TTL or a TTL that deletes rows, not both`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := yamlRequest(c, test.source)
+			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
+			c.Assert(err, qt.ErrorMatches, test.wantErr)
+			c.Assert(tables, qt.IsNil)
 		})
 	}
 }

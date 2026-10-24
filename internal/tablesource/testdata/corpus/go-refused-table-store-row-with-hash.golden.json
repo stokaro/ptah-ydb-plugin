@@ -1,0 +1,40 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "refused",
+ "error": "partition_by_hash requires store=column on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "partition_by_hash": "id",
+    "store": "ROW"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-store-row-with-hash.go",
+   "file_size": 308,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 85,
+    "line": 3,
+    "column": 68
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

@@ -16,9 +16,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// meaning is what a table's declared partitioning, TTL and column families say,
-// stripped of how a decoder spells them. Both decoders are reduced to it, so a
-// difference in spelling cannot hide a difference in effect, and the other way.
+// meaning is what a table's declared partitioning, TTL, column families and
+// column storage say, stripped of how a decoder spells them. Both decoders are
+// reduced to it, so a difference in spelling cannot hide a difference in
+// effect, and the other way.
 type meaning struct {
 	BySize          *bool
 	PartitionSizeMB uint64
@@ -32,6 +33,30 @@ type meaning struct {
 	AtKeys   [][]string
 	TTL      *ttlMeaning
 	Families []familyMeaning
+	// Column is the storage of a column table, nil for a row table. The TTL of
+	// a column table is part of it, a TTL that only deletes as one tier.
+	Column *columnMeaning
+}
+
+// columnMeaning is a column table's hash key, shard count and TTL.
+type columnMeaning struct {
+	Hash   []string
+	Shards uint64
+	TTL    *tieredMeaning
+}
+
+// tieredMeaning is a column table's TTL as seconds and targets.
+type tieredMeaning struct {
+	Column string
+	Unit   string
+	Tiers  []tierMeaning
+}
+
+// tierMeaning is one tier: its seconds, and the external data source it moves
+// rows to, "" for a tier that deletes.
+type tierMeaning struct {
+	Seconds uint64
+	Source  string
 }
 
 // ttlMeaning is a TTL as seconds: the host spells the interval as the author
@@ -50,7 +75,7 @@ type familyMeaning struct {
 
 func (m meaning) empty() bool {
 	return m.BySize == nil && m.PartitionSizeMB == 0 && m.ByLoad == nil && m.MinPartitions == 0 && m.MaxPartitions == 0 &&
-		m.ReadReplicas == "" && m.KeyBloomFilter == nil && m.Uniform == 0 && len(m.AtKeys) == 0 && m.TTL == nil && len(m.Families) == 0
+		m.ReadReplicas == "" && m.KeyBloomFilter == nil && m.Uniform == 0 && len(m.AtKeys) == 0 && m.TTL == nil && len(m.Families) == 0 && m.Column == nil
 }
 
 // families sorts a family list and drops the default family when it states
@@ -83,6 +108,20 @@ type hostTTL struct {
 	Column   string
 	Interval string
 	Unit     string
+}
+
+// hostColumnStore is the host's column-storage facet payload.
+type hostColumnStore struct {
+	HashColumns []string `json:"hash_columns"`
+	Partitions  uint64   `json:"partitions"`
+	TTL         *struct {
+		Column string `json:"column"`
+		Unit   string `json:"unit"`
+		Tiers  []struct {
+			Interval       string `json:"interval"`
+			ExternalSource string `json:"external_source"`
+		} `json:"tiers"`
+	} `json:"ttl"`
 }
 
 type hostFamilies struct {
@@ -128,11 +167,30 @@ func hostMeaning(c *qt.C, recorded golden) map[string]meaning {
 				for _, family := range f.Families {
 					m.Families = append(m.Families, familyMeaning{Name: family.Name, Data: family.Data, Compression: family.Compression, Columns: family.Columns})
 				}
+			case "ptah.run/ydb/column-store":
+				var store hostColumnStore
+				strictJSON(c, payload, &store)
+				m.Column = &columnMeaning{Hash: store.HashColumns, Shards: store.Partitions}
+				if store.TTL != nil {
+					m.Column.TTL = &tieredMeaning{Column: store.TTL.Column, Unit: store.TTL.Unit}
+					for _, tier := range store.TTL.Tiers {
+						seconds, err := ttlgrammar.IntervalSeconds(tier.Interval)
+						c.Assert(err, qt.IsNil)
+						m.Column.TTL.Tiers = append(m.Column.TTL.Tiers, tierMeaning{Seconds: seconds, Source: tier.ExternalSource})
+					}
+				}
 			default:
 				c.Fatalf("the host recorded an unexpected facet %s for %s", kind, table.Name)
 			}
 		}
 		m.Families = families(m.Families)
+		// A column table's TTL that only deletes is the host's TTL facet; it is
+		// the column table's one deleting tier.
+		if m.Column != nil && m.TTL != nil {
+			c.Assert(m.Column.TTL, qt.IsNil, qt.Commentf("table %s declares two TTLs, which no accepted row may", table.Name))
+			m.Column.TTL = &tieredMeaning{Column: m.TTL.Column, Unit: m.TTL.Unit, Tiers: []tierMeaning{{Seconds: m.TTL.Seconds}}}
+			m.TTL = nil
+		}
 		// A row the host and the provider are expected to agree on carries no
 		// index option, which the provider cannot carry.
 		c.Assert(table.Indexes, qt.HasLen, 0, qt.Commentf("table %s", table.Name))
@@ -167,6 +225,12 @@ func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning 
 					c.Assert(envelope.Owner.Path, qt.HasLen, 1)
 					key := tableKey(envelope.Owner.Schema, envelope.Owner.Path[0])
 					placed[key] = append(placed[key], placement{family: intent.GetFamily(), column: envelope.Owner.Name})
+					continue
+				}
+				if envelope.Kind == "github.com/stokaro/ptah-ydb-plugin/column-storage-properties" {
+					var storage native.ColumnStorageIntent
+					c.Assert(protojson.Unmarshal(envelope.Payload, &storage), qt.IsNil)
+					result[tableKey(envelope.Owner.Schema, envelope.Owner.Name)] = meaning{Column: columnOf(&storage)}
 					continue
 				}
 				c.Assert(envelope.Kind, qt.Equals, "github.com/stokaro/ptah-ydb-plugin/row-table-properties")
@@ -206,6 +270,23 @@ func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning 
 	}
 	return result
 }
+
+// columnOf reduces the provider's column-storage facet to its meaning.
+func columnOf(storage *native.ColumnStorageIntent) *columnMeaning {
+	result := &columnMeaning{Hash: storage.HashColumns, Shards: storage.Partitions}
+	enabled := storage.GetTtl().GetEnabled()
+	if enabled == nil {
+		return result
+	}
+	result.TTL = &tieredMeaning{Column: enabled.Column, Unit: columnUnits[enabled.ColumnUnit]}
+	for _, tier := range enabled.Tiers {
+		result.TTL.Tiers = append(result.TTL.Tiers, tierMeaning{Seconds: tier.ApplyAfterSeconds, Source: tier.GetExternalStorage()})
+	}
+	return result
+}
+
+// columnUnits spells a column TTL's unit as YQL writes it.
+var columnUnits = map[uint64]string{0: "", 1: "SECONDS", 2: "MILLISECONDS", 3: "MICROSECONDS", 4: "NANOSECONDS"}
 
 // placement is a column a column facet puts in a family.
 type placement struct{ family, column string }

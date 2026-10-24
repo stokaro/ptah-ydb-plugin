@@ -63,7 +63,7 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		"conversion":           "offline and all-or-nothing; requires complete implementation and child-topic settings; no comparison or planning advertised by these models",
 		"access":               "missing access leaves ownership and permissions unmanaged; present access retains complete direct grants and effective-permission requirements without granting permissions",
 		"native_objects":       "views require matching access from view and table APIs; external options, references and column order remain exact; no network access to external sources",
-		"column_storage":       "preserves hash order, partition and data-channel counts, local indexes and TTL tiers; excludes native IDs and runtime topology",
+		"column_storage":       "preserves hash order, partition and data-channel counts, local indexes and TTL tiers; excludes native IDs and runtime topology; a declaration may omit the hash key, the shard count and the data channels, which the server then chooses, and states the whole TTL of the table, a TTL that only deletes as one deleting tier; the server's derived expiration is not declared",
 	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
@@ -74,7 +74,13 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		panic(err)
 	}
 	digest := sha256.Sum256(canonical)
-	return &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
+	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
+	if kind == ColumnStorageProperties {
+		// A YAML or Go source declares a column table; the absence of the facet
+		// on a table such a source describes is a request for row storage.
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
+	}
+	return result
 }
 
 func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error) {
@@ -102,7 +108,11 @@ func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error)
 	if err := Known(target); err != nil {
 		return nil, err
 	}
-	if _, err := nativeObservation(target); err != nil {
+	if storage, ok := target.(*native.ColumnStorageIntent); ok {
+		if err := validateColumnStorageIntent(storage); err != nil {
+			return nil, err
+		}
+	} else if _, err := nativeObservation(target); err != nil {
 		return nil, err
 	}
 	switch intent := target.(type) {

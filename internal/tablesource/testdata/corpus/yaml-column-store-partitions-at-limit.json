@@ -1,0 +1,18 @@
+{
+ "tables": {
+  "items": {
+   "column_store": {
+    "partitions": 4294967295
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    },
+    "created_at": {
+     "type": "timestamp"
+    }
+   }
+  }
+ }
+}

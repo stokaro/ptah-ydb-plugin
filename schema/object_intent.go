@@ -40,7 +40,13 @@ func objectIntent(value proto.Message) (proto.Message, error) {
 		}
 		return &native.ExternalTableIntent{Access: accessIntent(observed.Self), SourceType: observed.SourceType, DataSourcePath: observed.DataSourcePath, Location: observed.Location, Content: maps.Clone(observed.Content), Columns: columns}, nil
 	case *native.ColumnStorageObservation:
-		return &native.ColumnStorageIntent{HashColumns: slices.Clone(observed.HashColumns), Partitions: observed.Partitions, DataChannelCount: observed.DataChannelCount, LocalIndexes: cloneIndexes(observed.LocalIndexes), Ttl: proto.CloneOf(observed.Ttl)}, nil
+		ttl := proto.CloneOf(observed.Ttl)
+		// The server derives the expiration from the tiers; a declaration
+		// states the tiers alone.
+		if enabled := ttl.GetEnabled(); enabled != nil {
+			enabled.ExpireAfterSeconds = nil
+		}
+		return &native.ColumnStorageIntent{HashColumns: slices.Clone(observed.HashColumns), Partitions: observed.Partitions, DataChannelCount: observed.DataChannelCount, LocalIndexes: cloneIndexes(observed.LocalIndexes), Ttl: ttl}, nil
 	default:
 		return nil, fmt.Errorf("unsupported native YDB observation")
 	}

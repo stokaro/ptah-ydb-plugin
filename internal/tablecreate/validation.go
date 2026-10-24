@@ -38,6 +38,10 @@ func ValidateDeclaration(subject *protocol.ComparisonIdentity, table *protocol.D
 	if err != nil {
 		return err
 	}
+	if IsColumnTable(table) {
+		_, err = CompileColumnTable(owner, table)
+		return err
+	}
 	_, err = compile(owner, table, false)
 	return err
 }

@@ -1,7 +1,8 @@
-// Package tablecompare compares the table and column facets of captured YDB row
+// Package tablecompare compares the table and column facets of captured YDB
 // tables offline: the TTL, the automatic partitioning settings, the column
-// families, the family each column sits in and the set of secondary indexes.
-// The changefeeds of a table are accepted and never reported as a difference.
+// families, the family each column sits in and the set of secondary indexes of
+// a row table, and the storage of a column table. The changefeeds of a table
+// are accepted and never reported as a difference.
 package tablecompare
 
 import (
@@ -23,7 +24,12 @@ const ServiceID = "ydb-row-table-properties"
 
 // Kinds lists the facet models this comparison owns.
 func Kinds() []string {
-	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties}
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
+}
+
+// ChangeKinds lists the changes this comparison reports.
+func ChangeKinds() []string {
+	return []string{schema.TablePropertiesChange, schema.ColumnStorageChange}
 }
 
 // OwnerKinds lists the subject kinds that carry those facets.
@@ -83,6 +89,10 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
+		if want.GetKind() == schema.ColumnStorageProperties {
+			// Compared per table below, where a missing side means row storage.
+			continue
+		}
 		observed := held[recordKey(want.GetKind(), want.GetSubject())]
 		if !compared(request, want) || observed == nil || !compared(request, observed) || !both[recordKey("", want.GetSubject())] {
 			continue
@@ -106,10 +116,89 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 			return nil, err
 		}
 	}
+	// desiredStorage holds the declared column storage of each table, and
+	// rowStated every table the declaration states row-table settings for.
+	desiredStorage := make(map[string]*protocol.ComparisonRecord)
+	rowStated := make(map[string]bool)
+	for _, record := range request.GetDesired().GetRecords() {
+		if !compared(request, record) {
+			continue
+		}
+		switch record.GetKind() {
+		case schema.ColumnStorageProperties:
+			desiredStorage[recordKey(record.GetKind(), record.GetSubject())] = record
+		case schema.TableProperties:
+			rowStated[recordKey(record.GetKind(), record.GetSubject())] = true
+		}
+	}
+	for _, parent := range request.GetParents() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if parent.GetSubject().GetKind() != "table" || !parent.GetDesired() || !parent.GetCurrent() || !slices.Contains(request.GetKinds(), schema.ColumnStorageProperties) {
+			continue
+		}
+		if err := compareStorage(request, result, parent.GetSubject(), desiredStorage, held, rowStated); err != nil {
+			return nil, err
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+// compareStorage compares the storage of a table both sides hold. A column
+// table whose hash key, shard count, TTL or stated local indexes differ from
+// the declaration is a change, and so is a table that is a row table on one
+// side and a column table on the other: a declared column table over a table
+// read as a row table, or a column table where the declaration asks for a row
+// table, which it does when the source describes the column storage of every
+// table it declares and states none for this one, or states row-table
+// settings for it. A side the comparison cannot establish states nothing.
+func compareStorage(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, subject *protocol.ComparisonIdentity,
+	desiredStorage, held map[string]*protocol.ComparisonRecord, rowStated map[string]bool) error {
+	wanted := desiredStorage[recordKey(schema.ColumnStorageProperties, subject)]
+	holding := held[recordKey(schema.ColumnStorageProperties, subject)]
+	if holding != nil && !compared(request, holding) {
+		holding = nil
+	}
+	row := held[recordKey(schema.TableProperties, subject)]
+	rowRead := row != nil && compared(request, row)
+	var before, after *protocol.Envelope
+	var err error
+	if wanted != nil {
+		if after, err = tablecreate.NormalizedFacet(wanted, protocol.ValueInput_DESIRED); err != nil {
+			return err
+		}
+	}
+	if holding != nil {
+		if before, err = tablecreate.NormalizedFacet(holding, protocol.ValueInput_OBSERVED); err != nil {
+			return err
+		}
+	}
+	switch {
+	case after != nil && before != nil:
+		differs, err := tablecreate.StorageFacetDiffers(after, before)
+		if err != nil || !differs {
+			return err
+		}
+	case after != nil && rowRead:
+	case before != nil && (rowStated[recordKey(schema.TableProperties, subject)] ||
+		tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.ColumnStorageProperties, subject, true)):
+	default:
+		return nil
+	}
+	owner := after.GetOwner()
+	if owner == nil {
+		owner = before.GetOwner()
+	}
+	change, err := schema.CaptureColumnStorageChange("change-"+strconv.Itoa(len(result.Changes)), owner, before, after)
+	if err != nil {
+		return err
+	}
+	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: schema.ColumnStorageProperties, Subject: proto.CloneOf(subject), Value: change})
+	return nil
 }
 
 // compareUnstated compares a table the desired side carries no table properties

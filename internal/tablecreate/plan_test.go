@@ -38,7 +38,7 @@ func TestNativeTableCreationPlanRenderNormalize(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
 	c.Assert(plan.Contributions, qt.HasLen, 1)
-	c.Assert(plan.Parents, qt.HasLen, 4)
+	c.Assert(plan.Parents, qt.HasLen, 5)
 	c.Assert(plan.Rewrites, qt.HasLen, 1)
 	c.Assert(proto.Equal(plan.Rewrites[0].Sources[0], commonID), qt.IsTrue)
 	step := plan.Contributions[0].Steps[0]
