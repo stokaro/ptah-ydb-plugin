@@ -1,0 +1,39 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid partition_at_keys \"10 20\": expected a comma after split point 1 at offset 3 on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "partition_at_keys": "10 20"
+   },
+   "struct": "Item",
+   "file": "go-refused-table-at-keys-missing-comma.go",
+   "file_size": 299,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 76,
+    "line": 3,
+    "column": 59
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

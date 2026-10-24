@@ -96,6 +96,11 @@ func tableDiffers(want *native.RowTableIntent, held *native.DescribeTableResult)
 	if partitioningDelta(want.PartitioningSettings, held.PartitioningSettings) != nil {
 		return true
 	}
+	// A layout the table was not created with differs, so that the plan reaches
+	// the planner, which refuses it with the reason.
+	if layoutRefusal(layoutOf(want), want.PartitioningSettings, held.PartitioningSettings) != "" {
+		return true
+	}
 	for _, family := range want.ColumnFamilies {
 		current := findFamily(held.ColumnFamilies, family.GetName())
 		if current == nil {

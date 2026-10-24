@@ -1,5 +1,5 @@
 {
- "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
  "format": "yaml",
  "outcome": "refused",
  "error": "table \"items\": column family \"cold\": invalid fields \"a,,b\": takes a comma-separated list of column names, none of them empty",

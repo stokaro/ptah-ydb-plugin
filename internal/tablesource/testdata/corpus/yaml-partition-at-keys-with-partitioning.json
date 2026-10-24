@@ -1,0 +1,14 @@
+{
+ "tables": {
+  "items": {
+   "auto_partitioning_by_size": "ENABLED",
+   "partition_at_keys": "10, 20, 30",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

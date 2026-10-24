@@ -34,7 +34,7 @@ func TestClaims(t *testing.T) {
 	}
 	c.Assert(keys, qt.DeepEquals, []string{
 		"auto_partitioning_by_size", "auto_partitioning_partition_size_mb", "auto_partitioning_by_load", "auto_partitioning_min_partitions_count",
-		"auto_partitioning_max_partitions_count", "read_replicas_settings", "key_bloom_filter", "column_families", "platform.ydb",
+		"auto_partitioning_max_partitions_count", "read_replicas_settings", "key_bloom_filter", "uniform_partitions", "partition_at_keys", "column_families", "platform.ydb",
 	})
 	directives := tablesource.GoDirectives()
 	c.Assert(len(directives), qt.Equals, 5)

@@ -93,6 +93,10 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 		{"a Go TTL", "--root-dir", "entities.go", goTable("//ptah:schema:table name=\"host_source_items\" platform.ydb.row_deletion_column=\"created_at\" platform.ydb.row_deletion_interval=\"P30D\"", "")},
 		{"a YAML TTL in the platform group", "--schema-file", "schema.yaml", hostYAMLPlatformTTL},
 		{"the columns of a Go family", "--root-dir", "entities.go", hostGoFamilyFields},
+		{"a uniform starting layout in YAML", "--schema-file", "schema.yaml", "tables:\n  host_source_items:\n    uniform_partitions: 4\n    columns:\n      id: {type: Uint64, primary: true}\n"},
+		{"starting split points in YAML", "--schema-file", "schema.yaml", "tables:\n  host_source_items:\n    partition_at_keys: \"10, 20\"\n    columns:\n      id: {type: Uint64, primary: true}\n"},
+		{"a uniform starting layout in Go", "--root-dir", "entities.go", goTable("//ptah:schema:table name=\"host_source_items\" uniform_partitions=\"4\"", "")},
+		{"starting split points in Go", "--root-dir", "entities.go", goTable("//ptah:schema:table name=\"host_source_items\" partition_at_keys=\"10, 20\"", "")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -107,7 +111,7 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testing.T) {
 	for _, test := range []struct{ name, flag, file, content, want string }{
 		{"an unclaimed YAML key", "--schema-file", "schema.yaml",
-			"tables:\n  host_source_items:\n    uniform_partitions: 4\n    columns:\n      id: {type: Uint64, primary: true}\n", `unknown key "uniform_partitions"`},
+			"tables:\n  host_source_items:\n    changefeeds: []\n    columns:\n      id: {type: Uint64, primary: true}\n", `unknown key "changefeeds"`},
 		{"a family cache mode", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    column_families:\n      cold: {cache_mode: regular}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a zstd family", "--schema-file", "schema.yaml",
@@ -115,8 +119,10 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 		{"a changefeed in Go", "--root-dir", "entities.go",
 			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:changefeed name=\"updates\" mode=\"UPDATES\" format=\"JSON\"\n" +
 				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n", `decode Go directives of engine "ydb"`},
-		{"a starting layout in Go", "--root-dir", "entities.go",
-			goTable("//ptah:schema:table name=\"host_source_items\" uniform_partitions=\"4\"", ""), `decode Go directives of engine "ydb"`},
+		{"both starting layouts in Go", "--root-dir", "entities.go",
+			goTable("//ptah:schema:table name=\"host_source_items\" uniform_partitions=\"4\" partition_at_keys=\"10\"", ""), `decode Go directives of engine "ydb"`},
+		{"both starting layouts in YAML", "--schema-file", "schema.yaml",
+			"tables:\n  host_source_items:\n    uniform_partitions: 4\n    partition_at_keys: \"10\"\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a column table in Go", "--root-dir", "entities.go",
 			goTable("//ptah:schema:table name=\"host_source_items\" store=\"COLUMN\"", ""), `decode Go directives of engine "ydb"`},
 		{"a TTL interval in months in Go", "--root-dir", "entities.go",

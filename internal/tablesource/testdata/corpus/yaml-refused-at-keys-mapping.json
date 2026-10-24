@@ -1,0 +1,15 @@
+{
+ "tables": {
+  "items": {
+   "partition_at_keys": {
+    "a": 1
+   },
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

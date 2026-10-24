@@ -29,6 +29,11 @@ func withPartitioning(settings string) string {
 	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}],"partitioningSettings":` + settings + `}`
 }
 
+// withLayout declares the given starting layout fields beside the default family.
+func withLayout(fields string) string {
+	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}],` + fields + `}`
+}
+
 func withFamily(family string) string {
 	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},` + family + `]}`
 }
@@ -223,6 +228,9 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"a TTL that differs", side{table: withTTL(daily)}, side{table: withTTL(hourly)}, []string{"records"}},
 		{"a TTL the declaration leaves out", side{table: plain}, side{table: withTTL(hourly)}, []string{"records"}},
 		{"a family the table lacks", side{table: withFamily(`{"name":"archive"}`)}, side{table: plain}, []string{"records"}},
+		{"a uniform layout the table was not created with", side{table: withLayout(`"uniformPartitions":"4"`)}, side{table: plain}, []string{"records"}},
+		{"a layout by split points the table was not created with",
+			side{table: withLayout(`"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`)}, side{table: withPartitioning(`{"minPartitionsCount":"2"}`)}, []string{"records"}},
 		{"partitioning by size switched on",
 			side{table: withPartitioning(`{"partitioningBySize":"ENABLED"}`)}, side{table: withPartitioning(`{"partitioningBySize":"DISABLED"}`)}, []string{"records"}},
 		{"partitioning by load switched on",
@@ -303,6 +311,12 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"a declared subset of the settings the table reports as defaults",
 			side{table: withPartitioning(`{"partitioningBySize":"ENABLED"}`)},
 			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","minPartitionsCount":"1","maxPartitionsCount":"50"}`)}},
+		{"a uniform layout whose minimum the table holds",
+			side{table: withLayout(`"uniformPartitions":"4"`)}, side{table: withPartitioning(`{"minPartitionsCount":"4"}`)}},
+		{"a layout by split points whose minimum the table holds",
+			side{table: withLayout(`"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`)}, side{table: withPartitioning(`{"minPartitionsCount":"3"}`)}},
+		{"a layout beside a declared minimum, which leaves no witness",
+			side{table: withLayout(`"uniformPartitions":"4","partitioningSettings":{"minPartitionsCount":"1"}`)}, side{table: withPartitioning(`{"minPartitionsCount":"1"}`)}},
 		{"partition columns the table holds",
 			side{table: withPartitioning(`{"partitionBy":["id"]}`)}, side{table: withPartitioning(`{"partitionBy":["id"]}`)}},
 		{"partition columns the comparison leaves to the planner",

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
+	"unicode/utf8"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
@@ -31,7 +33,8 @@ func buildTableDesiredModel() *protocol.ValueModel {
 		"encoding": "ydb-protojson", "message": "ptah.ydb.native.RowTableIntent", "messages": graph,
 		"unknown_fields_and_enum_values": "refused", "null_settings": "refused recursively, including map entries",
 		"canonicalization": "protojson followed by modeljson canonical JSON; key, family and grant order retained",
-		"settings":         "ordered primary key, TTL, storage, column families, attributes, partitioning policy, bloom filter, read replicas, tiering and temporary lifetime",
+		"settings":         "ordered primary key, TTL, storage, column families, attributes, partitioning policy, bloom filter, read replicas, tiering, temporary lifetime and the starting layout of a new table",
+		"starting_layout":  "uniform_partitions is a count of at least 1; partition_at_keys lists split points of source text values; at most one of them; YDB takes a layout only when it creates a table and keeps no record of it, so it is never observed",
 		"access":           "present access declares the complete direct-grant set and requires the complete effective-permission set; owner omission leaves ownership unmanaged; constraints never grant permissions or infer inheritance settings",
 		"omission":         "missing settings request native defaults and remain absent during normalization; missing access leaves access unmanaged",
 		"primary_key":      "a declaration that states settings only, such as a YAML or Go source, omits the key and the effective key comes from the common columns; a stated key is distinct, ordered, and must agree with them",
@@ -111,6 +114,20 @@ func validateTableIntent(intent *native.RowTableIntent) error {
 			return fmt.Errorf("YDB minimum partitions exceed maximum")
 		}
 	}
+	if intent.UniformPartitions != 0 && len(intent.PartitionAtKeys) != 0 {
+		return fmt.Errorf("uniform_partitions and partition_at_keys are both declared, which YDB refuses " +
+			"(`Uniform partitions and partitions at keys settings are mutually exclusive`)")
+	}
+	for _, point := range intent.PartitionAtKeys {
+		if len(point.GetValues()) == 0 {
+			return fmt.Errorf("a split point of partition_at_keys holds no value")
+		}
+		for _, value := range point.Values {
+			if !utf8.ValidString(value) || strings.ContainsRune(value, 0) {
+				return fmt.Errorf("a partition_at_keys value is not valid UTF-8 without NUL")
+			}
+		}
+	}
 	if ttl := intent.TtlSettings; ttl != nil {
 		switch mode := ttl.Mode.(type) {
 		case *Ydb_Table.TtlSettings_DateTypeColumn:
@@ -186,6 +203,9 @@ func tableIntent(observed *native.DescribeTableResult) *native.RowTableIntent {
 	return result
 }
 
+// tableObservation writes a desired table as a read of it would report it. A
+// starting layout is create-time only and YDB keeps no record of it, so a read
+// finds none and the conversion leaves it out.
 func tableObservation(intent *native.RowTableIntent) *native.DescribeTableResult {
 	result := &native.DescribeTableResult{PrimaryKey: slices.Clone(intent.PrimaryKey), TtlSettings: proto.CloneOf(intent.TtlSettings),
 		StorageSettings: proto.CloneOf(intent.StorageSettings), PartitioningSettings: proto.CloneOf(intent.PartitioningSettings),

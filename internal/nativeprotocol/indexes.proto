@@ -251,8 +251,18 @@ message AccessIntent {
     repeated Ydb.Scheme.Permissions required_effective_permissions = 3;
 }
 
+// SplitPoint is one split point of a starting layout: the values of the leading
+// key columns, as the source wrote them. The key column types turn the text into
+// native values where the table is created.
+message SplitPoint {
+    repeated string values = 1;
+}
+
 // RowTableIntent owns native settings outside common columns and child models.
-// Physical shard boundaries are runtime topology, not creation split points.
+// Physical shard boundaries are runtime topology, not creation split points. A
+// starting layout is the partitions a new table is created with, stated by
+// uniform_partitions or by partition_at_keys; YDB keeps no record of it beyond
+// the minimum partition count it sets, so it is never observed.
 message RowTableIntent {
     repeated string primary_key = 1;
     AccessIntent access = 2;
@@ -265,4 +275,6 @@ message RowTableIntent {
     Ydb.Table.ReadReplicasSettings read_replicas_settings = 9;
     string tiering = 10;
     bool temporary = 11;
+    uint64 uniform_partitions = 12;
+    repeated SplitPoint partition_at_keys = 13;
 }

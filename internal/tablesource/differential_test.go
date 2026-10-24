@@ -28,9 +28,11 @@ import (
 //
 //	refused-*   the host refuses the input, and so must this package
 //	deferred-*  the host accepts the input and the provider cannot carry it yet
+//	later-*     the host accepts the input when it decodes it and refuses the
+//	            table when it plans it; the provider refuses it when it decodes it
 //	any other   the host accepts the input, and both decoders mean the same
-//	            partitioning, read replicas, bloom filter, TTL, column
-//	            families and the columns each family holds
+//	            partitioning, starting layout, read replicas, bloom filter, TTL,
+//	            column families and the columns each family holds
 
 // golden is what the host recorded for one input.
 type golden struct {
@@ -112,7 +114,8 @@ func inputName(name string) string {
 
 func isRefused(name string) bool  { return strings.Contains(name, "refused-") }
 func isDeferred(name string) bool { return strings.Contains(name, "deferred-") }
-func isAccepted(name string) bool { return !isRefused(name) && !isDeferred(name) }
+func isLater(name string) bool    { return strings.Contains(name, "later-") }
+func isAccepted(name string) bool { return !isRefused(name) && !isDeferred(name) && !isLater(name) }
 
 // request replays a row as the captured document the host would send.
 func request(c *qt.C, r row) *protocol.DecodeSourceRequest {
@@ -148,7 +151,7 @@ func request(c *qt.C, r row) *protocol.DecodeSourceRequest {
 func TestCorpusShape(t *testing.T) {
 	c := qt.New(t)
 	rows := corpus(c, func(string) bool { return true })
-	c.Assert(len(rows) >= 135, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
+	c.Assert(len(rows) >= 200, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
 	hosts := map[string]bool{}
 	for _, r := range rows {
 		hosts[r.golden.Host] = true
@@ -158,9 +161,9 @@ func TestCorpusShape(t *testing.T) {
 	for _, r := range rows {
 		c.Assert(r.golden.Outcome == "refused", qt.Equals, isRefused(r.name), qt.Commentf("%s: host outcome %q", r.name, r.golden.Outcome))
 	}
-	c.Assert(len(corpus(c, isRefused)) >= 60, qt.IsTrue)
-	c.Assert(len(corpus(c, isDeferred)) >= 18, qt.IsTrue)
-	c.Assert(len(corpus(c, isAccepted)) >= 50, qt.IsTrue)
+	c.Assert(len(corpus(c, isRefused)) >= 80, qt.IsTrue)
+	c.Assert(len(corpus(c, isDeferred)) >= 14, qt.IsTrue)
+	c.Assert(len(corpus(c, isAccepted)) >= 70, qt.IsTrue)
 }
 
 // TestDifferential_HappyPath decodes every input the host accepts and requires
@@ -197,10 +200,8 @@ func TestDifferential_FailurePath(t *testing.T) {
 // unclaimed Go comment as no declaration at all, so the provider claims the
 // Go directives it cannot carry and refuses them itself.)
 var unclaimed = map[string]string{
-	"yaml-deferred-uniform-partitions": "uniform_partitions",
-	"yaml-deferred-partition-at-keys":  "partition_at_keys",
-	"yaml-deferred-changefeeds":        "changefeeds",
-	"yaml-deferred-column-store":       "column_store",
+	"yaml-deferred-changefeeds":  "changefeeds",
+	"yaml-deferred-column-store": "column_store",
 }
 
 // refusals names the inputs whose key or attribute the provider claims and
@@ -213,8 +214,6 @@ var refusals = map[string]string{
 	"yaml-deferred-ttl-platform-other-property": "platform.ydb.some_other_setting is not supported by the YDB provider yet",
 	"go-deferred-changefeed":                    "ptah:schema:changefeed is not supported by the YDB provider yet",
 	"go-deferred-changefeed-consumer":           "ptah:schema:changefeed is not supported by the YDB provider yet",
-	"go-deferred-table-uniform-partitions":      "uniform_partitions is not supported by the YDB provider yet",
-	"go-deferred-table-partition-at-keys":       "partition_at_keys is not supported by the YDB provider yet",
 	"go-deferred-table-store-column":            "store is not supported by the YDB provider yet",
 	"go-deferred-table-store-column-hash":       "store is not supported by the YDB provider yet",
 	"go-deferred-index-partitioning":            "auto_partitioning_by_load is not supported by the YDB provider yet",
@@ -222,6 +221,36 @@ var refusals = map[string]string{
 	"go-deferred-index-vector":                  "clusters is not supported by the YDB provider yet",
 	"go-deferred-index-fulltext":                "tokenizer is not supported by the YDB provider yet",
 	"go-deferred-index-bloom":                   "false_positive_probability is not supported by the YDB provider yet",
+}
+
+// laterRefusals names the inputs the host accepts when it decodes them and
+// refuses when it plans the table, with the words of the provider's refusal at
+// decode. The provider cannot carry the input, so it refuses it where it can.
+var laterRefusals = map[string]string{
+	"go-later-table-both-layouts": "uniform_partitions and partition_at_keys are both declared, which YDB refuses",
+	"yaml-later-both-layouts":     "uniform_partitions and partition_at_keys are both declared, which YDB refuses",
+}
+
+// TestLater_AreRefusedAtDecode requires every later row to be named, the host
+// to have accepted it, and the provider to refuse it with the stated words.
+func TestLater_AreRefusedAtDecode(t *testing.T) {
+	c := qt.New(t)
+	var rows []string
+	for _, r := range corpus(c, isLater) {
+		rows = append(rows, r.name)
+		c.Assert(r.golden.Outcome, qt.Equals, "accepted", qt.Commentf(r.name))
+	}
+	c.Assert(slices.Sorted(slices.Values(rows)), qt.DeepEquals, slices.Sorted(maps.Keys(laterRefusals)))
+	for name, words := range laterRefusals {
+		t.Run(name, func(t *testing.T) {
+			c := qt.New(t)
+			rows := corpus(c, func(candidate string) bool { return candidate == name })
+			c.Assert(len(rows), qt.Equals, 1)
+			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
+			c.Assert(err, qt.ErrorMatches, `(?s).*`+words+`.*`)
+			c.Assert(decoded == nil, qt.IsTrue)
+		})
+	}
 }
 
 // TestDeferred_AreAllNamed requires every deferred row to say what the

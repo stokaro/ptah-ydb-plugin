@@ -107,6 +107,34 @@ func (s *settings) setPartitioning(attribute, raw string) error {
 	return nil
 }
 
+// setLayout reads one attribute of the starting layout a new table is created
+// with: uniform_partitions takes a count of at least 1, and partition_at_keys
+// the split points parseSplitPoints reads. Naming both is refused where the
+// facet is normalized, since YDB refuses a table with both.
+func (s *settings) setLayout(attribute, raw string) error {
+	switch attribute {
+	case AttributeUniformPartitions:
+		count, err := parseCount(attribute, strings.TrimSpace(raw))
+		if err != nil {
+			return err
+		}
+		s.intent.UniformPartitions = count
+	case AttributePartitionAtKeys:
+		points, err := parseSplitPoints(raw)
+		if err != nil {
+			return &DeclarationError{Attribute: attribute, Value: raw, Reason: err.Error()}
+		}
+		s.intent.PartitionAtKeys = nil
+		for _, point := range points {
+			s.intent.PartitionAtKeys = append(s.intent.PartitionAtKeys, &native.SplitPoint{Values: point})
+		}
+	default:
+		return fmt.Errorf("YDB table layout reads no attribute %q", attribute)
+	}
+	s.declared = true
+	return nil
+}
+
 func parseSwitch(attribute, value string) (Ydb.FeatureFlag_Status, error) {
 	switch strings.ToUpper(value) {
 	case "ENABLED":

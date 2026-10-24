@@ -1,0 +1,49 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/table-partitioning": {
+     "partition_at_keys": [
+      [
+       "-10"
+      ],
+      [
+       "20"
+      ]
+     ]
+    }
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "partition_at_keys": "-10, 20"
+   },
+   "struct": "Item",
+   "file": "go-table-partition-at-keys-negative-value.go",
+   "file_size": 301,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 78,
+    "line": 3,
+    "column": 61
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

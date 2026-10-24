@@ -21,6 +21,12 @@ const defaultPartitioning = `{"partitionBy":["id"],"partitioningBySize":"ENABLED
 // disabledBySize is a table that does not partition by size, so it reports no size.
 const disabledBySize = `{"partitionBy":["id"],"partitioningBySize":"DISABLED","partitioningByLoad":"ENABLED","minPartitionsCount":"2","maxPartitionsCount":"8"}`
 
+// layoutTable is a table whose declaration states the given starting layout
+// fields, and perhaps other settings.
+func layoutTable(fields string) string {
+	return `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}],` + fields + `}`
+}
+
 func partitioningCase(desired, held string) alterCase {
 	return alterCase{desiredTable: desired, heldTable: held}
 }
@@ -121,6 +127,16 @@ func TestPartitioningPlan_NoChange(t *testing.T) {
 		{"the declaration leaves out what the table reports as defaults", partitioningCase(plainTable, partitionedTable(defaultPartitioning))},
 		{"a declaration without table properties leaves the partitioning alone", partitioningCase("", partitionedTable(defaultPartitioning))},
 		{"the declared partition columns are the held ones", partitioningCase(partitionedTable(`{"partitionBy":["id"]}`), partitionedTable(defaultPartitioning))},
+		{"a uniform layout whose minimum the table holds",
+			partitioningCase(layoutTable(`"uniformPartitions":"4"`), partitionedTable(`{"partitionBy":["id"],"minPartitionsCount":"4","maxPartitionsCount":"50"}`))},
+		{"a layout by split points whose minimum the table holds",
+			partitioningCase(layoutTable(`"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`), partitionedTable(`{"partitionBy":["id"],"minPartitionsCount":"3","maxPartitionsCount":"50"}`))},
+		{"a layout of one partition on a table that holds the default minimum",
+			partitioningCase(layoutTable(`"uniformPartitions":"1"`), partitionedTable(defaultPartitioning))},
+		{"a layout on a table that reports no minimum, which is one",
+			partitioningCase(layoutTable(`"uniformPartitions":"1"`), partitionedTable(`{"partitionBy":["id"]}`))},
+		{"a layout beside a declared minimum the table holds",
+			partitioningCase(layoutTable(`"uniformPartitions":"4","partitioningSettings":{"minPartitionsCount":"1"}`), partitionedTable(defaultPartitioning))},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -155,6 +171,20 @@ func TestPartitioningPlan_FailurePath(t *testing.T) {
 		{"other partition columns",
 			partitioningCase(partitionedTable(`{"partitionBy":["id","ts"]}`), partitionedTable(defaultPartitioning)),
 			`the partition columns \["id" "ts"\] differ from the \["id"\] the table holds, and YDB sets them only when the table is created`},
+		{"a uniform layout the table was not created with",
+			partitioningCase(layoutTable(`"uniformPartitions":"4"`), partitionedTable(defaultPartitioning)),
+			"it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table .`UNIFORM_PARTITIONS alter is not supported`. and " +
+				"which gives a new table a minimum of 4 partitions, where this table holds 1. Declare auto_partitioning_min_partitions_count to change the minimum in place"},
+		{"a layout by one split point the table was not created with",
+			partitioningCase(layoutTable(`"partitionAtKeys":[{"values":["10"]}]`), partitionedTable(defaultPartitioning)),
+			"it declares PARTITION_AT_KEYS with one split point, which YDB takes only when it creates a table .`PARTITION_AT_KEYS alter is not supported`. and " +
+				"which gives a new table a minimum of 2 partitions, where this table holds 1.*"},
+		{"a layout by split points the table was not created with",
+			partitioningCase(layoutTable(`"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`), partitionedTable(`{"partitionBy":["id"],"minPartitionsCount":"2"}`)),
+			"it declares PARTITION_AT_KEYS with 2 split points, which YDB takes only when it creates a table .*a minimum of 3 partitions, where this table holds 2.*"},
+		{"a layout beside a stated setting that could change",
+			partitioningCase(layoutTable(`"uniformPartitions":"4","partitioningSettings":{"maxPartitionsCount":"8"}`), partitionedTable(defaultPartitioning)),
+			"it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table.*"},
 		{"partition columns with a setting that could change",
 			partitioningCase(partitionedTable(`{"partitionBy":["ts"],"maxPartitionsCount":"8"}`), partitionedTable(defaultPartitioning)),
 			`the partition columns \["ts"\] differ from the \["id"\] the table holds.*`},

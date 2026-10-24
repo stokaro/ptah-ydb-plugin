@@ -133,7 +133,7 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable) (a
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
-	partitioning, reason := planPartitioning(partitioningInput{managed: managed, desired: intent.PartitioningSettings, held: held.PartitioningSettings})
+	partitioning, reason := planPartitioning(partitioningInput{managed: managed, desired: intent.PartitioningSettings, held: held.PartitioningSettings, layout: layoutOf(&intent)})
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}

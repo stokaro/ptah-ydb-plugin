@@ -70,6 +70,9 @@ func applyYAML(target *settings, key string, value *protocol.SourceValue) error 
 	if err != nil {
 		return fmt.Errorf("%s: %w", key, err)
 	}
+	if slices.Contains(layoutKeys(), key) {
+		return target.setLayout(key, text)
+	}
 	return target.setPartitioning(key, text)
 }
 
@@ -226,9 +229,11 @@ func applyTable(target *settings, value *protocol.SourceValue) error {
 			}
 		}
 	}
-	for _, name := range []string{AttributeUniformPartitions, AttributePartitionAtKeys} {
-		if _, found := values[name]; found {
-			return &UnsupportedError{Setting: name, Reason: "the row-table model carries no starting partition layout, which YDB takes only when it creates a table"}
+	for _, name := range layoutKeys() {
+		if text, found := values[name]; found {
+			if err := target.setLayout(name, text); err != nil {
+				return err
+			}
 		}
 	}
 	return target.setTTL(values)

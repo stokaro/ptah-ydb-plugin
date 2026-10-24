@@ -157,6 +157,12 @@ func confirmTableCreation(owner *protocol.Reference, wanted *Ydb_Table.CreateTab
 		!maps.Equal(wanted.Attributes, observed.Attributes) {
 		return fmt.Errorf("YDB created table settings differ from the request")
 	}
+	// YDB keeps no record of a starting layout beyond the minimum partition
+	// count it sets from it, unless the request names a minimum of its own.
+	if started := tablecreate.StartingPartitions(wanted); started != 0 && wanted.GetPartitioningSettings().GetMinPartitionsCount() == 0 &&
+		observed.GetPartitioningSettings().GetMinPartitionsCount() != started {
+		return fmt.Errorf("YDB created table starting layout differs from the request")
+	}
 	for _, family := range wanted.ColumnFamilies {
 		var actual *Ydb_Table.ColumnFamily
 		for _, candidate := range observed.ColumnFamilies {

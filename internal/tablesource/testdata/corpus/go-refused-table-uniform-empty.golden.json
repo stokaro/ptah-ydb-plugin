@@ -1,0 +1,39 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "refused",
+ "error": "invalid uniform_partitions \"\": write a whole number of at least 1; YDB refuses a count of zero on //ptah:schema:table at Item",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {}
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "uniform_partitions": ""
+   },
+   "struct": "Item",
+   "file": "go-refused-table-uniform-empty.go",
+   "file_size": 295,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 72,
+    "line": 3,
+    "column": 55
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

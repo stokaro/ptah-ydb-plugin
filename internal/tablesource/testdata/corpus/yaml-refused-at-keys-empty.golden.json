@@ -1,0 +1,7 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "yaml",
+ "outcome": "refused",
+ "error": "table \"items\": invalid partition_at_keys \"\": name at least one split point, such as 10, 20 or (10, 'a'), (20)",
+ "tables": null
+}

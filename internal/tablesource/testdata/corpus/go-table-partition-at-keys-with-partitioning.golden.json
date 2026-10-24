@@ -1,0 +1,56 @@
+{
+ "host": "0c676c27a5997cf5e51928ee7b751b67f2ac6916",
+ "format": "go",
+ "outcome": "accepted",
+ "tables": [
+  {
+   "schema": "",
+   "name": "items",
+   "struct": "Item",
+   "facets": {
+    "ptah.run/ydb/table-partitioning": {
+     "by_size": true,
+     "partition_size_mb": 512,
+     "partition_at_keys": [
+      [
+       "10"
+      ],
+      [
+       "20"
+      ],
+      [
+       "30"
+      ]
+     ]
+    }
+   }
+  }
+ ],
+ "declarations": [
+  {
+   "directive": "ptah:schema:table",
+   "attributes": {
+    "auto_partitioning_by_size": "ENABLED",
+    "auto_partitioning_partition_size_mb": "512",
+    "partition_at_keys": "10, 20, 30"
+   },
+   "struct": "Item",
+   "file": "go-table-partition-at-keys-with-partitioning.go",
+   "file_size": 382,
+   "start": {
+    "offset": 18,
+    "line": 3,
+    "column": 1
+   },
+   "end": {
+    "offset": 159,
+    "line": 3,
+    "column": 142
+   },
+   "subject": {
+    "kind": "table",
+    "name": ""
+   }
+  }
+ ]
+}

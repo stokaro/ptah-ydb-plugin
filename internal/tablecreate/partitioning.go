@@ -28,6 +28,9 @@ type partitioningInput struct {
 	managed bool
 	desired *Ydb_Table.PartitioningSettings
 	held    *Ydb_Table.PartitioningSettings
+	// layout is the starting layout the declaration states, which YDB takes only
+	// when it creates a table.
+	layout layout
 }
 
 // partitioningDelta returns the settings of want that a table holding held does
@@ -124,9 +127,17 @@ func PartitioningHolds(got, set *Ydb_Table.PartitioningSettings) bool {
 // AUTO_PARTITIONING_PARTITION_SIZE_MB, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT
 // and AUTO_PARTITIONING_MAX_PARTITIONS_COUNT change after creation. The
 // partition columns are set when the table is created, so a declaration that
-// names other columns is refused rather than ignored.
+// names other columns is refused rather than ignored. A starting layout is set
+// when the table is created too: a declaration of one is refused when the
+// minimum partition count it implies is not the one the table holds.
 func planPartitioning(in partitioningInput) (partitioningChange, string) {
-	if !in.managed || in.desired == nil {
+	if !in.managed {
+		return partitioningChange{}, ""
+	}
+	if reason := layoutRefusal(in.layout, in.desired, in.held); reason != "" {
+		return partitioningChange{}, reason
+	}
+	if in.desired == nil {
 		return partitioningChange{}, ""
 	}
 	if columns := in.desired.GetPartitionBy(); len(columns) != 0 && !slices.Equal(columns, in.held.GetPartitionBy()) {

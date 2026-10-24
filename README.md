@@ -525,6 +525,18 @@ frontend normalizes the spelling of a YAML number before the provider sees it
 (`1_000` arrives as `1000`, `0x10` as `16`); the bundled decoder reads the
 written text and refuses both.
 
+A starting layout is the partitions a new table is created with, and YDB takes
+it only when it creates the table. `uniform_partitions` takes a count of at
+least 1, and `partition_at_keys` takes split points in the host's grammar: a
+comma separated list whose items are a value, for a split on the first key
+column, or a parenthesized list of values for the leading key columns, such as
+`10, 20` or `(10, 'a'), (20)`. A value is a bare run of characters or a string in
+single or double quotes with backslash escapes. Both keys are claimed in YAML
+and in the Go table directive, and a table that names both is refused where it
+is decoded; the host accepts the pair when it decodes it and refuses the table
+when it plans it. The key column types are checked when the table is created
+(see "Table creation"). The corpus holds the inputs and the host's answers.
+
 Not read yet, and listed so that nobody mistakes the silence for support:
 
 | Setting | Why |
@@ -532,7 +544,6 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `fields` of a column family in YAML | The host attaches a YAML value to a table, never to a column, so a YAML family cannot place columns. Claimed and refused by name; write the family in a Go directive. |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
-| `uniform_partitions`, `partition_at_keys` | A starting layout is a create-time setting that the row-table model does not carry. In Go they are claimed and refused by name; in YAML they are not claimed, so the host refuses the key. |
 | `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
 | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
 | `store="COLUMN"`, `partition_by_hash`, `column_shards`, `column_ttl` in Go; `column_store` in YAML | Column tables have no planning yet. The Go attributes are claimed and refused by name when a column table is declared; `store="ROW"` is accepted and declares nothing. The YAML key is not claimed. |
@@ -646,7 +657,10 @@ not yet advertise table or access comparison/planning.
 
 Physical shard boundaries are runtime topology. A captured value containing them
 refuses conversion rather than turning the current split points into creation
-settings. Partitioning policy remains declarative. Statistics and transient
+settings. A starting layout (`uniformPartitions`, or `partitionAtKeys` as lists
+of source text values) is a creation setting of the desired model only: a read
+finds none, and converting a desired table to the observed representation leaves
+it out. Partitioning policy remains declarative. Statistics and transient
 object identity cannot enter the property model. Conversion preserves a complete
 mixed table/column batch, works after the session closes, and establishes no
 inspection coverage.
@@ -868,10 +882,22 @@ refusal.
 
 The SDK planner accepts captured CREATE lifecycles for row tables. It retains
 ordered composite primary keys, native column types and nullability, TTL,
-storage settings, column families, attributes, partitioning settings, bloom
-filters, read replicas, and tiering. Column families and typed literal defaults
-come from native column facets. Missing creation settings request server defaults.
-The common and native primary key declarations must agree on order.
+storage settings, column families, attributes, partitioning settings, starting
+layouts, bloom filters, read replicas, and tiering. Column families and typed
+literal defaults come from native column facets. Missing creation settings
+request server defaults. The common and native primary key declarations must
+agree on order.
+
+A starting layout becomes the `partitions` of the CreateTable request, checked
+against the key columns: `uniform_partitions` needs a Uint32 or Uint64 first key
+column; a split point holds at most one value per key column, each value a whole
+number in the range of its integer column or a string for a Utf8 or String
+column, and no other key type takes one. Each value travels as an optional
+element of a tuple over the leading key columns. Split points out of order are
+left to YDB, which refuses them. The creation is confirmed by the minimum
+partition count YDB sets from the layout, unless the declaration states a
+minimum of its own. The operation payload is checked again against the same
+rules, so a forged request cannot state a layout the rules refuse.
 
 The planner can replace a complete common CREATE TABLE step in the shared graph.
 Its replacement carries table and physical-path effects and forbids SQL
@@ -1021,7 +1047,15 @@ held when the plan was made. The settings are `AUTO_PARTITIONING_BY_SIZE`,
   not return it to its default.
 - Partition columns are set when the table is created. A declaration that names
   other columns than the table holds is refused; the same columns are no change.
-  `PARTITION_AT_KEYS` and `UNIFORM_PARTITIONS` are creation-only and are not read.
+- A starting layout is set when the table is created, and YDB keeps no record of
+  it except the minimum partition count it sets from it: the count of the layout,
+  unless the declaration states a minimum of its own. That minimum is the only
+  witness an existing table has, so a declaration whose layout sets the minimum
+  and whose minimum differs from the table's is a change the planner refuses
+  with `UNIFORM_PARTITIONS alter is not supported` (or the `PARTITION_AT_KEYS`
+  spelling) and the two minimums. A layout beside a declared minimum leaves no
+  witness and is not compared. The comparison reports the refused layout as a
+  difference, so that the plan reaches the planner.
 - A minimum count above a nonzero maximum is refused, checked against the value
   the table holds for a bound the declaration leaves out. A partition size beside
   disabled partitioning by size is refused too: the server turns partitioning by

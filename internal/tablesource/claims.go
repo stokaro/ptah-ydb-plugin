@@ -1,6 +1,6 @@
 // Package tablesource decodes the table-scope declarations a YAML or Go
 // annotation source writes for a YDB row table: its automatic partitioning,
-// read replicas, key bloom filter, TTL and column families.
+// read replicas, key bloom filter, starting layout, TTL and column families.
 //
 // The host lexes the source and sends the provider the parsed values of the
 // keys, directives and attributes the provider claimed. A Go source writes the
@@ -11,9 +11,9 @@
 // document may carry only one facet of a kind for a table.
 //
 // What the bundled decoder in the host reads and this package does not is
-// listed in the package README of the provider and in the tests: starting
-// partition layouts, column family cache modes, the columns of a family written
-// in YAML, changefeeds, column storage and index options. The host
+// listed in the package README of the provider and in the tests: column family
+// cache modes, the columns of a family written in YAML, changefeeds, column
+// storage and index options. The host
 // refuses a YAML key that no provider claims, and reads a Go comment that none
 // claims as no declaration. So the provider leaves unclaimed the YAML keys it
 // cannot carry, and claims the Go directives and attributes it cannot carry in
@@ -49,7 +49,7 @@ const (
 	DirectiveTable = "ptah:schema:table"
 
 	// AttributeUniformPartitions and AttributePartitionAtKeys set the layout a
-	// new table starts with. They are claimed so that they are refused by name.
+	// new table starts with. YDB takes it only when it creates the table.
 	AttributeUniformPartitions = "uniform_partitions"
 	AttributePartitionAtKeys   = "partition_at_keys"
 
@@ -122,10 +122,14 @@ func partitioningKeys() []string {
 	}
 }
 
+// layoutKeys are the table keys that set the starting layout of a new table, in
+// the order a refusal reports them.
+func layoutKeys() []string { return []string{AttributeUniformPartitions, AttributePartitionAtKeys} }
+
 // tableAttributes are the attributes the provider claims on ptah:schema:table,
 // in the order a refusal reports them.
 func tableAttributes() []string {
-	return slices.Concat(partitioningKeys(), []string{AttributeUniformPartitions, AttributePartitionAtKeys,
+	return slices.Concat(partitioningKeys(), layoutKeys(), []string{
 		AttributeStore, AttributeHash, AttributeShards, AttributeColumnTTL, AttributeTTLColumn, AttributeTTLInterval, AttributeTTLUnit})
 }
 
@@ -145,7 +149,7 @@ func indexAttributes() []string {
 // YAMLKeys returns the table-scope YAML keys the provider claims. Each key
 // declares the row-table properties model.
 func YAMLKeys() []*protocol.YAMLSourceKey {
-	keys := slices.Concat(partitioningKeys(), []string{KeyColumnFamilies, KeyPlatformYDB})
+	keys := slices.Concat(partitioningKeys(), layoutKeys(), []string{KeyColumnFamilies, KeyPlatformYDB})
 	claims := make([]*protocol.YAMLSourceKey, 0, len(keys))
 	for _, key := range keys {
 		claims = append(claims, &protocol.YAMLSourceKey{Scope: protocol.YAMLSourceKey_TABLE, Key: key, Selector: key, Models: []string{schema.TableProperties}})

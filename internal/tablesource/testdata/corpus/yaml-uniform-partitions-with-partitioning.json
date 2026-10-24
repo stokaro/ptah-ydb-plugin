@@ -1,0 +1,15 @@
+{
+ "tables": {
+  "items": {
+   "auto_partitioning_by_load": "ENABLED",
+   "uniform_partitions": 8,
+   "read_replicas_settings": "ANY_AZ:1",
+   "columns": {
+    "id": {
+     "type": "bigint",
+     "primary": true
+    }
+   }
+  }
+ }
+}

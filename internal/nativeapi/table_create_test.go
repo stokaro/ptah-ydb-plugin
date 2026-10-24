@@ -24,6 +24,8 @@ type creationFixture struct {
 	events                                                     []string
 	occupied, writeFailure, readFailure, changed, closeFailure bool
 	attributeDrift                                             bool
+	// minimum is the minimum partition count the described table reports.
+	minimum uint64
 }
 
 func (f *creationFixture) ListDirectory(_ context.Context, _ *Ydb_Scheme.ListDirectoryRequest, _ ...grpc.CallOption) (*Ydb_Scheme.ListDirectoryResponse, error) {
@@ -57,7 +59,11 @@ func (f *creationFixture) Describe(_ context.Context, _ string) (*native.Describ
 	if f.attributeDrift {
 		attributes = map[string]string{"unexpected": ""}
 	}
-	return &native.DescribeTableResult{Attributes: attributes, Self: &Ydb_Scheme.Entry{Name: "records", Type: Ydb_Scheme.Entry_TABLE},
+	var partitioning *Ydb_Table.PartitioningSettings
+	if f.minimum != 0 {
+		partitioning = &Ydb_Table.PartitioningSettings{MinPartitionsCount: f.minimum}
+	}
+	return &native.DescribeTableResult{PartitioningSettings: partitioning, Attributes: attributes, Self: &Ydb_Scheme.Entry{Name: "records", Type: Ydb_Scheme.Entry_TABLE},
 		PrimaryKey: []string{"id"}, Columns: []*native.ColumnMeta{{Name: name, Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UINT64}}, NotNull: new(true)}}}, nil
 }
 func (f *creationFixture) Close() error {
@@ -114,4 +120,56 @@ func TestNativeTableCreationDispatchAndConfirmation(t *testing.T) {
 			c.Assert(proto.Equal(original, operation.Value), qt.IsTrue)
 		})
 	}
+}
+
+// YDB keeps no record of a starting layout, only the minimum partition count it
+// sets from it, so the creation is confirmed by that minimum.
+func TestNativeTableCreationConfirmsAStartingLayout(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		minimum uint64
+		failed  bool
+	}{
+		{"the table starts with the layout's partitions", 4, false},
+		{"the table starts with fewer partitions", 1, true},
+		{"the table reports no minimum", 0, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			fixture := creationFixture{minimum: test.minimum}
+			api := &nativeapi.TableCreation{Scheme: &fixture, Open: func(context.Context) (nativeapi.CreationSession, error) { return &fixture, nil }}
+			owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
+			operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}})
+			c.Assert(err, qt.IsNil)
+			request, err := tablecreate.Request(operation.Value)
+			c.Assert(err, qt.IsNil)
+			request.Partitions = &Ydb_Table.CreateTableRequest_UniformPartitions{UniformPartitions: 4}
+			operation.Value.Payload, err = protojson.Marshal(request)
+			c.Assert(err, qt.IsNil)
+
+			dispatched, err := api.Apply(t.Context(), "/local", operation.Value, func(context.Context) error { return nil })
+
+			c.Assert(dispatched, qt.IsTrue)
+			c.Assert(err != nil, qt.Equals, test.failed)
+		})
+	}
+	t.Run("a minimum the declaration states is not the layout's", func(t *testing.T) {
+		c := qt.New(t)
+		fixture := creationFixture{minimum: 2}
+		api := &nativeapi.TableCreation{Scheme: &fixture, Open: func(context.Context) (nativeapi.CreationSession, error) { return &fixture, nil }}
+		owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
+		operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}})
+		c.Assert(err, qt.IsNil)
+		request, err := tablecreate.Request(operation.Value)
+		c.Assert(err, qt.IsNil)
+		request.Partitions = &Ydb_Table.CreateTableRequest_UniformPartitions{UniformPartitions: 4}
+		request.PartitioningSettings = &Ydb_Table.PartitioningSettings{MinPartitionsCount: 2}
+		operation.Value.Payload, err = protojson.Marshal(request)
+		c.Assert(err, qt.IsNil)
+
+		dispatched, err := api.Apply(t.Context(), "/local", operation.Value, func(context.Context) error { return nil })
+
+		c.Assert(dispatched, qt.IsTrue)
+		c.Assert(err, qt.IsNil)
+	})
 }
