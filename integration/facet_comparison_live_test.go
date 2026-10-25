@@ -42,11 +42,24 @@ type facetFixture struct {
 	// facet models; zero is complete knowledge, as the host reports for a
 	// source whose format describes them.
 	desiredKnowledge protocol.ModelKnowledge_State
+	// form is the form a plan is rendered in: ANY renders native units, and
+	// TEXT the YQL statements a migration file holds, for a client that lists
+	// render.text-units.
+	form protocol.RenderRequest_Form
+	// rendered are the units every plan the fixture ran was rendered to.
+	rendered []*protocol.Unit
 }
 
 // newFacetFixture creates records (id, ts, payload) with the given trailing
 // table clauses, such as a WITH TTL option or a column family.
 func newFacetFixture(c *qt.C, clauses, options string) *facetFixture {
+	c.Helper()
+	return newFacetFixtureListing(c, clauses, options)
+}
+
+// newFacetFixtureListing is newFacetFixture with a provider started for a
+// host that lists hostFeatures.
+func newFacetFixtureListing(c *qt.C, clauses, options string, hostFeatures ...string) *facetFixture {
 	c.Helper()
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
@@ -59,8 +72,7 @@ func newFacetFixture(c *qt.C, clauses, options string) *facetFixture {
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	binary, digest := providerBinary(c)
-	client := startProvider(c, binary, digest)
+	client := startProviderFor(c, hostFeatures...)
 	session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
@@ -199,8 +211,15 @@ func (f *facetFixture) tryExecute(c *qt.C, id string, plan *protocol.PlannedFeat
 	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	rendered, err := f.client.Render(ctx, renderSteps(scheduled(c, plan), f.session.Capabilities))
+	rendering := renderSteps(scheduled(c, plan), f.session.Capabilities)
+	rendering.Form = f.form
+	rendered, err := f.client.Render(ctx, rendering)
 	c.Assert(err, qt.IsNil)
+	c.Assert(rendered.Refusal, qt.IsNil)
+	for _, unit := range rendered.Units {
+		c.Assert(f.form != protocol.RenderRequest_TEXT || unit.GetSql() != "", qt.IsTrue, qt.Commentf("a TEXT render wrote a native unit"))
+	}
+	f.rendered = append(f.rendered, rendered.Units...)
 	return f.client.Execute(ctx, &protocol.ExecuteRequest{SessionId: f.session.Id, RequestId: id, Units: rendered.Units})
 }
 

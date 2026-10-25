@@ -42,6 +42,10 @@ const (
 	maxSessionGracePeriodMillis = 30_000
 )
 
+// MaxSessionGracePeriodMillis is the longest grace period YDB runs a node
+// with; it moves a longer one into its range.
+const MaxSessionGracePeriodMillis = maxSessionGracePeriodMillis
+
 // CoordinationNode is a coordination node's settings, as the host's spec
 // encodes them.
 type CoordinationNode struct {
@@ -76,6 +80,13 @@ func ParseCoordinationNode(values map[string]string) (CoordinationNode, error) {
 		return CoordinationNode{}, err
 	}
 	return spec, nil
+}
+
+// SetCoordinationSetting reads value into the setting of spec it names, one
+// of [CoordinationSettings], without checking it against the node's other
+// settings.
+func SetCoordinationSetting(spec *CoordinationNode, setting, value string) error {
+	return setCoordination(spec, setting, value)
 }
 
 func setCoordination(spec *CoordinationNode, setting, value string) error {
@@ -117,6 +128,10 @@ func parsePeriod(text string) (uint32, error) {
 	}
 	return uint32(micros / 1_000), nil
 }
+
+// PeriodText writes a period of millis milliseconds as the ISO 8601 text an
+// Interval literal takes.
+func PeriodText(millis uint32) string { return periodText(millis) }
 
 func periodText(millis uint32) string {
 	return ydbtype.IntervalText(int64(millis) * 1_000)

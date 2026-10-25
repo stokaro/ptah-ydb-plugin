@@ -51,8 +51,10 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	return result, nil
 }
 
-// Render validates complete captured operations and emits native envelopes.
-// No synthetic coordination SQL is generated or sent to the query service.
+// Render validates complete captured operations and emits native envelopes,
+// or, in the TEXT form a host asks for where it writes a migration file, the
+// YQL statement of each; see renderText. Both forms check the whole batch
+// before writing a unit.
 func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*protocol.RenderResult, error) {
 	if err := provider.ValidateRenderRequest(Description(), request); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -63,7 +65,7 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 			return nil, status.Error(codes.FailedPrecondition, "native YDB rendering requires established nontransactional DDL")
 		}
 	}
-	result := &protocol.RenderResult{Complete: true}
+	operations := make([]*protocol.Envelope, 0, len(request.Changes))
 	for _, change := range request.Changes {
 		if err := ctx.Err(); err != nil {
 			return nil, status.FromContextError(err).Err()
@@ -83,7 +85,19 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		if !proto.Equal(normalized, captured) {
 			return nil, status.Error(codes.InvalidArgument, "native operation metadata changed")
 		}
-		result.Units = append(result.Units, &protocol.Unit{ChangeId: change.Id, Body: &protocol.Unit_Native{Native: proto.CloneOf(normalized.Value)}})
+		operations = append(operations, normalized.Value)
+	}
+	result := &protocol.RenderResult{Complete: true}
+	if request.GetForm() == protocol.RenderRequest_TEXT {
+		text, err := renderText(ctx, request.Changes, operations)
+		if err != nil {
+			return nil, err
+		}
+		result = text
+	} else {
+		for i, change := range request.Changes {
+			result.Units = append(result.Units, &protocol.Unit{ChangeId: change.Id, Body: &protocol.Unit_Native{Native: proto.CloneOf(operations[i])}})
+		}
 	}
 	if err := provider.ValidateRenderedBatch(Description(), request, result); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
