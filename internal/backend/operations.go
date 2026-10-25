@@ -24,6 +24,10 @@ func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, 
 		return tablecreate.NormalizeColumnTTLAlteration(input)
 	case tablecreate.DropOperationKind:
 		return tablecreate.NormalizeDrop(input)
+	case tablecreate.CopyOperationKind:
+		return tablecreate.NormalizeCopy(input)
+	case tablecreate.RenameOperationKind:
+		return tablecreate.NormalizeRename(input)
 	default:
 		return nil, fmt.Errorf("unsupported YDB native operation")
 	}

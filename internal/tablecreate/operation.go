@@ -65,6 +65,12 @@ func Capture(id string, owner *protocol.Reference, table *protocol.DeclaredTable
 	if err != nil {
 		return nil, err
 	}
+	return CaptureRequest(id, owner, request)
+}
+
+// CaptureRequest builds the creation of a compiled native request at owner,
+// which a rebuild names with the scratch table's name.
+func CaptureRequest(id string, owner *protocol.Reference, request *Ydb_Table.CreateTableRequest) (*protocol.NormalizedValue, error) {
 	payload, err := protojson.Marshal(request)
 	if err != nil {
 		return nil, err

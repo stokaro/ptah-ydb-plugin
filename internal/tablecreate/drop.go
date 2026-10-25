@@ -115,6 +115,12 @@ func CaptureDrop(id string, owner *protocol.Reference, observed *protocol.Observ
 			}
 		}
 	}
+	return CaptureDropShape(id, owner, drop)
+}
+
+// CaptureDropShape builds the removal of the table owner names, which holds
+// what drop states.
+func CaptureDropShape(id string, owner *protocol.Reference, drop Drop) (*protocol.NormalizedValue, error) {
 	payload, err := json.Marshal(drop)
 	if err != nil {
 		return nil, err

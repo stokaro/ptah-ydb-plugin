@@ -75,6 +75,18 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.DropStatement(path), nil
+	case tablecreate.CopyOperationKind:
+		copied, err := tablecreate.DecodeCopy(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.CopyStatement(path, copied)
+	case tablecreate.RenameOperationKind:
+		rename, err := tablecreate.DecodeRename(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.RenameStatement(path, rename), nil
 	case schema.CoordinationOperation:
 		return coordinationText(path, value)
 	default:
