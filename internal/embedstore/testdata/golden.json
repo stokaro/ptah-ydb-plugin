@@ -1,0 +1,158 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "schema": {
+    "25.1": [
+      "CREATE TABLE IF NOT EXISTS `ptah_embedding_generation` (\n    `identity` Utf8 NOT NULL,\n    `spec_digest` Utf8 NOT NULL,\n    `spec_document` Utf8 NOT NULL,\n    `name` Utf8,\n    `reproducibility` Utf8 NOT NULL,\n    `reproducibility_reason` Utf8,\n    `resolved_model` Utf8,\n    `dimension` Int32 NOT NULL,\n    `target_schema` Utf8 NOT NULL,\n    `target_table` Utf8 NOT NULL,\n    `target_column` Utf8 NOT NULL,\n    `source_schema` Utf8 NOT NULL,\n    `source_table` Utf8 NOT NULL,\n    `consistency_mode` Utf8 NOT NULL,\n    `created_at` Timestamp NOT NULL,\n    `retired_at` Timestamp,\n    `verified_at` Timestamp,\n    `maintained_until` Timestamp,\n    PRIMARY KEY (`identity`)\n);\n",
+      "CREATE TABLE IF NOT EXISTS `ptah_embedding_run` (\n    `id` Utf8 NOT NULL,\n    `spec_digest` Utf8 NOT NULL,\n    `generation_identity` Utf8 NOT NULL,\n    `environment` Utf8 NOT NULL,\n    `source` Utf8 NOT NULL,\n    `target` Utf8 NOT NULL,\n    `provider_profile` Utf8 NOT NULL,\n    `resolved_model` Utf8,\n    `ptah_version` Utf8 NOT NULL,\n    `policy_digest` Utf8 NOT NULL,\n    `phase` Utf8 NOT NULL,\n    `status` Utf8 NOT NULL,\n    `lease_owner` Utf8,\n    `lease_expires` Timestamp,\n    `fencing_token` Int64 NOT NULL,\n    `snapshot_done` Bool NOT NULL,\n    `snapshot_watermark` Utf8,\n    `catch_up_watermark` Utf8,\n    `cursor` Utf8,\n    `rows_scanned` Int64 NOT NULL,\n    `rows_embedded` Int64 NOT NULL,\n    `rows_skipped` Int64 NOT NULL,\n    `rows_deleted` Int64 NOT NULL,\n    `batches_committed` Int64 NOT NULL,\n    `provider_prompt_tokens` Int64 NOT NULL,\n    `provider_total_tokens` Int64 NOT NULL,\n    `provider_usage_batches` Int64 NOT NULL,\n    `retry_count` Int32 NOT NULL,\n    `verification_ref` Utf8,\n    `cutover_plan_ref` Utf8,\n    `approval_ref` Utf8,\n    `active_pointer` Utf8,\n    `rollback_eligible` Bool NOT NULL,\n    `failure_class` Utf8,\n    `failure_detail` Utf8,\n    `created_at` Timestamp NOT NULL,\n    `updated_at` Timestamp NOT NULL,\n    PRIMARY KEY (`id`)\n);\n",
+      "CREATE TABLE IF NOT EXISTS `ptah_embedding_event` (\n    `sequence` Int64 NOT NULL,\n    `run_id` Utf8 NOT NULL,\n    `kind` Utf8 NOT NULL,\n    `at` Timestamp NOT NULL,\n    `actor` Utf8,\n    `fencing_token` Int64 NOT NULL,\n    `from_phase` Utf8,\n    `to_phase` Utf8,\n    `detail` Utf8,\n    `rows_scanned` Int64 NOT NULL,\n    `rows_embedded` Int64 NOT NULL,\n    `rows_skipped` Int64 NOT NULL,\n    `rows_deleted` Int64 NOT NULL,\n    `batches_committed` Int64 NOT NULL,\n    PRIMARY KEY (`run_id`, `sequence`)\n);\n",
+      "CREATE TABLE IF NOT EXISTS `ptah_embedding_pointer` (\n    `target_schema` Utf8 NOT NULL,\n    `target_table` Utf8 NOT NULL,\n    `active_generation` Utf8 NOT NULL,\n    `previous_generation` Utf8,\n    `cut_over_at` Timestamp NOT NULL,\n    `cut_over_by` Utf8,\n    `plan_digest` Utf8,\n    PRIMARY KEY (`target_schema`, `target_table`)\n);\n"
+    ],
+    "26.2": [
+      "CREATE TABLE IF NOT EXISTS `ptah_embedding_generation` (\n    `identity` Utf8 NOT NULL,\n    `spec_digest` Utf8 NOT NULL,\n    `spec_document` Utf8 NOT NULL,\n    `name` Utf8,\n    `reproducibility` Utf8 NOT NULL,\n    `reproducibility_reason` Utf8,\n    `resolved_model` Utf8,\n    `dimension` Int32 NOT NULL,\n    `target_schema` Utf8 NOT NULL,\n    `target_table` Utf8 NOT NULL,\n    `target_column` Utf8 NOT NULL,\n    `source_schema` Utf8 NOT NULL,\n    `source_table` Utf8 NOT NULL,\n    `consistency_mode` Utf8 NOT NULL,\n    `created_at` Timestamp64 NOT NULL,\n    `retired_at` Timestamp64,\n    `verified_at` Timestamp64,\n    `maintained_until` Timestamp64,\n    PRIMARY KEY (`identity`)\n);\n",
+      "CREATE TABLE IF NOT EXISTS `ptah_embedding_run` (\n    `id` Utf8 NOT NULL,\n    `spec_digest` Utf8 NOT NULL,\n    `generation_identity` Utf8 NOT NULL,\n    `environment` Utf8 NOT NULL,\n    `source` Utf8 NOT NULL,\n    `target` Utf8 NOT NULL,\n    `provider_profile` Utf8 NOT NULL,\n    `resolved_model` Utf8,\n    `ptah_version` Utf8 NOT NULL,\n    `policy_digest` Utf8 NOT NULL,\n    `phase` Utf8 NOT NULL,\n    `status` Utf8 NOT NULL,\n    `lease_owner` Utf8,\n    `lease_expires` Timestamp64,\n    `fencing_token` Int64 NOT NULL,\n    `snapshot_done` Bool NOT NULL,\n    `snapshot_watermark` Utf8,\n    `catch_up_watermark` Utf8,\n    `cursor` Utf8,\n    `rows_scanned` Int64 NOT NULL,\n    `rows_embedded` Int64 NOT NULL,\n    `rows_skipped` Int64 NOT NULL,\n    `rows_deleted` Int64 NOT NULL,\n    `batches_committed` Int64 NOT NULL,\n    `provider_prompt_tokens` Int64 NOT NULL,\n    `provider_total_tokens` Int64 NOT NULL,\n    `provider_usage_batches` Int64 NOT NULL,\n    `retry_count` Int32 NOT NULL,\n    `verification_ref` Utf8,\n    `cutover_plan_ref` Utf8,\n    `approval_ref` Utf8,\n    `active_pointer` Utf8,\n    `rollback_eligible` Bool NOT NULL,\n    `failure_class` Utf8,\n    `failure_detail` Utf8,\n    `created_at` Timestamp64 NOT NULL,\n    `updated_at` Timestamp64 NOT NULL,\n    PRIMARY KEY (`id`)\n);\n",
+      "CREATE TABLE IF NOT EXISTS `ptah_embedding_event` (\n    `sequence` Int64 NOT NULL,\n    `run_id` Utf8 NOT NULL,\n    `kind` Utf8 NOT NULL,\n    `at` Timestamp64 NOT NULL,\n    `actor` Utf8,\n    `fencing_token` Int64 NOT NULL,\n    `from_phase` Utf8,\n    `to_phase` Utf8,\n    `detail` Utf8,\n    `rows_scanned` Int64 NOT NULL,\n    `rows_embedded` Int64 NOT NULL,\n    `rows_skipped` Int64 NOT NULL,\n    `rows_deleted` Int64 NOT NULL,\n    `batches_committed` Int64 NOT NULL,\n    PRIMARY KEY (`run_id`, `sequence`)\n);\n",
+      "CREATE TABLE IF NOT EXISTS `ptah_embedding_pointer` (\n    `target_schema` Utf8 NOT NULL,\n    `target_table` Utf8 NOT NULL,\n    `active_generation` Utf8 NOT NULL,\n    `previous_generation` Utf8,\n    `cut_over_at` Timestamp64 NOT NULL,\n    `cut_over_by` Utf8,\n    `plan_digest` Utf8,\n    PRIMARY KEY (`target_schema`, `target_table`)\n);\n"
+    ]
+  },
+  "targets": [
+    {
+      "name": "cosine with an index",
+      "refused": false,
+      "column_type": "String",
+      "has_index": true,
+      "index_method": "vector_kmeans_tree",
+      "index_operator": "distance=cosine"
+    },
+    {
+      "name": "l2 with an index",
+      "refused": false,
+      "column_type": "String",
+      "has_index": true,
+      "index_method": "vector_kmeans_tree",
+      "index_operator": "distance=euclidean"
+    },
+    {
+      "name": "inner product with an index",
+      "refused": false,
+      "column_type": "String",
+      "has_index": true,
+      "index_method": "vector_kmeans_tree",
+      "index_operator": "similarity=inner_product"
+    },
+    {
+      "name": "no index",
+      "refused": false,
+      "column_type": "String"
+    },
+    {
+      "name": "a quantized representation",
+      "refused": true,
+      "message": "not supported on YDB: target objects: representation \"uint8\" is not one a YDB generation stores. YDB keeps a vector as the bytes of its float element type, so set target.representation to \"float\"; YDB's uint8, int8 and bit types hold quantized vectors, which an embedding provider does not return"
+    },
+    {
+      "name": "an upper-case representation",
+      "refused": false,
+      "column_type": "String"
+    },
+    {
+      "name": "a table of its own",
+      "refused": false,
+      "column_type": "String",
+      "owns_table": true,
+      "has_index": true,
+      "index_method": "vector_kmeans_tree",
+      "index_operator": "distance=cosine"
+    },
+    {
+      "name": "a chunked table of its own",
+      "refused": false,
+      "column_type": "String",
+      "owns_table": true
+    },
+    {
+      "name": "a table of its own that is the source",
+      "refused": true,
+      "message": "target objects: layout \"own_table\" names the source table app/articles as its target, and under this layout Ptah creates that table and drops it when the generation is retired. Name a table of the generation's own, or use the default layout to put the columns on the source"
+    },
+    {
+      "name": "a table of its own in another directory",
+      "refused": false,
+      "column_type": "String",
+      "owns_table": true
+    },
+    {
+      "name": "a pgvector method",
+      "refused": true,
+      "message": "not supported on YDB: index method \"hnsw\" is not one YDB builds; a YDB vector index is vector_kmeans_tree"
+    },
+    {
+      "name": "an hnsw parameter",
+      "refused": true,
+      "message": "not supported on YDB: storage parameter \"m\" belongs to pgvector's hnsw index; a vector_kmeans_tree index is shaped by its levels and clusters"
+    },
+    {
+      "name": "an ivfflat parameter",
+      "refused": true,
+      "message": "not supported on YDB: storage parameter \"lists\" belongs to pgvector's ivfflat index; a vector_kmeans_tree index is shaped by its levels and clusters"
+    },
+    {
+      "name": "an unknown option",
+      "refused": true,
+      "message": "not supported on YDB: storage parameter \"overlap\" has no YDB counterpart: a vector_kmeans_tree index takes its settings as the distance or similarity, vector_type, vector_dimension, levels and clusters attributes"
+    },
+    {
+      "name": "no levels",
+      "refused": true,
+      "message": "a vector_kmeans_tree index needs index_options levels and clusters: YDB 25.3 and later refuse an index without either, and 25.1 reports back no default for them"
+    },
+    {
+      "name": "no options",
+      "refused": true,
+      "message": "a vector_kmeans_tree index needs index_options levels and clusters: YDB 25.3 and later refuse an index without either, and 25.1 reports back no default for them"
+    },
+    {
+      "name": "levels that are not a number",
+      "refused": true,
+      "message": "index option levels is \"two\", not a whole number"
+    },
+    {
+      "name": "one cluster",
+      "refused": true,
+      "message": "a vector index's clusters are between 2 and 2048 (`Invalid clusters: 1 should be between 2 and 2048`)"
+    },
+    {
+      "name": "too many clusters",
+      "refused": true,
+      "message": "a vector index's clusters are between 2 and 2048 (`Invalid clusters: 2049 should be between 2 and 2048`)"
+    },
+    {
+      "name": "too many levels",
+      "refused": true,
+      "message": "a vector index's levels are between 1 and 16 (`Invalid levels: 17 should be between 1 and 16`)"
+    },
+    {
+      "name": "too large a tree",
+      "refused": true,
+      "message": "a vector index's clusters to the power of its levels is at most 1073741824 (`Invalid clusters^levels: 2048^3 should be less than 1073741824`)"
+    },
+    {
+      "name": "too wide an indexed vector",
+      "refused": true,
+      "message": "a vector index's vector_dimension is between 1 and 16384 (`Invalid vector_dimension: 16385 should be between 1 and 16384`)"
+    },
+    {
+      "name": "a wide vector without an index",
+      "refused": false,
+      "column_type": "String"
+    }
+  ],
+  "vectors": [
+    "0000803f000020c00000504001",
+    "01",
+    "0000000001",
+    "0000008001",
+    "0100000001",
+    "ffff7f7fffff7fff01",
+    "cdcccc3dcdcc4c3e9a99993ecdcccc3e01"
+  ]
+}

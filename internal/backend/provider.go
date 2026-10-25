@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/embedstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
@@ -49,11 +50,16 @@ type session struct {
 	locks           map[string]*lockRecord
 	fenced          bool
 	metadataReaders map[string]*metadataReader
+	// version is what the server answered SELECT Version() with.
+	version string
+	// embeddings is the session's embedding store, made on its first
+	// embedding call.
+	embeddings *embedstore.Store
 }
 
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
-	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature, provider.DevCleanupFeature, provider.ReplayGuardFeature, provider.StatementTimeoutFeature}
+	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature, provider.DevCleanupFeature, provider.ReplayGuardFeature, provider.StatementTimeoutFeature, provider.EmbeddingStoreFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -134,7 +140,7 @@ func Description() *protocol.Description {
 		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: "0.0.0-dev", SemanticIdentity: "ydb-table-lifecycle-2",
 		Features: providerFeatures(),
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: append([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, tablesource.YAMLKeys()...), GoSourceDirectives: tablesource.GoDirectives(), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), Features: engineFeatures()}},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: append([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, tablesource.YAMLKeys()...), GoSourceDirectives: tablesource.GoDirectives(), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), Features: engineFeatures(), Embeddings: &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes}}},
 	}
 }
 
@@ -189,7 +195,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	}
 	id := rand.Text()
 	p.mu.Lock()
-	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != ""}
+	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != "", version: version}
 	p.mu.Unlock()
 	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: capabilities, Features: negotiatedFeatures(ctx)}, nil
 }
