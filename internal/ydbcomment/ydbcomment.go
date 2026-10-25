@@ -1,4 +1,13 @@
-package migrationlint
+// Package ydbcomment reads the statements Ptah keeps a YDB comment with.
+//
+// YQL has no COMMENT statement. Ptah keeps a comment as a user attribute of
+// the table or view it belongs to, and a column's and an index's comment on
+// their table under a key that names them, and its YDB connection runs
+// `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW` through the table
+// service. [Recognize] reads those statements as the host's
+// internal/ydbcomment does, for migration lint and for the YQL schema reader,
+// so both read a comment with one rule.
+package ydbcomment
 
 import (
 	"errors"
@@ -11,34 +20,26 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 )
 
-// YQL has no COMMENT statement. Ptah keeps a comment as a user attribute of
-// the table or view it belongs to, and a column's and an index's comment on
-// their table under a key that names them, and its YDB connection runs
-// `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW` through the table
-// service. The recognizer here reads those statements as the host's
-// internal/ydbcomment does, for the rule that reports a comment a drop or a
-// rename leaves behind.
-
-// commentObject is what a comment belongs to.
-type commentObject int
+// Object is what a comment belongs to.
+type Object int
 
 const (
-	commentTable commentObject = iota + 1
-	commentColumn
-	commentIndex
-	commentView
+	Table Object = iota + 1
+	Column
+	Index
+	View
 )
 
 // keyword is the word COMMENT ON names the object with.
-func (o commentObject) keyword() string {
+func (o Object) Keyword() string {
 	switch o {
-	case commentTable:
+	case Table:
 		return "TABLE"
-	case commentColumn:
+	case Column:
 		return "COLUMN"
-	case commentIndex:
+	case Index:
 		return "INDEX"
-	case commentView:
+	case View:
 		return "VIEW"
 	default:
 		return ""
@@ -46,11 +47,11 @@ func (o commentObject) keyword() string {
 }
 
 // noun names the object in a sentence, with its article.
-func (o commentObject) noun() string {
-	if o == commentIndex {
+func (o Object) noun() string {
+	if o == Index {
 		return "an index"
 	}
-	return "a " + strings.ToLower(o.keyword())
+	return "a " + strings.ToLower(o.Keyword())
 }
 
 // The attribute keys: a table's and a view's own comment, and the prefixes a
@@ -67,30 +68,30 @@ const (
 	maxCommentValueBytes = 4096
 )
 
-// commentKey is the attribute that holds the comment of object, where name is
+// Key is the attribute that holds the comment of object, where name is
 // the column's or the index's name.
-func commentKey(object commentObject, name string) string {
+func Key(object Object, name string) string {
 	switch object {
-	case commentColumn:
+	case Column:
 		return columnCommentKey + name
-	case commentIndex:
+	case Index:
 		return indexCommentKey + name
 	default:
 		return ownCommentKey
 	}
 }
 
-// commentRefusal says why YDB cannot hold comment on object, or returns ""
+// Refusal says why YDB cannot hold comment on object, or returns ""
 // when it can.
-func commentRefusal(object commentObject, name, comment string) string {
-	key := commentKey(object, name)
+func Refusal(object Object, name, comment string) string {
+	key := Key(object, name)
 	switch {
-	case (object == commentColumn || object == commentIndex) && name == "":
-		return fmt.Sprintf("%s comment names no %s", object.noun(), strings.ToLower(object.keyword()))
+	case (object == Column || object == Index) && name == "":
+		return fmt.Sprintf("%s comment names no %s", object.noun(), strings.ToLower(object.Keyword()))
 	case len(key) > maxCommentKeyBytes:
 		return fmt.Sprintf("YDB keeps the comment as the table attribute %q, %d bytes long, and an attribute key "+
 			"takes at most %d bytes; %s name takes at most %d", key, len(key), maxCommentKeyBytes,
-			object.noun(), maxCommentKeyBytes-len(commentKey(object, "")))
+			object.noun(), maxCommentKeyBytes-len(Key(object, "")))
 	case len(comment) > maxCommentValueBytes:
 		return fmt.Sprintf("the comment is %d bytes long, and YDB keeps at most %d bytes in an attribute value",
 			len(comment), maxCommentValueBytes)
@@ -100,9 +101,9 @@ func commentRefusal(object commentObject, name, comment string) string {
 	return ""
 }
 
-// commentStatement is one of Ptah's comment statements.
-type commentStatement struct {
-	Object commentObject
+// Statement is one of Ptah's comment statements.
+type Statement struct {
+	Object Object
 	// Path is the table's or the view's path as the statement names it.
 	Path string
 	// Name is the column's or the index's name.
@@ -112,43 +113,43 @@ type commentStatement struct {
 }
 
 // Key is the attribute the statement sets.
-func (s commentStatement) Key() string {
-	return commentKey(s.Object, s.Name)
+func (s Statement) Key() string {
+	return Key(s.Object, s.Name)
 }
 
-// commentQuery is a query that runs one of Ptah's comment statements.
-type commentQuery struct {
-	commentStatement
+// Query is a query that runs one of Ptah's comment statements.
+type Query struct {
+	Statement
 	// PathPrefix is the path the query's `PRAGMA TablePathPrefix` sets, or
 	// empty where it sets none.
 	PathPrefix string
 }
 
-var errCommentStatement = errors.New("invalid comment statement")
+var ErrStatement = errors.New("invalid comment statement")
 
-// commentService is the YDB service a comment statement runs through, as a
+// service is the YDB service a comment statement runs through, as a
 // refusal names it.
-const commentService = "table service"
+const service = "table service"
 
-// recognizeComment reports whether text is a query running one of Ptah's
+// Recognize reports whether text is a query running one of Ptah's
 // comment statements, and reads it. Recognized text that does not read as the
 // statement is refused.
-func recognizeComment(text string) (commentQuery, bool, error) {
+func Recognize(text string) (Query, bool, error) {
 	if !containsFold(text, "comment") {
-		return commentQuery{}, false, nil
+		return Query{}, false, nil
 	}
-	located, recognized, err := locateServiceStatement(text, opensComment, commentService)
+	located, recognized, err := locateServiceStatement(text, opens, service)
 	switch {
 	case err != nil:
-		return commentQuery{}, true, fmt.Errorf("%w: %w", errCommentStatement, err)
+		return Query{}, true, fmt.Errorf("%w: %w", ErrStatement, err)
 	case !recognized:
-		return commentQuery{}, false, nil
+		return Query{}, false, nil
 	}
-	statement, err := parseComment(located.tokens)
+	statement, err := parse(located.tokens)
 	if err != nil {
-		return commentQuery{}, true, err
+		return Query{}, true, err
 	}
-	return commentQuery{commentStatement: statement, PathPrefix: located.pathPrefix}, true, nil
+	return Query{Statement: statement, PathPrefix: located.pathPrefix}, true, nil
 }
 
 // containsFold reports whether text contains word, ignoring case.
@@ -161,63 +162,63 @@ func containsFold(text, word string) bool {
 	return false
 }
 
-// opensComment reports whether tokens open one of the four statements.
-func opensComment(tokens []yql.Token) bool {
+// opens reports whether tokens open one of the four statements.
+func opens(tokens []yql.Token) bool {
 	if len(tokens) < 3 || !tokens[0].IsWord("COMMENT") || !tokens[1].IsWord("ON") {
 		return false
 	}
-	_, known := commentObjectOf(tokens[2])
+	_, known := objectOf(tokens[2])
 	return known
 }
 
-// commentObjectOf reads the object keyword of a statement.
-func commentObjectOf(token yql.Token) (commentObject, bool) {
-	for _, object := range []commentObject{commentTable, commentColumn, commentIndex, commentView} {
-		if token.IsWord(object.keyword()) {
+// objectOf reads the object keyword of a statement.
+func objectOf(token yql.Token) (Object, bool) {
+	for _, object := range []Object{Table, Column, Index, View} {
+		if token.IsWord(object.Keyword()) {
 			return object, true
 		}
 	}
 	return 0, false
 }
 
-// parseComment reads one of the four statements from its tokens.
-func parseComment(tokens []yql.Token) (commentStatement, error) {
-	object, _ := commentObjectOf(tokens[2])
-	statement := commentStatement{Object: object}
+// parse reads one of the four statements from its tokens.
+func parse(tokens []yql.Token) (Statement, error) {
+	object, _ := objectOf(tokens[2])
+	statement := Statement{Object: object}
 	opening := firstWords(tokens, 3)
-	refuse := func(format string, args ...any) (commentStatement, error) {
-		return commentStatement{}, fmt.Errorf("%w: %s: %s", errCommentStatement, opening, fmt.Sprintf(format, args...))
+	refuse := func(format string, args ...any) (Statement, error) {
+		return Statement{}, fmt.Errorf("%w: %s: %s", ErrStatement, opening, fmt.Sprintf(format, args...))
 	}
 	rest := tokens[3:]
 	var ok bool
 	switch object {
-	case commentColumn:
+	case Column:
 		if len(rest) < 3 || !rest[1].IsOperator(".") {
 			return refuse("name the column as `table`.`column`")
 		}
-		if statement.Path, ok = commentName(rest[0]); !ok {
+		if statement.Path, ok = name(rest[0]); !ok {
 			return refuse("%s does not name a table; write its path in backticks", rest[0].Value)
 		}
-		if statement.Name, ok = commentName(rest[2]); !ok {
+		if statement.Name, ok = name(rest[2]); !ok {
 			return refuse("%s does not name a column", rest[2].Value)
 		}
 		rest = rest[3:]
-	case commentIndex:
+	case Index:
 		if len(rest) < 3 || !rest[1].IsWord("ON") {
 			return refuse("name the index as `index` ON `table`")
 		}
-		if statement.Name, ok = commentName(rest[0]); !ok {
+		if statement.Name, ok = name(rest[0]); !ok {
 			return refuse("%s does not name an index", rest[0].Value)
 		}
-		if statement.Path, ok = commentName(rest[2]); !ok {
+		if statement.Path, ok = name(rest[2]); !ok {
 			return refuse("%s does not name a table; write its path in backticks", rest[2].Value)
 		}
 		rest = rest[3:]
 	default:
 		if len(rest) == 0 {
-			return refuse("the statement names no %s", strings.ToLower(object.keyword()))
+			return refuse("the statement names no %s", strings.ToLower(object.Keyword()))
 		}
-		if statement.Path, ok = commentName(rest[0]); !ok {
+		if statement.Path, ok = name(rest[0]); !ok {
 			return refuse("%s does not name %s; write its path in backticks", rest[0].Value, object.noun())
 		}
 		rest = rest[1:]
@@ -233,15 +234,15 @@ func parseComment(tokens []yql.Token) (commentStatement, error) {
 		}
 		statement.Comment = comment
 	}
-	if reason := commentRefusal(statement.Object, statement.Name, statement.Comment); reason != "" {
+	if reason := Refusal(statement.Object, statement.Name, statement.Comment); reason != "" {
 		return refuse("%s", reason)
 	}
 	return statement, nil
 }
 
-// commentName reads a backticked or plain identifier. A named expression is
+// name reads a backticked or plain identifier. A named expression is
 // not a name: the statement is read before YDB would evaluate one.
-func commentName(token yql.Token) (string, bool) {
+func name(token yql.Token) (string, bool) {
 	if token.Type != yql.TokenIdentifier || strings.HasPrefix(token.Value, "$") {
 		return "", false
 	}

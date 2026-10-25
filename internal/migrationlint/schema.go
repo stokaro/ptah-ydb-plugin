@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlddl"
 )
 
@@ -165,8 +166,8 @@ func (s *ydbSchema) apply(read yqlddl.Statement) {
 // table through a path prefix or an absolute path is not followed: the rules
 // that read comments stay silent about a table they cannot name.
 func (s *ydbSchema) applyComment(sql string) {
-	query, recognized, err := recognizeComment(sql)
-	if !recognized || err != nil || query.PathPrefix != "" || strings.HasPrefix(query.Path, "/") || query.Object == commentView {
+	query, recognized, err := ydbcomment.Recognize(sql)
+	if !recognized || err != nil || query.PathPrefix != "" || strings.HasPrefix(query.Path, "/") || query.Object == ydbcomment.View {
 		return
 	}
 	table, known := s.tables[query.Path]
