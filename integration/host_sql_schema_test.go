@@ -100,7 +100,7 @@ func TestHostAppliesASQLSchema_HappyPath(t *testing.T) {
 			schemaFile := filepath.Join(root, test.file)
 			for _, run := range []struct{ name, want string }{
 				{"creation", `(?s).*row-table-create-operation.*Schema apply completed successfully.*`},
-				{"a second run", `(?s).*No changes planned.*`},
+				{"a second run", `(?s).*Schema is synced, no changes to be made.*`},
 			} {
 				output, err := hostApplySQL(c, directory, schemaFile)
 				c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", run.name, output))

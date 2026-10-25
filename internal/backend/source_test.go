@@ -125,3 +125,98 @@ func TestEmptyNormalizationHonorsCancellation(t *testing.T) {
 	c.Assert(status.Code(err), qt.Equals, codes.Canceled)
 	c.Assert(result, qt.IsNil)
 }
+
+// goNode captures one coordination node directive written on a struct that
+// declares no table.
+func goNode(attributes map[string]string) (*protocol.DecodeSourceRequest, error) {
+	return testsource.GoDirectives(nil, []testsource.GoDeclaration{{Directive: schema.CoordinationGoDirective().Directive, Attributes: attributes, Struct: "Limits", File: "nodes.go", FileSize: 120,
+		Start: testsource.GoPosition{Offset: 10, Line: 2, Column: 1}, End: testsource.GoPosition{Offset: 90, Line: 2, Column: 81}}})
+}
+
+// A Go directive declares the node the host's own directive of the same name
+// declares, with the settings in the same model as a YAML entry.
+func TestCoordinationGoSource_HappyPath(t *testing.T) {
+	c := qt.New(t)
+	request, err := goNode(map[string]string{"name": "limits", "schema": "app", "self_check_period": "PT2S", "session_grace_period": "PT15S",
+		"read_consistency_mode": "strict", "attach_consistency_mode": "relaxed", "rate_limiter_counters_mode": "detailed"})
+	c.Assert(err, qt.IsNil)
+	result, err := backend.New().DecodeSource(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidateDecodedSource(backend.Description(), request, result), qt.IsNil)
+	values := result.Documents[0].Fragments[0].Values
+	c.Assert(values, qt.HasLen, 1)
+	c.Assert(values[0].Placement, qt.Equals, protocol.SourceModelValue_NATIVE_OBJECT)
+	c.Assert(values[0].Value.Value.Owner.Schema, qt.Equals, "app")
+	c.Assert(values[0].Value.Value.Owner.Name, qt.Equals, "limits")
+	c.Assert(string(values[0].Value.Value.Payload), qt.Equals, `{"attach_consistency_mode":"relaxed","rate_limiter_counters_mode":"detailed","read_consistency_mode":"strict","self_check_period_millis":2000,"session_grace_period_millis":15000}`)
+	c.Assert(values[0].Source.FragmentId, qt.Equals, "0")
+	c.Assert(values[0].Source.Path, qt.HasLen, 0)
+}
+
+// A Go source that declares no node claims the namespace whole, as YAML and
+// YQL do: an undeclared node is one the plan removes.
+func TestCoordinationGoSourceClaimsTheNamespace_HappyPath(t *testing.T) {
+	c := qt.New(t)
+	request, err := testsource.GoDirectives(nil, nil)
+	c.Assert(err, qt.IsNil)
+	result, err := backend.New().DecodeSource(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	var kinds []string
+	for _, claim := range result.Documents[0].Coverage.Kinds {
+		if claim.Knowledge.State == protocol.ModelKnowledge_COMPLETE {
+			kinds = append(kinds, claim.Model.Kind)
+		}
+	}
+	c.Assert(kinds, qt.Contains, schema.CoordinationProperties)
+}
+
+func TestCoordinationGoSource_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		attributes map[string]string
+		want       string
+	}{
+		{"no name", map[string]string{"schema": "app"}, `.*ptah:schema:coordinationnode needs a name`},
+		{"blank name", map[string]string{"name": "  "}, `.*ptah:schema:coordinationnode needs a name`},
+		{"source provenance", map[string]string{"name": "limits", "struct_name": "Limits"}, `.*Go directive attribute is outside its claim`},
+		{"clamped period", map[string]string{"name": "limits", "self_check_period": "PT20S"}, `.*coordination node "limits".*`},
+		{"runtime lock node", map[string]string{"name": "ptah_locks"}, `.*reserved for provider runtime use`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			request, err := goNode(test.attributes)
+			c.Assert(err, qt.IsNil)
+			result, err := backend.New().DecodeSource(c.Context(), request)
+			c.Assert(err, qt.ErrorMatches, test.want)
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}
+
+// Two directives that name one node are refused, as the host refuses a node
+// declared twice.
+func TestCoordinationGoSourceRefusesADuplicate_FailurePath(t *testing.T) {
+	c := qt.New(t)
+	declaration := testsource.GoDeclaration{Directive: schema.CoordinationGoDirective().Directive, Attributes: map[string]string{"name": "limits", "schema": "app"}, Struct: "Limits", File: "nodes.go", FileSize: 120,
+		Start: testsource.GoPosition{Offset: 10, Line: 2, Column: 1}, End: testsource.GoPosition{Offset: 50, Line: 2, Column: 41}}
+	again := declaration
+	again.Struct, again.Start, again.End = "Again", testsource.GoPosition{Offset: 60, Line: 5, Column: 1}, testsource.GoPosition{Offset: 100, Line: 5, Column: 41}
+	request, err := testsource.GoDirectives(nil, []testsource.GoDeclaration{declaration, again})
+	c.Assert(err, qt.IsNil)
+	result, err := backend.New().DecodeSource(c.Context(), request)
+	c.Assert(err, qt.IsNotNil)
+	c.Assert(result, qt.IsNil)
+}
+
+// The provider claims the host's Go directives for the objects it owns, each
+// once: the host's annotation tools list a directive only while some owner
+// claims it.
+func TestDescriptionClaimsTheGoDirectives_HappyPath(t *testing.T) {
+	c := qt.New(t)
+	var directives []string
+	for _, claim := range backend.Description().Engines[0].GoSourceDirectives {
+		directives = append(directives, claim.Directive)
+	}
+	c.Assert(directives, qt.DeepEquals, []string{"ptah:schema:table", "ptah:schema:index", "ptah:schema:columnfamily", "ptah:schema:changefeed",
+		"ptah:schema:changefeed:consumer", "ptah:schema:coordinationnode"})
+}

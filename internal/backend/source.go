@@ -88,44 +88,79 @@ func fragmentValues(ctx context.Context, document *protocol.SourceDocument, frag
 }
 
 func coordinationSource(ctx context.Context, document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int) ([]*protocol.SourceModelValue, error) {
-	if document.Format != protocol.SourceDocument_YAML || fragment.Selector != "coordination_nodes" || fragment.BindingId != "" || fragment.Subject != nil || len(fragment.GetInheritedAttributes().GetEntries()) != 0 {
+	if fragment.BindingId != "" || fragment.Subject != nil || len(fragment.GetInheritedAttributes().GetEntries()) != 0 {
 		return nil, fmt.Errorf("unsupported YDB coordination source attachment or format")
 	}
 	mapping := fragment.GetValue().GetMapping()
-	if mapping == nil {
-		return nil, fmt.Errorf("coordination_nodes requires a mapping")
-	}
-	entries := slices.Clone(mapping.Entries)
-	slices.SortFunc(entries, func(a, b *protocol.SourceEntry) int { return strings.Compare(a.Key, b.Key) })
-	var values []*protocol.SourceModelValue
-	for entryIndex, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	switch {
+	case document.Format == protocol.SourceDocument_YAML && fragment.Selector == schema.CoordinationYAMLKey().Selector:
+		if mapping == nil {
+			return nil, fmt.Errorf("coordination_nodes requires a mapping")
 		}
-		owner, intent, err := coordinationEntry(entry)
-		if err != nil {
-			return nil, fmt.Errorf("coordination node %q: %w", entry.Key, err)
+		entries := slices.Clone(mapping.Entries)
+		slices.SortFunc(entries, func(a, b *protocol.SourceEntry) int { return strings.Compare(a.Key, b.Key) })
+		var values []*protocol.SourceModelValue
+		for entryIndex, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			value, err := coordinationValue(document, fragment, entry, strconv.Itoa(index)+"."+strconv.Itoa(entryIndex), []*protocol.SourcePathStep{{Step: &protocol.SourcePathStep_Key{Key: entry.Key}}})
+			if err != nil {
+				return nil, fmt.Errorf("coordination node %q: %w", entry.Key, err)
+			}
+			values = append(values, value)
 		}
-		for _, binding := range document.Bindings {
-			object := binding.GetObject()
-			if object.GetKind() == "table" && object.GetDatabase() == owner.Database && object.GetCatalog() == "" && object.GetSchema() == owner.Schema && object.GetName() == owner.Name {
-				return nil, fmt.Errorf("YDB coordination node conflicts with a declared table")
+		return values, nil
+	case document.Format == protocol.SourceDocument_GO_ANNOTATIONS && fragment.Selector == schema.CoordinationGoDirective().Selector:
+		// A directive declares one node with its attributes; the host lexed
+		// them, and every value is text.
+		if mapping == nil {
+			return nil, fmt.Errorf("%s requires attributes", schema.CoordinationGoDirective().Directive)
+		}
+		name := ""
+		for _, entry := range mapping.Entries {
+			if entry.Key == "name" {
+				name = entry.GetValue().GetText()
 			}
 		}
-		if err := schema.ValidateManagedCoordinationOwner(owner); err != nil {
-			return nil, err
+		if strings.TrimSpace(name) == "" {
+			return nil, fmt.Errorf("%s needs a name", schema.CoordinationGoDirective().Directive)
 		}
-		value, err := schema.CaptureCoordinationIntent(owner, intent)
+		value, err := coordinationValue(document, fragment, &protocol.SourceEntry{Value: fragment.GetValue()}, strconv.Itoa(index), nil)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("coordination node %q: %w", name, err)
 		}
-		values = append(values, &protocol.SourceModelValue{Placement: protocol.SourceModelValue_NATIVE_OBJECT,
-			Value: &protocol.NormalizedValue{Id: strconv.Itoa(index) + "." + strconv.Itoa(entryIndex), Value: value, NormalizedOwner: proto.CloneOf(owner),
-				CanonicalFormat: schema.CoordinationDesiredModel().CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)},
-			Source: &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT, Path: []*protocol.SourcePathStep{{Step: &protocol.SourcePathStep_Key{Key: entry.Key}}}},
-		})
+		return []*protocol.SourceModelValue{value}, nil
+	default:
+		return nil, fmt.Errorf("unsupported YDB coordination source attachment or format")
 	}
-	return values, nil
+}
+
+// coordinationValue reads one declared node. A node may not take the path of
+// a table the same document declares.
+func coordinationValue(document *protocol.SourceDocument, fragment *protocol.SourceFragment, entry *protocol.SourceEntry, id string, path []*protocol.SourcePathStep) (*protocol.SourceModelValue, error) {
+	owner, intent, err := coordinationEntry(entry)
+	if err != nil {
+		return nil, err
+	}
+	for _, binding := range document.Bindings {
+		object := binding.GetObject()
+		if object.GetKind() == "table" && object.GetDatabase() == owner.Database && object.GetCatalog() == "" && object.GetSchema() == owner.Schema && object.GetName() == owner.Name {
+			return nil, fmt.Errorf("YDB coordination node conflicts with a declared table")
+		}
+	}
+	if err := schema.ValidateManagedCoordinationOwner(owner); err != nil {
+		return nil, err
+	}
+	value, err := schema.CaptureCoordinationIntent(owner, intent)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.SourceModelValue{Placement: protocol.SourceModelValue_NATIVE_OBJECT,
+		Value: &protocol.NormalizedValue{Id: id, Value: value, NormalizedOwner: proto.CloneOf(owner),
+			CanonicalFormat: schema.CoordinationDesiredModel().CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)},
+		Source: &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT, Path: path},
+	}, nil
 }
 
 func coordinationEntry(entry *protocol.SourceEntry) (*protocol.Reference, schema.CoordinationIntent, error) {

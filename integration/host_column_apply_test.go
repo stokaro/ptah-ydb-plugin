@@ -49,9 +49,9 @@ func TestHostAppliesAColumnTable_HappyPath(t *testing.T) {
 	const twoDays = ` store="COLUMN" partition_by_hash="id" column_shards="3" platform.ydb.row_deletion_column="ts" platform.ydb.row_deletion_interval="P2D"`
 	for _, run := range []struct{ name, attributes, want string }{
 		{"creation", hostColumnTable, `(?s).*column-table-create-operation.*Schema apply completed successfully.*`},
-		{"a second run", hostColumnTable, `(?s).*No changes planned.*`},
+		{"a second run", hostColumnTable, `(?s).*Schema is synced, no changes to be made.*`},
 		{"another TTL", twoDays, `(?s).*column-table-ttl-operation.*Schema apply completed successfully.*`},
-		{"a run after the TTL", twoDays, `(?s).*No changes planned.*`},
+		{"a run after the TTL", twoDays, `(?s).*Schema is synced, no changes to be made.*`},
 	} {
 		output, err := hostApply(c, directory, hostEvents(directory, run.attributes))
 		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", run.name, output))

@@ -80,51 +80,51 @@ func TestCoordinationComparisonCoverage(t *testing.T) {
 		{name: "complete", changes: 1},
 		{name: "unknown outside", mutate: func(r *protocol.CompareModelsRequest) {
 			r.Current.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
-		}, undecided: 2},
-		{name: "exact scoped absence", mutate: func(r *protocol.CompareModelsRequest) { scopeCurrent(r, "app") }, changes: 1, undecided: 1},
-		{name: "different namespace", mutate: func(r *protocol.CompareModelsRequest) { scopeCurrent(r, "application") }, undecided: 2},
+		}, undecided: 1},
+		{name: "exact scoped absence", mutate: func(r *protocol.CompareModelsRequest) { scopeCurrent(r, "app") }, changes: 1},
+		{name: "different namespace", mutate: func(r *protocol.CompareModelsRequest) { scopeCurrent(r, "application") }, undecided: 1},
 		{name: "different database", mutate: func(r *protocol.CompareModelsRequest) {
 			scopeCurrent(r, "app")
 			r.Current.Coverage.Kinds[0].Sources[0].Regions[0].Scope.Database = testcomparison.Part("/other")
-		}, undecided: 2},
-		{name: "explicit empty schema", mutate: func(r *protocol.CompareModelsRequest) { scopeCurrent(r, "") }, undecided: 2},
+		}, undecided: 1},
+		{name: "explicit empty schema", mutate: func(r *protocol.CompareModelsRequest) { scopeCurrent(r, "") }, undecided: 1},
 		{name: "overlapping unknown", mutate: func(r *protocol.CompareModelsRequest) {
 			scopeCurrent(r, "app")
 			source := r.Current.Coverage.Kinds[0].Sources[0]
 			region := proto.CloneOf(source.Regions[0])
 			region.Knowledge = testcomparison.Knowledge(protocol.ModelKnowledge_UNREPRESENTABLE)
 			source.Regions = append(source.Regions, region)
-		}, undecided: 2},
+		}, undecided: 1},
 		{name: "independent unknown", mutate: func(r *protocol.CompareModelsRequest) {
 			r.Current.Coverage.Kinds[0].Sources = append(r.Current.Coverage.Kinds[0].Sources, &protocol.ComparisonKnowledgeSource{Outside: testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)})
-		}, undecided: 2},
+		}, undecided: 1},
 		{name: "subject absence overrides unknown", mutate: func(r *protocol.CompareModelsRequest) {
 			r.Current.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
 			r.Current.Coverage.Subjects = []*protocol.ComparisonSubjectCoverage{{Kind: schema.CoordinationProperties, Subject: proto.CloneOf(r.Desired.Records[0].Subject), Knowledge: testcomparison.Knowledge(protocol.ModelKnowledge_ABSENT)}}
-		}, changes: 1, undecided: 1},
+		}, changes: 1},
 		{name: "subject unknown overrides complete", mutate: func(r *protocol.CompareModelsRequest) {
 			r.Current.Coverage.Subjects = []*protocol.ComparisonSubjectCoverage{{Kind: schema.CoordinationProperties, Subject: proto.CloneOf(r.Desired.Records[0].Subject), Knowledge: testcomparison.Knowledge(protocol.ModelKnowledge_UNREPRESENTABLE)}}
 		}, undecided: 1},
 		{name: "wrong target region", mutate: func(r *protocol.CompareModelsRequest) {
 			scopeCurrent(r, "app")
 			r.Current.Coverage.Kinds[0].Sources[0].Regions[0].Scope.Targets = []string{"postgres"}
-		}, undecided: 2},
+		}, undecided: 1},
 		{name: "target alias", mutate: func(r *protocol.CompareModelsRequest) {
 			scopeCurrent(r, "app")
 			r.Current.Coverage.Kinds[0].Sources[0].Regions[0].Scope.Targets = []string{"YDBS"}
-		}, changes: 1, undecided: 1},
+		}, changes: 1},
 		{name: "path prefix cannot match schema", mutate: func(r *protocol.CompareModelsRequest) {
 			scopeCurrent(r, "app")
 			r.Current.Coverage.Kinds[0].Sources[0].Regions[0].Scope.PathPrefix = []*protocol.ComparisonPart{testcomparison.Part("app")}
-		}, undecided: 2},
+		}, undecided: 1},
 		{name: "wrong subject kind", mutate: func(r *protocol.CompareModelsRequest) {
 			scopeCurrent(r, "app")
 			r.Current.Coverage.Kinds[0].Sources[0].Regions[0].Scope.SubjectKinds = []string{"table"}
-		}, undecided: 2},
+		}, undecided: 1},
 		{name: "exact empty path", mutate: func(r *protocol.CompareModelsRequest) {
 			scopeCurrent(r, "app")
 			r.Current.Coverage.Kinds[0].Sources[0].Regions[0].Scope.PathExact = true
-		}, changes: 1, undecided: 1},
+		}, changes: 1},
 		{name: "incomplete desired preserves current", mutate: func(r *protocol.CompareModelsRequest) {
 			observed, err := testcomparison.Request(nil, coordinationObserved())
 			if err != nil {
@@ -187,9 +187,9 @@ func TestCoordinationComparisonRejectsUntrustedInputs(t *testing.T) {
 			subject.Kind = "table"
 			r.DeclaredRelations = []*protocol.ComparisonIdentity{subject}
 		}},
-		{"unbound default database", func(r *protocol.CompareModelsRequest) {
-			r.Desired.Records[0].Value.Value.Owner.Database = ""
-			r.Desired.Records[0].Value.NormalizedOwner.Database = ""
+		{"another database", func(r *protocol.CompareModelsRequest) {
+			r.Desired.Records[0].Value.Value.Owner.Database = "/other"
+			r.Desired.Records[0].Value.NormalizedOwner.Database = "/other"
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -245,8 +245,9 @@ func TestCoordinationComparisonPreservesPolicy(t *testing.T) {
 	record.Value.NormalizedOwner = proto.CloneOf(record.Value.Value.Owner)
 	result, err = backend.New().CompareModels(t.Context(), request)
 	c.Assert(err, qt.IsNil)
+	// The runtime lock node is left out: no drop, and nothing to report.
 	c.Assert(result.Changes, qt.HasLen, 0)
-	c.Assert(result.Undecided, qt.HasLen, 1)
+	c.Assert(result.Undecided, qt.HasLen, 0)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	result, err = backend.New().CompareModels(ctx, request)
@@ -287,4 +288,64 @@ func TestCoordinationAccessRequirementsCannotBecomeIgnoredChanges(t *testing.T) 
 			}
 		})
 	}
+}
+
+// hostShaped names the declared node as the host does, without a database,
+// and leaves the database path out, while the read side keeps the database
+// the inspection names in its owners and regions.
+func hostShaped(r *protocol.CompareModelsRequest) {
+	r.DatabasePath = ""
+	for _, record := range r.Desired.Records {
+		record.Subject.Database = &protocol.ComparisonPart{}
+		record.Value.Value.Owner.Database = ""
+		record.Value.NormalizedOwner.Database = ""
+	}
+}
+
+// The host names a declared object without a database and a read one with the
+// session's. Both name one node, so a node the read holds is altered rather
+// than dropped and created again, and a node the scoped read established absent
+// is created. A change names the node as the request did: the declared
+// identity, or the read one for a removal, which has no declaration.
+func TestCoordinationComparisonReadsHostIdentities_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		desired  *schema.CoordinationIntent
+		observed *Ydb_Coordination.DescribeNodeResult
+		impact   protocol.ChangeSemantics_Impact
+		database string
+	}{
+		{name: "alter", desired: &schema.CoordinationIntent{ReadConsistencyMode: new("strict")}, observed: coordinationObserved(), impact: protocol.ChangeSemantics_BEHAVIORAL},
+		{name: "create", desired: &schema.CoordinationIntent{ReadConsistencyMode: new("strict")}, impact: protocol.ChangeSemantics_ADDITIVE},
+		{name: "drop", observed: coordinationObserved(), impact: protocol.ChangeSemantics_DESTRUCTIVE, database: "/local"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			request, err := testcomparison.Request(test.desired, test.observed)
+			c.Assert(err, qt.IsNil)
+			scopeCurrent(request, "app")
+			hostShaped(request)
+			result, err := backend.New().CompareModels(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateComparedModels(backend.Description(), request, result), qt.IsNil)
+			c.Assert(result.Undecided, qt.HasLen, 0)
+			c.Assert(result.Changes, qt.HasLen, 1)
+			c.Assert(result.Changes[0].Value.ChangeSemantics.Impact, qt.Equals, test.impact)
+			c.Assert(result.Changes[0].Subject.GetDatabase().GetNormalized(), qt.Equals, test.database)
+			c.Assert(result.Changes[0].Value.Value.Owner.Database, qt.Equals, test.database)
+		})
+	}
+}
+
+// A read that names two databases is refused rather than paired by guess.
+func TestCoordinationComparisonReadsHostIdentities_FailurePath(t *testing.T) {
+	c := qt.New(t)
+	request, err := testcomparison.Request(&schema.CoordinationIntent{}, coordinationObserved())
+	c.Assert(err, qt.IsNil)
+	scopeCurrent(request, "app")
+	hostShaped(request)
+	request.Current.Coverage.Kinds[0].Sources[0].Regions[0].Scope.Database = testcomparison.Part("/other")
+	result, err := backend.New().CompareModels(t.Context(), request)
+	c.Assert(err, qt.ErrorMatches, `.*more than one database`)
+	c.Assert(result, qt.IsNil)
 }

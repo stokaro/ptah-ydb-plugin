@@ -5,7 +5,7 @@ It is under development. Inspection covers row tables and their indexes and
 changefeeds, column tables, topics, views, coordination nodes, external data
 sources, and external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
-tags, and coordination locks. Offline YAML decoding is available for coordination-node declarations, and
+tags, and coordination locks. Offline YAML and Go annotation decoding is available for coordination-node declarations, and
 YAML and Go annotation decoding for the partitioning, TTL and column families of row tables, and in Go the columns of each family.
 Offline comparison, planning, and rendering produce native coordination
 operations. Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
@@ -642,10 +642,24 @@ invalid entry or cancellation. Desired and observed models have distinct
 encodings and definition digests; observation coverage contains only observed
 models.
 
+The same service decodes the host's Go directive `ptah:schema:coordinationnode`,
+written on a struct of its own, one node per directive:
+
+```go
+//ptah:schema:coordinationnode name="limits" schema="app" self_check_period="PT2S" read_consistency_mode="strict"
+type Limits struct{}
+```
+
+`name` is required, and the other attributes are the YAML settings above, with
+the same rules; `struct_name` has no attribute, since the host names the struct.
+A YAML document that writes `coordination_nodes`, and every Go source, describes
+the nodes completely, as they do for the host's embedded engine: a node the
+source does not declare is one the plan removes from the directories it reads.
+
 The subprocess tests exercise decoding, normalization, and representation
-conversion without a database address. An HCL adapter remains pending; a YQL
-schema declares coordination nodes through [SQL schema reading](#sql-schema-reading).
-This service alone does not make the YAML example executable as a migration.
+conversion without a database address. An HCL adapter remains pending (it needs
+the HCL claims of provider contract 25.3); a YQL schema declares coordination
+nodes through [SQL schema reading](#sql-schema-reading).
 
 ## Offline row-table declarations
 
@@ -900,8 +914,16 @@ An unread object does not establish absence. Independent coverage sources must
 all establish completeness; overlapping unknown regions override complete
 regions, and explicit subject claims override namespace claims. Namespace
 components, target scopes, and exact empty paths retain their boundaries.
-An incomplete desired source preserves known current configuration. Missing
-namespace coverage also produces an undecided diagnostic.
+An incomplete desired source preserves known current configuration. Every
+decision is made for one node, so a namespace the read left out produces no
+diagnostic of its own.
+
+The host names a declared node without a database, because it lives in the
+session's, while inspection names that database in every owner and region it
+reads. The comparison reads both in the host's terms, so the declared node and
+the node read at its path are one node. A change names the node as the host
+sent it: by the declared identity, or by the read one for a removal. A
+comparison whose read names two databases is refused.
 
 Coordination exports retain owner, direct grants, and effective-permission
 requirements in an optional `access` field. Its JSON field names use snake case.
@@ -913,20 +935,25 @@ with explicit access requirements is refused because the coordination service
 cannot promise inherited permissions or apply grants.
 
 The comparison refuses contradictory identities, forged normalization receipts,
-and collisions with declared relations. Database defaults require an explicit
-host binding. Required nodes are not removed. Exclusions for this model match
-exact relative paths such as `app/workers`, without case folding or trimming.
-The database-root `ptah_locks` observation remains visible and produces an
-undecided lifecycle diagnostic; its name does not prove provider ownership.
-Offline conversion and host schema export retain this observation, including
-its configuration and access metadata. Export does not authorize management:
-YAML declarations and change normalization still reject this root path.
+and collisions with declared relations. Required nodes are not removed.
+Exclusions for this model match exact relative paths such as `app/workers`,
+without case folding or trimming. The comparison leaves the database-root
+`ptah_locks` node out, as the host's embedded engine leaves it out of every
+read: it plans no removal of it and reports nothing about it. A declaration at
+that path is the one case it reports, as undecided. Offline conversion and host
+schema export retain this observation, including its configuration and access
+metadata. Export does not authorize management: YAML and Go declarations and
+change normalization still reject this root path.
 This changes the desired model definition; pre-v1, no compatibility with the
 earlier experimental definition is owed.
 
 Offline subprocess tests cover decode, compare, and change normalization without
 opening a session. Live tests compare native observations after closing their
-session on both qualified YDB lines.
+session on both qualified YDB lines. `TestHostAppliesACoordinationNode_HappyPath`
+drives `ptah schema apply` of the current host through this provider from a
+YAML, a Go and a YQL source: it creates a node, finds nothing to change on the
+next run, changes its settings in place, and removes it once the source no
+longer declares it, reading the node back after each run.
 
 ## Offline column declarations
 
@@ -1097,10 +1124,15 @@ requires unchanged generated files.
 
 The offline planner preserves complete before and after operands. Each step
 has an object effect, a shared `ydb.scheme-path` effect, and a forbidden SQL
-transaction requirement. Table-to-node and node-to-table replacements require
-an explicit common path handoff. Unsupported common footprints and overlapping
-parent/descendant paths are refused until a directory lifecycle is captured.
-The parent directory must already exist; execution never creates or deletes it.
+transaction requirement. The path effect names no database, as the host names
+a path of the session's database. Table-to-node and node-to-table replacements
+require an explicit common path handoff. Unsupported common footprints and
+overlapping parent/descendant paths are refused until a directory lifecycle is
+captured. The host's window markers (such as `common/feature-creations`) and the
+column of a column step occupy no path, so they order nothing; the host places
+the step between its markers. A common step that names another database than
+the change is refused. The parent directory must already exist; execution never
+creates or deletes it.
 
 Rendering validates the complete operation receipt and emits a native envelope.
 It does not generate coordination SQL. Execution uses native CreateNode,
@@ -1125,8 +1157,10 @@ These checks are not an atomic compare-and-set. Another actor can change a node
 between validation and dispatch; the native API has no conditional schema-write
 contract. Successful creation does not establish exclusive ownership. The SDK
 subprocess tests cover create, alter, reset, drop, stale plans, mixed SQL/native
-batch refusal, and lease loss on both tested YDB release lines. Host CLI routing,
-other object lifecycles, and complete migration planning remain pending.
+batch refusal, and lease loss on both tested YDB release lines. The host routes
+a coordination node's comparison, planning and execution to these services
+(see [Coordination comparison](#coordination-comparison)); other object
+lifecycles remain pending.
 
 ## Offline table preparation
 
@@ -1530,8 +1564,8 @@ carry is refused by name, with no partial reading:
 
 Some of what a reading carries is not planned yet. Table creation refuses
 column defaults, indexes and table comments. Ptah refuses views and roles from
-a provider's reading. A coordination node is read, but `schema apply` plans no
-change for it and reports the comparison limits it leaves unresolved.
+a provider's reading. A coordination node is planned as the coordination
+services describe.
 
 `internal/yqlschema/testdata` holds the differential corpus: every load of YQL
 schema documents Ptah's own tests read, the YDB fixtures Ptah renders, and edge

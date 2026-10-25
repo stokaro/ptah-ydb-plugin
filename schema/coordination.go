@@ -58,7 +58,8 @@ func buildCoordinationDesiredModel() *protocol.ValueModel {
 "source":{"format":"yaml","document_key":"coordination_nodes","selector":"coordination_nodes","shape":"mapping of entry keys to node settings; name defaults to entry key; schema is relative to database",
 "text_fields":["name","schema","struct_name","self_check_period","session_grace_period","read_consistency_mode","attach_consistency_mode","rate_limiter_counters_mode"],
 "periods":"positive ISO8601 week/day/hour/minute/second durations; at most six fractional second digits; exact whole milliseconds",
-"modes":"trimmed and case-insensitive; empty or null values refused","unknown_fields":"refused"},
+"modes":"trimmed and case-insensitive; empty or null values refused","unknown_fields":"refused",
+"go":{"directive":"ptah:schema:coordinationnode","scope":"document","shape":"one node per directive; name is required; the other attributes are the text fields but struct_name"}},
 "identity":"exact YDB relative schema and leaf name; no catalog, parent path, overload or system path; root ptah_locks can be represented and exported but authored source and changes are refused",
 "comparison":"canonical desired equality is representation-local; no desired-observed equivalence implied"}`
 	var document map[string]any
@@ -81,12 +82,20 @@ func buildCoordinationDesiredModel() *protocol.ValueModel {
 	digest := sha256.Sum256(canonical)
 	return &protocol.ValueModel{Kind: CoordinationProperties, DisplayName: modelDisplayName(CoordinationProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
 		Encoding: "json", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]),
-		CanonicalFormat: CoordinationProperties + "/desired-json-v1", SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_SQL}}
+		CanonicalFormat: CoordinationProperties + "/desired-json-v1", SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}}
 }
 
 // CoordinationYAMLKey declares the document grammar owned by this model.
 func CoordinationYAMLKey() *protocol.YAMLSourceKey {
 	return &protocol.YAMLSourceKey{Scope: protocol.YAMLSourceKey_DOCUMENT, Key: "coordination_nodes", Selector: "coordination_nodes", Models: []string{CoordinationProperties}}
+}
+
+// CoordinationGoDirective declares the Go annotation that declares a node,
+// with the attributes of the host's own directive of the same name.
+func CoordinationGoDirective() *protocol.GoSourceDirective {
+	return &protocol.GoSourceDirective{Scope: protocol.GoSourceDirective_DOCUMENT, Directive: "ptah:schema:coordinationnode", Selector: "ptah:schema:coordinationnode",
+		Attributes: []string{"name", "schema", "self_check_period", "session_grace_period", "read_consistency_mode", "attach_consistency_mode", "rate_limiter_counters_mode"},
+		Models:     []string{CoordinationProperties}}
 }
 
 // ValidateCoordinationIntent refuses settings YDB would silently clamp. Bounds

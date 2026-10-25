@@ -61,7 +61,9 @@ func TestCoordinationInspectionComparisonSubprocess(t *testing.T) {
 	equal, err := client.CompareModels(ctx, request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(equal.Changes, qt.HasLen, 0)
-	c.Assert(equal.Undecided, qt.HasLen, 1)
+	// Every decision is made for a subject, so the namespace the read left
+	// out raises none.
+	c.Assert(equal.Undecided, qt.HasLen, 0)
 	value, err := schema.CaptureCoordinationIntent(desired.Value.Value.Owner, schema.CoordinationIntent{})
 	c.Assert(err, qt.IsNil)
 	normalized, err = client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "desired", Representation: protocol.ValueInput_DESIRED, Value: value}}})

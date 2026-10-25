@@ -1,4 +1,4 @@
-package coordinationplan
+package objectplan
 
 import (
 	"fmt"
@@ -10,9 +10,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// slot is the scheme path a subject occupies, named as the host names a path
+// of the session's database: without the database. A plan runs in one
+// database, and the host names a declared object or a table without it while
+// a read object keeps the database its inspection named.
 func slot(subject *protocol.ComparisonIdentity) *protocol.ComparisonIdentity {
 	value := proto.CloneOf(subject)
 	value.Kind = PathKind
+	value.Database = &protocol.ComparisonPart{}
 	return value
 }
 func isSchemeSubject(subject *protocol.ComparisonIdentity) bool {
@@ -22,7 +27,7 @@ func samePath(a, b *protocol.ComparisonIdentity) bool {
 	return isSchemeSubject(a) && isSchemeSubject(b) && provider.CompareIdentities(slot(a), slot(b)) == 0
 }
 func ancestor(parent, child *protocol.ComparisonIdentity) bool {
-	if !isSchemeSubject(parent) || parent.GetDatabase().GetNormalized() != child.GetDatabase().GetNormalized() || parent.GetCatalog().GetNormalized() != child.GetCatalog().GetNormalized() || len(parent.GetPath())+len(parent.GetSignature()) != 0 || parent.GetParent().GetNormalized() != "" {
+	if !isSchemeSubject(parent) || parent.GetCatalog().GetNormalized() != child.GetCatalog().GetNormalized() || len(parent.GetPath())+len(parent.GetSignature()) != 0 || parent.GetParent().GetNormalized() != "" {
 		return false
 	}
 	directory := parent.GetName().GetNormalized()
@@ -38,7 +43,7 @@ type use struct {
 	action protocol.PlanningEffect_Action
 }
 
-func dependencies(request *protocol.PlanFeaturesRequest, item change, id *protocol.StepIdentity) ([]*protocol.PlanningDependency, error) {
+func dependencies(request *protocol.PlanFeaturesRequest, family Family, item change, id *protocol.StepIdentity) ([]*protocol.PlanningDependency, error) {
 	var uses []use
 	var edges []*protocol.PlanningDependency
 	var handoff *protocol.StepIdentity
@@ -56,15 +61,26 @@ func dependencies(request *protocol.PlanFeaturesRequest, item change, id *protoc
 	}
 	for _, common := range request.CommonSteps {
 		if len(common.GetMetadata().GetEffects()) == 0 {
+			// An ordering marker such as common/feature-creations belongs to
+			// no object and changes nothing; the host places the step between
+			// its markers.
+			if common.Parent == nil && common.AddedColumn == nil {
+				continue
+			}
 			return nil, fmt.Errorf("a common step has no established object footprint")
 		}
 		for _, effect := range common.Metadata.Effects {
-			// A directory or child-object effect needs its own path projection.
-			// Until that contract exists, it cannot establish a disjoint footprint.
+			// A column or an index lives in its table and occupies no path of
+			// its own; the table's effect beside it carries the path.
+			if effect.GetSubject().GetParent().GetNormalized() != "" {
+				continue
+			}
+			// A directory effect needs its own path projection. Until that
+			// contract exists, it cannot establish a disjoint footprint.
 			if !isSchemeSubject(effect.Subject) {
 				return nil, fmt.Errorf("common step has an unsupported path footprint")
 			}
-			if err := validatePath(effect.Subject, item.input.Subject); err != nil {
+			if err := validatePath(family, effect.Subject, item.input.Subject); err != nil {
 				return nil, err
 			}
 			if samePath(effect.Subject, item.input.Subject) {
@@ -81,7 +97,7 @@ func dependencies(request *protocol.PlanFeaturesRequest, item change, id *protoc
 				uses = append(uses, use{common.Id, effect.Action})
 				if effect.Action == protocol.PlanningEffect_CREATE || effect.Action == protocol.PlanningEffect_DROP {
 					if item.action == protocol.PlanningEffect_ALTER || effect.Action != expected || handoff != nil {
-						return nil, fmt.Errorf("coordination operation conflicts with a common occupant at its path")
+						return nil, fmt.Errorf("%s operation conflicts with a common occupant at its path", family.Noun)
 					}
 					handoff = common.Id
 				}
@@ -93,7 +109,7 @@ func dependencies(request *protocol.PlanFeaturesRequest, item change, id *protoc
 	}
 	if len(uses) > 0 {
 		if handoff == nil || item.action == protocol.PlanningEffect_ALTER {
-			return nil, fmt.Errorf("coordination operation has an unordered path occupant")
+			return nil, fmt.Errorf("%s operation has an unordered path occupant", family.Noun)
 		}
 		if item.action == protocol.PlanningEffect_CREATE {
 			add(handoff, id)
@@ -112,17 +128,17 @@ func dependencies(request *protocol.PlanFeaturesRequest, item change, id *protoc
 		}
 	}
 	for _, table := range request.Tables {
-		if err := validatePath(table.Subject, item.input.Subject); err != nil {
+		if err := validatePath(family, table.Subject, item.input.Subject); err != nil {
 			return nil, err
 		}
 		if ancestor(table.Subject, item.input.Subject) || ancestor(item.input.Subject, table.Subject) {
-			return nil, fmt.Errorf("captured table overlaps a coordination directory path")
+			return nil, fmt.Errorf("captured table overlaps the directory path of a %s", family.Noun)
 		}
 		if !samePath(table.Subject, item.input.Subject) {
 			continue
 		}
 		if handoff == nil || (item.action == protocol.PlanningEffect_CREATE && table.Action != protocol.PlanningTable_DROP) || (item.action == protocol.PlanningEffect_DROP && table.Action != protocol.PlanningTable_CREATE) || item.action == protocol.PlanningEffect_ALTER {
-			return nil, fmt.Errorf("captured table lifecycle conflicts with the coordination path")
+			return nil, fmt.Errorf("captured table lifecycle conflicts with the path of a %s", family.Noun)
 		}
 	}
 	// Native objects cannot become each other's parent directories in one batch.
@@ -132,21 +148,23 @@ func dependencies(request *protocol.PlanFeaturesRequest, item change, id *protoc
 			continue
 		}
 		if ancestor(other.Subject, item.input.Subject) || ancestor(item.input.Subject, other.Subject) {
-			return nil, fmt.Errorf("coordination changes contain overlapping object and directory paths")
+			return nil, fmt.Errorf("%s changes contain overlapping object and directory paths", family.Noun)
 		}
 	}
 	return edges, nil
 }
 
-// An omitted database is an offline binding, not evidence of a separate path.
-func validatePath(subject, bound *protocol.ComparisonIdentity) error {
+// An omitted database is the session's, not evidence of a separate path; two
+// databases that are both named must be one.
+func validatePath(family Family, subject, bound *protocol.ComparisonIdentity) error {
 	identity := proto.CloneOf(subject)
-	identity.Kind = schema.CoordinationProperties
-	if _, err := schema.CoordinationBoundOwner(identity); err != nil {
+	identity.Kind = family.Kind
+	if _, err := family.Owner(identity); err != nil {
 		return fmt.Errorf("common context has an invalid YDB path identity: %w", err)
 	}
-	if (subject.GetDatabase().GetNormalized() == "") != (bound.GetDatabase().GetNormalized() == "") {
-		return fmt.Errorf("common context has an unresolved database binding")
+	a, b := subject.GetDatabase().GetNormalized(), bound.GetDatabase().GetNormalized()
+	if a != "" && b != "" && a != b {
+		return fmt.Errorf("common context names another database")
 	}
 	return nil
 }

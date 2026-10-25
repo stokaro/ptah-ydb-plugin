@@ -106,7 +106,6 @@ func TestDescriptionAdvertisesTheTableClaims(t *testing.T) {
 	for _, claim := range tablesource.YAMLKeys() {
 		c.Assert(slices.ContainsFunc(engine.YamlSourceKeys, func(declared *protocol.YAMLSourceKey) bool { return proto.Equal(declared, claim) }), qt.IsTrue, qt.Commentf(claim.Key))
 	}
-	c.Assert(len(engine.GoSourceDirectives), qt.Equals, 5)
 	for _, directive := range tablesource.GoDirectives() {
 		c.Assert(slices.ContainsFunc(engine.GoSourceDirectives, func(declared *protocol.GoSourceDirective) bool { return proto.Equal(declared, directive) }), qt.IsTrue, qt.Commentf(directive.Directive))
 	}
