@@ -643,7 +643,8 @@ encodings and definition digests; observation coverage contains only observed
 models.
 
 The subprocess tests exercise decoding, normalization, and representation
-conversion without a database address. HCL and SQL adapters remain pending.
+conversion without a database address. An HCL adapter remains pending; a YQL
+schema declares coordination nodes through [SQL schema reading](#sql-schema-reading).
 This service alone does not make the YAML example executable as a migration.
 
 ## Offline row-table declarations
@@ -1494,6 +1495,50 @@ subject names no database without its owner's, so both sides of one table name
 one owner. A facet whose owner is another table than its subject names is
 refused.
 
+## SQL schema reading
+
+The provider serves `schema.read-sql` for the `ydb` engine in document mode.
+`ptah schema plan` and `ptah schema apply` hand it the documents of a
+`--schema-file` or of a schema directory of `.sql` files, and it reads them as
+one load without a database session. The reader is a port of Ptah's own YQL
+schema reader at commit `a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d`, so a load
+reads to the model Ptah's bundled YDB owner reads, and a load Ptah refuses is
+refused with Ptah's words and at the position Ptah names.
+
+The reply carries the tables with their keys, columns, defaults, serial
+columns, comments and indexes; views; users, groups and memberships; grants and
+revocations; and coordination nodes as this provider's coordination model. It
+says what each document declares, traces every object to its statement, and
+claims complete coverage of the row-table, column, column-storage and
+coordination models. A `ptah:not-described` header entry of kind
+`coordination_node` limits that claim.
+
+A refused token is quoted with at most its first 64 bytes, where Ptah quotes it
+whole: a schema file can hold a secret in a string literal.
+
+A load that declares something no reply field or model of this provider can
+carry is refused by name, with no partial reading:
+
+- the partitioning settings, column families, TTL and column storage of a
+  table, which Ptah refuses in a SQL schema reading;
+- the partitioning and vector settings of an index;
+- changefeeds, topics, external data sources and external tables, which this
+  provider declares from no source document;
+- a user's password;
+- async replications, transfers, streaming queries, secrets, resource pools and
+  resource pool classifiers, which this provider has no model for.
+
+Some of what a reading carries is not planned yet. Table creation refuses
+column defaults, indexes and table comments. Ptah refuses views and roles from
+a provider's reading. A coordination node is read, but `schema apply` plans no
+change for it and reports the comparison limits it leaves unresolved.
+
+`internal/yqlschema/testdata` holds the differential corpus: every load of YQL
+schema documents Ptah's own tests read, the YDB fixtures Ptah renders, and edge
+cases, each with the answer Ptah's reader recorded. The unit suite compares the
+provider's reading with each answer, refusal for refusal. The corpus README says
+how the answers are recorded again.
+
 ## Offline SQL analysis
 
 The SQL analysis service reads default-mode YQL without a database session. It
@@ -1751,7 +1796,7 @@ settings other than column families, table removal and rebuild, planning, render
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
 rendering, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, offline SQL analysis, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
+lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations
