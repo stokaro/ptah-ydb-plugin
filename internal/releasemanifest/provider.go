@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // ProviderDocumentName is the release asset a host reads to choose a
@@ -59,23 +60,21 @@ type ProviderDocument struct {
 	Artifacts   []Artifact      `json:"artifacts"`
 }
 
-// minContractMinor is the lowest contract minor version this provider needs
-// from a host. provider-sdk v0.2.0 predates minor versions, so its contract is
-// minor 0; read the provider's declared minimum once the SDK pin carries one.
-const minContractMinor = 0
-
-// BuildProvider renders the ptah-provider.json document for a release.
+// BuildProvider renders the ptah-provider.json document for a release. The
+// minimum contract is the one description declares, so the manifest and the
+// provider's Describe reply cannot disagree about which hosts can start it.
 // version is the tag without its leading "v", as GoReleaser's .Version is;
 // project and executable are the archive prefix and the binary name.
 func BuildProvider(description *protocol.Description, version, project, executable string) ([]byte, error) {
 	if version == "" || strings.HasPrefix(version, "v") {
 		return nil, fmt.Errorf("release version %q must be the tag without its leading v", version)
 	}
+	minimum := provider.MinimumContract(description)
 	doc := ProviderDocument{
 		Schema:      1,
 		ProviderID:  description.GetProviderId(),
 		Version:     version,
-		MinContract: ContractVersion{Major: description.GetRevision(), Minor: minContractMinor},
+		MinContract: ContractVersion{Major: minimum.GetMajor(), Minor: minimum.GetMinor()},
 	}
 	for _, engine := range description.GetEngines() {
 		doc.Engines = append(doc.Engines, engine.GetId())
