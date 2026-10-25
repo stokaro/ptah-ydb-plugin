@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 167: invalid topic_min_active_partitions \"0\": takes a count of at least 1 (`topic_min_active_partitions must be greater than 0`) (got \";\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 167: invalid topic_min_active_partitions \"0\": takes a count of at least 1 (`topic_min_active_partitions must be greater than 0`) (got \";\")"
+ }
+}

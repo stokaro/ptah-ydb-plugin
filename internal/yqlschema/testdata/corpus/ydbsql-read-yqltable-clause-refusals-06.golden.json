@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 81: invalid data \"\": names the kind of storage pool the family is kept in, such as ssd; leave it out to keep the database's own pool (YDB answers an empty one with `database doesn't have required storage pools`) (got \")\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 81: invalid data \"\": names the kind of storage pool the family is kept in, such as ssd; leave it out to keep the database's own pool (YDB answers an empty one with `database doesn't have required storage pools`) (got \")\")"
+ }
+}

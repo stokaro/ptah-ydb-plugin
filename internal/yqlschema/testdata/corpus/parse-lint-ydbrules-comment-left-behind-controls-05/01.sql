@@ -1,0 +1,1 @@
+COMMENT ON INDEX `notes_tag` ON `app/notes` IS NULL

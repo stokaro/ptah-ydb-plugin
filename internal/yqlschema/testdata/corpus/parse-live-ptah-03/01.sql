@@ -1,0 +1,1 @@
+ALTER TABLE `__ptah_rebuild_ptah_ydb_rebuild_cmds` RENAME TO `ptah_ydb_rebuild_cmds`

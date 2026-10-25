@@ -1,0 +1,1 @@
+UPSERT INTO docs (id, v) VALUES (1, "x"u)

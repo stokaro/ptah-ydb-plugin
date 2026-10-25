@@ -1,0 +1,1 @@
+CREATE EXTERNAL DATA SOURCE `ext/s3` WITH (SOURCE_TYPE = 'ObjectStorage', LOCATION = 'https://storage.invalid/b/', AUTH_METHOD = 'NONE'); CREATE EXTERNAL TABLE `ext/events` (id Int64 NOT NULL) WITH (DATA_SOURCE = 'ext/s3', LOCATION = 'e/', FORMAT = 'csv_with_names'); GRANT SELECT ROW ON `ext/s3`, `ext/events` TO readers;

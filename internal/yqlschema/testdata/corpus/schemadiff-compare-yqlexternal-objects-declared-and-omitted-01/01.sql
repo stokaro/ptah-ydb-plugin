@@ -1,0 +1,1 @@
+CREATE EXTERNAL DATA SOURCE bucket WITH (SOURCE_TYPE = 'ObjectStorage', LOCATION = 'https://storage.invalid/', AUTH_METHOD = 'NONE'); CREATE EXTERNAL TABLE events (id Int64) WITH (DATA_SOURCE = 'bucket', LOCATION = '/');

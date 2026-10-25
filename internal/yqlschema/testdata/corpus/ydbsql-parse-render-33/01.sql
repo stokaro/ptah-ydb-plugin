@@ -1,0 +1,1 @@
+CREATE TOPIC events; ALTER TOPIC events ADD CONSUMER worker;

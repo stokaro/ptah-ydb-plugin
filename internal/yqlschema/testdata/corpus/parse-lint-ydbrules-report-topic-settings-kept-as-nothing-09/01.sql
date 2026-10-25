@@ -1,0 +1,1 @@
+CREATE TOPIC events WITH (retention_storage_mb = 1024)

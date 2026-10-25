@@ -1,0 +1,1 @@
+ALTER TOPIC `app/t/feed` ADD CONSUMER reader;

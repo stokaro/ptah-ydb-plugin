@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 115: session_grace_period PT5S: YDB runs a node with a grace period from the self-check period plus PT1S (PT6S here) to PT30S and moves a period outside that range into it (got \";\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 115: session_grace_period PT5S: YDB runs a node with a grace period from the self-check period plus PT1S (PT6S here) to PT30S and moves a period outside that range into it (got \";\")"
+ }
+}

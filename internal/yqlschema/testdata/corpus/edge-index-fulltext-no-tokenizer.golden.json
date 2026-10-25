@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 139: a YDB full-text index requires tokenizer (got \")\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 139: a YDB full-text index requires tokenizer (got \")\")"
+ }
+}

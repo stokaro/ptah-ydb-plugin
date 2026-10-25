@@ -1,0 +1,1 @@
+INSERT INTO `ref/colors` (`created`, `id`, `name`, `weight`) VALUES (Timestamp('2025-12-31T00:00:00Z'), 1, 'red'u, Decimal('0.25', 22, 9))

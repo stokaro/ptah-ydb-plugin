@@ -1,0 +1,1 @@
+ALTER USER app PASSWORD 'Secret2!' NOLOGIN; ALTER GROUP readers ADD USER app;

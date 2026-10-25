@@ -1,0 +1,16 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql",
+  "02.sql",
+  "03.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "03.sql: changefeed \"feed\" is declared twice on table t"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "03.sql: changefeed \"feed\" is declared twice on table t"
+ }
+}

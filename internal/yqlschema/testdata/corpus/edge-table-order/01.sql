@@ -1,0 +1,3 @@
+CREATE TABLE zeta (id Uint64 NOT NULL, PRIMARY KEY (id));
+CREATE TABLE alpha (id Uint64 NOT NULL, PRIMARY KEY (id));
+CREATE TABLE `m/beta` (id Uint64 NOT NULL, PRIMARY KEY (id));

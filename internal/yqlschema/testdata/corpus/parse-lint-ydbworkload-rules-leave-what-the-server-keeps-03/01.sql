@@ -1,0 +1,1 @@
+CREATE BACKUP COLLECTION nightly (TABLE t) WITH (STORAGE = 'cluster')

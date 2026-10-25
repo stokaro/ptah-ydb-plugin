@@ -1,0 +1,1 @@
+CREATE ASYNC REPLICATION `archive/mirror` FOR `/remote/source` AS `archive/copy` WITH (CONNECTION_STRING='grpc://source:2136/?database=/remote');ALTER ASYNC REPLICATION `archive/mirror` SET (TOKEN_SECRET_NAME='token'); ALTER ASYNC REPLICATION `archive/mirror` SET (TOKEN_SECRET_PATH='secrets/token');

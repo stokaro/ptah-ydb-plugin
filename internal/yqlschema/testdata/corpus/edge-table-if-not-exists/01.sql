@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS `app/t` (id Uint64 NOT NULL, PRIMARY KEY (id));

@@ -1,0 +1,1 @@
+ALTER TABLE t ADD CHANGEFEED feed WITH (mode = 'KEYS_ONLY', format = 'JSON');

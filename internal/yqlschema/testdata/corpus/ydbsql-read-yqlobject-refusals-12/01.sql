@@ -1,0 +1,1 @@
+CREATE VIEW `/local/v` WITH (security_invoker = TRUE) AS SELECT 1;

@@ -1,0 +1,1 @@
+ALTER TABLE `shop/users` ADD INDEX users_name GLOBAL UNIQUE SYNC ON (name)

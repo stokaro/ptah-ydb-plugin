@@ -1,0 +1,1 @@
+CREATE TABLE `app/orders` (id Serial NOT NULL, b BigSerial, s SmallSerial, PRIMARY KEY (id));

@@ -1,0 +1,1 @@
+ALTER ASYNC REPLICATION `archive/mirror` SET (ENDPOINT='moved:2136'); ALTER TRANSFER `archive/ingest` SET (BATCH_SIZE_BYTES=4096);

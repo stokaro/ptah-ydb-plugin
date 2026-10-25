@@ -1,0 +1,1 @@
+CREATE TOPIC `events.v1`;

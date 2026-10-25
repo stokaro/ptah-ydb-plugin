@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, a Timestamp DEFAULT CurrentUtcTimestamp(), PRIMARY KEY (id));

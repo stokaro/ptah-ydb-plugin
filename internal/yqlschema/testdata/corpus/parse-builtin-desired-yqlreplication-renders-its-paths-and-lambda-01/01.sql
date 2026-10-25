@@ -1,0 +1,1 @@
+CREATE ASYNC REPLICATION `archive/mirror` FOR `/remote/source` AS `archive/copy` WITH (ENDPOINT='source:2136', DATABASE='/remote'); CREATE TRANSFER `archive/ingest` FROM `archive/events` TO `archive/rows` USING ($msg) -> { RETURN [<|id:$msg._offset|>]; };

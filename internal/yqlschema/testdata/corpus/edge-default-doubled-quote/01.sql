@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, m Utf8 NOT NULL DEFAULT 'q''u'u, PRIMARY KEY (id));

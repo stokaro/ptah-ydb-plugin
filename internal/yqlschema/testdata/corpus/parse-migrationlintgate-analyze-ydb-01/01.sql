@@ -1,0 +1,1 @@
+CREATE TABLE `shop/legacy` (id Uint64 NOT NULL, PRIMARY KEY (id))

@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_lint/view/base` (id Uint64 NOT NULL, PRIMARY KEY (id))

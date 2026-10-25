@@ -1,0 +1,1 @@
+CREATE SECRET s WITH (value = 'SENTINEL');

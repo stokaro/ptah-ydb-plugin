@@ -1,0 +1,1 @@
+CREATE TABLE events (`a,b` Uint64 NOT NULL, body Utf8, PRIMARY KEY (`a,b`), INDEX body_bloom LOCAL USING bloom_filter ON (body) WITH (false_positive_probability = 0.05)) PARTITION BY HASH (`a,b`) WITH (STORE = COLUMN, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 8);

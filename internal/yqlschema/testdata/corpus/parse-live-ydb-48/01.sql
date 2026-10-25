@@ -1,0 +1,1 @@
+COMMENT ON INDEX `users_by_phone` ON `ptah_ydb_comments/users` IS 'By phone'

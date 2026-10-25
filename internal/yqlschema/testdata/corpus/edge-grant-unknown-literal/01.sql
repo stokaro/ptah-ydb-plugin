@@ -1,0 +1,2 @@
+CREATE TABLE t (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id));
+GRANT 'YDB.GENERIC.LIST' ON t TO alice;

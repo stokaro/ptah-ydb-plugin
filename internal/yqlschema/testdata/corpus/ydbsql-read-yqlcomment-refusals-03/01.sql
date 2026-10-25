@@ -1,0 +1,1 @@
+COMMENT ON TABLE absent IS 'x';

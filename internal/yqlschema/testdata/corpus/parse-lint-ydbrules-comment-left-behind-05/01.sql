@@ -1,0 +1,1 @@
+ALTER TABLE `app/old_notes` DROP COLUMN body

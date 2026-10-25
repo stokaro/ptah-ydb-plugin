@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_comments/users` ADD INDEX `users_by_phone` GLOBAL SYNC ON (`phone`)

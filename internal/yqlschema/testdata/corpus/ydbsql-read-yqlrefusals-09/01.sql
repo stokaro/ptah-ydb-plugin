@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, v String DEFAULT "x"pt, PRIMARY KEY (id));

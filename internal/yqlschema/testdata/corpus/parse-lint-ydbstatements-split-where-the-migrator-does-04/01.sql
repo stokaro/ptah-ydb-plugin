@@ -1,0 +1,1 @@
+DO BEGIN SELECT 1 AS `end`; SELECT 2 AS `do`; END DO

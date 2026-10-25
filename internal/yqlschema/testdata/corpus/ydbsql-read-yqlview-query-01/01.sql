@@ -1,0 +1,1 @@
+CREATE VIEW `app/summary` WITH (security_invoker = TRUE) AS SELECT id, ';' AS text FROM `app/items` /* keep the query */ WHERE id > 0; CREATE TOPIC `app/events`;

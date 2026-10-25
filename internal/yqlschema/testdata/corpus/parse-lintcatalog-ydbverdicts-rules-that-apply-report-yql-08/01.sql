@@ -1,0 +1,1 @@
+DROP GROUP readers

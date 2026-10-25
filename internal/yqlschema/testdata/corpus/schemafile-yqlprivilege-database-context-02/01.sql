@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Uint64 NOT NULL, PRIMARY KEY(id)); GRANT SELECT ON `/local/shop/orders` TO readers;

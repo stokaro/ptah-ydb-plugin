@@ -1,0 +1,1 @@
+UPSERT INTO notes (id, body) VALUES (1, 'DROP COORDINATION NODE locks'u)

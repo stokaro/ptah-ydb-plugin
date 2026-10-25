@@ -53,7 +53,7 @@ func buildTableDesiredModel() *protocol.ValueModel {
 	digest := sha256.Sum256(canonical)
 	return &protocol.ValueModel{Kind: TableProperties, DisplayName: modelDisplayName(TableProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
 		Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: TableProperties + "/desired-json-v1",
-		SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}}
+		SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}}
 }
 
 func normalizeTableIntent(value *protocol.Envelope) (*protocol.Envelope, error) {

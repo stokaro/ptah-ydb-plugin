@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/rule_12/t` ADD CHANGEFEED feed WITH (MODE = 'UPDATES', FORMAT = 'JSON')

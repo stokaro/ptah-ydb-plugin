@@ -1,0 +1,1 @@
+CREATE TABLE events (id Int64 NOT NULL, PRIMARY KEY (id));ALTER TABLE events ADD CHANGEFEED updates WITH (mode='UPDATES', format='JSON', topic_min_active_partitions=0);

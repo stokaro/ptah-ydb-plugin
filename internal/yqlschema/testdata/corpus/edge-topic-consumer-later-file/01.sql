@@ -1,0 +1,1 @@
+CREATE TOPIC `app/events`;

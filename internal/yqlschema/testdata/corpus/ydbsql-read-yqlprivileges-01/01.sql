@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE `app/locks`; GRANT 'use' ON `app/locks` TO readers;

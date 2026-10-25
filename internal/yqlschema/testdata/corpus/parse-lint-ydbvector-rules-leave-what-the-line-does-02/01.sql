@@ -1,0 +1,1 @@
+ALTER TABLE docs DROP INDEX docs_emb

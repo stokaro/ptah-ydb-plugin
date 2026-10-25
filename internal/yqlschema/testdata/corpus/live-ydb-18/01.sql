@@ -1,0 +1,1 @@
+CREATE TABLE items (id Int64 NOT NULL, PRIMARY KEY (id)); CREATE COORDINATION NODE locks;CREATE VIEW summary WITH (security_invoker = TRUE) AS SELECT id FROM items; CREATE TOPIC events (CONSUMER worker WITH (important = TRUE)) WITH (retention_period = Interval('P1D'));

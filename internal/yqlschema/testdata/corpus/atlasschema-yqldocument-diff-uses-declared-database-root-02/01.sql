@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Int64 NOT NULL, PRIMARY KEY(id)); CREATE USER app;GRANT CONNECT ON `/local` TO app; GRANT LIST ON `/local/shop` TO app;

@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Int64 NOT NULL, PRIMARY KEY(id)); CREATE USER app;

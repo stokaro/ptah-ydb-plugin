@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 88: index method \"hnsw\" is pgvector's and has no YDB counterpart: YDB's vector index is vector_kmeans_tree, declared with type \"vector_kmeans_tree\" and its distance or similarity, vector_type, vector_dimension, levels and clusters (got \"ON\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 88: index method \"hnsw\" is pgvector's and has no YDB counterpart: YDB's vector index is vector_kmeans_tree, declared with type \"vector_kmeans_tree\" and its distance or similarity, vector_type, vector_dimension, levels and clusters (got \"ON\")"
+ }
+}

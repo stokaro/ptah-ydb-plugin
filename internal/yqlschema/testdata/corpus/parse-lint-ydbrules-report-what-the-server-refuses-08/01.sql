@@ -1,0 +1,1 @@
+ALTER TABLE base RENAME TO moved

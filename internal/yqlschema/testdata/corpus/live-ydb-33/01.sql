@@ -1,0 +1,1 @@
+CREATE USER `ptahaccu6c1e5825` PASSWORD 'Secret1!'; CREATE USER ptahaccb6c1e5825 NOLOGIN; CREATE GROUP ptahaccg6c1e5825 WITH USER ptahaccu6c1e5825, ptahaccb6c1e5825;

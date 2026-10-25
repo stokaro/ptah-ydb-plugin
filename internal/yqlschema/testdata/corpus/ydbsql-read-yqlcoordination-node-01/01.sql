@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE `app/locks.v1` WITH (self_check_period = Interval('PT0.5S'), attach_consistency_mode = 'strict');

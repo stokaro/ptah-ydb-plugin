@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 55: invalid supported_codecs \"raw,foo\": takes a comma-separated list of raw, gzip, lzop, zstd, custom; YDB keeps a list naming any other codec as no list at all (got \"\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 55: invalid supported_codecs \"raw,foo\": takes a comma-separated list of raw, gzip, lzop, zstd, custom; YDB keeps a list naming any other codec as no list at all (got \"\")"
+ }
+}

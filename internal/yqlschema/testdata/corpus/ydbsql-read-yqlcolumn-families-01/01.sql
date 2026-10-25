@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, `a,b` Utf8 FAMILY `pay\x6coad`, v String FAMILY payload, PRIMARY KEY (id), FAMILY payload (COMPRESSION = 'lz4'), FAMILY `default` (CACHE_MODE = 'regular'));

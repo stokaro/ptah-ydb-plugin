@@ -1,0 +1,15 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "database_path": "/Root/db",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: the schema model has no place for this statement: YDB source path \"/Root/other/shop/orders\" is outside database \"/Root/db\""
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: the schema model has no place for this statement: YDB source path \"/Root/other/shop/orders\" is outside database \"/Root/db\""
+ }
+}

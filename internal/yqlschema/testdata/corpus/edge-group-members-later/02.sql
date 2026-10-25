@@ -1,0 +1,1 @@
+ALTER GROUP devs ADD USER alice, bob;

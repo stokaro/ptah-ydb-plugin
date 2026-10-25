@@ -1,0 +1,1 @@
+ALTER SEQUENCE `/local/counters/_serial_column_n` INCREMENT BY 2

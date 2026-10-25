@@ -1,0 +1,2 @@
+GRANT INSERT ON t TO alice;
+REVOKE SELECT ON t FROM alice;

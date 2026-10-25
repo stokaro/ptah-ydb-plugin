@@ -1,0 +1,1 @@
+DROP RESOURCE POOL batch

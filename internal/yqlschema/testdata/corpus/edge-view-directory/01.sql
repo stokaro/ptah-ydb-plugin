@@ -1,0 +1,1 @@
+CREATE VIEW `app/v` WITH (security_invoker = TRUE) AS SELECT 1 AS one;

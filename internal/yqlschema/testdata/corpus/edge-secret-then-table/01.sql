@@ -1,0 +1,2 @@
+CREATE SECRET `s` WITH (value = $PTAH_SECRET_S);
+CREATE TABLE t (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id));

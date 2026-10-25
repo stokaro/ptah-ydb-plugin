@@ -1,0 +1,1 @@
+CREATE TABLE events (id Int64 NOT NULL, ts Timestamp64, expires Uint64, PRIMARY KEY (id));

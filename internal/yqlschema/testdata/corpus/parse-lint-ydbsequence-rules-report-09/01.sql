@@ -1,0 +1,1 @@
+CREATE TABLE tags (id Serial2 NOT NULL, PRIMARY KEY (id))

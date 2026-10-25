@@ -1,0 +1,1 @@
+UPSERT INTO notes (id) VALUES (1)

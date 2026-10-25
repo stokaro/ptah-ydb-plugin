@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 60: invalid rank \"\": a classifier needs a rank; YDB ranks one declared without it after every classifier the database holds, so the rank would depend on the database rather than on the declaration (got \";\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 60: invalid rank \"\": a classifier needs a rank; YDB ranks one declared without it after every classifier the database holds, so the rank would depend on the database rather than on the declaration (got \";\")"
+ }
+}

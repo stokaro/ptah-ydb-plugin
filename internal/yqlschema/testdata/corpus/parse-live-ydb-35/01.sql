@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/view/base` RENAME TO `ptah_ydb_lint/view/moved`

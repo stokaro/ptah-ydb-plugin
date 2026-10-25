@@ -1,0 +1,1 @@
+COMMENT ON INDEX `notes_by_tag` ON `app/notes` IS 'By tag'

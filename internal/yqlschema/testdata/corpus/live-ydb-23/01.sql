@@ -1,0 +1,1 @@
+CREATE TOPIC `ptah_ydb_repl/events`; CREATE TABLE `ptah_ydb_repl/rows` (id Int64 NOT NULL, PRIMARY KEY(id));CREATE TRANSFER `ptah_ydb_repl/ingest` FROM `ptah_ydb_repl/events` TO `ptah_ydb_repl/rows` USING ($msg) -> { RETURN [<|id:Unwrap(CAST($msg._offset AS Int64))|>]; } WITH (FLUSH_INTERVAL=Interval('PT1S'));

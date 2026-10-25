@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_cli_migrations/posts` (id Int64 NOT NULL, PRIMARY KEY (id))

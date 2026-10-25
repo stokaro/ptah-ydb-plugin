@@ -1,0 +1,1 @@
+CREATE USER alice PASSWORD 'secret';

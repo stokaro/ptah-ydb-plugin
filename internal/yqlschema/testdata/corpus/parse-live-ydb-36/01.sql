@@ -1,0 +1,1 @@
+COMMENT ON COLUMN `ptah_ydb_comments/users`.`email` IS 'Login'

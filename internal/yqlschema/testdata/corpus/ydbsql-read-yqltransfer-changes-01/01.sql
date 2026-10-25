@@ -1,0 +1,1 @@
+CREATE TRANSFER `archive/ingest` FROM `archive/events` TO `archive/rows` USING ($msg) -> { $items = [<|id:$msg._offset|>]; RETURN $items; };ALTER TRANSFER `archive/ingest` SET USING ($msg) -> { RETURN [<|id:$msg._offset+1|>]; }, SET (BATCH_SIZE_BYTES=8192,FLUSH_INTERVAL=Interval('PT3S'));

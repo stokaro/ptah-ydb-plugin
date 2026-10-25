@@ -1,0 +1,1 @@
+ALTER USER app NOLOGIN; ALTER GROUP readers ADD USER app;

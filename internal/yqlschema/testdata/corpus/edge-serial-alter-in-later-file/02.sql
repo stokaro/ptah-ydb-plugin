@@ -1,0 +1,1 @@
+ALTER SEQUENCE `/Root/db/app/orders/_serial_column_id` START WITH 10 INCREMENT BY 2;

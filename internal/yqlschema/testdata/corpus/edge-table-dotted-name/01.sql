@@ -1,0 +1,2 @@
+CREATE TABLE `a.b` (id Uint64 NOT NULL, PRIMARY KEY (id));
+CREATE TABLE `a/b` (id Uint64 NOT NULL, PRIMARY KEY (id));

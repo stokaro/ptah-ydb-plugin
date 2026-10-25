@@ -1,0 +1,1 @@
+CREATE SECRET `ext/pw` WITH (value = 's3cr3t-SENTINEL')

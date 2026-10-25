@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX l LOCAL USING bloom_ngram_filter ON (v) WITH (ngram_size = 4, false_positive_probability = 0.05, case_sensitive = false)) PARTITION BY HASH (id) WITH (STORE = COLUMN);

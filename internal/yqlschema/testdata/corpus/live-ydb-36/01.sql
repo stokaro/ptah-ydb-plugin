@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_access/orders` (id Int64 NOT NULL, PRIMARY KEY(id)); CREATE GROUP ptahaccg67e579f6; CREATE USER ptahaccu67e579f6;GRANT SELECT ROW ON `ptah_ydb_access/orders` TO ptahaccg67e579f6 WITH GRANT OPTION; GRANT LIST ON `/local/ptah_ydb_access` TO ptahaccg67e579f6; GRANT CONNECT ON `/local` TO ptahaccu67e579f6;

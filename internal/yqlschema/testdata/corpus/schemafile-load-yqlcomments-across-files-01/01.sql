@@ -1,0 +1,1 @@
+CREATE TABLE `dir/t` (id Int64 NOT NULL, body Utf8, PRIMARY KEY (id), INDEX by_body GLOBAL ON (body));

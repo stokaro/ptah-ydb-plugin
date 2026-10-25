@@ -1,0 +1,1 @@
+CREATE TABLE `app/orders` (id BigSerial NOT NULL,note Utf8,PRIMARY KEY(id));ALTER SEQUENCE `/Root/db/app/orders/_serial_column_id` START WITH 100 INCREMENT BY 5; ALTER SEQUENCE `/Root/db/app/orders/_serial_column_id` INCREMENT BY 7;

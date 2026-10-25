@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, PRIMARY KEY (id), INDEX i GLOBAL ASYNC USING vector_kmeans_tree ON (id));

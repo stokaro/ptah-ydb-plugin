@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_serials/orders` (id BigSerial NOT NULL,note Utf8,PRIMARY KEY(id)); ALTER SEQUENCE `/local/ptah_ydb_serials/orders/_serial_column_id` START WITH 100 INCREMENT BY 5; CREATE TABLE `ptah_ydb_serials/counters` (id BigSerial NOT NULL,note Utf8,PRIMARY KEY(id)); ALTER SEQUENCE `/local/ptah_ydb_serials/counters/_serial_column_id` INCREMENT 7;

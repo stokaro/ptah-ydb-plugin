@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_comments/users` DROP COLUMN `legacy`

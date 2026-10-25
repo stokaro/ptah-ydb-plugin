@@ -1,0 +1,1 @@
+CREATE TABLE `app/notes` (id Uint64 NOT NULL, body Utf8, tag Utf8, PRIMARY KEY (id), INDEX notes_tag GLOBAL ON (tag))

@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_lint/rule_1/t` (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX t_v GLOBAL UNIQUE SYNC ON (v))

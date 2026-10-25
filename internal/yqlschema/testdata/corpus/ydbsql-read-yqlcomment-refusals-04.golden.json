@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 35: invalid comment statement: COMMENT ON TABLE: the comment 'unterminated is not a string Ptah reads; write it in quotes, with the escapes \\\\, \\', \\\", \\n, \\r, \\t and \\xHH (got \"\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 35: invalid comment statement: COMMENT ON TABLE: the comment 'unterminated is not a string Ptah reads; write it in quotes, with the escapes \\\\, \\', \\\", \\n, \\r, \\t and \\xHH (got \"\")"
+ }
+}

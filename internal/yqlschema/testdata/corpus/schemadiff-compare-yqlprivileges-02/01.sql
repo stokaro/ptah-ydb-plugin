@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Int64 NOT NULL, PRIMARY KEY(id)); CREATE GROUP readers; CREATE USER app PASSWORD 'Secret1!'; ALTER GROUP readers ADD USER app; ALTER GROUP `DATA-READERS` ADD USER app;GRANT SELECT ROW, LIST ON `shop/orders` TO readers; GRANT LIST ON shop TO readers; GRANT CONNECT ON `/local` TO app;

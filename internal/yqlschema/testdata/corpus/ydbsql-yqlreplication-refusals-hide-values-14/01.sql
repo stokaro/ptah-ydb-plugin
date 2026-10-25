@@ -1,0 +1,1 @@
+CREATE ASYNC REPLICATION x FOR src AS dst WITH (ENDPOINT='grpc://grpcs://source:2136',DATABASE='/remote');

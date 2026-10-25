@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, e String, PRIMARY KEY (id), INDEX v GLOBAL USING vector_kmeans_tree ON (e) WITH (similarity = inner_product, vector_type = uint8, vector_dimension = 8, levels = 2, clusters = 4));

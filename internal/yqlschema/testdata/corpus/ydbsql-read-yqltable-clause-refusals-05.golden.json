@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 91: desired model \"ptah.run/ydb/ttl\": invalid feature value: interval \"invalid\" is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): it does not begin with P (got \";\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 91: desired model \"ptah.run/ydb/ttl\": invalid feature value: interval \"invalid\" is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): it does not begin with P (got \";\")"
+ }
+}

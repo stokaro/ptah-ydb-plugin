@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE n WITH (self_check_period = Interval('PT0.0001S'));

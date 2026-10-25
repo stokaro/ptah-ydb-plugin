@@ -1,0 +1,1 @@
+CREATE TABLE t (ts Timestamp NOT NULL, id Uint64, PRIMARY KEY (ts)) PARTITION BY HASH (ts) WITH (STORE = COLUMN, TTL = Interval('PT2H') TO EXTERNAL DATA SOURCE `/local/s3`, Interval('PT1H') DELETE ON ts);

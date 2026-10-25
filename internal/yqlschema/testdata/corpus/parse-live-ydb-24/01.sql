@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/rule_13/t` RENAME TO `ptah_ydb_lint/rule_13/u`

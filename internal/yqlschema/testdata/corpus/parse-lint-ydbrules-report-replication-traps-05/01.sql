@@ -1,0 +1,1 @@
+CREATE TRANSFER ingest FROM tp TO t USING ($m) -> { return [<| a: 1 |>]; } WITH (CONNECTION_STRING = 'grpc://primary:2136/?database=/prod', TOKEN = 'secret')

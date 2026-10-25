@@ -1,0 +1,408 @@
+package yqlschema_test
+
+import (
+	"encoding/json"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+
+	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+)
+
+// readRequest is the request a provider-selected run of the host sends for a
+// row: its documents in order, named by their place in the load, the
+// database root, and the header entries the host reads for the engine.
+func readRequest(r row) *protocol.ReadSQLSchemaRequest {
+	description := backend.Description()
+	engine := description.GetEngines()[0]
+	request := &protocol.ReadSQLSchemaRequest{Engine: engine.GetId(), TargetFeatures: slices.Clone(engine.GetFeatures()),
+		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(engine.GetIdentifiers()), DefaultSchema: engine.GetDefaultSchema()},
+		DatabasePath: r.golden.DatabasePath}
+	for i, document := range r.documents {
+		request.Documents = append(request.Documents, &protocol.SQLDocument{Id: strconv.Itoa(i + 1), Path: document.Path, Text: document.Text})
+	}
+	for _, limit := range r.golden.Limits {
+		request.Limits = append(request.Limits, &protocol.SchemaCoverageLimit{Kind: limit.Kind, Name: limit.Name, Reason: limit.Reason, Provenance: limit.Provenance})
+	}
+	return request
+}
+
+// wireRows are the rows whose reading reaches the reply: the host's grammar
+// accepts them, the host accepts the headers they hold, and this provider
+// has a model for every statement.
+func wireRows(c *qt.C) []row {
+	c.Helper()
+	listed := unsupportedRows(c)
+	return corpus(c, func(r row) bool { return accepted(r) && r.golden.Load.Outcome == "accepted" && listed[r.name] == "" })
+}
+
+// gaps names what a reading declares that a SQL schema reading has no home
+// for: a table's or an index's YDB settings, a password, and an object other
+// than a coordination node. A coordination node at a path the provider's
+// model refuses counts as one too.
+func gaps(reading *yqlschema.Reading) []string {
+	var found []string
+	for _, table := range reading.Tables {
+		if !table.Facets.Empty() {
+			found = append(found, "table "+table.Qualified())
+		}
+	}
+	for _, index := range reading.Indexes {
+		if len(yqlschema.IndexFacetPayloads(index)) != 0 {
+			found = append(found, "index "+index.Name)
+		}
+	}
+	for _, role := range reading.Roles {
+		if role.Password != "" {
+			found = append(found, "password "+role.Name)
+		}
+	}
+	for _, object := range reading.Objects {
+		owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: object.Schema, Name: object.Name}
+		if object.Kind != yqlschema.KindCoordinationNode || schema.ValidateManagedCoordinationOwner(owner) != nil {
+			found = append(found, string(object.Kind)+" "+object.Name)
+		}
+	}
+	return found
+}
+
+func complete(c *qt.C, r row) bool {
+	c.Helper()
+	reading, refusal := yqlschema.Read(r.documents, r.golden.DatabasePath)
+	c.Assert(refusal == nil, qt.IsTrue)
+	return len(gaps(reading)) == 0
+}
+
+// TestReply_HappyPath answers every row whose reading has a home in a SQL
+// schema reading, and requires a reply the SDK accepts that the host maps to
+// the model its own reader makes: the common objects field for field, the
+// coordination nodes, and the declarations of each document.
+func TestReply_HappyPath(t *testing.T) {
+	c := qt.New(t)
+	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return !complete(c, r) })
+	c.Assert(len(rows) >= 180, qt.IsTrue, qt.Commentf("%d rows reach a complete reply", len(rows)))
+	for _, r := range rows {
+		t.Run(r.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := readRequest(r)
+			reply := yqlschema.Reply(request)
+			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
+			c.Assert(reply.GetComplete(), qt.IsTrue, qt.Commentf("%v", reply.GetDiagnostics()))
+			c.Assert(wireOrder(settle(c, hostMapping(c, reply))), qt.DeepEquals, wireOrder(settle(c, withoutFacets(hostMeaning(c, r.golden.Grammar)))))
+		})
+	}
+}
+
+// TestReply_FailurePath answers every row whose reading declares something a
+// SQL schema reading has no home for, and requires a refusal the SDK accepts
+// that names each of them and exposes no schema.
+func TestReply_FailurePath(t *testing.T) {
+	c := qt.New(t)
+	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return complete(c, r) })
+	c.Assert(len(rows) >= 30, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
+	for _, r := range rows {
+		t.Run(r.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := readRequest(r)
+			reply := yqlschema.Reply(request)
+			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
+			c.Assert(reply.GetComplete(), qt.IsFalse)
+			reading, _ := yqlschema.Read(r.documents, r.golden.DatabasePath)
+			c.Assert(reply.GetDiagnostics(), qt.HasLen, len(gaps(reading)))
+		})
+	}
+}
+
+// TestReply_RefusedLoad answers every row the host's grammar refuses with a
+// reply the SDK accepts, whose first error is the refusal the host makes.
+func TestReply_RefusedLoad(t *testing.T) {
+	listed := unsupportedRows(qt.New(t))
+	rows := corpus(qt.New(t), func(r row) bool { return refused(r) && listed[r.name] == "" })
+	for _, r := range rows {
+		t.Run(r.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := readRequest(r)
+			reply := yqlschema.Reply(request)
+			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
+			c.Assert(reply.GetComplete(), qt.IsFalse)
+			c.Assert(reply.GetDiagnostics(), qt.HasLen, 1)
+			want := expectedRefusal(c, r.golden.Grammar.Error)
+			diagnostic := reply.GetDiagnostics()[0]
+			got := hostRefusal{Document: documentIndex(c, diagnostic.GetDocumentId()), Offset: int(diagnostic.GetSpan().GetStart().GetByteOffset()),
+				Message: diagnostic.GetMessage()}
+			got.Offset = map[bool]int{true: -1, false: got.Offset}[want.Offset < 0]
+			c.Assert(got, qt.DeepEquals, hostRefusal{Document: want.Document, Offset: want.Offset, Message: boundedMessage(want.Message)})
+		})
+	}
+}
+
+func documentIndex(c *qt.C, id string) int {
+	c.Helper()
+	number, err := strconv.Atoi(id)
+	c.Assert(err, qt.IsNil)
+	return number - 1
+}
+
+// boundedMessage is a host message as a diagnostic carries it: one line of
+// at most provider.MaxSQLDiagnosticMessage bytes.
+func boundedMessage(message string) string {
+	message = strings.Join(strings.FieldsFunc(message, func(r rune) bool { return r == '\n' || r == '\r' || r == '\t' }), " ")
+	if len(message) <= provider.MaxSQLDiagnosticMessage {
+		return message
+	}
+	return message[:provider.MaxSQLDiagnosticMessage-3] + "..."
+}
+
+// settle is a meaning as the host settles a load's model once it is read:
+// each table, column, index, view, role and grant once, the first of each
+// kept, and the tables in the order of their qualified names.
+func settle(c *qt.C, m meaning) meaning {
+	c.Helper()
+	first := func(values []map[string]any, key func(map[string]any) string) []map[string]any {
+		seen := map[string]bool{}
+		var kept []map[string]any
+		for _, value := range values {
+			if k := key(value); !seen[k] {
+				seen[k] = true
+				kept = append(kept, value)
+			}
+		}
+		return kept
+	}
+	text := func(value map[string]any, key string) string {
+		held, _ := value[key].(string)
+		return held
+	}
+	qualified := func(table map[string]any) string { return canonical(text(table, "Schema"), text(table, "Name")) }
+	m.Tables = first(m.Tables, qualified)
+	slices.SortStableFunc(m.Tables, func(a, b map[string]any) int { return strings.Compare(qualified(a), qualified(b)) })
+	m.Fields = first(m.Fields, func(field map[string]any) string { return text(field, "Table") + "\x00" + text(field, "Name") })
+	m.Indexes = first(m.Indexes, func(index map[string]any) string { return text(index, "TableName") + "\x00" + text(index, "Name") })
+	m.Views = first(m.Views, func(view map[string]any) string { return text(view, "Name") })
+	m.Roles = first(m.Roles, func(role map[string]any) string { return text(role, "Name") })
+	whole := func(value map[string]any) string { return string(marshal(c, value)) }
+	m.Grants = first(m.Grants, whole)
+	m.RevokedGrants = first(m.RevokedGrants, whole)
+	return m
+}
+
+// withoutFacets is a meaning with the settings of tables and indexes left
+// out, which a complete reply carries none of.
+func withoutFacets(m meaning) meaning {
+	m.TableFacets, m.IndexFacets = map[string]map[string]any{}, map[string]map[string]any{}
+	return m
+}
+
+// wireOrder orders the columns of a meaning by table. The host's reader
+// keeps the columns of a load in the order the documents create them; a
+// reply lists each table's columns with the table, and the host keeps the
+// order of a table's own columns either way.
+func wireOrder(m meaning) meaning {
+	slices.SortStableFunc(m.Fields, func(a, b map[string]any) int { return strings.Compare(a["Table"].(string), b["Table"].(string)) })
+	slices.SortStableFunc(m.Indexes, func(a, b map[string]any) int {
+		return strings.Compare(a["TableName"].(string), b["TableName"].(string))
+	})
+	return m
+}
+
+// hostMapping is the meaning of the model the host maps a complete reply to,
+// as internal/providerhost maps a SQL schema reading: each table at its
+// qualified name with its columns and indexes, each view at its qualified
+// name, each grant at the field of the host's model its target's kind names,
+// and each coordination node with the settings its envelope holds.
+func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
+	c.Helper()
+	result := meaning{TableFacets: map[string]map[string]any{}, IndexFacets: map[string]map[string]any{}}
+	for _, table := range reply.GetTables() {
+		qualified := canonical(table.GetSchema(), table.GetName())
+		object := map[string]any{"Name": table.GetName(), "Schema": table.GetSchema(), "Comment": table.GetComment(), "PrimaryKey": table.GetPrimaryKey()}
+		var parts []map[string]any
+		for _, part := range table.GetPrimaryKeyParts() {
+			parts = append(parts, map[string]any{"Name": part.GetColumn(), "Prefix": part.GetPrefix(), "Desc": part.GetDescending()})
+		}
+		object["PrimaryKeyParts"] = parts
+		result.Tables = append(result.Tables, element(c, marshal(c, object)))
+		for _, column := range table.GetColumns() {
+			field := element(c, marshal(c, map[string]any{"Name": column.GetName(), "Type": column.GetType(), "Nullable": column.GetNullable(),
+				"Primary": column.GetPrimary(), "IdentityStart": column.GetIdentityStart(), "IdentityIncrement": column.GetIdentityIncrement(),
+				"Default": column.GetDefaultValue(), "DefaultSet": column.GetDefaultSet(), "Comment": column.GetComment()}))
+			field["Table"] = qualified
+			result.Fields = append(result.Fields, field)
+		}
+		for _, index := range table.GetIndexes() {
+			tableName := index.GetTableName()
+			if tableName == "" {
+				tableName = qualified
+			}
+			result.Indexes = append(result.Indexes, element(c, marshal(c, map[string]any{"Name": index.GetName(), "Fields": index.GetFields(),
+				"Unique": index.GetUnique(), "Comment": index.GetComment(), "Type": index.GetType(), "IncludeColumns": index.GetIncludeColumns(),
+				"StorageParams": index.GetStorageParameters(), "TableName": tableName})))
+		}
+	}
+	for _, view := range reply.GetViews() {
+		result.Views = append(result.Views, element(c, marshal(c, map[string]any{"Name": canonical(view.GetSchema(), view.GetName()), "Body": view.GetBody(),
+			"Comment": view.GetComment()})))
+	}
+	for _, role := range reply.GetRoles() {
+		result.Roles = append(result.Roles, element(c, marshal(c, map[string]any{"Name": role.GetName(), "Login": role.GetLogin(), "Inherit": role.GetInherit(),
+			"Group": role.GetGroup(), "MemberOf": role.GetMemberOf()})))
+	}
+	for _, grant := range reply.GetGrants() {
+		object := map[string]any{"Role": grant.GetRole(), "Privileges": grant.GetPrivileges()}
+		target := grant.GetTarget()
+		switch kind := strings.ToLower(target.GetKind()); kind {
+		case "table":
+			object["OnTable"] = canonical(target.GetSchema(), target.GetName())
+		case "schema":
+			object["OnSchema"] = target.GetName()
+		case "database":
+			object["OnDatabase"] = true
+		default:
+			object["OnObject"], object["ObjectKind"] = canonical(target.GetSchema(), target.GetName()), strings.ToUpper(kind)
+		}
+		mapped := element(c, marshal(c, object))
+		if grant.GetRevoked() {
+			result.RevokedGrants = append(result.RevokedGrants, mapped)
+		} else {
+			result.Grants = append(result.Grants, mapped)
+		}
+	}
+	for _, envelope := range reply.GetNativeObjects() {
+		c.Assert(envelope.GetKind(), qt.Equals, schema.CoordinationProperties)
+		var spec map[string]any
+		c.Assert(json.Unmarshal(envelope.GetPayload(), &spec), qt.IsNil)
+		owner := envelope.GetOwner()
+		result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindCoordinationNode), Schema: owner.GetSchema(), Name: owner.GetName(),
+			Payload: map[string]any{"spec": spec}})
+	}
+	for _, declared := range reply.GetDeclarations() {
+		var file fileMeaning
+		for _, object := range declared.GetObjects() {
+			file.Objects = append(file.Objects, yqlschema.Declaration{Kind: object.GetKind(), Name: object.GetName()})
+		}
+		for _, object := range declared.GetGuards() {
+			file.Guards = append(file.Guards, yqlschema.Declaration{Kind: object.GetKind(), Name: object.GetName()})
+		}
+		for _, statement := range declared.GetTables() {
+			file.Tables = append(file.Tables, yqlschema.TableStatement{Name: statement.GetName(), Drop: statement.GetDrop(), Guarded: statement.GetGuarded()})
+		}
+		file.Objects = append([]yqlschema.Declaration{}, file.Objects...)
+		result.Files = append(result.Files, file)
+	}
+	return result
+}
+
+// TestReply_Coverage requires a complete reply to claim what the host's YDB
+// owner claims for the load about the models this provider claims: every
+// coordination node complete, less the nodes and the namespace the headers
+// leave unmanaged, and a table's settings, its columns' and its storage
+// complete.
+func TestReply_Coverage(t *testing.T) {
+	c := qt.New(t)
+	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return !complete(c, r) })
+	for _, r := range rows {
+		t.Run(r.name, func(t *testing.T) {
+			c := qt.New(t)
+			reply := yqlschema.Reply(readRequest(r))
+			c.Assert(pluginCoverage(reply.GetCoverage()), qt.DeepEquals, hostCoverage(c, r.golden.Load.Coverage))
+		})
+	}
+}
+
+// coverageMeaning is what a claim says about the models both owners claim:
+// the knowledge of each, in the host's model kind, and the coordination
+// nodes it leaves unmanaged.
+type coverageMeaning struct {
+	Kinds    map[string]string
+	Subjects []string
+}
+
+// claimedHostKinds are the host's models a claim of this provider's models
+// stands for.
+var claimedHostKinds = map[string][]string{
+	schema.TableProperties:         {"ptah.run/ydb/table-partitioning", "ptah.run/ydb/ttl", "ptah.run/ydb/column-families"},
+	schema.ColumnProperties:        {"ptah.run/ydb/column-families"},
+	schema.ColumnStorageProperties: {"ptah.run/ydb/column-store"},
+	schema.CoordinationProperties:  {"ptah.run/ydb/coordination-node"},
+}
+
+func pluginCoverage(coverage *protocol.ModelCoverage) coverageMeaning {
+	result := coverageMeaning{Kinds: map[string]string{}}
+	for _, record := range coverage.GetKinds() {
+		for _, kind := range claimedHostKinds[record.GetModel().GetKind()] {
+			result.Kinds[kind] = strings.ToLower(record.GetKnowledge().GetState().String()) + " " + record.GetKnowledge().GetReason()
+		}
+	}
+	for _, subject := range coverage.GetSubjects() {
+		result.Subjects = append(result.Subjects, subject.GetSubject().GetSchema()+"/"+subject.GetSubject().GetName()+" "+subject.GetKnowledge().GetReason())
+	}
+	return result
+}
+
+func hostCoverage(c *qt.C, coverage *goldenCoverage) coverageMeaning {
+	c.Helper()
+	result := coverageMeaning{Kinds: map[string]string{}}
+	claimed := map[string]bool{}
+	for _, kinds := range claimedHostKinds {
+		for _, kind := range kinds {
+			claimed[kind] = true
+		}
+	}
+	for _, record := range coverage.Kinds {
+		if !claimed[record.Model.Kind] {
+			continue
+		}
+		c.Assert(record.Knowledge, qt.HasLen, 1)
+		var knowledge struct {
+			Outside struct {
+				State  string `json:"state"`
+				Reason string `json:"reason"`
+			} `json:"outside"`
+		}
+		c.Assert(json.Unmarshal(record.Knowledge[0], &knowledge), qt.IsNil)
+		state := map[string]string{"complete": "complete", "": "uninspected"}[knowledge.Outside.State]
+		result.Kinds[record.Model.Kind] = state + " " + knowledge.Outside.Reason
+	}
+	for _, subject := range coverage.Subjects {
+		if subject.Kind != "ptah.run/ydb/coordination-node" {
+			continue
+		}
+		var knowledge struct {
+			Reason string `json:"reason"`
+		}
+		c.Assert(json.Unmarshal(subject.Knowledge, &knowledge), qt.IsNil)
+		result.Subjects = append(result.Subjects, partSource(subject.Subject.Schema)+"/"+subject.Subject.Name.Source+" "+knowledge.Reason)
+	}
+	return result
+}
+
+// TestReply_HeaderLimits requires the provider to refuse a header entry the
+// host's YDB owner refuses for a load its grammar reads, at the header line
+// that wrote it, with the host's words and this provider's identity in place
+// of the host owner's.
+func TestReply_HeaderLimits(t *testing.T) {
+	c := qt.New(t)
+	rows := corpus(c, func(r row) bool {
+		return accepted(r) && r.golden.Load.Outcome == "refused" && strings.Contains(r.golden.Load.Error, "coverage of ptah.run/ydb")
+	})
+	c.Assert(len(rows) >= 1, qt.IsTrue)
+	for _, r := range rows {
+		t.Run(r.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := readRequest(r)
+			reply := yqlschema.Reply(request)
+			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
+			c.Assert(reply.GetDiagnostics(), qt.HasLen, 1)
+			want := expectedRefusal(c, strings.Replace(r.golden.Load.Error, "coverage of ptah.run/ydb", "coverage of "+schema.ProviderID, 1))
+			diagnostic := reply.GetDiagnostics()[0]
+			c.Assert(hostRefusal{Document: documentIndex(c, diagnostic.GetDocumentId()), Offset: -1, Message: diagnostic.GetMessage()}, qt.DeepEquals, want)
+		})
+	}
+}

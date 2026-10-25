@@ -1,0 +1,1 @@
+ALTER SEQUENCE `/local/tags/_serial_column_id` RESTART WITH 2

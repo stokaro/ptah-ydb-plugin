@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE n WITH (read_consistency_mode = 'unknown');

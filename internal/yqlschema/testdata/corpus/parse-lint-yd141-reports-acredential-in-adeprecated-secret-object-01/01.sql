@@ -1,0 +1,1 @@
+CREATE EXTERNAL DATA SOURCE `ext/pg` WITH (SOURCE_TYPE = 'PostgreSQL', LOCATION = 'pg:5432', AUTH_METHOD = 'BASIC', LOGIN = 'u', password_secret_name = 'pw')

@@ -1,0 +1,1 @@
+GRANT CONNECT ON `/Root/database` TO readers;

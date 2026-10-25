@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 71: invalid query_memory_limit_percent_per_node \"101\": takes a percentage from 0 to 100; leave it out for no limit (got \";\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 71: invalid query_memory_limit_percent_per_node \"101\": takes a percentage from 0 to 100; leave it out for no limit (got \";\")"
+ }
+}

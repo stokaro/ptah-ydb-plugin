@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint_gate/users` ADD INDEX users_email GLOBAL UNIQUE SYNC ON (email)

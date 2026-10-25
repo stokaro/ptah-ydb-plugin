@@ -1,0 +1,1 @@
+CREATE TABLE events (id Int64 NOT NULL, PRIMARY KEY (id));CREATE TOPIC queue (CONSUMER worker); ALTER TOPIC queue ADD CONSUMER worker;

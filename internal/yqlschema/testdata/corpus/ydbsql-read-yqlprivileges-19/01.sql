@@ -1,0 +1,1 @@
+CREATE TOPIC `archive/events`; REVOKE SELECT ROW ON `/Root/db/archive/events` FROM readers;

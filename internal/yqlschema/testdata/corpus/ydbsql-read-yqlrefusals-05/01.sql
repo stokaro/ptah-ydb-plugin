@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, PRIMARY KEY (id), INDEX i GLOBAL ON (id) WITH (vector_dimension = 2));

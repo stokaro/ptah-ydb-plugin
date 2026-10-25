@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE n WITH (unknown = 1);

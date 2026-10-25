@@ -1,0 +1,1 @@
+CREATE TABLE items (id Int64 NOT NULL, PRIMARY KEY (id)); CREATE COORDINATION NODE locks;CREATE VIEW summary WITH (security_invoker = TRUE) AS SELECT id FROM items WHERE id > 0; CREATE TOPIC events (CONSUMER audit WITH (read_from = Timestamp('2026-01-01T00:00:00Z'))) WITH (retention_period = Interval('P2D'));

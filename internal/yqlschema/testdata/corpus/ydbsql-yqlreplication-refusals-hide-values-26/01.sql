@@ -1,0 +1,1 @@
+CREATE TRANSFER x FROM src TO dst USING ($msg) -> { $items = [<|id:$msg._offset|>]; RETURN $items; } WITH (FLUSH_INTERVAL=Interval(' PT2S'));

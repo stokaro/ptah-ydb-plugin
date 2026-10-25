@@ -1,0 +1,1 @@
+ALTER TABLE docs ADD INDEX docs_emb2 GLOBAL USING vector_kmeans_tree ON (emb) WITH (distance=euclidean, vector_type=float, vector_dimension=3, levels=1, clusters=2)

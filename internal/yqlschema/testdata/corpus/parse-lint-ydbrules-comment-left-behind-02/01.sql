@@ -1,0 +1,1 @@
+ALTER TABLE `app/notes` DROP INDEX notes_tag

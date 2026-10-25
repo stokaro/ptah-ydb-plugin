@@ -1,0 +1,1 @@
+COMMENT ON COLUMN `app/notes`.`body` IS 'The text'

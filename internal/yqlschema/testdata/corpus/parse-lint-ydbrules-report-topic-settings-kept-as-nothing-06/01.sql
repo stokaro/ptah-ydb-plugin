@@ -1,0 +1,1 @@
+CREATE TOPIC events WITH (auto_partitioning_strategy = 'disabled', max_active_partitions = 5)

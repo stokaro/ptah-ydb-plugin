@@ -1,0 +1,1 @@
+REVOKE GRANT OPTION FOR SELECT ON `shop/users` FROM app

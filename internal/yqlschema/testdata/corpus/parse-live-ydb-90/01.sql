@@ -1,0 +1,1 @@
+DO BEGIN UPSERT INTO `ptah_ydb_lint/rule_2/t` (id) VALUES (1ul); CREATE TABLE `ptah_ydb_lint/rule_2/m` (id Uint64 NOT NULL, PRIMARY KEY (id)); END DO

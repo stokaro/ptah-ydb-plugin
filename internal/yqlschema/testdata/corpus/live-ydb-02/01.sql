@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE `ptah_ydb_yql_resources/locks` WITH (attach_consistency_mode = 'strict'); CREATE RESOURCE POOL `ptahrpb5a4ec987` WITH (CONCURRENT_QUERY_LIMIT = 8); CREATE RESOURCE POOL CLASSIFIER `ptahrcb5a4ec987` WITH (RESOURCE_POOL = 'ptahrpb5a4ec987', RANK = 3712328964, MEMBER_NAME = 'ptahrpu5a4ec987');

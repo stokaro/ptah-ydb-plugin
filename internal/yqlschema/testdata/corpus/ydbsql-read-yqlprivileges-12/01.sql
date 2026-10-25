@@ -1,0 +1,1 @@
+CREATE TOPIC `archive/events/source`; GRANT LIST ON archive TO readers;

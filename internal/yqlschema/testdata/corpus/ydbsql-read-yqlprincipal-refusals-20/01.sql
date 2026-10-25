@@ -1,0 +1,1 @@
+CREATE USER app; ALTER GROUP app ADD USER app;

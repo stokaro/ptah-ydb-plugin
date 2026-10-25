@@ -1,0 +1,1 @@
+UPDATE docs SET emb = "y" WHERE id = 1

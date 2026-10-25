@@ -1,0 +1,1 @@
+ALTER TABLE `app/items` RENAME TO `app/__ptah_replaced_items`

@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, password_secret_name Utf8, PRIMARY KEY (id))

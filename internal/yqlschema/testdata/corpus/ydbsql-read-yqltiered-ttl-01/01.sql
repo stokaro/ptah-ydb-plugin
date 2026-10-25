@@ -1,0 +1,1 @@
+CREATE TABLE events (ts Timestamp NOT NULL, id Uint64, PRIMARY KEY (ts)) WITH (STORE = COLUMN, TTL = Interval('PT1H') TO EXTERNAL DATA SOURCE `/local/archive/cold`, Interval('P7D') DELETE ON ts);

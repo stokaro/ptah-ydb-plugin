@@ -1,0 +1,1 @@
+CREATE TABLE items (id Int64 NOT NULL, body Utf8, PRIMARY KEY (id), INDEX by_body GLOBAL ON (body)); CREATE VIEW summary WITH (security_invoker = TRUE) AS SELECT id FROM items;

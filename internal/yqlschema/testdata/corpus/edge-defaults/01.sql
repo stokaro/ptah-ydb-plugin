@@ -1,0 +1,2 @@
+CREATE TABLE t (id Uint64 NOT NULL, a Int8 DEFAULT 5t, b Uint64 DEFAULT 7ul, c Bool DEFAULT true, d Utf8 DEFAULT 'x y'u, e String DEFAULT "s", f String DEFAULT @@multi
+line@@, g Decimal(22,9) DEFAULT Decimal("1.5", 22, 9), h Timestamp DEFAULT Timestamp('2026-01-01T00:00:00Z'), i Date DEFAULT Date("2026-01-02"), j Interval DEFAULT Interval('PT1H'), k Utf8 DEFAULT NULL, l Int32 DEFAULT -5, PRIMARY KEY (id));

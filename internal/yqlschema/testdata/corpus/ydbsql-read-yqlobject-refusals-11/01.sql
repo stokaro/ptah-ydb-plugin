@@ -1,0 +1,1 @@
+CREATE TOPIC events; UPSERT INTO t (id) VALUES (1);

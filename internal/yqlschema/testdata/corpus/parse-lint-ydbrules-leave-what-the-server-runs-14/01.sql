@@ -1,0 +1,1 @@
+ALTER TABLE base RENAME TO __ptah_replaced_base

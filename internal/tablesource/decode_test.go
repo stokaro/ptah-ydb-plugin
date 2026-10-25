@@ -110,8 +110,8 @@ func TestDescriptionAdvertisesTheTableClaims(t *testing.T) {
 	for _, directive := range tablesource.GoDirectives() {
 		c.Assert(slices.ContainsFunc(engine.GoSourceDirectives, func(declared *protocol.GoSourceDirective) bool { return proto.Equal(declared, directive) }), qt.IsTrue, qt.Commentf(directive.Directive))
 	}
-	c.Assert(schema.TableDesiredModel().SourceFormats, qt.DeepEquals, []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS})
-	c.Assert(schema.ColumnDesiredModel().SourceFormats, qt.DeepEquals, []protocol.SourceDocument_Format{protocol.SourceDocument_GO_ANNOTATIONS})
+	c.Assert(schema.TableDesiredModel().SourceFormats, qt.DeepEquals, []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL})
+	c.Assert(schema.ColumnDesiredModel().SourceFormats, qt.DeepEquals, []protocol.SourceDocument_Format{protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL})
 }
 
 func TestDecode_HappyPath(t *testing.T) {

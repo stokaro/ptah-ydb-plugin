@@ -1,0 +1,2 @@
+CREATE EXTERNAL DATA SOURCE `ext/s3` WITH (SOURCE_TYPE = "ObjectStorage", LOCATION = "https://bucket/", AUTH_METHOD = "NONE", unusual_option = "x");
+CREATE OR REPLACE EXTERNAL TABLE `ext/rows` (id Int64 NOT NULL, body Utf8) WITH (DATA_SOURCE = "ext/s3", LOCATION = "/rows/", FORMAT = "json_each_row");

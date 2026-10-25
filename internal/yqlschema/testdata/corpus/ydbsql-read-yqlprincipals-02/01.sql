@@ -1,0 +1,1 @@
+CREATE USER app HASH '{"hash":"abc","salt":"abc","type":"argon2id"}';

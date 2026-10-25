@@ -1,0 +1,1 @@
+ALTER TABLE `shop/users` ADD INDEX users_score GLOBAL UNIQUE SYNC ON (score)

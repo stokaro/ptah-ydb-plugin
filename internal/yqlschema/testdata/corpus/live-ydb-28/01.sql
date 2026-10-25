@@ -1,0 +1,1 @@
+CREATE TOPIC `ptah_yql_streaming/source`; CREATE TOPIC `ptah_yql_streaming/sink`;

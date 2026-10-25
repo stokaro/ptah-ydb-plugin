@@ -1,0 +1,4 @@
+# A refusal position is a byte offset, so the documents keep their bytes.
+corpus/** -text
+# The answers are recorded by oracle/main.go; README.md says how.
+corpus/*.golden.json linguist-generated

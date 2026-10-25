@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/sizes_3` SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)

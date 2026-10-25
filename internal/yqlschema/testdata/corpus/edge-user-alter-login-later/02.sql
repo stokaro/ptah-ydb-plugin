@@ -1,0 +1,1 @@
+ALTER USER alice NOLOGIN;

@@ -1,0 +1,2 @@
+CREATE TOPIC events;
+CREATE TOPIC events;

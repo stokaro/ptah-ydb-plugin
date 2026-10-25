@@ -1,0 +1,1 @@
+CREATE SECRET `ext/pw` WITH (value = $PTAH_SECRET_PW)

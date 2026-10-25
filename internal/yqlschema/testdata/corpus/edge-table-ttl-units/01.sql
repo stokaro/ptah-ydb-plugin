@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, ts Uint32, PRIMARY KEY (id)) WITH (TTL = Interval('PT10M') ON ts AS milliseconds);

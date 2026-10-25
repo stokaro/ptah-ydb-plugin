@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX f GLOBAL USING fulltext_plain ON (v) WITH (use_filter_lowercase = true));

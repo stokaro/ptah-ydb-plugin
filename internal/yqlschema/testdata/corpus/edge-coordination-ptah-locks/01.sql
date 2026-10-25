@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE ptah_locks;

@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL FAMILY f, PRIMARY KEY (id), FAMILY f ());

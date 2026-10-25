@@ -1,0 +1,1 @@
+ALTER TABLE `dir/t` ADD COLUMN `ts` Timestamp

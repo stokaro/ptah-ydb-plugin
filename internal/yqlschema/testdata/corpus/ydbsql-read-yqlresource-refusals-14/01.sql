@@ -1,0 +1,1 @@
+CREATE RESOURCE POOL p WITH (unknown = '-1');

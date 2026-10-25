@@ -1,0 +1,1 @@
+DO BEGIN SELECT 1; CREATE TABLE `ptah_ydb_lint/rule_3/m` (id Uint64 NOT NULL, PRIMARY KEY (id)); END DO

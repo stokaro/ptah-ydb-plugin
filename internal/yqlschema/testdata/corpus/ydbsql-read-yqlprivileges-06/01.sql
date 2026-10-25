@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Uint64 NOT NULL, PRIMARY KEY(id));GRANT LIST ON shop TO readers;

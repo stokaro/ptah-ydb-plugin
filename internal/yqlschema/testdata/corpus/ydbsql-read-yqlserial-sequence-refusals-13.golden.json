@@ -1,0 +1,15 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "database_path": "/local",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: the schema model has no place for this statement: YDB source path \"/locality/app/orders/_serial_column_id\" is outside database \"/local\""
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: the schema model has no place for this statement: YDB source path \"/locality/app/orders/_serial_column_id\" is outside database \"/local\""
+ }
+}

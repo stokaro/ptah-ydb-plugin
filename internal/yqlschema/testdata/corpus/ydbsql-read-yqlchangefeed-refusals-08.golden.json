@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 176: invalid resolved_timestamps \"PT0.5S\": interval \"PT0.5S\" has a fraction of a second, and YDB keeps whole seconds only (PT1.5S reads back as PT1S) (got \";\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 176: invalid resolved_timestamps \"PT0.5S\": interval \"PT0.5S\" has a fraction of a second, and YDB keeps whole seconds only (PT1.5S reads back as PT1S) (got \";\")"
+ }
+}

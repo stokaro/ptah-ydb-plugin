@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/family/t` ALTER FAMILY cold SET COMPRESSION 'off'

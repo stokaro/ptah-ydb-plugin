@@ -1,0 +1,1 @@
+ALTER TABLE `dir/t` SET (TTL = Interval("P1D") ON `ts`)

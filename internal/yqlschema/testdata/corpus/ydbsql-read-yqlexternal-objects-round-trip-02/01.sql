@@ -1,0 +1,1 @@
+CREATE OR REPLACE EXTERNAL DATA SOURCE `dir/bucket` WITH (SOURCE_TYPE = 'ObjectStorage', LOCATION = 'https://storage.invalid/root/', AUTH_METHOD = 'NONE');CREATE OR REPLACE EXTERNAL TABLE `dir/data.v1` (`d` Date, `body` Utf8) WITH (DATA_SOURCE = 'dir/bucket', LOCATION = '/', FORMAT = 'csv_with_names', CSV_DELIMITER = ' ', PARTITIONED_BY = '["d"]');
