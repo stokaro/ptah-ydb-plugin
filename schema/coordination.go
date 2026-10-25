@@ -82,12 +82,32 @@ func buildCoordinationDesiredModel() *protocol.ValueModel {
 	digest := sha256.Sum256(canonical)
 	return &protocol.ValueModel{Kind: CoordinationProperties, DisplayName: modelDisplayName(CoordinationProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
 		Encoding: "json", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]),
-		CanonicalFormat: CoordinationProperties + "/desired-json-v1", SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}}
+		CanonicalFormat: CoordinationProperties + "/desired-json-v1", SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL, protocol.SourceDocument_HCL}}
 }
 
 // CoordinationYAMLKey declares the document grammar owned by this model.
 func CoordinationYAMLKey() *protocol.YAMLSourceKey {
 	return &protocol.YAMLSourceKey{Scope: protocol.YAMLSourceKey_DOCUMENT, Key: "coordination_nodes", Selector: "coordination_nodes", Models: []string{CoordinationProperties}}
+}
+
+// CoordinationSettingNames are the settings a node declaration spells, in every
+// source format: an attribute each of the Go directive, the YAML entry and the
+// HCL block.
+func CoordinationSettingNames() []string {
+	return []string{"self_check_period", "session_grace_period", "read_consistency_mode", "attach_consistency_mode", "rate_limiter_counters_mode"}
+}
+
+// CoordinationHCLBlock declares the top-level HCL block that declares a node,
+// as the host's bundled YDB source reads it: labeled with its name, or its
+// directory and its name, and its settings as strings spelled as the Go
+// directive spells them. A permission names a node as a coordination node.
+func CoordinationHCLBlock() *protocol.HCLSourceBlock {
+	block := &protocol.HCLSourceBlock{Site: protocol.HCLSourceBlock_TOP_LEVEL, Type: "coordination_node", Naming: protocol.HCLSourceBlock_SCHEMA_AND_NAME,
+		GrantKind: "coordination_node", Selector: "coordination_node", Models: []string{CoordinationProperties}}
+	for _, setting := range CoordinationSettingNames() {
+		block.Attributes = append(block.Attributes, &protocol.HCLSourceAttribute{Name: setting, Kind: protocol.HCLSourceAttribute_STRING})
+	}
+	return block
 }
 
 // CoordinationGoDirective declares the Go annotation that declares a node,

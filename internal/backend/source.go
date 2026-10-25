@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -20,7 +21,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// DecodeSource interprets complete captured YAML and Go annotation
+// DecodeSource interprets complete captured YAML, HCL and Go annotation
 // declarations: coordination nodes, topics, and the partitioning and column
 // families of row tables. It reads no files or environment variables and requires no
 // database session. Unsupported syntax or any invalid entry discards the
@@ -35,6 +36,13 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			return nil, status.FromContextError(err).Err()
 		}
 		decoded := &protocol.DecodedSourceDocument{Id: document.Id, Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_DESIRED}}
+		// An HCL document's ptah:not-described header leaves coordination
+		// nodes, or one of them, outside its claim, as a YQL document's does.
+		// The host applies the limits; a limit no node can take is refused here
+		// with the host's words.
+		if err := yqlschema.CheckLimits(document.GetLimits()); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		for _, model := range document.Models {
 			decoded.Coverage.Kinds = append(decoded.Coverage.Kinds, &protocol.ModelKindCoverage{Model: proto.CloneOf(model), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}})
 		}
@@ -155,6 +163,28 @@ func coordinationSource(ctx context.Context, document *protocol.SourceDocument, 
 	}
 	mapping := fragment.GetValue().GetMapping()
 	switch {
+	case document.Format == protocol.SourceDocument_HCL && fragment.Selector == schema.CoordinationHCLBlock().Selector:
+		// The block's labels name the node: its name, or its directory and
+		// its name. The frontend evaluated every attribute.
+		block := fragment.GetBlock()
+		labels := block.GetLabels()
+		if len(labels) == 0 || len(labels) > 2 {
+			return nil, fmt.Errorf("a coordination_node block is labeled with its name, or its directory and its name")
+		}
+		name, entries := labels[len(labels)-1].GetValue(), slices.Clone(block.GetAttributes().GetEntries())
+		entries = append(entries, &protocol.SourceEntry{Key: "name", Value: &protocol.SourceValue{Value: &protocol.SourceValue_Text{Text: name}}})
+		if len(labels) == 2 {
+			entries = append(entries, &protocol.SourceEntry{Key: "schema", Value: &protocol.SourceValue{Value: &protocol.SourceValue_Text{Text: labels[0].GetValue()}}})
+		}
+		if len(block.GetChildren()) != 0 {
+			return nil, fmt.Errorf("coordination node %q: a coordination_node block holds no block", name)
+		}
+		value, err := coordinationValue(document, fragment, &protocol.SourceEntry{Value: &protocol.SourceValue{Value: &protocol.SourceValue_Mapping{
+			Mapping: &protocol.SourceMapping{Entries: entries}}}}, strconv.Itoa(index), nil)
+		if err != nil {
+			return nil, fmt.Errorf("coordination node %q: %w", name, err)
+		}
+		return []*protocol.SourceModelValue{value}, nil
 	case document.Format == protocol.SourceDocument_YAML && fragment.Selector == schema.CoordinationYAMLKey().Selector:
 		if mapping == nil {
 			return nil, fmt.Errorf("coordination_nodes requires a mapping")

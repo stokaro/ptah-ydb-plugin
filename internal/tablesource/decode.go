@@ -54,6 +54,9 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 		if fragment.GetGoDirective().GetDirective() == DirectiveIndex {
 			return nil, indexRefusal(fragment)
 		}
+		if key := fragment.GetYamlKey(); key.GetScope() == protocol.YAMLSourceKey_INDEX {
+			return nil, &UnsupportedError{Setting: key.GetKey(), Reason: indexReason}
+		}
 		binding, err := bindingOf(document, fragment)
 		if err != nil {
 			return nil, fmt.Errorf("fragment %q: %w", fragment.GetId(), err)
@@ -268,5 +271,8 @@ func indexRefusal(fragment *protocol.SourceFragment) error {
 	if entries := fragment.GetValue().GetMapping().GetEntries(); len(entries) != 0 {
 		setting = entries[0].GetKey()
 	}
-	return &UnsupportedError{Setting: setting, Reason: "an index states no settings of its own in the row-table model, and the provider adds only plain global indexes"}
+	return &UnsupportedError{Setting: setting, Reason: indexReason}
 }
+
+// indexReason is why an index setting is refused, in either format.
+const indexReason = "an index states no settings of its own in the row-table model, and the provider adds only plain global indexes"
