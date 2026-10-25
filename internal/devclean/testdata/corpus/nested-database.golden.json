@@ -1,0 +1,16 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "objects": [
+    {
+      "kind": "table",
+      "schema": "",
+      "name": "x"
+    }
+  ],
+  "drop": {
+    "executed": [
+      "DROP TABLE `x`"
+    ],
+    "removed": []
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "database": "/local",
+  "realm": "",
+  "tree": {
+    "/local": [
+      {
+        "name": "t1",
+        "type": "TABLE"
+      },
+      {
+        "name": ".sys",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": ".hidden",
+        "type": "COORDINATION_NODE"
+      },
+      {
+        "name": "app",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "keep",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "locks",
+        "type": "COORDINATION_NODE"
+      },
+      {
+        "name": "mixed",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "nodes",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "olap",
+        "type": "COLUMN_TABLE"
+      },
+      {
+        "name": "ptah_dev",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "ptah_locks",
+        "type": "COORDINATION_NODE"
+      },
+      {
+        "name": "queues",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "v",
+        "type": "VIEW"
+      },
+      {
+        "name": "z",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/app": [
+      {
+        "name": "pw",
+        "type": "SECRET"
+      },
+      {
+        "name": "s3",
+        "type": "EXTERNAL_DATA_SOURCE"
+      },
+      {
+        "name": "sub",
+        "type": "DIRECTORY"
+      },
+      {
+        "name": "t2",
+        "type": "TABLE"
+      },
+      {
+        "name": "v2",
+        "type": "VIEW"
+      }
+    ],
+    "/local/app/sub": [
+      {
+        "name": "t`3",
+        "type": "TABLE"
+      }
+    ],
+    "/local/keep": [],
+    "/local/mixed": [
+      {
+        "name": "t4",
+        "type": "TABLE"
+      },
+      {
+        "name": "events",
+        "type": "TOPIC"
+      }
+    ],
+    "/local/nodes": [
+      {
+        "name": "ptah_locks",
+        "type": "COORDINATION_NODE"
+      }
+    ],
+    "/local/queues": [
+      {
+        "name": "events",
+        "type": "TOPIC"
+      },
+      {
+        "name": "olap",
+        "type": "COLUMN_TABLE"
+      }
+    ],
+    "/local/z": [
+      {
+        "name": "files",
+        "type": "EXTERNAL_TABLE"
+      }
+    ]
+  }
+}

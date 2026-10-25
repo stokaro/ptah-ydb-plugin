@@ -39,14 +39,25 @@ func startProviderWithDocker(c *qt.C, binary, digest string) *providerruntime.Cl
 	return client
 }
 
+// TestDevDatabaseSubprocess provisions a dev database from each form of spec
+// the operator types: the engine form, which names a tag of local-ydb, and the
+// image form, which names the image.
 func TestDevDatabaseSubprocess(t *testing.T) {
-	c := qt.New(t)
+	for _, spec := range []string{
+		"docker://ydb/" + devImageTag,
+		"docker+ydb://_/ydbplatform/local-ydb:" + devImageTag + "/local",
+	} {
+		t.Run(spec, func(t *testing.T) { provisionDevDatabase(qt.New(t), spec) })
+	}
+}
+
+func provisionDevDatabase(c *qt.C, spec string) {
 	binary, digest := providerBinary(c)
 	client := startProviderWithDocker(c, binary, digest)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	reply, err := client.ProvisionDevDatabase(ctx, &protocol.ProvisionDevRequest{Engine: "ydb", Spec: "docker://ydb/" + devImageTag})
+	reply, err := client.ProvisionDevDatabase(ctx, &protocol.ProvisionDevRequest{Engine: "ydb", Spec: spec})
 	c.Assert(err, qt.IsNil)
 	c.Assert(reply.Refusal, qt.IsNil)
 	released := false

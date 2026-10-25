@@ -51,11 +51,26 @@ type session struct {
 	metadataReaders map[string]*metadataReader
 }
 
-// engineFeatures is the feature list of the ydb engine. The description, the
-// session it opens and the inspection snapshot all report it, so the host holds
-// one target profile for observed, desired and planned values.
+// providerFeatures are the services and behaviors the provider offers.
+func providerFeatures() []string {
+	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature, provider.DevCleanupFeature, provider.ReplayGuardFeature, provider.StatementTimeoutFeature}
+}
+
+// engineFeatures is the feature list of the ydb engine: every feature of the
+// provider, and dev realms, a property of the engine rather than a service.
+// The description, the session it opens and the inspection snapshot all
+// report it, so the host holds one target profile for observed, desired and
+// planned values.
 func engineFeatures() []string {
-	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature}
+	return append(providerFeatures(), provider.DevRealmsFeature)
+}
+
+// negotiatedFeatures is the engine's feature list as the host holds it: the
+// two-way features the host did not list are left out, as the SDK leaves them
+// out of the description the host reads. A session and an inspection snapshot
+// report it, so the host can check them against that description.
+func negotiatedFeatures(ctx context.Context) []string {
+	return provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx)).GetEngines()[0].GetFeatures()
 }
 
 // sessionCapabilities are the host capabilities a session reports before the
@@ -117,7 +132,7 @@ func Description() *protocol.Description {
 	return &protocol.Description{
 		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: "0.0.0-dev", SemanticIdentity: "ydb-table-lifecycle-2",
-		Features: engineFeatures(),
+		Features: providerFeatures(),
 		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: append([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, tablesource.YAMLKeys()...), GoSourceDirectives: tablesource.GoDirectives(), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), Features: engineFeatures()}},
 	}
 }
@@ -175,7 +190,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	p.mu.Lock()
 	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != ""}
 	p.mu.Unlock()
-	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: capabilities, Features: engineFeatures()}, nil
+	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: capabilities, Features: negotiatedFeatures(ctx)}, nil
 }
 
 // Close releases only the named session. Repeated closes return the original

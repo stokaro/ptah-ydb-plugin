@@ -1,0 +1,34 @@
+{
+  "database": "/local",
+  "realm": "",
+  "tree": {
+    "/local": [
+      {
+        "name": "a",
+        "type": "TABLE"
+      },
+      {
+        "name": "feed",
+        "type": "TRANSFER"
+      },
+      {
+        "name": "mirror",
+        "type": "REPLICATION"
+      },
+      {
+        "name": "replica",
+        "type": "TABLE"
+      },
+      {
+        "name": "stream",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/stream": [
+      {
+        "name": "q",
+        "type": "TABLE"
+      }
+    ]
+  }
+}

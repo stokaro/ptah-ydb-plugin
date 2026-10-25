@@ -1,0 +1,20 @@
+{
+  "database": "/local",
+  "realm": "",
+  "remove_realm": "r9",
+  "tree": {
+    "/local": [
+      {
+        "name": "ptah_dev",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/ptah_dev": [
+      {
+        "name": "r1",
+        "type": "DIRECTORY"
+      }
+    ],
+    "/local/ptah_dev/r1": []
+  }
+}

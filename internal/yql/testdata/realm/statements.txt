@@ -81,3 +81,14 @@ $x = 1
 --!ansi_lexer SELECT 1
 VALUES (1)
 PROCESS t USING $f(TableRow())
+--!syntax_v1\nSELECT 1
+--!syntax_v1\nUPSERT INTO t (id) VALUES (1)
+UPSERT INTO `/other/t` (id) VALUES (1)
+CREATE TABLE `/local/abs2` (id Int64 NOT NULL, PRIMARY KEY (id))
+CREATE USER u2 PASSWORD 'p'
+GRANT SELECT ON t TO u2
+CREATE EXTERNAL DATA SOURCE s WITH (SOURCE_TYPE = "ObjectStorage", LOCATION = "x", AUTH_METHOD = "NONE")
+CREATE TRANSFER tr FROM a TO b USING ($x) -> { RETURN $x; }
+CREATE ASYNC REPLICATION r FOR a AS b WITH (CONNECTION_STRING = "grpc://x/?database=/y")
+PRAGMA TablePathPrefix = "/local"
+DROP TABLE `../up`

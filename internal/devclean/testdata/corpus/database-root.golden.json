@@ -1,0 +1,143 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "objects": [
+    {
+      "kind": "secret",
+      "schema": "app",
+      "name": "pw"
+    },
+    {
+      "kind": "external data source",
+      "schema": "app",
+      "name": "s3"
+    },
+    {
+      "kind": "table",
+      "schema": "app/sub",
+      "name": "t`3"
+    },
+    {
+      "kind": "directory",
+      "schema": "app",
+      "name": "sub"
+    },
+    {
+      "kind": "table",
+      "schema": "app",
+      "name": "t2"
+    },
+    {
+      "kind": "view",
+      "schema": "app",
+      "name": "v2"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "app"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "keep"
+    },
+    {
+      "kind": "coordination node",
+      "schema": "",
+      "name": "locks"
+    },
+    {
+      "kind": "topic",
+      "schema": "mixed",
+      "name": "events"
+    },
+    {
+      "kind": "table",
+      "schema": "mixed",
+      "name": "t4"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "mixed"
+    },
+    {
+      "kind": "coordination node",
+      "schema": "nodes",
+      "name": "ptah_locks"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "nodes"
+    },
+    {
+      "kind": "column table",
+      "schema": "",
+      "name": "olap"
+    },
+    {
+      "kind": "topic",
+      "schema": "queues",
+      "name": "events"
+    },
+    {
+      "kind": "column table",
+      "schema": "queues",
+      "name": "olap"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "queues"
+    },
+    {
+      "kind": "table",
+      "schema": "",
+      "name": "t1"
+    },
+    {
+      "kind": "view",
+      "schema": "",
+      "name": "v"
+    },
+    {
+      "kind": "external table",
+      "schema": "z",
+      "name": "files"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "z"
+    }
+  ],
+  "drop": {
+    "executed": [
+      "DROP TABLE `olap`",
+      "DROP TABLE `queues/olap`",
+      "DROP EXTERNAL TABLE `z/files`",
+      "DROP EXTERNAL DATA SOURCE `app/s3`",
+      "DROP TABLE `app/sub/t\\`3`",
+      "DROP TABLE `app/t2`",
+      "DROP VIEW `app/v2`",
+      "DROP COORDINATION NODE `locks`",
+      "DROP TOPIC `mixed/events`",
+      "DROP TABLE `mixed/t4`",
+      "DROP COORDINATION NODE `nodes/ptah_locks`",
+      "DROP TOPIC `queues/events`",
+      "DROP TABLE `t1`",
+      "DROP VIEW `v`",
+      "DROP SECRET `app/pw`"
+    ],
+    "removed": [
+      "/local/app/sub",
+      "/local/app",
+      "/local/keep",
+      "/local/mixed",
+      "/local/nodes",
+      "/local/queues",
+      "/local/z"
+    ]
+  }
+}

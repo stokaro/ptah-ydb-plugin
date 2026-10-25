@@ -1,0 +1,25 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "objects": [
+    {
+      "kind": "table",
+      "schema": "",
+      "name": "a"
+    },
+    {
+      "kind": "sequence",
+      "schema": "dir",
+      "name": "seq"
+    },
+    {
+      "kind": "directory",
+      "schema": "",
+      "name": "dir"
+    }
+  ],
+  "drop": {
+    "executed": [],
+    "removed": [],
+    "error": "ydb: /local holds sequence \"seq\" in directory \"dir\", which Ptah has no statement to drop; nothing was dropped"
+  }
+}

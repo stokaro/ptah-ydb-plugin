@@ -1,0 +1,13 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "objects": [],
+  "drop": {
+    "executed": [],
+    "removed": []
+  },
+  "remove_realm": {
+    "executed": [],
+    "removed": [],
+    "error": "ydb: the dev realm /local/ptah_dev/r1 holds resource pool \"pool\", which Ptah has no statement to drop; nothing was dropped"
+  }
+}

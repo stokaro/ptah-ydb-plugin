@@ -30,9 +30,9 @@ func TestConfineToRealm_HappyPath(t *testing.T) {
 func TestConfineToRealm_FailurePath(t *testing.T) {
 	for _, test := range []struct{ name, source, operation string }{
 		{"escape after a statement that stays", "CREATE TABLE a (id Int64 NOT NULL, PRIMARY KEY (id)); DROP TABLE `/local/a`", "the absolute path /local/a"},
-		{"escape after a comment", "-- ok\nDROP TABLE `../a`", "the path ../a, which climbs out of the dev realm"},
+		{"escape after a comment", "-- ok\nDROP TABLE `../a`", "the path ../a, which climbs out of the dev database"},
 		{"escape in an action body", "DEFINE ACTION $a() AS DROP TABLE `/local/a`; END DEFINE; DO $a()", "DEFINE ACTION"},
-		{"escape after an escaped backtick", "DROP TABLE `a``b/../..`", "the path a`b/../.., which climbs out of the dev realm"},
+		{"escape after an escaped backtick", "DROP TABLE `a``b/../..`", "the path a`b/../.., which climbs out of the dev database"},
 		{"prefix moved after a statement", "SELECT 1; PRAGMA TablePathPrefix = \"/local\"", "PRAGMA TablePathPrefix"},
 		{"user", "CREATE USER u1 PASSWORD 'p'", "a user of the whole database"},
 		{"statement without a target", "INSERT VALUES (1)", "a INSERT with no INTO the guard can read"},

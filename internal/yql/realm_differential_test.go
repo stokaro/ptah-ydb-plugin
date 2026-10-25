@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -14,8 +13,7 @@ import (
 // The corpus holds the statements the host's YDB replay guard (internal/devclean/ydbreplay)
 // was run over, with the dev database scope that confines a statement to its
 // directory, and its answers. testdata/realm/README.md says how host.json is
-// regenerated. The host words its refusals for a "dev database"; this package
-// words them for a "dev realm".
+// regenerated.
 type guardRow struct {
 	Statement string `json:"statement"`
 	Outcome   string `json:"outcome"`
@@ -42,7 +40,7 @@ func TestConfineToRealmAgreesWithHost(t *testing.T) {
 
 			var refusal *yql.RealmRefusal
 			c.Assert(errors.As(err, &refusal), qt.Equals, row.Outcome == "refused")
-			c.Assert(refusal.OperationOrEmpty(), qt.Equals, strings.ReplaceAll(row.Operation, "dev database", "dev realm"))
+			c.Assert(refusal.OperationOrEmpty(), qt.Equals, row.Operation)
 		})
 	}
 }

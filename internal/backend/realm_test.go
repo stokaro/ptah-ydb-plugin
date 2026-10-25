@@ -43,7 +43,7 @@ func TestRealmSessionExecutesConfinedStatements(t *testing.T) {
 func TestRealmSessionRefusesAnEscapeBeforeAnyUnitRuns(t *testing.T) {
 	for _, test := range []struct{ name, escape, message string }{
 		{"absolute path", "DROP TABLE `/local/t`", "YDB dev realm session rejects the absolute path /local/t because its effects cannot be confined to the dev realm"},
-		{"climbing path", "CREATE TABLE `../t` (id Int64 NOT NULL, PRIMARY KEY (id))", "YDB dev realm session rejects the path ../t, which climbs out of the dev realm because its effects cannot be confined to the dev realm"},
+		{"climbing path", "CREATE TABLE `../t` (id Int64 NOT NULL, PRIMARY KEY (id))", "YDB dev realm session rejects the path ../t, which climbs out of the dev database because its effects cannot be confined to the dev realm"},
 		{"prefix change", "PRAGMA TablePathPrefix = \"/local\"", "YDB dev realm session rejects PRAGMA TablePathPrefix because its effects cannot be confined to the dev realm"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
