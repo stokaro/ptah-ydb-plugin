@@ -6,7 +6,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -27,6 +29,9 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		return nil, status.Error(codes.InvalidArgument, "session, request ID, and units are required")
 	}
 	hasSQL, hasNative := false, false
+	// services are the SQL units that run one of Ptah's coordination node
+	// statements, which YDB's query service does not take.
+	services := make(map[*protocol.Unit]coordinationsql.Query)
 	// Pure validation covers the whole batch before any prefix can execute.
 	for _, unit := range request.Units {
 		if err := provider.ValidateUnit(unit); err != nil {
@@ -35,6 +40,16 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		switch unit.Body.(type) {
 		case *protocol.Unit_Sql:
 			hasSQL = true
+			query, recognized, err := coordinationsql.Recognize(unit.GetSql())
+			switch {
+			case err != nil:
+				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.invalid-coordination-statement", Message: rowdata.OneLine(err.Error())}, nil
+			case recognized && request.TransactionId != "":
+				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.native-transaction-forbidden",
+					Message: "A coordination node statement runs outside a transaction, as YDB runs every scheme statement"}, nil
+			case recognized:
+				services[unit] = query
+			}
 		case *protocol.Unit_Native:
 			hasNative = true
 			inputs := &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: Description().Features, Values: []*protocol.ValueInput{{Id: unit.ChangeId, Representation: protocol.ValueInput_OPERATION, Value: unit.GetNative()}}}
@@ -113,6 +128,9 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewColumnTableTTL(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			}
 			return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+		}
+		if query, recognized := services[unit]; recognized {
+			return nativeapi.NewCoordination(s.connection.Driver).RunStatement(ctx, s.connection.Database(), s.database, query, s.verifyLocks)
 		}
 		if err := s.verifyLocks(ctx); err != nil {
 			return false, err
@@ -197,7 +215,11 @@ func executeUnits(ctx context.Context, timeout time.Duration, stopped stoppedUni
 				if applied > 0 {
 					outcome = protocol.Execution_PARTIAL
 				}
-				return &protocol.Execution{Outcome: outcome, AppliedCount: applied, DiagnosticCode: "ydb.precondition-refused", Message: "The unit was not dispatched because its precondition or lock guarantee was not established"}
+				message := "The unit was not dispatched because its precondition or lock guarantee was not established"
+				if refusal, ok := errors.AsType[*nativeapi.StatementRefusal](err); ok {
+					message = rowdata.OneLine(refusal.Error())
+				}
+				return &protocol.Execution{Outcome: outcome, AppliedCount: applied, DiagnosticCode: "ydb.precondition-refused", Message: message}
 			}
 			return &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: applied, DiagnosticCode: "ydb.execution-unconfirmed", Message: "The dispatched unit's outcome is unknown; no automatic retry was attempted"}
 		}

@@ -5,12 +5,16 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Operations"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -194,4 +198,198 @@ func confirmCoordination(before, after, current *protocol.Envelope) error {
 		}
 	}
 	return nil
+}
+
+// RunStatement runs one of Ptah's coordination node statements, which YDB's
+// query service does not take, through the coordination service, as the
+// host's YDB connection runs it. database is the absolute path of the
+// session's database and root the directory its statements are confined to:
+// database itself, or a dev realm's directory under it, whose path prefix a
+// relative node path is read with.
+//
+// A node outside root, the host's lock node at the database root, and a path
+// segment that starts with a dot are refused before any call. A CREATE first
+// asks whether the node exists, because the service answers a creation of an
+// existing node with success and leaves its configuration as it was. An ALTER
+// merges the settings it changes with the node's own and refuses a result the
+// node would not run with as written; the service keeps every setting the
+// call leaves out. Dispatched is true once a write is attempted.
+func (c *Coordination) RunStatement(ctx context.Context, database, root string, query coordinationsql.Query, beforeWrite func(context.Context) error) (dispatched bool, err error) {
+	database = "/" + strings.Trim(database, "/")
+	root = "/" + strings.Trim(root, "/")
+	prefix := ""
+	if root != database {
+		prefix = root
+	}
+	absolute, err := query.Absolute(database, prefix)
+	if err != nil {
+		return false, &StatementRefusal{Err: err}
+	}
+	if _, inside := strings.CutPrefix(absolute, strings.TrimSuffix(root, "/")+"/"); !inside {
+		return false, &StatementRefusal{Err: fmt.Errorf("%w: coordination node %s is not in %s", coordinationsql.ErrStatement, absolute, root)}
+	}
+	relative := strings.TrimPrefix(absolute, database+"/")
+	directory := path.Dir(relative)
+	if directory == "." {
+		directory = ""
+	}
+	if err := ydbdecl.RefuseCoordinationName(directory, path.Base(relative)); err != nil {
+		return false, &StatementRefusal{Err: fmt.Errorf("%w: %w", coordinationsql.ErrStatement, err)}
+	}
+	current, found, err := c.describeNode(ctx, absolute)
+	if err != nil {
+		return false, err
+	}
+	var call func() (*Ydb_Operations.Operation, error)
+	switch query.Verb {
+	case coordinationsql.Create:
+		if found {
+			return false, &StatementRefusal{Err: fmt.Errorf("create YDB coordination node %s: the node already exists", absolute)}
+		}
+		call = func() (*Ydb_Operations.Operation, error) {
+			response, err := c.Nodes.CreateNode(ctx, &Ydb_Coordination.CreateNodeRequest{Path: absolute, Config: statementConfig(query.Settings)})
+			return response.GetOperation(), err
+		}
+	case coordinationsql.Alter:
+		if !found {
+			return false, &StatementRefusal{Err: fmt.Errorf("change YDB coordination node %s: no coordination node is at this path", absolute)}
+		}
+		if err := ydbdecl.ValidateCoordinationNode(coordinationsql.Merge(current, query.Settings)); err != nil {
+			return false, &StatementRefusal{Err: fmt.Errorf("%w: change YDB coordination node %s: %w", coordinationsql.ErrStatement, absolute, err)}
+		}
+		call = func() (*Ydb_Operations.Operation, error) {
+			response, err := c.Nodes.AlterNode(ctx, &Ydb_Coordination.AlterNodeRequest{Path: absolute, Config: statementConfig(query.Settings)})
+			return response.GetOperation(), err
+		}
+	default:
+		if !found {
+			return false, &StatementRefusal{Err: fmt.Errorf("drop YDB coordination node %s: no coordination node is at this path", absolute)}
+		}
+		call = func() (*Ydb_Operations.Operation, error) {
+			response, err := c.Nodes.DropNode(ctx, &Ydb_Coordination.DropNodeRequest{Path: absolute})
+			return response.GetOperation(), err
+		}
+	}
+	if err := beforeWrite(ctx); err != nil {
+		return false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	operation, callErr := call()
+	if callErr != nil {
+		return true, fmt.Errorf("YDB coordination node %s: transport failed", absolute)
+	}
+	if err := Status(operation); err != nil {
+		return true, fmt.Errorf("YDB coordination node %s: %w", absolute, err)
+	}
+	return true, nil
+}
+
+// StatementRefusal is why a coordination node statement was refused before
+// anything was sent: the statement and what the server holds disagree. Its
+// text is Ptah's own and names the node, never a credential or server text.
+type StatementRefusal struct{ Err error }
+
+func (r *StatementRefusal) Error() string { return r.Err.Error() }
+func (r *StatementRefusal) Unwrap() error { return r.Err }
+
+// describeNode reads the configuration of the node at absolute as YDB keeps
+// it, every setting nobody sent left out, and reports whether a node is
+// there. A path that holds an object of another kind is an error.
+func (c *Coordination) describeNode(ctx context.Context, absolute string) (ydbdecl.CoordinationNode, bool, error) {
+	response, err := c.Scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: path.Dir(absolute)})
+	if err != nil {
+		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("read YDB coordination namespace: transport failed")
+	}
+	var listing Ydb_Scheme.ListDirectoryResult
+	if err := Operation(response.GetOperation(), &listing); err != nil {
+		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("read the directory of YDB coordination node %s: %w", absolute, err)
+	}
+	found := false
+	for _, entry := range listing.GetChildren() {
+		if entry.GetName() != path.Base(absolute) {
+			continue
+		}
+		if entry.GetType() != Ydb_Scheme.Entry_COORDINATION_NODE {
+			return ydbdecl.CoordinationNode{}, false, &StatementRefusal{Err: fmt.Errorf("%w: %s is a YDB object of another kind than a coordination node",
+				coordinationsql.ErrStatement, absolute)}
+		}
+		found = true
+	}
+	if !found {
+		return ydbdecl.CoordinationNode{}, false, nil
+	}
+	described, err := c.Nodes.DescribeNode(ctx, &Ydb_Coordination.DescribeNodeRequest{Path: absolute})
+	if err != nil {
+		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("describe YDB coordination node: transport failed")
+	}
+	var result Ydb_Coordination.DescribeNodeResult
+	if err := Operation(described.GetOperation(), &result); err != nil {
+		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("describe YDB coordination node %s: %w", absolute, err)
+	}
+	current, err := nodeSettings(result.GetConfig())
+	if err != nil {
+		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("describe YDB coordination node %s: %w", absolute, err)
+	}
+	return current, true, nil
+}
+
+// consistencyNames and counterNames name the enum values a statement reads
+// and writes. A value outside them is refused by its number rather than read
+// as the nearest one: YDB stores and reports a mode of 7.
+var (
+	consistencyNames = map[Ydb_Coordination.ConsistencyMode]string{
+		Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_UNSET:   "",
+		Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT:  "strict",
+		Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_RELAXED: "relaxed",
+	}
+	counterNames = map[Ydb_Coordination.RateLimiterCountersMode]string{
+		Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_UNSET:      "",
+		Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_AGGREGATED: "aggregated",
+		Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_DETAILED:   "detailed",
+	}
+)
+
+// nodeSettings reads a node's configuration as the settings a statement
+// names.
+func nodeSettings(config *Ydb_Coordination.Config) (ydbdecl.CoordinationNode, error) {
+	read, readKnown := consistencyNames[config.GetReadConsistencyMode()]
+	attach, attachKnown := consistencyNames[config.GetAttachConsistencyMode()]
+	counters, countersKnown := counterNames[config.GetRateLimiterCountersMode()]
+	switch {
+	case !readKnown:
+		return ydbdecl.CoordinationNode{}, fmt.Errorf("its read_consistency_mode is %d, which Ptah does not know", config.GetReadConsistencyMode())
+	case !attachKnown:
+		return ydbdecl.CoordinationNode{}, fmt.Errorf("its attach_consistency_mode is %d, which Ptah does not know", config.GetAttachConsistencyMode())
+	case !countersKnown:
+		return ydbdecl.CoordinationNode{}, fmt.Errorf("its rate_limiter_counters_mode is %d, which Ptah does not know", config.GetRateLimiterCountersMode())
+	}
+	return ydbdecl.CoordinationNode{SelfCheckPeriodMillis: config.GetSelfCheckPeriodMillis(), SessionGracePeriodMillis: config.GetSessionGracePeriodMillis(),
+		ReadConsistencyMode: read, AttachConsistencyMode: attach, RateLimiterCountersMode: counters}, nil
+}
+
+// statementConfig writes the settings a statement names as the configuration
+// the coordination service takes. A setting it leaves out is sent unset,
+// which the service reads as "keep" on a change and as "the default" on a
+// creation.
+func statementConfig(settings ydbdecl.CoordinationNode) *Ydb_Coordination.Config {
+	config := &Ydb_Coordination.Config{SelfCheckPeriodMillis: settings.SelfCheckPeriodMillis, SessionGracePeriodMillis: settings.SessionGracePeriodMillis}
+	for mode, name := range consistencyNames {
+		if name == "" {
+			continue
+		}
+		if settings.ReadConsistencyMode == name {
+			config.ReadConsistencyMode = mode
+		}
+		if settings.AttachConsistencyMode == name {
+			config.AttachConsistencyMode = mode
+		}
+	}
+	for mode, name := range counterNames {
+		if name != "" && settings.RateLimiterCountersMode == name {
+			config.RateLimiterCountersMode = mode
+		}
+	}
+	return config
 }
