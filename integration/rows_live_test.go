@@ -16,7 +16,6 @@ import (
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 )
 
@@ -59,7 +58,7 @@ func newRowsFixture(c *qt.C) *rowsFixture {
 		defer cancel()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE `"+table+"`"), qt.IsNil)
 	})
-	return &rowsFixture{opened: opened, client: client, session: session.Id, directory: directory, features: backend.Description().GetFeatures(),
+	return &rowsFixture{opened: opened, client: client, session: session.Id, directory: directory, features: client.Description().GetFeatures(),
 		table: &protocol.Reference{Kind: "table", Schema: directory, Name: "rows"}}
 }
 
