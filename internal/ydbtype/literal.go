@@ -343,6 +343,12 @@ func parseDuration(text string) (int64, bool) {
 	return micros, true
 }
 
+// ParseInterval reads an ISO 8601 duration as YDB's Interval literal takes
+// it, in microseconds, and reports false for one it refuses.
+func ParseInterval(text string) (int64, bool) {
+	return parseDuration(strings.TrimSpace(text))
+}
+
 // IntervalText writes a duration of micros microseconds as the ISO 8601 text
 // YDB's Interval reads, in days, hours, minutes and seconds, leaving out the
 // parts that are zero: 93600000000 is P1DT2H, -1000000 is -PT1S, and 0 is
