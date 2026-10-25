@@ -233,11 +233,21 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		facts := item.operation.OperationSemantics
 		slot := proto.CloneOf(item.table.Subject)
 		slot.Kind = "ydb.scheme-path"
+		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.table.Subject), Action: protocol.PlanningEffect_CREATE},
+			{Subject: slot, Action: protocol.PlanningEffect_CREATE}}
+		if !isColumnCreation(item.operation) {
+			created, err := Request(item.operation.Value)
+			if err != nil {
+				return nil, err
+			}
+			for _, index := range created.GetIndexes() {
+				effects = append(effects, &protocol.PlanningEffect{Subject: indexSubject(item.table.Subject, index.GetName()), Action: protocol.PlanningEffect_CREATE})
+			}
+		}
 		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: item.id,
 			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation},
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
-				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.table.Subject), Action: protocol.PlanningEffect_CREATE},
-					{Subject: slot, Action: protocol.PlanningEffect_CREATE}}}})
+				Effects: effects}})
 		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
 	}
 	slices.SortFunc(drops, func(a, b removal) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
@@ -392,8 +402,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		item := creations[matched]
 		effects := step.GetMetadata().GetEffects()
-		if claimed[matched] || step.AddedColumn != nil || len(effects) != 1 ||
-			effects[0].Action != protocol.PlanningEffect_CREATE || provider.CompareIdentities(effects[0].Subject, item.table.Subject) != 0 {
+		if claimed[matched] || step.AddedColumn != nil || len(effects) == 0 ||
+			effects[0].Action != protocol.PlanningEffect_CREATE || provider.CompareIdentities(effects[0].Subject, item.table.Subject) != 0 ||
+			slices.ContainsFunc(effects[1:], func(effect *protocol.PlanningEffect) bool { return !createsIndexOf(effect, item.table.Subject) }) {
 			return refused(item.index, "A table creation rewrite requires one complete common table footprint"), nil
 		}
 		claimed[matched] = true
@@ -450,6 +461,16 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		return nil, err
 	}
 	return result, nil
+}
+
+// createsIndexOf reports an effect that creates an index of table, which a
+// creation builds with the table.
+func createsIndexOf(effect *protocol.PlanningEffect, table *protocol.ComparisonIdentity) bool {
+	subject := effect.GetSubject()
+	if effect.GetAction() != protocol.PlanningEffect_CREATE || subject.GetKind() != "index" || subject.GetName().GetNormalized() == "" {
+		return false
+	}
+	return provider.CompareIdentities(indexSubject(table, subject.GetName().GetSource()), subject) == 0
 }
 
 // ttlAction is what a TTL step does to the table's TTL setting: a removal drops

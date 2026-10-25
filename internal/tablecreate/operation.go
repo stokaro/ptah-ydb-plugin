@@ -21,7 +21,7 @@ import (
 const OperationKind = schema.ProviderID + "/row-table-create-operation"
 
 var nativeFields = []string{"columns", "primary_key", "ttl_settings", "storage_settings", "column_families", "attributes",
-	"partitioning_settings", "key_bloom_filter", "read_replicas_settings", "tiering", "store_type", "uniform_partitions", "partition_at_keys"}
+	"partitioning_settings", "key_bloom_filter", "read_replicas_settings", "tiering", "store_type", "uniform_partitions", "partition_at_keys", "indexes"}
 var operationModel = buildOperationModel()
 
 // Model binds the native payload grammar, absence precondition, and confirmation.
@@ -39,11 +39,12 @@ func buildOperationModel() *protocol.ValueModel {
 		"table_model":  json.RawMessage(schema.TableDesiredModel().DefinitionJson),
 		"columns":      "distinct names, exact native storage types, explicit matching notNull, optional typed literal; sequences, compression, and encoding refused",
 		"keys":         "ordered nonempty distinct existing columns",
-		"settings":     "row storage only; no access changes, temporary lifetime, indexes, changefeeds, profiles or compaction policy; a starting layout is either a count of uniform partitions over a Uint32 or Uint64 first key column, or split points of optional tuples over the leading key columns",
+		"settings":     "row storage only; no access changes, temporary lifetime, changefeeds, profiles or compaction policy; a starting layout is either a count of uniform partitions over a Uint32 or Uint64 first key column, or split points of optional tuples over the leading key columns",
+		"indexes":      "global indexes, sync, async or unique, each with its ordered key columns and covered columns over declared columns and no settings of its own, built with the table",
 		"omission":     "omitted creation settings request server defaults; explicit settings are confirmed after creation",
 		"execution":    "native CreateTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
 		"precondition": "complete exact parent directory listing must establish absence; parent must exist; root ptah_locks is reserved; no atomic compare-and-set",
-		"confirmation": "read back columns, ordered primary key, requested settings, and absence of unexpected indexes or changefeeds; a successful create does not establish exclusive ownership",
+		"confirmation": "read back columns, ordered primary key, requested settings, the requested indexes ready with their definitions and no other index, and no changefeed; a successful create does not establish exclusive ownership",
 		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
@@ -165,6 +166,9 @@ func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {
 		}
 		keys[key] = true
 	}
+	if err := validateIndexes(&request, names); err != nil {
+		return nil, err
+	}
 	// Reuse the desired model's validation for native settings rather than
 	// accepting a less strict operation payload than the source declaration.
 	if err := validateRequestLayout(&request); err != nil {
@@ -180,6 +184,7 @@ func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {
 	}
 	delete(raw, "columns")
 	delete(raw, "storeType")
+	delete(raw, "indexes")
 	// The request states the layout as native typed values, which the check
 	// above holds to the rules; the settings model states it as source text.
 	delete(raw, "uniformPartitions")

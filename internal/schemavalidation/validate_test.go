@@ -110,11 +110,12 @@ func TestValidateSchema_Diagnostics(t *testing.T) {
 			misdirected.Declaration.PrimaryKey = []string{"nope"}
 			return newRequest(misdirected)
 		}, protocol.SchemaDiagnostic_INVALID_SCHEMA, "table", "misdirected", `invalid YDB primary key column`},
-		{"common index", func() *protocol.ValidateSchemaRequest {
+		{"a vector index", func() *protocol.ValidateSchemaRequest {
 			indexed := keyed("", "indexed")
-			indexed.Declaration.Indexes = []*protocol.DeclaredIndex{{Name: "by_body", Fields: []string{"body"}}}
+			indexed.Declaration.Indexes = []*protocol.DeclaredIndex{{Name: "by_body", Fields: []string{"body"}, Type: "vector_kmeans_tree"}}
 			return newRequest(indexed)
-		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "indexed", `YDB table creation does not support .*indexes`},
+		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "indexed",
+			`index "by_body": it is a vector_kmeans_tree index, and this provider creates a table with its global indexes, synchronous or asynchronous`},
 		{"table inside a table", func() *protocol.ValidateSchemaRequest {
 			return newRequest(keyed("", "a"), keyed("a", "b"))
 		}, protocol.SchemaDiagnostic_INVALID_SCHEMA, "table path", "a/b", `YDB table a/b lies inside table a; a table holds no children`},

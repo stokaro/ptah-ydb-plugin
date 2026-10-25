@@ -135,8 +135,8 @@ func TestCompileRefusesUnimplementedOrForgedState(t *testing.T) {
 		}},
 		{"checks", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) { d.Checks = []string{"true"} }},
 		{"comment", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) { d.Comment = "keep me" }},
-		{"index", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
-			d.Indexes = []*protocol.DeclaredIndex{{Name: "keep", Fields: []string{"value"}}}
+		{"partial index", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+			d.Indexes = []*protocol.DeclaredIndex{{Name: "keep", Fields: []string{"value"}, Condition: "value > 0"}}
 		}},
 		{"receipt", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.Features.Facets.Records[0].Value.CanonicalProjection = []byte("{}")

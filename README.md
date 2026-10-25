@@ -1370,8 +1370,20 @@ indexes or changefeeds. A failed reply or unconfirmed result remains UNKNOWN.
 The native API provides no atomic compare-and-set; these checks do not establish
 exclusive ownership against another schema writer.
 
-Access requirements, temporary tables, indexes, changefeeds, sequence defaults,
-column compression or encoding, and richer common constraints are refused.
+A table is created with the global indexes it declares, synchronous or
+asynchronous, unique or not, with their key and covered columns, in the one
+CreateTable request, as the host's embedded engine writes them inside its
+CREATE TABLE. That is the only way to give a new table a unique index on a
+release that refuses one on an existing table. What a YDB index has no clause
+for is refused in the embedded engine's words: an expression, an order, a
+prefix, a NULLS order or an operator class on a key column, an index on the
+table's key, a covered key column. A vector, full-text or local index is
+refused too, since the pinned table protocol builds none of them with a table.
+Execution confirms each index by reading it back. In the TEXT form each index
+is an INDEX clause of the CREATE TABLE.
+
+Access requirements, temporary tables, changefeeds, sequence defaults, column
+compression or encoding, and richer common constraints are refused.
 Table rebuild remains unsupported, removal is described below, and alteration covers column
 families, the addition and removal of columns, the TTL and the automatic partitioning settings (see below). An unknown populated
 field cannot disappear during compilation. A mixed SQL/native batch is validated
@@ -1694,7 +1706,7 @@ carry is refused by name, with no partial reading:
   resource pool classifiers, which this provider has no model for.
 
 Some of what a reading carries is not planned yet. Table creation refuses
-column defaults, indexes and table comments. Ptah refuses views and roles from
+column defaults and table comments. Ptah refuses views and roles from
 a provider's reading. A coordination node is planned as the coordination
 services describe.
 
