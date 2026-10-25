@@ -30,7 +30,11 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating 
 	if err := validateOwner(owner); err != nil {
 		return nil, err
 	}
-	if err := only(table, "name", "schema", "primary_key", "columns", "features"); err != nil {
+	key, err := declaredKey(table)
+	if err != nil {
+		return nil, err
+	}
+	if err := only(table, "name", "schema", "primary_key", "primary_key_parts", "columns", "features"); err != nil {
 		return nil, err
 	}
 	if table.Name != owner.Name || table.Schema != owner.Schema {
@@ -47,7 +51,7 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating 
 		return nil, fmt.Errorf("temporary YDB tables need an explicit session lifetime")
 	}
 	result := &Ydb_Table.CreateTableRequest{
-		PrimaryKey:           slices.Clone(table.PrimaryKey),
+		PrimaryKey:           key,
 		StoreType:            Ydb_Table.StoreType_STORE_TYPE_ROW,
 		TtlSettings:          proto.CloneOf(settings.TtlSettings),
 		StorageSettings:      proto.CloneOf(settings.StorageSettings),
@@ -123,6 +127,28 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating 
 		result.Partitions = started.Partitions
 	}
 	return result, nil
+}
+
+// declaredKey is the ordered key a declaration states: its key columns, as
+// the key and as the parts a SQL schema writes it in. A YDB key part is a
+// column and nothing else, so a part with a prefix or a direction is
+// refused, and so are parts that name other columns than the key does.
+func declaredKey(table *protocol.DeclaredTable) ([]string, error) {
+	key := slices.Clone(table.GetPrimaryKey())
+	if len(table.GetPrimaryKeyParts()) == 0 {
+		return key, nil
+	}
+	parts := make([]string, 0, len(table.GetPrimaryKeyParts()))
+	for _, part := range table.GetPrimaryKeyParts() {
+		if err := only(part, "column"); err != nil {
+			return nil, err
+		}
+		parts = append(parts, part.GetColumn())
+	}
+	if len(key) != 0 && !slices.Equal(key, parts) {
+		return nil, fmt.Errorf("the key parts of a YDB table declaration disagree with its key")
+	}
+	return parts, nil
 }
 
 func compileColumn(column *protocol.DeclaredColumn, settings *native.ColumnIntent) (*Ydb_Table.ColumnMeta, error) {
