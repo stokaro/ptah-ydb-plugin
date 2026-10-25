@@ -8,6 +8,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -24,10 +25,11 @@ func HeaderKinds() []string {
 }
 
 // ClaimedModels are the desired models whose coverage a YQL document claims:
-// a row table's settings, a column's, a column table's storage and a
-// coordination node. Their source formats include SQL.
+// a row table's settings, a column's, a column table's storage, a
+// coordination node and a topic. Their source formats include SQL.
 func ClaimedModels() []*protocol.ValueModel {
-	return []*protocol.ValueModel{schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel()}
+	return []*protocol.ValueModel{schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel(),
+		schema.NativeDesiredModel(schema.TopicProperties)}
 }
 
 // Reply reads the documents of a ReadSQLSchema request and answers with the
@@ -283,7 +285,20 @@ func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 		return nil, at(fmt.Sprintf("changefeed %s of table %s has no home in a SQL schema reading: "+
 			"the host refuses the owned objects of a table in a SQL schema reading", quoteName(object.Name), quoteName(ydbPath(object.Schema, object.Parent))))
 	case KindTopic:
-		return nil, at(fmt.Sprintf("topic %s has no home in a SQL schema reading: this provider declares no topic from a source document", quoteName(ydbPath(object.Schema, object.Name))))
+		spec := object.Spec.(*ydbdecl.Topic)
+		invalid := func(err error) *Refusal {
+			return &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
+				Message: fmt.Sprintf("topic %s: %v", quoteName(ydbPath(object.Schema, object.Name)), err)}
+		}
+		intent, err := topics.Intent(*spec)
+		if err != nil {
+			return nil, invalid(err)
+		}
+		envelope, err := schema.CaptureTopicIntent(&protocol.Reference{Engine: "ydb", Kind: schema.TopicProperties, Schema: object.Schema, Name: object.Name}, intent)
+		if err != nil {
+			return nil, invalid(err)
+		}
+		return envelope, nil
 	case KindExternalSource:
 		return nil, at(fmt.Sprintf("external data source %s has no home in a SQL schema reading: this provider declares no external data source from a source document",
 			quoteName(ydbPath(object.Schema, object.Name))))
@@ -318,45 +333,68 @@ func coordinationIntent(spec ydbdecl.CoordinationNode) schema.CoordinationIntent
 	return intent
 }
 
+// limitedKinds are the header kinds a load's claim can be limited by, with
+// the model each limits, how a limit names an object of it, and the reason a
+// limit of the whole kind gives.
+var limitedKinds = map[string]struct {
+	model  string
+	path   func(string) (string, string)
+	reason string
+}{
+	"coordination_node": {schema.CoordinationProperties, coordinationLimit, "the source leaves coordination nodes unmanaged"},
+	"topic":             {schema.TopicProperties, topicLimit, "the source leaves topics unmanaged"},
+}
+
 // claim is the coverage a load claims: every claimed model complete, less
-// the coordination nodes the documents' headers leave unmanaged. A limit
-// whose name no object of its kind can take is refused as the host refuses
-// it.
+// the coordination nodes and topics the documents' headers leave unmanaged.
+// A limit whose name no object of its kind can take is refused as the host
+// refuses it.
 func claim(limits []*protocol.SchemaCoverageLimit) (*protocol.ModelCoverage, *Refusal) {
 	coverage := &protocol.ModelCoverage{Representation: protocol.ValueInput_DESIRED}
-	nodes := &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}
+	whole := map[string]*protocol.ModelKnowledge{}
 	var subjects []*protocol.ModelSubjectCoverage
 	seen := map[string]bool{}
 	for _, limit := range limits {
 		if refusal := checkLimit(limit); refusal != nil {
 			return nil, refusal
 		}
-		if limit.GetKind() != "coordination_node" {
+		kind, limited := limitedKinds[limit.GetKind()]
+		if !limited {
 			continue
 		}
 		if limit.GetName() == "" {
-			nodes = &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "the source leaves coordination nodes unmanaged"}
+			whole[kind.model] = &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: kind.reason}
 			continue
 		}
-		schemaName, name := coordinationLimit(limit.GetName())
-		key := schemaName + "\x00" + name
+		schemaName, name := kind.path(limit.GetName())
+		key := kind.model + "\x00" + schemaName + "\x00" + name
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: schemaName, Name: name}
-		subjects = append(subjects, &protocol.ModelSubjectCoverage{Kind: schema.CoordinationProperties, Subject: owner, NormalizedSubject: proto.CloneOf(owner),
+		owner := &protocol.Reference{Engine: "ydb", Kind: kind.model, Schema: schemaName, Name: name}
+		subjects = append(subjects, &protocol.ModelSubjectCoverage{Kind: kind.model, Subject: owner, NormalizedSubject: proto.CloneOf(owner),
 			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "the source leaves this object unmanaged"}})
 	}
 	for _, model := range ClaimedModels() {
 		knowledge := &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}
-		if model.GetKind() == schema.CoordinationProperties {
-			knowledge = proto.CloneOf(nodes)
+		if limited, found := whole[model.GetKind()]; found {
+			knowledge = proto.CloneOf(limited)
 		}
 		coverage.Kinds = append(coverage.Kinds, &protocol.ModelKindCoverage{Model: model, Knowledge: knowledge})
 	}
 	coverage.Subjects = subjects
 	return coverage, nil
+}
+
+// topicLimit is the directory and the name of the topic a header names: a
+// path relative to the database root, a dot being part of a name.
+func topicLimit(written string) (string, string) {
+	path, err := ydbdecl.ParseTopicPath(written)
+	if err != nil {
+		return "", written
+	}
+	return path.Schema, path.Name
 }
 
 // coordinationLimit is the directory and the name of the node a header

@@ -81,7 +81,10 @@ func createFixtureTable(c *qt.C, opened *connection.Connection, database, direct
 func execFixtureSchema(ctx context.Context, db *sql.DB, statement string) error {
 	for {
 		_, err := db.ExecContext(ctx, statement)
-		if !ydb.IsOperationErrorOverloaded(err) || !strings.Contains(err.Error(), "path is under operation") {
+		// YDB answers a schema statement on a path a schema operation still
+		// holds with OVERLOADED, naming the path as under operation or as
+		// locked by the operation's transaction.
+		if !ydb.IsOperationErrorOverloaded(err) || (!strings.Contains(err.Error(), "path is under operation") && !strings.Contains(err.Error(), "has been locked by tx")) {
 			return err
 		}
 		select {

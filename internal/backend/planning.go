@@ -6,6 +6,8 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topicplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -31,6 +33,8 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	switch request.PlanningId {
 	case coordinationplan.ServiceID:
 		result, err = coordinationplan.Plan(ctx, request)
+	case topicplan.ServiceID:
+		result, err = topicplan.Plan(ctx, request)
 	case tablecreate.ServiceID:
 		result, err = tablecreate.Plan(ctx, request)
 	default:
@@ -77,6 +81,9 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		captured := native.GetValue()
 		if captured.GetValue().GetKind() == schema.CoordinationOperation && !request.Capabilities["coordination_nodes"] {
 			return nil, status.Error(codes.FailedPrecondition, "native coordination rendering requires established capabilities")
+		}
+		if captured.GetValue().GetKind() == schema.TopicOperation && !request.Capabilities[topics.CapabilityTopics] {
+			return nil, status.Error(codes.FailedPrecondition, "topic rendering requires the topics capability")
 		}
 		normalized, err := normalizeOperation(&protocol.ValueInput{Id: captured.GetId(), Representation: protocol.ValueInput_OPERATION, Value: captured.GetValue()})
 		if err != nil {

@@ -60,9 +60,10 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		"index_status":         "declarations require a ready implementation; conversion to observed form predicts readiness without establishing coverage",
 		"streams":              "all topic and consumer configuration retained without partition topology or statistics; access uses separate direct-grant and effective-access requirements",
 		"initial_scan":         "initialScan retains creation intent; disabled is independent; observed INITIAL_SCAN converts to enabled intent with initialScan true, never to a claim that scanning finished",
-		"conversion":           "offline and all-or-nothing; requires complete implementation and child-topic settings; no comparison or planning advertised by these models",
+		"conversion":           "offline and all-or-nothing; requires complete implementation and child-topic settings; a model is compared and planned only where the provider names a service for it",
 		"access":               "missing access leaves ownership and permissions unmanaged; present access retains complete direct grants and effective-permission requirements without granting permissions",
 		"native_objects":       "views require matching access from view and table APIs; external options, references and column order remain exact; no network access to external sources",
+		"topic_declarations":   "a topic setting or consumer setting left at zero is one the declaration leaves out, which requests the value YDB gives a new topic; attributes and access are not declared",
 		"column_storage":       "preserves hash order, partition and data-channel counts, local indexes and TTL tiers; excludes native IDs and runtime topology; a declaration may omit the hash key, the shard count and the data channels, which the server then chooses, and states the whole TTL of the table, a TTL that only deletes as one deleting tier; the server's derived expiration is not declared",
 	}
 	encoded, err := json.Marshal(definition)
@@ -75,10 +76,11 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	}
 	digest := sha256.Sum256(canonical)
 	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
-	if kind == ColumnStorageProperties {
+	if kind == ColumnStorageProperties || kind == TopicProperties {
 		// A YAML, Go or SQL source says whether a table stores columns, so the
 		// absence of the facet on a table such a source describes is a request
-		// for row storage.
+		// for row storage. Each of them declares topics too, and describes
+		// them completely, as for the host's embedded engine.
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}
 	}
 	return result

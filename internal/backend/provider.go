@@ -15,9 +15,13 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/embedstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
+	"github.com/stokaro/ptah-ydb-plugin/internal/releaseline"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topicplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -93,8 +97,14 @@ func negotiatedFeatures(ctx context.Context) []string {
 // tiered_ttl is false, because EnableTieringInColumnShard is off by default
 // on every line from 25.1 to 26.2. An address that names the monitoring
 // endpoint replaces it with the flag's value (see featureflags).
-func sessionCapabilities() map[string]bool {
-	return map[string]bool{"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false}
+//
+// topics is true on every line: the provider declares, reads and plans a
+// standalone topic. topic_consumer_availability_period is a consumer's
+// availability_period, which 25.4 and later take (`AVAILABILITY_PERIOD:
+// unknown option for consumer` on 25.1 to 25.3, as the host measured).
+func sessionCapabilities(version string) map[string]bool {
+	return map[string]bool{"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+		"topics": true, "topic_consumer_availability_period": releaseline.AtLeast(version, 25, 4)}
 }
 
 // clusterCapabilities refines the preset with the feature flags of the
@@ -103,9 +113,9 @@ func sessionCapabilities() map[string]bool {
 // rather than falling back to the preset: the operator asked for the cluster's
 // answer, and planning without it would be planning with an answer nobody
 // asked for.
-func clusterCapabilities(ctx context.Context, opened *connection.Connection) (map[string]bool, error) {
+func clusterCapabilities(ctx context.Context, opened *connection.Connection, version string) (map[string]bool, error) {
 	if !opened.HasMonitoring() {
-		return sessionCapabilities(), nil
+		return sessionCapabilities(version), nil
 	}
 	body, err := opened.ReadMonitoring(ctx, "feature flags", featureflags.Path, url.Values{"database": {opened.Database()}})
 	if err != nil {
@@ -115,7 +125,7 @@ func clusterCapabilities(ctx context.Context, opened *connection.Connection) (ma
 	if err != nil {
 		return nil, fmt.Errorf("read the YDB feature flags: %w", err)
 	}
-	return flags.Refine(sessionCapabilities()), nil
+	return flags.Refine(sessionCapabilities(version)), nil
 }
 
 // New constructs an isolated session service.
@@ -140,7 +150,7 @@ func Description() *protocol.Description {
 		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: "0.0.0-dev", SemanticIdentity: "ydb-table-lifecycle-2",
 		Features: providerFeatures(),
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: append([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey()}, tablesource.YAMLKeys()...), GoSourceDirectives: append(tablesource.GoDirectives(), schema.CoordinationGoDirective()), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), SqlSchema: sqlSchemaDeclaration(), Features: engineFeatures(), Embeddings: &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes}}},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: topicplan.ServiceID, ChangeKinds: []string{schema.TopicChange}, OperationKinds: []string{schema.TopicOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: topiccompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.TopicProperties}, ChangeKinds: []string{schema.TopicChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: append([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey(), topicsource.YAMLKey()}, tablesource.YAMLKeys()...), GoSourceDirectives: append(append(tablesource.GoDirectives(), schema.CoordinationGoDirective()), topicsource.GoDirectives()...), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), SqlSchema: sqlSchemaDeclaration(), Features: engineFeatures(), Embeddings: &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes}}},
 	}
 }
 
@@ -181,7 +191,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 		_ = opened.Close()
 		return nil, connectionError(ctx, "read YDB server version")
 	}
-	capabilities, err := clusterCapabilities(ctx, opened)
+	capabilities, err := clusterCapabilities(ctx, opened, version)
 	if err != nil {
 		_ = opened.Close()
 		if ctxErr := ctx.Err(); ctxErr != nil {

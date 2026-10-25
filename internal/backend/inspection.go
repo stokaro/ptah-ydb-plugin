@@ -90,6 +90,8 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 				normalize = schema.NormalizeTablePropertiesChange
 			case schema.ColumnStorageChange:
 				normalize = schema.NormalizeColumnStorageChange
+			case schema.TopicChange:
+				normalize = schema.NormalizeTopicChange
 			}
 			normalized, changeErr := normalize(input)
 			if changeErr != nil {

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/releaseline"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 )
@@ -50,35 +50,12 @@ type Capabilities struct {
 // feature flags where they were read, deciding the vector index of 25.1. A
 // version the store cannot read is the newest line's.
 func LineCapabilities(version string, flags map[string]bool) Capabilities {
-	major, minor, known := line(version)
-	newer := func(atMajor, atMinor int) bool {
-		return !known || major > atMajor || major == atMajor && minor >= atMinor
-	}
+	newer := func(atMajor, atMinor int) bool { return releaseline.AtLeast(version, atMajor, atMinor) }
 	caps := Capabilities{WideTimestamps: newer(25, 2), VectorIndexes: newer(25, 2), MaintainedOnWrite: newer(25, 3)}
 	if enabled, listed := flags["EnableVectorIndex"]; listed {
 		caps.VectorIndexes = enabled
 	}
 	return caps
-}
-
-// line reads the major and minor release out of a YDB version: dotted, such
-// as "26.2.1.14", or a build branch, such as "stable-25-4-1".
-func line(version string) (int, int, bool) {
-	trimmed := strings.ToLower(strings.TrimSpace(version))
-	separator := "."
-	if rest, branch := strings.CutPrefix(trimmed, "stable-"); branch {
-		trimmed, separator = rest, "-"
-	}
-	parts := strings.Split(trimmed, separator)
-	if len(parts) < 2 {
-		return 0, 0, false
-	}
-	major, majorErr := strconv.Atoi(parts[0])
-	minor, minorErr := strconv.Atoi(parts[1])
-	if majorErr != nil || minorErr != nil {
-		return 0, 0, false
-	}
-	return major, minor, true
 }
 
 // named binds arguments to the parameters $p1, $p2, ... a statement names

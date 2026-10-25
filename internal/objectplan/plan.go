@@ -19,7 +19,7 @@ import (
 const PathKind = "ydb.scheme-path"
 
 // Family is what one kind of standalone object brings to planning. Every
-// field is required.
+// field but Refuse is required.
 type Family struct {
 	// ServiceID is the planning service the host asks for the family's changes.
 	ServiceID string
@@ -44,6 +44,10 @@ type Family struct {
 	Operation func(id string, change *protocol.Envelope) (*protocol.NormalizedValue, error)
 	// Present reports which operands of a normalized change are present.
 	Present func(change *protocol.Envelope) (before, after bool, err error)
+	// Refuse says why a normalized change cannot be planned on a target
+	// holding capabilities, or returns nil; a nil Refuse refuses nothing.
+	// Its error is a refusal of the change, not of the request.
+	Refuse func(change *protocol.Envelope, capabilities map[string]bool) error
 }
 
 type change struct {
@@ -94,6 +98,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 		}
 		if request.DatabasePath != "" && owner.Database != "" && owner.Database != request.DatabasePath {
 			return nil, fmt.Errorf("%s change targets another database", family.Noun)
+		}
+		if family.Refuse != nil {
+			if err := family.Refuse(captured.Value, request.Capabilities); err != nil {
+				return refusal(family, i, err.Error()), nil
+			}
 		}
 		value, err := family.Operation("pending", captured.Value)
 		if err != nil {
