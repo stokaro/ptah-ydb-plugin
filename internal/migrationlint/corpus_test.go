@@ -101,7 +101,7 @@ func TestCorpus_Shape(t *testing.T) {
 		c.Assert(findings[code] > 0, qt.IsTrue, qt.Commentf("no case of the corpus reports %s", code))
 	}
 	facts := corpusFacts(c)
-	for _, fact := range migrationlint.Judged() {
+	for _, fact := range migrationlint.Judged(false) {
 		c.Assert(facts[factNames[fact]] > 0, qt.IsTrue, qt.Commentf("no split of the corpus reports %s", fact))
 	}
 	c.Assert(corpusDeclines(c) > 0, qt.IsTrue)

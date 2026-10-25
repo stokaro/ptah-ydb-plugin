@@ -1,0 +1,2 @@
+﻿CREATE TABLE bom (id Uint64);
+UPSERT INTO bom (id) VALUES (1);

@@ -12,15 +12,16 @@ import (
 )
 
 // TestDescriptionListsOneFeatureSet pins that the engine offers every
-// service of the provider, and dev realms, which the contract makes a feature
-// of the engine alone.
+// service of the provider, dev realms, which the contract makes a feature of
+// the engine alone, and the statement facts of its lint, which the contract
+// lists beside the engine's lint.
 func TestDescriptionListsOneFeatureSet(t *testing.T) {
 	c := qt.New(t)
 
 	description := backend.Description()
 
 	c.Assert(description.Features, qt.Not(qt.HasLen), 0)
-	c.Assert(description.Engines[0].Features, qt.DeepEquals, append(description.Features, "database.dev-realms"))
+	c.Assert(description.Engines[0].Features, qt.DeepEquals, append(description.Features, "database.dev-realms", "lint.statement-facts"))
 }
 
 func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {

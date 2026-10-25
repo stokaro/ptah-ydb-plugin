@@ -1,0 +1,9 @@
+CREATE TABLE d (id Uint64 NOT NULL, emb String, PRIMARY KEY (id), INDEX d_e GLOBAL USING vector_kmeans_tree
+    ON (emb) WITH (distance=cosine, vector_type="float", vector_dimension=3, levels=1, clusters=2));
+ALTER TABLE d ADD INDEX d_f GLOBAL USING vector_kmeans_tree ON (emb)
+    WITH (distance=cosine, vector_type=float, vector_dimension=3, levels=1, clusters=2);
+ALTER TABLE d ADD INDEX d_b GLOBAL USING vector_kmeans_tree ON (emb)
+    WITH (distance=manhattan, vector_type="BIT", vector_dimension=8, levels=1, clusters=2);
+CREATE TABLE bits (id Uint64, emb String, INDEX bits_e GLOBAL USING vector_kmeans_tree ON (emb)
+    WITH (distance=cosine, vector_type=bit, vector_dimension=8, levels=1, clusters=2));
+CREATE TABLE plain (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX plain_v GLOBAL UNIQUE ON (v), INDEX plain_w GLOBAL ON (v));

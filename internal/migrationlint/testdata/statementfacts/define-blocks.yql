@@ -1,0 +1,10 @@
+DEFINE ACTION $make($name) AS
+    CREATE TABLE $name (id Uint64);
+    UPSERT INTO $name (id) VALUES (1);
+END DEFINE;
+DO $make("a");
+EVALUATE FOR $n IN AsList("b", "c") DO $make($n);
+DEFINE SUBQUERY $q() AS
+    SELECT 1 AS one;
+END DEFINE;
+SELECT * FROM $q();

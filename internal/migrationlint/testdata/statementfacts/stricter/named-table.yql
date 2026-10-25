@@ -1,0 +1,3 @@
+$t = "dynamic";
+CREATE TABLE $t (id Uint64);
+ALTER TABLE $t ADD COLUMN v Int64 DEFAULT 1;

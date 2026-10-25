@@ -1,0 +1,11 @@
+
+CREATE TABLE first (
+    id Uint64 NOT NULL,
+    PRIMARY KEY (id)
+);
+
+        ALTER TABLE first
+            ADD COLUMN later Utf8 DEFAULT "x";
+
+
+UPSERT INTO first (id) VALUES (1);DROP TABLE first;   CREATE TABLE second (id Uint64);
