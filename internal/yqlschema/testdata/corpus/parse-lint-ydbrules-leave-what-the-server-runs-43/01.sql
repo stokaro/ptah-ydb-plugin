@@ -1,0 +1,1 @@
+UPSERT INTO t (id) VALUES (1)

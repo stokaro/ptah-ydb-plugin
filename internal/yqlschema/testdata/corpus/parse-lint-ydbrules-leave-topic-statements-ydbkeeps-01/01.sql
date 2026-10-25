@@ -1,0 +1,1 @@
+ALTER TOPIC events ALTER CONSUMER c RESET (availability_period)

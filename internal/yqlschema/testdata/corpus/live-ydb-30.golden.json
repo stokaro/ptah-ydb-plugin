@@ -1,0 +1,415 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "accepted",
+  "database": {
+   "Schemas": [],
+   "Tables": [],
+   "Fields": [],
+   "Indexes": [],
+   "Constraints": [],
+   "Enums": [],
+   "EmbeddedFields": [],
+   "Functions": [],
+   "Sequences": null,
+   "Views": [],
+   "MaterializedViews": [],
+   "Triggers": [],
+   "RLSPolicies": [],
+   "RLSEnabledTables": [],
+   "Roles": [],
+   "Grants": [],
+   "ManagedData": null,
+   "Dependencies": {},
+   "FunctionDependencies": {},
+   "SelfReferencingForeignKeys": {},
+   "EmbeddedSources": {
+    "Fields": null,
+    "Definitions": null
+   }
+  },
+  "feature_objects": [
+   {
+    "ref": {
+     "kind": "ptah.run/ydb/streaming-query",
+     "schema": {
+      "source": "ptah_yql_streaming",
+      "normalized": "ptah_yql_streaming"
+     },
+     "name": {
+      "source": "copy",
+      "normalized": "copy"
+     }
+    },
+    "value": {
+     "format": 1,
+     "owner": "ptah.run/ydb",
+     "kind": "ptah.run/ydb/streaming-query",
+     "representation": "desired",
+     "version": 1,
+     "definition": "sha256:a9e66c416cce1e07aebd815dc6eb72aba2894effa0df685595c7096d9145d4a4",
+     "payload": {
+      "allow_state_reset": false,
+      "spec": {
+       "run": false,
+       "text": "INSERT INTO `ptah_yql_streaming/sink` SELECT * FROM `ptah_yql_streaming/source` WHERE TRUE;"
+      }
+     }
+    }
+   },
+   {
+    "ref": {
+     "kind": "ptah.run/ydb/topic",
+     "schema": {
+      "source": "ptah_yql_streaming",
+      "normalized": "ptah_yql_streaming"
+     },
+     "name": {
+      "source": "sink",
+      "normalized": "sink"
+     }
+    },
+    "value": {
+     "format": 1,
+     "owner": "ptah.run/ydb",
+     "kind": "ptah.run/ydb/topic",
+     "representation": "desired",
+     "version": 1,
+     "definition": "sha256:93772061f0b5a00d857e39f3ba478de322b378ad13280bbfd9dfffeb5a1a6325",
+     "payload": {
+      "spec": {}
+     }
+    }
+   },
+   {
+    "ref": {
+     "kind": "ptah.run/ydb/topic",
+     "schema": {
+      "source": "ptah_yql_streaming",
+      "normalized": "ptah_yql_streaming"
+     },
+     "name": {
+      "source": "source",
+      "normalized": "source"
+     }
+    },
+    "value": {
+     "format": 1,
+     "owner": "ptah.run/ydb",
+     "kind": "ptah.run/ydb/topic",
+     "representation": "desired",
+     "version": 1,
+     "definition": "sha256:93772061f0b5a00d857e39f3ba478de322b378ad13280bbfd9dfffeb5a1a6325",
+     "payload": {
+      "spec": {}
+     }
+    }
+   }
+  ],
+  "files": [
+   {
+    "Path": "01.sql",
+    "Objects": [
+     {
+      "Kind": "streaming query",
+      "Name": "ptah_yql_streaming.copy"
+     },
+     {
+      "Kind": "topic",
+      "Name": "ptah_yql_streaming.sink"
+     },
+     {
+      "Kind": "topic",
+      "Name": "ptah_yql_streaming.source"
+     }
+    ],
+    "Guards": null,
+    "Tables": null
+   }
+  ]
+ },
+ "load": {
+  "outcome": "accepted",
+  "coverage": {
+   "format": 2,
+   "representation": "desired",
+   "kinds": [
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/async-replication",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:27529b0d35367a7e4e32c96e6e13a80f0525ee37c5e22594a149fae45531a887"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/changefeed",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:d720327a92c26a569422f4067b131c4fca67388b7201a2d0afdd781714527078"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/column-families",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:282f6923da99b35931bb5fa0be3fa233f6c69418c11ff586f6c58c9046eb72ed"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/column-store",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:395dfc2d99d6c476c90bc5cf3812d7c5e5f297418c54ef06430cc410314eaa8c"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/coordination-node",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:4c044f15565424fd0212b50fa50c1f760e53c228028c0f0e9ac8399ad3d2183a"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/external-data-source",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:5d557b4f8393b1b4a677400c5341f862d35defc9edcb4ebb24df51bd842c7ddf"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/external-table",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:c5c29c53c5aac6a10c7af2b7f30d77afba07846404f24fa615b2bffa36a3b9a7"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/index-partitioning",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:5ae483f28b7cc3a7170d6298113ca44e36f3dbcf0d70ccdd28ae2e116f8cc2ba"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/resource-pool",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:7fb013e7125b22c2188062bab76440ac507235cabe294918eb06d639463d4e49"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/resource-pool-classifier",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:1c016233305c21f34ac69127f4f7e9f15adf6fb615539c3d6d3f2eb3ec9a65bd"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/secret",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:e4c720da37204bb248f14f040dd5ed7a52bb0c526c36b271e58b8df19edfde04"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/streaming-query",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:a9e66c416cce1e07aebd815dc6eb72aba2894effa0df685595c7096d9145d4a4"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/table-partitioning",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:b96c042a9087dda1f0811d0218686068c707d952008d82b066dd0877212b3001"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/topic",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:93772061f0b5a00d857e39f3ba478de322b378ad13280bbfd9dfffeb5a1a6325"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/transfer",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:5d2f2ea2b0e2442b1af783b84ce00bbed3a102d4c4abfe2feee37861b94d6b25"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/ttl",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:85cf7135fe7de1379ce1c0f8d843cac4cf93b37df8d715b458c0911b04f958f8"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    },
+    {
+     "model": {
+      "owner": "ptah.run/ydb",
+      "kind": "ptah.run/ydb/vector-index",
+      "representation": "desired",
+      "version": 1,
+      "definition": "sha256:f309640481582f950605e07eb7ec4afefa394f48ea4ff6e6f4676b6017e8d71c"
+     },
+     "knowledge": [
+      {
+       "outside": {
+        "state": "complete"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

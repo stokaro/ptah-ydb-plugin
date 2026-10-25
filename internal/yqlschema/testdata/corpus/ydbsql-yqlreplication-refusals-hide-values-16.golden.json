@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 64: invalid replication or transfer declaration; use modeled settings and secret references, with an inline lambda for a transfer"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 64: invalid replication or transfer declaration; use modeled settings and secret references, with an inline lambda for a transfer"
+ }
+}

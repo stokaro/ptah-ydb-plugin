@@ -1,0 +1,1 @@
+COMMENT ON TABLE `dir/t` IS 'table'; COMMENT ON COLUMN `dir/t`.body IS 'column'; COMMENT ON INDEX by_body ON `dir/t` IS 'index';

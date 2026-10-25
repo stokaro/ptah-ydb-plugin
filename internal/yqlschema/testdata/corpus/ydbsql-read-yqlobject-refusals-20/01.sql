@@ -1,0 +1,1 @@
+CREATE VIEW v WITH (security_invoker = TRUE, unknown = 1) AS SELECT 1;

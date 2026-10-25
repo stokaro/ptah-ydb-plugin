@@ -1,0 +1,1 @@
+CREATE SECRET first WITH (value = $PTAH_SECRET_YQL_TEST);

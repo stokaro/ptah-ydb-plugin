@@ -1,0 +1,1 @@
+CREATE TOPIC events (CONSUMER worker WITH (important = TRUE, availability_period = Interval('PT1H')));

@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, a Utf8 FAMILY cold, b Utf8 FAMILY hot, c Utf8 FAMILY cold, PRIMARY KEY (id), FAMILY hot (DATA = "ssd", COMPRESSION = "off", CACHE_MODE = "in_memory"), FAMILY cold (COMPRESSION = "LZ4"), FAMILY default (DATA = "hdd"));

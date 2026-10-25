@@ -1,0 +1,1 @@
+CREATE USER app; CREATE GROUP readers; CREATE GROUP auditors WITH USER app, readers;

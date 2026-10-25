@@ -1,0 +1,1 @@
+ALTER TABLE `app/notes` RENAME TO `app/old_notes`

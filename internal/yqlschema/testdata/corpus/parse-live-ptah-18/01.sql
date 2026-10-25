@@ -1,0 +1,1 @@
+INSERT INTO `ptah_ydb_cli_migrations/users` (id, name) VALUES (1l, $name)

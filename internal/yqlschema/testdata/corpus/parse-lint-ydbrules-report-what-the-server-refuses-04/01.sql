@@ -1,0 +1,1 @@
+ALTER TABLE `dir/u` DROP COLUMN a

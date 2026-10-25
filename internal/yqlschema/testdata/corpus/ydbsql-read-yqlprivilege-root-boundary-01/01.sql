@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Uint64 NOT NULL, PRIMARY KEY(id));GRANT SELECT ON `/Root/db-other/shop/orders` TO readers;

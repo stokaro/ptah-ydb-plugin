@@ -1,0 +1,1 @@
+CREATE TRANSFER `archive/ingest` FROM `archive/events` TO `archive/rows` USING ($msg) -> { $items = [<|id:$msg._offset|>]; RETURN $items; };ALTER TRANSFER `archive/ingest` SET (CONSUMER='SENTINEL');

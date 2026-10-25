@@ -1,0 +1,1 @@
+/* leading */ CREATE TABLE /* inside */ t (id Uint64 NOT NULL, PRIMARY KEY (id)); -- trailing

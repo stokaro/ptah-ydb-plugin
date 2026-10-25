@@ -1,0 +1,1 @@
+CREATE VIEW `ptah_ydb_lint/view/v` WITH (security_invoker = TRUE) AS SELECT id FROM `ptah_ydb_lint/view/base`

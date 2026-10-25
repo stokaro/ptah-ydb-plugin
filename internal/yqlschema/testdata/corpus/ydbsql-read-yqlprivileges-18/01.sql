@@ -1,0 +1,1 @@
+CREATE RESOURCE POOL `batch.v2` WITH (CONCURRENT_QUERY_LIMIT=5); GRANT SELECT ROW ON `.metadata/workload_manager/pools/batch.v2`, `/Root/db/.metadata/workload_manager/pools/batch.v2` TO etl;

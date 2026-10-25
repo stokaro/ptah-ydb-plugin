@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_lint/rule_9/t` (id Uint64 NOT NULL, k Utf8, c Utf8, ts Timestamp, free Utf8, PRIMARY KEY (id), INDEX t_k GLOBAL SYNC ON (k) COVER (c)) WITH (TTL = Interval("P1D") ON ts)

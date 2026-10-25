@@ -1,0 +1,1 @@
+ALTER TRANSFER missing SET USING ($msg) -> { $items = [<|id:$msg._offset|>]; RETURN $items; };

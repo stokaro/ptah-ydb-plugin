@@ -1,0 +1,2 @@
+CREATE TABLE t (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id));
+CREATE TABLE t (id Uint64 NOT NULL, b Utf8, PRIMARY KEY (id));

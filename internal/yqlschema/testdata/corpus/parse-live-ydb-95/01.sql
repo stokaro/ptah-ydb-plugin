@@ -1,0 +1,1 @@
+DROP VIEW `ptah_ydb_views/active`

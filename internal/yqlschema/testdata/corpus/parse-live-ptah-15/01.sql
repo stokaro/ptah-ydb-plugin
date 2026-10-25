@@ -1,0 +1,1 @@
+CREATE TABLE `shop/users` (`id` Uint64 NOT NULL, PRIMARY KEY (`id`))

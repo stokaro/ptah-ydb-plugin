@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlddl"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -643,7 +644,7 @@ func ydbVectorIndexStaleRule(h history) rule {
 // INDEX of a column or an index that carries a comment, when no statement
 // after it in the file removes or moves the comment. YDB keeps a comment as a
 // table attribute keyed by the column's or the index's name (see
-// [commentKey]), and keeps the attribute after the column or the index
+// [ydbcomment.Key]), and keeps the attribute after the column or the index
 // is dropped or renamed, measured on 25.1.4.7 and 26.2.1.14: it then takes up
 // the table's 10240 bytes of attributes, and a column or an index created
 // later under the old name reads it as its own. Ptah's plans remove and move
@@ -665,7 +666,7 @@ func ydbCommentLeftBehindRule(h history) rule {
 			var pending []leftBehind
 			for i := range file.Statements {
 				stmt := &file.Statements[i]
-				if query, recognized, err := recognizeComment(stmt.SQL); recognized && err == nil {
+				if query, recognized, err := ydbcomment.Recognize(stmt.SQL); recognized && err == nil {
 					pending = slices.DeleteFunc(pending, func(left leftBehind) bool {
 						return left.table == query.Path && left.key == query.Key()
 					})
@@ -710,19 +711,19 @@ func commentLeftBehind(table string, action yqlddl.Action, comments map[string]s
 	quotedTable := quoteName(table)
 	switch action.Kind {
 	case yqlddl.DropColumn:
-		key = commentKey(commentColumn, action.Column.Name)
+		key = ydbcomment.Key(ydbcomment.Column, action.Column.Name)
 		message = fmt.Sprintf("DROP COLUMN %s leaves its comment on the table as the attribute %s, which YDB keeps "+
 			"after the column is gone and a column added later under the name reads as its own; remove it with "+
 			"COMMENT ON COLUMN %s.%s IS NULL", action.Column.Name, key, quotedTable,
 			quoteName(action.Column.Name))
 	case yqlddl.DropIndex:
-		key = commentKey(commentIndex, action.Index.Name)
+		key = ydbcomment.Key(ydbcomment.Index, action.Index.Name)
 		message = fmt.Sprintf("DROP INDEX %s leaves its comment on the table as the attribute %s, which YDB keeps "+
 			"after the index is gone and an index added later under the name reads as its own; remove it with "+
 			"COMMENT ON INDEX %s ON %s IS NULL", action.Index.Name, key, quoteName(action.Index.Name),
 			quotedTable)
 	case yqlddl.RenameIndex:
-		key = commentKey(commentIndex, action.Index.Name)
+		key = ydbcomment.Key(ydbcomment.Index, action.Index.Name)
 		message = fmt.Sprintf("RENAME INDEX %s TO %s leaves the index's comment under the old name, as the "+
 			"attribute %s; move it with COMMENT ON INDEX %s ON %s and COMMENT ON INDEX %s ON %s IS NULL",
 			action.Index.Name, action.NewName, key, quoteName(action.NewName), quotedTable,

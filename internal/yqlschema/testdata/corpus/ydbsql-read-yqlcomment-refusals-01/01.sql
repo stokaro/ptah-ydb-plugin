@@ -1,0 +1,1 @@
+COMMENT ON SEQUENCE s IS 'x';

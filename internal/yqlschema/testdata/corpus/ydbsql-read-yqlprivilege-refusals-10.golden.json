@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: the schema model has no place for this statement: a YDB permission subject cannot be empty or have surrounding whitespace"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: the schema model has no place for this statement: a YDB permission subject cannot be empty or have surrounding whitespace"
+ }
+}

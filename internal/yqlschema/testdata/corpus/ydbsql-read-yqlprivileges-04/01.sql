@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Uint64 NOT NULL, PRIMARY KEY(id));CREATE VIEW `shop/active` WITH (security_invoker = TRUE) AS SELECT 1; GRANT SELECT ON `shop/active` TO readers;

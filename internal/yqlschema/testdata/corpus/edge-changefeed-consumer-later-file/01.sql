@@ -1,0 +1,2 @@
+CREATE TABLE `app/t` (id Uint64 NOT NULL, PRIMARY KEY (id));
+ALTER TABLE `app/t` ADD CHANGEFEED feed WITH (mode = 'NEW_AND_OLD_IMAGES', format = 'DEBEZIUM_JSON', retention_period = Interval('PT6H'), topic_min_active_partitions = 2, topic_auto_partitioning = 'ENABLED', user_sids = true, schema_changes = false);

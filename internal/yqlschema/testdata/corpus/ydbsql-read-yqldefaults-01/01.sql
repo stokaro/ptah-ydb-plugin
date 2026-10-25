@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, v Decimal(22,9) DEFAULT Decimal('1.25', 22, 9), PRIMARY KEY (id));

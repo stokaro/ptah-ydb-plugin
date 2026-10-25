@@ -1,0 +1,1 @@
+UPSERT INTO docs (id, emb) VALUES (1, "x")

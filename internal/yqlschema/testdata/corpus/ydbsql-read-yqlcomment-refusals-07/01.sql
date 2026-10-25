@@ -1,0 +1,1 @@
+COMMENT ON VIEW absent IS 'x';

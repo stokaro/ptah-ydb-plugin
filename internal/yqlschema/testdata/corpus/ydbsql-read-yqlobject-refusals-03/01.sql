@@ -1,0 +1,1 @@
+CREATE TOPIC events (CONSUMER worker WITH (name = 'other'));

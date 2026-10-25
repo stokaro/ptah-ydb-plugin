@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Uint64 NOT NULL, PRIMARY KEY(id));GRANT SELECT ON `shop/orders` TO readers WITH GRANT OPTION; REVOKE GRANT OPTION FOR SELECT ON `shop/orders` FROM readers;

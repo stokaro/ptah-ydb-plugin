@@ -1,0 +1,1 @@
+CREATE STREAMING QUERY q WITH (resource_pool=pool + suffix) AS DO BEGIN SELECT 1; END DO;

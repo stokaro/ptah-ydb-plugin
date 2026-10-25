@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, v Utf8 FAMILY missing, PRIMARY KEY (id));

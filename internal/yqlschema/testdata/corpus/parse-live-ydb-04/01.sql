@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_comments/users` DROP INDEX `users_by_legacy`

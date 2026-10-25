@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/family/t` ADD COLUMN b Int32 FAMILY hot

@@ -1,0 +1,1 @@
+CREATE TABLE events (id Int64 NOT NULL, PRIMARY KEY (id));ALTER TABLE events ADD CHANGEFEED updates WITH (mode='UPDATES', format='JSON', virtual_timestamps=TRUE, resolved_timestamps=Interval('PT1S'), retention_period=Interval('PT12H'), initial_scan=TRUE);

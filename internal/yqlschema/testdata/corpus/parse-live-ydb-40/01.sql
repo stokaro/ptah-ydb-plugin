@@ -1,0 +1,1 @@
+COMMENT ON COLUMN `ptah_ydb_comments/users`.`label` IS 'Shown name'

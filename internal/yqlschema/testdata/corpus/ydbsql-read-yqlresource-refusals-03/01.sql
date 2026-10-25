@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE `/local/n`;

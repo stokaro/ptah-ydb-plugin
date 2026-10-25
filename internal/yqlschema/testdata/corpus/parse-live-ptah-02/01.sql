@@ -1,0 +1,1 @@
+ALTER SECRET `ptah_ydb_secrets_e2e/pg_password` WITH (value = $PTAH_SECRET_E2E_PG_PASSWORD)

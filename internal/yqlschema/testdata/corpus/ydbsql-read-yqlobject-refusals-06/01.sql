@@ -1,0 +1,1 @@
+CREATE TOPIC events WITH (min_active_partitions = 0);

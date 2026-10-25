@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_lint_gate/users` (id Uint64 NOT NULL, email Utf8, PRIMARY KEY (id))

@@ -1,0 +1,6 @@
+CREATE TABLE `t` (
+    `id` Uint64 NOT NULL,
+    `v` Utf8,
+    PRIMARY KEY (`id`),
+    INDEX `i` LOCAL USING bloom_filter ON (`v`) WITH (false_positive_probability = 0.1)
+) PARTITION BY HASH (`id`) WITH (STORE = COLUMN);

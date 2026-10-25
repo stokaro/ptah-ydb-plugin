@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_repl/src` (id Int64 NOT NULL, note Utf8, PRIMARY KEY(id));CREATE ASYNC REPLICATION `ptah_ydb_repl/mirror` FOR `/local/ptah_ydb_repl/src` AS `ptah_ydb_repl/rep` WITH (CONNECTION_STRING='grpc://localhost:2136/?database=/local');

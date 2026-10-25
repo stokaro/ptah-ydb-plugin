@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_lint/family/t` (id Uint64 NOT NULL, a Utf8 FAMILY cold, PRIMARY KEY (id), FAMILY cold (COMPRESSION = 'lz4'))

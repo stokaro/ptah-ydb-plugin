@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Uint64 NOT NULL, PRIMARY KEY(id));REVOKE ALL ON `shop/orders` FROM readers; GRANT 'full' ON `shop/orders` TO readers;

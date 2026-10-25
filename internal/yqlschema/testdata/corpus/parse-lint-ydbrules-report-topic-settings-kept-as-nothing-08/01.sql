@@ -1,0 +1,1 @@
+CREATE TOPIC events WITH (metering_mode = 'request_units')

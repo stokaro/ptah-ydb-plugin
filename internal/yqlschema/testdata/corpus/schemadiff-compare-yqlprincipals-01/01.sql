@@ -1,0 +1,1 @@
+CREATE USER app NOLOGIN; CREATE GROUP readers;

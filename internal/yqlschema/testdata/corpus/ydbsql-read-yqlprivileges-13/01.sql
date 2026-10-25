@@ -1,0 +1,1 @@
+CREATE TOPIC `archive/events`; CREATE ASYNC REPLICATION `archive/mirror` FOR `/remote/source` AS `archive/copy` WITH (CONNECTION_STRING='grpc://source:2136/?database=/remote');CREATE TRANSFER `archive/ingest` FROM `archive/events` TO `archive/rows` USING ($msg) -> { $items = [<|id:$msg._offset|>]; RETURN $items; };GRANT 'manage' ON `archive/mirror`, `archive/ingest` TO operators;

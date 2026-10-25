@@ -1,0 +1,1 @@
+COMMENT ON INDEX `users_label_idx` ON `ptah_ydb_comments/users` IS 'Lookup by name'

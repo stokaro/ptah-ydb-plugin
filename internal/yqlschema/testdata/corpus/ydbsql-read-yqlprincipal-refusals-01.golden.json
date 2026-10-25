@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 14: invalid user declaration; expected a user name and PASSWORD, HASH, LOGIN or NOLOGIN options"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 14: invalid user declaration; expected a user name and PASSWORD, HASH, LOGIN or NOLOGIN options"
+ }
+}

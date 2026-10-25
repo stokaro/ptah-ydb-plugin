@@ -1,0 +1,1 @@
+CREATE SECRET `/local/SENTINEL` WITH (value = $PTAH_SECRET_OK);

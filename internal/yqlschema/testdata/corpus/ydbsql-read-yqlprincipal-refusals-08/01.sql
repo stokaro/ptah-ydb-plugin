@@ -1,0 +1,1 @@
+CREATE GROUP readers; ALTER GROUP readers ADD USER readers;

@@ -1,0 +1,191 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "limits": [
+  {
+   "kind": "topic",
+   "name": "/abs/t"
+  }
+ ],
+ "grammar": {
+  "outcome": "accepted",
+  "database": {
+   "Schemas": [],
+   "Tables": [
+    {
+     "StructName": "T",
+     "Name": "t",
+     "APIName": "",
+     "APINames": {
+      "OpenAPI": "",
+      "GraphQL": "",
+      "Protobuf": ""
+     },
+     "Schema": "",
+     "Engine": "",
+     "Collate": "",
+     "Comment": "",
+     "PrimaryKey": [
+      "id"
+     ],
+     "PrimaryKeyName": "",
+     "PrimaryKeyParts": [
+      {
+       "Name": "id",
+       "Prefix": "",
+       "Desc": false
+      }
+     ],
+     "PrimaryKeyInclude": null,
+     "PrimaryKeyMethod": "",
+     "PrimaryKeyComment": "",
+     "PrimaryKeyDeferrable": false,
+     "PrimaryKeyInitially": "",
+     "Checks": null,
+     "CustomSQL": "",
+     "Overrides": {}
+    }
+   ],
+   "Fields": [
+    {
+     "StructName": "T",
+     "FieldName": "",
+     "Name": "id",
+     "APIName": "",
+     "APINames": {
+      "OpenAPI": "",
+      "GraphQL": "",
+      "Protobuf": ""
+     },
+     "APIType": "",
+     "Type": "Uint64",
+     "TypeRawSQL": false,
+     "Nullable": false,
+     "Primary": true,
+     "AutoInc": false,
+     "IdentityGeneration": "",
+     "IdentityStart": "",
+     "IdentityIncrement": "",
+     "IdentityOptions": "",
+     "Unique": false,
+     "UniqueExpr": "",
+     "Default": "",
+     "DefaultSet": false,
+     "DefaultExpr": "",
+     "Foreign": "",
+     "ForeignKeyName": "",
+     "OnDelete": "",
+     "OnUpdate": "",
+     "Deferrable": false,
+     "Initially": "",
+     "ForeignKeyMatch": "",
+     "ForeignKeyNotEnforced": false,
+     "Enum": null,
+     "Check": "",
+     "CheckName": "",
+     "CheckNotEnforced": false,
+     "NotNullConstraintName": "",
+     "GeneratedExpression": "",
+     "GeneratedKind": "",
+     "Collate": "",
+     "Comment": "",
+     "Overrides": null,
+     "GeneratedFromEmbedded": false
+    },
+    {
+     "StructName": "T",
+     "FieldName": "",
+     "Name": "v",
+     "APIName": "",
+     "APINames": {
+      "OpenAPI": "",
+      "GraphQL": "",
+      "Protobuf": ""
+     },
+     "APIType": "",
+     "Type": "Utf8",
+     "TypeRawSQL": false,
+     "Nullable": true,
+     "Primary": false,
+     "AutoInc": false,
+     "IdentityGeneration": "",
+     "IdentityStart": "",
+     "IdentityIncrement": "",
+     "IdentityOptions": "",
+     "Unique": false,
+     "UniqueExpr": "",
+     "Default": "",
+     "DefaultSet": false,
+     "DefaultExpr": "",
+     "Foreign": "",
+     "ForeignKeyName": "",
+     "OnDelete": "",
+     "OnUpdate": "",
+     "Deferrable": false,
+     "Initially": "",
+     "ForeignKeyMatch": "",
+     "ForeignKeyNotEnforced": false,
+     "Enum": null,
+     "Check": "",
+     "CheckName": "",
+     "CheckNotEnforced": false,
+     "NotNullConstraintName": "",
+     "GeneratedExpression": "",
+     "GeneratedKind": "",
+     "Collate": "",
+     "Comment": "",
+     "Overrides": null,
+     "GeneratedFromEmbedded": false
+    }
+   ],
+   "Indexes": [],
+   "Constraints": [],
+   "Enums": [],
+   "EmbeddedFields": [],
+   "Functions": [],
+   "Sequences": null,
+   "Views": [],
+   "MaterializedViews": [],
+   "Triggers": [],
+   "RLSPolicies": [],
+   "RLSEnabledTables": [],
+   "Roles": [],
+   "Grants": [],
+   "ManagedData": null,
+   "Dependencies": {
+    "t": []
+   },
+   "FunctionDependencies": {},
+   "SelfReferencingForeignKeys": {},
+   "EmbeddedSources": {
+    "Fields": null,
+    "Definitions": null
+   }
+  },
+  "files": [
+   {
+    "Path": "01.sql",
+    "Objects": [
+     {
+      "Kind": "table",
+      "Name": "t"
+     }
+    ],
+    "Guards": null,
+    "Tables": [
+     {
+      "Name": "t",
+      "Drop": false,
+      "Guarded": false
+     }
+    ]
+   }
+  ]
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: coverage of ptah.run/ydb: invalid feature value: topic limit: \"/abs/t\" is not a topic path (dir/name): invalid feature value: the path starts with a slash; write the path relative to the database root, without the database's own path"
+ }
+}

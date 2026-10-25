@@ -1,0 +1,1 @@
+CREATE VIEW v WITH (security_invoker = TRUE) AS DO BEGIN $f = ($x) -> { RETURN $x + 1; }; SELECT $f(1) AS id; END DO;

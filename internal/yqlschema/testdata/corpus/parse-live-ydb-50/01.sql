@@ -1,0 +1,1 @@
+COMMENT ON INDEX `users_email_key` ON `ptah_ydb_comments/users` IS 'One login per person'

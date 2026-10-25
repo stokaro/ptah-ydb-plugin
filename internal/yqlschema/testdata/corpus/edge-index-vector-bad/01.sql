@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, e String, PRIMARY KEY (id), INDEX v GLOBAL USING vector_kmeans_tree ON (e) WITH (distance = hamming));

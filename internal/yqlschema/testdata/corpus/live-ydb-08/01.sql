@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_repl/src` (id Int64 NOT NULL, note Utf8, PRIMARY KEY(id));

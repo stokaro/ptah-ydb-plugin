@@ -1,0 +1,1 @@
+CREATE TOPIC `ptah_ydb_stream_access/source`; CREATE TOPIC `ptah_ydb_stream_access/sink`; CREATE USER ptahobjuc65c2d52 PASSWORD 'Secret1!';

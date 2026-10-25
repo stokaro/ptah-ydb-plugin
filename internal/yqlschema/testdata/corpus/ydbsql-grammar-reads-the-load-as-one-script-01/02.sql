@@ -1,0 +1,1 @@
+ALTER TABLE `app/orders` ADD CHANGEFEED updates WITH (mode = 'UPDATES', format = 'JSON');ALTER SEQUENCE `/Root/db/app/orders/_serial_column_id` START WITH 100;

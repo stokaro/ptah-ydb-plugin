@@ -1,0 +1,1 @@
+CREATE TOPIC events; GRANT SELECT ON events TO readers;

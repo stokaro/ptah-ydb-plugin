@@ -1,0 +1,1 @@
+INSERT INTO `app/__ptah_rebuild_items` (`id`, `n`) SELECT Unwrap(`id`, 'rebuilding table app.items: column id holds NULL'u) AS `id`, IF(`n` IS NULL, NULL, Unwrap(CAST(`n` AS Int64), 'rebuilding table app.items: column n does not convert'u)) AS `n` FROM `app/items`

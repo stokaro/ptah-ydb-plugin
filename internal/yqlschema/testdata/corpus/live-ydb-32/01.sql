@@ -1,0 +1,1 @@
+CREATE TOPIC `ptah_yql_streaming/source`; CREATE TOPIC `ptah_yql_streaming/sink`;CREATE STREAMING QUERY `ptah_yql_streaming/copy` WITH (RUN=TRUE) AS DO BEGIN INSERT INTO `ptah_yql_streaming/sink` SELECT * FROM `ptah_yql_streaming/source`; END DO;

@@ -1,0 +1,1 @@
+CREATE EXTERNAL DATA SOURCE s WITH (SOURCE_TYPE = 'ObjectStorage', AUTH_METHOD = 'NONE', auth_method = 'BASIC');

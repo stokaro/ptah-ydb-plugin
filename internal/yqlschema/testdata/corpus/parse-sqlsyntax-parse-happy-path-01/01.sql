@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX i GLOBAL ON (v));

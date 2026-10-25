@@ -1,0 +1,1 @@
+COMMENT ON TABLE `/local/t` IS 'x';

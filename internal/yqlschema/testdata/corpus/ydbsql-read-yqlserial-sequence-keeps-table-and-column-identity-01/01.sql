@@ -1,0 +1,1 @@
+CREATE TABLE `one/orders.v2` (`key.id` BigSerial NOT NULL,PRIMARY KEY(`key.id`)); CREATE TABLE `two/orders.v2` (`key.id` BigSerial NOT NULL,PRIMARY KEY(`key.id`)); ALTER SEQUENCE `/local/two/orders.v2/_serial_column_key.id` INCREMENT 9;

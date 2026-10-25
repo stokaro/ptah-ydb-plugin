@@ -1,0 +1,1 @@
+CREATE TABLE `t` (`id` Uint64 NOT NULL, `a b` Utf8, `c\`d` Int32, PRIMARY KEY (`id`));

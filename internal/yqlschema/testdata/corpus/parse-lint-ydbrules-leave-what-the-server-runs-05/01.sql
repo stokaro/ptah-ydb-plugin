@@ -1,0 +1,1 @@
+ALTER TABLE `dir/t` SET (TTL = Interval("PT1H") ON `e` AS SECONDS)

@@ -1,0 +1,3 @@
+CREATE USER alice;
+CREATE USER bob;
+CREATE GROUP devs;

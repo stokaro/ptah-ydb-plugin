@@ -1,0 +1,1 @@
+CREATE TRANSFER `archive/ingest` FROM `archive/events` TO `archive/rows` USING ($msg) -> { $items = [<|id:$msg._offset|>]; RETURN $items; } WITH (BATCH_SIZE_BYTES=4096,FLUSH_INTERVAL=Interval('PT2S'),CONSUMER='events_reader');

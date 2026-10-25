@@ -1,0 +1,1 @@
+ALTER TOPIC `app/events` ADD CONSUMER late WITH (important = false);

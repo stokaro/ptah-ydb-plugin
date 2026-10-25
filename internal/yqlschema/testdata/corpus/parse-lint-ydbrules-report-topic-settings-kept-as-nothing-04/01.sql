@@ -1,0 +1,1 @@
+ALTER TOPIC events SET (partition_count_limit = 20)

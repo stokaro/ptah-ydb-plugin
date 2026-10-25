@@ -1,0 +1,1 @@
+CREATE TABLE docs (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX docs_v GLOBAL ON (v))

@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Uint64 NOT NULL, PRIMARY KEY(id));REVOKE SELECT ON `shop/orders` FROM readers CASCADE;

@@ -1,0 +1,3 @@
+EVALUATE FOR $i IN AsList(1, 2) DO BEGIN
+  UPSERT INTO t (id) VALUES ($i);
+END DO

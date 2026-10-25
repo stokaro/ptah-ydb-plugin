@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, a Utf8, b Utf8, c Int32, PRIMARY KEY (id), INDEX i_sync GLOBAL ON (a), INDEX i_async GLOBAL ASYNC ON (b) COVER (c), INDEX i_unique GLOBAL UNIQUE SYNC ON (c, a));

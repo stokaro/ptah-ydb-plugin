@@ -1,0 +1,1 @@
+COMMENT ON TABLE `app/notes` IS 'Notes'

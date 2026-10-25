@@ -1,0 +1,1 @@
+CREATE SECRET pw WITH (value = $v)

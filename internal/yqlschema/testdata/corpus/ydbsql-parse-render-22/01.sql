@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, v String, PRIMARY KEY (id), INDEX i GLOBAL SYNC USING vector_kmeans_tree ON (v) WITH (distance = 'cosine', vector_type = 'float', vector_dimension = 3, levels = 1, clusters = 2));

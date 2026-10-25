@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, ts Timestamp, PRIMARY KEY (id)) WITH (TTL = Interval('PT1H') TO EXTERNAL DATA SOURCE `/local/s3`, Interval('PT2H') DELETE ON ts);

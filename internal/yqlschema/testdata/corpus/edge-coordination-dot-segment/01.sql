@@ -1,0 +1,2 @@
+CREATE COORDINATION NODE `.hidden/locks`;
+CREATE COORDINATION NODE `app/.locks`;

@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 DEFAULT (

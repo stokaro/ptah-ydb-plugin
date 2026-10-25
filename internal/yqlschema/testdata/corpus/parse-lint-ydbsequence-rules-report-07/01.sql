@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id BigSerial NOT NULL, PRIMARY KEY (id))

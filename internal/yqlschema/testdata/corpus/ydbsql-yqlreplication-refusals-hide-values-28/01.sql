@@ -1,0 +1,1 @@
+CREATE TRANSFER x FROM src TO dst USING ($msg) -> { RETURN [<|id:1|>]; WITH (TOKEN='SENTINEL');

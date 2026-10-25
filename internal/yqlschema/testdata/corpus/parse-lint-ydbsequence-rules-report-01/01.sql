@@ -1,0 +1,1 @@
+ALTER SEQUENCE `/Root/db/counters/_serial_column_n` START WITH 5

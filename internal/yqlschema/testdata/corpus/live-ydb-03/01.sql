@@ -1,0 +1,1 @@
+CREATE EXTERNAL DATA SOURCE bucket WITH (SOURCE_TYPE = 'ObjectStorage', LOCATION = 'https://storage.invalid/old/', AUTH_METHOD = 'NONE'); CREATE EXTERNAL TABLE events (id Int64 NOT NULL, amount Decimal(22,9)) WITH (DATA_SOURCE = 'bucket', LOCATION = '/', FORMAT = 'csv_with_names', CSV_DELIMITER = ';');

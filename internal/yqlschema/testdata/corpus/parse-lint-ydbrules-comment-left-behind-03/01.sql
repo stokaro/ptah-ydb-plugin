@@ -1,0 +1,1 @@
+ALTER TABLE `app/notes` RENAME INDEX notes_tag TO notes_by_tag

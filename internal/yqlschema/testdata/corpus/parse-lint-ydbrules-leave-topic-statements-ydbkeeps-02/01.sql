@@ -1,0 +1,1 @@
+ALTER TOPIC events DROP CONSUMER c

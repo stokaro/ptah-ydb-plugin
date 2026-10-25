@@ -1,0 +1,1 @@
+CREATE TABLE `app/orders` (id BigSerial NOT NULL,note Utf8,PRIMARY KEY(id));ALTER SEQUENCE `/local/app/orders/other` START 2;

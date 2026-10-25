@@ -1,0 +1,1 @@
+ALTER TOPIC `app.events/updates` ADD CONSUMER dotted; ALTER TOPIC `app/events/updates` ADD CONSUMER nested; ALTER TOPIC `app.events/audit` ADD CONSUMER ordinary;

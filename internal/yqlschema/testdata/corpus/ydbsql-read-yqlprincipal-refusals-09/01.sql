@@ -1,0 +1,1 @@
+CREATE GROUP readers; ALTER USER readers NOLOGIN;

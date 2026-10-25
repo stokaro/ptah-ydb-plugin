@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_lint/rule_13/t` (id Uint64 NOT NULL, PRIMARY KEY (id))

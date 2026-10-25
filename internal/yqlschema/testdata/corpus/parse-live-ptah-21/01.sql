@@ -1,0 +1,1 @@
+UPSERT INTO `ref/colors` (`id`, `name`, `weight`, `created`) VALUES (2, 'blue'u, Decimal('1.5', 22, 9), Timestamp('2026-01-02T03:04:05Z')), (1, 'red'u, Decimal('0.25', 22, 9), Timestamp('2025-12-31T00:00:00Z'))

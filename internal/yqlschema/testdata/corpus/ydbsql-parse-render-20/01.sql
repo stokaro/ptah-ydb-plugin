@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, ts Timestamp, body Utf8 FAMILY payload, PRIMARY KEY (id), FAMILY payload (COMPRESSION = "lz4"), FAMILY empty ()) WITH (TTL = Interval("PT1H") ON ts);

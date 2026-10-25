@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 50: invalid resource_pool \"\": a classifier names the pool it sends queries to (`Missing required property resource_pool`) (got \";\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 50: invalid resource_pool \"\": a classifier names the pool it sends queries to (`Missing required property resource_pool`) (got \";\")"
+ }
+}

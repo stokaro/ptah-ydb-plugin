@@ -1,0 +1,1 @@
+CREATE SECRET `a/b` WITH (value = $PTAH_SECRET_X); CREATE SECRET `a/b` WITH (value = $PTAH_SECRET_X);

@@ -1,0 +1,1 @@
+DROP TABLE `app/__ptah_replaced_items`

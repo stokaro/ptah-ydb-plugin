@@ -1,0 +1,1 @@
+ALTER TABLE `shop/users` DROP COLUMN expires

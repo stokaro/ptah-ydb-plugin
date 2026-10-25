@@ -1,0 +1,5 @@
+CREATE TABLE `t` (
+    `id` Uint64 NOT NULL,
+    `part` Utf8 NOT NULL,
+    PRIMARY KEY (`id`, `part`)
+) WITH (PARTITION_AT_KEYS = ((10, 'a\n\'b'u), (20)));

@@ -1,0 +1,1 @@
+ALTER TABLE t SET (TTL = Interval("P1D") ON b)

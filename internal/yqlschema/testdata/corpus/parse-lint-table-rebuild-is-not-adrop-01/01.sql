@@ -1,0 +1,1 @@
+ALTER TABLE `app/__ptah_rebuild_items` RENAME TO `app/items`

@@ -1,0 +1,1 @@
+CREATE ASYNC REPLICATION `archive/mirror` FOR src AS `archive/rep` WITH (CONNECTION_STRING='grpc://source:2136/?database=/remote'); CREATE TRANSFER `archive/ingest` FROM `archive/topic` TO `archive/rows` USING ($msg) -> { RETURN [<|id:$msg._offset|>]; };

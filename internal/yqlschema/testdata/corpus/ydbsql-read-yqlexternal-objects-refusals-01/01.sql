@@ -1,0 +1,1 @@
+CREATE EXTERNAL DATA SOURCE `/local/s` WITH (SOURCE_TYPE = 'ObjectStorage', AUTH_METHOD = 'NONE');

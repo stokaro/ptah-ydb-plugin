@@ -1,0 +1,1 @@
+CREATE TABLE m (id Uint64 NOT NULL, PRIMARY KEY (id))

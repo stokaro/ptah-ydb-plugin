@@ -81,7 +81,7 @@ func buildCoordinationDesiredModel() *protocol.ValueModel {
 	digest := sha256.Sum256(canonical)
 	return &protocol.ValueModel{Kind: CoordinationProperties, DisplayName: modelDisplayName(CoordinationProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
 		Encoding: "json", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]),
-		CanonicalFormat: CoordinationProperties + "/desired-json-v1", SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML}}
+		CanonicalFormat: CoordinationProperties + "/desired-json-v1", SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_SQL}}
 }
 
 // CoordinationYAMLKey declares the document grammar owned by this model.

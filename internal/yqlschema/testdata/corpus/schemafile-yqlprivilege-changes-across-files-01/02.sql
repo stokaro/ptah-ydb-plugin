@@ -1,0 +1,1 @@
+REVOKE GRANT OPTION FOR SELECT ON `shop/orders` FROM readers; GRANT LIST ON shop TO readers;

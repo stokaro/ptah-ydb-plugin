@@ -1,0 +1,5 @@
+CREATE TOPIC `events`;
+
+CREATE VIEW `v` WITH (security_invoker = TRUE) AS
+SELECT 1 AS id
+;

@@ -1,0 +1,1 @@
+COMMENT ON TABLE `ptah_ydb_comments/users` IS 'People who sign in'

@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/partitions_3` SET (AUTO_PARTITIONING_PARTITION_SIZE_MB = 100)

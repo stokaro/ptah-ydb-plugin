@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, a Decimal(22,9), b Decimal(35, 10), c Timestamp64, d Uuid, e Json, f JsonDocument, g Yson, h Date32, i Interval64, j DyNumber, k Float, l Double, m Bool, n Int8, o Uint8, PRIMARY KEY (id));

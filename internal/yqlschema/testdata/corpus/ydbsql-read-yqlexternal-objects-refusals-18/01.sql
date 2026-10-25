@@ -1,0 +1,1 @@
+CREATE EXTERNAL TABLE t (id Int64, id Utf8) WITH (DATA_SOURCE = 's', LOCATION = '/');

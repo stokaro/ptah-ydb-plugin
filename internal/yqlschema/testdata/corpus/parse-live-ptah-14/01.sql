@@ -1,0 +1,1 @@
+CREATE TABLE `ref/colors` (`id` Int32 NOT NULL, `name` Utf8, `weight` Decimal(22,9), `created` Timestamp, PRIMARY KEY (`id`))

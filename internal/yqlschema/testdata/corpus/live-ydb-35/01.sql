@@ -1,0 +1,1 @@
+CREATE TABLE `ptah_ydb_access/orders` (id Int64 NOT NULL, PRIMARY KEY(id)); CREATE GROUP ptahaccg67e579f6; CREATE USER ptahaccu67e579f6;

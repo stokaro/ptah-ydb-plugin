@@ -1,0 +1,1 @@
+CREATE TABLE `shop/orders` (id Uint64 NOT NULL, PRIMARY KEY(id));GRANT ALL PRIVILEGES ON `shop/orders` TO readers; REVOKE SELECT ROW ON `shop/orders` FROM readers;

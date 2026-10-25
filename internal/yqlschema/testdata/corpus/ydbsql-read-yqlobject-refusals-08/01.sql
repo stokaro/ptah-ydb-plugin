@@ -1,0 +1,1 @@
+CREATE TOPIC events WITH (retention_period = Interval('P1D') + Interval('P1D'));

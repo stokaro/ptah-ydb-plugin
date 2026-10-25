@@ -1,0 +1,1 @@
+CREATE TABLE `app/orders` (id Int64 NOT NULL,PRIMARY KEY(id)); ALTER SEQUENCE `/local/app/orders/_serial_column_id` START 2;

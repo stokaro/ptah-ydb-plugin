@@ -1,0 +1,1 @@
+DROP TABLE `__ptah_replaced_ptah_ydb_rebuild_cmds`

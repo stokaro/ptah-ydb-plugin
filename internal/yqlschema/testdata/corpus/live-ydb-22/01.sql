@@ -1,0 +1,1 @@
+CREATE TOPIC `ptah_ydb_repl/events`; CREATE TABLE `ptah_ydb_repl/rows` (id Int64 NOT NULL, PRIMARY KEY(id));

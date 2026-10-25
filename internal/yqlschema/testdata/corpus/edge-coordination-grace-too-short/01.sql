@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE locks WITH (self_check_period = Interval('PT5S'), session_grace_period = Interval('PT5S'));

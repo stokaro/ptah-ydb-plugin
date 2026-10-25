@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 98: invalid read_replicas_settings \"everywhere\": write PER_AZ:\u003cn\u003e for n replicas in every availability zone, or ANY_AZ:\u003cn\u003e for n in all of them together (got \";\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 98: invalid read_replicas_settings \"everywhere\": write PER_AZ:\u003cn\u003e for n replicas in every availability zone, or ANY_AZ:\u003cn\u003e for n in all of them together (got \";\")"
+ }
+}

@@ -1,0 +1,1 @@
+CREATE OR REPLACE EXTERNAL DATA SOURCE bucket WITH (SOURCE_TYPE = 'ObjectStorage', LOCATION = 'https://storage.invalid/new/', AUTH_METHOD = 'NONE'); CREATE OR REPLACE EXTERNAL TABLE events (id Int64 NOT NULL, amount Decimal(22,9), body Utf8) WITH (DATA_SOURCE = 'bucket', LOCATION = '/', FORMAT = 'csv_with_names', CSV_DELIMITER = ' ');

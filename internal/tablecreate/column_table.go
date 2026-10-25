@@ -75,7 +75,11 @@ func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable
 	if err := validateOwner(owner); err != nil {
 		return nil, err
 	}
-	if err := only(table, "name", "schema", "primary_key", "columns", "features"); err != nil {
+	key, err := declaredKey(table)
+	if err != nil {
+		return nil, err
+	}
+	if err := only(table, "name", "schema", "primary_key", "primary_key_parts", "columns", "features"); err != nil {
 		return nil, err
 	}
 	if table.Name != owner.Name || table.Schema != owner.Schema {
@@ -91,7 +95,7 @@ func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable
 	if captured.stated && !proto.Equal(captured.table, &native.RowTableIntent{}) {
 		return nil, unsupported("%s", schema.ColumnTableRowSettingsRefusal)
 	}
-	result := &native.ColumnTableCreation{PrimaryKey: slices.Clone(table.PrimaryKey), HashColumns: slices.Clone(captured.storage.HashColumns),
+	result := &native.ColumnTableCreation{PrimaryKey: key, HashColumns: slices.Clone(captured.storage.HashColumns),
 		Partitions: captured.storage.Partitions, Ttl: proto.CloneOf(captured.storage.Ttl)}
 	if captured.storage.GetTtl().GetDisabled() != nil {
 		result.Ttl = nil

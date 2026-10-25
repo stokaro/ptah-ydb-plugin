@@ -1,0 +1,1 @@
+CREATE USER app; CREATE GROUP readers WITH USER app; ALTER GROUP readers DROP USER app;

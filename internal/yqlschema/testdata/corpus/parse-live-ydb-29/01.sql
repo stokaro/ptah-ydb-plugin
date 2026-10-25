@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/rule_8/t` DROP COLUMN c

@@ -1,0 +1,1 @@
+CREATE TABLE rb (id Int64 NOT NULL, v Int32, PRIMARY KEY (id));

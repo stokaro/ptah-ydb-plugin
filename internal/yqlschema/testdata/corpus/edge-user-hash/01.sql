@@ -1,0 +1,1 @@
+CREATE USER alice HASH '{"hash":"aGFzaA==","salt":"c2FsdA==","type":"argon2id"}';

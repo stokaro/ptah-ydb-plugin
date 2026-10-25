@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 52: invalid max_active_partitions: it shapes auto-partitioning, which this topic does not enable; declare auto_partitioning_strategy as scale_up, scale_up_and_down or paused (got \"\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 52: invalid max_active_partitions: it shapes auto-partitioning, which this topic does not enable; declare auto_partitioning_strategy as scale_up, scale_up_and_down or paused (got \"\")"
+ }
+}

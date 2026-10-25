@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX f GLOBAL USING fulltext_relevance ON (v) WITH (tokenizer = 'whitespace', use_filter_ngram = true, filter_ngram_min_length = 2, filter_ngram_max_length = 4, language = 'english'));

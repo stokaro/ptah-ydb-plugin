@@ -1,0 +1,11 @@
+CREATE RESOURCE POOL `reporting` WITH (
+    CONCURRENT_QUERY_LIMIT = 10,
+    QUEUE_SIZE = 20,
+    QUERY_MEMORY_LIMIT_PERCENT_PER_NODE = 25.5
+);
+
+CREATE RESOURCE POOL CLASSIFIER `reporting_group` WITH (
+    RESOURCE_POOL = 'reporting',
+    MEMBER_NAME = 'reporters',
+    RANK = 100
+);

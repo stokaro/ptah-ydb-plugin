@@ -1,0 +1,1 @@
+COMMENT ON INDEX `users_by_legacy` ON `ptah_ydb_comments/users` IS NULL

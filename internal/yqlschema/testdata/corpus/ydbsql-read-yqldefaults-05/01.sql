@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, v Timestamp DEFAULT Timestamp("2026-01-02T00:00:00Z"), PRIMARY KEY (id));

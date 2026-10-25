@@ -1,0 +1,1 @@
+CREATE TABLE `/local/t` (id Uint64 NOT NULL, PRIMARY KEY (id));

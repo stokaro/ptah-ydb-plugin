@@ -1,0 +1,1 @@
+GRANT SELECT ON `shop/a.b` TO readers WITH GRANT OPTION; REVOKE GRANT OPTION FOR SELECT ON `shop/a.b` FROM readers;

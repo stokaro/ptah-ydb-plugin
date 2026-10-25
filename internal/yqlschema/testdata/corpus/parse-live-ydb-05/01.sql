@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_comments/users` RENAME INDEX `users_by_label` TO `users_label_idx`

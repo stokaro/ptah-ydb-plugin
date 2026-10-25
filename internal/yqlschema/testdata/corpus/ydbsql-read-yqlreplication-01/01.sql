@@ -1,0 +1,1 @@
+CREATE ASYNC REPLICATION `archive/mirror` FOR `/remote/source` AS `archive/copy`, other AS `archive/other` WITH (ENDPOINT='grpcs://source:2135', DATABASE='/remote', CONSISTENCY_LEVEL='GLOBAL', COMMIT_INTERVAL=Interval('PT0.5S'), TOKEN_SECRET_NAME='token');

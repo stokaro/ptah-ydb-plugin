@@ -1,0 +1,1 @@
+DROP TABLE `ptah_ydb_views/items`

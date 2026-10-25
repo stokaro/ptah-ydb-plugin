@@ -1,0 +1,1 @@
+CREATE TABLE t (id Uint64 NOT NULL, id Utf8, PRIMARY KEY (id));

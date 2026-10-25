@@ -1,0 +1,1 @@
+ALTER TABLE t DROP INDEX t_v

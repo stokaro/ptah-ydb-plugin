@@ -1,0 +1,1 @@
+CREATE TABLE base (id Uint64 NOT NULL, n Int32, PRIMARY KEY (id))

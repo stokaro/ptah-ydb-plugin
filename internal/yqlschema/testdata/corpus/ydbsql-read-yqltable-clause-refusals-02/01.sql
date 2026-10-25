@@ -1,0 +1,1 @@
+CREATE TABLE t (id Int64 NOT NULL, PRIMARY KEY (id)) WITH (TTL = Interval('PT1H') DELETE ON id);

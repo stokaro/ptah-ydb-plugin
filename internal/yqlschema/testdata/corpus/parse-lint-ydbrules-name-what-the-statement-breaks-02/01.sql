@@ -1,0 +1,1 @@
+CREATE VIEW `shop/named` WITH (security_invoker = TRUE) AS SELECT id, name FROM `shop/users`

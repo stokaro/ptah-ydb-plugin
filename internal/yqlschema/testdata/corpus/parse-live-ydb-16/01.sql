@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/rule_0/t` ADD INDEX t_v GLOBAL UNIQUE SYNC ON (v)

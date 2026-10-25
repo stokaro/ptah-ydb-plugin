@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE `locks` WITH (self_check_period = Interval('PT1S'), session_grace_period = Interval('PT2S'), read_consistency_mode = 'strict', attach_consistency_mode = 'relaxed', rate_limiter_counters_mode = 'detailed');

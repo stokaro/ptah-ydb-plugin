@@ -1,0 +1,1 @@
+CREATE TABLE t (k Utf8 NOT NULL, PRIMARY KEY (k)) WITH (PARTITION_AT_KEYS = ('a', "b\\c"u, @@d'e@@));

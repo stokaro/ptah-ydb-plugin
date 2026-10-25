@@ -1,0 +1,1 @@
+CREATE TOPIC events (CONSUMER worker WITH (important = true, read_from = Timestamp("2026-01-01T00:00:00Z"), supported_codecs = "raw,gzip")) WITH (min_active_partitions = 2, retention_period = Interval("P1D"), supported_codecs = "raw,gzip");

@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 5089: invalid comment statement: COMMENT ON TABLE: the comment is 5000 bytes long, and YDB keeps at most 4096 bytes in an attribute value (got \";\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 5089: invalid comment statement: COMMENT ON TABLE: the comment is 5000 bytes long, and YDB keeps at most 4096 bytes in an attribute value (got \";\")"
+ }
+}

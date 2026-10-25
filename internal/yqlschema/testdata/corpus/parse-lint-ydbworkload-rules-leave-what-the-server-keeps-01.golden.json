@@ -1,0 +1,14 @@
+{
+ "host": "a4e286dbf5ac42a609bd6ccd2b60dcc3335c210d",
+ "documents": [
+  "01.sql"
+ ],
+ "grammar": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 61: invalid concurrent_query_limit \"10\": the pool default takes no concurrent_query_limit: YDB keeps it unlimited (`Can not change property concurrent_query_limit for default pool`) (got \"\")"
+ },
+ "load": {
+  "outcome": "refused",
+  "error": "01.sql: YQL schema at position 61: invalid concurrent_query_limit \"10\": the pool default takes no concurrent_query_limit: YDB keeps it unlimited (`Can not change property concurrent_query_limit for default pool`) (got \"\")"
+ }
+}

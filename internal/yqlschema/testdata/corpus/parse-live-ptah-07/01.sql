@@ -1,0 +1,1 @@
+CREATE COORDINATION NODE `ptah_ydb_coordination_e2e/limits` WITH (self_check_period = Interval('PT2S'), read_consistency_mode = 'strict')

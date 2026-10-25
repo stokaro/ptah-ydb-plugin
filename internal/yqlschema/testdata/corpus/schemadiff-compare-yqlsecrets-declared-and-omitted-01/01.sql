@@ -1,0 +1,1 @@
+CREATE SECRET credential WITH (value = $PTAH_SECRET_TEST);

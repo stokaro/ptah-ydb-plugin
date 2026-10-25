@@ -1,0 +1,1 @@
+CREATE TABLE notes (id Uint64 NOT NULL, body Utf8, PRIMARY KEY (id))

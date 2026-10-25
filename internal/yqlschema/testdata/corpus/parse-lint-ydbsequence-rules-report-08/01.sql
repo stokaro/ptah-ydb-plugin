@@ -1,0 +1,1 @@
+CREATE TABLE counters (id serial4 NOT NULL, n SmallSerial, PRIMARY KEY (id))

@@ -1,0 +1,1 @@
+ALTER TABLE `ptah_ydb_lint/rule_4/t` ADD COLUMN a Int64 NOT NULL

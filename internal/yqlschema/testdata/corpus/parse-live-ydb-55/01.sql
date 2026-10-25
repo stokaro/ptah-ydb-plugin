@@ -1,0 +1,1 @@
+COMMENT ON VIEW `ptah_ydb_comments/active_users` IS 'Users who signed in'
