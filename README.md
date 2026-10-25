@@ -68,7 +68,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.4.0, which speaks provider contract 25.2.
+The module pins `provider-sdk` v0.5.0, which speaks provider contract 25.3.
 Builds require neither the Ptah application source nor a local SDK checkout.
 
 Run the unit suite and build the executable:
