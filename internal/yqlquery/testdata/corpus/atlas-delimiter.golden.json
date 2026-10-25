@@ -1,0 +1,5 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "error": "client delimiter directive in YQL: \"-- atlas:delimiter $$\" has no meaning in YQL, which ends every statement with a semicolon; remove the directive and terminate each statement with a semicolon",
+  "queries": []
+}

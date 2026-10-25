@@ -1,0 +1,53 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "a",
+      "declared_type": "TIMESTAMP"
+    },
+    {
+      "name": "b",
+      "declared_type": "TIMESTAMPTZ"
+    },
+    {
+      "name": "c",
+      "declared_type": "DATETIME"
+    },
+    {
+      "name": "d",
+      "declared_type": "Timestamp"
+    },
+    {
+      "name": "e",
+      "declared_type": "TIMESTAMP(3)"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "2026-01-02T03:04:05Z"
+      },
+      {
+        "string": "2026-01-02 03:04:05"
+      },
+      {
+        "timestamp": {
+          "seconds": 1767323045,
+          "nanos": 123456000
+        }
+      },
+      {
+        "string": "2026-01-02T03:04:05.5+02:00"
+      },
+      {
+        "string": "2026-01-02"
+      }
+    ]
+  ],
+  "live": null
+}

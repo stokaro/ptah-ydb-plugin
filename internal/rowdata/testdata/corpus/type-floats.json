@@ -1,0 +1,57 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "r",
+      "declared_type": "REAL"
+    },
+    {
+      "name": "d",
+      "declared_type": "DOUBLE PRECISION"
+    },
+    {
+      "name": "f",
+      "declared_type": "FLOAT(10)"
+    },
+    {
+      "name": "g",
+      "declared_type": "FLOAT"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "double": 1.5
+      },
+      {
+        "string": "1e3"
+      },
+      {
+        "double": 0.1
+      },
+      {
+        "int64": "3"
+      }
+    ],
+    [
+      {
+        "string": ".5"
+      },
+      {
+        "string": "+5"
+      },
+      {
+        "string": "5."
+      },
+      {
+        "string": "-2.5E-3"
+      }
+    ]
+  ],
+  "live": null
+}

@@ -1,0 +1,126 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "id",
+      "type": "Int64"
+    },
+    {
+      "name": "price",
+      "type": "Decimal(10,2)"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "1"
+      },
+      {
+        "decimal": {
+          "digits": "1250",
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    ],
+    [
+      {
+        "int64": "2"
+      },
+      {
+        "decimal": {
+          "digits": "1250",
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    ],
+    [
+      {
+        "int64": "3"
+      },
+      {
+        "decimal": {
+          "digits": "-50",
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    ],
+    [
+      {
+        "int64": "4"
+      },
+      {
+        "decimal": {
+          "digits": "700",
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    ],
+    [
+      {
+        "int64": "5"
+      },
+      {
+        "decimal": {
+          "digits": "310",
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "int64": "1"
+      },
+      {
+        "decimal": {
+          "digits": "1250",
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    ],
+    [
+      {
+        "int64": "2"
+      },
+      {
+        "decimal": {
+          "digits": "1250",
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    ],
+    [
+      {
+        "int64": "3"
+      },
+      {
+        "decimal": {
+          "digits": "-50",
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    ],
+    [
+      {
+        "int64": "4"
+      },
+      {
+        "decimal": {
+          "digits": "700",
+          "precision": 10,
+          "scale": 2
+        }
+      }
+    ]
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "capabilities": {
+    "wide_date_time_types": false,
+    "parameterized_decimal": false,
+    "serial_columns": false
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "price",
+      "declared_type": "DECIMAL(22,9)"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "1.5"
+      }
+    ],
+    [
+      {
+        "decimal": {
+          "digits": "150",
+          "precision": 22,
+          "scale": 2
+        }
+      }
+    ]
+  ],
+  "live": null
+}

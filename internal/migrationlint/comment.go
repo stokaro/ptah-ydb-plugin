@@ -3,12 +3,12 @@ package migrationlint
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
+	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 )
 
 // YQL has no COMMENT statement. Ptah keeps a comment as a user attribute of
@@ -331,7 +331,7 @@ func firstWords(tokens []yql.Token, count int) string {
 func readDefinition(tokens []yql.Token, statement, service string) (prefix string, isPrefix bool, err error) {
 	first := tokens[0]
 	isNamed := first.Type == yql.TokenIdentifier && strings.HasPrefix(first.Value, "$")
-	if !isNamed && !slices.ContainsFunc(definitionVerbs, first.IsWord) {
+	if !isNamed && !yqlquery.Defines(first) {
 		return "", false, fmt.Errorf("%s shares its query with %s, and Ptah runs it through YDB's %s, "+
 			"which takes it alone", statement, firstWords(tokens, 3), service)
 	}

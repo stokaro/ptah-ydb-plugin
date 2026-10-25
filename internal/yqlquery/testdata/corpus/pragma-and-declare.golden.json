@@ -1,0 +1,19 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "queries": [
+    {
+      "kind": "data",
+      "text": "PRAGMA AnsiInForEmptyOrNullableItemsCollections;\nDECLARE $p AS Int64;\nSELECT $p",
+      "statements": [
+        "SELECT $p"
+      ]
+    },
+    {
+      "kind": "scheme",
+      "text": "PRAGMA AnsiInForEmptyOrNullableItemsCollections;\nDECLARE $p AS Int64;\nDROP TABLE x",
+      "statements": [
+        "DROP TABLE x"
+      ]
+    }
+  ]
+}

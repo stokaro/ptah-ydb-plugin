@@ -11,13 +11,14 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"path"
+	"slices"
 	"strings"
 )
 
 // Check establishes absence through complete parent listings, or validates the
 // existing table. An arbitrary scheme error never becomes proof of absence.
 func (s Identity) Check(ctx context.Context, driver *ydb.Driver, validate func(*native.DescribeTableResult) error) (exists bool, err error) {
-	exists, err = s.listed(ctx, driver)
+	exists, err = s.listed(ctx, driver, Ydb_Scheme.Entry_TABLE)
 	if err != nil || !exists {
 		return exists, err
 	}
@@ -41,7 +42,30 @@ func (s Identity) Check(ctx context.Context, driver *ydb.Driver, validate func(*
 	return true, nil
 }
 
-func (s Identity) listed(ctx context.Context, driver *ydb.Driver) (bool, error) {
+// Find describes the table, a row table or a column table, or establishes its
+// absence through complete parent listings and returns nil. A name that holds
+// another kind of object is an error.
+func (s Identity) Find(ctx context.Context, driver *ydb.Driver) (result *native.DescribeTableResult, err error) {
+	exists, err := s.listed(ctx, driver, Ydb_Scheme.Entry_TABLE, Ydb_Scheme.Entry_COLUMN_TABLE)
+	if err != nil || !exists {
+		return nil, err
+	}
+	table, err := nativeapi.OpenTable(ctx, driver)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = errors.Join(err, table.Close())
+		if err != nil {
+			result = nil
+		}
+	}()
+	return table.Describe(ctx, s.Path())
+}
+
+// listed establishes through complete parent listings whether the name holds
+// an object of one of kinds.
+func (s Identity) listed(ctx context.Context, driver *ydb.Driver, kinds ...Ydb_Scheme.Entry_Type) (bool, error) {
 	client := Ydb_Scheme_V1.NewSchemeServiceClient(ydb.GRPCConn(driver))
 	parts := []string{}
 	if s.Directory != "" {
@@ -77,11 +101,11 @@ func (s Identity) listed(ctx context.Context, driver *ydb.Driver) (bool, error) 
 		if found == nil {
 			return false, nil
 		}
-		expected := Ydb_Scheme.Entry_DIRECTORY
+		expected := []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_DIRECTORY}
 		if i == len(parts)-1 {
-			expected = Ydb_Scheme.Entry_TABLE
+			expected = kinds
 		}
-		if found.Type != expected {
+		if !slices.Contains(expected, found.Type) {
 			return false, fmt.Errorf("YDB storage path has an incompatible object kind")
 		}
 		parent = path.Join(parent, name)

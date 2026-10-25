@@ -1,0 +1,5 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": false,
+  "error": "column \"v\": Varchar has no YDB counterpart: YDB reads Varchar as String, a byte string; declare Utf8 (or VARCHAR) for text and String for bytes"
+}

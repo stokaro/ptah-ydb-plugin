@@ -1,0 +1,5 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": false,
+  "error": "column \"v\": VECTOR(16385) has no YDB counterpart: the dimension must be between 1 and 16384, the most a YDB vector index takes"
+}

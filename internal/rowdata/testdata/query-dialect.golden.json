@@ -1,0 +1,22 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "placeholder": "dollar-named",
+  "quoting": {
+    "style": "yql",
+    "bare": "never",
+    "paths": true
+  },
+  "query": {
+    "checks_capabilities": true,
+    "unsigned_bounds": true,
+    "upsert": "upsert-into",
+    "upsert_refusal": "YDB has no ON CONFLICT: UpsertInto writes each row over the row with the same primary key, and the server refuses INSERT OR IGNORE"
+  },
+  "default_capabilities": {
+    "common_table_expressions": false,
+    "correlated_subqueries": false,
+    "non_equi_joins": false,
+    "offset_without_limit": false,
+    "returning_clause": true
+  }
+}

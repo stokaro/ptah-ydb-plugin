@@ -1,0 +1,24 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "blob",
+      "type": "String"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "bytes": "YWJj"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "bytes": "YWJj"
+      }
+    ]
+  ]
+}

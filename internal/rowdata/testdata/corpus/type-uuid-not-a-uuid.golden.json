@@ -1,0 +1,5 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": false,
+  "error": "declared row 1, column \"id\": Uuid cannot hold \"not-a-uuid\": it is not a Uuid value"
+}

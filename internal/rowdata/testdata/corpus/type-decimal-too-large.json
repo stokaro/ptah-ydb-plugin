@@ -1,0 +1,22 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "price",
+      "declared_type": "NUMERIC(4,2)"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "123.4"
+      }
+    ]
+  ],
+  "live": null
+}

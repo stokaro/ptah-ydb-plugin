@@ -1,0 +1,5 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "error": "unsupported YQL translation setting \"--!ansi_lexer\": Ptah splits YQL as --!syntax_v1 reads it, and YDB would read this text differently or refuse it; remove the line",
+  "queries": []
+}

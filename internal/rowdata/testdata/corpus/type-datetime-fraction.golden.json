@@ -1,0 +1,5 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": false,
+  "error": "declared row 1, column \"dt\": Datetime cannot hold \"2026-01-02T03:04:05.5Z\": it is not a Datetime value"
+}

@@ -1,0 +1,5 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": false,
+  "error": "declared row 1, column \"i\": Interval cannot hold \"1 day\": Interval takes an ISO 8601 duration such as P1D or PT30M"
+}

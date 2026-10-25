@@ -1,0 +1,34 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "n",
+      "type": "DyNumber"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "1.50"
+      }
+    ],
+    [
+      {
+        "string": "1.5"
+      }
+    ],
+    [
+      {
+        "string": "7"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "string": ".15e1"
+      }
+    ]
+  ]
+}

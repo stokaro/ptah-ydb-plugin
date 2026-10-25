@@ -1,0 +1,29 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "UPDATE_BY_KEY",
+      "table": "t",
+      "columns": [
+        "id",
+        "v"
+      ],
+      "key_columns": [
+        "id"
+      ],
+      "values": [
+        {
+          "int64": "1"
+        },
+        {
+          "string": "x"
+        }
+      ],
+      "column_types": {
+        "id": "Int64",
+        "v": "Utf8"
+      },
+      "schema": "app"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": false,
+  "error": "column \"a\": List\u003cInt32\u003e has no YDB counterpart: YDB stores only primitive types in a table column (`Only YQL data types and PG types are currently supported`)"
+}

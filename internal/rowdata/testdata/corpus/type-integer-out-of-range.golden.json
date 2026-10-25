@@ -1,0 +1,5 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": false,
+  "error": "declared row 1, column \"n\": Int32 cannot hold 5000000000: it is outside the range -2147483648 to 2147483647"
+}

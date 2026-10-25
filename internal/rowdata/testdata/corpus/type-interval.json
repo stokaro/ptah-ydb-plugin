@@ -1,0 +1,53 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "i",
+      "declared_type": "INTERVAL"
+    },
+    {
+      "name": "n",
+      "declared_type": "Interval"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "PT26H"
+      },
+      {
+        "interval": {
+          "months": 0,
+          "days": 0,
+          "nanoseconds": "93600000000000"
+        }
+      }
+    ],
+    [
+      {
+        "string": "-PT1S"
+      },
+      {
+        "interval": {
+          "months": 0,
+          "days": 1,
+          "nanoseconds": "0"
+        }
+      }
+    ],
+    [
+      {
+        "string": "P1W"
+      },
+      {
+        "string": "PT0.5S"
+      }
+    ]
+  ],
+  "live": null
+}

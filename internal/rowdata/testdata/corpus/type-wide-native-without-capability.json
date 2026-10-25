@@ -1,0 +1,22 @@
+{
+  "capabilities": {
+    "wide_date_time_types": false,
+    "parameterized_decimal": false,
+    "serial_columns": false
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "at",
+      "declared_type": "Timestamp64"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "2026-01-02T03:04:05Z"
+      }
+    ]
+  ],
+  "live": null
+}

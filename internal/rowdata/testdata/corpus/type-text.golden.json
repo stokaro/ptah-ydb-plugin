@@ -1,0 +1,62 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "v",
+      "type": "Utf8"
+    },
+    {
+      "name": "t",
+      "type": "Utf8"
+    },
+    {
+      "name": "c",
+      "type": "Utf8"
+    },
+    {
+      "name": "u",
+      "type": "Utf8"
+    },
+    {
+      "name": "cs",
+      "type": "Utf8"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "hello"
+      },
+      {
+        "string": "multi\nline 'quoted'"
+      },
+      {
+        "string": "ab"
+      },
+      {
+        "string": "été"
+      },
+      {
+        "string": "x"
+      }
+    ],
+    [
+      {
+        "string": "bytes as text"
+      },
+      {
+        "string": ""
+      },
+      {
+        "null": true
+      },
+      {
+        "string": "\\"
+      },
+      {
+        "string": "y"
+      }
+    ]
+  ]
+}

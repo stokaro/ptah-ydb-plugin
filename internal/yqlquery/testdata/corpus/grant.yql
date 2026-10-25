@@ -1,0 +1,2 @@
+GRANT SELECT ON t TO u;
+INSERT INTO t (id) VALUES (1);

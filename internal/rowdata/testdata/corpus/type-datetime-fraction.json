@@ -1,0 +1,27 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "dt",
+      "type": "Datetime"
+    }
+  ],
+  "columns": [
+    {
+      "name": "dt",
+      "declared_type": "DATETIME"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "2026-01-02T03:04:05.5Z"
+      }
+    ]
+  ],
+  "live": null
+}

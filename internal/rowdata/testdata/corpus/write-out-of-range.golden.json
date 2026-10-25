@@ -1,0 +1,13 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "statement": "INSERT INTO `t` (`id`) VALUES (1t);"
+    },
+    {
+      "change_id": "w2",
+      "error": "datadiff: column \"id\": Int8 cannot hold 1000: it is outside the range -128 to 127"
+    }
+  ]
+}

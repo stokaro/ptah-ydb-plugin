@@ -1508,6 +1508,79 @@ every dialect shares. The host's built-in owner reports nothing from these rules
 on a run that names no dialect; the provider is only asked about its own engine,
 so a host does not send it the codes of such a run.
 
+## Rows, row writes and seeds
+
+The provider serves the row services of the contract (`data.type-rows`,
+`data.read-rows`, `data.render-writes`) and the seed service (`data.seeds`),
+with the answers of the host's embedded YDB engine: its row typing
+(`internal/ydbdata`), its row diff statements (`migration/datadiff`) and its
+seeds (`migration/seeder` and the YDB seed service). The host keeps which rows
+are declared, the row diff, the ordering and the seed policy.
+
+YQL types every literal and converts few of them, so every value is compared
+and written in its column's YDB type: the live table's type where the column
+exists, and otherwise the type the declared type lands on for the request's
+capabilities (`VARCHAR(255)` is Utf8, `TIMESTAMP` is Timestamp64 with
+`wide_date_time_types` and Timestamp without it, `DECIMAL(10,2)` needs
+`parameterized_decimal`). `TypeRows` returns the declared and the live rows in
+one canonical form, so a declared `12.50` pairs with the `1.5` a Decimal reads
+back, a moment in another zone with the one in UTC a read returns, `PT26H`
+with the interval of the same length and an upper-case UUID with the lower-case
+one YDB stores. A Decimal is a decimal at its column's scale, a Date a date, the
+other date and time types a timestamp, an Interval a count of nanoseconds,
+String and Yson bytes, Json and JsonDocument JSON text (JsonDocument with sorted
+keys and no spaces), and Utf8, Uuid and DyNumber text. A value its column
+cannot hold refuses the request with the host's words, and a column no side
+types keeps its values.
+
+`RenderRowWrites` writes the host's statements: `INSERT INTO` with the columns
+sorted by name, `UPDATE ... SET ... WHERE` with the columns outside the key
+sorted and the key predicate in sorted order, `DELETE FROM ... WHERE`, and a
+key column holding null as `IS NULL`. An UPSERT is YQL's `UPSERT INTO` in the
+shape of the INSERT; the host's row diff writes none. A value a column cannot
+hold, or a column the write names no type for, refuses the batch with
+`UNSUPPORTED_VALUE` and a message that names the write and the column but never
+the value.
+
+`ReadRows` reads one page of a row or column table in the order of the
+requested key columns and then of the primary key columns the request leaves
+out, so the order is total, and resumes after the last row of a page through
+its token. YDB orders a null first, and the cursor steps past nulls and equal
+keys. A page holds at most the requested rows and 3 MiB. A missing table is a
+complete page that says so.
+
+A seed file runs as the queries YQL reads it into, in one serializable
+transaction with its ledger row, so the file and its row commit together or not
+at all. A transaction YDB aborts for a conflicting one runs again, at most five
+times. A file holding a scheme statement, a BATCH UPDATE or BATCH DELETE, a
+translation setting other than `--!syntax_v1` or a delimiter directive is
+refused before anything runs, with the position of the statement, and so is a
+statement that leaves the dev realm of a realm session. A file that hits an
+existing key is `KEY_CONFLICT`, and nothing of it stayed. A failed commit that
+YDB did not answer with a key conflict or an abort is `UNKNOWN`.
+
+The ledger is the host's table `schema_seeds` at the root of the session's
+database, created with the host's statement, so a ledger the embedded engine
+wrote is read and extended here, and the other way round. A table of that name
+with another layout is refused and never adopted. A missing ledger reads as
+missing and is not created by a read.
+
+The engine also declares the query-builder spelling the host's YDB descriptor
+states (`query.dialect`): named parameters, YQL quoting with paths, unsigned
+row bounds, `UPSERT INTO`, and the capabilities the builder assumes for YDB
+when its caller names no target.
+
+`internal/rowdata/testdata` holds row cases and the host's answers for them,
+and `internal/yqlquery/testdata` YQL texts and the queries the host splits each
+into; the README there says how to record them again. The one difference is
+the wording of a write refusal, which names the value in the host's message and
+never in the provider's. A live test writes rows of every value kind through
+the services, reads them back in pages and types both sides into one form; the
+seed tests run in a dev realm and read a ledger written with the host's
+statements. Against a Ptah whose `schema apply` and `ptah seed` serve declared
+rows and seed files through a provider, the end-to-end tests run both through
+this one in a dev realm and read the table back.
+
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
@@ -1516,7 +1589,7 @@ settings other than column families, table removal and rebuild, planning, render
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
 rendering, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, offline SQL analysis and migration lint services. The remaining
+lock, offline SQL analysis, migration lint, row and seed services. The remaining
 capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

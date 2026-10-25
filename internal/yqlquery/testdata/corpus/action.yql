@@ -1,0 +1,5 @@
+DEFINE ACTION $a() AS
+  UPSERT INTO t (id) VALUES (1);
+  CREATE TABLE m (id Int64, PRIMARY KEY (id));
+END DEFINE;
+DO $a();

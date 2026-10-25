@@ -1,0 +1,9 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "statement": "INSERT INTO `t` (`a`, `b`, `c`, `d`, `e`, `f`, `g`, `h`, `i`, `j`, `k`, `l`, `m`) VALUES ('\\x00\\xff\\'\\\\', 'y'u, Timestamp('2026-01-02T03:04:05.123456Z'), Date('2024-10-04'), Interval('P1DT2H'), Decimal('12.5', 10, 2), JsonDocument('{\"b\": 2, \"a\": 1}'), Json('{\"b\": 2}'), Uuid('6f9619ff-8b86-d011-b42d-00c04fc964ff'), Float('0.1'), Double('1.5'), DyNumber('1.50'), Yson('{a=1}'));"
+    }
+  ]
+}

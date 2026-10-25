@@ -1,0 +1,30 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "price",
+      "type": "Decimal(22,9)"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "decimal": {
+          "digits": "1500000000",
+          "precision": 22,
+          "scale": 9
+        }
+      }
+    ],
+    [
+      {
+        "decimal": {
+          "digits": "1500000000",
+          "precision": 22,
+          "scale": 9
+        }
+      }
+    ]
+  ]
+}

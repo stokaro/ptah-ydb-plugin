@@ -1,0 +1,4 @@
+$x = 9l;
+UPSERT INTO t (id) VALUES ($x);
+CREATE TABLE m (id Int64, PRIMARY KEY (id));
+UPSERT INTO t (id) VALUES ($x + 1);

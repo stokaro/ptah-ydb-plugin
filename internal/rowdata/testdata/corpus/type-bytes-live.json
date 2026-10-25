@@ -1,0 +1,33 @@
+{
+  "capabilities": {
+    "wide_date_time_types": true,
+    "parameterized_decimal": true,
+    "serial_columns": true
+  },
+  "live_table": [
+    {
+      "name": "blob",
+      "type": "String"
+    }
+  ],
+  "columns": [
+    {
+      "name": "blob",
+      "declared_type": "BYTEA"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "string": "abc"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "bytes": "YWJj"
+      }
+    ]
+  ]
+}

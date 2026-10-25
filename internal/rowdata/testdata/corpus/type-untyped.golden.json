@@ -1,0 +1,41 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "accepted": true,
+  "columns": [
+    {
+      "name": "id",
+      "type": "Int64"
+    },
+    {
+      "name": "extra"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "1"
+      },
+      {
+        "json": "{\"k\": 1}"
+      }
+    ],
+    [
+      {
+        "int64": "2"
+      },
+      {
+        "string": "text"
+      }
+    ]
+  ],
+  "live": [
+    [
+      {
+        "int64": "1"
+      },
+      {
+        "bytes": "eA=="
+      }
+    ]
+  ]
+}

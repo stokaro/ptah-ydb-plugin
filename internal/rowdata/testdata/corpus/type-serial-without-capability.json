@@ -1,0 +1,22 @@
+{
+  "capabilities": {
+    "wide_date_time_types": false,
+    "parameterized_decimal": false,
+    "serial_columns": false
+  },
+  "live_table": null,
+  "columns": [
+    {
+      "name": "id",
+      "declared_type": "SERIAL"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "int64": "1"
+      }
+    ]
+  ],
+  "live": null
+}

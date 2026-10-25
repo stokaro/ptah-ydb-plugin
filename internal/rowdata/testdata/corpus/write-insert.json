@@ -1,0 +1,33 @@
+{
+  "writes": [
+    {
+      "change_id": "w1",
+      "mode": "INSERT",
+      "table": "regions",
+      "columns": [
+        "name",
+        "id",
+        "active"
+      ],
+      "key_columns": [
+        "id"
+      ],
+      "values": [
+        {
+          "string": "North"
+        },
+        {
+          "int64": "1"
+        },
+        {
+          "bool": true
+        }
+      ],
+      "column_types": {
+        "name": "Utf8",
+        "id": "Int32",
+        "active": "Bool"
+      }
+    }
+  ]
+}

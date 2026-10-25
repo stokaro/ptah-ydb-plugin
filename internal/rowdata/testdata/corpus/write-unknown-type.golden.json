@@ -1,0 +1,9 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "error": "datadiff: column \"v\": Optional\u003cUtf8\u003e cannot hold \"x\": Ptah writes no literal of that type"
+    }
+  ]
+}

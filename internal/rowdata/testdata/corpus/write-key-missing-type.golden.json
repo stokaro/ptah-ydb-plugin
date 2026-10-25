@@ -1,0 +1,9 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "writes": [
+    {
+      "change_id": "w1",
+      "error": "datadiff: key column \"id\": YDB stores a literal only in its column's own type, and the diff names no type for this column"
+    }
+  ]
+}

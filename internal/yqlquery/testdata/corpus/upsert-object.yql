@@ -1,0 +1,1 @@
+UPSERT OBJECT s (TYPE SECRET) WITH value = 'v';
