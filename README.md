@@ -368,9 +368,41 @@ receipts explicitly report `transactional_ddl=false`. Live tests verify that
 DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
-Coordination, row-table creation and row-table alteration operations use native envelopes. Other
-operation models and common SQL rendering remain to be extracted. The host's
-extended comment and coordination SQL forms are not implemented here.
+Coordination, row-table creation and row-table alteration operations use native envelopes, or
+YQL statements in the TEXT form; see [Text units](#text-units). Other operation
+models remain to be extracted. A SQL unit that runs one of the host's
+coordination node statements is run through the coordination service; the
+host's extended comment statements are not implemented here.
+
+## Text units
+
+The provider lists `render.text-units` (contract 25.3, ADR 0034 in Ptah). A
+host that lists it asks for the TEXT form where it writes text: migration
+files, `schema render`, SQL diffs and SQL inspection. Every unit is then a YQL
+statement, the one the host's embedded engine writes for the same change, and
+this provider's `Execute` does with it what the native call does:
+
+| Operation | Statement |
+| --- | --- |
+| Row-table creation | `CREATE TABLE` with its columns, key, families, TTL, automatic partitioning, read replicas, key bloom filter and starting layout |
+| Row-table alteration | One `ALTER TABLE`: families and placements, added or dropped columns, `SET (TTL = ...)` or `RESET (TTL)`, the whole automatic partitioning set, or `ADD`/`DROP INDEX` |
+| Column table | The `CREATE TABLE ... STORE = COLUMN` and TTL statements the provider runs |
+| Coordination node | `CREATE COORDINATION NODE ... WITH (...)`, `ALTER ... SET (...)` naming the settings that change, `DROP COORDINATION NODE` |
+
+YQL has no coordination node statement, so `Execute` reads one as the host's
+YDB connection does and runs it through the coordination service: alone in its
+query after nothing but definitions, with the query's `PRAGMA TablePathPrefix`,
+and inside a dev realm relative to the realm. A CREATE checks first that no node
+is at the path, because the service answers a second creation with success and
+keeps the node as it is; an ALTER merges its settings with the node's and
+refuses a result YDB would move into its range. Such a statement in a
+transaction, or one that cannot be read, refuses the batch before any unit runs.
+
+A change only the native call makes refuses the batch with `NO_TEXT_FORM` and
+no unit: user attributes, storage settings, tiering, the partition columns, a
+family kept in memory, a default from a sequence or of a type without a
+literal, a TTL run interval other than YDB's own, and a coordination node that
+declares its access. A host that does not list the feature gets native units.
 
 ## Migration history
 
@@ -1134,8 +1166,9 @@ the step between its markers. A common step that names another database than
 the change is refused. The parent directory must already exist; execution never
 creates or deletes it.
 
-Rendering validates the complete operation receipt and emits a native envelope.
-It does not generate coordination SQL. Execution uses native CreateNode,
+Rendering validates the complete operation receipt and emits a native envelope,
+or, in the TEXT form, the coordination node statement the host's embedded
+engine writes (see [Text units](#text-units)). Execution uses native CreateNode,
 AlterNode, and DropNode requests. A nonempty database identity must equal the
 selected session database. The provider validates every envelope and transaction
 constraint before executing any unit in the batch.
@@ -1829,7 +1862,7 @@ Remaining work includes more source formats, comparison, the alteration of table
 settings other than column families, table removal and rebuild, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
-rendering, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
+rendering, text units, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 
