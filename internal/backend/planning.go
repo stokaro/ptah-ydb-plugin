@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicplan"
@@ -36,7 +37,10 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	case topicplan.ServiceID:
 		result, err = topicplan.Plan(ctx, request)
 	case tablecreate.ServiceID:
-		result, err = tablecreate.Plan(ctx, request)
+		var stripped *protocol.PlanFeaturesRequest
+		if stripped, err = planningWithoutComments(request); err == nil {
+			result, err = tablecreate.Plan(ctx, stripped)
+		}
 	default:
 		err = fmt.Errorf("unsupported YDB planning service")
 	}
@@ -57,8 +61,9 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 
 // Render validates complete captured operations and emits native envelopes,
 // or, in the TEXT form a host asks for where it writes a migration file, the
-// YQL statement of each; see renderText. Both forms check the whole batch
-// before writing a unit.
+// YQL statement of each; see renderText. A view or a comment on the common
+// wire is YQL in either form: Ptah's COMMENT ON statement is what execution
+// reads. Both forms check the whole batch before writing a unit.
 func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*protocol.RenderResult, error) {
 	if err := provider.ValidateRenderRequest(Description(), request); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -69,10 +74,21 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 			return nil, status.Error(codes.FailedPrecondition, "native YDB rendering requires established nontransactional DDL")
 		}
 	}
-	operations := make([]*protocol.Envelope, 0, len(request.Changes))
-	for _, change := range request.Changes {
+	// Each change is a native operation or, for a common object, its
+	// statement.
+	operations := make([]*protocol.Envelope, len(request.Changes))
+	statements := make([]string, len(request.Changes))
+	for i, change := range request.Changes {
 		if err := ctx.Err(); err != nil {
 			return nil, status.FromContextError(err).Err()
+		}
+		if common := change.GetCommonObject(); common != nil {
+			statement, err := commonobject.Render(common)
+			if err != nil {
+				return nil, status.Error(codes.FailedPrecondition, err.Error())
+			}
+			statements[i] = statement
+			continue
 		}
 		native := change.GetNative()
 		if native.GetRole() != protocol.NativeOperation_STATEMENT || native.GetParent() != nil {
@@ -92,18 +108,22 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		if !proto.Equal(normalized, captured) {
 			return nil, status.Error(codes.InvalidArgument, "native operation metadata changed")
 		}
-		operations = append(operations, normalized.Value)
+		operations[i] = normalized.Value
 	}
 	result := &protocol.RenderResult{Complete: true}
 	if request.GetForm() == protocol.RenderRequest_TEXT {
-		text, err := renderText(ctx, request.Changes, operations)
+		text, err := renderText(ctx, request.Changes, operations, statements)
 		if err != nil {
 			return nil, err
 		}
 		result = text
 	} else {
 		for i, change := range request.Changes {
-			result.Units = append(result.Units, &protocol.Unit{ChangeId: change.Id, Body: &protocol.Unit_Native{Native: proto.CloneOf(operations[i])}})
+			unit := &protocol.Unit{ChangeId: change.Id, Body: &protocol.Unit_Sql{Sql: statements[i]}}
+			if operations[i] != nil {
+				unit.Body = &protocol.Unit_Native{Native: proto.CloneOf(operations[i])}
+			}
+			result.Units = append(result.Units, unit)
 		}
 	}
 	if err := provider.ValidateRenderedBatch(Description(), request, result); err != nil {

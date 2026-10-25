@@ -13,6 +13,7 @@ package servicequery
 
 import (
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -68,6 +69,32 @@ func Locate(text string, opens func([]yql.Token) bool, service string) (Located,
 		}
 	}
 	return result, true, nil
+}
+
+// Absolute is the absolute path a service statement names as name, on the
+// database whose absolute path is database: name itself where it starts with a
+// slash, else name under the query's own TablePathPrefix, else under prefix,
+// the one the session puts in effect, else under the database root.
+//
+// A relative TablePathPrefix is refused, as YDB refuses one: `PRAGMA
+// TablePathPrefix("relp"); CREATE TABLE t (...)` answers `Table path not in
+// database, path: relp/t, database: /local` on 25.1.4.7 and 26.2.1.14.
+func Absolute(name, queryPrefix, database, prefix string) (string, error) {
+	if strings.HasPrefix(name, "/") {
+		return path.Clean(name), nil
+	}
+	if queryPrefix != "" {
+		prefix = queryPrefix
+	}
+	switch {
+	case prefix == "":
+		return path.Join("/"+strings.Trim(database, "/"), name), nil
+	case strings.HasPrefix(prefix, "/"):
+		return path.Join(prefix, name), nil
+	default:
+		return "", fmt.Errorf("path %s is not in database %s: the TablePathPrefix %q is relative, and YDB "+
+			"reads a prefix only as an absolute path", path.Join(prefix, name), "/"+strings.Trim(database, "/"), prefix)
+	}
 }
 
 // ContainsFold reports whether text contains word, ignoring case, without

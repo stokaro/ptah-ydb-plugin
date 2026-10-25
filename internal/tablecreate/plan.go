@@ -104,7 +104,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			if err != nil {
 				return refused(i, fmt.Sprintf("table %q: %v", tableLabel(owner), err)), nil
 			}
-			item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names)
+			item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon())
 			if err != nil {
 				return nil, err
 			}
@@ -167,7 +167,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				if !request.GetPolicy().GetAllowTableRebuild() {
 					return refused(i, rebuildRefusal(needs[0], request.GetPolicy())), nil
 				}
-				item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names)
+				item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon())
 				if err != nil {
 					return nil, err
 				}
@@ -419,6 +419,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	// step or a mixed footprint needs its own lifecycle, never a partial rewrite.
 	claimed := make(map[int]bool)
 	for _, step := range request.CommonSteps {
+		if step.GetCommonObject() != nil {
+			// A view or a comment is the host's step, which this service
+			// orders against its own and never takes over.
+			continue
+		}
 		if step.Parent == nil && step.AddedColumn == nil && len(step.GetMetadata().GetEffects()) == 0 {
 			// An ordering marker such as common/prerequisite-creations belongs to no
 			// table and changes nothing. The host keeps it.
@@ -515,6 +520,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				Subject: proto.CloneOf(table.Subject), Kind: kind, Strategy: strategy, Steps: steps}})
 		}
 	}
+	contribution.Dependencies = append(contribution.Dependencies, commonObjectDependencies(request.CommonSteps, contribution.Steps)...)
 	if len(contribution.Steps) > 0 {
 		result.Contributions = []*protocol.PlanningContribution{contribution}
 	}

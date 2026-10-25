@@ -5,8 +5,8 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"io"
-	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 )
 
@@ -15,24 +15,10 @@ import (
 // resolves inside the realm. The pragma does not confine an absolute path, a
 // path that climbs out with `..` or a table named through a `$` expression;
 // internal/yql refuses those before a statement is sent.
-func pathPrefix(root string) string {
-	return "PRAGMA TablePathPrefix(" + stringLiteral(root) + ");\n"
-}
-
-// stringLiteral writes value as a YQL string literal.
-func stringLiteral(value string) string {
-	var b strings.Builder
-	b.WriteByte('"')
-	for _, r := range value {
-		switch r {
-		case '"', '\\':
-			b.WriteByte('\\')
-		}
-		b.WriteRune(r)
-	}
-	b.WriteByte('"')
-	return b.String()
-}
+//
+// YDB stores the pragma in the query text of a view the session creates, so
+// the spelling is internal/ydbview's, where the view reader removes it.
+func pathPrefix(root string) string { return ydbview.RealmPrefix(root) }
 
 // sdkConn is what database/sql uses of a ydb-go-sdk connection. The SDK's
 // connection type is internal, so the set is checked when a connection is made:

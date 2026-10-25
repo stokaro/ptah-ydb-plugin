@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
@@ -167,6 +169,13 @@ func CaptureTable(owner *protocol.Reference, description *native.DescribeTableRe
 	}
 	projected := proto.CloneOf(description)
 	projected.Columns, projected.TableStats = nil, nil
+	// Ptah keeps a comment as an attribute of its table. The comment belongs
+	// to the comment, which the common wire carries, and never to the
+	// table's own declared attributes.
+	maps.DeleteFunc(projected.Attributes, func(key, _ string) bool { return ydbcomment.IsKey(key) })
+	if len(projected.Attributes) == 0 {
+		projected.Attributes = nil
+	}
 	if projected.Self != nil {
 		projected.Self.Name, projected.Self.Type = "", 0
 		projected.Self.SizeBytes, projected.Self.CreatedAt = 0, nil

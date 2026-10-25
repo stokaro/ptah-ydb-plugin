@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -49,6 +50,11 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating 
 	}
 	if creating && settings.Temporary {
 		return nil, fmt.Errorf("temporary YDB tables need an explicit session lifetime")
+	}
+	for key := range settings.Attributes {
+		if ydbcomment.IsKey(key) {
+			return nil, unsupported("YDB table attribute %q is where Ptah keeps a comment; declare the comment instead", key)
+		}
 	}
 	result := &Ydb_Table.CreateTableRequest{
 		PrimaryKey:           key,

@@ -19,13 +19,18 @@ import (
 // statement, the one the host's embedded engine writes for the same change,
 // which this provider's Execute runs read back from a migration file. A
 // change only a native call can make refuses the whole batch with
-// NO_TEXT_FORM and no unit.
-// operations are the changes' normalized operations, in order.
-func renderText(ctx context.Context, changes []*protocol.Change, operations []*protocol.Envelope) (*protocol.RenderResult, error) {
+// NO_TEXT_FORM and no unit. operations are the changes' normalized
+// operations, in order, and nil for a common object, whose statement is in
+// statements.
+func renderText(ctx context.Context, changes []*protocol.Change, operations []*protocol.Envelope, statements []string) (*protocol.RenderResult, error) {
 	result := &protocol.RenderResult{Complete: true}
 	for i, change := range changes {
 		if err := ctx.Err(); err != nil {
 			return nil, status.FromContextError(err).Err()
+		}
+		if operations[i] == nil {
+			result.Units = append(result.Units, &protocol.Unit{ChangeId: change.GetId(), Body: &protocol.Unit_Sql{Sql: statements[i]}})
+			continue
 		}
 		statement, err := textOf(operations[i])
 		if errors.Is(err, tablecreate.ErrNoTextForm) {

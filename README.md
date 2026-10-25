@@ -399,10 +399,51 @@ refuses a result YDB would move into its range. Such a statement in a
 transaction, or one that cannot be read, refuses the batch before any unit runs.
 
 A change only the native call makes refuses the batch with `NO_TEXT_FORM` and
-no unit: user attributes, storage settings, tiering, the partition columns, a
+no unit: user attributes other than Ptah's comments, storage settings, tiering, the partition columns, a
 family kept in memory, a default from a sequence or of a type without a
 literal, a TTL run interval other than YDB's own, and a coordination node that
 declares its access. A host that does not list the feature gets native units.
+
+## Common objects
+
+The provider lists `schema.common-objects` (contract 25.3, ADR 0033 in Ptah),
+and the ydb engine declares the kinds `VIEW` and `COMMENT`. A host that lists
+the feature compares and orders views and comments in its shared code, as it
+does for every engine; the provider reads them, spells a declaration the way
+YDB does, and writes each change as the host's embedded engine writes it. A
+host that does not list it gets none of this: views stay native objects, and a
+declared comment is refused as a table setting no creation states.
+
+What each step does with the two kinds:
+
+| Step | Views | Comments |
+| --- | --- | --- |
+| Inspect | Each view, its query as the server stores it; on a dev realm without the realm's `PRAGMA TablePathPrefix`, which YDB stores at the head of a view the session created | The comment of each row table, of its columns and indexes, and of each view, from the user attributes YDB keeps them in |
+| PrepareCommonObjects | The query in the server's form: its tokens joined by single spaces, comments and terminators left out | As declared |
+| ValidateSchema | Refuses a view without a query, `WITH CHECK OPTION`, view attributes and materialized views | Refuses what an attribute cannot hold: a key over 100 bytes, a value over 4096 bytes, text that is not UTF-8, more than 10240 bytes on one table |
+| Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
+| PlanFeatures | Dropped before every table step and created after them | After every step on the table that keeps it |
+
+The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
+two- or three-character operator is one token except `>>`, which YDB writes
+`> >`; `$x` is `$ x`; a number keeps its exponent and its suffix; a quoted
+string or name, a multi-line string among them, is kept whole. A read of a view
+applied once therefore equals the preparation of its declaration.
+
+YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
+YDB connection does and sets the one attribute it names through the table
+service, after checking that the object is in the session's database or realm,
+is a row table or a view of the kind the statement names, and for a non-empty
+comment has the column or the index. A unit holding a comment statement beside
+other statements, such as a commented view, runs as the queries a migration
+file is split into, one statement after another. A comment statement in a
+transaction, or one that cannot be read, refuses the batch before any unit
+runs. A comment is never a table property: the table facet leaves Ptah's
+comment keys out, a declared attribute under one of them is refused, and the
+new table of a rebuild takes the comments the read reported.
+
+Sequences, roles and grants are not carried yet, so a host that negotiates the
+wire refuses them by name, as it does every kind an engine does not declare.
 
 ## Migration history
 
@@ -1741,7 +1782,8 @@ carry is refused by name, with no partial reading:
   resource pool classifiers, which this provider has no model for.
 
 Some of what a reading carries is not planned yet. Table creation refuses
-column defaults and table comments. Ptah refuses views and roles from
+column defaults, and table comments on a host that does not list
+`schema.common-objects`, which carries them. Ptah refuses views and roles from
 a provider's reading. A coordination node is planned as the coordination
 services describe.
 
@@ -2007,7 +2049,7 @@ Remaining work includes more source formats, comparison, the alteration of table
 settings other than column families, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
-rendering, text units, table rebuilds the planning policy asks for, SQL, offline schema validation, native coordination, topic lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
+rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 

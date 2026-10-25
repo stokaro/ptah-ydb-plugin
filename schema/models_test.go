@@ -130,3 +130,24 @@ func TestLiveCaptureRequiresDatabaseBinding(t *testing.T) {
 	c.Assert(value, qt.IsNil)
 	c.Assert(err, qt.ErrorMatches, "captured YDB observation requires a database")
 }
+
+// A comment Ptah keeps as a table attribute belongs to the comment, which the
+// common wire carries, never to the table's properties.
+func TestTablePropertiesLeaveCommentsOut(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		attributes map[string]string
+		want       string
+	}{
+		{"comments and an attribute", map[string]string{"ptah.comment": "rows", "ptah.comment.column.a": "the key", "ptah.comment.index.i": "x", "purpose": "kept"}, `"attributes":{"purpose":"kept"}`},
+		{"comments alone", map[string]string{"ptah.comment": "rows"}, `{"primaryKey":["a"],"storeType":"STORE_TYPE_ROW"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := qt.New(t)
+			captured, err := schema.CaptureTable(tableOwner(), &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"a"}, Attributes: tc.attributes})
+			c.Assert(err, qt.IsNil)
+			c.Assert(string(captured.Payload), qt.Contains, tc.want)
+			c.Assert(string(captured.Payload), qt.Not(qt.Contains), "ptah.comment")
+		})
+	}
+}

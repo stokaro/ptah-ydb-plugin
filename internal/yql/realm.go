@@ -184,6 +184,8 @@ func confineToRealm(tokens []Token) error {
 		return checkTargetAfter(tokens, 1, "TABLE")
 	case "CREATE", "ALTER", "DROP":
 		return confineObject(tokens)
+	case "COMMENT":
+		return confineComment(tokens)
 	}
 	if strings.HasPrefix(tokens[0].Value, "$") && tokens[0].Type == TokenIdentifier {
 		// A named expression or lambda defines a value and writes nothing; a
@@ -227,6 +229,25 @@ func confineObject(tokens []Token) error {
 		return refuse("a change to the whole database")
 	default:
 		return refuse("unrecognized object " + strings.ToUpper(tokens[0].Value) + " " + strings.ToUpper(valueAt(tokens, kind)))
+	}
+}
+
+// confineComment refuses one of Ptah's comment statements whose table or
+// view is not a relative path inside the realm: `COMMENT ON TABLE` and `VIEW`
+// name it first, `COLUMN` names it before the dot and the column, and `INDEX`
+// names it after ON. The statement sets an attribute of that object alone.
+func confineComment(tokens []Token) error {
+	switch {
+	case keywordAt(tokens, 1) != "ON":
+		return refuse("unrecognized statement COMMENT")
+	case keywordAt(tokens, 2) == "TABLE", keywordAt(tokens, 2) == "VIEW":
+		return checkTarget(tokens, 3)
+	case keywordAt(tokens, 2) == "COLUMN" && len(tokens) > 3:
+		return checkTarget(tokens[:4], 3)
+	case keywordAt(tokens, 2) == "INDEX":
+		return checkTargetAfter(tokens, 4, "ON")
+	default:
+		return refuse("unrecognized object COMMENT ON " + strings.ToUpper(valueAt(tokens, 2)))
 	}
 }
 

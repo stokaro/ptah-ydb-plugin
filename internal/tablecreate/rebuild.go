@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -124,6 +125,34 @@ func requestedWith(policy *protocol.PlanningPolicy) string {
 	return rebuildRequest
 }
 
+// keepHeldComments gives the new table of a rebuild the comments the read
+// reported on the old one, its own and those of the columns and indexes the
+// new table has, as the attributes YDB keeps them in. On the common wire a
+// comment is not a table setting, so the read of the table's properties
+// holds none, and the host plans no change for a comment it finds in place.
+func keepHeldComments(request *Ydb_Table.CreateTableRequest, owner *protocol.Reference, common *protocol.ObservedCommonObjects) {
+	comments := ydbcomment.Comments{Columns: map[string]string{}, Indexes: map[string]string{}}
+	for _, comment := range common.GetComments() {
+		object := comment.GetObject()
+		switch {
+		case object.GetSchema() != owner.GetSchema():
+		case object.GetKind() == "table" && object.GetName() == owner.GetName():
+			comments.Own = comment.GetText()
+		case len(object.GetPath()) != 1 || object.GetPath()[0] != owner.GetName():
+		case object.GetKind() == "column" && slices.ContainsFunc(request.GetColumns(), func(column *Ydb_Table.ColumnMeta) bool { return column.GetName() == object.GetName() }):
+			comments.Columns[object.GetName()] = comment.GetText()
+		case object.GetKind() == "index" && slices.ContainsFunc(request.GetIndexes(), func(index *Ydb_Table.TableIndex) bool { return index.GetName() == object.GetName() }):
+			comments.Indexes[object.GetName()] = comment.GetText()
+		}
+	}
+	for key, value := range comments.Attributes() {
+		if request.Attributes == nil {
+			request.Attributes = map[string]string{}
+		}
+		request.Attributes[key] = value
+	}
+}
+
 // heldKey is the key of an observed table, in key order where the read of its
 // properties states it and in column order otherwise.
 func heldKey(observed *protocol.ObservedTable) []string {
@@ -196,8 +225,10 @@ type rebuild struct {
 // planRebuild builds the steps of a rebuild of the table owner names into
 // the declaration desired compiles to, numbered with number, or the reason it
 // cannot be rebuilt. names are the tables the request declares or holds, which
-// a scratch name must not take.
-func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names map[string]bool) (*rebuild, string, error) {
+// a scratch name must not take. common is what the read reported of the common
+// objects, whose comments on the table the new one keeps.
+func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names map[string]bool,
+	common *protocol.ObservedCommonObjects) (*rebuild, string, error) {
 	label := tableLabel(owner)
 	subject := fmt.Sprintf("rebuilding table %q", label)
 	current := table.GetCurrent()
@@ -221,6 +252,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	}
 	request := proto.CloneOf(desired)
 	keepHeldSettings(request, current, table.GetDesired())
+	keepHeldComments(request, owner, common)
 	heldColumns := make([]string, 0, len(current.GetColumns()))
 	for _, column := range current.GetColumns() {
 		heldColumns = append(heldColumns, column.GetName())
