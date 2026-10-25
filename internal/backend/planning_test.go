@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -165,7 +166,9 @@ func TestCoordinationPlanningRefusesUnestablishedFootprints(t *testing.T) {
 		name   string
 		modify func(*protocol.CommonPlanningStep)
 	}{
-		{"unbound database", func(s *protocol.CommonPlanningStep) { s.Metadata.Effects[0].Subject.Database = nil }},
+		{"another database", func(s *protocol.CommonPlanningStep) {
+			s.Metadata.Effects[0].Subject.Database = &protocol.ComparisonPart{Source: "/other", Normalized: "/other"}
+		}},
 		{"unknown kind", func(s *protocol.CommonPlanningStep) { s.Metadata.Effects[0].Subject.Kind = "foreign-object" }},
 		{"directory", func(s *protocol.CommonPlanningStep) { s.Metadata.Effects[0].Subject.Kind = "schema" }},
 		{"folded name", func(s *protocol.CommonPlanningStep) { s.Metadata.Effects[0].Subject.Name.Source = "NODE" }},
@@ -178,7 +181,6 @@ func TestCoordinationPlanningRefusesUnestablishedFootprints(t *testing.T) {
 			s.Metadata.Effects[0].Subject.Schema.Source = "app/node"
 			s.Metadata.Effects[0].Subject.Schema.Normalized = "app/node"
 		}},
-		{"no effects", func(s *protocol.CommonPlanningStep) { s.Metadata.Effects = nil }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -215,15 +217,24 @@ func TestCoordinationRenderRefusesWholeBatch(t *testing.T) {
 	c.Assert(result, qt.IsNil)
 }
 
-func TestCoordinationPlanningKeepsExplicitDatabasesSeparate(t *testing.T) {
+// The host's ordering markers belong to no object, and a column step's column
+// lives in its table: neither occupies a path, so neither orders the node. The
+// host names its table without a database; the node names the session's, and
+// both name one path.
+func TestCoordinationPlanningPassesOverMarkersAndColumns_HappyPath(t *testing.T) {
 	c := qt.New(t)
 	request := nativePlan(c, "create")
-	common := commonPath(request, protocol.PlanningEffect_CREATE)
-	common.Metadata.Effects[0].Subject.Database.Source = "/other"
-	common.Metadata.Effects[0].Subject.Database.Normalized = "/other"
-	request.CommonSteps = []*protocol.CommonPlanningStep{common}
+	marker := &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: "common/feature-creations"}, Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN}}
+	table := proto.CloneOf(request.Changes[0].Subject)
+	table.Kind, table.Name, table.Database = "table", testcomparison.Part("items"), &protocol.ComparisonPart{}
+	column := &protocol.ComparisonIdentity{Kind: "column", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: proto.CloneOf(table.Schema), Parent: testcomparison.Part("items"), Name: testcomparison.Part("note")}
+	added := &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: "common/000001"}, Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Fixture column",
+		Effects: []*protocol.PlanningEffect{{Subject: table, Action: protocol.PlanningEffect_READ}, {Subject: column, Action: protocol.PlanningEffect_CREATE}}}}
+	request.CommonSteps = []*protocol.CommonPlanningStep{marker, added}
 	result, err := backend.New().PlanFeatures(t.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Diagnostics, qt.HasLen, 0)
 	c.Assert(result.Contributions[0].Dependencies, qt.HasLen, 0)
+	// The node's path effect names no database, as the host's table does.
+	c.Assert(result.Contributions[0].Steps[0].Metadata.Effects[1].Subject.GetDatabase().GetNormalized(), qt.Equals, "")
 }

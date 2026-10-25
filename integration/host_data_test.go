@@ -133,7 +133,7 @@ func TestHostWritesDeclaredRowsThroughTheProvider_HappyPath(t *testing.T) {
 
 	output, err = f.apply(c)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
-	c.Assert(output, qt.Matches, `(?s).*No changes planned.*`)
+	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`)
 
 	f.declare(c, "- code: NO\n  name: Norge\n  rank: 2\n- code: SE\n  name: Sweden\n  rank: 3\n")
 	output, err = f.apply(c)

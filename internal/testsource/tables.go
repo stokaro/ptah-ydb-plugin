@@ -117,7 +117,8 @@ type GoDeclaration struct {
 // provider that claims Go directives: one document, a binding for each table,
 // and one fragment for each declaration whose attributes are text. A directive
 // of table scope is bound to the table of the struct it is written on, and the
-// provider reads a table attribute itself.
+// provider reads a table attribute itself. A directive of document scope, such
+// as a coordination node's, is bound to nothing.
 func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.DecodeSourceRequest, error) {
 	document := &protocol.SourceDocument{Id: "document", Format: protocol.SourceDocument_GO_ANNOTATIONS, File: "<unnamed Go>",
 		Models: desiredModels(protocol.SourceDocument_GO_ANNOTATIONS)}
@@ -131,17 +132,19 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 		if i == 0 {
 			document.File, document.ByteLength = declaration.File, uint64(declaration.FileSize)
 		}
-		claim := slices.IndexFunc(tablesource.GoDirectives(), func(claim *protocol.GoSourceDirective) bool { return claim.Directive == declaration.Directive })
+		claims := append(tablesource.GoDirectives(), schema.CoordinationGoDirective())
+		claim := slices.IndexFunc(claims, func(claim *protocol.GoSourceDirective) bool { return claim.Directive == declaration.Directive })
 		if claim < 0 {
 			return nil, fmt.Errorf("the provider claims no Go directive %q", declaration.Directive)
 		}
+		directive := claims[claim]
 		owning := slices.IndexFunc(tables, func(table GoTable) bool {
 			if declaration.Subject.Table != "" {
 				return table.Name == declaration.Subject.Table
 			}
 			return table.Struct == declaration.Struct
 		})
-		if owning < 0 {
+		if owning < 0 && directive.Scope != protocol.GoSourceDirective_DOCUMENT {
 			return nil, fmt.Errorf("struct %s maps to no table in this file", declaration.Struct)
 		}
 		span := &protocol.SourceSpan{
@@ -153,9 +156,11 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 			mapping.Entries = append(mapping.Entries, &protocol.SourceEntry{Key: key, KeySpan: span,
 				Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Text{Text: declaration.Attributes[key]}}})
 		}
-		directive := tablesource.GoDirectives()[claim]
 		fragment := &protocol.SourceFragment{Id: strconv.Itoa(i), GoDirective: directive, Selector: directive.Selector,
-			Span: span, BindingId: bindings[owning], Content: &protocol.SourceFragment_Value{Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Mapping{Mapping: mapping}}}}
+			Span: span, Content: &protocol.SourceFragment_Value{Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Mapping{Mapping: mapping}}}}
+		if directive.Scope != protocol.GoSourceDirective_DOCUMENT {
+			fragment.BindingId = bindings[owning]
+		}
 		if directive.Scope == protocol.GoSourceDirective_COLUMN || directive.Scope == protocol.GoSourceDirective_INDEX {
 			fragment.Subject = &protocol.Reference{Engine: "ydb", Kind: declaration.Subject.Kind, Schema: tables[owning].Schema, Path: []string{tables[owning].Name}, Name: declaration.Subject.Name}
 		}

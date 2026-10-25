@@ -58,9 +58,9 @@ func TestHostAppliesAndAltersARowTable_HappyPath(t *testing.T) {
 	})
 	for _, run := range []struct{ name, attributes, want string }{
 		{"creation", "", `(?s).*row-table-create-operation.*Schema apply completed successfully.*`},
-		{"a second run", "", `(?s).*No changes planned.*`},
+		{"a second run", "", `(?s).*Schema is synced, no changes to be made.*`},
 		{"a TTL", ` platform.ydb.row_deletion_column="ts" platform.ydb.row_deletion_interval="P1D"`, `(?s).*row-table-alter-operation.*Schema apply completed successfully.*`},
-		{"a run after the TTL", ` platform.ydb.row_deletion_column="ts" platform.ydb.row_deletion_interval="P1D"`, `(?s).*No changes planned.*`},
+		{"a run after the TTL", ` platform.ydb.row_deletion_column="ts" platform.ydb.row_deletion_interval="P1D"`, `(?s).*Schema is synced, no changes to be made.*`},
 	} {
 		output, err := hostApply(c, directory, hostItems(directory, run.attributes))
 		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", run.name, output))
