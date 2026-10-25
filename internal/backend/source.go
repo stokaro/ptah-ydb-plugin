@@ -10,6 +10,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -19,8 +20,8 @@ import (
 )
 
 // DecodeSource interprets complete captured YAML and Go annotation
-// declarations: coordination nodes, and the partitioning and column families of
-// row tables. It reads no files or environment variables and requires no
+// declarations: coordination nodes, topics, and the partitioning and column
+// families of row tables. It reads no files or environment variables and requires no
 // database session. Unsupported syntax or any invalid entry discards the
 // complete result.
 func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourceRequest) (*protocol.DecodedSource, error) {
@@ -43,8 +44,18 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			}
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		topics, err := topicsource.Decode(ctx, document)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, status.FromContextError(ctx.Err()).Err()
+			}
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		for index, fragment := range document.Fragments {
-			values, err := fragmentValues(ctx, document, fragment, index, tables)
+			values, err := topics[index], error(nil)
+			if !topicsource.Owns(fragment) {
+				values, err = fragmentValues(ctx, document, fragment, index, tables)
+			}
 			if err != nil {
 				if ctx.Err() != nil {
 					return nil, status.FromContextError(ctx.Err()).Err()

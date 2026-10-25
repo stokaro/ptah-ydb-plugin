@@ -9,6 +9,8 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -45,8 +47,8 @@ func wireRows(c *qt.C) []row {
 
 // gaps names what a reading declares that a SQL schema reading has no home
 // for: a table's or an index's YDB settings, a password, and an object other
-// than a coordination node. A coordination node at a path the provider's
-// model refuses counts as one too.
+// than a coordination node or a topic. A coordination node at a path the
+// provider's model refuses counts as one too.
 func gaps(reading *yqlschema.Reading) []string {
 	var found []string
 	for _, table := range reading.Tables {
@@ -65,10 +67,18 @@ func gaps(reading *yqlschema.Reading) []string {
 		}
 	}
 	for _, object := range reading.Objects {
-		owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: object.Schema, Name: object.Name}
-		if object.Kind != yqlschema.KindCoordinationNode || schema.ValidateManagedCoordinationOwner(owner) != nil {
-			found = append(found, string(object.Kind)+" "+object.Name)
+		switch object.Kind {
+		case yqlschema.KindCoordinationNode:
+			owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: object.Schema, Name: object.Name}
+			if schema.ValidateManagedCoordinationOwner(owner) == nil {
+				continue
+			}
+		case yqlschema.KindTopic:
+			if _, err := topics.Intent(*object.Spec.(*ydbdecl.Topic)); err == nil {
+				continue
+			}
 		}
+		found = append(found, string(object.Kind)+" "+object.Name)
 	}
 	return found
 }
@@ -95,7 +105,7 @@ func TestReply_HappyPath(t *testing.T) {
 			reply := yqlschema.Reply(request)
 			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
 			c.Assert(reply.GetComplete(), qt.IsTrue, qt.Commentf("%v", reply.GetDiagnostics()))
-			c.Assert(wireOrder(settle(c, hostMapping(c, reply))), qt.DeepEquals, wireOrder(settle(c, withoutFacets(hostMeaning(c, r.golden.Grammar)))))
+			c.Assert(wireOrder(settle(c, hostMapping(c, reply))), qt.DeepEquals, wireOrder(settle(c, normalTopics(c, withoutFacets(hostMeaning(c, r.golden.Grammar))))))
 		})
 	}
 }
@@ -275,10 +285,19 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 		}
 	}
 	for _, envelope := range reply.GetNativeObjects() {
+		owner := envelope.GetOwner()
+		if envelope.GetKind() == schema.TopicProperties {
+			intent, err := schema.DesiredTopic(envelope)
+			c.Assert(err, qt.IsNil)
+			spec, err := topics.FromIntent(intent)
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindTopic), Schema: owner.GetSchema(), Name: owner.GetName(),
+				Payload: topicPayload(c, spec)})
+			continue
+		}
 		c.Assert(envelope.GetKind(), qt.Equals, schema.CoordinationProperties)
 		var spec map[string]any
 		c.Assert(json.Unmarshal(envelope.GetPayload(), &spec), qt.IsNil)
-		owner := envelope.GetOwner()
 		result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindCoordinationNode), Schema: owner.GetSchema(), Name: owner.GetName(),
 			Payload: map[string]any{"spec": spec}})
 	}
@@ -297,6 +316,37 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 		result.Files = append(result.Files, file)
 	}
 	return result
+}
+
+// topicPayload is a topic as the host's payload holds it, in the spelling the
+// provider's model keeps: intervals as whole seconds written the host's way,
+// and consumers sorted by name.
+func topicPayload(c *qt.C, spec ydbdecl.Topic) any {
+	c.Helper()
+	intent, err := topics.Intent(spec)
+	c.Assert(err, qt.IsNil)
+	read, err := topics.FromIntent(intent)
+	c.Assert(err, qt.IsNil)
+	slices.SortFunc(read.Consumers, func(a, b ydbdecl.Consumer) int { return strings.Compare(a.Name, b.Name) })
+	return decodeAny(c, marshal(c, map[string]any{"spec": read}))
+}
+
+// normalTopics writes the host's topics in the spelling the provider's model
+// keeps, so a reply is held to their meaning rather than to their spelling:
+// PT36H and P1DT12H are one retention period.
+func normalTopics(c *qt.C, m meaning) meaning {
+	c.Helper()
+	for i, object := range m.Objects {
+		if object.Kind != string(yqlschema.KindTopic) {
+			continue
+		}
+		var held struct {
+			Spec ydbdecl.Topic `json:"spec"`
+		}
+		c.Assert(json.Unmarshal(marshal(c, object.Payload), &held), qt.IsNil)
+		m.Objects[i].Payload = topicPayload(c, held.Spec)
+	}
+	return m
 }
 
 // TestReply_Coverage requires a complete reply to claim what the host's YDB
@@ -331,6 +381,7 @@ var claimedHostKinds = map[string][]string{
 	schema.ColumnProperties:        {"ptah.run/ydb/column-families"},
 	schema.ColumnStorageProperties: {"ptah.run/ydb/column-store"},
 	schema.CoordinationProperties:  {"ptah.run/ydb/coordination-node"},
+	schema.TopicProperties:         {"ptah.run/ydb/topic"},
 }
 
 func pluginCoverage(coverage *protocol.ModelCoverage) coverageMeaning {
@@ -371,7 +422,7 @@ func hostCoverage(c *qt.C, coverage *goldenCoverage) coverageMeaning {
 		result.Kinds[record.Model.Kind] = state + " " + knowledge.Outside.Reason
 	}
 	for _, subject := range coverage.Subjects {
-		if subject.Kind != "ptah.run/ydb/coordination-node" {
+		if subject.Kind != "ptah.run/ydb/coordination-node" && subject.Kind != "ptah.run/ydb/topic" {
 			continue
 		}
 		var knowledge struct {

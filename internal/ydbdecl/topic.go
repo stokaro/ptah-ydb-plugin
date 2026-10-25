@@ -292,6 +292,10 @@ func parseCodecs(raw string) ([]string, error) {
 	return codecs, nil
 }
 
+// TopicSeconds reads one of a topic's intervals as whole seconds, with the
+// refusals a declaration's parse gives.
+func TopicSeconds(text string) (uint64, error) { return topicSeconds(text) }
+
 // topicSeconds reads one of a topic's intervals as whole seconds.
 func topicSeconds(text string) (uint64, error) {
 	micros, ok := ydbtype.ParseInterval(text)

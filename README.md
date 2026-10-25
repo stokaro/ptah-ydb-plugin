@@ -5,10 +5,10 @@ It is under development. Inspection covers row tables and their indexes and
 changefeeds, column tables, topics, views, coordination nodes, external data
 sources, and external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
-tags, and coordination locks. Offline YAML and Go annotation decoding is available for coordination-node declarations, and
+tags, and coordination locks. Offline YAML and Go annotation decoding is available for coordination-node and topic declarations, and
 YAML and Go annotation decoding for the partitioning, TTL and column families of row tables, and in Go the columns of each family.
 Offline comparison, planning, and rendering produce native coordination
-operations. Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
+and topic operations (see [Topics](#topics)). Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
 Offline migration lint splits YQL migrations and checks YD rules; see
 [Migration lint](#migration-lint).
@@ -799,7 +799,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
 | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name. YAML has no index key claim. |
-| Topics, resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` at document scope. |
+| Resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` and `topics` at document scope (see [Topics](#topics)). |
 
 A table is managed for its TTL when its source states table properties for it,
 or when the host reports complete knowledge of the table properties of the
@@ -1044,9 +1044,10 @@ The `values.convert` service also converts index, changefeed, and standalone
 topic properties between separate typed desired and observed models. It works
 without an open session, retains exact owner identity, and returns no prefix
 when any value in a mixed batch fails. Conversion establishes no inspection
-coverage. Only the index model advertises comparison and planning, for adding
-and dropping global secondary indexes of an existing row table (see
-[Index alteration](#index-alteration)); the changefeed and topic models do not.
+coverage. The index model advertises comparison and planning, for adding and
+dropping global secondary indexes of an existing row table (see
+[Index alteration](#index-alteration)), and so does the topic model (see
+[Topics](#topics)); the changefeed model does not.
 
 Index declarations retain the native index kind, ordered index/data columns,
 and kind-specific settings. Each declaration includes complete requirements on
@@ -1194,6 +1195,83 @@ batch refusal, and lease loss on both tested YDB release lines. The host routes
 a coordination node's comparison, planning and execution to these services
 (see [Coordination comparison](#coordination-comparison)); other object
 lifecycles remain pending.
+
+## Topics
+
+The provider declares, compares, plans and applies standalone topics and their
+consumers, with the syntax, the rules and the statements of the host's embedded
+YDB engine (`dialect/ydb/ydbtopic`).
+
+A YAML document declares topics under the document key `topics`, a Go file with
+the directives `ptah:schema:topic` and `ptah:schema:topic:consumer`, and a YQL
+schema with `CREATE TOPIC` and `ALTER TOPIC ... ADD CONSUMER`:
+
+```yaml
+topics:
+  order_events:
+    schema: app
+    min_active_partitions: 2
+    retention_period: PT36H
+    supported_codecs: [raw, gzip]
+    consumers:
+      billing:
+        important: true
+      audit:
+        read_from: "2026-01-01T00:00:00Z"
+```
+
+```go
+//ptah:schema:topic name="order_events" schema="app" min_active_partitions="2" retention_period="PT36H" supported_codecs="raw,gzip"
+//ptah:schema:topic:consumer name="billing" topic="order_events" schema="app" important="true"
+//ptah:schema:topic:consumer name="audit" topic="order_events" schema="app" read_from="2026-01-01T00:00:00Z"
+type Events struct{}
+```
+
+The settings are the host's: `min_active_partitions`, `max_active_partitions`,
+`auto_partitioning_strategy`, the up and down utilization percentages and the
+stabilization window, `retention_period`, `partition_write_speed_bytes_per_second`,
+`partition_write_burst_bytes` and `supported_codecs`; a consumer takes
+`important`, `read_from`, `supported_codecs` and `availability_period`. Each is
+parsed and refused with the host's words. A Go consumer names a topic the same
+file declares. Each source describes the topics of the directories it reads
+completely, so a topic it leaves out is dropped; a `ptah:not-described topic`
+header entry of a YQL document keeps one. HCL has no topic block. The model
+keeps the consumers of a topic sorted by name.
+
+A setting a declaration leaves out takes the value YDB gives a new topic, and
+the comparison reads both sides that way: one partition, a day of retention, a
+write speed of 1 MiB/s and a burst of the speed, and with auto-partitioning on,
+the maximum at the minimum, 90% and 30% thresholds and a five-minute window.
+Consumers compare by name. YDB's own attributes and the access metadata are not
+compared. A topic the read finds holding a setting no statement sets
+(`retention_storage_mb`, `partition_count_limit`, a metering mode, the read
+speeds or a metrics level) refuses the comparison, as the host refuses to read
+it.
+
+The planner writes one step per topic, outside a transaction. It refuses a
+change YDB cannot make in place: fewer partitions than the topic has, and
+switching auto-partitioning off once it is on (declare `paused` instead). It
+refuses a consumer's `availability_period` on a server before 25.4, where the
+session reports `topic_consumer_availability_period` false. The operation runs
+the host's statements: one `CREATE TOPIC` naming what the declaration names, one
+`DROP TOPIC`, or one `ALTER TOPIC` that names every setting at its resolved
+value once any differs, drops, alters and adds consumers, and a second `ALTER
+TOPIC` that adds again a consumer whose codec list the declaration empties,
+which YDB changes only by dropping the consumer. A drop of a topic or of a
+consumer is destructive.
+
+Execution reads the topic before the first statement and refuses one that
+changed since the plan read it, or a path that holds something else; it runs
+each statement once and reads the topic back, requiring the declared settings
+and consumers, the access metadata an alteration found, or the topic's absence
+after a drop. An unconfirmed result is UNKNOWN and is never retried.
+
+`TestTopicLifecycleSubprocess` creates a topic, restarts a consumer, refuses a
+change planned before another writer changed the topic, and drops it, reading
+the topic back from the server after each step. `TestHostAppliesATopic_HappyPath`
+drives `ptah schema apply` from a YAML, a Go and a YQL source: it creates a
+topic with its consumers, finds nothing to change, changes the retention and
+the consumers, finds nothing to change again, and drops the topic.
 
 ## Offline table preparation
 
@@ -1574,11 +1652,14 @@ refused with Ptah's words and at the position Ptah names.
 
 The reply carries the tables with their keys, columns, defaults, serial
 columns, comments and indexes; views; users, groups and memberships; grants and
-revocations; and coordination nodes as this provider's coordination model. It
+revocations; coordination nodes as this provider's coordination model; and
+topics with the consumers `CREATE TOPIC` and `ALTER TOPIC ... ADD CONSUMER`
+declare, as this provider's topic model. It
 says what each document declares, traces every object to its statement, and
-claims complete coverage of the row-table, column, column-storage and
-coordination models. A `ptah:not-described` header entry of kind
-`coordination_node` limits that claim.
+claims complete coverage of the row-table, column, column-storage,
+coordination and topic models. A `ptah:not-described` header entry of kind
+`coordination_node` or `topic` limits that claim, for one object or, without a
+name, for the kind.
 
 A refused token is quoted with at most its first 64 bytes, where Ptah quotes it
 whole: a schema file can hold a secret in a string literal.
@@ -1589,7 +1670,7 @@ carry is refused by name, with no partial reading:
 - the partitioning settings, column families, TTL and column storage of a
   table, which Ptah refuses in a SQL schema reading;
 - the partitioning and vector settings of an index;
-- changefeeds, topics, external data sources and external tables, which this
+- changefeeds, external data sources and external tables, which this
   provider declares from no source document;
 - a user's password;
 - async replications, transfers, streaming queries, secrets, resource pools and
@@ -1862,7 +1943,7 @@ Remaining work includes more source formats, comparison, the alteration of table
 settings other than column families, table removal and rebuild, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
-rendering, text units, SQL, offline schema validation, native coordination, row-table creation and row-table alteration execution, transaction, history, metadata,
+rendering, text units, SQL, offline schema validation, native coordination, topic lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 

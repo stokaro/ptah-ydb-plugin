@@ -374,9 +374,12 @@ func TestExecutionStoppedByADeadlineKeepsTheConfirmedPrefix(t *testing.T) {
 
 func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 	c := qt.New(t)
-	c.Assert(sessionCapabilities(), qt.DeepEquals, map[string]bool{
+	c.Assert(sessionCapabilities("26.2.1.14"), qt.DeepEquals, map[string]bool{
 		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+		"topics": true, "topic_consumer_availability_period": true,
 	})
+	// 25.1 to 25.3 take no availability period on a consumer.
+	c.Assert(sessionCapabilities("25.1.4.7")["topic_consumer_availability_period"], qt.IsFalse)
 }
 
 // blockUntilDone is a unit that runs until its context ends.

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
@@ -27,8 +28,11 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 		return nil, status.Error(codes.InvalidArgument, "YDB comparison requires its negotiated identifier rules")
 	}
 	compare := coordinationcompare.Compare
-	if request.GetComparisonId() == tablecompare.ServiceID {
+	switch request.GetComparisonId() {
+	case tablecompare.ServiceID:
 		compare = tablecompare.Compare
+	case topiccompare.ServiceID:
+		compare = topiccompare.Compare
 	}
 	result, err := compare(ctx, request)
 	if err != nil {
