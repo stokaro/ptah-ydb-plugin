@@ -14,12 +14,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// sessionDatabase is the database the current side was read from, which is
-// the one database a comparison holds objects of. A host that names it sends
-// it as the database path; otherwise an inspection names it in every owner,
-// subject and region it returns, and two databases there are refused. A region
-// of another database than the path names stays another database's.
-func sessionDatabase(request *protocol.CompareModelsRequest, kind string) (string, error) {
+// SessionDatabase is the database the current side was read from, which is
+// the one database a comparison holds objects of, or "" where nothing names
+// it. A host that names it sends it as the database path; otherwise an
+// inspection names it in every owner, subject and region of kinds it returns,
+// and two databases there are refused. A region of another database than the
+// path names stays another database's.
+func SessionDatabase(request *protocol.CompareModelsRequest, kinds ...string) (string, error) {
 	if request.GetDatabasePath() != "" {
 		return request.GetDatabasePath(), nil
 	}
@@ -34,13 +35,15 @@ func sessionDatabase(request *protocol.CompareModelsRequest, kind string) (strin
 		add(record.GetValue().GetValue().GetOwner().GetDatabase())
 	}
 	for _, claim := range request.GetCurrent().GetCoverage().GetSubjects() {
-		if claim.GetKind() == kind {
+		if slices.Contains(kinds, claim.GetKind()) {
 			add(claim.GetSubject().GetDatabase().GetNormalized())
 		}
 	}
-	for _, source := range kindSources(request.GetCurrent().GetCoverage(), kind) {
-		for _, region := range source.GetRegions() {
-			add(region.GetScope().GetDatabase().GetNormalized())
+	for _, kind := range kinds {
+		for _, source := range kindSources(request.GetCurrent().GetCoverage(), kind) {
+			for _, region := range source.GetRegions() {
+				add(region.GetScope().GetDatabase().GetNormalized())
+			}
 		}
 	}
 	if len(found) > 1 {
@@ -55,7 +58,7 @@ func sessionDatabase(request *protocol.CompareModelsRequest, kind string) (strin
 // bind returns a copy of the request whose subjects and regions name the
 // session's database the way the host names it: not at all. A subject of
 // another database keeps it, and the owner checks refuse it.
-func bind(request *protocol.CompareModelsRequest, kind, session string) *protocol.CompareModelsRequest {
+func bind(request *protocol.CompareModelsRequest, kinds []string, session string) *protocol.CompareModelsRequest {
 	bound := proto.CloneOf(request)
 	if session == "" {
 		return bound
@@ -78,10 +81,12 @@ func bind(request *protocol.CompareModelsRequest, kind, session string) *protoco
 		for _, claim := range state.GetCoverage().GetSubjects() {
 			identity(claim.Subject)
 		}
-		for _, source := range kindSources(state.GetCoverage(), kind) {
-			for _, region := range source.GetRegions() {
-				if region.GetScope() != nil {
-					region.Scope.Database = part(region.Scope.Database)
+		for _, kind := range kinds {
+			for _, source := range kindSources(state.GetCoverage(), kind) {
+				for _, region := range source.GetRegions() {
+					if region.GetScope() != nil {
+						region.Scope.Database = part(region.Scope.Database)
+					}
 				}
 			}
 		}

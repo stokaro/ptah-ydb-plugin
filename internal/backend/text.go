@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -94,6 +95,8 @@ func textOf(value *protocol.Envelope) (string, error) {
 		return tablecreate.RenameStatement(path, rename), nil
 	case schema.CoordinationOperation:
 		return coordinationText(path, value)
+	case schema.ExternalSourceOperation, schema.ExternalTableOperation:
+		return externalText(path, value)
 	default:
 		return "", fmt.Errorf("%w: the native operation %s has no YQL statement", tablecreate.ErrNoTextForm, value.GetKind())
 	}
@@ -130,6 +133,51 @@ func coordinationText(path string, value *protocol.Envelope) (string, error) {
 		statement.Verb, statement.Settings = coordinationsql.Alter, coordinationsql.Changes(nodeSettings(desired), nodeSettings(current))
 	}
 	return statement.Text()
+}
+
+// externalText writes an external data source or external table operation
+// as the one statement the host's embedded engine writes for it: a CREATE, a
+// CREATE OR REPLACE or a DROP, with the paths and the options as the
+// declaration writes them. An object dropped and created again around the
+// statements of one plan has no text form: the native call gives the new
+// object the owner and the access entries the old one held, which no single
+// statement does.
+func externalText(path string, value *protocol.Envelope) (string, error) {
+	change, operation, err := schema.ExternalOperationChange(value)
+	if err != nil {
+		return "", err
+	}
+	source := value.GetKind() == schema.ExternalSourceOperation
+	switch operation {
+	case schema.ExternalDrop:
+		if source {
+			return externals.DropDataSourceStatement(path), nil
+		}
+		return externals.DropTableStatement(path), nil
+	case schema.ExternalRecreate, schema.ExternalRestore:
+		return "", fmt.Errorf("%w: an external object dropped and created again is given the owner and the access entries of the old one by a native call", tablecreate.ErrNoTextForm)
+	}
+	creation := externals.Create
+	if operation == schema.ExternalReplace {
+		creation = externals.Replace
+	}
+	_, after, _, err := schema.ExternalOperands(change)
+	if err != nil {
+		return "", err
+	}
+	// An empty root keeps every path as the declaration writes it.
+	if source {
+		_, spec, err := externals.SourcePair(nil, after, "")
+		if err != nil {
+			return "", err
+		}
+		return externals.CreateDataSourceStatement(path, *spec, creation), nil
+	}
+	_, spec, err := externals.TablePair(nil, after, "")
+	if err != nil {
+		return "", err
+	}
+	return externals.CreateTableStatement(path, *spec, creation), nil
 }
 
 // nodeSettings is a coordination intent as the settings a statement names.

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -33,6 +34,8 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 		compare = tablecompare.Compare
 	case topiccompare.ServiceID:
 		compare = topiccompare.Compare
+	case externalcompare.ServiceID:
+		compare = externalcompare.Compare
 	}
 	result, err := compare(ctx, request)
 	if err != nil {

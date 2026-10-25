@@ -101,6 +101,8 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 				normalize = schema.NormalizeColumnStorageChange
 			case schema.TopicChange:
 				normalize = schema.NormalizeTopicChange
+			case schema.ExternalSourceChange, schema.ExternalTableChange:
+				normalize = schema.NormalizeExternalChange
 			}
 			normalized, changeErr := normalize(input)
 			if changeErr != nil {

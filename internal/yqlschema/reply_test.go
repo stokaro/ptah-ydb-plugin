@@ -9,6 +9,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
@@ -47,8 +48,9 @@ func wireRows(c *qt.C) []row {
 
 // gaps names what a reading declares that a SQL schema reading has no home
 // for: a table's or an index's YDB settings, a password, and an object other
-// than a coordination node or a topic. A coordination node at a path the
-// provider's model refuses counts as one too.
+// than a coordination node, a topic, an external data source or an external
+// table. A coordination node at a path the provider's model refuses counts as
+// one too.
 func gaps(reading *yqlschema.Reading) []string {
 	var found []string
 	for _, table := range reading.Tables {
@@ -75,6 +77,14 @@ func gaps(reading *yqlschema.Reading) []string {
 			}
 		case yqlschema.KindTopic:
 			if _, err := topics.Intent(*object.Spec.(*ydbdecl.Topic)); err == nil {
+				continue
+			}
+		case yqlschema.KindExternalSource:
+			if _, err := externals.SourceIntent(*object.Spec.(*ydbdecl.ExternalDataSource)); err == nil {
+				continue
+			}
+		case yqlschema.KindExternalTable:
+			if _, err := externals.TableIntent(*object.Spec.(*ydbdecl.ExternalTable)); err == nil {
 				continue
 			}
 		}
@@ -105,7 +115,7 @@ func TestReply_HappyPath(t *testing.T) {
 			reply := yqlschema.Reply(request)
 			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
 			c.Assert(reply.GetComplete(), qt.IsTrue, qt.Commentf("%v", reply.GetDiagnostics()))
-			c.Assert(wireOrder(settle(c, hostMapping(c, reply))), qt.DeepEquals, wireOrder(settle(c, normalTopics(c, withoutFacets(hostMeaning(c, r.golden.Grammar))))))
+			c.Assert(wireOrder(settle(c, hostMapping(c, reply))), qt.DeepEquals, wireOrder(settle(c, normalExternals(c, normalTopics(c, withoutFacets(hostMeaning(c, r.golden.Grammar)))))))
 		})
 	}
 }
@@ -295,6 +305,24 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 				Payload: topicPayload(c, spec)})
 			continue
 		}
+		if envelope.GetKind() == schema.ExternalSourceProperties {
+			intent, err := schema.DesiredExternalSource(envelope)
+			c.Assert(err, qt.IsNil)
+			spec, err := externals.SourceFromIntent(intent, "")
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindExternalSource), Schema: owner.GetSchema(), Name: owner.GetName(),
+				Payload: decodeAny(c, marshal(c, map[string]any{"spec": spec}))})
+			continue
+		}
+		if envelope.GetKind() == schema.ExternalTableProperties {
+			intent, err := schema.DesiredExternalTable(envelope)
+			c.Assert(err, qt.IsNil)
+			spec, err := externals.TableFromIntent(intent, "")
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindExternalTable), Schema: owner.GetSchema(), Name: owner.GetName(),
+				Payload: decodeAny(c, marshal(c, map[string]any{"spec": spec}))})
+			continue
+		}
 		c.Assert(envelope.GetKind(), qt.Equals, schema.CoordinationProperties)
 		var spec map[string]any
 		c.Assert(json.Unmarshal(envelope.GetPayload(), &spec), qt.IsNil)
@@ -349,6 +377,30 @@ func normalTopics(c *qt.C, m meaning) meaning {
 	return m
 }
 
+// normalExternals writes the host's external tables in the spelling the
+// provider's model keeps, so a reply is held to their meaning rather than to
+// their spelling: a column type is written as YDB writes it, so
+// Decimal(22, 9) and Decimal(22,9) are one type, and a PARTITIONED_BY list
+// is written without spaces.
+func normalExternals(c *qt.C, m meaning) meaning {
+	c.Helper()
+	for i, object := range m.Objects {
+		if object.Kind != string(yqlschema.KindExternalTable) {
+			continue
+		}
+		var held struct {
+			Spec ydbdecl.ExternalTable `json:"spec"`
+		}
+		c.Assert(json.Unmarshal(marshal(c, object.Payload), &held), qt.IsNil)
+		intent, err := externals.TableIntent(held.Spec)
+		c.Assert(err, qt.IsNil)
+		spec, err := externals.TableFromIntent(intent, "")
+		c.Assert(err, qt.IsNil)
+		m.Objects[i].Payload = decodeAny(c, marshal(c, map[string]any{"spec": spec}))
+	}
+	return m
+}
+
 // TestReply_Coverage requires a complete reply to claim what the host's YDB
 // owner claims for the load about the models this provider claims: every
 // coordination node complete, less the nodes and the namespace the headers
@@ -377,11 +429,13 @@ type coverageMeaning struct {
 // claimedHostKinds are the host's models a claim of this provider's models
 // stands for.
 var claimedHostKinds = map[string][]string{
-	schema.TableProperties:         {"ptah.run/ydb/table-partitioning", "ptah.run/ydb/ttl", "ptah.run/ydb/column-families"},
-	schema.ColumnProperties:        {"ptah.run/ydb/column-families"},
-	schema.ColumnStorageProperties: {"ptah.run/ydb/column-store"},
-	schema.CoordinationProperties:  {"ptah.run/ydb/coordination-node"},
-	schema.TopicProperties:         {"ptah.run/ydb/topic"},
+	schema.TableProperties:          {"ptah.run/ydb/table-partitioning", "ptah.run/ydb/ttl", "ptah.run/ydb/column-families"},
+	schema.ColumnProperties:         {"ptah.run/ydb/column-families"},
+	schema.ColumnStorageProperties:  {"ptah.run/ydb/column-store"},
+	schema.CoordinationProperties:   {"ptah.run/ydb/coordination-node"},
+	schema.TopicProperties:          {"ptah.run/ydb/topic"},
+	schema.ExternalSourceProperties: {"ptah.run/ydb/external-data-source"},
+	schema.ExternalTableProperties:  {"ptah.run/ydb/external-table"},
 }
 
 func pluginCoverage(coverage *protocol.ModelCoverage) coverageMeaning {
@@ -422,7 +476,7 @@ func hostCoverage(c *qt.C, coverage *goldenCoverage) coverageMeaning {
 		result.Kinds[record.Model.Kind] = state + " " + knowledge.Outside.Reason
 	}
 	for _, subject := range coverage.Subjects {
-		if subject.Kind != "ptah.run/ydb/coordination-node" && subject.Kind != "ptah.run/ydb/topic" {
+		if !slices.Contains([]string{"ptah.run/ydb/coordination-node", "ptah.run/ydb/topic", "ptah.run/ydb/external-data-source", "ptah.run/ydb/external-table"}, subject.Kind) {
 			continue
 		}
 		var knowledge struct {

@@ -302,7 +302,7 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(), TopicChangeModel(), TopicOperationModel(), TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel())
+	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(), TopicChangeModel(), TopicOperationModel(), ExternalSourceChangeModel(), ExternalSourceOperationModel(), ExternalTableChangeModel(), ExternalTableOperationModel(), TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel())
 }
 
 func validateModelOwner(value *protocol.Envelope) error {

@@ -89,7 +89,7 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	}
 	if s.realm {
 		for _, unit := range request.Units {
-			if err := yql.ConfineToRealm(unit.GetSql()); err != nil {
+			if err := confineToRealm(unit); err != nil {
 				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.realm-escape", Message: err.Error()}, nil
 			}
 		}
@@ -145,6 +145,8 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyRename(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.ChangefeedOperation:
 				return nativeapi.NewChangefeed(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case schema.ExternalSourceOperation, schema.ExternalTableOperation:
+				return nativeapi.NewExternal(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			}
 			return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 		}
@@ -252,6 +254,20 @@ func (s *session) runPiece(ctx context.Context, runner sqlExecutor, piece sqlPie
 	}
 	_, err := runner.ExecContext(ctx, piece.text)
 	return true, err
+}
+
+// confineToRealm refuses a unit whose effects a dev realm cannot confine: a
+// SQL statement the realm guard refuses, and an external data source or
+// external table operation, which reads past the server as such a statement
+// does.
+func confineToRealm(unit *protocol.Unit) error {
+	switch unit.GetNative().GetKind() {
+	case schema.ExternalSourceOperation:
+		return &yql.RealmRefusal{Operation: "an external data source"}
+	case schema.ExternalTableOperation:
+		return &yql.RealmRefusal{Operation: "an external table"}
+	}
+	return yql.ConfineToRealm(unit.GetSql())
 }
 
 // executeSchema runs one schema statement on a connection of its own, once.

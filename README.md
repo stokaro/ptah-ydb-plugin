@@ -5,10 +5,12 @@ It is under development. Inspection covers row tables and their indexes and
 changefeeds, column tables, topics, views, coordination nodes, external data
 sources, and external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
-tags, and coordination locks. Offline YAML and Go annotation decoding is available for coordination-node and topic declarations, and
+tags, and coordination locks. Offline YAML and Go annotation decoding is available for coordination-node, topic, external data source
+and external table declarations, and
 YAML and Go annotation decoding for the partitioning, TTL, column families and changefeeds of row tables, and in Go the columns of each family.
 Offline comparison, planning, and rendering produce native coordination,
-topic and changefeed operations (see [Topics](#topics) and [Changefeeds](#changefeeds)). Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
+topic, changefeed and external object operations (see [Topics](#topics), [Changefeeds](#changefeeds) and
+[External data sources and external tables](#external-data-sources-and-external-tables)). Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
 Offline migration lint splits YQL migrations and checks YD rules; see
 [Migration lint](#migration-lint).
@@ -194,6 +196,8 @@ reports the defaults of every supported line.
 | --- | --- | --- |
 | `tiered_ttl` | `EnableTieringInColumnShard` | `false` on every line from 25.1 to 26.2 |
 | `changefeed_topic_auto_partitioning` | `EnableTopicAutopartitioningForCDC` | `false` on 25.1, `true` from 25.2 |
+| `external_data_sources` | `EnableExternalDataSources` | `false` on every line from 25.1 to 26.2 |
+| `external_object_replace` | `EnableReplaceIfExistsForExternalEntities` | `false` on every line from 25.1 to 26.2 |
 
 The host maps more flags than these. The provider reports only the
 capabilities it plans with, because the host plans with the others itself: an
@@ -369,7 +373,7 @@ receipts explicitly report `transactional_ddl=false`. Live tests verify that
 DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
-Coordination, row-table creation and row-table alteration operations use native envelopes, or
+Coordination, external object, row-table creation and row-table alteration operations use native envelopes, or
 YQL statements in the TEXT form; see [Text units](#text-units). Topic and
 changefeed operations have native envelopes only. Other operation
 models remain to be extracted. A SQL unit that runs one of the host's
@@ -390,6 +394,7 @@ this provider's `Execute` does with it what the native call does:
 | Row-table alteration | One `ALTER TABLE`: families and placements, added or dropped columns, `SET (TTL = ...)` or `RESET (TTL)`, the whole automatic partitioning set, or `ADD`/`DROP INDEX` |
 | Column table | The `CREATE TABLE ... STORE = COLUMN` and TTL statements the provider runs |
 | Coordination node | `CREATE COORDINATION NODE ... WITH (...)`, `ALTER ... SET (...)` naming the settings that change, `DROP COORDINATION NODE` |
+| External data source or external table | `CREATE`, `CREATE OR REPLACE` or `DROP EXTERNAL DATA SOURCE` or `EXTERNAL TABLE`, with the paths and options as the declaration writes them |
 
 YQL has no coordination node statement, so `Execute` reads one as the host's
 YDB connection does and runs it through the coordination service: alone in its
@@ -404,8 +409,10 @@ A change only the native call makes refuses the batch with `NO_TEXT_FORM` and
 no unit: user attributes other than Ptah's comments, storage settings, tiering, the partition columns, a
 family kept in memory, a default from a sequence or of a type without a
 literal, a TTL run interval other than YDB's own, a coordination node that
-declares its access, and every topic and changefeed operation. A host that
-does not list the feature gets native units.
+declares its access, an external data source or external table dropped and
+created again around the plan's other statements, which the native call gives
+the owner and the access entries of the old one, and every topic and
+changefeed operation. A host that does not list the feature gets native units.
 
 ## Common objects
 
@@ -869,7 +876,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. |
-| Resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` and `topics` at document scope (see [Topics](#topics)). |
+| Resource pools, secrets, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes`, `topics`, `external_data_sources` and `external_tables` at document scope (see [Topics](#topics) and [External data sources and external tables](#external-data-sources-and-external-tables)). |
 
 A table is managed for its TTL when its source states table properties for it,
 or when the host reports complete knowledge of the table properties of the
@@ -1441,6 +1448,108 @@ and a Go source: it creates a table with two changefeeds, finds nothing to
 change, changes a topic in place and recreates a changefeed, finds nothing to
 change again, and drops both.
 
+## External data sources and external tables
+
+The provider declares, compares, plans and applies YDB external data sources
+and the external tables over them, with the syntax, the rules and the
+statements of the host's embedded YDB engine (`dialect/ydb/ydbexternal`). One
+comparison service and one planner own both kinds, because a data source the
+plan drops and creates again takes the tables over it along.
+
+A YAML document declares them under the document keys `external_data_sources`
+and `external_tables`, a Go file with the directives
+`ptah:schema:externaldatasource` and `ptah:schema:externaltable`, and a YQL
+schema with `CREATE [OR REPLACE] EXTERNAL DATA SOURCE` and `CREATE [OR REPLACE]
+EXTERNAL TABLE`; OR REPLACE is not part of the declaration, because whether a
+plan replaces an object is the plan's decision:
+
+```yaml
+external_data_sources:
+  events_bucket:
+    schema: ext
+    source_type: ObjectStorage
+    location: https://storage.example.test/events/
+    auth_method: NONE
+external_tables:
+  events:
+    schema: ext
+    data_source: ext/events_bucket
+    location: 2026/
+    columns:
+      - {name: id, type: Int64, not_null: true}
+      - {name: kind, type: Utf8}
+    options:
+      FORMAT: csv_with_names
+      CSV_DELIMITER: ";"
+```
+
+```go
+//ptah:schema:externaldatasource name="events_bucket" schema="ext" source_type="ObjectStorage" location="https://storage.example.test/events/" auth_method="NONE"
+//ptah:schema:externaltable name="events" schema="ext" data_source="ext/events_bucket" location="2026/" columns="id Int64 NOT NULL, kind Utf8" options="FORMAT=csv_with_names;CSV_DELIMITER=\;"
+type Externals struct{}
+```
+
+A data source takes `name`, `schema`, `source_type`, `location`, `auth_method`
+and `options`; a table takes `name`, `schema`, `data_source`, `location`,
+`columns` and `options`. A Go `options` attribute is `NAME=value` pairs
+separated by `;`, where `\;` writes a semicolon and `\\` a backslash, and a Go
+`columns` attribute is `name Type [NOT NULL]` entries separated by commas.
+Option names are read in upper case; an option that has an attribute of its
+own, `REFERENCES`, which the server keeps, a column with `DEFAULT`, `PRIMARY
+KEY` or `FAMILY`, and an object declared twice are refused with the host's
+words. Each source describes the external objects of the directories it reads
+completely, so an object it leaves out is dropped; a `ptah:not-described
+external_data_source` or `external_table` header entry of a YQL document keeps
+one. HCL has no block for either kind.
+
+The comparison reads both sides as the host does, against the database the
+current side was read from: source type, location and auth method exactly,
+options by upper-case name, and a `*_SECRET_PATH` option relative to the
+database, which the server keeps absolute; a table's data source relative to
+the database, its location, its columns in order with their types and
+nullability, and its options, with `PARTITIONED_BY` read as the list it holds.
+REFERENCES and the access metadata are not compared. A declaration on a
+target without `external_data_sources` is refused, and so is a plan that drops
+a data source a declared table reads. A data source dropped and created again,
+or replaced with a new source type, takes each declared table over it along,
+as a change whose operands may describe the same table.
+
+YDB alters neither object (`Alter operation for EXTERNAL_DATA_SOURCE objects is
+not implemented`), so the planner replaces a changed one: with `CREATE OR
+REPLACE` where the session reports `external_object_replace`, and otherwise by
+a DROP and a CREATE. A data source dropped and created again is one operation;
+a table is a drop before the statement on its data source and a restore after
+it. Tables are dropped before the data sources they read and created after,
+and every step asks for the host's dependent phase, the one window creations
+and drops share. The planner refuses, with the host's words, every statement
+on a target without `external_data_sources`, an option ending in
+`_SECRET_PATH` before 25.4, where the session reports
+`external_data_source_secret_paths` false, a secret path outside the
+database, two objects at one path, and a table over a data source the batch
+writes that is not ObjectStorage. No statement holds data YDB stores, so a
+drop or a replacement is behavioral and never destructive.
+
+Execution reads the object before the first statement and refuses one that
+changed since the plan read it, REFERENCES aside, or a path that holds
+something else. It runs each statement once, gives an object dropped and
+created again the owner and the direct access entries the old one held, and
+reads the object back, requiring the declaration, the owner and the access
+entries, or the object's absence after a drop. An unconfirmed result is
+UNKNOWN and is never retried. A dev realm session refuses both kinds, which
+reach past the realm.
+
+`TestExternalLifecycleSubprocess` creates a data source and a table over it,
+moves the data source with access entries on both objects, refuses a change
+planned before another writer changed the table, and drops both, reading the
+server back after each step. `TestExternalReplacementSubprocess` turns
+EnableReplaceIfExistsForExternalEntities on through the server's dynamic
+configuration and replaces the data source, which keeps the table, and then the
+table in place, each keeping its owner and access entries.
+`TestHostAppliesExternalObjects_HappyPath` drives
+`ptah schema apply` from a YAML, a Go and a YQL source: it creates both
+objects, finds nothing to change, moves the data source, adds a column to the
+table, finds nothing to change after each, and drops both.
+
 ## Offline table preparation
 
 The experimental `schema.prepare-tables` service derives column key membership
@@ -1888,12 +1997,15 @@ The reply carries the tables with their keys, columns, defaults, serial
 columns, comments and indexes; views; users, groups and memberships; grants and
 revocations; coordination nodes as this provider's coordination model; and
 topics with the consumers `CREATE TOPIC` and `ALTER TOPIC ... ADD CONSUMER`
-declare, as this provider's topic model. It
+declare, as this provider's topic model; and the data sources and external
+tables `CREATE [OR REPLACE] EXTERNAL DATA SOURCE` and `CREATE [OR REPLACE]
+EXTERNAL TABLE` declare, as this provider's external object models. It
 says what each document declares, traces every object to its statement, and
 claims complete coverage of the row-table, column, column-storage,
-coordination and topic models. A `ptah:not-described` header entry of kind
-`coordination_node` or `topic` limits that claim, for one object or, without a
-name, for the kind.
+coordination, topic, external data source and external table models. A
+`ptah:not-described` header entry of kind `coordination_node`, `topic`,
+`external_data_source` or `external_table` limits that claim, for one object
+or, without a name, for the kind.
 
 A refused token is quoted with at most its first 64 bytes, where Ptah quotes it
 whole: a schema file can hold a secret in a string literal.
@@ -1908,8 +2020,6 @@ carry is refused by name, with no partial reading:
   of a table in a SQL schema reading, and a changefeed is one. A YQL source
   therefore leaves the changefeeds of its tables as they are; declare them in
   YAML or Go;
-- external data sources and external tables, which this provider declares
-  from no source document;
 - a user's password;
 - async replications, transfers, streaming queries, secrets, resource pools and
   resource pool classifiers, which this provider has no model for.
@@ -2182,7 +2292,7 @@ Remaining work includes more source formats, comparison, the alteration of table
 settings other than column families, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
-rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
+rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic and external object lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 

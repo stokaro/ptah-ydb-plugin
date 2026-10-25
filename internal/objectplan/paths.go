@@ -168,3 +168,16 @@ func validatePath(family Family, subject, bound *protocol.ComparisonIdentity) er
 	}
 	return nil
 }
+
+// PathDependencies orders one step that acts on subject with action, a
+// creation, an alteration or a drop of an object of family, against the
+// common steps and the captured tables of request that occupy its path, as
+// Plan orders the step of a change. A family that plans more than one step
+// for a change asks for each.
+func PathDependencies(request *protocol.PlanFeaturesRequest, family Family, subject *protocol.ComparisonIdentity, action protocol.PlanningEffect_Action, id *protocol.StepIdentity) ([]*protocol.PlanningDependency, error) {
+	return dependencies(request, family, change{input: &protocol.PlanningChange{Subject: subject}, action: action}, id)
+}
+
+// Slot is the scheme path subject occupies, the identity a step's effect
+// names beside the object's own.
+func Slot(subject *protocol.ComparisonIdentity) *protocol.ComparisonIdentity { return slot(subject) }
