@@ -30,11 +30,21 @@ type creation struct {
 	id        *protocol.StepIdentity
 }
 
-// Plan contributes native table creation, and the alteration of an existing
-// table's column families, columns and TTL, to the common graph. The host's steps
-// that add a nullable column or drop a column are replaced by native
-// operations, ordered with the family operation in one graph. Dropping or
-// rebuilding a table remains an explicit refusal until its complete state is
+// removal is a table the plan drops, and the host's steps its drop replaces.
+type removal struct {
+	index     int
+	table     *protocol.PlanningTable
+	operation *protocol.NormalizedValue
+	id        *protocol.StepIdentity
+	sources   []*protocol.StepIdentity
+}
+
+// Plan contributes native table creation, the alteration of an existing
+// table's column families, columns and TTL, and the removal of a table, to
+// the common graph. The host's steps that add a nullable column or drop a
+// column are replaced by native operations, ordered with the family operation
+// in one graph, and the host's steps that drop a table by its removal.
+// Rebuilding a table remains an explicit refusal until its complete state is
 // handled. Every other setting of an altered table, and a column step the
 // native call cannot state, stay with the host's steps.
 func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol.PlannedFeatures, error) {
@@ -54,6 +64,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	}
 	result := &protocol.PlannedFeatures{Complete: true}
 	var creations []creation
+	var drops []removal
 	var alterations []alteration
 	// columnAlterations are the column tables the request alters. Each holds
 	// what the declaration asks for, or differs from it in its TTL alone, since
@@ -83,8 +94,27 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				return refused(i, fmt.Sprintf("table %q: %s", tableLabel(owner), rebuildRefusal)), nil
 			}
 		}
+		if table.Action == protocol.PlanningTable_DROP {
+			transactional, known := request.Capabilities["transactional_ddl"]
+			if !known || transactional {
+				return refused(i, "YDB table removal requires established nontransactional DDL"), nil
+			}
+			owner, err := boundOwner(table.Subject)
+			if err != nil {
+				return nil, err
+			}
+			if table.Current == nil || len(table.Current.GetColumns()) == 0 {
+				return refused(i, fmt.Sprintf("table %q: a removal checks the table it drops against the read of it, and the table was not read", tableLabel(owner))), nil
+			}
+			operation, err := CaptureDrop("pending", owner, table.Current)
+			if err != nil {
+				return refused(i, fmt.Sprintf("table %q: %v", tableLabel(owner), err)), nil
+			}
+			drops = append(drops, removal{index: i, table: table, operation: operation})
+			continue
+		}
 		if table.Action != protocol.PlanningTable_CREATE && table.Action != protocol.PlanningTable_ALTER {
-			return refused(i, "Only native row-table creation and alteration of column families, columns, the TTL, the partitioning settings and the indexes, and column-table creation, are implemented"), nil
+			return refused(i, "Only native row-table creation, alteration of column families, columns, the TTL, the partitioning settings and the indexes, column-table creation and table removal are implemented"), nil
 		}
 		transactional, known := request.Capabilities["transactional_ddl"]
 		if !known || transactional {
@@ -210,6 +240,21 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 					{Subject: slot, Action: protocol.PlanningEffect_CREATE}}}})
 		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
 	}
+	slices.SortFunc(drops, func(a, b removal) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
+	for number := range drops {
+		item := &drops[number]
+		item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("table-drop/%06d", number)}
+		item.operation.Id = item.id.Name
+		facts := item.operation.OperationSemantics
+		slot := proto.CloneOf(item.table.Subject)
+		slot.Kind = "ydb.scheme-path"
+		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: item.id,
+			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation},
+			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
+				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.table.Subject), Action: protocol.PlanningEffect_DROP},
+					{Subject: slot, Action: protocol.PlanningEffect_DROP}}}})
+		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
+	}
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals int
 	for i := range alterations {
@@ -326,6 +371,12 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			// The host keeps the column and setting steps of a table this service only alters.
 			continue
 		}
+		if dropped := slices.IndexFunc(drops, func(item removal) bool { return provider.CompareIdentities(step.Parent, item.table.Subject) == 0 }); dropped >= 0 {
+			// The table's DROP TABLE takes everything the host would drop of
+			// it: the table, and the indexes and changefeeds it holds.
+			drops[dropped].sources = append(drops[dropped].sources, proto.CloneOf(step.Id))
+			continue
+		}
 		matched := -1
 		for i, item := range creations {
 			if provider.CompareIdentities(step.Parent, item.table.Subject) == 0 {
@@ -348,6 +399,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		claimed[matched] = true
 		result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: []*protocol.StepIdentity{proto.CloneOf(step.Id)}, Replacement: proto.CloneOf(item.id)})
 	}
+	for _, item := range drops {
+		if len(item.sources) != 0 {
+			result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: item.sources, Replacement: proto.CloneOf(item.id)})
+		}
+	}
 	for i, change := range request.Changes {
 		index := changeIndex(request, change)
 		if index < 0 {
@@ -365,6 +421,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			if len(receiptSteps[i]) != 0 {
 				strategy = "Reset the column table's TTL and set the declared one with YQL's ALTER TABLE through the query service; its kind, its hash key and its shard count are fixed when YDB creates it and already match"
 			}
+		}
+		if table.Action == protocol.PlanningTable_DROP {
+			strategy = "Drop the table, with its rows, indexes and changefeeds, through YQL's DROP TABLE, once the table still holds the columns and the key the plan read"
 		}
 		if slices.ContainsFunc(creations, func(item creation) bool { return item.index == i && isColumnCreation(item.operation) }) {
 			strategy = "Create the complete captured column table with YQL's CREATE TABLE through the query service, as the host's embedded engine writes it"

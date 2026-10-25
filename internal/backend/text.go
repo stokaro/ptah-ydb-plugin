@@ -70,6 +70,11 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.ColumnTTLStatement(path, alteration), nil
+	case tablecreate.DropOperationKind:
+		if _, err := tablecreate.DecodeDrop(value); err != nil {
+			return "", err
+		}
+		return tablecreate.DropStatement(path), nil
 	case schema.CoordinationOperation:
 		return coordinationText(path, value)
 	default:

@@ -1372,7 +1372,7 @@ exclusive ownership against another schema writer.
 
 Access requirements, temporary tables, indexes, changefeeds, sequence defaults,
 column compression or encoding, and richer common constraints are refused.
-Table removal and rebuild remain unsupported, and alteration covers column
+Table rebuild remains unsupported, removal is described below, and alteration covers column
 families, the addition and removal of columns, the TTL and the automatic partitioning settings (see below). An unknown populated
 field cannot disappear during compilation. A mixed SQL/native batch is validated
 before its first unit executes.
@@ -1385,6 +1385,23 @@ gets past validation and stops at the host's common-step stage ("A common step i
 outside the supported table creation lifecycle"), because the host's common table
 comparison does not yet preserve complete native declarations. These SDK checks do
 not establish a complete native CLI table migration workflow.
+
+## Native table removal
+
+A table the declaration no longer holds, which the host plans to drop, is
+dropped by this provider: the planner replaces the host's steps for the table
+with one removal step, and its receipts name it for every table facet. A row
+table goes with its indexes and changefeeds, and a column table the same way.
+The removal is written as YQL's `DROP TABLE`, as the host's embedded engine
+writes it, in either form: execution runs it through the query service once,
+outside a transaction, and confirms that the path is gone.
+
+Before the statement is sent, execution reads the path: it must still hold a
+table of the store the plan read, with the columns the plan read, in order, and
+the same key columns. A table that changed or went since the plan is refused
+with nothing dropped (`NOT_STARTED`). This is not an atomic compare-and-set: the
+native API has none. The live tests drop a row table natively and by text, a
+column table, and refuse a table a column was added to after planning.
 
 ## Native table alteration
 
@@ -1940,7 +1957,7 @@ refusals, and the answers an agent reads, which carry no source content.
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes more source formats, comparison, the alteration of table
-settings other than column families, table removal and rebuild, planning, rendering and operation models for other objects,
+settings other than column families, table rebuild, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
 rendering, text units, SQL, offline schema validation, native coordination, topic lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
