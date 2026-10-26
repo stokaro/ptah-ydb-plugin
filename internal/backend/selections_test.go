@@ -20,7 +20,7 @@ func TestScopeSelectionsNegotiation(t *testing.T) {
 	c.Assert(without.Engines[0].ScopeSelections, qt.HasLen, 0)
 	with := provider.NegotiatedDescription(description, []string{provider.ScopeSelectionsFeature})
 	c.Assert(provider.ValidateDescription(with, []string{provider.ScopeSelectionsFeature}), qt.IsNil)
-	c.Assert(with.Engines[0].ScopeSelections, qt.HasLen, 6)
+	c.Assert(with.Engines[0].ScopeSelections, qt.HasLen, 7)
 	for _, selection := range with.Engines[0].ScopeSelections {
 		switch selection.Kind {
 		case schema.ResourcePoolClassifierProperties:
