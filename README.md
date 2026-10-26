@@ -1520,6 +1520,11 @@ one that selects the root, `/`: a read filtered to other directories cannot
 report what belongs to the database, so it leaves both kinds uninspected. A dev
 realm holds none of its own.
 
+A complete workload read records absence inside the opened database's root
+namespace, including when no pools or classifiers were returned. It establishes
+no absence in another database or a directory namespace. The host preserves
+that boundary when it compares a new declaration against the inspection.
+
 `TestWorkloadLifecycleSubprocess` creates a pool and two classifiers, swaps
 their ranks from the text of a migration file, refuses a change planned before
 another writer changed the pool, and removes them, reading the views back after

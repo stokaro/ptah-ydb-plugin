@@ -64,12 +64,9 @@ func Workload(ctx context.Context, snapshot *protocol.Schema, database string, s
 		observe(snapshot, []*protocol.Envelope{value})
 	}
 	for _, record := range records {
-		if len(selectors) == 0 {
-			record.Knowledge = &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}
-			continue
-		}
-		// A filtered read claims the root namespace it was given, not the
-		// database.
+		// Even an unfiltered read establishes absence only in this database.
+		// The host cannot use global model knowledge as a session-bound claim.
+		record.Knowledge = &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Workload observations cover only the selected database root"}
 		record.Regions = append(record.Regions, &protocol.ModelNamespaceKnowledge{
 			Scope:     &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: database, Normalized: database}, Catalog: &protocol.NamespaceComponent{}, Schema: &protocol.NamespaceComponent{}},
 			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
