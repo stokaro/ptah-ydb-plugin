@@ -79,6 +79,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		schemas = []string{""}
 	}
 	visited := map[string]bool{}
+	skippedRealm := false
 	for len(schemas) != 0 {
 		selected := schemas[0]
 		schemas = schemas[1:]
@@ -110,6 +111,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				continue
 			}
 			if selected == "" && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY && slices.Contains(leaveOut, name) {
+				skippedRealm = true
 				continue
 			}
 			switch entry.GetType() {
@@ -228,9 +230,6 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		// A successful list and complete child reads prove native-object
 		// absence only in this exact directory, never in skipped descendants.
 		for _, record := range result.Coverage.Kinds {
-			if record.Model.Kind == schema.StreamingQueryProperties && queries == nil {
-				continue
-			}
 			// Views the common wire carries are not read as native objects.
 			if schema.IsNativeObject(record.Model.Kind) && (record.Model.Kind != schema.ViewProperties || !common.Views) {
 				record.Regions = append(record.Regions, &protocol.ModelNamespaceKnowledge{
@@ -239,6 +238,16 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				})
 			}
 		}
+	}
+	// Complete streaming dependency assessment needs queries in every user
+	// directory, including dot-prefixed paths. Excluded realms and explicit
+	// selectors retain the narrower coverage captured above.
+	if len(selectors) == 0 && !skippedRealm {
+		inventory, err := ReadStreamingInventory(ctx, database, source.directory, queries)
+		if err != nil {
+			return nil, err
+		}
+		replaceStreamingInventory(result, inventory)
 	}
 	slices.SortFunc(result.Tables, func(a, b *protocol.Table) int {
 		if compared := strings.Compare(a.Identity.Schema, b.Identity.Schema); compared != 0 {
