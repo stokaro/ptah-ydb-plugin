@@ -23,6 +23,7 @@ func TestHostRendersAuthoredSchemaOfflineSubprocess(t *testing.T) {
 		name, filename, source, flag string
 		want                         []string
 	}{
+		{"YAML secret input reference", "desired.yaml", "secrets:\n  z.pw:\n    schema: app\n    value_env: PTAH_SECRET_DECLARATION_INPUT\n", "--schema-file", []string{"CREATE SECRET `app/z.pw` WITH (value = $PTAH_SECRET_DECLARATION_INPUT);"}},
 		{"YAML table and native objects", "desired.yaml", hostYAMLTable + node + "topics:\n  events:\n    schema: app\n    consumers:\n      worker: {}\n", "--schema-file", []string{"CREATE TABLE `host_source_items`", "CREATE COORDINATION NODE `app/workers` WITH (self_check_period = Interval('PT2S'))", "CREATE TOPIC `app/events` (CONSUMER `worker`)"}},
 		{"Go table and native object", "entities.go", "package entities\n\n" + strings.ReplaceAll(goItems, "{dir}", "app") + "\n//ptah:schema:coordinationnode name=\"workers\" schema=\"app\" self_check_period=\"PT2S\"\ntype Workers struct{}\n", "--root-dir", []string{"CREATE TABLE `app/items`", "CREATE COORDINATION NODE `app/workers` WITH (self_check_period = Interval('PT2S'))"}},
 		{"HCL native object", "desired.hcl", "coordination_node \"app\" \"workers\" {\n self_check_period = \"PT2S\"\n}\n", "--schema-file", []string{"CREATE COORDINATION NODE `app/workers` WITH (self_check_period = Interval('PT2S'))"}},
