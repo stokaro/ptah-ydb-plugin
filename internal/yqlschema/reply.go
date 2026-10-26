@@ -9,6 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -27,10 +28,11 @@ func HeaderKinds() []string {
 
 // ClaimedModels are the desired models whose coverage a YQL document claims:
 // a row table's settings, a column's, a column table's storage, a
-// coordination node and a topic. Their source formats include SQL.
+// coordination node, a topic, an external data source and an external table.
+// Their source formats include SQL.
 func ClaimedModels() []*protocol.ValueModel {
 	return []*protocol.ValueModel{schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel(),
-		schema.NativeDesiredModel(schema.TopicProperties)}
+		schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties)}
 }
 
 // Reply reads the documents of a ReadSQLSchema request and answers with the
@@ -300,13 +302,46 @@ func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 			return nil, invalid(err)
 		}
 		return envelope, nil
-	case KindExternalSource:
-		return nil, at(fmt.Sprintf("external data source %s has no home in a SQL schema reading: this provider declares no external data source from a source document",
-			quoteName(ydbPath(object.Schema, object.Name))))
 	default:
-		return nil, at(fmt.Sprintf("external table %s has no home in a SQL schema reading: this provider declares no external table from a source document",
-			quoteName(ydbPath(object.Schema, object.Name))))
+		return externalObject(object)
 	}
+}
+
+// externalObject is the reply's envelope for an external data source or an
+// external table. CREATE OR REPLACE says nothing the declaration keeps:
+// whether a plan replaces the object is the plan's decision.
+func externalObject(object Object) (*protocol.Envelope, *Refusal) {
+	kind, noun := schema.ExternalTableProperties, "external table"
+	if object.Kind == KindExternalSource {
+		kind, noun = schema.ExternalSourceProperties, "external data source"
+	}
+	invalid := func(err error) *Refusal {
+		return &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
+			Message: fmt.Sprintf("%s %s: %v", noun, quoteName(ydbPath(object.Schema, object.Name)), err)}
+	}
+	owner := &protocol.Reference{Engine: "ydb", Kind: kind, Schema: object.Schema, Name: object.Name}
+	if err := schema.ValidateNativeOwner(owner); err != nil {
+		return nil, invalid(err)
+	}
+	var envelope *protocol.Envelope
+	var err error
+	if object.Kind == KindExternalSource {
+		intent, intentErr := externals.SourceIntent(*object.Spec.(*ydbdecl.ExternalDataSource))
+		if intentErr != nil {
+			return nil, invalid(intentErr)
+		}
+		envelope, err = schema.CaptureExternalIntent(owner, intent)
+	} else {
+		intent, intentErr := externals.TableIntent(*object.Spec.(*ydbdecl.ExternalTable))
+		if intentErr != nil {
+			return nil, invalid(intentErr)
+		}
+		envelope, err = schema.CaptureExternalIntent(owner, intent)
+	}
+	if err != nil {
+		return nil, invalid(err)
+	}
+	return envelope, nil
 }
 
 // coordinationIntent is a node's declared settings as the provider's model
@@ -342,12 +377,15 @@ var limitedKinds = map[string]struct {
 	path   func(string) (string, string)
 	reason string
 }{
-	"coordination_node": {schema.CoordinationProperties, coordinationLimit, "the source leaves coordination nodes unmanaged"},
-	"topic":             {schema.TopicProperties, topicLimit, "the source leaves topics unmanaged"},
+	"coordination_node":    {schema.CoordinationProperties, coordinationLimit, "the source leaves coordination nodes unmanaged"},
+	"topic":                {schema.TopicProperties, topicLimit, "the source leaves topics unmanaged"},
+	"external_data_source": {schema.ExternalSourceProperties, externalLimit, "the source leaves external data sources unmanaged"},
+	"external_table":       {schema.ExternalTableProperties, externalLimit, "the source leaves external tables unmanaged"},
 }
 
 // claim is the coverage a load claims: every claimed model complete, less
-// the coordination nodes and topics the documents' headers leave unmanaged.
+// the coordination nodes, topics and external objects the documents' headers
+// leave unmanaged.
 // A limit whose name no object of its kind can take is refused as the host
 // refuses it.
 func claim(limits []*protocol.SchemaCoverageLimit) (*protocol.ModelCoverage, *Refusal) {
@@ -404,6 +442,17 @@ func CheckLimits(limits []*protocol.SchemaCoverageLimit) error {
 // path relative to the database root, a dot being part of a name.
 func topicLimit(written string) (string, string) {
 	path, err := ydbdecl.ParseTopicPath(written)
+	if err != nil {
+		return "", written
+	}
+	return path.Schema, path.Name
+}
+
+// externalLimit is the directory and the name of the external object a
+// header names: a path relative to the database root, a dot being part of a
+// name.
+func externalLimit(written string) (string, string) {
+	path, err := ydbdecl.ParseExternalPath(written)
 	if err != nil {
 		return "", written
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
@@ -21,9 +22,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// DecodeSource interprets complete captured YAML, HCL and Go annotation
-// declarations: coordination nodes, topics, and the partitioning and column
-// families of row tables. It reads no files or environment variables and requires no
+// DecodeSource interprets captured YAML and Go declarations of native objects
+// and row-table facets, and HCL declarations of coordination nodes.
+// It reads no files or environment variables and requires no
 // database session. Unsupported syntax or any invalid entry discards the
 // complete result.
 func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourceRequest) (*protocol.DecodedSource, error) {
@@ -67,6 +68,13 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			}
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		externals, err := externalsource.Decode(ctx, document)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, status.FromContextError(ctx.Err()).Err()
+			}
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		if err := refuseColumnTableChangefeeds(tables, feeds); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
@@ -78,6 +86,8 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 				values = topics[index]
 			case changefeedsource.Owns(fragment):
 				values = changefeedValues(document, fragment, index, feeds)
+			case externalsource.Owns(fragment):
+				values = externals[index]
 			default:
 				values, err = fragmentValues(ctx, document, fragment, index, tables)
 			}

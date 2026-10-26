@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -19,7 +20,8 @@ type Family struct {
 	ServiceID string
 	// Kind is the model kind of both representations of the object.
 	Kind string
-	// Capability is the session fact that a present object requires.
+	// Capability is the session fact that a present object requires, or ""
+	// for a family that checks its capabilities itself.
 	Capability string
 	// Noun names one object in a reason, such as "coordination node".
 	Noun string
@@ -31,6 +33,9 @@ type Family struct {
 	NormalizeDesired, NormalizeObserved func(*protocol.Envelope) (*protocol.Envelope, error)
 	// Reserved says why a subject belongs to the provider's runtime, or "".
 	Reserved func(*protocol.ComparisonIdentity) string
+	// Unread says why a target holding capabilities leaves every object of
+	// the family a read found unmanaged, or "". A nil Unread leaves none.
+	Unread func(capabilities map[string]bool) string
 	// Unsettled says why the desired object cannot be planned against the
 	// current one, such as access the plan cannot establish, or nil. Either
 	// side may be nil.
@@ -45,6 +50,7 @@ type Family struct {
 }
 
 type object struct {
+	family *Family
 	// subject is the object's identity in the host's terms, which pairs both
 	// sides and matches coverage.
 	subject *protocol.ComparisonIdentity
@@ -77,45 +83,101 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest, family
 	if request.GetComparisonId() != family.ServiceID || !slices.Equal(request.Kinds, []string{family.Kind}) {
 		return nil, fmt.Errorf("unknown %s comparison", family.Noun)
 	}
+	result, _, err := compare(ctx, request, []Family{family})
+	return result, err
+}
+
+// Decided is one object a comparison of several families decided: both
+// sides known and the pair compared. Subject and Owner name it as the
+// request did, and Desired and Current are under Owner, either nil. Change is
+// the change the comparison reported for it, or nil for an object that holds
+// what is declared.
+type Decided struct {
+	Kind             string
+	Subject          *protocol.ComparisonIdentity
+	Owner            *protocol.Reference
+	Desired, Current *protocol.Envelope
+	Change           *protocol.NormalizedValue
+}
+
+// Families compares the objects of several families that share one
+// comparison service, each as Compare compares one family's. request.Kinds
+// names the kinds of some of them, sorted and each once, as the host sends
+// them; the host leaves out a kind no record and no coverage claim names. Families returns
+// each object it decided, family by family and each family's in identity
+// order, for the rules that relate objects of two families.
+func Families(ctx context.Context, request *protocol.CompareModelsRequest, families []Family) (*protocol.ComparedModels, []Decided, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	var selected []Family
+	for _, family := range families {
+		if request.GetComparisonId() != family.ServiceID {
+			return nil, nil, fmt.Errorf("unknown %s comparison", family.Noun)
+		}
+		if slices.Contains(request.Kinds, family.Kind) {
+			selected = append(selected, family)
+		}
+	}
+	if len(selected) == 0 || len(selected) != len(request.Kinds) || !slices.IsSortedFunc(request.Kinds, strings.Compare) || len(slices.Compact(slices.Clone(request.Kinds))) != len(request.Kinds) {
+		return nil, nil, fmt.Errorf("unknown %s comparison", families[0].Noun)
+	}
+	return compare(ctx, request, selected)
+}
+
+func compare(ctx context.Context, request *protocol.CompareModelsRequest, families []Family) (*protocol.ComparedModels, []Decided, error) {
 	for _, part := range request.GetIdentifiers().GetResolvedNames() {
 		if part.Name != part.Key {
-			return nil, fmt.Errorf("YDB comparison requires exact identifiers")
+			return nil, nil, fmt.Errorf("YDB comparison requires exact identifiers")
 		}
 	}
 	if request.GetIdentifiers().GetDefaultSchema() != "" || request.GetIdentifiers().GetCatalogCollation() != "" {
-		return nil, fmt.Errorf("YDB comparison has unsupported identifier defaults")
+		return nil, nil, fmt.Errorf("YDB comparison has unsupported identifier defaults")
 	}
-	session, err := sessionDatabase(request, family.Kind)
+	kinds := make([]string, 0, len(families))
+	for _, family := range families {
+		kinds = append(kinds, family.Kind)
+	}
+	session, err := SessionDatabase(request, kinds...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	bound := bind(request, family.Kind, session)
-	objects, err := capture(request, bound, family, session)
-	if err != nil {
-		return nil, err
-	}
-	if len(objects) > 0 && !request.Capabilities[family.Capability] {
-		return nil, fmt.Errorf("%s capability was not established", family.Noun)
+	bound := bind(request, kinds, session)
+	var objects []object
+	for i := range families {
+		captured, err := capture(request, bound, &families[i], session)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(captured) > 0 && families[i].Capability != "" && !request.Capabilities[families[i].Capability] {
+			return nil, nil, fmt.Errorf("%s capability was not established", families[i].Noun)
+		}
+		objects = append(objects, captured...)
 	}
 	result := &protocol.ComparedModels{Complete: true, Desired: proto.CloneOf(request.Desired)}
+	var decided []Decided
 	for index, item := range objects {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if err := compareObject(bound, result, family, item, strconv.Itoa(index)); err != nil {
-			return nil, err
+		pair, err := compareObject(bound, result, *item.family, item, strconv.Itoa(index))
+		if err != nil {
+			return nil, nil, err
+		}
+		if pair != nil {
+			decided = append(decided, *pair)
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return result, nil
+	return result, decided, nil
 }
 
 // capture pairs the records and coverage claims of both sides. bound is the
 // request in the host's terms, original the request as sent; their records
 // and claims are in the same order.
-func capture(original, bound *protocol.CompareModelsRequest, family Family, session string) ([]object, error) {
+func capture(original, bound *protocol.CompareModelsRequest, family *Family, session string) ([]object, error) {
 	var objects []object
 	find := func(subject, reported *protocol.ComparisonIdentity, rank int) *object {
 		for i := range objects {
@@ -126,19 +188,22 @@ func capture(original, bound *protocol.CompareModelsRequest, family Family, sess
 				return &objects[i]
 			}
 		}
-		objects = append(objects, object{subject: proto.CloneOf(subject), reported: proto.CloneOf(reported), rank: rank})
+		objects = append(objects, object{family: family, subject: proto.CloneOf(subject), reported: proto.CloneOf(reported), rank: rank})
 		return &objects[len(objects)-1]
 	}
 	originals := []*protocol.ComparisonState{original.Desired, original.Current}
 	for side, state := range []*protocol.ComparisonState{bound.Desired, bound.Current} {
 		for index, record := range state.Records {
+			if record.Kind != family.Kind {
+				continue
+			}
 			if !selected(record.Targets) {
 				return nil, fmt.Errorf("%s record is outside the selected target", family.Noun)
 			}
 			if _, err := family.Owner(record.Subject); err != nil {
 				return nil, err
 			}
-			value, err := captureRecord(state, family, record, session)
+			value, err := captureRecord(state, *family, record, session)
 			if err != nil {
 				return nil, err
 			}
@@ -216,14 +281,14 @@ func rebound(value *protocol.Envelope, owner *protocol.Reference) *protocol.Enve
 	return value
 }
 
-func compareObject(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, family Family, item object, id string) error {
+func compareObject(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, family Family, item object, id string) (*Decided, error) {
 	name := item.subject.GetName().GetSource()
 	if namespace := item.subject.GetSchema().GetSource(); namespace != "" {
 		name = namespace + "/" + name
 	}
 	for _, exclusion := range request.Exclusions {
 		if exclusion.GetKind() == family.Kind && exclusion.GetName() == name {
-			return nil
+			return nil, nil
 		}
 	}
 	if reason := family.Reserved(item.subject); reason != "" {
@@ -233,29 +298,35 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		if item.desired != nil {
 			undecided(result, family, item, reason)
 		}
-		return nil
+		return nil, nil
+	}
+	if family.Unread != nil && item.current != nil {
+		if reason := family.Unread(request.Capabilities); reason != "" {
+			undecided(result, family, item, "The current "+family.Noun+" or its absence was not established: "+reason)
+			return nil, nil
+		}
 	}
 	if claim, found := subjectKnowledge(request.Desired.Coverage, family.Kind, item.subject); found && unknown(claim) && item.desired != nil {
 		undecided(result, family, item, "The desired source cannot describe the complete "+family.Noun)
-		return nil
+		return nil, nil
 	}
 	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); (found && unknown(claim)) || (item.current == nil && unknown(knowledge(request.Current.Coverage, family.Kind, item.subject))) {
 		undecided(result, family, item, "The current "+family.Noun+" or its absence was not established")
-		return nil
+		return nil, nil
 	}
 	if item.desired == nil && unknown(knowledge(request.Desired.Coverage, family.Kind, item.subject)) {
 		if item.current == nil {
-			return nil
+			return nil, nil
 		}
-		return preserve(result, family, item, id)
+		return nil, preserve(result, family, item, id)
 	}
 	if item.desired == nil && item.current == nil {
-		return nil
+		return nil, nil
 	}
 	if item.desired != nil {
 		for _, relation := range request.DeclaredRelations {
 			if relation.GetDatabase().GetNormalized() == item.subject.GetDatabase().GetNormalized() && relation.GetCatalog().GetNormalized() == "" && relation.GetSchema().GetNormalized() == item.subject.GetSchema().GetNormalized() && relation.GetName().GetNormalized() == item.subject.GetName().GetNormalized() && len(relation.GetPath()) == 0 {
-				return fmt.Errorf("%s collides with a declared relation", family.Noun)
+				return nil, fmt.Errorf("%s collides with a declared relation", family.Noun)
 			}
 		}
 	}
@@ -263,30 +334,32 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		for _, required := range request.Required {
 			if provider.CompareIdentities(required, item.subject) == 0 {
 				undecided(result, family, item, "A declared dependency requires the "+family.Noun)
-				return nil
+				return nil, nil
 			}
 		}
 	}
 	if err := family.Unsettled(item.current, item.desired); err != nil {
 		undecided(result, family, item, err.Error())
-		return nil
+		return nil, nil
 	}
+	reported := owner(family, item.reported)
+	pair := &Decided{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Owner: reported, Desired: rebound(item.desired, reported), Current: rebound(item.current, reported)}
 	if item.desired != nil && item.current != nil {
 		equal, err := family.Equal(item.current, item.desired)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if equal {
-			return nil
+			return pair, nil
 		}
 	}
-	reported := owner(family, item.reported)
-	change, err := family.Change("change-"+id, reported, rebound(item.current, reported), rebound(item.desired, reported))
+	change, err := family.Change("change-"+id, reported, pair.Current, pair.Desired)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Value: change})
-	return nil
+	pair.Change = change
+	return pair, nil
 }
 
 func preserve(result *protocol.ComparedModels, family Family, item object, id string) error {

@@ -20,7 +20,16 @@ func page(c *qt.C, name string) []byte {
 
 // preset is the session's capability set before the flags are read.
 func preset() map[string]bool {
-	return map[string]bool{"transactional_ddl": false, "tiered_ttl": false}
+	return map[string]bool{"transactional_ddl": false, "tiered_ttl": false, "external_data_sources": false, "external_object_replace": false}
+}
+
+// with is the preset with some capabilities set.
+func with(set map[string]bool) map[string]bool {
+	caps := preset()
+	for key, value := range set {
+		caps[key] = value
+	}
+	return caps
 }
 
 // linePreset is the preset of one release line: an auto-partitioned
@@ -59,7 +68,7 @@ func TestRefine_ClusterThatTurnedTieringOn(t *testing.T) {
 	flags, err := featureflags.Decode(page(c, "local-ydb-26.2.1.14-tiering-on.json"), "/local")
 	c.Assert(err, qt.IsNil)
 	c.Assert(flags["EnableTieringInColumnShard"], qt.IsTrue)
-	c.Assert(flags.Refine(linePreset(true)), qt.DeepEquals, map[string]bool{"transactional_ddl": false, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true})
+	c.Assert(flags.Refine(linePreset(true)), qt.DeepEquals, with(map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true}))
 }
 
 // TestRefine_HappyPath pins what each flag does to its capability, and that a
@@ -70,16 +79,18 @@ func TestRefine_HappyPath(t *testing.T) {
 		flags featureflags.Flags
 		want  map[string]bool
 	}{
-		{name: "tiering on", flags: featureflags.Flags{"EnableTieringInColumnShard": true}, want: map[string]bool{"transactional_ddl": false, "tiered_ttl": true}},
-		{name: "tiering off", flags: featureflags.Flags{"EnableTieringInColumnShard": false}, want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false}},
-		{name: "tiering not listed", flags: featureflags.Flags{"EnableVectorIndex": true}, want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false}},
-		{name: "a flag of a capability the host owns", flags: featureflags.Flags{"EnableMoveIndex": true}, want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false}},
+		{name: "tiering on", flags: featureflags.Flags{"EnableTieringInColumnShard": true}, want: with(map[string]bool{"tiered_ttl": true})},
+		{name: "tiering off", flags: featureflags.Flags{"EnableTieringInColumnShard": false}, want: preset()},
+		{name: "tiering not listed", flags: featureflags.Flags{"EnableVectorIndex": true}, want: preset()},
+		{name: "a flag of a capability the host owns", flags: featureflags.Flags{"EnableMoveIndex": true}, want: preset()},
+		{name: "external data sources on", flags: featureflags.Flags{"EnableExternalDataSources": true}, want: with(map[string]bool{"external_data_sources": true})},
+		{name: "external objects replaced in place", flags: featureflags.Flags{"EnableReplaceIfExistsForExternalEntities": true}, want: with(map[string]bool{"external_object_replace": true})},
 		// A 25.1 cluster with the flag on takes an auto-partitioned changefeed
 		// topic, and a later one with it off refuses one.
 		{name: "auto-partitioned changefeed topics on", flags: featureflags.Flags{"EnableTopicAutopartitioningForCDC": true},
-			want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false, "changefeed_topic_auto_partitioning": true}},
+			want: with(map[string]bool{"changefeed_topic_auto_partitioning": true})},
 		{name: "auto-partitioned changefeed topics off", flags: featureflags.Flags{"EnableTopicAutopartitioningForCDC": false},
-			want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false, "changefeed_topic_auto_partitioning": false}},
+			want: with(map[string]bool{"changefeed_topic_auto_partitioning": false})},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -113,7 +124,7 @@ func TestGates_NameEveryFlagOnce(t *testing.T) {
 		c.Assert(flags[gate.Flag], qt.IsFalse, qt.Commentf(gate.Flag))
 		keys[gate.Key], flags[gate.Flag] = true, true
 	}
-	c.Assert(keys, qt.DeepEquals, map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true})
+	c.Assert(keys, qt.DeepEquals, map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "external_object_replace": true})
 }
 
 func TestDecode_HappyPath(t *testing.T) {

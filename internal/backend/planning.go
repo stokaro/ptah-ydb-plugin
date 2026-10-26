@@ -7,6 +7,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
@@ -37,6 +39,8 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 		result, err = coordinationplan.Plan(ctx, request)
 	case topicplan.ServiceID:
 		result, err = topicplan.Plan(ctx, request)
+	case externalplan.ServiceID:
+		result, err = externalplan.Plan(ctx, request)
 	case tablecreate.ServiceID:
 		var stripped *protocol.PlanFeaturesRequest
 		if stripped, err = planningWithoutComments(request); err == nil {
@@ -104,6 +108,9 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		}
 		if captured.GetValue().GetKind() == schema.ChangefeedOperation && !request.Capabilities[changefeeds.CapabilityChangefeeds] {
 			return nil, status.Error(codes.FailedPrecondition, "changefeed rendering requires the changefeeds capability")
+		}
+		if kind := captured.GetValue().GetKind(); (kind == schema.ExternalSourceOperation || kind == schema.ExternalTableOperation) && !request.Capabilities[externals.CapabilityExternalDataSources] {
+			return nil, status.Error(codes.FailedPrecondition, "external object rendering requires the external_data_sources capability")
 		}
 		normalized, err := normalizeOperation(&protocol.ValueInput{Id: captured.GetId(), Representation: protocol.ValueInput_OPERATION, Value: captured.GetValue()})
 		if err != nil {

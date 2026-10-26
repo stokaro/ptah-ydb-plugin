@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -25,14 +26,27 @@ type objectChanges struct {
 	// definition is what the change model says beyond its operands, and
 	// execution what the operation model says about how it runs.
 	definition, execution map[string]any
-	changeModel           *protocol.ValueModel
-	operationModel        *protocol.ValueModel
+	// database makes a change carry the database its operands were read
+	// from, beside them, for a family whose operands hold paths a planner
+	// reads against it.
+	database bool
+	// operations, when set, are the ways an operation may carry its change
+	// out, one of which every operation names; allowed says which of them a
+	// change with the operands present takes.
+	operations     []string
+	allowed        func(operation string, before, after bool) bool
+	changeModel    *protocol.ValueModel
+	operationModel *protocol.ValueModel
 }
 
 func newObjectChanges(c objectChanges) *objectChanges {
 	payload := map[string]any{"required": []string{"before", "after"}, "additionalProperties": false,
 		"before": map[string]any{"nullable": true, "model": json.RawMessage(model(c.kind).DefinitionJson)},
 		"after":  map[string]any{"nullable": true, "model": json.RawMessage(NativeDesiredModel(c.kind).DefinitionJson)}}
+	if c.database {
+		payload["database"] = map[string]any{"type": "string", "optional": true,
+			"meaning": "the absolute path of the database the operands were read from; omitted where the comparison could not name it"}
+	}
 	definition := map[string]any{"kind": c.change, "representation": "change", "schema_version": 1, "payload": payload,
 		"operands": "before is the complete native observation including access metadata; after is complete desired intent; null means established absence; both null refused"}
 	for key, value := range c.definition {
@@ -40,6 +54,10 @@ func newObjectChanges(c objectChanges) *objectChanges {
 	}
 	c.changeModel = buildJSONModel(c.change, protocol.ValueInput_CHANGE, definition)
 	operation := map[string]any{"kind": c.operation, "representation": "operation", "schema_version": 1, "payload": json.RawMessage(c.changeModel.DefinitionJson)}
+	if c.operations != nil {
+		operation["operation"] = map[string]any{"required": true, "enum": c.operations,
+			"meaning": "how the operation carries out the change it holds beside the operation key"}
+	}
 	for key, value := range c.execution {
 		operation[key] = value
 	}
@@ -63,6 +81,12 @@ func buildJSONModel(kind string, representation protocol.ValueInput_Representati
 // capture builds a change from complete operands under one owner. Callers
 // establish absence and coverage before passing a nil operand.
 func (c *objectChanges) capture(id string, owner *protocol.Reference, before, after *protocol.Envelope) (*protocol.NormalizedValue, error) {
+	return c.captureIn(id, owner, "", before, after)
+}
+
+// captureIn builds a change whose operands were read from database, "" where
+// it is not known.
+func (c *objectChanges) captureIn(id string, owner *protocol.Reference, database string, before, after *protocol.Envelope) (*protocol.NormalizedValue, error) {
 	operands := map[string]json.RawMessage{"before": json.RawMessage("null"), "after": json.RawMessage("null")}
 	for _, entry := range []struct {
 		key   string
@@ -75,6 +99,16 @@ func (c *objectChanges) capture(id string, owner *protocol.Reference, before, af
 			return nil, fmt.Errorf("%s change operands have different owners", c.noun)
 		}
 		operands[entry.key] = entry.value.Payload
+	}
+	if database != "" {
+		if !c.database {
+			return nil, fmt.Errorf("%s change carries no database", c.noun)
+		}
+		encoded, err := json.Marshal(database)
+		if err != nil {
+			return nil, err
+		}
+		operands["database"] = encoded
 	}
 	payload, err := json.Marshal(operands)
 	if err != nil {
@@ -92,7 +126,7 @@ func (c *objectChanges) normalizeChange(input *protocol.ValueInput) (*protocol.N
 		value.GetEncoding() != c.changeModel.Encoding || value.GetDefinitionSha256() != c.changeModel.DefinitionSha256 {
 		return nil, fmt.Errorf("%s change does not match its negotiated definition", c.noun)
 	}
-	before, after, err := c.operands(value)
+	before, after, database, err := c.parts(value)
 	if err != nil {
 		return nil, err
 	}
@@ -100,18 +134,7 @@ func (c *objectChanges) normalizeChange(input *protocol.ValueInput) (*protocol.N
 	if err != nil {
 		return nil, err
 	}
-	operands := map[string]json.RawMessage{"before": json.RawMessage("null"), "after": json.RawMessage("null")}
-	if before != nil {
-		operands["before"] = before.Payload
-	}
-	if after != nil {
-		operands["after"] = after.Payload
-	}
-	encoded, err := json.Marshal(operands)
-	if err != nil {
-		return nil, err
-	}
-	canonical, err := modeljson.Canonical(encoded)
+	canonical, err := c.encode(before, after, database, "")
 	if err != nil {
 		return nil, err
 	}
@@ -120,16 +143,58 @@ func (c *objectChanges) normalizeChange(input *protocol.ValueInput) (*protocol.N
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner), CanonicalFormat: c.changeModel.CanonicalFormat, CanonicalProjection: bytes.Clone(canonical), ChangeSemantics: semantics}, nil
 }
 
+// encode writes a change's canonical payload, with the operation an
+// operation names when operation is not "".
+func (c *objectChanges) encode(before, after *protocol.Envelope, database, operation string) ([]byte, error) {
+	operands := map[string]any{"before": json.RawMessage("null"), "after": json.RawMessage("null")}
+	if before != nil {
+		operands["before"] = json.RawMessage(before.Payload)
+	}
+	if after != nil {
+		operands["after"] = json.RawMessage(after.Payload)
+	}
+	if database != "" {
+		operands["database"] = database
+	}
+	if operation != "" {
+		operands["operation"] = operation
+	}
+	encoded, err := json.Marshal(operands)
+	if err != nil {
+		return nil, err
+	}
+	return modeljson.Canonical(encoded)
+}
+
 // operands returns a change's operands, each normalized under the change's
 // owner, or nil for an absent one. Both absent is refused.
 func (c *objectChanges) operands(value *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error) {
+	before, after, _, err := c.parts(value)
+	return before, after, err
+}
+
+// parts returns a change's operands and the database it names, "" for none.
+func (c *objectChanges) parts(value *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, string, error) {
 	canonical, err := modeljson.Canonical(value.GetPayload())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	var payload map[string]json.RawMessage
-	if err := json.Unmarshal(canonical, &payload); err != nil || len(payload) != 2 || payload["before"] == nil || payload["after"] == nil {
-		return nil, nil, fmt.Errorf("%s change requires exact before and after operands", c.noun)
+	if err := json.Unmarshal(canonical, &payload); err != nil || payload["before"] == nil || payload["after"] == nil {
+		return nil, nil, "", fmt.Errorf("%s change requires exact before and after operands", c.noun)
+	}
+	var database string
+	if encoded, found := payload["database"]; found && c.database {
+		if err := json.Unmarshal(encoded, &database); err != nil || database == "" {
+			return nil, nil, "", fmt.Errorf("%s change names its database as a nonempty string", c.noun)
+		}
+		if err := ValidateNativeOwner(&protocol.Reference{Engine: "ydb", Kind: c.kind, Database: database, Name: "x"}); err != nil {
+			return nil, nil, "", fmt.Errorf("%s change names an invalid database", c.noun)
+		}
+		delete(payload, "database")
+	}
+	if len(payload) != 2 {
+		return nil, nil, "", fmt.Errorf("%s change requires exact before and after operands", c.noun)
 	}
 	operand := func(key string, definition *protocol.ValueModel, normalize func(*protocol.Envelope) (*protocol.Envelope, error)) (*protocol.Envelope, error) {
 		if bytes.Equal(payload[key], []byte("null")) {
@@ -140,25 +205,41 @@ func (c *objectChanges) operands(value *protocol.Envelope) (*protocol.Envelope, 
 	}
 	before, err := operand("before", model(c.kind), Normalize)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	after, err := operand("after", NativeDesiredModel(c.kind), NormalizeDesired)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	if before == nil && after == nil {
-		return nil, nil, fmt.Errorf("%s change has no operands", c.noun)
+		return nil, nil, "", fmt.Errorf("%s change has no operands", c.noun)
 	}
-	return before, after, nil
+	return before, after, database, nil
 }
 
 // operationFromChange lowers a complete change without losing its operands.
 func (c *objectChanges) operationFromChange(id string, change *protocol.Envelope) (*protocol.NormalizedValue, error) {
-	if _, err := c.normalizeChange(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_CHANGE, Value: change}); err != nil {
+	return c.operationAs(id, change, "")
+}
+
+// operationAs lowers a complete change to an operation that carries it out
+// the way operation names, "" for a family whose operations name none.
+func (c *objectChanges) operationAs(id string, change *protocol.Envelope, operation string) (*protocol.NormalizedValue, error) {
+	captured, err := c.normalizeChange(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_CHANGE, Value: change})
+	if err != nil {
 		return nil, err
 	}
-	value := proto.CloneOf(change)
+	value := proto.CloneOf(captured.Value)
 	value.Kind, value.Encoding, value.SchemaVersion, value.DefinitionSha256 = c.operation, c.operationModel.Encoding, c.operationModel.SchemaVersion, c.operationModel.DefinitionSha256
+	if operation != "" {
+		before, after, database, err := c.parts(captured.Value)
+		if err != nil {
+			return nil, err
+		}
+		if value.Payload, err = c.encode(before, after, database, operation); err != nil {
+			return nil, err
+		}
+	}
 	return c.normalizeOperation(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_OPERATION, Value: value})
 }
 
@@ -170,18 +251,62 @@ func (c *objectChanges) normalizeOperation(input *protocol.ValueInput) (*protoco
 		value.GetEncoding() != c.operationModel.Encoding || value.GetDefinitionSha256() != c.operationModel.DefinitionSha256 {
 		return nil, fmt.Errorf("%s operation does not match its negotiated definition", c.noun)
 	}
-	captured, err := c.normalizeChange(&protocol.ValueInput{Id: input.Id, Representation: protocol.ValueInput_CHANGE, Value: c.operationChange(value)})
+	change, operation, err := c.split(value)
 	if err != nil {
 		return nil, err
 	}
+	captured, err := c.normalizeChange(&protocol.ValueInput{Id: input.Id, Representation: protocol.ValueInput_CHANGE, Value: change})
+	if err != nil {
+		return nil, err
+	}
+	payload := bytes.Clone(captured.Value.Payload)
+	if c.operations != nil {
+		before, after, database, err := c.parts(captured.Value)
+		if err != nil {
+			return nil, err
+		}
+		if !c.allowed(operation, before != nil, after != nil) {
+			return nil, fmt.Errorf("%s operation %q cannot carry out its change", c.noun, operation)
+		}
+		if payload, err = c.encode(before, after, database, operation); err != nil {
+			return nil, err
+		}
+	}
 	result := proto.CloneOf(value)
-	result.Payload = bytes.Clone(captured.Value.Payload)
+	result.Payload = payload
 	facts := captured.ChangeSemantics
 	return &protocol.NormalizedValue{Id: input.Id, Value: result, NormalizedOwner: proto.CloneOf(result.Owner), CanonicalFormat: c.operationModel.CanonicalFormat, CanonicalProjection: bytes.Clone(result.Payload),
 		OperationSemantics: &protocol.OperationSemantics{Impact: facts.Impact, Reason: facts.Reason, Access: facts.Access, AccessReason: facts.AccessReason}}, nil
 }
 
-// operationChange restores the change envelope an operation carries.
+// split separates an operation into the change it carries and the
+// operation it names, "" for a family whose operations name none.
+func (c *objectChanges) split(operation *protocol.Envelope) (*protocol.Envelope, string, error) {
+	change := c.operationChange(operation)
+	if c.operations == nil {
+		return change, "", nil
+	}
+	canonical, err := modeljson.Canonical(operation.GetPayload())
+	if err != nil {
+		return nil, "", err
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(canonical, &payload); err != nil {
+		return nil, "", fmt.Errorf("%s operation requires an object", c.noun)
+	}
+	var name string
+	if err := json.Unmarshal(payload["operation"], &name); err != nil || !slices.Contains(c.operations, name) {
+		return nil, "", fmt.Errorf("%s operation names none of %v", c.noun, c.operations)
+	}
+	delete(payload, "operation")
+	if change.Payload, err = json.Marshal(payload); err != nil {
+		return nil, "", err
+	}
+	return change, name, nil
+}
+
+// operationChange restores the change envelope an operation carries, its
+// payload still naming the operation for a family whose operations name one.
 func (c *objectChanges) operationChange(operation *protocol.Envelope) *protocol.Envelope {
 	value := proto.CloneOf(operation)
 	if value == nil {

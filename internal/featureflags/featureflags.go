@@ -45,6 +45,12 @@ type Gate struct {
 // capabilities it owns, because the host plans the others itself: an
 // index_rename the host read as true would make the host plan a RENAME INDEX
 // that the provider's alteration does not carry out.
+//
+// external_data_sources follows EnableExternalDataSources and
+// external_object_replace EnableReplaceIfExistsForExternalEntities, as the
+// host maps them: both are off by default on every line, the first refuses
+// every external data source and external table (`External data sources are
+// disabled`), and the second refuses CREATE OR REPLACE of either object.
 var gates = []Gate{
 	{Key: "tiered_ttl", Flag: "EnableTieringInColumnShard"},
 	// Off on 25.1 and on from 25.2. With the flag on, 25.1 takes a changefeed
@@ -52,6 +58,8 @@ var gates = []Gate{
 	// auto-partitioned topic; with it off, YDB answers `Topic autopartitioning
 	// for CDC is disabled`.
 	{Key: "changefeed_topic_auto_partitioning", Flag: "EnableTopicAutopartitioningForCDC"},
+	{Key: "external_data_sources", Flag: "EnableExternalDataSources"},
+	{Key: "external_object_replace", Flag: "EnableReplaceIfExistsForExternalEntities"},
 }
 
 // Gates returns every capability a flag decides, in a fixed order.
