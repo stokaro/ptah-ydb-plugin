@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -49,13 +50,11 @@ func TestHostSecretPresenceAndApprovedRotation(t *testing.T) {
 	source := filepath.Join(c.TempDir(), "schema.yaml")
 	c.Assert(os.WriteFile(source, []byte(fmt.Sprintf("secrets:\n  pg.pw:\n    schema: %s\n    value_env: %s\n", directory, variable)), 0o600), qt.IsNil)
 	var binding *string
-	apply := func(extra ...string) (string, error) {
+	run := func(args ...string) (string, error) {
 		c.Helper()
 		ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 		defer cancel()
-		args := []string{"schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
-			"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", source, "--schemas", directory}
-		command := exec.CommandContext(ctx, host, append(args, extra...)...)
+		command := exec.CommandContext(ctx, host, args...)
 		command.Env = os.Environ()
 		if binding != nil {
 			command.Env = append(command.Env, variable+"="+*binding)
@@ -63,6 +62,12 @@ func TestHostSecretPresenceAndApprovedRotation(t *testing.T) {
 		output, err := command.CombinedOutput()
 		c.Assert(string(output), qt.Not(qt.Contains), canary)
 		return string(output), err
+	}
+	apply := func(extra ...string) (string, error) {
+		c.Helper()
+		args := []string{"schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+			"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", source, "--schemas", directory}
+		return run(append(args, extra...)...)
 	}
 	assertEmpty := func() {
 		c.Helper()
@@ -82,8 +87,36 @@ func TestHostSecretPresenceAndApprovedRotation(t *testing.T) {
 	_, err = apply()
 	c.Assert(err, qt.IsNotNil)
 	assertEmpty()
+	planPath := filepath.Join(c.TempDir(), "create.plan.json")
+	output, err = run("schema", "plan", "--provider-config", manifest, "--provider-engine", "ydb",
+		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", source, "--output", planPath)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
+	planBytes, err := os.ReadFile(planPath)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(planBytes), qt.Not(qt.Contains), canary)
+	var plan struct {
+		Statements []struct {
+			Native struct{ Kind string }           `json:"native"`
+			Inputs []struct{ Source, Name string } `json:"inputs"`
+		} `json:"statements"`
+	}
+	c.Assert(json.Unmarshal(planBytes, &plan), qt.IsNil)
+	c.Assert(plan.Statements, qt.HasLen, 1)
+	c.Assert(plan.Statements[0].Native.Kind, qt.Equals, "github.com/stokaro/ptah-ydb-plugin/secret-operation")
+	c.Assert(plan.Statements[0].Inputs, qt.HasLen, 1)
+	c.Assert(plan.Statements[0].Inputs[0].Source, qt.Equals, "environment")
+	c.Assert(plan.Statements[0].Inputs[0].Name, qt.Equals, variable)
+	applyPlan := func() (string, error) {
+		c.Helper()
+		return run("schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+			"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--plan", planPath)
+	}
+	output, err = applyPlan()
+	c.Assert(err, qt.IsNotNil)
+	c.Assert(output, qt.Contains, fmt.Sprintf("environment variable %q is not set", variable))
+	assertEmpty()
 	binding = &canary
-	output, err = apply()
+	output, err = applyPlan()
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
 	c.Assert(output, qt.Contains, "Schema apply completed successfully")
 	binding = nil
