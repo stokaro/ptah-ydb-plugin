@@ -20,8 +20,9 @@ func TestScopeSelectionsNegotiation(t *testing.T) {
 	c.Assert(without.Engines[0].ScopeSelections, qt.HasLen, 0)
 	with := provider.NegotiatedDescription(description, []string{provider.ScopeSelectionsFeature})
 	c.Assert(provider.ValidateDescription(with, []string{provider.ScopeSelectionsFeature}), qt.IsNil)
-	c.Assert(with.Engines[0].ScopeSelections, qt.HasLen, 7)
+	var kinds []string
 	for _, selection := range with.Engines[0].ScopeSelections {
+		kinds = append(kinds, selection.Kind)
 		switch selection.Kind {
 		case schema.ResourcePoolClassifierProperties:
 			c.Assert(selection.KeepsRequired, qt.DeepEquals, []string{schema.ResourcePoolProperties})
@@ -36,6 +37,9 @@ func TestScopeSelectionsNegotiation(t *testing.T) {
 			c.Assert(selection.GrantObjectType, qt.Not(qt.Equals), "")
 		}
 	}
+	c.Assert(kinds, qt.ContentEquals, []string{schema.SecretProperties, schema.StreamingQueryProperties,
+		schema.CoordinationProperties, schema.TopicProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties,
+		schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties})
 }
 
 func TestClassifierScopeKeepsItsPool(t *testing.T) {
