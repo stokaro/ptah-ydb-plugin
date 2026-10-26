@@ -215,6 +215,9 @@ func validateObjects(ctx context.Context, request *protocol.ValidateSchemaReques
 		if !proto.Equal(value, record.Value.GetValue()) {
 			return fmt.Errorf("YDB validation found a %s object whose normalization differs from its capture", record.Kind)
 		}
+		if record.Kind == schema.SecretProperties && !request.Capabilities["secrets"] {
+			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, record.Kind, object, "secrets", "secret %s requires the unavailable target capability secrets", object)
+		}
 	}
 	return nil
 }

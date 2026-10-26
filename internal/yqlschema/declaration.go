@@ -53,7 +53,8 @@ func (p *parser) createDeclaration() []statement {
 		p.pos++
 		return one(p.coordination())
 	case p.word("SECRET"):
-		return p.unsupported("CREATE SECRET", "SECRET")
+		p.pos++
+		return one(p.secret())
 	case p.word("EXTERNAL"):
 		p.pos++
 		return p.external()

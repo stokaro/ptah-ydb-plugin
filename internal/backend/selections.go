@@ -11,6 +11,7 @@ import (
 // pools unless excluded.
 func scopeSelections() []*protocol.ScopeSelection {
 	return []*protocol.ScopeSelection{
+		{Kind: schema.SecretProperties, SelectorType: "secret", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "SECRET"},
 		{Kind: schema.StreamingQueryProperties, SelectorType: "streaming_query", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "STREAMING QUERY", KeepsRequired: []string{schema.ResourcePoolProperties}},
 		{Kind: schema.CoordinationProperties, SelectorType: "coordination_node", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "COORDINATION NODE"},
 		{Kind: schema.TopicProperties, SelectorType: "topic", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "TOPIC"},

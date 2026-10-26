@@ -24,6 +24,8 @@ func objectIdentity(self *Ydb_Scheme.Entry, absolute string, kind Ydb_Scheme.Ent
 
 func (s *source) readObject(ctx context.Context, absolute string, kind Ydb_Scheme.Entry_Type) (string, proto.Message, error) {
 	switch kind {
+	case Ydb_Scheme.Entry_SECRET:
+		return schema.SecretProperties, &native.SecretPresence{}, nil
 	case Ydb_Scheme.Entry_VIEW:
 		response, err := s.view.DescribeView(ctx, &Ydb_View.DescribeViewRequest{Path: absolute})
 		if err != nil {

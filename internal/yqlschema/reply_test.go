@@ -77,6 +77,8 @@ func gaps(reading *yqlschema.Reading) []string {
 	}
 	for _, object := range reading.Objects {
 		switch object.Kind {
+		case yqlschema.KindSecret:
+			continue
 		case yqlschema.KindCoordinationNode:
 			owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: object.Schema, Name: object.Name}
 			if schema.ValidateManagedCoordinationOwner(owner) == nil {
@@ -333,6 +335,11 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 			continue
 		}
 		switch envelope.GetKind() {
+		case schema.SecretProperties:
+			intent, err := schema.DesiredSecret(envelope)
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindSecret), Schema: owner.GetSchema(), Name: owner.GetName(), Payload: map[string]any{"value_env": intent.ValueEnv}})
+			continue
 		case schema.StreamingQueryProperties:
 			spec, allow, err := schema.DesiredStreamingQuery(envelope)
 			c.Assert(err, qt.IsNil)
@@ -457,6 +464,7 @@ type coverageMeaning struct {
 // claimedHostKinds are the host's models a claim of this provider's models
 // stands for.
 var claimedHostKinds = map[string][]string{
+	schema.SecretProperties:                 {"ptah.run/ydb/secret"},
 	schema.TableProperties:                  {"ptah.run/ydb/table-partitioning", "ptah.run/ydb/ttl", "ptah.run/ydb/column-families"},
 	schema.ColumnProperties:                 {"ptah.run/ydb/column-families"},
 	schema.ColumnStorageProperties:          {"ptah.run/ydb/column-store"},
@@ -506,7 +514,7 @@ func hostCoverage(c *qt.C, coverage *goldenCoverage) coverageMeaning {
 		result.Kinds[record.Model.Kind] = state + " " + knowledge.Outside.Reason
 	}
 	for _, subject := range coverage.Subjects {
-		if !slices.Contains([]string{"ptah.run/ydb/coordination-node", "ptah.run/ydb/topic", "ptah.run/ydb/external-data-source", "ptah.run/ydb/external-table", "ptah.run/ydb/resource-pool", "ptah.run/ydb/resource-pool-classifier"}, subject.Kind) {
+		if !slices.Contains([]string{"ptah.run/ydb/secret", "ptah.run/ydb/coordination-node", "ptah.run/ydb/topic", "ptah.run/ydb/external-data-source", "ptah.run/ydb/external-table", "ptah.run/ydb/resource-pool", "ptah.run/ydb/resource-pool-classifier"}, subject.Kind) {
 			continue
 		}
 		var knowledge struct {

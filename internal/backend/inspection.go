@@ -75,6 +75,9 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 			}
 		}
 	}
+	if !session.capabilities["secrets"] {
+		inspect.UnavailableSecrets(result)
+	}
 	result.TargetFeatures = negotiatedFeatures(ctx)
 	// The reply is checked against the description the host holds: one that
 	// did not list the common wire declares no common object.
@@ -152,6 +155,8 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 				normalize = schema.NormalizeTablePropertiesChange
 			case schema.ColumnStorageChange:
 				normalize = schema.NormalizeColumnStorageChange
+			case schema.SecretChange:
+				normalize = schema.NormalizeSecretChange
 			case schema.TopicChange:
 				normalize = schema.NormalizeTopicChange
 			case schema.ExternalSourceChange, schema.ExternalTableChange:

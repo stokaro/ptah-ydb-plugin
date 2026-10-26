@@ -168,6 +168,8 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 		ref := proto.CloneOf(object.GetOwner())
 		var types []Ydb_Scheme.Entry_Type
 		switch object.GetKind() {
+		case schema.SecretProperties:
+			ref.Kind, types = "secret", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_SECRET}
 		case schema.TopicProperties:
 			ref.Kind, types = "topic", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP}
 		case schema.StreamingQueryProperties:

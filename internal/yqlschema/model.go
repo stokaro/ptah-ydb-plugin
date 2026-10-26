@@ -142,6 +142,7 @@ type ObjectKind string
 // principals.
 const (
 	KindChangefeed       ObjectKind = "ptah.run/ydb/changefeed"
+	KindSecret           ObjectKind = "ptah.run/ydb/secret"
 	KindCoordinationNode ObjectKind = "ptah.run/ydb/coordination-node"
 	KindExternalSource   ObjectKind = "ptah.run/ydb/external-data-source"
 	KindExternalTable    ObjectKind = "ptah.run/ydb/external-table"
@@ -240,6 +241,9 @@ func SortedObjects(r *Reading) []Object {
 // ObjectPayload is an object's specification in the form the host's codec
 // writes its payload.
 func ObjectPayload(object Object) any {
+	if object.Kind == KindSecret {
+		return object.Spec
+	}
 	if object.Kind == KindStreamingQuery {
 		node := object.Spec.(*createStreamingQuery)
 		return struct {

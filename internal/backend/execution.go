@@ -75,6 +75,11 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	if hasNative && request.TransactionId != "" {
 		return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.native-transaction-forbidden"}, nil
 	}
+	bindings, err := executionBindings(ctx, request)
+	if err != nil {
+		return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.invalid-execution-inputs", Message: rowdata.OneLine(err.Error())}, nil
+	}
+	defer clear(bindings)
 	s, err := p.lookup(request.SessionId)
 	if err != nil {
 		return nil, err
@@ -83,6 +88,13 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	defer s.mu.Unlock()
 	if s.closed {
 		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+	}
+	if !s.capabilities["secrets"] {
+		for _, unit := range request.Units {
+			if unit.GetNative().GetKind() == schema.SecretOperation || len(bindings) != 0 {
+				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.secrets-unsupported"}, nil
+			}
+		}
 	}
 	for _, unit := range request.Units {
 		if native := unit.GetNative(); native != nil && native.GetOwner().GetDatabase() != "" && native.GetOwner().GetDatabase() != s.database {
@@ -137,6 +149,18 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewColumnTableCreation(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.ColumnTTLOperationKind:
 				return nativeapi.NewColumnTableTTL(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case schema.SecretOperation:
+				if !s.capabilities["secrets"] {
+					return false, fmt.Errorf("the target does not support scheme secrets")
+				}
+				execute := func(ctx context.Context, query string) error {
+					expansion, err := expandInputs(query, bindings)
+					if err != nil {
+						return err
+					}
+					return inputError(expansion, s.executeSchema(ctx, expansion.Text))
+				}
+				return nativeapi.NewSecret(s.connection.Driver, execute).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.TopicOperation:
 				return nativeapi.NewTopic(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.DropOperationKind:
@@ -166,14 +190,14 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		}
 		if pieces, split := services[unit]; split {
 			for i, piece := range pieces {
-				if dispatched, err := s.runPiece(ctx, runner, piece); err != nil {
+				if dispatched, err := s.runInputPiece(ctx, runner, piece, bindings); err != nil {
 					// A piece after the first leaves the unit partly applied.
 					return dispatched || i > 0, err
 				}
 			}
 			return true, nil
 		}
-		return s.runPiece(ctx, runner, sqlPiece{text: unit.GetSql()})
+		return s.runInputPiece(ctx, runner, sqlPiece{text: unit.GetSql()}, bindings)
 	}, request.Units)
 	if s.verifyLocks(ctx) != nil && (result.AppliedCount > 0 || result.Outcome == protocol.Execution_UNKNOWN) {
 		result.Outcome = protocol.Execution_UNKNOWN
@@ -396,4 +420,21 @@ func (p *Provider) lookup(id string) (*session, error) {
 		return nil, status.Error(codes.NotFound, "unknown YDB session")
 	}
 	return s, nil
+}
+
+// runInputPiece expands references only in the transient text passed to YDB.
+func (s *session) runInputPiece(ctx context.Context, runner sqlExecutor, piece sqlPiece, bindings map[string]string) (bool, error) {
+	if piece.service() {
+		return s.runPiece(ctx, runner, piece)
+	}
+	expansion, err := expandInputs(piece.text, bindings)
+	if err != nil {
+		return false, err
+	}
+	if expansion.Defines() && !s.capabilities["secrets"] {
+		return false, fmt.Errorf("the target does not support scheme secrets")
+	}
+	piece.text = expansion.Text
+	dispatched, err := s.runPiece(ctx, runner, piece)
+	return dispatched, inputError(expansion, err)
 }
