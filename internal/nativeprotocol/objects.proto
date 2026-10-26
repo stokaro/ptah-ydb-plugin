@@ -44,3 +44,22 @@ message ResourcePoolClassifierSettings {
     string member_name = 2;
     int64 rank = 3;
 }
+
+// A streaming query's persistent settings as .sys/streaming_queries reports
+// them: the body inside DO BEGIN ... END DO, whether it runs, and its resource
+// pool. Runtime status, retries, offsets and checkpoints are not settings.
+message StreamingQuerySettings {
+    string text = 1;
+    optional bool run = 2;
+    string resource_pool = 3;
+}
+
+// A declared streaming query: its settings, an unset run starting it and an
+// empty pool selecting the pool default, and the declaration's permission to
+// reset the query's aggregation state, which the database does not keep.
+message StreamingQueryIntent {
+    string text = 1;
+    optional bool run = 2;
+    string resource_pool = 3;
+    bool allow_state_reset = 4;
+}
