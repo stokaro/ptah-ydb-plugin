@@ -7,6 +7,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -104,7 +105,7 @@ func TestEncodeSource_CoordinationNodes(t *testing.T) {
 }
 
 // A YAML source records the struct a node was declared on; the other formats
-// leave it out, and every format leaves out access, which no source manages.
+// leave that source provenance out.
 func TestEncodeSource_WritesWhatTheFormatHolds(t *testing.T) {
 	c := qt.New(t)
 	value := node(c, "queue", "", "queue", schema.CoordinationIntent{StructName: "Worker"})
@@ -157,5 +158,64 @@ func TestEncodeSource_FailurePath(t *testing.T) {
 	c := qt.New(t)
 	encoded, err := backend.New().EncodeSource(encodingContext(c), encodeRequest(protocol.SourceDocument_SQL))
 	c.Assert(err, qt.ErrorMatches, `.*a format the host writes is YAML, HCL or Go annotations.*`)
+	c.Assert(encoded, qt.IsNil)
+}
+
+func TestEncodeSource_ReportsAccessConstraintsAsLosses(t *testing.T) {
+	for _, format := range []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_HCL} {
+		t.Run(format.String(), func(t *testing.T) {
+			c := qt.New(t)
+			value := node(c, "queue", "app", "queue", schema.CoordinationIntent{Access: &native.AccessIntent{Owner: new("alice")}})
+			encoded, err := backend.New().EncodeSource(encodingContext(c), encodeRequest(format, value))
+			c.Assert(err, qt.IsNil)
+			c.Assert(len(encoded.Fragments), qt.Equals, 0)
+			c.Assert(encoded.Losses, qt.HasLen, 1)
+			c.Assert(encoded.Losses[0].ValueId, qt.Equals, "queue")
+			c.Assert(encoded.Losses[0].Message, qt.Equals, "coordination node app/queue: access constraints have no source spelling")
+		})
+	}
+}
+
+func TestEncodeSource_RefusesIncompleteCoverage(t *testing.T) {
+	for _, format := range []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_HCL} {
+		t.Run(format.String(), func(t *testing.T) {
+			for _, knowledge := range []protocol.ModelKnowledge_State{protocol.ModelKnowledge_UNINSPECTED, protocol.ModelKnowledge_UNREPRESENTABLE} {
+				t.Run(knowledge.String(), func(t *testing.T) {
+					c := qt.New(t)
+					request := encodeRequest(format)
+					request.Coverage = &protocol.ModelCoverage{Representation: protocol.ValueInput_DESIRED,
+						Kinds: []*protocol.ModelKindCoverage{{Model: schema.CoordinationDesiredModel(), Knowledge: &protocol.ModelKnowledge{State: knowledge, Reason: "the source leaves nodes unmanaged"}}}}
+					encoded, err := backend.New().EncodeSource(encodingContext(c), request)
+					c.Assert(err, qt.ErrorMatches, `.*YDB source encoding cannot preserve incomplete coverage of .*coordination-node.*`)
+					c.Assert(encoded, qt.IsNil)
+				})
+			}
+		})
+	}
+}
+
+func TestEncodeSource_RefusesIncompleteSubjectCoverage(t *testing.T) {
+	c := qt.New(t)
+	value := node(c, "queue", "app", "queue", schema.CoordinationIntent{})
+	request := encodeRequest(protocol.SourceDocument_HCL, value)
+	request.Coverage = &protocol.ModelCoverage{Representation: protocol.ValueInput_DESIRED,
+		Kinds: []*protocol.ModelKindCoverage{{Model: schema.CoordinationDesiredModel(), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}}},
+		Subjects: []*protocol.ModelSubjectCoverage{{Kind: schema.CoordinationProperties, Subject: proto.CloneOf(value.Value.Value.Owner),
+			NormalizedSubject: proto.CloneOf(value.Value.Value.Owner), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "node not read"}}}}
+	encoded, err := backend.New().EncodeSource(encodingContext(c), request)
+	c.Assert(err, qt.ErrorMatches, `.*YDB source encoding cannot preserve incomplete coverage of .* app/queue.*`)
+	c.Assert(encoded, qt.IsNil)
+	request.Coverage.Subjects[0].Knowledge = &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}
+	encoded, err = backend.New().EncodeSource(encodingContext(c), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(encoded.Fragments, qt.HasLen, 1)
+}
+
+func TestEncodeSource_Canceled(t *testing.T) {
+	c := qt.New(t)
+	ctx, cancel := context.WithCancel(encodingContext(c))
+	cancel()
+	encoded, err := backend.New().EncodeSource(ctx, encodeRequest(protocol.SourceDocument_HCL))
+	c.Assert(err, qt.ErrorMatches, `.*context canceled.*`)
 	c.Assert(encoded, qt.IsNil)
 }

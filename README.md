@@ -752,8 +752,10 @@ host's words. A host that does not list the feature reads no such block.
 
 `EncodeSource` (`source.encode`, ADR 0037) writes a desired node back as the
 fragment each format reads: an entry of `coordination_nodes`, one directive, or
-one block placed after the tables, which decode to the same node. Access is
-left out, as no source manages it, and `struct_name` is written in YAML alone.
+one block placed after the tables, which decode to the same node. Access
+constraints are reported as losses because no source can represent them.
+`struct_name` is written in YAML alone. Incomplete kind or subject coverage
+refuses the export, because these fragments cannot preserve that knowledge.
 A table's YDB settings are reported as losses: this provider holds them as one
 value, which a source writes as several declarations, and the contract writes
 one value with one fragment; HCL has no spelling for them at all, as the host's

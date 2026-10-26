@@ -25,16 +25,17 @@ import (
 // directive, or one coordination_node HCL block, which decodes to the same
 // node. The host writes the syntax.
 //
-// A node's access is left out, as every source leaves it: omission keeps a
-// node's access unmanaged. Its struct name, which records where a YAML source
+// Access constraints have no source spelling and are reported as a loss.
+// A node's struct name, which records where a YAML source
 // declared it and has no server counterpart, is written in YAML alone.
 //
 // Every other value is reported as a loss. This provider holds a table's YDB
 // settings, its partitioning, layout, TTL, families and column storage, as one
 // value, which a source writes as several declarations, and the contract
 // writes one value with one fragment; HCL has no spelling for them at all, as
-// the host's embedded engine reports. Indexes, changefeeds and the other
-// native objects have no source of this provider.
+// the host's embedded engine reports. Other native objects have no encoder.
+// Coverage that is not complete is refused: these fragments cannot preserve
+// the captured knowledge when the host reads them back.
 func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourceRequest) (*protocol.EncodedSource, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -42,6 +43,9 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	description := provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx))
 	if err := provider.ValidateEncodeSourceRequest(description, request); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := encodeCoverage(request.GetCoverage()); err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 	result := &protocol.EncodedSource{Complete: true}
 	var nodes []encodedNode
@@ -57,6 +61,11 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 		node, err := nodeOf(value.GetValue())
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		if node.access {
+			result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: node.id,
+				Message: fmt.Sprintf("coordination node %s: access constraints have no source spelling", path.Join(node.owner.GetSchema(), node.owner.GetName()))})
+			continue
 		}
 		nodes = append(nodes, node)
 	}
@@ -85,6 +94,24 @@ type encodedNode struct {
 	settings []*protocol.SourceEntry
 	// structName is where a YAML source declared the node.
 	structName string
+	access     bool
+}
+
+// encodeCoverage refuses knowledge these source fragments would strengthen.
+// A not-described marker cannot reproduce every captured reason or state.
+func encodeCoverage(coverage *protocol.ModelCoverage) error {
+	for _, kind := range coverage.GetKinds() {
+		if kind.GetKnowledge().GetState() != protocol.ModelKnowledge_COMPLETE {
+			return fmt.Errorf("YDB source encoding cannot preserve incomplete coverage of %s", kind.GetModel().GetKind())
+		}
+	}
+	for _, subject := range coverage.GetSubjects() {
+		if subject.GetKnowledge().GetState() != protocol.ModelKnowledge_COMPLETE {
+			return fmt.Errorf("YDB source encoding cannot preserve incomplete coverage of %s %s", subject.GetKind(),
+				path.Join(subject.GetSubject().GetSchema(), subject.GetSubject().GetName()))
+		}
+	}
+	return nil
 }
 
 // nodeOf reads a node's settings out of its desired value, spelled as a
@@ -98,7 +125,7 @@ func nodeOf(value *protocol.NormalizedValue) (encodedNode, error) {
 	if err := decoder.Decode(&intent); err != nil {
 		return encodedNode{}, fmt.Errorf("invalid YDB coordination node value")
 	}
-	node := encodedNode{id: value.GetId(), owner: proto.CloneOf(envelope.GetOwner()), structName: intent.StructName}
+	node := encodedNode{id: value.GetId(), owner: proto.CloneOf(envelope.GetOwner()), structName: intent.StructName, access: intent.Access != nil}
 	text := func(key, value string) {
 		node.settings = append(node.settings, &protocol.SourceEntry{Key: key, Value: &protocol.SourceValue{Value: &protocol.SourceValue_Text{Text: value}}})
 	}
