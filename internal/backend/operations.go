@@ -11,6 +11,8 @@ import (
 
 func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	switch input.GetValue().GetKind() {
+	case schema.SecretOperation:
+		return schema.NormalizeSecretOperation(input)
 	case declarationplan.OperationKind:
 		return declarationplan.Normalize(input)
 	case schema.CoordinationOperation:

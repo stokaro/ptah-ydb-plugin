@@ -63,3 +63,9 @@ message StreamingQueryIntent {
     string resource_pool = 3;
     bool allow_state_reset = 4;
 }
+
+// A scheme secret is observed only by identity. Its value is never read.
+message SecretPresence {}
+
+// A desired scheme secret holds a host-approved input reference only.
+message SecretIntent { string value_env = 1; }

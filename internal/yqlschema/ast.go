@@ -1,6 +1,7 @@
 package yqlschema
 
 import (
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
@@ -172,4 +173,11 @@ type createClassifier struct {
 type unsupported struct {
 	spanned
 	construct string
+}
+
+// createSecret is a value-free CREATE SECRET declaration.
+type createSecret struct {
+	spanned
+	schema, name string
+	spec         secrets.Spec
 }

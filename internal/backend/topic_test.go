@@ -51,7 +51,7 @@ func topicRequest(c *qt.C, declared *ydbdecl.Topic, read *native.DescribeTopicRe
 	currentState.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
 	currentState.Coverage.Kinds[0].Sources[0].Regions = []*protocol.ComparisonRegion{{Scope: &protocol.ComparisonNamespace{Targets: []string{"ydb"}, SubjectKinds: []string{schema.TopicProperties},
 		Database: testcomparison.Part("/local"), Catalog: testcomparison.Part(""), Schema: testcomparison.Part("app")}, Knowledge: testcomparison.Knowledge(protocol.ModelKnowledge_COMPLETE)}}
-	request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: topiccompare.ServiceID, Kinds: []string{schema.TopicProperties},
+	request := &protocol.CompareModelsRequest{Engine: "ydb", DatabasePath: "/local", ComparisonId: topiccompare.ServiceID, Kinds: []string{schema.TopicProperties},
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: map[string]bool{"topics": true}, Desired: desiredState, Current: currentState}
 	if declared != nil {
 		intent, err := topics.Intent(*declared)

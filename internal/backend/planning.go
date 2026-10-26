@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secretplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -42,6 +43,8 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	var result *protocol.PlannedFeatures
 	var err error
 	switch request.PlanningId {
+	case secretplan.ServiceID:
+		result, err = secretplan.Plan(ctx, request)
 	case coordinationplan.ServiceID:
 		result, err = coordinationplan.Plan(ctx, request)
 	case streamingplan.ServiceID:
@@ -113,6 +116,9 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		captured := native.GetValue()
 		if captured.GetValue().GetKind() == schema.CoordinationOperation && !request.Capabilities["coordination_nodes"] {
 			return nil, status.Error(codes.FailedPrecondition, "native coordination rendering requires established capabilities")
+		}
+		if captured.GetValue().GetKind() == schema.SecretOperation && !request.Capabilities["secrets"] {
+			return nil, status.Error(codes.FailedPrecondition, "secret rendering requires the secrets capability")
 		}
 		if captured.GetValue().GetKind() == schema.TopicOperation && !request.Capabilities[topics.CapabilityTopics] {
 			return nil, status.Error(codes.FailedPrecondition, "topic rendering requires the topics capability")

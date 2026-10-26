@@ -75,7 +75,13 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 			}
 		}
 	}
+	if !session.capabilities["secrets"] {
+		inspect.UnavailableSecrets(result)
+	}
 	result.TargetFeatures = negotiatedFeatures(ctx)
+	if slices.Contains(result.TargetFeatures, provider.ValueContextFeature) {
+		bindInspectionContext(result, &protocol.DatabaseContext{Database: session.database, SourceDatabase: session.connection.Database()})
+	}
 	// The reply is checked against the description the host holds: one that
 	// did not list the common wire declares no common object.
 	if _, err := provider.InspectionValues(provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx)), request, result); err != nil {
@@ -152,6 +158,8 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 				normalize = schema.NormalizeTablePropertiesChange
 			case schema.ColumnStorageChange:
 				normalize = schema.NormalizeColumnStorageChange
+			case schema.SecretChange:
+				normalize = schema.NormalizeSecretChange
 			case schema.TopicChange:
 				normalize = schema.NormalizeTopicChange
 			case schema.ExternalSourceChange, schema.ExternalTableChange:
@@ -178,12 +186,12 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		required, err := schema.RequiredObjects(value)
+		required, pending, err := schema.RequiredObjects(value)
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 		result.Values = append(result.Values, &protocol.NormalizedValue{Id: input.GetId(), Value: value, NormalizedOwner: proto.CloneOf(value.Owner),
-			CanonicalFormat: format, CanonicalProjection: bytes.Clone(value.Payload), RequiredObjects: required})
+			CanonicalFormat: format, CanonicalProjection: bytes.Clone(value.Payload), RequiredObjects: required, RequiresDatabaseContext: pending})
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()

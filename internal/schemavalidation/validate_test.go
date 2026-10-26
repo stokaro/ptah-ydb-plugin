@@ -241,3 +241,32 @@ func TestValidateSchema_WorkloadObjects(t *testing.T) {
 	}
 	c.Assert(diagnostics(c, request), qt.HasLen, 0)
 }
+
+func TestValidateSchema_SecretCapability(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		supported bool
+		findings  int
+	}{
+		{name: "supported", supported: true},
+		{name: "unavailable", findings: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := newRequest()
+			request.Capabilities["secrets"] = test.supported
+			model := schema.NativeDesiredModel(schema.SecretProperties)
+			values, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "secret", Representation: protocol.ValueInput_DESIRED,
+				Value: &protocol.Envelope{ProviderId: schema.ProviderID, Kind: schema.SecretProperties, SchemaVersion: 1, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256,
+					Owner: &protocol.Reference{Engine: "ydb", Kind: schema.SecretProperties, Name: "pw"}, Payload: []byte(`{"valueEnv":"PTAH_SECRET_PW"}`)}}}})
+			c.Assert(err, qt.IsNil)
+			request.Features.Objects.Records = []*protocol.ComparisonRecord{{Kind: schema.SecretProperties, Subject: &protocol.ComparisonIdentity{Kind: schema.SecretProperties, Name: testcomparison.Part("pw")}, Value: values.Values[0]}}
+			got := diagnostics(c, request)
+			c.Assert(got, qt.HasLen, test.findings)
+			for _, diagnostic := range got {
+				c.Assert(diagnostic.Code, qt.Equals, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE)
+				c.Assert(diagnostic.Feature, qt.Equals, "secrets")
+			}
+		})
+	}
+}

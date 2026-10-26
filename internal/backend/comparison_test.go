@@ -291,10 +291,10 @@ func TestCoordinationAccessRequirementsCannotBecomeIgnoredChanges(t *testing.T) 
 }
 
 // hostShaped names the declared node as the host does, without a database,
-// and leaves the database path out, while the read side keeps the database
-// the inspection names in its owners and regions.
+// and retains the explicit database path, while the read side keeps the
+// database the inspection names in its owners and regions.
 func hostShaped(r *protocol.CompareModelsRequest) {
-	r.DatabasePath = ""
+	r.DatabasePath = "/local"
 	for _, record := range r.Desired.Records {
 		record.Subject.Database = &protocol.ComparisonPart{}
 		record.Value.Value.Owner.Database = ""
@@ -337,15 +337,16 @@ func TestCoordinationComparisonReadsHostIdentities_HappyPath(t *testing.T) {
 	}
 }
 
-// A read that names two databases is refused rather than paired by guess.
+// Conflicting physical context receipts are refused before identity pairing.
 func TestCoordinationComparisonReadsHostIdentities_FailurePath(t *testing.T) {
 	c := qt.New(t)
 	request, err := testcomparison.Request(&schema.CoordinationIntent{}, coordinationObserved())
 	c.Assert(err, qt.IsNil)
 	scopeCurrent(request, "app")
 	hostShaped(request)
-	request.Current.Coverage.Kinds[0].Sources[0].Regions[0].Scope.Database = testcomparison.Part("/other")
+	request.TargetFeatures = backend.Description().Engines[0].Features
+	request.Current.Records[0].Value.Value.Context = &protocol.DatabaseContext{Database: "/other", SourceDatabase: "/other"}
 	result, err := backend.New().CompareModels(t.Context(), request)
-	c.Assert(err, qt.ErrorMatches, `.*more than one database`)
+	c.Assert(err, qt.ErrorMatches, `.*conflicting database contexts`)
 	c.Assert(result, qt.IsNil)
 }

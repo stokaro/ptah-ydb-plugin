@@ -10,6 +10,7 @@ import (
 
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -45,6 +46,9 @@ func newObjectChanges(c objectChanges) *objectChanges {
 	payload := map[string]any{"required": []string{"before", "after"}, "additionalProperties": false,
 		"before": map[string]any{"nullable": true, "model": json.RawMessage(model(c.kind).DefinitionJson)},
 		"after":  map[string]any{"nullable": true, "model": json.RawMessage(NativeDesiredModel(c.kind).DefinitionJson)}}
+	for _, key := range []string{"before_context", "after_context"} {
+		payload[key] = map[string]any{"optional": true, "meaning": "complete database.context receipt for the present operand, independent of its identity"}
+	}
 	if c.database {
 		payload["database"] = map[string]any{"type": "string", "optional": true,
 			"meaning": "the absolute path of the database the operands were read from; omitted where the comparison could not name it"}
@@ -105,6 +109,13 @@ func (c *objectChanges) captureIn(id string, owner *protocol.Reference, database
 			return nil, fmt.Errorf("%s change operands have different owners", c.noun)
 		}
 		operands[entry.key] = entry.value.Payload
+		if entry.value.Context != nil {
+			encoded, err := protojson.Marshal(entry.value.Context)
+			if err != nil {
+				return nil, err
+			}
+			operands[entry.key+"_context"] = encoded
+		}
 	}
 	if database != "" {
 		if !c.database {
@@ -120,8 +131,12 @@ func (c *objectChanges) captureIn(id string, owner *protocol.Reference, database
 	if err != nil {
 		return nil, err
 	}
+	bound, err := operandContext(before, after)
+	if err != nil {
+		return nil, err
+	}
 	return c.normalizeChange(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_CHANGE, Value: &protocol.Envelope{
-		ProviderId: ProviderID, Kind: c.change, Owner: proto.CloneOf(owner), SchemaVersion: 1, Encoding: c.changeModel.Encoding, DefinitionSha256: c.changeModel.DefinitionSha256, Payload: payload}})
+		ProviderId: ProviderID, Kind: c.change, Owner: proto.CloneOf(owner), Context: bound, SchemaVersion: 1, Encoding: c.changeModel.Encoding, DefinitionSha256: c.changeModel.DefinitionSha256, Payload: payload}})
 }
 
 // normalizeChange reconstructs a change's safety facts from its complete
@@ -158,6 +173,15 @@ func (c *objectChanges) encode(before, after *protocol.Envelope, database, opera
 	}
 	if after != nil {
 		operands["after"] = json.RawMessage(after.Payload)
+	}
+	for key, operand := range map[string]*protocol.Envelope{"before_context": before, "after_context": after} {
+		if operand.GetContext() != nil {
+			encoded, err := protojson.Marshal(operand.Context)
+			if err != nil {
+				return nil, err
+			}
+			operands[key] = json.RawMessage(encoded)
+		}
 	}
 	if database != "" {
 		operands["database"] = database
@@ -199,6 +223,20 @@ func (c *objectChanges) parts(value *protocol.Envelope) (*protocol.Envelope, *pr
 		}
 		delete(payload, "database")
 	}
+	contexts := map[string]*protocol.DatabaseContext{}
+	for _, key := range []string{"before", "after"} {
+		if encoded, found := payload[key+"_context"]; found {
+			bound := &protocol.DatabaseContext{}
+			if bytes.Equal(payload[key], []byte("null")) || protojson.Unmarshal(encoded, bound) != nil || ValidateDatabaseContext(bound) != nil {
+				return nil, nil, "", fmt.Errorf("%s change has invalid operand context", c.noun)
+			}
+			if database != "" && bound.Database != database {
+				return nil, nil, "", fmt.Errorf("%s change context differs from its selected database", c.noun)
+			}
+			contexts[key] = bound
+			delete(payload, key+"_context")
+		}
+	}
 	if len(payload) != 2 {
 		return nil, nil, "", fmt.Errorf("%s change requires exact before and after operands", c.noun)
 	}
@@ -206,8 +244,19 @@ func (c *objectChanges) parts(value *protocol.Envelope) (*protocol.Envelope, *pr
 		if bytes.Equal(payload[key], []byte("null")) {
 			return nil, nil
 		}
-		return normalize(&protocol.Envelope{ProviderId: ProviderID, Kind: c.kind, Owner: proto.CloneOf(value.Owner), SchemaVersion: definition.SchemaVersion,
-			Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: bytes.Clone(payload[key])})
+		result, err := normalize(&protocol.Envelope{ProviderId: ProviderID, Kind: c.kind, Owner: proto.CloneOf(value.Owner), SchemaVersion: definition.SchemaVersion,
+			Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: bytes.Clone(payload[key]), Context: contexts[key]})
+		if err != nil {
+			return nil, err
+		}
+		_, pending, err := RequiredObjects(result)
+		if err != nil {
+			return nil, err
+		}
+		if pending {
+			return nil, fmt.Errorf("%s change requires resolved operand context", c.noun)
+		}
+		return result, nil
 	}
 	before, err := operand("before", model(c.kind), Normalize)
 	if err != nil {
@@ -220,7 +269,34 @@ func (c *objectChanges) parts(value *protocol.Envelope) (*protocol.Envelope, *pr
 	if before == nil && after == nil {
 		return nil, nil, "", fmt.Errorf("%s change has no operands", c.noun)
 	}
+	bound, err := operandContext(before, after)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if !proto.Equal(value.Context, bound) {
+		return nil, nil, "", fmt.Errorf("%s change context differs from its operands", c.noun)
+	}
 	return before, after, database, nil
+}
+
+// The outer receipt lets the host check the dispatch target without reading
+// opaque payloads. Each operand keeps its own authored root inside the capture.
+func operandContext(before, after *protocol.Envelope) (*protocol.DatabaseContext, error) {
+	var result *protocol.DatabaseContext
+	for _, operand := range []*protocol.Envelope{before, after} {
+		bound := operand.GetContext()
+		if bound == nil {
+			continue
+		}
+		if err := ValidateDatabaseContext(bound); err != nil {
+			return nil, err
+		}
+		if result != nil && result.Database != bound.Database {
+			return nil, fmt.Errorf("YDB change operands name different selected databases")
+		}
+		result = proto.CloneOf(bound)
+	}
+	return result, nil
 }
 
 // operationFromChange lowers a complete change without losing its operands.

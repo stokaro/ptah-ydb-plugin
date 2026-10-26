@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -22,7 +23,8 @@ func NativeDesiredModel(kind string) *protocol.ValueModel {
 }
 
 var nativeIntentDefinitions = map[string]*protocol.ValueModel{
-	IndexProperties: buildNativeIntentModel(IndexProperties), ChangefeedProperties: buildNativeIntentModel(ChangefeedProperties), TopicProperties: buildNativeIntentModel(TopicProperties),
+	SecretProperties: buildNativeIntentModel(SecretProperties),
+	IndexProperties:  buildNativeIntentModel(IndexProperties), ChangefeedProperties: buildNativeIntentModel(ChangefeedProperties), TopicProperties: buildNativeIntentModel(TopicProperties),
 	ViewProperties: buildNativeIntentModel(ViewProperties), ExternalSourceProperties: buildNativeIntentModel(ExternalSourceProperties), ExternalTableProperties: buildNativeIntentModel(ExternalTableProperties), ColumnStorageProperties: buildNativeIntentModel(ColumnStorageProperties),
 	ResourcePoolProperties: buildNativeIntentModel(ResourcePoolProperties), ResourcePoolClassifierProperties: buildNativeIntentModel(ResourcePoolClassifierProperties),
 	StreamingQueryProperties: buildNativeIntentModel(StreamingQueryProperties),
@@ -30,6 +32,8 @@ var nativeIntentDefinitions = map[string]*protocol.ValueModel{
 
 func nativeIntentMessage(kind string) proto.Message {
 	switch kind {
+	case SecretProperties:
+		return &native.SecretIntent{}
 	case IndexProperties:
 		return &native.IndexSetIntent{}
 	case ChangefeedProperties:
@@ -74,6 +78,9 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		"topic_declarations":   "a topic setting or consumer setting left at zero is one the declaration leaves out, which requests the value YDB gives a new topic; attributes and access are not declared",
 		"column_storage":       "preserves hash order, partition and data-channel counts, local indexes and TTL tiers; excludes native IDs and runtime topology; a declaration may omit the hash key, the shard count and the data channels, which the server then chooses, and states the whole TTL of the table, a TTL that only deletes as one deleting tier; the server's derived expiration is not declared",
 	}
+	if kind == SecretProperties {
+		definition["secrets"] = "value_env is a required PTAH_SECRET_ approved-input reference; observed presence carries no value or value reference; conversions derive a deterministic reference from the exact path; rotations require an explicit comparison request"
+	}
 	if IsWorkloadObject(kind) {
 		definition["workload_objects"] = workloadDefinition
 	}
@@ -91,7 +98,7 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	digest := sha256.Sum256(canonical)
 	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
 	switch kind {
-	case ColumnStorageProperties, TopicProperties, ExternalSourceProperties, ExternalTableProperties, ResourcePoolProperties, ResourcePoolClassifierProperties, StreamingQueryProperties:
+	case SecretProperties, ColumnStorageProperties, TopicProperties, ExternalSourceProperties, ExternalTableProperties, ResourcePoolProperties, ResourcePoolClassifierProperties, StreamingQueryProperties:
 		// A YAML, Go or SQL source says whether a table stores columns, so the
 		// absence of the facet on a table such a source describes is a request
 		// for row storage. Each of them declares topics, external data sources
@@ -200,6 +207,12 @@ func ConvertNative(value *protocol.Envelope, from, to protocol.ValueInput_Repres
 		if err != nil {
 			return nil, err
 		}
+		if secret, ok := intent.(*native.SecretIntent); ok {
+			secret.ValueEnv = secrets.DefaultValueEnv(value.Owner.GetSchema(), value.Owner.GetName())
+		}
+		if err := convertExternalContext(value, intent, to); err != nil {
+			return nil, err
+		}
 		return convertedEnvelope(value, NativeDesiredModel(value.Kind), intent, NormalizeDesired)
 	}
 	if from == protocol.ValueInput_DESIRED && to == protocol.ValueInput_OBSERVED {
@@ -215,6 +228,9 @@ func ConvertNative(value *protocol.Envelope, from, to protocol.ValueInput_Repres
 		if err != nil {
 			return nil, err
 		}
+		if err := convertExternalContext(value, observed, to); err != nil {
+			return nil, err
+		}
 		return convertedEnvelope(value, model(value.Kind), observed, Normalize)
 	}
 	return nil, fmt.Errorf("native YDB conversion requires distinct schema representations")
@@ -222,6 +238,8 @@ func ConvertNative(value *protocol.Envelope, from, to protocol.ValueInput_Repres
 
 func nativeIntent(value proto.Message) (proto.Message, error) {
 	switch v := value.(type) {
+	case *native.SecretPresence:
+		return &native.SecretIntent{}, nil
 	case *native.IndexObservations:
 		return indexIntents(v)
 	case *native.ChangefeedObservations:
@@ -239,6 +257,11 @@ func nativeIntent(value proto.Message) (proto.Message, error) {
 
 func nativeObservation(value proto.Message) (proto.Message, error) {
 	switch v := value.(type) {
+	case *native.SecretIntent:
+		if err := secrets.CheckValueEnv(v.ValueEnv); err != nil {
+			return nil, err
+		}
+		return &native.SecretPresence{}, nil
 	case *native.IndexSetIntent:
 		return indexObservations(v)
 	case *native.ChangefeedSetIntent:

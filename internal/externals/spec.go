@@ -15,8 +15,8 @@ package externals
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"maps"
-	"path"
 	"slices"
 	"strings"
 
@@ -39,9 +39,6 @@ const (
 	// optionPartitionedBy is the one table option whose value is a JSON
 	// array of column names rather than a string.
 	optionPartitionedBy = "PARTITIONED_BY"
-	// secretPathSuffix ends the name of every option that names a YDB secret
-	// by its path.
-	secretPathSuffix = "_SECRET_PATH"
 	// objectStorage is the one source type an external table reads.
 	objectStorage = "ObjectStorage"
 )
@@ -81,8 +78,8 @@ func sourceSpec(sourceType, location string, properties map[string]string, root 
 			continue
 		case name == optionReferences:
 			continue
-		case strings.HasSuffix(name, secretPathSuffix):
-			value = RelativePath(value, root)
+		case externalpath.IsSecretOption(name):
+			value = externalpath.RelativePath(value, root)
 		}
 		options[name] = value
 	}
@@ -133,7 +130,7 @@ func TableFromIntent(intent *native.ExternalTableIntent, root string) (ydbdecl.E
 }
 
 func tableSpec(dataSource, location string, content map[string]string, columns []*native.ColumnMeta, root string) (ydbdecl.ExternalTable, error) {
-	spec := ydbdecl.ExternalTable{DataSource: RelativePath(dataSource, root), Location: location}
+	spec := ydbdecl.ExternalTable{DataSource: externalpath.RelativePath(dataSource, root), Location: location}
 	for _, column := range columns {
 		name, nullable, err := schema.ColumnType(column.GetType())
 		if err != nil {
@@ -195,40 +192,6 @@ func TableIntent(spec ydbdecl.ExternalTable) (*native.ExternalTableIntent, error
 		intent.Content[name] = string(encoded)
 	}
 	return intent, nil
-}
-
-// RelativePath is a path an option or a description holds, relative to root,
-// the database a read describes: an absolute path under root loses root, and
-// any other path is kept as it is.
-func RelativePath(value, root string) string {
-	if strings.Trim(root, "/") == "" {
-		return value
-	}
-	root = "/" + strings.Trim(root, "/")
-	if rest, under := strings.CutPrefix(value, root+"/"); under && strings.HasPrefix(value, "/") {
-		return path.Clean(rest)
-	}
-	return value
-}
-
-// ResolveSource reads the path of a data source an external table names, as
-// a directory and a name relative to root: relative as written, or absolute
-// under root. It reports false for a path outside root or one that names no
-// object.
-func ResolveSource(root, written string) (ydbdecl.Path, bool) {
-	trimmed := strings.TrimSpace(written)
-	if strings.HasPrefix(trimmed, "/") {
-		if strings.Trim(root, "/") == "" {
-			return ydbdecl.Path{}, false
-		}
-		relative, under := strings.CutPrefix(path.Clean(trimmed), "/"+strings.Trim(root, "/")+"/")
-		if !under {
-			return ydbdecl.Path{}, false
-		}
-		trimmed = relative
-	}
-	ref, err := ydbdecl.ParseExternalPath(trimmed)
-	return ref, err == nil
 }
 
 // DescribedTableOption is the value a declaration writes for name, given the

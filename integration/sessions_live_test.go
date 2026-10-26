@@ -46,7 +46,7 @@ func startProvider(c *qt.C, binary, digest string) *providerruntime.Client {
 	defer cancel()
 	client, err := providerruntime.Start(ctx, providerruntime.Options{
 		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin",
-		HostFeatures: []string{provider.PlanningLifecycleFeature},
+		HostFeatures: []string{provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature},
 	})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(client.Close)

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
@@ -43,7 +44,7 @@ func CheckDataSource(display string, source ydbdecl.ExternalDataSource, capabili
 		return fmt.Errorf("%s: it needs an auth_method, such as NONE or BASIC (`AUTH_METHOD requires key`)", subject)
 	}
 	for _, option := range slices.Sorted(maps.Keys(source.Options)) {
-		if strings.HasSuffix(option, secretPathSuffix) && !capabilities[CapabilitySecretPaths] {
+		if externalpath.IsSecretOption(option) && !capabilities[CapabilitySecretPaths] {
 			return capabilityRefusal(subject+" option "+option, CapabilitySecretPaths)
 		}
 	}
@@ -84,31 +85,4 @@ func CheckReplace(subject string, capabilities map[string]bool) error {
 		return capabilityRefusal(subject+" replaced in place", CapabilityReplace)
 	}
 	return nil
-}
-
-// SecretPaths are the secrets the options of a data source name by their
-// path, relative to root, in option order. A path outside the database is
-// refused with the host's words: the data source cannot read it.
-func SecretPaths(options map[string]string, root string) ([]ydbdecl.Path, error) {
-	var paths []ydbdecl.Path
-	for _, option := range slices.Sorted(maps.Keys(options)) {
-		written := strings.TrimSpace(options[option])
-		if !strings.HasSuffix(strings.ToUpper(option), secretPathSuffix) || written == "" {
-			continue
-		}
-		relative := written
-		if strings.HasPrefix(written, "/") {
-			relative = RelativePath(written, root)
-			if strings.HasPrefix(relative, "/") {
-				return nil, fmt.Errorf("option %s names secret %q, which is outside the database /%s, so the data source cannot read it",
-					option, written, strings.Trim(root, "/"))
-			}
-		}
-		ref, err := ydbdecl.ParseExternalPath(relative)
-		if err != nil || slices.Contains(paths, ref) {
-			continue
-		}
-		paths = append(paths, ref)
-	}
-	return paths, nil
 }

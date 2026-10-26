@@ -1,6 +1,7 @@
 package externals_test
 
 import (
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -150,16 +151,27 @@ func TestCheck_FailurePath(t *testing.T) {
 
 func TestSecretPaths_HappyPath(t *testing.T) {
 	c := qt.New(t)
-	got, err := externals.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/local/ext/pw", "TOKEN_SECRET_PATH": "ext/pw", "AWS_SECRET_PATH": "ext/aws", "LOGIN": "reader"}, "/local")
+	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/local/ext/pw", "TOKEN_SECRET_PATH": "ext/pw", "AWS_SECRET_PATH": "ext/aws", "LOGIN": "reader"}, "/local")
 	c.Assert(err, qt.IsNil)
 	c.Assert(got, qt.DeepEquals, []ydbdecl.Path{{Schema: "ext", Name: "aws"}, {Schema: "ext", Name: "pw"}})
 }
 
 func TestSecretPaths_FailurePath(t *testing.T) {
 	c := qt.New(t)
-	got, err := externals.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/other/ext/pw"}, "/local")
+	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/other/ext/pw"}, "/local")
 	c.Assert(err, qt.ErrorMatches, `option PASSWORD_SECRET_PATH names secret "/other/ext/pw", which is outside the database /local, so the data source cannot read it`)
 	c.Assert(got, qt.IsNil)
+}
+
+func TestSecretPathsRejectsMalformedReferences(t *testing.T) {
+	for _, path := range []string{"../pw", "app//pw", "app/../pw", "app/", "\\pw"} {
+		t.Run(path, func(t *testing.T) {
+			c := qt.New(t)
+			got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": path}, "/local")
+			c.Assert(err, qt.IsNotNil)
+			c.Assert(got, qt.IsNil)
+		})
+	}
 }
 
 func TestStatements(t *testing.T) {
@@ -299,7 +311,7 @@ func TestRelativePath(t *testing.T) {
 	} {
 		t.Run(test.value, func(t *testing.T) {
 			c := qt.New(t)
-			c.Assert(externals.RelativePath(test.value, "/local"), qt.Equals, test.want)
+			c.Assert(externalpath.RelativePath(test.value, "/local"), qt.Equals, test.want)
 		})
 	}
 }

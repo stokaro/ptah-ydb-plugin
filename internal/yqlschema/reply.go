@@ -10,6 +10,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -32,7 +34,7 @@ func HeaderKinds() []string {
 // coordination node, a topic, an external data source and an external table.
 // Their source formats include SQL.
 func ClaimedModels() []*protocol.ValueModel {
-	return []*protocol.ValueModel{schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel(),
+	return []*protocol.ValueModel{schema.NativeDesiredModel(schema.SecretProperties), schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel(),
 		schema.NativeDesiredModel(schema.StreamingQueryProperties), schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties), schema.NativeDesiredModel(schema.ResourcePoolProperties), schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties)}
 }
 
@@ -276,6 +278,13 @@ func indexSettings(index Index) []string {
 func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 	at := func(message string) *Refusal { return gap(object.document, object.span, message) }
 	switch object.Kind {
+	case KindSecret:
+		spec := object.Spec.(*secrets.Spec)
+		value, err := schema.CaptureSecretIntent(&protocol.Reference{Engine: "ydb", Kind: schema.SecretProperties, Schema: object.Schema, Name: object.Name}, &native.SecretIntent{ValueEnv: spec.ValueEnv})
+		if err != nil {
+			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: "invalid secret declaration"}
+		}
+		return value, nil
 	case KindCoordinationNode:
 		spec := object.Spec.(*ydbdecl.CoordinationNode)
 		owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: object.Schema, Name: object.Name}
@@ -402,6 +411,7 @@ var limitedKinds = map[string]struct {
 	path   func(string) (string, string)
 	reason string
 }{
+	"secret":                   {schema.SecretProperties, topicLimit, "the source leaves secrets unmanaged"},
 	"coordination_node":        {schema.CoordinationProperties, coordinationLimit, "the source leaves coordination nodes unmanaged"},
 	"streaming_query":          {schema.StreamingQueryProperties, topicLimit, "the source leaves streaming queries unmanaged"},
 	"topic":                    {schema.TopicProperties, topicLimit, "the source leaves topics unmanaged"},

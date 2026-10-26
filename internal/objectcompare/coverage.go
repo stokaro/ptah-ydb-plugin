@@ -9,50 +9,33 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
 )
 
-// SessionDatabase is the database the current side was read from, which is
-// the one database a comparison holds objects of, or "" where nothing names
-// it. A host that names it sends it as the database path; otherwise an
-// inspection names it in every owner, subject and region of kinds it returns,
-// and two databases there are refused. A region of another database than the
-// path names stays another database's.
-func SessionDatabase(request *protocol.CompareModelsRequest, kinds ...string) (string, error) {
-	if request.GetDatabasePath() != "" {
-		return request.GetDatabasePath(), nil
-	}
-	var found []string
-	add := func(database string) {
-		if database != "" && !slices.Contains(found, database) {
-			found = append(found, database)
-		}
-	}
-	for _, record := range request.GetCurrent().GetRecords() {
-		add(record.GetSubject().GetDatabase().GetNormalized())
-		add(record.GetValue().GetValue().GetOwner().GetDatabase())
-	}
-	for _, claim := range request.GetCurrent().GetCoverage().GetSubjects() {
-		if slices.Contains(kinds, claim.GetKind()) {
-			add(claim.GetSubject().GetDatabase().GetNormalized())
-		}
-	}
-	for _, kind := range kinds {
-		for _, source := range kindSources(request.GetCurrent().GetCoverage(), kind) {
-			for _, region := range source.GetRegions() {
-				add(region.GetScope().GetDatabase().GetNormalized())
+// SessionDatabase returns the explicit selected database. Object identities and
+// coverage coordinates do not establish a physical root. Every captured context
+// must agree with the request and with the other values in the comparison.
+func SessionDatabase(request *protocol.CompareModelsRequest) (string, error) {
+	root := request.GetDatabasePath()
+	for _, state := range []*protocol.ComparisonState{request.GetDesired(), request.GetCurrent()} {
+		for _, record := range state.GetRecords() {
+			captured := record.GetValue().GetValue().GetContext()
+			if captured == nil {
+				continue
 			}
+			if err := schema.ValidateDatabaseContext(captured); err != nil {
+				return "", err
+			}
+			if root != "" && root != captured.Database {
+				return "", fmt.Errorf("YDB comparison has conflicting database contexts")
+			}
+			root = captured.Database
 		}
 	}
-	if len(found) > 1 {
-		return "", fmt.Errorf("YDB comparison reads objects of more than one database")
-	}
-	if len(found) == 0 {
-		return "", nil
-	}
-	return found[0], nil
+	return root, nil
 }
 
 // bind returns a copy of the request whose subjects and regions name the

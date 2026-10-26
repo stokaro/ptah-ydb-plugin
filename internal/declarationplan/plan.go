@@ -3,10 +3,10 @@ package declarationplan
 import (
 	"context"
 	"fmt"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -74,7 +74,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 			if err != nil {
 				return nil, err
 			}
-			if path, known := externals.ResolveSource(desired.Owner.Database, intent.GetDataSourcePath()); known {
+			if path, pathErr := externalpath.SourcePath(schema.InterpretationRoot(desired), intent.GetDataSourcePath()); pathErr == nil {
 				ref := proto.CloneOf(object.Subject)
 				ref.Kind = schema.ExternalSourceProperties
 				ref.Schema = &protocol.ComparisonPart{Source: path.Schema, Normalized: path.Schema}
@@ -82,6 +82,11 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 				effects = append(effects, &protocol.PlanningEffect{Subject: ref, Action: protocol.PlanningEffect_READ})
 			}
 		}
+		secretReads, err := sourceSecretEffects(object)
+		if err != nil {
+			return refused(index, object.Kind, err.Error()), nil
+		}
+		effects = append(effects, secretReads...)
 		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: operation.Id}
 		facts := operation.OperationSemantics
 		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Value: operation, Role: protocol.NativeOperation_STATEMENT}, Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}})

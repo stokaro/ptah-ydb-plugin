@@ -28,6 +28,7 @@ func TestObjectConversionsPreserveNativeOptions(t *testing.T) {
 			c := qt.New(t)
 			observed, err := schema.CaptureObject(objectOwner(test.kind), test.value)
 			c.Assert(err, qt.IsNil)
+			observed.Context = &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
 			assertChildRoundTrip(c, observed)
 		})
 	}

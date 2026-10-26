@@ -24,7 +24,7 @@ func main() {
 		_ = dev.Close()
 		os.Exit(1) //revive:disable-line:deep-exit the provider process must not outlive the signal that stopped it
 	}()
-	err := runtime.Serve(runtime.Server{DevProvisioner: dev,
+	err := runtime.Serve(runtime.Server{DatabaseContexts: owner, DevProvisioner: dev,
 		Description:     backend.Description(),
 		Sessions:        owner,
 		Inspector:       owner,
@@ -41,6 +41,7 @@ func main() {
 		SourceDecoder:   owner,
 		SQLSchemaReader: owner,
 		Executor:        owner,
+		ExecutionInputs: owner,
 		Transactions:    owner,
 		Statements:      owner,
 		History:         owner,
