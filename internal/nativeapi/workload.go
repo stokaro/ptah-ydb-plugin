@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -27,7 +28,7 @@ type HeldWorkload struct {
 func ReadWorkload(ctx context.Context, db *sql.DB, database string) (held HeldWorkload, err error) {
 	held = HeldWorkload{Pools: map[string]workload.PoolSpec{}, Classifiers: map[string]workload.ClassifierSpec{}}
 	pools, err := db.QueryContext(ctx, "SELECT Name, ConcurrentQueryLimit, QueueSize, DatabaseLoadCpuThreshold, QueryMemoryLimitPercentPerNode, "+
-		"QueryCpuLimitPercentPerNode, TotalCpuLimitPercentPerNode, ResourceWeight FROM `"+path.Join(database, ".sys/resource_pools")+"`")
+		"QueryCpuLimitPercentPerNode, TotalCpuLimitPercentPerNode, ResourceWeight FROM "+ydbtype.QuoteIdentifier(path.Join(database, ".sys/resource_pools")))
 	if err != nil {
 		return HeldWorkload{}, fmt.Errorf("read YDB resource pools: %w", err)
 	}
@@ -51,7 +52,7 @@ func ReadWorkload(ctx context.Context, db *sql.DB, database string) (held HeldWo
 	if err := pools.Err(); err != nil {
 		return HeldWorkload{}, fmt.Errorf("read YDB resource pools: %w", err)
 	}
-	classifiers, err := db.QueryContext(ctx, "SELECT Name, Rank, MemberName, ResourcePool FROM `"+path.Join(database, ".sys/resource_pool_classifiers")+"`")
+	classifiers, err := db.QueryContext(ctx, "SELECT Name, Rank, MemberName, ResourcePool FROM "+ydbtype.QuoteIdentifier(path.Join(database, ".sys/resource_pool_classifiers")))
 	if err != nil {
 		return HeldWorkload{}, fmt.Errorf("read YDB resource pool classifiers: %w", err)
 	}
