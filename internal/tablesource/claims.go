@@ -14,8 +14,8 @@
 //
 // What the bundled decoder in the host reads and this package does not is
 // listed in the package README of the provider and in the tests: column family
-// cache modes, the columns of a family written in YAML, changefeeds and index
-// options. The host
+// cache modes, the columns of a family written in YAML, and index options. A
+// table's changefeeds are decoded by internal/changefeedsource. The host
 // refuses a YAML key that no provider claims, and reads a Go comment that none
 // claims as no declaration. So the provider leaves unclaimed the YAML keys it
 // cannot carry, and claims the Go directives and attributes it cannot carry in
@@ -96,12 +96,6 @@ const (
 	// DirectiveColumnFamily declares one family of the struct's table, or of
 	// the table its table attribute names.
 	DirectiveColumnFamily = "ptah:schema:columnfamily"
-	// DirectiveChangefeed and DirectiveChangefeedConsumer are claimed so that
-	// the provider can refuse them by name. The host reads a Go comment that
-	// no provider claims as no declaration at all, so leaving them unclaimed
-	// would drop a changefeed without a word.
-	DirectiveChangefeed         = "ptah:schema:changefeed"
-	DirectiveChangefeedConsumer = "ptah:schema:changefeed:consumer"
 
 	AttributeName        = "name"
 	AttributeTable       = "table"
@@ -168,10 +162,8 @@ func YAMLKeys() []*protocol.YAMLSourceKey {
 	return claims
 }
 
-// GoDirectives returns the Go claims of the provider: the attributes it adds to
-// the host's table and index directives, and the directives of its own. The
-// attributes of the changefeed directives are the ones the host's bundled
-// decoder reads, claimed only so that a changefeed is refused by name.
+// GoDirectives returns the Go claims of this package: the attributes it adds
+// to the host's table and index directives, and the column family directive.
 func GoDirectives() []*protocol.GoSourceDirective {
 	claim := func(directive string, attributes ...string) *protocol.GoSourceDirective {
 		return &protocol.GoSourceDirective{Scope: protocol.GoSourceDirective_TABLE, Directive: directive, Selector: directive, Attributes: attributes,
@@ -191,9 +183,6 @@ func GoDirectives() []*protocol.GoSourceDirective {
 		table,
 		index,
 		family,
-		claim(DirectiveChangefeed, AttributeName, AttributeTable, "mode", "format", "virtual_timestamps", "resolved_timestamps", "initial_scan", "user_sids",
-			"schema_changes", "topic_min_active_partitions", "topic_auto_partitioning", "retention_period"),
-		claim(DirectiveChangefeedConsumer, AttributeName, "changefeed", AttributeTable, "important", "read_from", "supported_codecs", "availability_period"),
 	}
 }
 

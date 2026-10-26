@@ -1,8 +1,7 @@
 // Package tablecompare compares the table and column facets of captured YDB
 // tables offline: the TTL, the automatic partitioning settings, the column
-// families, the family each column sits in and the set of secondary indexes of
-// a row table, and the storage of a column table. The changefeeds of a table
-// are accepted and never reported as a difference.
+// families, the family each column sits in, the set of secondary indexes and
+// the changefeeds of a row table, and the storage of a column table.
 package tablecompare
 
 import (
@@ -40,12 +39,14 @@ func OwnerKinds() []string { return []string{"table", "column"} }
 // compare: the alteration planner decides what an absent read means. The
 // exception is the table properties of a table that exists on both sides: when
 // the desired coverage establishes them, a table with no declared facet is
-// declared to have no TTL, and a TTL it holds is reported. A table's
-// changefeeds are read and validated, and never differ: the planner does not
-// alter them. Only
-// differences the alteration planner acts on are reported, and each carries
-// both complete operands. The backend validates the request and the result
-// around this call.
+// declared to have no TTL, and a TTL it holds is reported; likewise a source
+// that describes the changefeeds of every table it declares declares a table
+// with none to have none. A changefeed set the comparison cannot decide, one
+// holding a changefeed the read cannot represent or a replication-managed
+// stream the declaration changes, is reported as undecided. Only differences
+// the alteration planner acts on are reported, and each carries both complete
+// operands. The backend validates the request and the result around this
+// call.
 func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*protocol.ComparedModels, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -113,6 +114,17 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 			continue
 		}
 		if err := compareUnstated(request, result, parent.GetSubject(), observed); err != nil {
+			return nil, err
+		}
+	}
+	for _, parent := range request.GetParents() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if parent.GetSubject().GetKind() != "table" || !parent.GetDesired() || !parent.GetCurrent() {
+			continue
+		}
+		if err := compareUnstatedChangefeeds(request, result, parent.GetSubject(), held); err != nil {
 			return nil, err
 		}
 	}
@@ -231,6 +243,58 @@ func compareUnstated(request *protocol.CompareModelsRequest, result *protocol.Co
 	return nil
 }
 
+// compareUnstatedChangefeeds compares a table both sides hold, for which the
+// desired side carries no changefeed set, with the changefeeds the table holds.
+// A source that describes the changefeeds of every table it declares (complete
+// desired knowledge) declares such a table to have none; a source that could
+// not describe them states nothing.
+func compareUnstatedChangefeeds(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, subject *protocol.ComparisonIdentity,
+	held map[string]*protocol.ComparisonRecord) error {
+	if !slices.Contains(request.GetKinds(), schema.ChangefeedProperties) {
+		return nil
+	}
+	for _, record := range request.GetDesired().GetRecords() {
+		if record.GetKind() == schema.ChangefeedProperties && provider.CompareIdentities(record.GetSubject(), subject) == 0 {
+			return nil
+		}
+	}
+	observed := held[recordKey(schema.ChangefeedProperties, subject)]
+	if observed == nil || !compared(request, observed) || !tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.ChangefeedProperties, subject, true) {
+		return nil
+	}
+	before, err := tablecreate.NormalizedFacet(observed, protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return err
+	}
+	after, err := tablecreate.UnstatedChangefeedFacet(before.Owner)
+	if err != nil {
+		return err
+	}
+	return compareChangefeeds(result, schema.ChangefeedProperties, subject, after, before)
+}
+
+// compareChangefeeds reports how a table's changefeeds differ from the
+// declared ones: a change, an undecided set, or nothing.
+func compareChangefeeds(result *protocol.ComparedModels, kind string, subject *protocol.ComparisonIdentity, after, before *protocol.Envelope) error {
+	differs, undecided, err := tablecreate.ChangefeedDifference(after, before)
+	if err != nil {
+		return err
+	}
+	if undecided != "" {
+		result.Undecided = append(result.Undecided, &protocol.ComparisonUndecided{Kind: kind, Subject: proto.CloneOf(subject), Reason: undecided})
+		return nil
+	}
+	if !differs {
+		return nil
+	}
+	change, err := schema.CaptureTablePropertiesChange("change-"+strconv.Itoa(len(result.Changes)), after.Owner, before, after)
+	if err != nil {
+		return err
+	}
+	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: kind, Subject: proto.CloneOf(subject), Value: change})
+	return nil
+}
+
 // compared reports whether this comparison reads a record: it owns the model,
 // the record states a value, and the value is not bound to other targets.
 func compared(request *protocol.CompareModelsRequest, record *protocol.ComparisonRecord) bool {
@@ -254,6 +318,9 @@ func compareRecord(result *protocol.ComparedModels, want, observed *protocol.Com
 		result.Undecided = append(result.Undecided, &protocol.ComparisonUndecided{Kind: want.Kind, Subject: proto.CloneOf(want.Subject),
 			Reason: "The declared and the observed facet name different owners"})
 		return nil
+	}
+	if want.Kind == schema.ChangefeedProperties {
+		return compareChangefeeds(result, want.Kind, want.Subject, after, before)
 	}
 	differs, err := tablecreate.FacetDiffers(after, before)
 	if err != nil || !differs {

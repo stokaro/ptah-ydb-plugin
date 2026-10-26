@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -38,10 +41,16 @@ func buildTablePropertiesChangeModel() *protocol.ValueModel {
 			"indexes": map[string]any{
 				"facet":  "the kind of the index set model, present exactly when the operands are index sets",
 				"before": json.RawMessage(model(IndexProperties).DefinitionJson),
-				"after":  json.RawMessage(NativeDesiredModel(IndexProperties).DefinitionJson)}},
-		"operands":   "the owner is a table or one of its columns; before is the complete observed facet of that owner and after is the complete desired facet; neither may be null; the facet key names the index set model when the owner is a table and the operands are its index sets",
-		"validation": "exact lowercase keys; validate both operands against the model that matches the owner kind, or the index set model when the facet key names it",
-		"semantics":  "behavioral; replaces no owner, removes no state, leaves access unchanged",
+				"after":  json.RawMessage(NativeDesiredModel(IndexProperties).DefinitionJson)},
+			"changefeeds": map[string]any{
+				"facet":  "the kind of the changefeed set model, present exactly when the operands are changefeed sets",
+				"before": json.RawMessage(model(ChangefeedProperties).DefinitionJson),
+				"after":  json.RawMessage(NativeDesiredModel(ChangefeedProperties).DefinitionJson)}},
+		"operands": "the owner is a table or one of its columns; before is the complete observed facet of that owner and after is the complete desired facet; neither may be null; " +
+			"the facet key names the index set or the changefeed set model when the owner is a table and the operands are its index or changefeed sets",
+		"validation": "exact lowercase keys; validate both operands against the model that matches the owner kind, or the set model the facet key names",
+		"semantics": "behavioral; replaces no owner, removes no state, leaves access unchanged; a changefeed set change that drops or recreates a changefeed, or drops or restarts a consumer of its topic, " +
+			"is destructive and removes state, and one that only adds changefeeds or consumers is additive",
 	})
 	if err != nil {
 		panic(err)
@@ -90,8 +99,8 @@ func CaptureTablePropertiesChange(id string, owner *protocol.Reference, before, 
 		return nil, fmt.Errorf("table properties change operands are facets of different models")
 	}
 	operands := map[string]json.RawMessage{"before": before.Payload, "after": after.Payload}
-	if before.Kind == IndexProperties {
-		operands[facetKey] = json.RawMessage(strconv.Quote(IndexProperties))
+	if before.Kind == IndexProperties || before.Kind == ChangefeedProperties {
+		operands[facetKey] = json.RawMessage(strconv.Quote(before.Kind))
 	}
 	payload, err := json.Marshal(operands)
 	if err != nil {
@@ -126,10 +135,14 @@ func NormalizeTablePropertiesChange(input *protocol.ValueInput) (*protocol.Norma
 	expected := 2
 	if selector, found := operands[facetKey]; found {
 		expected = 3
-		if operandKind != TableProperties || !bytes.Equal(selector, []byte(strconv.Quote(IndexProperties))) {
+		switch {
+		case operandKind == TableProperties && bytes.Equal(selector, []byte(strconv.Quote(IndexProperties))):
+			operandKind = IndexProperties
+		case operandKind == TableProperties && bytes.Equal(selector, []byte(strconv.Quote(ChangefeedProperties))):
+			operandKind = ChangefeedProperties
+		default:
 			return nil, fmt.Errorf("table properties change names an unsupported facet")
 		}
-		operandKind = IndexProperties
 	}
 	if len(operands) != expected {
 		return nil, fmt.Errorf("table properties change requires exact before and after operands")
@@ -165,9 +178,16 @@ func NormalizeTablePropertiesChange(input *protocol.ValueInput) (*protocol.Norma
 		reason = "A column moves to another column family"
 	case IndexProperties:
 		reason = "A secondary index is added, dropped or differs from its declaration; YDB builds a new index in the background and cannot alter one in place"
+	case ChangefeedProperties:
+		reason = "A changefeed is added, dropped or added again, or its topic's retention or consumers change"
 	}
 	semantics := &protocol.ChangeSemantics{ReplacesOwner: new(false), RemovesState: new(false), Impact: protocol.ChangeSemantics_BEHAVIORAL, Reason: reason,
 		Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: "Altering table settings preserves native access metadata"}
+	if operandKind == ChangefeedProperties {
+		if err := changefeedSetSemantics(semantics, operands["before"], operands["after"]); err != nil {
+			return nil, err
+		}
+	}
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner), CanonicalFormat: contract.CanonicalFormat,
 		CanonicalProjection: bytes.Clone(canonical), ChangeSemantics: semantics}, nil
 }
@@ -176,8 +196,56 @@ func desiredModel(kind string) *protocol.ValueModel {
 	switch kind {
 	case ColumnProperties:
 		return ColumnDesiredModel()
-	case IndexProperties:
-		return NativeDesiredModel(IndexProperties)
+	case IndexProperties, ChangefeedProperties:
+		return NativeDesiredModel(kind)
 	}
 	return TableDesiredModel()
+}
+
+// changefeedSetSemantics sets the impact of a changefeed set change from the
+// steps that carry it out. A change whose steps cannot be decided keeps the
+// behavioral default: the comparison reports such a set as undecided, never as
+// a change.
+func changefeedSetSemantics(semantics *protocol.ChangeSemantics, before, after json.RawMessage) error {
+	var held native.ChangefeedObservations
+	if err := protojson.Unmarshal(before, &held); err != nil {
+		return err
+	}
+	var declared native.ChangefeedSetIntent
+	if err := protojson.Unmarshal(after, &declared); err != nil {
+		return err
+	}
+	changes, undecided := changefeeds.Diff(&declared, &held)
+	if undecided != "" {
+		return nil
+	}
+	additive := len(changes) > 0
+	for _, change := range changes {
+		switch change.Action() {
+		case changefeeds.Drop, changefeeds.Recreate:
+			semantics.Impact, semantics.RemovesState, semantics.Reason = protocol.ChangeSemantics_DESTRUCTIVE, new(true), dropChangefeedReason
+			return nil
+		case changefeeds.Topic:
+			current, err := changefeeds.FromObserved(change.Before)
+			if err != nil {
+				return err
+			}
+			desired, err := changefeeds.FromIntent(change.After)
+			if err != nil {
+				return err
+			}
+			if len(changefeeds.ConsumerPositionsLost(desired, current)) > 0 {
+				semantics.Impact, semantics.RemovesState, semantics.Reason = protocol.ChangeSemantics_DESTRUCTIVE, new(true), changeChangefeedTopic
+				return nil
+			}
+			if changefeeds.RetentionChanged(desired, current) || changefeeds.ConsumersChanged(desired, current) {
+				additive = false
+			}
+		}
+	}
+	semantics.Reason = "A changefeed is added, or its topic's retention or consumers change; " + changeChangefeedTopic
+	if additive {
+		semantics.Impact, semantics.Reason = protocol.ChangeSemantics_ADDITIVE, "Changefeeds, or consumers of their topics, are added"
+	}
+	return nil
 }

@@ -47,6 +47,11 @@ type Gate struct {
 // that the provider's alteration does not carry out.
 var gates = []Gate{
 	{Key: "tiered_ttl", Flag: "EnableTieringInColumnShard"},
+	// Off on 25.1 and on from 25.2. With the flag on, 25.1 takes a changefeed
+	// with TOPIC_AUTO_PARTITIONING = 'ENABLED' and reads it back as an
+	// auto-partitioned topic; with it off, YDB answers `Topic autopartitioning
+	// for CDC is disabled`.
+	{Key: "changefeed_topic_auto_partitioning", Flag: "EnableTopicAutopartitioningForCDC"},
 }
 
 // Gates returns every capability a flag decides, in a fixed order.

@@ -38,6 +38,11 @@ type declaredFacets struct {
 	columns map[string]*native.ColumnIntent
 	// storage is the column-storage facet of a column table, nil for a row table.
 	storage *native.ColumnStorageIntent
+	// changefeeds are the changefeeds of a row table, nil where the
+	// declaration states none. The creation request carries none of them:
+	// YDB adds a changefeed only to a table that exists, so each is a step of
+	// its own after the creation.
+	changefeeds *native.ChangefeedSetIntent
 }
 
 func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures) (declaredFacets, error) {
@@ -94,6 +99,11 @@ func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures)
 		case schema.ColumnStorageProperties:
 			result.storage = &native.ColumnStorageIntent{}
 			if err := protojson.Unmarshal(value.Payload, result.storage); err != nil {
+				return declaredFacets{}, err
+			}
+		case schema.ChangefeedProperties:
+			result.changefeeds = &native.ChangefeedSetIntent{}
+			if err := protojson.Unmarshal(value.Payload, result.changefeeds); err != nil {
 				return declaredFacets{}, err
 			}
 		default:

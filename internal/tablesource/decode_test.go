@@ -47,7 +47,7 @@ func TestClaims(t *testing.T) {
 	c.Assert(models["platform.ydb"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnStorageProperties})
 	c.Assert(models["column_store"], qt.DeepEquals, []string{schema.ColumnStorageProperties})
 	directives := tablesource.GoDirectives()
-	c.Assert(len(directives), qt.Equals, 5)
+	c.Assert(len(directives), qt.Equals, 3)
 	scopes := map[string]protocol.GoSourceDirective_Scope{}
 	var names []string
 	for _, directive := range directives {
@@ -64,13 +64,12 @@ func TestClaims(t *testing.T) {
 		}
 		c.Assert(directive.Models, qt.DeepEquals, want, qt.Commentf(directive.Directive))
 	}
-	c.Assert(names, qt.DeepEquals, []string{"ptah:schema:table", "ptah:schema:index", "ptah:schema:columnfamily", "ptah:schema:changefeed", "ptah:schema:changefeed:consumer"})
+	c.Assert(names, qt.DeepEquals, []string{"ptah:schema:table", "ptah:schema:index", "ptah:schema:columnfamily"})
 	// The host's own directives take the scope of the part they declare, and
-	// the provider's directives sit on a table.
+	// the provider's directive sits on a table.
 	c.Assert(scopes, qt.DeepEquals, map[string]protocol.GoSourceDirective_Scope{
 		"ptah:schema:table": protocol.GoSourceDirective_TABLE, "ptah:schema:index": protocol.GoSourceDirective_INDEX,
-		"ptah:schema:columnfamily": protocol.GoSourceDirective_TABLE, "ptah:schema:changefeed": protocol.GoSourceDirective_TABLE,
-		"ptah:schema:changefeed:consumer": protocol.GoSourceDirective_TABLE,
+		"ptah:schema:columnfamily": protocol.GoSourceDirective_TABLE,
 	})
 }
 

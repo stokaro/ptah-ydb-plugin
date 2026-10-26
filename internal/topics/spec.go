@@ -98,7 +98,7 @@ func FromObserved(observed *native.DescribeTopicResult) (ydbdecl.Topic, error) {
 		return ydbdecl.Topic{}, err
 	}
 	for _, consumer := range observed.GetConsumers() {
-		decoded, err := observedConsumer(consumer)
+		decoded, err := ObservedConsumer(consumer)
 		if err != nil {
 			return ydbdecl.Topic{}, fmt.Errorf("consumer %q: %w", consumer.GetName(), err)
 		}
@@ -132,10 +132,10 @@ func refuseUnmodeled(observed *native.DescribeTopicResult) error {
 	return nil
 }
 
-// observedConsumer reads one consumer of a description. A consumer's
+// ObservedConsumer reads one consumer of a description. A consumer's
 // attributes are YDB's own (`_service_type`), and a streaming consumer type is
 // the one kind of consumer YQL creates; neither is declared.
-func observedConsumer(observed *native.Consumer) (ydbdecl.Consumer, error) {
+func ObservedConsumer(observed *native.Consumer) (ydbdecl.Consumer, error) {
 	consumer := ydbdecl.Consumer{Name: observed.GetName(), Important: observed.GetImportant()}
 	if readFrom := observed.GetReadFrom(); readFrom != nil {
 		if readFrom.GetNanos() != 0 {
@@ -214,17 +214,8 @@ func FromIntent(intent *native.TopicIntent) (ydbdecl.Topic, error) {
 		return ydbdecl.Topic{}, err
 	}
 	for _, consumer := range intent.GetConsumers() {
-		decoded := ydbdecl.Consumer{Name: consumer.GetName(), Important: consumer.GetImportant()}
-		if readFrom := consumer.GetReadFrom(); readFrom != nil {
-			if readFrom.GetNanos() != 0 {
-				return ydbdecl.Topic{}, fmt.Errorf("consumer %q: its read_from %s is not a whole second", consumer.GetName(), readFrom.AsTime().Format(time.RFC3339Nano))
-			}
-			decoded.ReadFrom = formatReadFrom(readFrom.AsTime())
-		}
-		if decoded.SupportedCodecs, err = codecNames("its", consumer.GetSupportedCodecs()); err != nil {
-			return ydbdecl.Topic{}, fmt.Errorf("consumer %q: %w", consumer.GetName(), err)
-		}
-		if decoded.AvailabilityPeriod, err = interval("its availability period", consumer.GetAvailabilityPeriod()); err != nil {
+		decoded, err := DeclaredConsumer(consumer)
+		if err != nil {
 			return ydbdecl.Topic{}, fmt.Errorf("consumer %q: %w", consumer.GetName(), err)
 		}
 		spec.Consumers = append(spec.Consumers, decoded)
@@ -233,6 +224,27 @@ func FromIntent(intent *native.TopicIntent) (ydbdecl.Topic, error) {
 		return ydbdecl.Topic{}, err
 	}
 	return spec, nil
+}
+
+// DeclaredConsumer reads one consumer of a desired topic as the declaration
+// states it. A consumer's attributes and its type are YDB's own and are not
+// declared.
+func DeclaredConsumer(consumer *native.ConsumerIntent) (ydbdecl.Consumer, error) {
+	decoded := ydbdecl.Consumer{Name: consumer.GetName(), Important: consumer.GetImportant()}
+	if readFrom := consumer.GetReadFrom(); readFrom != nil {
+		if readFrom.GetNanos() != 0 {
+			return ydbdecl.Consumer{}, fmt.Errorf("its read_from %s is not a whole second", readFrom.AsTime().Format(time.RFC3339Nano))
+		}
+		decoded.ReadFrom = formatReadFrom(readFrom.AsTime())
+	}
+	var err error
+	if decoded.SupportedCodecs, err = codecNames("its", consumer.GetSupportedCodecs()); err != nil {
+		return ydbdecl.Consumer{}, err
+	}
+	if decoded.AvailabilityPeriod, err = interval("its availability period", consumer.GetAvailabilityPeriod()); err != nil {
+		return ydbdecl.Consumer{}, err
+	}
+	return decoded, nil
 }
 
 // Intent writes a declared topic as the provider's desired model: each
@@ -262,20 +274,29 @@ func Intent(spec ydbdecl.Topic) (*native.TopicIntent, error) {
 	intent.PartitionWriteBurstBytes = int64(spec.PartitionWriteBurstBytes)
 	intent.SupportedCodecs = codecList(spec.SupportedCodecs)
 	for _, consumer := range spec.Consumers {
-		declared := &native.ConsumerIntent{Name: consumer.Name, Important: consumer.Important, SupportedCodecs: codecList(consumer.SupportedCodecs)}
-		if consumer.ReadFrom != "" {
-			instant, err := time.Parse(time.RFC3339, consumer.ReadFrom)
-			if err != nil {
-				return nil, fmt.Errorf("consumer %q: invalid read_from %q", consumer.Name, consumer.ReadFrom)
-			}
-			declared.ReadFrom = timestamppb.New(instant)
-		}
-		if consumer.AvailabilityPeriod != "" {
-			declared.AvailabilityPeriod = durationOf(consumer.AvailabilityPeriod)
+		declared, err := ConsumerIntent(consumer)
+		if err != nil {
+			return nil, err
 		}
 		intent.Consumers = append(intent.Consumers, declared)
 	}
 	return intent, nil
+}
+
+// ConsumerIntent writes a declared consumer as the provider's desired model.
+func ConsumerIntent(consumer ydbdecl.Consumer) (*native.ConsumerIntent, error) {
+	declared := &native.ConsumerIntent{Name: consumer.Name, Important: consumer.Important, SupportedCodecs: codecList(consumer.SupportedCodecs)}
+	if consumer.ReadFrom != "" {
+		instant, err := time.Parse(time.RFC3339, consumer.ReadFrom)
+		if err != nil {
+			return nil, fmt.Errorf("consumer %q: invalid read_from %q", consumer.Name, consumer.ReadFrom)
+		}
+		declared.ReadFrom = timestamppb.New(instant)
+	}
+	if consumer.AvailabilityPeriod != "" {
+		declared.AvailabilityPeriod = durationOf(consumer.AvailabilityPeriod)
+	}
+	return declared, nil
 }
 
 // Keep returns the declaration that keeps a read topic as it is, for a topic

@@ -85,6 +85,22 @@ const (
 const (
 	declaredFeed = `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","topic":{"partitioningSettings":{}}}]}`
 	heldFeed     = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED"},"topic":{"partitioningSettings":{}}}]}`
+	// heldDefaults is the changefeed of heldFeed as YDB reports it: its
+	// topic's 24 hours and one partition, and a consumer it named nothing for.
+	heldDefaults = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED"},` +
+		`"topic":{"partitioningSettings":{"minActivePartitions":"1"},"retentionPeriod":"86400s"}}]}`
+	// heldKeys holds a KEYS_ONLY changefeed under the name of heldFeed's.
+	heldKeys = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_KEYS_ONLY","format":"FORMAT_JSON","state":"STATE_ENABLED"},"topic":{"partitioningSettings":{}}}]}`
+	// declaredConsumer and heldConsumer give the changefeed one consumer.
+	declaredConsumer = `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","topic":{"partitioningSettings":{},"consumers":[{"name":"c"}]}}]}`
+	heldConsumer     = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED"},` +
+		`"topic":{"partitioningSettings":{},"consumers":[{"name":"c"}]}}]}`
+	declaredLonger = `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","topic":{"partitioningSettings":{},"retentionPeriod":"172800s"}}]}`
+	// heldRegion and heldReplicated hold what the comparison leaves undecided:
+	// a changefeed naming an AWS region, and a replication-managed stream.
+	heldRegion     = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED","awsRegion":"eu-west-1"},"topic":{"partitioningSettings":{}}}]}`
+	heldReplicated = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",` +
+		`"attributes":{"__async_replication":"{\"path\":\"/local/repl/records\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},"topic":{"partitioningSettings":{}}}]}`
 )
 
 func owner(kind, name string) *protocol.Reference {
@@ -346,8 +362,10 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"a column only the read states", side{table: plain}, side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}},
 		{"no facets at all", side{}, side{}},
 		{"changefeeds on both sides", side{changefeeds: declaredFeed}, side{changefeeds: heldFeed}},
-		{"a changefeed only the read states", side{}, side{changefeeds: heldFeed}},
-		{"a changefeed the declaration adds", side{changefeeds: declaredFeed}, side{changefeeds: `{"changefeeds":[]}`}},
+		{"a changefeed read with YDB's defaults", side{changefeeds: declaredFeed}, side{changefeeds: heldDefaults}},
+		{"a changefeed a source that could not describe changefeeds leaves out", side{uninspected: true}, side{changefeeds: heldFeed}},
+		{"no changefeed on either side", side{changefeeds: `{"changefeeds":[]}`}, side{changefeeds: `{"changefeeds":[]}`}},
+		{"a table with no changefeed the source states none for", side{}, side{changefeeds: `{"changefeeds":[]}`}},
 		{"changefeeds beside a table that differs in no setting", side{table: plain, changefeeds: declaredFeed}, side{table: plain, changefeeds: heldFeed}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -356,6 +374,83 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 			c.Assert(result.Changes, qt.HasLen, 0)
 		})
 	}
+}
+
+// TestCompare_ReportsAChangefeedChange reports a changefeed set the table does
+// not hold, with the impact the steps that carry it out have: a removal or a
+// recreation loses the records nobody read, and so does a consumer dropped,
+// while an addition adds.
+func TestCompare_ReportsAChangefeedChange(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		desired      side
+		current      side
+		impact       protocol.ChangeSemantics_Impact
+		removesState bool
+	}{
+		{"a changefeed the declaration adds", side{changefeeds: declaredFeed}, side{changefeeds: `{"changefeeds":[]}`}, protocol.ChangeSemantics_ADDITIVE, false},
+		{"a changefeed the source states none for", side{}, side{changefeeds: heldFeed}, protocol.ChangeSemantics_DESTRUCTIVE, true},
+		{"a changefeed the declaration leaves out", side{changefeeds: `{"changefeeds":[]}`}, side{changefeeds: heldFeed}, protocol.ChangeSemantics_DESTRUCTIVE, true},
+		{"a changefeed whose mode changes", side{changefeeds: declaredFeed}, side{changefeeds: heldKeys}, protocol.ChangeSemantics_DESTRUCTIVE, true},
+		{"a consumer the declaration adds", side{changefeeds: declaredConsumer}, side{changefeeds: heldFeed}, protocol.ChangeSemantics_ADDITIVE, false},
+		{"a consumer the declaration leaves out", side{changefeeds: declaredFeed}, side{changefeeds: heldConsumer}, protocol.ChangeSemantics_DESTRUCTIVE, true},
+		{"a longer retention", side{changefeeds: declaredLonger}, side{changefeeds: heldFeed}, protocol.ChangeSemantics_BEHAVIORAL, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			result := compare(c, request(c, test.desired, test.current))
+			c.Assert(result.Changes, qt.HasLen, 1)
+			change := result.Changes[0]
+			c.Assert(change.Kind, qt.Equals, schema.ChangefeedProperties)
+			c.Assert(change.Subject.Kind, qt.Equals, "table")
+			c.Assert(change.Value.Value.Kind, qt.Equals, schema.TablePropertiesChange)
+			c.Assert(string(change.Value.Value.Payload), qt.Contains, `"facet":"`+schema.ChangefeedProperties+`"`)
+			c.Assert(change.Value.ChangeSemantics.Impact, qt.Equals, test.impact)
+			c.Assert(change.Value.ChangeSemantics.GetRemovesState(), qt.Equals, test.removesState)
+			c.Assert(change.Value.ChangeSemantics.GetReplacesOwner(), qt.IsFalse)
+			c.Assert(change.Value.ChangeSemantics.Access, qt.Equals, protocol.ChangeSemantics_UNCHANGED)
+		})
+	}
+}
+
+// TestCompare_LeavesAChangefeedUndecided reports a changefeed set the
+// comparison cannot decide as undecided, never as a change: a changefeed the
+// read cannot represent, and a replication-managed stream the declaration
+// changes.
+func TestCompare_LeavesAChangefeedUndecided(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		desired    side
+		current    side
+		wantReason string
+	}{
+		{"a changefeed naming an AWS region", side{changefeeds: declaredFeed}, side{changefeeds: heldRegion},
+			`changefeed "f" has settings this provider cannot represent, so the current changefeed was not established: it names an AWS region, which Ptah does not model`},
+		{"a changefeed naming an AWS region the source states none for", side{}, side{changefeeds: heldRegion},
+			`changefeed "f" has settings this provider cannot represent, .*`},
+		{"a replication-managed stream the declaration changes", side{changefeeds: declaredLonger}, side{changefeeds: heldReplicated},
+			`changefeed "f" is a replication-managed stream, .*`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			req := request(c, test.desired, test.current)
+			result, err := backend.New().CompareModels(c.Context(), req)
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateComparedModels(backend.Description(), req, result), qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 0)
+			c.Assert(result.Undecided, qt.HasLen, 1)
+			c.Assert(result.Undecided[0].Kind, qt.Equals, schema.ChangefeedProperties)
+			c.Assert(result.Undecided[0].Reason, qt.Matches, test.wantReason)
+		})
+	}
+}
+
+// TestCompare_KeepsAReplicationManagedStream leaves a replication-managed
+// stream the declaration leaves out as it is: its controller owns it.
+func TestCompare_KeepsAReplicationManagedStream(t *testing.T) {
+	c := qt.New(t)
+	result := compare(c, request(c, side{}, side{changefeeds: heldReplicated}))
+	c.Assert(result.Changes, qt.HasLen, 0)
 }
 
 func TestCompare_ReadsFacetsByTarget(t *testing.T) {

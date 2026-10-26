@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
@@ -51,9 +52,25 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			}
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		feeds, err := changefeedsource.Decode(ctx, document)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, status.FromContextError(ctx.Err()).Err()
+			}
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		if err := refuseColumnTableChangefeeds(tables, feeds); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		for index, fragment := range document.Fragments {
-			values, err := topics[index], error(nil)
-			if !topicsource.Owns(fragment) {
+			var values []*protocol.SourceModelValue
+			var err error
+			switch {
+			case topicsource.Owns(fragment):
+				values = topics[index]
+			case changefeedsource.Owns(fragment):
+				values = changefeedValues(document, fragment, index, feeds)
+			default:
 				values, err = fragmentValues(ctx, document, fragment, index, tables)
 			}
 			if err != nil {
@@ -77,6 +94,40 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	return result, nil
+}
+
+// refuseColumnTableChangefeeds refuses a changefeed of a table the document
+// declares as a column table: YDB keeps changefeeds on row tables only, and
+// the host's bundled source refuses the declaration with these words.
+func refuseColumnTableChangefeeds(tables []tablesource.Table, feeds []changefeedsource.Table) error {
+	for _, feed := range feeds {
+		for _, table := range tables {
+			if table.Binding.GetId() == feed.Binding.GetId() && table.Value.GetValue().GetKind() == schema.ColumnStorageProperties {
+				return fmt.Errorf("table %q: %s", tableName(feed.Binding.GetObject()), schema.ColumnTableRowSettingsRefusal)
+			}
+		}
+	}
+	return nil
+}
+
+// tableName names a table as the source refusals name it.
+func tableName(table *protocol.Reference) string {
+	if table.GetSchema() == "" {
+		return table.GetName()
+	}
+	return table.GetSchema() + "." + table.GetName()
+}
+
+// changefeedValues returns the changefeed facet a table's first changefeed
+// fragment declares, and nothing for its other fragments.
+func changefeedValues(document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int, feeds []changefeedsource.Table) []*protocol.SourceModelValue {
+	for _, table := range feeds {
+		if table.Fragment == index {
+			return []*protocol.SourceModelValue{{Placement: protocol.SourceModelValue_FACET, Value: table.Value,
+				Source: &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}}}
+		}
+	}
+	return nil
 }
 
 // fragmentValues returns the values one fragment declares. A table's

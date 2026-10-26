@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -100,6 +101,9 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		}
 		if captured.GetValue().GetKind() == schema.TopicOperation && !request.Capabilities[topics.CapabilityTopics] {
 			return nil, status.Error(codes.FailedPrecondition, "topic rendering requires the topics capability")
+		}
+		if captured.GetValue().GetKind() == schema.ChangefeedOperation && !request.Capabilities[changefeeds.CapabilityChangefeeds] {
+			return nil, status.Error(codes.FailedPrecondition, "changefeed rendering requires the changefeeds capability")
 		}
 		normalized, err := normalizeOperation(&protocol.ValueInput{Id: captured.GetId(), Representation: protocol.ValueInput_OPERATION, Value: captured.GetValue()})
 		if err != nil {

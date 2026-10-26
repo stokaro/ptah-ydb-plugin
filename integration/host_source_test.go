@@ -122,14 +122,14 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 // YAML key it is not claimed and by the provider for a claimed one.
 func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testing.T) {
 	for _, test := range []struct{ name, flag, file, content, want string }{
-		{"an unclaimed YAML key", "--schema-file", "schema.yaml",
-			"tables:\n  host_source_items:\n    changefeeds: []\n    columns:\n      id: {type: Uint64, primary: true}\n", `unknown key "changefeeds"`},
+		{"a changefeed without its mode in YAML", "--schema-file", "schema.yaml",
+			"tables:\n  host_source_items:\n    changefeeds:\n      updates: {format: JSON}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a family cache mode", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    column_families:\n      cold: {cache_mode: regular}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a zstd family", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    column_families:\n      cold: {compression: zstd}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
-		{"a changefeed in Go", "--root-dir", "entities.go",
-			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:changefeed name=\"updates\" mode=\"UPDATES\" format=\"JSON\"\n" +
+		{"a consumer of a changefeed the table does not declare in Go", "--root-dir", "entities.go",
+			"package entities\n\n//ptah:schema:table name=\"host_source_items\"\n//ptah:schema:changefeed:consumer name=\"billing\" changefeed=\"updates\"\n" +
 				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n", `decode Go directives of engine "ydb"`},
 		{"both starting layouts in Go", "--root-dir", "entities.go",
 			goTable("//ptah:schema:table name=\"host_source_items\" uniform_partitions=\"4\" partition_at_keys=\"10\"", ""), `decode Go directives of engine "ydb"`},

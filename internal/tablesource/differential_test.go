@@ -13,6 +13,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
@@ -27,7 +28,9 @@ import (
 // A file name says what the row asserts:
 //
 //	refused-*   the host refuses the input, and so must this package
-//	deferred-*  the host accepts the input and the provider cannot carry it yet
+//	deferred-*  the host accepts the input and this package cannot carry it:
+//	            the provider refuses it, the host refuses its unclaimed key, or
+//	            another decoder of the provider carries it
 //	later-*     the host accepts the input when it decodes it and refuses the
 //	            table when it plans it; the provider refuses it when it decodes it
 //	stricter-*  the host accepts the input and loses what the author wrote; the
@@ -206,8 +209,16 @@ func TestDifferential_FailurePath(t *testing.T) {
 // unclaimed YAML key by name before it dispatches anything. (It reads an
 // unclaimed Go comment as no declaration at all, so the provider claims the
 // Go directives it cannot carry and refuses them itself.)
-var unclaimed = map[string]string{
-	"yaml-deferred-changefeeds": "changefeeds",
+var unclaimed = map[string]string{}
+
+// elsewhere names the inputs whose declarations another decoder of the
+// provider carries, with the facet kind it returns for the table. The rows were
+// recorded before that decoder existed, so their names still say deferred;
+// the host's golden facets of the table are compared all the same.
+var elsewhere = map[string]string{
+	"yaml-deferred-changefeeds":       schema.ChangefeedProperties,
+	"go-deferred-changefeed":          schema.ChangefeedProperties,
+	"go-deferred-changefeed-consumer": schema.ChangefeedProperties,
 }
 
 // refusals names the inputs whose key or attribute the provider claims and
@@ -218,8 +229,6 @@ var refusals = map[string]string{
 	"go-deferred-family-cache-mode":             "cache_mode is not supported by the YDB provider yet",
 	"go-deferred-family-fields-other-table":     "fields is not supported by the YDB provider yet",
 	"yaml-deferred-ttl-platform-other-property": "platform.ydb.some_other_setting is not supported by the YDB provider yet",
-	"go-deferred-changefeed":                    "ptah:schema:changefeed is not supported by the YDB provider yet",
-	"go-deferred-changefeed-consumer":           "ptah:schema:changefeed is not supported by the YDB provider yet",
 	"go-deferred-index-partitioning":            "auto_partitioning_by_load is not supported by the YDB provider yet",
 	"go-deferred-index-replicas":                "read_replicas_settings is not supported by the YDB provider yet",
 	"go-deferred-index-vector":                  "clusters is not supported by the YDB provider yet",
@@ -312,7 +321,7 @@ func TestDeferred_AreAllNamed(t *testing.T) {
 		rows = append(rows, r.name)
 		c.Assert(r.golden.Outcome, qt.Equals, "accepted", qt.Commentf(r.name))
 	}
-	named := slices.Concat(slices.Collect(maps.Keys(unclaimed)), slices.Collect(maps.Keys(refusals)))
+	named := slices.Concat(slices.Collect(maps.Keys(unclaimed)), slices.Collect(maps.Keys(refusals)), slices.Collect(maps.Keys(elsewhere)))
 	c.Assert(slices.Sorted(slices.Values(rows)), qt.DeepEquals, slices.Sorted(slices.Values(named)))
 }
 
@@ -338,6 +347,29 @@ func TestDeferred_RefusedByName(t *testing.T) {
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
 			c.Assert(err, qt.ErrorMatches, `(?s).*`+words+`.*`)
 			c.Assert(decoded == nil, qt.IsTrue)
+		})
+	}
+}
+
+// TestDeferred_DecodedElsewhere decodes the inputs another decoder of the
+// provider carries: the table's facets mean what the host's mean, and the
+// other decoder's facet comes back beside them.
+func TestDeferred_DecodedElsewhere(t *testing.T) {
+	for name, kind := range elsewhere {
+		t.Run(name, func(t *testing.T) {
+			c := qt.New(t)
+			rows := corpus(c, func(candidate string) bool { return candidate == name })
+			c.Assert(len(rows), qt.Equals, 1)
+			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
+			c.Assert(err, qt.IsNil)
+			c.Assert(pluginMeaning(c, decoded), qt.DeepEquals, hostMeaning(c, rows[0].golden))
+			var kinds []string
+			for _, fragment := range decoded.Documents[0].Fragments {
+				for _, value := range fragment.Values {
+					kinds = append(kinds, value.Value.Value.Kind)
+				}
+			}
+			c.Assert(kinds, qt.DeepEquals, []string{kind})
 		})
 	}
 }

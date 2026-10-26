@@ -76,12 +76,18 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	}
 	digest := sha256.Sum256(canonical)
 	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
-	if kind == ColumnStorageProperties || kind == TopicProperties {
+	switch kind {
+	case ColumnStorageProperties, TopicProperties:
 		// A YAML, Go or SQL source says whether a table stores columns, so the
 		// absence of the facet on a table such a source describes is a request
 		// for row storage. Each of them declares topics too, and describes
 		// them completely, as for the host's embedded engine.
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}
+	case ChangefeedProperties:
+		// A YAML or Go source declares the changefeeds of each table it
+		// declares, as for the host's embedded engine, so a table it declares
+		// with none is declared to have none.
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
 	}
 	return result
 }

@@ -36,7 +36,7 @@ func facet(c *qt.C, kind, name, payload string) *protocol.ComparisonRecord {
 		reference.Kind, reference.Path, reference.Name = "column", []string{reference.Name}, name
 		model = schema.ColumnDesiredModel()
 	}
-	if kind == schema.IndexProperties {
+	if kind == schema.IndexProperties || kind == schema.ChangefeedProperties {
 		model = schema.NativeDesiredModel(kind)
 	}
 	values, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{
