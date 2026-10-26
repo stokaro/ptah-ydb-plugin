@@ -44,7 +44,7 @@ func TestCompileKeyParts_HappyPath(t *testing.T) {
 			c := qt.New(t)
 			table := unfaceted()
 			table.PrimaryKey, table.PrimaryKeyParts = test.key, test.parts
-			result, err := tablecreate.Compile(owner(), table)
+			result, err := tablecreate.Compile(owner(), table, nil)
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.PrimaryKey, qt.DeepEquals, test.want)
 		})
@@ -73,7 +73,7 @@ func TestCompileKeyParts_FailurePath(t *testing.T) {
 			c := qt.New(t)
 			table := unfaceted()
 			table.PrimaryKey, table.PrimaryKeyParts = test.key, test.parts
-			result, err := tablecreate.Compile(owner(), table)
+			result, err := tablecreate.Compile(owner(), table, nil)
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(result, qt.IsNil)
 		})

@@ -49,8 +49,10 @@ a minor version), its engines and the archive and executable for each platform.
 A host starts the release when its contract has the same major version and a
 minor version at least `min_contract.minor`. The document states the minimum the
 provider declares in its `Describe` reply, so the two cannot disagree. This
-provider requires contract 25.5 and negotiates `planning.lifecycle` to order
-native replacements around common table operations. `ptah providers install`
+provider requires contract 25.6 so the host can consume authoritative column
+comparison, readback, and creation receipts. It also negotiates
+`planning.lifecycle` to order native replacements around common table operations.
+`ptah providers install`
 reads the document to choose the newest release the host can start, without
 downloading an archive. `release-lines.json` lists the release lines the provider declares.
 
@@ -70,7 +72,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.7.0, which speaks provider contract 25.5.
+The module pins `provider-sdk` v0.8.0, which speaks provider contract 25.6.
 Builds require neither the Ptah application source nor a local SDK checkout.
 
 Run the unit suite and build the executable:
@@ -1717,6 +1719,25 @@ table in place, each keeping its owner and access entries.
 `ptah schema apply` from a YAML, a Go and a YQL source: it creates both
 objects, finds nothing to change, moves the data source, adds a column to the
 table, finds nothing to change after each, and drops both.
+
+## Common column semantics
+
+The negotiated `schema.columns` service compares the exact columns the host
+pairs inside their full captured tables. It reports type and default
+equivalence, effective nullability, and sequence start and increment differences.
+Primary and serial columns have effective `NOT NULL`; the original declaration
+is retained. Readback distinguishes absent defaults, empty literal values and
+expressions. Creation projection reports every effective column in declaration
+order, including its typed literal default and comment.
+
+Table compilation maps supported SQL aliases using the selected target's
+capabilities. Row-table literal defaults compile into typed native values;
+expressions are refused. A default has one source declaration, either a common
+column field or native column settings. Wide date/time types and parameterized
+Decimal follow the cluster flags; small integer and document defaults follow the
+measured release line. A column table accepts no defaults or serial columns.
+Serial creation and sequence changes still require their separate operation
+implementation before the extraction is complete.
 
 ## Offline table preparation
 

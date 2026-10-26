@@ -83,7 +83,44 @@ type session struct {
 
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
-	return []string{provider.SchemaDeclarationsFeature, provider.ScopeSelectionsFeature, provider.StatementsFeature, provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature, provider.DevCleanupFeature, provider.ReplayGuardFeature, provider.StatementTimeoutFeature, provider.EmbeddingStoreFeature, provider.ReadSQLSchemaFeature, provider.TextUnitsFeature, provider.PlanningPolicyFeature, provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature, provider.EntryKeysFeature, provider.HCLSourceFeature, provider.EncodeSourceFeature}
+	return []string{provider.ColumnsFeature,provider.SchemaDeclarationsFeature,
+		provider.ScopeSelectionsFeature,
+		provider.StatementsFeature,
+		provider.ValidateSchemaFeature,
+		provider.ProjectTableCreationsFeature,
+		provider.PrepareTablesFeature,
+		provider.PlanFeaturesFeature,
+		provider.RenderFeature,
+		provider.CompareModelsFeature,
+		provider.DecodeSourceFeature,
+		provider.InspectFeature,
+		provider.NormalizeValuesFeature,
+		provider.ConvertValuesFeature,
+		provider.ExecuteFeature,
+		provider.TransactionsFeature,
+		provider.HistoryFeature,
+		provider.LocksFeature,
+		provider.MetadataFeature,
+		provider.AnalyzeSQLFeature,
+		provider.DevDatabaseFeature,
+		provider.LintFeature,
+		provider.TypeRowsFeature,
+		provider.ReadRowsFeature,
+		provider.RenderRowWritesFeature,
+		provider.SeedsFeature,
+		provider.DevCleanupFeature,
+		provider.ReplayGuardFeature,
+		provider.StatementTimeoutFeature,
+		provider.EmbeddingStoreFeature,
+		provider.ReadSQLSchemaFeature,
+		provider.TextUnitsFeature,
+		provider.PlanningPolicyFeature,
+		provider.CommonObjectsFeature,
+		provider.CommonAccessFeature,
+		provider.PlanningLifecycleFeature,
+		provider.EntryKeysFeature,
+		provider.HCLSourceFeature,
+		provider.EncodeSourceFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -133,7 +170,9 @@ func negotiatedFeatures(ctx context.Context) []string {
 // which 25.4 and later take and 25.1 to 25.3 read as a missing name
 // (`PASSWORD_SECRET_NAME requires key`).
 func sessionCapabilities(version string) map[string]bool {
-	return map[string]bool{"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+	return map[string]bool{"wide_date_time_types": releaseline.AtLeast(version, 25, 2), "parameterized_decimal": releaseline.AtLeast(version, 25, 2),
+		"small_integer_defaults": releaseline.AtLeast(version, 25, 2), "document_type_defaults": releaseline.AtLeast(version, 25, 3),
+		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true,
 		"relative_grant_paths": releaseline.AtLeast(version, 26, 1), "topics": true, "topic_consumer_availability_period": releaseline.AtLeast(version, 25, 4), workload.CapabilityResourcePools: false, streaming.Capability: false,
 		changefeeds.CapabilityChangefeeds: true, changefeeds.CapabilityUserSIDs: releaseline.AtLeast(version, 26, 1),
@@ -165,10 +204,9 @@ func clusterCapabilities(ctx context.Context, opened *connection.Connection, ver
 // New constructs an isolated session service.
 func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
-// minContractMinor requires authored declarations and lifecycle planning.
-// Native replacements share physical paths with common objects, so their
-// ordering requires the complete sequence under planning.lifecycle.
-const minContractMinor = 5
+// minContractMinor requires the host column semantics contract. A host without
+// authoritative column receipts cannot compare or project this engine safely.
+const minContractMinor = 6
 
 // Description advertises native runtime services, offline coordination models,
 // captured row-table creation, column family alteration of existing tables,

@@ -38,6 +38,8 @@ func with(set map[string]bool) map[string]bool {
 func linePreset(autoPartitionedFeeds bool) map[string]bool {
 	caps := preset()
 	caps["changefeed_topic_auto_partitioning"] = autoPartitionedFeeds
+	caps["wide_date_time_types"] = autoPartitionedFeeds
+	caps["parameterized_decimal"] = autoPartitionedFeeds
 	caps["resource_pools"] = false
 	return caps
 }
@@ -70,7 +72,7 @@ func TestRefine_ClusterThatTurnedTieringOn(t *testing.T) {
 	flags, err := featureflags.Decode(page(c, "local-ydb-26.2.1.14-tiering-on.json"), "/local")
 	c.Assert(err, qt.IsNil)
 	c.Assert(flags["EnableTieringInColumnShard"], qt.IsTrue)
-	c.Assert(flags.Refine(linePreset(true)), qt.DeepEquals, with(map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true}))
+	c.Assert(flags.Refine(linePreset(true)), qt.DeepEquals, with(map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "wide_date_time_types": true, "parameterized_decimal": true}))
 }
 
 // TestRefine_HappyPath pins what each flag does to its capability, and that a
@@ -81,6 +83,8 @@ func TestRefine_HappyPath(t *testing.T) {
 		flags featureflags.Flags
 		want  map[string]bool
 	}{
+		{name: "wide time types on", flags: featureflags.Flags{"EnableTableDatetime64": true}, want: with(map[string]bool{"wide_date_time_types": true})},
+		{name: "parameterized decimal on", flags: featureflags.Flags{"EnableParameterizedDecimal": true}, want: with(map[string]bool{"parameterized_decimal": true})},
 		{name: "tiering on", flags: featureflags.Flags{"EnableTieringInColumnShard": true}, want: with(map[string]bool{"tiered_ttl": true})},
 		{name: "tiering off", flags: featureflags.Flags{"EnableTieringInColumnShard": false}, want: preset()},
 		{name: "tiering not listed", flags: featureflags.Flags{"EnableVectorIndex": true}, want: preset()},
@@ -128,7 +132,7 @@ func TestGates_NameEveryFlagOnce(t *testing.T) {
 		c.Assert(flags[gate.Flag], qt.IsFalse, qt.Commentf(gate.Flag))
 		keys[gate.Key], flags[gate.Flag] = true, true
 	}
-	c.Assert(keys, qt.DeepEquals, map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "external_object_replace": true, "resource_pools": true})
+	c.Assert(keys, qt.DeepEquals, map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "external_object_replace": true, "resource_pools": true, "wide_date_time_types": true, "parameterized_decimal": true})
 }
 
 func TestDecode_HappyPath(t *testing.T) {

@@ -101,7 +101,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				// table, whatever the host proposes.
 				return refused(i, fmt.Sprintf("rebuilding table %q, which Ptah plans when asked with %s", tableLabel(owner), requestedWith(request.GetPolicy()))), nil
 			}
-			desired, err := Compile(owner, table.Desired)
+			desired, err := Compile(owner, table.Desired, request.Capabilities)
 			if err != nil {
 				return refused(i, fmt.Sprintf("table %q: %v", tableLabel(owner), err)), nil
 			}
@@ -158,13 +158,18 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				return refused(i, reason), nil
 			}
 			if column {
+				if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
+					if reason := completeColumnAlteration(owner, table, nil, request.Capabilities); reason != "" {
+						return refused(i, reason), nil
+					}
+				}
 				columnAlterations = append(columnAlterations, i)
 				if columnTTL != nil {
 					columnTTLs = append(columnTTLs, columnTTLStep{index: i, table: table, owner: owner, change: *columnTTL})
 				}
 				continue
 			}
-			if needs, desired := rebuildNeeds(owner, table); len(needs) != 0 {
+			if needs, desired := rebuildNeeds(owner, table, request.Capabilities); len(needs) != 0 {
 				if !request.GetPolicy().GetAllowTableRebuild() {
 					return refused(i, rebuildRefusal(needs[0], request.GetPolicy())), nil
 				}
@@ -219,6 +224,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			if reason != "" {
 				return refused(i, reason), nil
 			}
+			if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
+				if reason := completeColumnAlteration(owner, table, item.claims, request.Capabilities); reason != "" {
+					return refused(i, reason), nil
+				}
+			}
 			for _, claim := range item.claims {
 				if claim.operation, err = captureColumns("pending", owner, claim); err != nil {
 					return refused(i, err.Error()), nil
@@ -234,7 +244,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		if IsColumnTable(table.Desired) {
 			capture = CaptureColumnTable
 		}
-		operation, err := capture("pending", owner, table.Desired)
+		operation, err := capture("pending", owner, table.Desired, request.Capabilities)
 		if err != nil {
 			return refused(i, err.Error()), nil
 		}

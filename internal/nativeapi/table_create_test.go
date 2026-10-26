@@ -102,7 +102,7 @@ func TestNativeTableCreationDispatchAndConfirmation(t *testing.T) {
 				return &fixture, nil
 			}}
 			owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
-			operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}})
+			operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}}, nil)
 			c.Assert(err, qt.IsNil)
 			if fixture.attributeDrift {
 				request, err := tablecreate.Request(operation.Value)
@@ -144,7 +144,7 @@ func TestNativeTableCreationConfirmsAStartingLayout(t *testing.T) {
 			fixture := creationFixture{minimum: test.minimum}
 			api := &nativeapi.TableCreation{Scheme: &fixture, Open: func(context.Context) (nativeapi.CreationSession, error) { return &fixture, nil }}
 			owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
-			operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}})
+			operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}}, nil)
 			c.Assert(err, qt.IsNil)
 			request, err := tablecreate.Request(operation.Value)
 			c.Assert(err, qt.IsNil)
@@ -163,7 +163,7 @@ func TestNativeTableCreationConfirmsAStartingLayout(t *testing.T) {
 		fixture := creationFixture{minimum: 2}
 		api := &nativeapi.TableCreation{Scheme: &fixture, Open: func(context.Context) (nativeapi.CreationSession, error) { return &fixture, nil }}
 		owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
-		operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}})
+		operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}}, nil)
 		c.Assert(err, qt.IsNil)
 		request, err := tablecreate.Request(operation.Value)
 		c.Assert(err, qt.IsNil)
@@ -204,7 +204,7 @@ func indexedCreation(c *qt.C, held []*native.TableIndexDescription) (bool, error
 	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
 	operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"},
 		Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "mail", Type: "Utf8", Nullable: true}, {Name: "note", Type: "Utf8", Nullable: true}},
-		Indexes: []*protocol.DeclaredIndex{{Name: "by_mail", Fields: []string{"mail"}, Unique: true}, {Name: "by_note", Fields: []string{"note"}, Type: "async"}}})
+		Indexes: []*protocol.DeclaredIndex{{Name: "by_mail", Fields: []string{"mail"}, Unique: true}, {Name: "by_note", Fields: []string{"note"}, Type: "async"}}}, nil)
 	c.Assert(err, qt.IsNil)
 	return api.Apply(c.Context(), "/local", operation.Value, func(context.Context) error { return nil })
 }

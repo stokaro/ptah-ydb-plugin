@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -323,6 +324,13 @@ func readTable(database, directory, name string, described *nativeprotocol.Descr
 			nullable = false
 		}
 		projected := &protocol.Column{Name: column.GetName(), Type: spelling, Nullable: nullable, PrimaryKey: slices.Contains(described.GetPrimaryKey(), column.GetName())}
+		if literal := column.GetFromLiteral(); literal != nil {
+			text, err := columnsemantics.Literal(literal)
+			if err != nil {
+				return nil, fmt.Errorf("column %q default: %w", column.GetName(), err)
+			}
+			projected.DefaultExpression = new(text)
+		}
 		facet, err := schema.CaptureColumn(provider.ColumnReference(ref, column.GetName()), column)
 		if err != nil {
 			return nil, err

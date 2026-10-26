@@ -1,14 +1,12 @@
 package backend_test
 
 import (
-	"fmt"
-	"testing"
+		"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
-
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 )
 
 // TestDescriptionListsOneFeatureSet pins that the engine offers every
@@ -33,17 +31,17 @@ func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
 	c.Assert(description.Engines[0].Features, qt.Contains, "database.dev")
 }
 
-// Authored declarations and lifecycle planning require their declared contract
+// Column semantics, authored declarations, and lifecycle planning require their contract
 // minor. Later compatible minors retain both contracts.
-func TestDescriptionRequiresDeclarationAndLifecycleContract(t *testing.T) {
+func TestDescriptionRequiresColumnSemanticsContract(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		minor uint32
 		want  error
 	}{
-		{"earlier minor", 4, provider.ErrProtocol},
-		{"declaration and lifecycle minor", 5, nil},
-		{"later minor", 6, nil},
+		{"earlier minor", 5, provider.ErrProtocol},
+		{"column semantics minor", 6, nil},
+		{"later minor", 7, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
