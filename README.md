@@ -1418,7 +1418,13 @@ Native and text rendering carry the same operations and preconditions.
 Input dependencies use physical scheme paths, including absolute paths inside
 the selected database or dev realm. A constant `PRAGMA TablePathPrefix` applies
 to subsequent relative paths. A foreign path or an unresolved prefix refuses
-planning. A named resource pool remains a database-wide dependency, including
+planning. Constant named paths, named subqueries, `AS_TABLE`, static `CONCAT`
+and `EACH` inputs retain their dependencies. A qualified external reference
+retains the local external data source as its dependency. Unresolved named
+paths, `USE`, and dynamic table functions such as `RANGE` refuse planning:
+their complete physical inputs cannot be proven from the captured body.
+Ordinary strings outside a table expression create no path dependency.
+A named resource pool remains a database-wide dependency, including
 a literal dot in its name. Scope selection keeps that pool when it keeps the
 query, unless the pool is explicitly excluded. Access changes follow a query's
 stop and restart; a final drop accounts for revoking that query's access.

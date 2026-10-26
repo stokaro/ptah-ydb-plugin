@@ -276,55 +276,6 @@ func LosesCheckpoint(change Change) bool {
 	}
 }
 
-// NamedPaths returns the exact scheme paths named after FROM, JOIN, or INTO.
-// A constant TablePathPrefix applies to subsequent relative paths. A prefix
-// whose value cannot be established is refused rather than hiding dependencies.
-// Qualified data sources, table functions, and named expressions name no local path.
-func NamedPaths(text string) ([]string, error) {
-	tokens := bodyTokens(text)
-	var paths []string
-	prefix := ""
-	for index := 0; index < len(tokens); index++ {
-		keyword := tokens[index]
-		if keyword.IsWord("PRAGMA") && index+1 < len(tokens) && tokens[index+1].IsWord("TablePathPrefix") {
-			if index+4 >= len(tokens) || !tokens[index+2].IsOperator("=") || tokens[index+4].Type != yql.TokenSemicolon {
-				return nil, fmt.Errorf("streaming query TablePathPrefix requires one constant string")
-			}
-			value, ok := yql.StringValue(tokens[index+3].Value)
-			if !ok || !validPath(value, true) {
-				return nil, fmt.Errorf("streaming query TablePathPrefix requires a clean path string")
-			}
-			prefix = value
-			index += 4
-			continue
-		}
-		if index+1 >= len(tokens) || (!keyword.IsWord("FROM") && !keyword.IsWord("JOIN") && !keyword.IsWord("INTO")) {
-			continue
-		}
-		name := tokens[index+1]
-		if name.Type != yql.TokenIdentifier || strings.HasPrefix(name.Value, "$") {
-			continue
-		}
-		if index+2 < len(tokens) && (tokens[index+2].IsOperator(".") || tokens[index+2].IsOperator("(")) {
-			continue
-		}
-		value := name.Value
-		if decoded, ok := yql.IdentifierValue(name.Value); ok {
-			value = decoded
-		}
-		if !validPath(value, false) {
-			return nil, fmt.Errorf("streaming query contains an invalid scheme path")
-		}
-		if prefix != "" && !path.IsAbs(value) {
-			value = path.Join(prefix, value)
-		}
-		if !slices.Contains(paths, value) {
-			paths = append(paths, value)
-		}
-	}
-	return paths, nil
-}
-
 func validPath(value string, empty bool) bool {
 	if value == "" {
 		return empty

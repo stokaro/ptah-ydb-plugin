@@ -129,7 +129,17 @@ func TestNamedPaths(t *testing.T) {
 		want       []string
 	}{
 		{"paths", "INSERT INTO `app/out` SELECT * FROM input JOIN `app/extra` ON true JOIN input ON true;", []string{"app/out", "input", "app/extra"}},
-		{"expressions", "SELECT * FROM $rows JOIN pq.topic ON true JOIN AS_TABLE($rows) ON true;", nil},
+		{"named subquery", "$rows = SELECT * FROM input; SELECT * FROM $rows;", []string{"input"}},
+		{"parenthesized subquery", "$rows = (SELECT * FROM input); SELECT * FROM $rows;", []string{"input"}},
+		{"values", "SELECT * FROM AS_TABLE($rows);", nil},
+		{"qualified external", "SELECT * FROM `app/external`.`remote/topic`;", []string{"app/external"}},
+		{"constant variable", "$input = 'app/input'; INSERT INTO output SELECT * FROM $input;", []string{"output", "app/input"}},
+		{"constant alias", "$input = 'app/input'; $alias = $input; SELECT * FROM $alias;", []string{"app/input"}},
+		{"constant concatenation", "$dir = 'app/'; $input = $dir || 'input'; SELECT * FROM $input;", []string{"app/input"}},
+		{"concat", "$input = 'app/input'; SELECT * FROM CONCAT($input, `app/extra`);", []string{"app/input", "app/extra"}},
+		{"each", "$inputs = ['app/input', 'app/extra']; SELECT * FROM EACH($inputs);", []string{"app/input", "app/extra"}},
+		{"literal each", "SELECT * FROM EACH(['app/input', 'app/extra']);", []string{"app/input", "app/extra"}},
+		{"unrelated literals", "$value = 'app/not-a-path'; SELECT 'also/not-a-path' FROM input;", []string{"input"}},
 		{"absolute prefix", "PRAGMA TablePathPrefix = '/local/app'; SELECT * FROM input;", []string{"/local/app/input"}},
 		{"relative prefix", "PRAGMA TablePathPrefix = 'app'; INSERT INTO output SELECT * FROM `/local/absolute`;", []string{"app/output", "/local/absolute"}},
 		{"prefix reset", "PRAGMA TablePathPrefix = 'app'; SELECT * FROM first; PRAGMA TablePathPrefix = ''; SELECT * FROM second;", []string{"app/first", "second"}},
@@ -149,6 +159,16 @@ func TestNamedPathsRefusesUnresolvedPaths(t *testing.T) {
 		"PRAGMA TablePathPrefix('app'); SELECT * FROM input;",
 		"SELECT * FROM `app/../input`;",
 		"SELECT * FROM `/local//input`;",
+		"$input = CurrentUtcTimestamp(); SELECT * FROM $input;",
+		"DECLARE $input AS String; SELECT * FROM $input;",
+		"$input = 'app/input'; $input = GetPath(); SELECT * FROM $input;",
+		"SELECT * FROM RANGE(`app`);",
+		"SELECT * FROM EACH($inputs);",
+		"SELECT * FROM $function();",
+		"SELECT * FROM source.RANGE(`app`);",
+		"SELECT * FROM good; SELECT * FROM $unknown;",
+		"$input = GetPath(); SELECT * FROM input WHERE $input = 'app/other'; SELECT * FROM $input;",
+		"USE other; SELECT * FROM input;",
 	} {
 		got, err := streaming.NamedPaths(text)
 		qt.Assert(t, err, qt.IsNotNil)

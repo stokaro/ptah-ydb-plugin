@@ -68,6 +68,9 @@ func TestStreamingResourcesRefuseForeignAndUnresolvedPaths(t *testing.T) {
 		"SELECT * FROM `/local-other/app/source`;",
 		"SELECT * FROM `/local/app/source`; PRAGMA TablePathPrefix = $prefix; SELECT * FROM source;",
 		"PRAGMA TablePathPrefix = '../app'; SELECT * FROM source;",
+		"DECLARE $source AS String; SELECT * FROM $source;",
+		"$source = BuildPath('app/source'); SELECT * FROM $source;",
+		"SELECT * FROM RANGE(`app`);",
 	} {
 		c := qt.New(t)
 		request := streamingPlanRequest(c, nil, &streaming.Spec{Text: text}, false)
@@ -182,4 +185,19 @@ func TestStreamingSettingsDoNotFencePrincipalChanges(t *testing.T) {
 	for _, edge := range result.Contributions[0].Dependencies {
 		c.Assert(proto.Equal(edge.Before, principal.Id) || proto.Equal(edge.After, principal.Id), qt.IsFalse)
 	}
+}
+
+func TestStreamingResourcesResolveNamedAndExternalInputs(t *testing.T) {
+	c := qt.New(t)
+	request := streamingPlanRequest(c, nil, &streaming.Spec{Text: "$input = '/local/app/input'; $rows = SELECT * FROM $input; INSERT INTO `app/sink` SELECT * FROM $rows JOIN `app/external`.`remote/topic` ON true;"}, false)
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	var paths []string
+	for _, effect := range result.Contributions[0].Steps[0].Metadata.Effects {
+		if effect.Action == protocol.PlanningEffect_READ && effect.Subject.Kind == "ydb.scheme-path" {
+			paths = append(paths, effect.Subject.GetSchema().GetNormalized()+"/"+effect.Subject.GetName().GetNormalized())
+		}
+	}
+	c.Assert(paths, qt.DeepEquals, []string{"app/input", "app/sink", "app/external"})
 }
