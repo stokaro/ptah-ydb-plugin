@@ -180,6 +180,7 @@ func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error)
 		return nil, err
 	}
 	result := proto.CloneOf(value)
+	requireStreamingContext(result)
 	result.Payload = payload
 	return result, nil
 }
