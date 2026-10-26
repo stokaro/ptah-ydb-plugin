@@ -18,7 +18,7 @@ func creationPlan(c *qt.C) *protocol.PlanFeaturesRequest {
 	table := withSettings(c)
 	table.Features.Objects = &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}}
 	table.Features.Facets.Coverage = &protocol.ComparisonCoverage{}
-	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
 		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
 		Capabilities: map[string]bool{"transactional_ddl": false},
 		Tables: []*protocol.PlanningTable{{Subject: &protocol.ComparisonIdentity{Kind: "table", Database: part("/local"), Schema: part("app"), Name: part("records")},

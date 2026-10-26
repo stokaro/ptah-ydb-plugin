@@ -26,6 +26,9 @@ func TestScopeSelectionsNegotiation(t *testing.T) {
 		case schema.ResourcePoolClassifierProperties:
 			c.Assert(selection.KeepsRequired, qt.DeepEquals, []string{schema.ResourcePoolProperties})
 			c.Assert(selection.Naming, qt.Equals, protocol.ScopeSelection_DATABASE_WIDE)
+		case schema.StreamingQueryProperties:
+			c.Assert(selection.KeepsRequired, qt.DeepEquals, []string{schema.ResourcePoolProperties})
+			c.Assert(selection.Naming, qt.Equals, protocol.ScopeSelection_IN_SCHEMA)
 		case schema.ResourcePoolProperties:
 			c.Assert(selection.Naming, qt.Equals, protocol.ScopeSelection_DATABASE_WIDE)
 		default:

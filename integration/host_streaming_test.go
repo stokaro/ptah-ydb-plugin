@@ -33,8 +33,8 @@ func TestHostStreamingQueryGraph(t *testing.T) {
 		c.Skip("the target does not support streaming queries")
 	}
 	quoted := func(name string) string { return "`" + path.Join(directory, name) + "`" }
-	body := "INSERT INTO " + quoted("sink") + " SELECT * FROM " + quoted("source") + ";"
-	changed := "INSERT INTO " + quoted("sink") + " SELECT * FROM " + quoted("next") + ";"
+	body := "INSERT INTO `" + path.Join(database, directory, "sink") + "` SELECT * FROM `" + path.Join(database, directory, "source") + "`;"
+	changed := "PRAGMA TablePathPrefix = " + strconv.Quote(path.Join(database, directory)) + "; INSERT INTO sink SELECT * FROM next;"
 	c.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()

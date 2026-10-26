@@ -125,7 +125,7 @@ func TestRowTableFamilyAlterationSubprocess(t *testing.T) {
 				desired.Features.Facets.Records = append(desired.Features.Facets.Records, desiredFacet(c, client, columnOwner(name), schema.ColumnProperties, payload))
 			}
 		}
-		request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+		request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 			Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_ALTER, Desired: desired,
 				Current: observedTable(c, client, session, directory)}}}
@@ -295,7 +295,7 @@ func TestRowTableColumnAlterationSubprocess(t *testing.T) {
 				desired.Features.Facets.Records = append(desired.Features.Facets.Records, desiredFacet(c, client, columnOwner(name), schema.ColumnProperties, payload))
 			}
 		}
-		request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+		request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)}, CommonSteps: steps,
 			Tables: []*protocol.PlanningTable{{Subject: proto.CloneOf(table), Action: protocol.PlanningTable_ALTER, Desired: desired, Current: observedTable(c, client, session, directory)}}}
 		result, err := client.PlanFeatures(ctx, request)
@@ -435,7 +435,7 @@ func TestRowTableTTLAlterationSubprocess(t *testing.T) {
 			settings += `,"ttlSettings":` + ttl
 		}
 		desired.Features.Facets.Records = append(desired.Features.Facets.Records, desiredFacet(c, client, owner, schema.TableProperties, settings+`}`))
-		request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+		request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)}, CommonSteps: steps,
 			Tables: []*protocol.PlanningTable{{Subject: proto.CloneOf(table), Action: protocol.PlanningTable_ALTER, Desired: desired, Current: observedTable(c, client, session, directory)}}}
 		result, err := client.PlanFeatures(ctx, request)
@@ -543,7 +543,7 @@ func TestRowTableTTLAlterationSubprocess(t *testing.T) {
 	})
 	t.Run("refuses a column the server would refuse before the call", func(t *testing.T) {
 		c := qt.New(t)
-		request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+		request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)}}
 		desired := &protocol.DeclaredTable{Name: "records", Schema: directory, PrimaryKey: []string{"id"},
 			Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "label", Type: "Utf8", Nullable: true}},

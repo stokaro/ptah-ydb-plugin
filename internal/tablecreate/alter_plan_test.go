@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -152,7 +153,7 @@ func alterRequest(c *qt.C, in alterCase) *protocol.PlanFeaturesRequest {
 	}) {
 		current.Features.Facets.Records = append(current.Features.Facets.Records, observedFacet(c, schema.ColumnProperties, name, in.heldColumns[name]))
 	}
-	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
 		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
 		Capabilities: capabilities,
 		Tables:       []*protocol.PlanningTable{{Subject: tableSubject(), Action: protocol.PlanningTable_ALTER, Desired: desired, Current: current}}}

@@ -25,7 +25,7 @@ func offlineCreation(c *qt.C, client *providerruntime.Client, payload string) *p
 		Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{},
 			Records: []*protocol.ComparisonRecord{desiredFacet(c, client, owner, schema.TableProperties, payload)}},
 	}
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(),
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(),
 		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)},
 		Capabilities: map[string]bool{"transactional_ddl": false},
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE,

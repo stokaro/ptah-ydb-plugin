@@ -5,7 +5,6 @@ package streamingplan
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
@@ -40,6 +39,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		return result, err
 	}
 	base := result.Contributions[0]
+	pathRequest, err := objectplan.PathContext(request)
+	if err != nil {
+		return nil, err
+	}
+	result.Rewrites = nil
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
 	for _, step := range base.Steps {
 		if err := ctx.Err(); err != nil {
@@ -77,31 +81,36 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			} else if part.After == nil {
 				action = protocol.PlanningEffect_DROP
 			}
-			edges, err := objectplan.PathDependencies(request, family(), receipt.Subject, action, id)
+			edges, err := objectplan.PathDependencies(pathRequest, family(), receipt.Subject, action, id)
 			if err != nil {
 				return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_INVALID_SCHEMA, Kind: schema.StreamingQueryChange, Message: err.Error(), Input: &protocol.PlanningDiagnostic_Change{Change: uint32(index)}}}}, nil
 			}
 			contribution.Dependencies = append(contribution.Dependencies, edges...)
 			metadata := &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: value.OperationSemantics.Impact, Reason: value.OperationSemantics.Reason,
 				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(receipt.Subject), Action: action}, {Subject: objectplan.Slot(receipt.Subject), Action: action}}}
-			var body string
+			access, err := objectplan.OrderAccess(request, family(), receipt.Subject, action, id)
+			if err != nil {
+				return nil, err
+			}
+			metadata.Effects = append(metadata.Effects, access.Effects...)
+			contribution.Dependencies = append(contribution.Dependencies, access.Dependencies...)
+			// Streaming preconditions contain only the persistent query settings.
+			// Principal edits do not change that capture; matching access writes
+			// still follow the query operation through OrderAccess.
+			if len(access.Sources) != 0 {
+				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: access.Sources, Replacement: proto.CloneOf(id)})
+			}
+			spec := part.After
 			if streaming.Early(part) {
 				metadata.Placement = protocol.PlanningMetadata_EARLY
-				body = part.Before.Text
-			} else {
-				body = part.After.Text
+				spec = part.Before
 			}
-			metadata.Effects = append(metadata.Effects, topicReads(body, receipt.Subject)...)
-			for _, common := range request.CommonSteps {
-				if len(common.GetMetadata().GetEffects()) == 0 {
-					continue
-				}
-				edge := &protocol.PlanningDependency{Before: proto.CloneOf(common.Id), After: proto.CloneOf(id)}
-				if streaming.Early(part) {
-					edge.Before, edge.After = edge.After, edge.Before
-				}
-				contribution.Dependencies = append(contribution.Dependencies, edge)
+			reads, dependencies, err := queryResources(pathRequest, receipt.Subject, *spec, streaming.Early(part), id)
+			if err != nil {
+				return nil, err
 			}
+			metadata.Effects = append(metadata.Effects, reads...)
+			contribution.Dependencies = append(contribution.Dependencies, dependencies...)
 			if len(receipt.Steps) > 0 {
 				contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(receipt.Steps[len(receipt.Steps)-1]), After: proto.CloneOf(id)})
 			}
@@ -137,23 +146,4 @@ func operation(id string, owner *protocol.Reference, change streaming.Change) (*
 		return nil, err
 	}
 	return schema.StreamingQueryOperationFromChange(id, captured.Value)
-}
-
-func topicReads(body string, subject *protocol.ComparisonIdentity) []*protocol.PlanningEffect {
-	var effects []*protocol.PlanningEffect
-	for _, name := range streaming.NamedPaths(body) {
-		directory := ""
-		if slash := strings.LastIndexByte(name, '/'); slash >= 0 {
-			directory, name = name[:slash], name[slash+1:]
-		}
-		if err := streaming.ValidateIdentity(directory, name); err != nil {
-			continue
-		}
-		ref := proto.CloneOf(subject)
-		ref.Kind, ref.Database = schema.TopicProperties, &protocol.ComparisonPart{}
-		ref.Schema = &protocol.ComparisonPart{Source: directory, Normalized: directory}
-		ref.Name = &protocol.ComparisonPart{Source: name, Normalized: name}
-		effects = append(effects, &protocol.PlanningEffect{Subject: ref, Action: protocol.PlanningEffect_READ})
-	}
-	return effects
 }

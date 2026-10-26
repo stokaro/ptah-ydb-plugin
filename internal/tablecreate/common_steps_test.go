@@ -38,7 +38,7 @@ func commentedTable(c *qt.C, step *protocol.CommonPlanningStep) *protocol.Common
 func commonCreation(c *qt.C, steps ...*protocol.CommonPlanningStep) *protocol.PlanFeaturesRequest {
 	c.Helper()
 	request := creationPlan(c)
-	request.TargetFeatures = []string{provider.CommonObjectsFeature}
+	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.PlanningLifecycleFeature}
 	subject := request.Tables[0].Subject
 	request.CommonSteps = append([]*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "create"}, Parent: proto.CloneOf(subject),
 		Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Creates a table",

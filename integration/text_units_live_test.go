@@ -184,7 +184,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 		for _, column := range declared.Features.Facets.Records[1:] {
 			column.Subject.Parent = &protocol.ComparisonPart{Source: name, Normalized: name}
 		}
-		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 			Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE, Desired: declared}}}
 		prepareCapturedCreation(c, client, planning)
@@ -313,7 +313,7 @@ func (f *coordinationText) text(c *qt.C, compared *protocol.ComparedModels) *pro
 	c.Helper()
 	c.Assert(compared.Changes, qt.HasLen, 1)
 	change := compared.Changes[0]
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: coordinationplan.ServiceID, DatabasePath: f.database, Capabilities: f.session.Capabilities,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: coordinationplan.ServiceID, DatabasePath: f.database, Capabilities: f.session.Capabilities,
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Changes:     []*protocol.PlanningChange{{Subject: change.Subject, Value: change.Value}}}
 	plan, err := f.client.PlanFeatures(c.Context(), request)

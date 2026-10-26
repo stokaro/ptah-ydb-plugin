@@ -18,6 +18,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/proto"
 )
@@ -173,7 +174,7 @@ func (f *facetFixture) plan(c *qt.C, changes []*protocol.ComparedChange, records
 			Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 			Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: f.desiredFacets(nil).Coverage,
 				Records: records}}}
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
 		Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)}, CommonSteps: f.steps,
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(f.owner), Action: protocol.PlanningTable_ALTER, Desired: desired,
 			Current: observedTable(c, f.client, f.session, f.directory)}}}

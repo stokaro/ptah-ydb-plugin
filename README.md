@@ -1415,8 +1415,18 @@ planner stops a running query before changing its inputs and restarts it after
 its new inputs exist; a change that only stops the query emits one statement.
 Native and text rendering carry the same operations and preconditions.
 
-Execution verifies the stored definition before dispatch, checks cancellation
-and held locks before each statement, and reads back the result. Each statement
+Input dependencies use physical scheme paths, including absolute paths inside
+the selected database or dev realm. A constant `PRAGMA TablePathPrefix` applies
+to subsequent relative paths. A foreign path or an unresolved prefix refuses
+planning. A named resource pool remains a database-wide dependency, including
+a literal dot in its name. Scope selection keeps that pool when it keeps the
+query, unless the pool is explicitly excluded. Access changes follow a query's
+stop and restart; a final drop accounts for revoking that query's access.
+
+Execution verifies the stored query settings before dispatch, checks
+cancellation and held locks before each statement, and reads back the result.
+This precondition contains no ACL or principal state; access ordering remains
+explicit in the complete plan. Each statement
 runs once. A dispatched operation whose result cannot be confirmed is UNKNOWN.
 The dev-realm guard checks the query body as well as the query's own path.
 

@@ -124,7 +124,34 @@ func TestValidateIdentity(t *testing.T) {
 }
 
 func TestNamedPaths(t *testing.T) {
-	qt.Assert(t, streaming.NamedPaths("INSERT INTO `app/out` SELECT * FROM input JOIN `app/extra` ON true JOIN input ON true;"), qt.DeepEquals, []string{"app/out", "input", "app/extra"})
-	qt.Assert(t, streaming.NamedPaths("SELECT * FROM $rows JOIN pq.topic ON true JOIN AS_TABLE($rows) ON true;"), qt.HasLen, 0)
-	qt.Assert(t, streaming.NamedPaths("PRAGMA TablePathPrefix = '/local/app'; SELECT * FROM input;"), qt.HasLen, 0)
+	for _, tc := range []struct {
+		name, text string
+		want       []string
+	}{
+		{"paths", "INSERT INTO `app/out` SELECT * FROM input JOIN `app/extra` ON true JOIN input ON true;", []string{"app/out", "input", "app/extra"}},
+		{"expressions", "SELECT * FROM $rows JOIN pq.topic ON true JOIN AS_TABLE($rows) ON true;", nil},
+		{"absolute prefix", "PRAGMA TablePathPrefix = '/local/app'; SELECT * FROM input;", []string{"/local/app/input"}},
+		{"relative prefix", "PRAGMA TablePathPrefix = 'app'; INSERT INTO output SELECT * FROM `/local/absolute`;", []string{"app/output", "/local/absolute"}},
+		{"prefix reset", "PRAGMA TablePathPrefix = 'app'; SELECT * FROM first; PRAGMA TablePathPrefix = ''; SELECT * FROM second;", []string{"app/first", "second"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := streaming.NamedPaths(tc.text)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, got, qt.DeepEquals, tc.want)
+		})
+	}
+}
+
+func TestNamedPathsRefusesUnresolvedPaths(t *testing.T) {
+	for _, text := range []string{
+		"SELECT * FROM good; PRAGMA TablePathPrefix = $prefix; SELECT * FROM input;",
+		"PRAGMA TablePathPrefix = '../app'; SELECT * FROM input;",
+		"PRAGMA TablePathPrefix('app'); SELECT * FROM input;",
+		"SELECT * FROM `app/../input`;",
+		"SELECT * FROM `/local//input`;",
+	} {
+		got, err := streaming.NamedPaths(text)
+		qt.Assert(t, err, qt.IsNotNil)
+		qt.Assert(t, got, qt.IsNil)
+	}
 }

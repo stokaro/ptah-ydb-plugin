@@ -33,7 +33,7 @@ func streamingPlanRequest(c *qt.C, before, after *streaming.Spec, allow bool) *p
 	}
 	change, err := schema.CaptureStreamingQueryChange("change", owner, observed, desired)
 	c.Assert(err, qt.IsNil)
-	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: streamingplan.ServiceID,
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: streamingplan.ServiceID, DatabasePath: "/local",
 		Capabilities: map[string]bool{streaming.Capability: true, "transactional_ddl": false},
 		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
 		Changes:      []*protocol.PlanningChange{{Subject: testplanning.Subject(owner), Value: change}}}

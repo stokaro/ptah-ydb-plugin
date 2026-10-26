@@ -19,6 +19,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// The pinned vendor protobuf does not name STREAMING_QUERY.
+const streamingQueryEntry = Ydb_Scheme.Entry_Type(26)
+
 // ColumnTables reads the monitoring endpoint's description of the column table
 // at an absolute path: the page columnstore.Decode reads.
 type ColumnTables func(ctx context.Context, absolute string) ([]byte, error)
@@ -110,7 +113,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				continue
 			}
 			switch entry.GetType() {
-			case Ydb_Scheme.Entry_Type(26): // STREAMING_QUERY is absent from the pinned vendor protobuf enum.
+			case streamingQueryEntry:
 				owner := &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: schema.StreamingQueryProperties, Name: name}
 				var spec *streaming.Spec
 				readErr := fmt.Errorf("the streaming query capability was not established")
