@@ -2369,6 +2369,30 @@ inference flows through this provider: two generations from plan to cutover, a
 rollback and a retirement, a chunked generation in a table of its own, the
 refusals, and the answers an agent reads, which carry no source content.
 
+## Operator statements and object scopes
+
+The `sessions.statements` service runs operator checks, migration test
+assertions and script steps on a pinned connection. It returns typed rows in
+bounded pages and leaves the affected-row count absent because YDB does not
+report it. A result ends at its last page, explicit close, transaction end or
+session close. Cleanup failures remain failures on a repeated close.
+
+A read-only request proves that its single SELECT reads local tables or views,
+then runs in a snapshot read-only transaction. External tables, views that
+reach them, UDFs, code evaluation and file or secret functions are refused
+before execution. A transport failure has an unknown outcome and is never
+retried. Confirmed atomic query failures preserve the server's issue text for
+expected-error assertions, without the driver's address and transport wrapper.
+Bound arguments retain JSON, decimal, date, timestamp and interval types;
+precision the engine cannot represent is refused before execution.
+
+The negotiated `scope.selections` declaration makes coordination nodes, topics,
+external data sources and external tables selectable by their directory and
+name. Resource pools and classifiers use database-wide names, including literal
+dots. A kept classifier keeps the pool it requires when the input contains that
+pool; an explicit exclusion of the pool still wins. Grants follow the object
+their target names.
+
 ## Extraction still required
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.

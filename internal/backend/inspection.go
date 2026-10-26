@@ -147,8 +147,12 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		required, err := schema.RequiredObjects(value)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		result.Values = append(result.Values, &protocol.NormalizedValue{Id: input.GetId(), Value: value, NormalizedOwner: proto.CloneOf(value.Owner),
-			CanonicalFormat: format, CanonicalProjection: bytes.Clone(value.Payload)})
+			CanonicalFormat: format, CanonicalProjection: bytes.Clone(value.Payload), RequiredObjects: required})
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
