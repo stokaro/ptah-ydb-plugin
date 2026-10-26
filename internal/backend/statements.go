@@ -10,6 +10,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/readproof"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secretvalue"
 	"github.com/stokaro/ptah-ydb-plugin/internal/statementrows"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -43,6 +44,9 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 	}
 	refuse := func(reason string) (*protocol.StatementResult, error) {
 		return &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_REFUSED, Refusal: rowdata.OneLine(reason)}, nil
+	}
+	if len(secretvalue.References(request.Sql)) != 0 {
+		return refuse("secret references require approved execution inputs")
 	}
 	piece, err := recognizePiece(request.Sql)
 	if err != nil {

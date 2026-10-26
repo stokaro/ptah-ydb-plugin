@@ -142,6 +142,8 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 				normalize = schema.NormalizeTablePropertiesChange
 			case schema.ColumnStorageChange:
 				normalize = schema.NormalizeColumnStorageChange
+			case schema.SecretChange:
+				normalize = schema.NormalizeSecretChange
 			case schema.TopicChange:
 				normalize = schema.NormalizeTopicChange
 			case schema.ExternalSourceChange, schema.ExternalTableChange:

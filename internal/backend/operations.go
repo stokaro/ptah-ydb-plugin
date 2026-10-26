@@ -10,6 +10,8 @@ import (
 
 func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	switch input.GetValue().GetKind() {
+	case schema.SecretOperation:
+		return schema.NormalizeSecretOperation(input)
 	case schema.CoordinationOperation:
 		return schema.NormalizeCoordinationOperation(input)
 	case schema.TopicOperation:

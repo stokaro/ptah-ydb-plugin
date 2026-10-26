@@ -162,6 +162,17 @@ func TestSecretPaths_FailurePath(t *testing.T) {
 	c.Assert(got, qt.IsNil)
 }
 
+func TestSecretPathsRejectsMalformedReferences(t *testing.T) {
+	for _, path := range []string{"../pw", "app//pw", "app/../pw", "app/", "\\pw"} {
+		t.Run(path, func(t *testing.T) {
+			c := qt.New(t)
+			got, err := externals.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": path}, "/local")
+			c.Assert(err, qt.IsNotNil)
+			c.Assert(got, qt.IsNil)
+		})
+	}
+}
+
 func TestStatements(t *testing.T) {
 	for _, test := range []struct {
 		name string

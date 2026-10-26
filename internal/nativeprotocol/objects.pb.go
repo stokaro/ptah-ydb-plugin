@@ -322,6 +322,88 @@ func (x *ResourcePoolClassifierSettings) GetRank() int64 {
 	return 0
 }
 
+// A scheme secret is observed only by identity. Its value is never read.
+type SecretPresence struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SecretPresence) Reset() {
+	*x = SecretPresence{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecretPresence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecretPresence) ProtoMessage() {}
+
+func (x *SecretPresence) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecretPresence.ProtoReflect.Descriptor instead.
+func (*SecretPresence) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{4}
+}
+
+// A desired scheme secret holds a host-approved input reference only.
+type SecretIntent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ValueEnv      string                 `protobuf:"bytes,1,opt,name=value_env,json=valueEnv,proto3" json:"value_env,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SecretIntent) Reset() {
+	*x = SecretIntent{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecretIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecretIntent) ProtoMessage() {}
+
+func (x *SecretIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecretIntent.ProtoReflect.Descriptor instead.
+func (*SecretIntent) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SecretIntent) GetValueEnv() string {
+	if x != nil {
+		return x.ValueEnv
+	}
+	return ""
+}
+
 var File_internal_nativeprotocol_objects_proto protoreflect.FileDescriptor
 
 const file_internal_nativeprotocol_objects_proto_rawDesc = "" +
@@ -366,7 +448,10 @@ const file_internal_nativeprotocol_objects_proto_rawDesc = "" +
 	"\rresource_pool\x18\x01 \x01(\tR\fresourcePool\x12\x1f\n" +
 	"\vmember_name\x18\x02 \x01(\tR\n" +
 	"memberName\x12\x12\n" +
-	"\x04rank\x18\x03 \x01(\x03R\x04rankB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
+	"\x04rank\x18\x03 \x01(\x03R\x04rank\"\x10\n" +
+	"\x0eSecretPresence\"+\n" +
+	"\fSecretIntent\x12\x1b\n" +
+	"\tvalue_env\x18\x01 \x01(\tR\bvalueEnvB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
 
 var (
 	file_internal_nativeprotocol_objects_proto_rawDescOnce sync.Once
@@ -380,29 +465,31 @@ func file_internal_nativeprotocol_objects_proto_rawDescGZIP() []byte {
 	return file_internal_nativeprotocol_objects_proto_rawDescData
 }
 
-var file_internal_nativeprotocol_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_internal_nativeprotocol_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_internal_nativeprotocol_objects_proto_goTypes = []any{
 	(*ViewObservation)(nil),                // 0: ptah.ydb.native.ViewObservation
 	(*DescribeExternalTableResult)(nil),    // 1: ptah.ydb.native.DescribeExternalTableResult
 	(*ResourcePoolSettings)(nil),           // 2: ptah.ydb.native.ResourcePoolSettings
 	(*ResourcePoolClassifierSettings)(nil), // 3: ptah.ydb.native.ResourcePoolClassifierSettings
-	nil,                                    // 4: ptah.ydb.native.DescribeExternalTableResult.ContentEntry
-	(*Ydb_View.DescribeViewResult)(nil),    // 5: Ydb.View.DescribeViewResult
-	(*DescribeTableResult)(nil),            // 6: ptah.ydb.native.DescribeTableResult
-	(*Ydb_Scheme.Entry)(nil),               // 7: Ydb.Scheme.Entry
-	(*ColumnMeta)(nil),                     // 8: ptah.ydb.native.ColumnMeta
+	(*SecretPresence)(nil),                 // 4: ptah.ydb.native.SecretPresence
+	(*SecretIntent)(nil),                   // 5: ptah.ydb.native.SecretIntent
+	nil,                                    // 6: ptah.ydb.native.DescribeExternalTableResult.ContentEntry
+	(*Ydb_View.DescribeViewResult)(nil),    // 7: Ydb.View.DescribeViewResult
+	(*DescribeTableResult)(nil),            // 8: ptah.ydb.native.DescribeTableResult
+	(*Ydb_Scheme.Entry)(nil),               // 9: Ydb.Scheme.Entry
+	(*ColumnMeta)(nil),                     // 10: ptah.ydb.native.ColumnMeta
 }
 var file_internal_nativeprotocol_objects_proto_depIdxs = []int32{
-	5, // 0: ptah.ydb.native.ViewObservation.view:type_name -> Ydb.View.DescribeViewResult
-	6, // 1: ptah.ydb.native.ViewObservation.properties:type_name -> ptah.ydb.native.DescribeTableResult
-	7, // 2: ptah.ydb.native.DescribeExternalTableResult.self:type_name -> Ydb.Scheme.Entry
-	8, // 3: ptah.ydb.native.DescribeExternalTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
-	4, // 4: ptah.ydb.native.DescribeExternalTableResult.content:type_name -> ptah.ydb.native.DescribeExternalTableResult.ContentEntry
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	7,  // 0: ptah.ydb.native.ViewObservation.view:type_name -> Ydb.View.DescribeViewResult
+	8,  // 1: ptah.ydb.native.ViewObservation.properties:type_name -> ptah.ydb.native.DescribeTableResult
+	9,  // 2: ptah.ydb.native.DescribeExternalTableResult.self:type_name -> Ydb.Scheme.Entry
+	10, // 3: ptah.ydb.native.DescribeExternalTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
+	6,  // 4: ptah.ydb.native.DescribeExternalTableResult.content:type_name -> ptah.ydb.native.DescribeExternalTableResult.ContentEntry
+	5,  // [5:5] is the sub-list for method output_type
+	5,  // [5:5] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_internal_nativeprotocol_objects_proto_init() }
@@ -419,7 +506,7 @@ func file_internal_nativeprotocol_objects_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_nativeprotocol_objects_proto_rawDesc), len(file_internal_nativeprotocol_objects_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

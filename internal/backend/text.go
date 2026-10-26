@@ -95,6 +95,8 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.RenameStatement(path, rename), nil
+	case schema.SecretOperation:
+		return schema.SecretStatement(value)
 	case schema.CoordinationOperation:
 		return coordinationText(path, value)
 	case schema.ExternalSourceOperation, schema.ExternalTableOperation:

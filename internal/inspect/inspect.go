@@ -165,7 +165,7 @@ func ReadCommon(ctx context.Context, driver *ydb.Driver, columns ColumnTables, d
 				}
 				result.NativeObjects = append(result.NativeObjects, value)
 				observe(result, []*protocol.Envelope{value})
-			case Ydb_Scheme.Entry_VIEW, Ydb_Scheme.Entry_COORDINATION_NODE, Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE, Ydb_Scheme.Entry_EXTERNAL_TABLE:
+			case Ydb_Scheme.Entry_SECRET, Ydb_Scheme.Entry_VIEW, Ydb_Scheme.Entry_COORDINATION_NODE, Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE, Ydb_Scheme.Entry_EXTERNAL_TABLE:
 				kind, described, err := source.readObject(ctx, path.Join(database, selected, name), entry.GetType())
 				if err != nil {
 					return nil, err

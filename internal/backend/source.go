@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secretsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
@@ -55,6 +56,10 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			}
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		secretValues, err := secretsource.Decode(ctx, document)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		topics, err := topicsource.Decode(ctx, document)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -90,6 +95,8 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			var values []*protocol.SourceModelValue
 			var err error
 			switch {
+			case secretsource.Owns(fragment):
+				values = secretValues[index]
 			case topicsource.Owns(fragment):
 				values = topics[index]
 			case workloadsource.Owns(fragment):

@@ -16,6 +16,7 @@ var grantObjectKinds = []struct {
 }{
 	{"TOPIC", KindTopic},
 	{"COORDINATION NODE", KindCoordinationNode},
+	{"SECRET", KindSecret},
 	{"EXTERNAL DATA SOURCE", KindExternalSource},
 	{"EXTERNAL TABLE", KindExternalTable},
 	{"RESOURCE POOL", KindResourcePool},

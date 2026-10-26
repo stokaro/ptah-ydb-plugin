@@ -33,11 +33,13 @@ const (
 
 // ObservedModels returns fresh definitions for the supported native observations.
 func ObservedModels() []*protocol.ValueModel {
-	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties), model(ResourcePoolProperties), model(ResourcePoolClassifierProperties)}
+	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties), model(ResourcePoolProperties), model(ResourcePoolClassifierProperties), model(SecretProperties)}
 }
 
 func message(kind string) proto.Message {
 	switch kind {
+	case SecretProperties:
+		return &native.SecretPresence{}
 	case ColumnStorageProperties:
 		return &native.ColumnStorageObservation{}
 	case TableProperties:
@@ -78,6 +80,7 @@ func excluded(kind string) []string {
 }
 
 var definitions = map[string]*protocol.ValueModel{
+	SecretProperties:        buildModel(SecretProperties),
 	ColumnStorageProperties: buildModel(ColumnStorageProperties),
 	TableProperties:         buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties), ChangefeedProperties: buildModel(ChangefeedProperties), TopicProperties: buildModel(TopicProperties),
 	ViewProperties: buildModel(ViewProperties), CoordinationProperties: buildModel(CoordinationProperties), ExternalSourceProperties: buildModel(ExternalSourceProperties), ExternalTableProperties: buildModel(ExternalTableProperties),
@@ -103,6 +106,9 @@ func buildModel(kind string) *protocol.ValueModel {
 		"changefeed_observations": "complete feed set per table sorted by name; each feed includes its child topic settings; initial scan presence retained, progress counters excluded",
 		"native_objects":          "retain view query plus table API attributes; coordination config except duplicate path; external source options and ordered external columns; transient self identity excluded",
 		"index_observations":      "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
+	}
+	if kind == SecretProperties {
+		definition["secrets"] = "presence only; the server never returns the value; owners and access are independently observed common objects"
 	}
 	if kind == ViewProperties {
 		definition["view_api_projection"] = "view table API disabled partitioning-by-size/load switches are nondeclarative scaffolding; omit only this exact configuration and refuse any other partition settings"
@@ -315,11 +321,16 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(), TopicChangeModel(), TopicOperationModel(), ExternalSourceChangeModel(), ExternalSourceOperationModel(), ExternalTableChangeModel(), ExternalTableOperationModel(), TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel(), NativeDesiredModel(ResourcePoolProperties), NativeDesiredModel(ResourcePoolClassifierProperties), ResourcePoolChangeModel(), ResourcePoolClassifierChangeModel(), WorkloadOperationModel())
+	return append(ObservedModels(), NativeDesiredModel(SecretProperties), SecretChangeModel(), SecretOperationModel(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(), TopicChangeModel(), TopicOperationModel(), ExternalSourceChangeModel(), ExternalSourceOperationModel(), ExternalTableChangeModel(), ExternalTableOperationModel(), TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel(), NativeDesiredModel(ResourcePoolProperties), NativeDesiredModel(ResourcePoolClassifierProperties), ResourcePoolChangeModel(), ResourcePoolClassifierChangeModel(), WorkloadOperationModel())
 }
 
 func validateModelOwner(value *protocol.Envelope) error {
 	owner := value.GetOwner()
+	if value.GetKind() == SecretProperties {
+		if err := validateSecretOwner(owner); err != nil {
+			return err
+		}
+	}
 	if IsWorkloadObject(value.GetKind()) {
 		if owner.GetKind() != value.GetKind() {
 			return fmt.Errorf("invalid YDB observation owner")
@@ -344,6 +355,8 @@ func validateModelOwner(value *protocol.Envelope) error {
 
 func modelDisplayName(kind string) string {
 	switch kind {
+	case SecretProperties:
+		return "YDB secrets"
 	case TableProperties:
 		return "YDB row-table properties"
 	case ColumnProperties:

@@ -44,3 +44,9 @@ message ResourcePoolClassifierSettings {
     string member_name = 2;
     int64 rank = 3;
 }
+
+// A scheme secret is observed only by identity. Its value is never read.
+message SecretPresence {}
+
+// A desired scheme secret holds a host-approved input reference only.
+message SecretIntent { string value_env = 1; }

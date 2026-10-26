@@ -28,7 +28,7 @@ const (
 // Inspection coverage and owner validation must use the same classification.
 func IsNativeObject(kind string) bool {
 	switch kind {
-	case ViewProperties, CoordinationProperties, ExternalSourceProperties, ExternalTableProperties, TopicProperties:
+	case SecretProperties, ViewProperties, CoordinationProperties, ExternalSourceProperties, ExternalTableProperties, TopicProperties:
 		return true
 	default:
 		return false
@@ -90,6 +90,8 @@ func transientSelf(self *Ydb_Scheme.Entry) bool {
 func normalizeObject(described proto.Message) error {
 	var self *Ydb_Scheme.Entry
 	switch value := described.(type) {
+	case *native.SecretPresence:
+		return nil
 	case *native.ViewObservation:
 		if value.View == nil || value.Properties == nil || strings.TrimSpace(value.View.QueryText) == "" {
 			return fmt.Errorf("incomplete YDB view observation")

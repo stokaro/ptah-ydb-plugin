@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
@@ -105,7 +106,13 @@ func SecretPaths(options map[string]string, root string) ([]ydbdecl.Path, error)
 			}
 		}
 		ref, err := ydbdecl.ParseExternalPath(relative)
-		if err != nil || slices.Contains(paths, ref) {
+		if err != nil {
+			return nil, fmt.Errorf("option %s names an invalid secret path: %w", option, err)
+		}
+		if err := secrets.ValidateIdentity(ref.Schema, ref.Name); err != nil {
+			return nil, fmt.Errorf("option %s names an invalid secret path: %w", option, err)
+		}
+		if slices.Contains(paths, ref) {
 			continue
 		}
 		paths = append(paths, ref)

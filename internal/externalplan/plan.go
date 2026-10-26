@@ -65,6 +65,8 @@ type step struct {
 	// sources are the data sources a table statement reads or read, to order
 	// it against their statements.
 	sources []ydbdecl.Path
+	// secrets are the scheme secrets read before or after this operation.
+	secrets []ydbdecl.Path
 }
 
 func (s step) path() ydbdecl.Path {
@@ -237,11 +239,24 @@ func dropHalf(change *protocol.Envelope, database string) (*protocol.Envelope, e
 func lowerSource(index int, input read, replace bool, root string) lowered {
 	result := lowered{input: index, subject: input.subject, kind: schema.ExternalSourceChange}
 	before, after := input.specs.SourceBefore, input.specs.SourceAfter
-	write := func(operation string, action protocol.PlanningEffect_Action) step {
-		if _, err := externals.SecretPaths(after.Options, root); err != nil {
+	secretPaths := func(source *ydbdecl.ExternalDataSource) []ydbdecl.Path {
+		paths, err := externals.SecretPaths(source.Options, root)
+		if err != nil {
 			result.refused = fmt.Errorf("external data source %s: %w", display(input.subject), err)
 		}
-		return step{input: index, subject: input.subject, group: sourceWrites, action: action, operation: operation, change: input.change, sourceType: after.SourceType}
+		return paths
+	}
+	write := func(operation string, action protocol.PlanningEffect_Action) step {
+		paths := secretPaths(after)
+		if before != nil {
+			// Removing a reference must finish before the old secret drops.
+			for _, path := range secretPaths(before) {
+				if !slices.Contains(paths, path) {
+					paths = append(paths, path)
+				}
+			}
+		}
+		return step{input: index, subject: input.subject, group: sourceWrites, action: action, operation: operation, change: input.change, sourceType: after.SourceType, secrets: paths}
 	}
 	switch {
 	case before == nil:
@@ -249,7 +264,7 @@ func lowerSource(index int, input read, replace bool, root string) lowered {
 		result.steps = []step{write(schema.ExternalCreate, protocol.PlanningEffect_CREATE)}
 	case after == nil:
 		result.strategy = "drop the data source; the system it reads is untouched"
-		result.steps = []step{{input: index, subject: input.subject, group: sourceDrops, action: protocol.PlanningEffect_DROP, operation: schema.ExternalDrop, change: input.change}}
+		result.steps = []step{{input: index, subject: input.subject, group: sourceDrops, action: protocol.PlanningEffect_DROP, operation: schema.ExternalDrop, change: input.change, secrets: secretPaths(before)}}
 	case !replace:
 		result.strategy = "drop the data source and create it again, with the external tables over it"
 		result.steps = []step{write(schema.ExternalRecreate, protocol.PlanningEffect_ALTER)}
@@ -346,7 +361,7 @@ func conflicts(changes []lowered) map[int]error {
 	sourceTypes := map[ydbdecl.Path]string{}
 	for _, change := range changes {
 		for _, planned := range change.steps {
-			if planned.action == protocol.PlanningEffect_DROP {
+			if planned.action == protocol.PlanningEffect_DROP && len(planned.secrets) != 0 {
 				continue
 			}
 			if planned.source() {
@@ -451,6 +466,12 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 		access.Dependencies = append(access.Dependencies, objectplan.BeforePrincipalChanges(request, accessAction, id)...)
 		contribution.Dependencies = append(contribution.Dependencies, edges...)
 		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(planned.subject), Action: planned.action}, {Subject: objectplan.Slot(planned.subject), Action: planned.action}}
+		for _, path := range planned.secrets {
+			secret := sourceSubject(path)
+			secret.Kind = schema.SecretProperties
+			effects = append(effects, &protocol.PlanningEffect{Subject: secret, Action: protocol.PlanningEffect_READ},
+				&protocol.PlanningEffect{Subject: objectplan.Slot(secret), Action: protocol.PlanningEffect_READ})
+		}
 		if !planned.source() && planned.action != protocol.PlanningEffect_DROP {
 			for _, source := range planned.sources {
 				effects = append(effects, &protocol.PlanningEffect{Subject: sourceSubject(source), Action: protocol.PlanningEffect_READ})
@@ -463,12 +484,15 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 		// batch orders its own steps there.
 		step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_DEPENDENT},
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Placement: protocol.PlanningMetadata_EARLY, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}}
-		if len(access.Dependencies)+len(access.Sources) != 0 {
+		if len(access.Dependencies)+len(access.Sources)+len(planned.secrets) != 0 {
 			if !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
-				return refused(changes[planned.input], fmt.Errorf("native access ordering requires planning.lifecycle")), nil
+				return refused(changes[planned.input], fmt.Errorf("native dependency ordering requires planning.lifecycle")), nil
 			}
 			step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
 			step.Metadata.Placement = protocol.PlanningMetadata_DEFAULT
+			if planned.action == protocol.PlanningEffect_DROP {
+				step.Metadata.Placement = protocol.PlanningMetadata_EARLY
+			}
 			step.Metadata.Effects = append(step.Metadata.Effects, access.Effects...)
 			contribution.Dependencies = append(contribution.Dependencies, access.Dependencies...)
 			if len(access.Sources) != 0 {

@@ -3,13 +3,13 @@
 This repository owns the executable YDB provider for [Ptah #4204](https://github.com/stokaro/ptah/issues/4204).
 It is under development. Inspection covers row tables and their indexes and
 changefeeds, column tables, topics, views, coordination nodes, external data
-sources, and external tables. Native SQL execution and session-bound data transactions are
+sources, external tables, and scheme secrets. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML and Go annotation decoding is available for coordination-node, topic, external data source
-and external table declarations, and
+external table and secret declarations, and
 YAML and Go annotation decoding for the partitioning, TTL, column families and changefeeds of row tables, including the columns of each family.
 Offline comparison, planning, and rendering produce native coordination,
-topic, changefeed and external object operations (see [Topics](#topics), [Changefeeds](#changefeeds) and
+topic, changefeed, secret and external object operations (see [Secrets](#secrets), [Topics](#topics), [Changefeeds](#changefeeds) and
 [External data sources and external tables](#external-data-sources-and-external-tables)). Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
 Offline migration lint splits YQL migrations and checks YD rules; see
@@ -199,6 +199,7 @@ reports the defaults of every supported line.
 | `external_data_sources` | `EnableExternalDataSources` | `false` on every line from 25.1 to 26.2 |
 | `external_object_replace` | `EnableReplaceIfExistsForExternalEntities` | `false` on every line from 25.1 to 26.2 |
 | `resource_pools` | `EnableResourcePools` | `false` on every line from 25.1 to 26.2 |
+| `secrets` | `EnableSchemaSecrets` | `false` through 25.3, `true` from 25.4 |
 
 The host maps more flags than these. The provider reports only the
 capabilities it plans with, because the host plans with the others itself: an
@@ -1835,6 +1836,53 @@ table; so is a column table, whose rebuild needs an explicit data migration.
 The live tests rebuild a table natively and by text on both release lines,
 read the copied rows back, and fail a copy whose value does not convert.
 
+## Secrets
+
+The `ydb-secrets` comparison and planning services manage scheme-secret
+presence. Inspection records the secret's path without reading its value.
+A declaration names an approved environment input:
+
+```yaml
+secrets:
+  pg_password:
+    schema: app
+    value_env: PTAH_SECRET_PG_PASSWORD
+```
+
+The equivalent Go annotation is
+`//ptah:schema:secret name="pg_password" schema="app" value_env="PTAH_SECRET_PG_PASSWORD"`.
+A YQL schema declares
+`CREATE SECRET \`app/pg_password\` WITH (value = $PTAH_SECRET_PG_PASSWORD);`.
+Schema sources refuse inline values. Input names must start with `PTAH_SECRET_`
+and contain only ASCII letters, digits, and underscores.
+
+An absent secret is created. An existing secret is unchanged unless the
+operator requests rotation with `--rotate-secret app/pg_password`. Rotation
+of an absent declared secret creates it. A rotation request must name a
+secret retained by the selected desired schema. An omitted secret is removed
+only when desired and current coverage establish that removal.
+
+The `units.sensitive-inputs` service reports input names before approval.
+Previews and saved operations contain references only. Immediately before
+execution, the host checks those references again and resolves the approved
+inputs. The provider receives ephemeral bindings and never reads its process
+environment for secret values. A missing binding refuses the entire batch
+before its first write; an explicitly empty value is accepted. SQL migrations
+can use these references as the complete `value` of `CREATE SECRET` or
+`ALTER SECRET`. Expressions, assignments, and references in unrelated
+statements are refused. Query errors redact expanded values.
+
+Native execution checks presence before dispatch and again afterward. Rotation
+also confirms that the owner and permissions remain unchanged. Values cannot
+be read back, so these checks cannot detect a concurrent value rotation.
+Secret operations run outside SQL transactions and are never retried
+automatically. Targets without the `secrets` capability refuse them.
+
+External data source planning records its old and new secret-path
+dependencies. Creation follows its secret's creation, and a reference is
+removed before its old secret is dropped. Absolute references must resolve
+inside the selected database or dev realm.
+
 ## Native table alteration
 
 The same planning service (`ydb-row-table-create`) accepts captured ALTER
@@ -2107,12 +2155,13 @@ revocations; coordination nodes as this provider's coordination model; and
 topics with the consumers `CREATE TOPIC` and `ALTER TOPIC ... ADD CONSUMER`
 declare, as this provider's topic model; and the data sources and external
 tables `CREATE [OR REPLACE] EXTERNAL DATA SOURCE` and `CREATE [OR REPLACE]
-EXTERNAL TABLE` declare, as this provider's external object models. It
+EXTERNAL TABLE` declare, as this provider's external object models; and secrets
+whose values are approved input references. It
 says what each document declares, traces every object to its statement, and
 claims complete coverage of the row-table, column, column-storage,
-coordination, topic, external data source and external table models. A
+coordination, topic, external data source, external table and secret models. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
-`external_data_source` or `external_table` limits that claim, for one object
+`external_data_source`, `external_table` or `secret` limits that claim, for one object
 or, without a name, for the kind.
 
 A refused token is quoted with at most its first 64 bytes, where Ptah quotes it
@@ -2132,7 +2181,7 @@ carry is refused by name, with no partial reading:
 - a grant on a resource pool whose name holds a dot, a quote or a bracket: Ptah
   names a pool it reads from a provider as it names a table, so the grant
   would come back on a renamed pool;
-- async replications, transfers, streaming queries and secrets, which this
+- async replications, transfers and streaming queries, which this
   provider has no model for.
 
 Some of what a reading carries is not planned yet. Table creation refuses
@@ -2427,7 +2476,7 @@ Remaining work includes more source formats, comparison, the alteration of table
 settings other than column families, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
-rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object and resource pool lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
+rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object, secret and resource pool lifecycles, approved execution inputs, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 

@@ -245,7 +245,7 @@ func externalPlan(c *qt.C, declared, read []external, comparedWith, capabilities
 	request := externalRequest(c, declared, read, comparedWith)
 	compared, err := backend.New().CompareModels(c.Context(), request)
 	c.Assert(err, qt.IsNil)
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: externalplan.ServiceID, Identifiers: request.Identifiers, Capabilities: capabilities}
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: externalplan.ServiceID, TargetFeatures: backend.Description().Features, Identifiers: request.Identifiers, Capabilities: capabilities}
 	for _, change := range compared.Changes {
 		planning.Changes = append(planning.Changes, &protocol.PlanningChange{Subject: change.Subject, Value: change.Value})
 	}

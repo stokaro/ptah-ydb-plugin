@@ -1,10 +1,7 @@
 # Loads this provider refuses by name, because they hold a statement the host
 # reads into an object this provider has no model for: <case> <construct>.
-edge-secret-then-table CREATE SECRET
 edge-streaming-body-semicolons CREATE STREAMING QUERY
 fixture-055-ydb-streaming-queries CREATE STREAMING QUERY
-live-ydb-05 CREATE SECRET
-live-ydb-06 CREATE SECRET
 live-ydb-09 CREATE ASYNC REPLICATION
 live-ydb-10 CREATE ASYNC REPLICATION
 live-ydb-23 CREATE TRANSFER
@@ -16,10 +13,6 @@ live-ydb-30 CREATE STREAMING QUERY
 live-ydb-31 CREATE STREAMING QUERY
 live-ydb-32 CREATE STREAMING QUERY
 parse-builtin-desired-yqlreplication-renders-its-paths-and-lambda-01 CREATE ASYNC REPLICATION
-parse-lint-yd140-names-the-secret-and-never-the-value-01 CREATE SECRET
-parse-lint-yd140-reports-asecret-value-in-the-migration-05 CREATE SECRET
-parse-lint-yd140-reports-asecret-value-in-the-migration-06 CREATE SECRET
-parse-lint-yd140-reports-asecret-value-in-the-migration-07 CREATE SECRET
 parse-lint-ydbrules-leave-replication-statements-ydbkeeps-01 ALTER ASYNC REPLICATION
 parse-lint-ydbrules-leave-replication-statements-ydbkeeps-02 CREATE ASYNC REPLICATION
 parse-lint-ydbrules-leave-replication-statements-ydbkeeps-03 CREATE TRANSFER
@@ -34,42 +27,18 @@ parse-lint-ydbstreaming-checkpoint-lint-03 CREATE OR REPLACE STREAMING QUERY
 parse-lint-ydbstreaming-checkpoint-lint-04 CREATE OR REPLACE STREAMING QUERY
 parse-lint-ydbstreaming-checkpoint-lint-05 CREATE STREAMING QUERY
 render-050-ydb-replication CREATE ASYNC REPLICATION
-render-052-ydb-secrets CREATE SECRET
-schemadiff-compare-yqlsecrets-declared-and-omitted-01 CREATE SECRET
 schemadiff-compare-yqlstreaming-query-body-change-requires-permission-01 CREATE STREAMING QUERY
 schemadiff-compare-yqlstreaming-query-omission-and-reset-01 CREATE OR REPLACE STREAMING QUERY
 schemadiff-compare-yqlstreaming-query-omission-and-reset-02 CREATE STREAMING QUERY
 schemafile-yqlreplication-changes-across-files-01 CREATE ASYNC REPLICATION
-ydbsource-yqlsecret-limits-read-the-path-01 CREATE SECRET
 ydbsql-read-yqlcredential-changes-01 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-02 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-03 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-04 CREATE ASYNC REPLICATION
-ydbsql-read-yqlprivileges-03 CREATE SECRET
 ydbsql-read-yqlprivileges-13 CREATE ASYNC REPLICATION
 ydbsql-read-yqlprivileges-15 CREATE STREAMING QUERY
 ydbsql-read-yqlreplication-01 CREATE ASYNC REPLICATION
 ydbsql-read-yqlreplication-changes-01 CREATE ASYNC REPLICATION
-ydbsql-read-yqlsecret-declared-twice-01 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-01 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-02 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-03 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-04 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-05 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-06 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-07 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-08 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-09 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-10 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-11 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-12 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-13 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-14 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-15 CREATE SECRET
-ydbsql-read-yqlsecret-refusals-redact-declaration-16 CREATE SECRET
-ydbsql-read-yqlsecret-refused-on-older-line-01 CREATE SECRET
-ydbsql-read-yqlsecrets-01 CREATE SECRET
-ydbsql-read-yqlsecrets-02 CREATE SECRET
 ydbsql-read-yqlstreaming-query-01 CREATE STREAMING QUERY
 ydbsql-read-yqlstreaming-query-02 CREATE STREAMING QUERY
 ydbsql-read-yqlstreaming-query-03 CREATE STREAMING QUERY

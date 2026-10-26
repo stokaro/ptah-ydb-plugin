@@ -166,6 +166,12 @@ func (c *converter) convert(statement statement) error {
 		return c.declareTopic(node)
 	case *addConsumer:
 		return c.addConsumer(node)
+	case *createSecret:
+		object := Object{Kind: KindSecret, Schema: node.schema, Name: node.name, Spec: new(node.spec)}
+		if c.file.object(object) != nil {
+			return fmt.Errorf("secret %s is declared twice", ydbPath(node.schema, node.name))
+		}
+		return c.declare(object)
 	case *createCoordinationNode:
 		return c.declareCoordinationNode(node)
 	case *createExternalSource:

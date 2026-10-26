@@ -10,6 +10,7 @@ import (
 // excludes its grants. A classifier keeps its required pool unless excluded.
 func scopeSelections() []*protocol.ScopeSelection {
 	return []*protocol.ScopeSelection{
+		{Kind: schema.SecretProperties, SelectorType: "secret", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "SECRET"},
 		{Kind: schema.CoordinationProperties, SelectorType: "coordination_node", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "COORDINATION NODE"},
 		{Kind: schema.TopicProperties, SelectorType: "topic", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "TOPIC"},
 		{Kind: schema.ExternalSourceProperties, SelectorType: "external_data_source", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "EXTERNAL DATA SOURCE"},

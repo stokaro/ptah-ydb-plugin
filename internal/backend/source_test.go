@@ -218,7 +218,7 @@ func TestDescriptionClaimsTheGoDirectives_HappyPath(t *testing.T) {
 		directives = append(directives, claim.Directive)
 	}
 	c.Assert(directives, qt.DeepEquals, []string{"ptah:schema:table", "ptah:schema:index", "ptah:schema:columnfamily", "ptah:schema:changefeed",
-		"ptah:schema:changefeed:consumer", "ptah:schema:coordinationnode", "ptah:schema:topic", "ptah:schema:topic:consumer",
+		"ptah:schema:changefeed:consumer", "ptah:schema:secret", "ptah:schema:coordinationnode", "ptah:schema:topic", "ptah:schema:topic:consumer",
 		"ptah:schema:externaldatasource", "ptah:schema:externaltable",
 		"ptah:schema:resourcepool", "ptah:schema:resourcepool:classifier"})
 }
