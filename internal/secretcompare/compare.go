@@ -65,7 +65,13 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 		}
 	}
 	family := objectcompare.Family{
-		ServiceID: ServiceID, Kind: schema.SecretProperties, Capability: secrets.Capability, Noun: "secret",
+		ServiceID: ServiceID, Kind: schema.SecretProperties, Capability: secrets.Capability, ChangeCapability: true, Noun: "secret",
+		Unread: func(capabilities map[string]bool) string {
+			if capabilities[secrets.Capability] {
+				return ""
+			}
+			return "The target's secrets capability is unavailable"
+		},
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(schema.SecretProperties) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 			return schema.NativeBoundOwner(schema.SecretProperties, subject)

@@ -74,6 +74,9 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 			}
 		}
 	}
+	if !session.capabilities["secrets"] {
+		inspect.UnavailableSecrets(result)
+	}
 	result.TargetFeatures = negotiatedFeatures(ctx)
 	// The reply is checked against the description the host holds: one that
 	// did not list the common wire declares no common object.

@@ -1876,7 +1876,9 @@ Native execution checks presence before dispatch and again afterward. Rotation
 also confirms that the owner and permissions remain unchanged. Values cannot
 be read back, so these checks cannot detect a concurrent value rotation.
 Secret operations run outside SQL transactions and are never retried
-automatically. Targets without the `secrets` capability refuse them.
+automatically. Targets without the `secrets` capability refuse declarations
+and mutations. Any secret names still returned by their directory listing
+remain unknown observations; they cannot become planned removals.
 
 External data source planning records its old and new secret-path
 dependencies. Creation follows its secret's creation, and a reference is

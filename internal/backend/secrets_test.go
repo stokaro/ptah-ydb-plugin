@@ -161,6 +161,17 @@ func TestSecretRotationRefusesUndeclaredAndUnknownPresence(t *testing.T) {
 	c.Assert(result.Undecided, qt.HasLen, 1)
 }
 
+func TestSecretComparisonKeepsUnsupportedObservationsUndecided(t *testing.T) {
+	c := qt.New(t)
+	request := secretRequest(c, true)
+	request.Capabilities["secrets"] = false
+	request.Desired.Records = nil
+	result, err := backend.New().CompareModels(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Changes, qt.HasLen, 0)
+	c.Assert(result.Undecided, qt.HasLen, 1)
+}
+
 func TestSecretSourceRefusesInlineValuesAndPreservesReferences(t *testing.T) {
 	c := qt.New(t)
 	request, err := testsource.YAMLDocument(`{"secrets":{"a.b":{"schema":"app","value_env":"PTAH_SECRET_PG"}}}`, secretsource.YAMLKey(), schema.NativeDesiredModel(schema.SecretProperties))
