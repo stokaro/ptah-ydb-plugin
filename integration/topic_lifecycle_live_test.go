@@ -82,7 +82,7 @@ func TestTopicLifecycleSubprocess(t *testing.T) {
 			return nil
 		}
 		c.Assert(compared.Changes, qt.HasLen, 1)
-		planned, err := client.PlanFeatures(ctx, &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: topicplan.ServiceID, Capabilities: session.Capabilities,
+		planned, err := client.PlanFeatures(ctx, &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: topicplan.ServiceID, Capabilities: session.Capabilities,
 			Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}, Changes: []*protocol.PlanningChange{{Subject: compared.Changes[0].Subject, Value: compared.Changes[0].Value}}})
 		c.Assert(err, qt.IsNil)
 		c.Assert(planned.Diagnostics, qt.HasLen, 0)

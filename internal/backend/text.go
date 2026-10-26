@@ -9,6 +9,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -99,6 +100,19 @@ func textOf(value *protocol.Envelope) (string, error) {
 		return coordinationText(path, value)
 	case schema.ExternalSourceOperation, schema.ExternalTableOperation:
 		return externalText(path, value)
+	case schema.StreamingQueryOperation:
+		change, err := schema.StreamingChangeOf(schema.StreamingQueryOperationChange(value))
+		if err != nil {
+			return "", err
+		}
+		statements, err := streaming.Statements(change)
+		if err != nil {
+			return "", err
+		}
+		if len(statements) != 1 {
+			return "", fmt.Errorf("%w: a running streaming query alteration needs separate stop and restart operations", tablecreate.ErrNoTextForm)
+		}
+		return statements[0], nil
 	case schema.WorkloadOperation:
 		return workloadText(value)
 	default:

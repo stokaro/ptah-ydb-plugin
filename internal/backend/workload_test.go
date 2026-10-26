@@ -186,7 +186,7 @@ func TestWorkloadComparison_FailurePath(t *testing.T) {
 // as the host sends the changes of the planner's kinds together.
 func workloadPlan(c *qt.C, capabilities map[string]bool, common []*protocol.CommonPlanningStep, requests ...*protocol.CompareModelsRequest) (*protocol.PlanFeaturesRequest, *protocol.PlannedFeatures) {
 	c.Helper()
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: workloadplan.ServiceID, Identifiers: requests[0].Identifiers, Capabilities: capabilities, CommonSteps: common}
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: workloadplan.ServiceID, Identifiers: requests[0].Identifiers, Capabilities: capabilities, CommonSteps: common}
 	for _, request := range requests {
 		for _, change := range compareWorkload(c, request).Changes {
 			// Each comparison numbers its own changes; a planning request

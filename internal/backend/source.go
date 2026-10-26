@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streamingsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
@@ -83,6 +84,10 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			}
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		queries, err := streamingsource.Decode(ctx, document)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		if err := refuseColumnTableChangefeeds(tables, feeds); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
@@ -90,6 +95,8 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			var values []*protocol.SourceModelValue
 			var err error
 			switch {
+			case streamingsource.Owns(fragment):
+				values = queries[index]
 			case topicsource.Owns(fragment):
 				values = topics[index]
 			case workloadsource.Owns(fragment):
@@ -109,6 +116,10 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			}
 			decoded.Fragments = append(decoded.Fragments, &protocol.DecodedSourceFragment{Id: fragment.Id, Values: values})
 			for _, value := range values {
+				value.Value.RequiredObjects, err = schema.RequiredObjects(value.Value.Value)
+				if err != nil {
+					return nil, status.Error(codes.InvalidArgument, err.Error())
+				}
 				owner := value.Value.Value.Owner
 				decoded.Coverage.Subjects = append(decoded.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: value.Value.Value.Kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}})
 			}

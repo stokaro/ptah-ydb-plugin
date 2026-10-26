@@ -1,7 +1,6 @@
 package backend_test
 
 import (
-	"fmt"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -33,16 +32,22 @@ func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
 	c.Assert(description.Engines[0].Features, qt.Contains, "database.dev")
 }
 
-// TestDescriptionStartsOnEveryHostOfItsMajor pins the declared minimum: every
-// addition after contract 25.0 the provider uses is negotiated, so a host of
-// contract 25.0 starts it, and so does every later minor.
-func TestDescriptionStartsOnEveryHostOfItsMajor(t *testing.T) {
-	for minor := range provider.ContractMinor + 1 {
-		t.Run(fmt.Sprintf("%d.%d", provider.Revision, minor), func(t *testing.T) {
+// The lifecycle phase requires its declared contract minor, and later minors
+// retain it. Older hosts must refuse before planning native replacements.
+func TestDescriptionRequiresLifecycleContract(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		minor uint32
+		want  error
+	}{
+		{"earlier minor", 4, provider.ErrProtocol},
+		{"lifecycle minor", 5, nil},
+		{"later minor", 6, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
-			host := &protocol.ContractVersion{Major: provider.Revision, Minor: minor}
-
-			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.IsNil)
+			host := &protocol.ContractVersion{Major: provider.Revision, Minor: test.minor}
+			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.ErrorIs, test.want)
 		})
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -16,7 +17,7 @@ func Request(owner *protocol.Reference, before, after *protocol.Envelope) (*prot
 	if err != nil {
 		return nil, err
 	}
-	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: coordinationplan.ServiceID, DatabasePath: owner.Database, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: map[string]bool{"coordination_nodes": true, "transactional_ddl": false}, Changes: []*protocol.PlanningChange{{Subject: Subject(owner), Value: change}}}, nil
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: coordinationplan.ServiceID, DatabasePath: owner.Database, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: map[string]bool{"coordination_nodes": true, "transactional_ddl": false}, Changes: []*protocol.PlanningChange{{Subject: Subject(owner), Value: change}}}, nil
 }
 
 // Subject keeps database, directory, and leaf identity separate.

@@ -170,6 +170,8 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 		switch object.GetKind() {
 		case schema.TopicProperties:
 			ref.Kind, types = "topic", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP}
+		case schema.StreamingQueryProperties:
+			ref.Kind, types = "streaming query", []Ydb_Scheme.Entry_Type{streamingQueryEntry}
 		case schema.CoordinationProperties:
 			ref.Kind, types = "coordination node", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_COORDINATION_NODE}
 		case schema.ExternalSourceProperties:

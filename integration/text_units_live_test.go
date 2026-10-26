@@ -153,7 +153,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()
-	client := startProviderFor(c, provider.TextUnitsFeature)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
@@ -184,7 +184,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 		for _, column := range declared.Features.Facets.Records[1:] {
 			column.Subject.Parent = &protocol.ComparisonPart{Source: name, Normalized: name}
 		}
-		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 			Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE, Desired: declared}}}
 		prepareCapturedCreation(c, client, planning)
@@ -313,7 +313,7 @@ func (f *coordinationText) text(c *qt.C, compared *protocol.ComparedModels) *pro
 	c.Helper()
 	c.Assert(compared.Changes, qt.HasLen, 1)
 	change := compared.Changes[0]
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: coordinationplan.ServiceID, DatabasePath: f.database, Capabilities: f.session.Capabilities,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: coordinationplan.ServiceID, DatabasePath: f.database, Capabilities: f.session.Capabilities,
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Changes:     []*protocol.PlanningChange{{Subject: change.Subject, Value: change.Value}}}
 	plan, err := f.client.PlanFeatures(c.Context(), request)
@@ -355,7 +355,7 @@ func TestCoordinationTextUnitsSubprocess(t *testing.T) {
 		defer stop()
 		_, _ = nodes.DropNode(cleanup, &Ydb_Coordination.DropNodeRequest{Path: path.Join(database, directory, "node")})
 	})
-	client := startProviderFor(c, provider.TextUnitsFeature)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
@@ -419,7 +419,7 @@ func TestCoordinationStatementsOfAMigrationFileSubprocess(t *testing.T) {
 	c := qt.New(t)
 	opened, directory, database := inspectionFixture(c)
 	nodes := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(opened.Driver))
-	client := startProviderFor(c)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })

@@ -20,12 +20,15 @@ func TestScopeSelectionsNegotiation(t *testing.T) {
 	c.Assert(without.Engines[0].ScopeSelections, qt.HasLen, 0)
 	with := provider.NegotiatedDescription(description, []string{provider.ScopeSelectionsFeature})
 	c.Assert(provider.ValidateDescription(with, []string{provider.ScopeSelectionsFeature}), qt.IsNil)
-	c.Assert(with.Engines[0].ScopeSelections, qt.HasLen, 6)
+	c.Assert(with.Engines[0].ScopeSelections, qt.HasLen, 7)
 	for _, selection := range with.Engines[0].ScopeSelections {
 		switch selection.Kind {
 		case schema.ResourcePoolClassifierProperties:
 			c.Assert(selection.KeepsRequired, qt.DeepEquals, []string{schema.ResourcePoolProperties})
 			c.Assert(selection.Naming, qt.Equals, protocol.ScopeSelection_DATABASE_WIDE)
+		case schema.StreamingQueryProperties:
+			c.Assert(selection.KeepsRequired, qt.DeepEquals, []string{schema.ResourcePoolProperties})
+			c.Assert(selection.Naming, qt.Equals, protocol.ScopeSelection_IN_SCHEMA)
 		case schema.ResourcePoolProperties:
 			c.Assert(selection.Naming, qt.Equals, protocol.ScopeSelection_DATABASE_WIDE)
 		default:

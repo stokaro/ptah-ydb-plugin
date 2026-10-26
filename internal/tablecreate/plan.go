@@ -293,7 +293,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			}
 		}
 		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: item.id,
-			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation},
+			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation, Phase: protocol.PlanningOperation_LIFECYCLE},
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
 				Effects: effects}})
 		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
@@ -314,7 +314,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		slot := proto.CloneOf(item.table.Subject)
 		slot.Kind = "ydb.scheme-path"
 		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: item.id,
-			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation},
+			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation, Phase: protocol.PlanningOperation_LIFECYCLE},
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
 				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.table.Subject), Action: protocol.PlanningEffect_DROP},
 					{Subject: slot, Action: protocol.PlanningEffect_DROP}}}})
@@ -367,7 +367,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			familySlot := proto.CloneOf(subject)
 			familySlot.Kind = "ydb.column-families"
 			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: item.id,
-				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation},
+				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation, Phase: protocol.PlanningOperation_LIFECYCLE},
 				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
 					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
 						{Subject: familySlot, Action: protocol.PlanningEffect_ALTER}}}})

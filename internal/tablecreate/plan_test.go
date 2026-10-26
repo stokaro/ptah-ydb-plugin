@@ -18,7 +18,7 @@ func creationPlan(c *qt.C) *protocol.PlanFeaturesRequest {
 	table := withSettings(c)
 	table.Features.Objects = &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}}
 	table.Features.Facets.Coverage = &protocol.ComparisonCoverage{}
-	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
 		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
 		Capabilities: map[string]bool{"transactional_ddl": false},
 		Tables: []*protocol.PlanningTable{{Subject: &protocol.ComparisonIdentity{Kind: "table", Database: part("/local"), Schema: part("app"), Name: part("records")},
@@ -43,6 +43,7 @@ func TestNativeTableCreationPlanRenderNormalize(t *testing.T) {
 	c.Assert(proto.Equal(plan.Rewrites[0].Sources[0], commonID), qt.IsTrue)
 	step := plan.Contributions[0].Steps[0]
 	c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
+	c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
 	c.Assert(step.Metadata.Effects, qt.HasLen, 2)
 	c.Assert(step.Metadata.Effects[1].Subject.Kind, qt.Equals, "ydb.scheme-path")
 	c.Assert(step.Operation.Value.Value.Kind, qt.Equals, tablecreate.OperationKind)
