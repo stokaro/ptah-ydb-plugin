@@ -1,6 +1,7 @@
 package tablecreate_test
 
 import (
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -157,4 +158,32 @@ func TestRebuildPlanRefusesChangefeeds(t *testing.T) {
 	check.Assert(err, qt.IsNil)
 	check.Assert(plan.Diagnostics, qt.HasLen, 1)
 	check.Assert(plan.Diagnostics[0].Message, qt.Matches, `rebuilding table "app/records": the table holds changefeeds, .*`)
+}
+
+// On the common wire a read reports the table's comments apart from its
+// properties. The new table of a rebuild keeps them, the comments of the
+// columns it has, and a migration file writes them after its CREATE TABLE.
+func TestRebuildPlanKeepsTheComments(t *testing.T) {
+	check := qt.New(t)
+	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+	request.TargetFeatures = []string{provider.CommonObjectsFeature}
+	comment := func(kind, name, text string, path ...string) *protocol.ObjectComment {
+		return &protocol.ObjectComment{Object: &protocol.Reference{Engine: "ydb", Kind: kind, Schema: "app", Name: name, Path: path}, Text: text}
+	}
+	request.CurrentCommon = &protocol.ObservedCommonObjects{
+		Coverage: []*protocol.CommonObjectCoverage{{Kind: protocol.CommonObjectSupport_VIEW, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}},
+			{Kind: protocol.CommonObjectSupport_COMMENT, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}}},
+		Comments: []*protocol.ObjectComment{comment("table", "records", "rows"), comment("column", "payload", "the text", "records"),
+			comment("column", "gone", "dropped", "records"), comment("table", "other", "another table")},
+	}
+	plan, err := backend.New().PlanFeatures(check.Context(), request)
+	check.Assert(err, qt.IsNil)
+	check.Assert(plan.Diagnostics, qt.HasLen, 0)
+	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering.Form = protocol.RenderRequest_TEXT
+	rendered, err := backend.New().Render(check.Context(), rendering)
+	check.Assert(err, qt.IsNil)
+	check.Assert(rendered.Units[0].GetSql(), qt.Contains, ";\nCOMMENT ON TABLE `app/__ptah_rebuild_records` IS 'rows';\n"+
+		"COMMENT ON COLUMN `app/__ptah_rebuild_records`.`payload` IS 'the text';")
+	check.Assert(strings.HasSuffix(rendered.Units[0].GetSql(), "'the text';"), qt.IsTrue)
 }

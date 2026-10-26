@@ -9,8 +9,11 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/servicequery"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
+	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -30,9 +33,10 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		return nil, status.Error(codes.InvalidArgument, "session, request ID, and units are required")
 	}
 	hasSQL, hasNative := false, false
-	// services are the SQL units that run one of Ptah's coordination node
-	// statements, which YDB's query service does not take.
-	services := make(map[*protocol.Unit]coordinationsql.Query)
+	// services are the SQL units that run one of Ptah's comment or
+	// coordination node statements, which YDB's query service does not take,
+	// cut into the queries they run as.
+	services := make(map[*protocol.Unit][]sqlPiece)
 	// Pure validation covers the whole batch before any prefix can execute.
 	for _, unit := range request.Units {
 		if err := provider.ValidateUnit(unit); err != nil {
@@ -41,15 +45,19 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		switch unit.Body.(type) {
 		case *protocol.Unit_Sql:
 			hasSQL = true
-			query, recognized, err := coordinationsql.Recognize(unit.GetSql())
+			pieces, err := unitPieces(unit.GetSql())
 			switch {
 			case err != nil:
-				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.invalid-coordination-statement", Message: rowdata.OneLine(err.Error())}, nil
-			case recognized && request.TransactionId != "":
+				code := "ydb.invalid-coordination-statement"
+				if errors.Is(err, ydbcomment.ErrStatement) {
+					code = "ydb.invalid-comment-statement"
+				}
+				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: code, Message: rowdata.OneLine(err.Error())}, nil
+			case pieces != nil && request.TransactionId != "":
 				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.native-transaction-forbidden",
-					Message: "A coordination node statement runs outside a transaction, as YDB runs every scheme statement"}, nil
-			case recognized:
-				services[unit] = query
+					Message: "A comment or coordination node statement runs outside a transaction, as YDB runs every scheme statement"}, nil
+			case pieces != nil:
+				services[unit] = pieces
 			}
 		case *protocol.Unit_Native:
 			hasNative = true
@@ -138,20 +146,110 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 			}
 			return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 		}
-		if query, recognized := services[unit]; recognized {
-			return nativeapi.NewCoordination(s.connection.Driver).RunStatement(ctx, s.connection.Database(), s.database, query, s.verifyLocks)
+		if pieces, split := services[unit]; split {
+			for i, piece := range pieces {
+				if dispatched, err := s.runPiece(ctx, runner, piece); err != nil {
+					// A piece after the first leaves the unit partly applied.
+					return dispatched || i > 0, err
+				}
+			}
+			return true, nil
 		}
-		if err := s.verifyLocks(ctx); err != nil {
-			return false, err
-		}
-		_, err := runner.ExecContext(ctx, unit.GetSql())
-		return true, err
+		return s.runPiece(ctx, runner, sqlPiece{text: unit.GetSql()})
 	}, request.Units)
 	if s.verifyLocks(ctx) != nil && (result.AppliedCount > 0 || result.Outcome == protocol.Execution_UNKNOWN) {
 		result.Outcome = protocol.Execution_UNKNOWN
 		result.DiagnosticCode = "ydb.lock-guarantee-lost"
 	}
 	return result, nil
+}
+
+// sqlPiece is one query a SQL unit runs as: a comment statement, a
+// coordination node statement, or a query YDB's query service runs.
+type sqlPiece struct {
+	text         string
+	coordination *coordinationsql.Query
+	comment      *ydbcomment.Query
+}
+
+// unitPieces cuts a SQL unit that runs one of Ptah's comment or coordination
+// node statements into the queries it runs as, in order, or returns nil for a
+// unit that runs none and goes to the query service whole.
+//
+// A unit that is one such statement, preceded by nothing but definitions, is
+// one piece. A unit that holds one beside other statements, such as the CREATE
+// VIEW and the COMMENT ON VIEW a commented view renders as, is cut as
+// internal/yqlquery cuts a migration file: each scheme statement a query of
+// its own, with the definitions above it. A statement Ptah cannot read is an
+// error wrapping the ErrStatement of its package.
+func unitPieces(text string) ([]sqlPiece, error) {
+	whole, err := recognizePiece(text)
+	if err == nil && whole.service() {
+		return []sqlPiece{whole}, nil
+	}
+	if err == nil && !servicequery.ContainsFold(text, "comment") && !servicequery.ContainsFold(text, "coordination") {
+		return nil, nil
+	}
+	queries, splitErr := yqlquery.Split(text)
+	if splitErr != nil {
+		return nil, err
+	}
+	pieces := make([]sqlPiece, 0, len(queries))
+	services := 0
+	for _, query := range queries {
+		piece, err := recognizePiece(query.Text)
+		if err != nil {
+			return nil, err
+		}
+		if piece.service() {
+			services++
+		}
+		pieces = append(pieces, piece)
+	}
+	if services == 0 {
+		return nil, err
+	}
+	return pieces, nil
+}
+
+// recognizePiece reads one query: a comment statement, a coordination node
+// statement, or neither.
+func recognizePiece(text string) (sqlPiece, error) {
+	coordination, recognized, err := coordinationsql.Recognize(text)
+	switch {
+	case err != nil:
+		return sqlPiece{}, err
+	case recognized:
+		return sqlPiece{text: text, coordination: &coordination}, nil
+	}
+	comment, recognized, err := ydbcomment.Recognize(text)
+	switch {
+	case err != nil:
+		return sqlPiece{}, err
+	case recognized:
+		return sqlPiece{text: text, comment: &comment}, nil
+	}
+	return sqlPiece{text: text}, nil
+}
+
+// service reports a piece YDB's query service does not take.
+func (p sqlPiece) service() bool { return p.coordination != nil || p.comment != nil }
+
+// runPiece runs one piece of a SQL unit once: a comment statement through the
+// table service, a coordination node statement through the coordination
+// service, and every other query through runner.
+func (s *session) runPiece(ctx context.Context, runner sqlExecutor, piece sqlPiece) (bool, error) {
+	switch {
+	case piece.coordination != nil:
+		return nativeapi.NewCoordination(s.connection.Driver).RunStatement(ctx, s.connection.Database(), s.database, *piece.coordination, s.verifyLocks)
+	case piece.comment != nil:
+		return nativeapi.NewComments(s.connection.Driver).RunStatement(ctx, s.connection.Database(), s.database, *piece.comment, s.verifyLocks)
+	}
+	if err := s.verifyLocks(ctx); err != nil {
+		return false, err
+	}
+	_, err := runner.ExecContext(ctx, piece.text)
+	return true, err
 }
 
 // executeSchema runs one schema statement on a connection of its own, once.

@@ -34,7 +34,13 @@ type ColumnTables func(ctx context.Context, absolute string) ([]byte, error)
 // leaveOut names the directories at the root that belong to other runs, such
 // as the directory of the dev realms in a database a realm does not select.
 // Neither the traversal nor a selector reaches them.
-func Read(ctx context.Context, driver *ydb.Driver, columns ColumnTables, database string, selectors []string, leaveOut ...string) (result *protocol.Schema, err error) {
+func Read(ctx context.Context, driver *ydb.Driver, columns ColumnTables, database string, selectors []string, leaveOut ...string) (*protocol.Schema, error) {
+	return ReadCommon(ctx, driver, columns, database, selectors, Common{}, leaveOut...)
+}
+
+// ReadCommon is [Read] that also reports the common objects common names,
+// each kind complete for the directories the read lists.
+func ReadCommon(ctx context.Context, driver *ydb.Driver, columns ColumnTables, database string, selectors []string, common Common, leaveOut ...string) (result *protocol.Schema, err error) {
 	schemas, bindings, err := scopes(database, selectors, leaveOut)
 	if err != nil {
 		return nil, err
@@ -50,7 +56,7 @@ func Read(ctx context.Context, driver *ydb.Driver, columns ColumnTables, databas
 		}
 	}()
 	result = &protocol.Schema{Complete: true, Engine: "ydb", ScopeBindings: bindings,
-		Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}}
+		Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}, CommonObjects: common.coverage()}
 	for _, model := range schema.ObservedModels() {
 		result.Coverage.Kinds = append(result.Coverage.Kinds, &protocol.ModelKindCoverage{Model: model,
 			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Knowledge is limited to returned subjects and fully listed directories"}})
@@ -110,6 +116,7 @@ func Read(ctx context.Context, driver *ydb.Driver, columns ColumnTables, databas
 				if err != nil {
 					return nil, err
 				}
+				common.tableComments(result.CommonObjects, table.Identity, description)
 				indexes, err := source.readIndexes(ctx, path.Join(database, selected, name), description)
 				if err != nil {
 					return nil, err
@@ -163,6 +170,10 @@ func Read(ctx context.Context, driver *ydb.Driver, columns ColumnTables, databas
 				if err != nil {
 					return nil, err
 				}
+				if view, isView := described.(*nativeprotocol.ViewObservation); isView && common.Views {
+					common.view(result.CommonObjects, &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: "view", Name: name}, view)
+					break
+				}
 				owner := &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: kind, Name: name}
 				value, err := schema.CaptureObject(owner, described)
 				if err != nil {
@@ -183,7 +194,8 @@ func Read(ctx context.Context, driver *ydb.Driver, columns ColumnTables, databas
 		// A successful list and complete child reads prove native-object
 		// absence only in this exact directory, never in skipped descendants.
 		for _, record := range result.Coverage.Kinds {
-			if schema.IsNativeObject(record.Model.Kind) {
+			// Views the common wire carries are not read as native objects.
+			if schema.IsNativeObject(record.Model.Kind) && (record.Model.Kind != schema.ViewProperties || !common.Views) {
 				record.Regions = append(record.Regions, &protocol.ModelNamespaceKnowledge{
 					Scope:     &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: database, Normalized: database}, Catalog: &protocol.NamespaceComponent{}, Schema: &protocol.NamespaceComponent{Source: selected, Normalized: selected}},
 					Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
@@ -203,6 +215,7 @@ func Read(ctx context.Context, driver *ydb.Driver, columns ColumnTables, databas
 		}
 		return strings.Compare(a.Owner.Name, b.Owner.Name)
 	})
+	common.sort(result.CommonObjects)
 	if err := provider.ValidateSchema(result); err != nil {
 		return nil, err
 	}

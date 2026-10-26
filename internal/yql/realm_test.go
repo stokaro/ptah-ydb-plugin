@@ -19,6 +19,10 @@ func TestConfineToRealm_HappyPath(t *testing.T) {
 		{"semicolon in a subquery body", "DEFINE SUBQUERY $s() AS SELECT 1; SELECT 2; END DEFINE; SELECT 3"},
 		{"syntax setting", "--!syntax_v1\nSELECT 1"},
 		{"unrelated pragma", "PRAGMA AnsiInForEmptyOrNullableItemsCollections; SELECT 1"},
+		{"comment on a relative table", "COMMENT ON TABLE `app/t` IS 'text'"},
+		{"comment on a relative column", "COMMENT ON COLUMN `app/t`.`id` IS 'text'"},
+		{"comment on a relative index", "COMMENT ON INDEX `by_id` ON `app/t` IS NULL"},
+		{"comment on a relative view", "CREATE VIEW `v` WITH (security_invoker = TRUE) AS SELECT 1;\nCOMMENT ON VIEW `v` IS 'text';"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -37,6 +41,10 @@ func TestConfineToRealm_FailurePath(t *testing.T) {
 		{"user", "CREATE USER u1 PASSWORD 'p'", "a user of the whole database"},
 		{"statement without a target", "INSERT VALUES (1)", "a INSERT with no INTO the guard can read"},
 		{"translation setting", "--!ansi_lexer\nSELECT 1", "translation setting --!ansi_lexer"},
+		{"comment on an absolute table", "COMMENT ON TABLE `/local/t` IS 'text'", "the absolute path /local/t"},
+		{"comment on a column outside", "COMMENT ON COLUMN `../t`.`id` IS 'text'", "the path ../t, which climbs out of the dev database"},
+		{"comment on an index outside", "COMMENT ON INDEX `i` ON `/local/t` IS 'text'", "the absolute path /local/t"},
+		{"comment on another object", "COMMENT ON SCHEMA `app` IS 'text'", "unrecognized object COMMENT ON SCHEMA"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)

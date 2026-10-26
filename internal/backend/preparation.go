@@ -24,7 +24,11 @@ func (*Provider) PrepareTables(ctx context.Context, request *protocol.PrepareTab
 	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) {
 		return nil, status.Error(codes.InvalidArgument, "YDB preparation requires its negotiated identifier rules")
 	}
-	result, err := tablecreate.PrepareTables(ctx, request)
+	stripped, err := preparationWithoutComments(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	result, err := tablecreate.PrepareTables(ctx, stripped)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()

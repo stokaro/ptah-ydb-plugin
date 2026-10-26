@@ -12,9 +12,11 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -24,6 +26,7 @@ const (
 	kindNamespace = "schema"
 	kindEnum      = "enum"
 	kindPaths     = "table path"
+	kindView      = "view"
 )
 
 // Validate checks every captured declaration and returns one completed result.
@@ -49,9 +52,11 @@ func Validate(ctx context.Context, request *protocol.ValidateSchemaRequest) (*pr
 	add := func(code protocol.SchemaDiagnostic_Code, kind, object, feature, format string, args ...any) {
 		result.Diagnostics = append(result.Diagnostics, &protocol.SchemaDiagnostic{Code: code, Kind: kind, Object: object, Feature: feature, Message: fmt.Sprintf(format, args...)})
 	}
-	if err := validateTables(ctx, request.Tables, add); err != nil {
+	carried := slices.Contains(request.GetTargetFeatures(), provider.CommonObjectsFeature)
+	if err := validateTables(ctx, request.Tables, carried, add); err != nil {
 		return nil, err
 	}
+	validateCommonObjects(request.GetCommonObjects(), add)
 	validateNamespaces(request, add)
 	validateEnums(request, add)
 	if err := validateObjects(ctx, request, add); err != nil {
@@ -68,7 +73,11 @@ func Validate(ctx context.Context, request *protocol.ValidateSchemaRequest) (*pr
 
 type addFunc func(code protocol.SchemaDiagnostic_Code, kind, object, feature, format string, args ...any)
 
-func validateTables(ctx context.Context, tables []*protocol.ValidationTable, add addFunc) error {
+// validateTables checks each table declaration. Where the host negotiated
+// the common wire, carried, a comment a table declares on itself, a column or
+// an index is the comment's own change: it is held to what YDB keeps in a
+// table attribute, and the table is checked without it.
+func validateTables(ctx context.Context, tables []*protocol.ValidationTable, carried bool, add addFunc) error {
 	paths := make(map[string]map[string]string)
 	for _, table := range tables {
 		if err := ctx.Err(); err != nil {
@@ -76,7 +85,15 @@ func validateTables(ctx context.Context, tables []*protocol.ValidationTable, add
 		}
 		name := tableName(table.GetDeclaration())
 		code := protocol.SchemaDiagnostic_INVALID_SCHEMA
-		if err := tablecreate.ValidateDeclaration(table.Subject, table.Declaration); err != nil {
+		declaration := table.GetDeclaration()
+		if carried {
+			if err := commonobject.TableCommentRefusal(declaration); err != nil {
+				add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, kindTable, name, "", "%s", err)
+				continue
+			}
+			declaration = commonobject.WithoutComments(declaration)
+		}
+		if err := tablecreate.ValidateDeclaration(table.Subject, declaration); err != nil {
 			if tablecreate.IsUnsupported(err) {
 				code = protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE
 			}
@@ -116,6 +133,16 @@ func tableName(table *protocol.DeclaredTable) string {
 		return table.GetName()
 	}
 	return table.GetSchema() + "/" + table.GetName()
+}
+
+// validateCommonObjects checks the views a declaration holds against what a
+// YDB view can be. The SDK has refused every kind the engine does not carry.
+func validateCommonObjects(declared *protocol.DeclaredCommonObjects, add addFunc) {
+	for _, view := range declared.GetViews() {
+		if err := commonobject.Refusal(view); err != nil {
+			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, kindView, tableName(&protocol.DeclaredTable{Schema: view.GetSchema(), Name: view.GetName()}), "", "%s", err)
+		}
+	}
 }
 
 func validateNamespaces(request *protocol.ValidateSchemaRequest, add addFunc) {

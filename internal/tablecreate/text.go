@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -48,16 +49,21 @@ func TextPath(schemaPath, name string) string {
 //	    FAMILY `f` (DATA = 'ssd', COMPRESSION = 'lz4')
 //	) WITH (TTL = ..., AUTO_PARTITIONING_..., KEY_BLOOM_FILTER = ..., UNIFORM_PARTITIONS = n);
 //
+// The comments Ptah keeps among the attributes, the new table's own and its
+// columns' and indexes', follow as Ptah's COMMENT ON statements, as the
+// embedded engine writes them after the CREATE TABLE.
+//
 // A request that sets something YQL has no spelling for is refused with
-// [ErrNoTextForm]: storage settings, user attributes, tiering, a TTL run
-// interval other than YDB's own, the partition columns, a family kept in
-// memory, and a default YQL cannot write.
+// [ErrNoTextForm]: storage settings, user attributes other than comments,
+// tiering, a TTL run interval other than YDB's own, the partition columns, a
+// family kept in memory, and a default YQL cannot write.
 func RowTableStatement(path string, request *Ydb_Table.CreateTableRequest) (string, error) {
+	comments, err := attributeComments(path, request)
 	switch {
+	case err != nil:
+		return "", err
 	case request.GetStorageSettings() != nil:
 		return "", noTextForm("YQL has no setting for a row table's storage settings")
-	case len(request.GetAttributes()) != 0:
-		return "", noTextForm("YQL's CREATE TABLE sets no user attribute")
 	case request.GetTiering() != "":
 		return "", noTextForm("YQL has no setting for a row table's tiering")
 	case len(request.GetPartitioningSettings().GetPartitionBy()) != 0:
@@ -92,7 +98,46 @@ func RowTableStatement(path string, request *Ydb_Table.CreateTableRequest) (stri
 	if len(settings) != 0 {
 		statement += " WITH (" + strings.Join(settings, ", ") + ")"
 	}
-	return statement + ";", nil
+	return strings.Join(append([]string{statement + ";"}, comments...), "\n"), nil
+}
+
+// attributeComments writes the comments a creation's attributes hold as
+// Ptah's COMMENT ON statements: the table's own, then its columns' and its
+// indexes' in the order the request holds them. An attribute that is not a
+// comment of the table has no text form.
+func attributeComments(path string, request *Ydb_Table.CreateTableRequest) ([]string, error) {
+	held := ydbcomment.Read(request.GetAttributes())
+	for key := range request.GetAttributes() {
+		if !ydbcomment.IsKey(key) {
+			return nil, noTextForm("YQL's CREATE TABLE sets no user attribute")
+		}
+	}
+	var statements []ydbcomment.Statement
+	if held.Own != "" {
+		statements = append(statements, ydbcomment.Statement{Object: ydbcomment.Table, Path: path, Comment: held.Own})
+	}
+	for _, column := range request.GetColumns() {
+		if comment := held.Columns[column.GetName()]; comment != "" {
+			statements = append(statements, ydbcomment.Statement{Object: ydbcomment.Column, Path: path, Name: column.GetName(), Comment: comment})
+		}
+	}
+	for _, index := range request.GetIndexes() {
+		if comment := held.Indexes[index.GetName()]; comment != "" {
+			statements = append(statements, ydbcomment.Statement{Object: ydbcomment.Index, Path: path, Name: index.GetName(), Comment: comment})
+		}
+	}
+	if len(statements) != len(held.Attributes()) {
+		return nil, noTextForm("the table's attributes hold a comment of a column or an index it does not have")
+	}
+	texts := make([]string, 0, len(statements))
+	for _, statement := range statements {
+		text, err := statement.Text()
+		if err != nil {
+			return nil, noTextForm("%v", err)
+		}
+		texts = append(texts, text)
+	}
+	return texts, nil
 }
 
 // columnDefinition writes one column: its name, its type, the family it sits

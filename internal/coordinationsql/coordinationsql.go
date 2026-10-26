@@ -12,7 +12,6 @@ package coordinationsql
 import (
 	"errors"
 	"fmt"
-	"path"
 	"slices"
 	"strings"
 
@@ -127,28 +126,13 @@ type Query struct {
 
 // Absolute is the absolute path of the node the query names, on the
 // database whose absolute path is database, with prefix in effect where the
-// query sets no TablePathPrefix of its own.
-//
-// A relative TablePathPrefix is refused, as YDB refuses one: `PRAGMA
-// TablePathPrefix("relp"); CREATE TABLE t (...)` answers `Table path not in
-// database, path: relp/t, database: /local` on 25.1.4.7 and 26.2.1.14.
+// query sets no TablePathPrefix of its own; see [servicequery.Absolute].
 func (q Query) Absolute(database, prefix string) (string, error) {
-	if strings.HasPrefix(q.Path, "/") {
-		return path.Clean(q.Path), nil
+	absolute, err := servicequery.Absolute(q.Path, q.PathPrefix, database, prefix)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrStatement, err)
 	}
-	if q.PathPrefix != "" {
-		prefix = q.PathPrefix
-	}
-	switch {
-	case prefix == "":
-		return path.Join("/"+strings.Trim(database, "/"), q.Path), nil
-	case strings.HasPrefix(prefix, "/"):
-		return path.Join(prefix, q.Path), nil
-	default:
-		return "", fmt.Errorf("%w: path %s is not in database %s: the TablePathPrefix %q is relative, and YDB "+
-			"reads a prefix only as an absolute path", ErrStatement, path.Join(prefix, q.Path),
-			"/"+strings.Trim(database, "/"), prefix)
-	}
+	return absolute, nil
 }
 
 // Recognize reports whether text is a query running one of Ptah's

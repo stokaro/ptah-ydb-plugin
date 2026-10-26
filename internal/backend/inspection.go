@@ -32,7 +32,14 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	result, err := inspect.Read(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), session.leftOut()...)
+	var common inspect.Common
+	if carriesCommon(provider.HostFeatures(ctx)) {
+		common = inspect.Common{Views: true, Comments: true}
+		if session.realm {
+			common.Realm = session.database
+		}
+	}
+	result, err := inspect.ReadCommon(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), common, session.leftOut()...)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
@@ -40,7 +47,9 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 	result.TargetFeatures = negotiatedFeatures(ctx)
-	if _, err := provider.InspectionValues(Description(), request, result); err != nil {
+	// The reply is checked against the description the host holds: one that
+	// did not list the common wire declares no common object.
+	if _, err := provider.InspectionValues(provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx)), request, result); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if err := ctx.Err(); err != nil {
