@@ -155,12 +155,17 @@ func fragmentValues(ctx context.Context, document *protocol.SourceDocument, frag
 		return coordinationSource(ctx, document, fragment, index)
 	}
 	for _, table := range tables {
+		trace := &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}
+		var values []*protocol.SourceModelValue
 		if table.Fragment == index {
-			trace := &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}
-			values := []*protocol.SourceModelValue{{Placement: protocol.SourceModelValue_FACET, Value: table.Value, Source: trace}}
+			values = append(values, &protocol.SourceModelValue{Placement: protocol.SourceModelValue_FACET, Value: table.Value, Source: trace})
+		}
+		if table.ColumnFragment == index {
 			for _, column := range table.Columns {
 				values = append(values, &protocol.SourceModelValue{Placement: protocol.SourceModelValue_FACET, Value: column, Source: proto.CloneOf(trace)})
 			}
+		}
+		if len(values) != 0 {
 			return values, nil
 		}
 	}

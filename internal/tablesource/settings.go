@@ -242,9 +242,6 @@ type family struct {
 	compression *string
 	cacheMode   *string
 	fields      *string
-	// yaml marks a family a YAML source wrote. The host attaches a YAML value
-	// to a table only, so such a family cannot place its columns.
-	yaml bool
 }
 
 // addFamily checks one family and adds it to the table's families. The checks
@@ -281,9 +278,6 @@ func (s *settings) addFamily(declared family) error {
 	}
 	var columns []string
 	if declared.fields != nil {
-		if declared.yaml {
-			return &UnsupportedError{Setting: AttributeFields, Reason: "the host attaches a YAML value to a table, never to a column, so a YAML family cannot place columns; write the family in a Go directive"}
-		}
 		var err error
 		if columns, err = parseFields(*declared.fields); err != nil {
 			return err

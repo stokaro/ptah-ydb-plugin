@@ -13,6 +13,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -101,6 +102,8 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 		{"a Go TTL", "--root-dir", "entities.go", goTable("//ptah:schema:table name=\"host_source_items\" platform.ydb.row_deletion_column=\"created_at\" platform.ydb.row_deletion_interval=\"P30D\"", "")},
 		{"a YAML TTL in the platform group", "--schema-file", "schema.yaml", hostYAMLPlatformTTL},
 		{"the columns of a Go family", "--root-dir", "entities.go", hostGoFamilyFields},
+		{"the columns of a YAML family", "--schema-file", "schema.yaml",
+			"tables:\n  host_source_items:\n    key_bloom_filter: ENABLED\n    column_families:\n      cold: {fields: [body]}\n    columns:\n      id: {type: Uint64, primary: true}\n      body: {type: Utf8}\n"},
 		{"a uniform starting layout in YAML", "--schema-file", "schema.yaml", "tables:\n  host_source_items:\n    uniform_partitions: 4\n    columns:\n      id: {type: Uint64, primary: true}\n"},
 		{"starting split points in YAML", "--schema-file", "schema.yaml", "tables:\n  host_source_items:\n    partition_at_keys: \"10, 20\"\n    columns:\n      id: {type: Uint64, primary: true}\n"},
 		{"a uniform starting layout in Go", "--root-dir", "entities.go", goTable("//ptah:schema:table name=\"host_source_items\" uniform_partitions=\"4\"", "")},
@@ -116,6 +119,38 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 			c.Assert(output, qt.Not(qt.Matches), `(?s).*(decode source failed|unknown key|unknown annotation|project table creations failed).*`)
 		})
 	}
+}
+
+func TestHostPlansYAMLFamilyPlacement(t *testing.T) {
+	c := qt.New(t)
+	output := hostSource(c, "--schema-file", "schema.yaml",
+		"tables:\n  host_source_items:\n    key_bloom_filter: ENABLED\n    column_families:\n      cold: {fields: [body]}\n    columns:\n      id: {type: Uint64, primary: true}\n      body: {type: Utf8}\n")
+	var plan struct {
+		Statements []struct {
+			Native struct {
+				Kind      string
+				Operation struct{ Payload struct{ Payload []byte } }
+			}
+		}
+	}
+	c.Assert(json.Unmarshal([]byte(output), &plan), qt.IsNil)
+	found := false
+	for _, statement := range plan.Statements {
+		if statement.Native.Kind != tablecreate.OperationKind {
+			continue
+		}
+		var creation struct {
+			Columns []struct{ Name, Family string }
+		}
+		c.Assert(json.Unmarshal(statement.Native.Operation.Payload.Payload, &creation), qt.IsNil)
+		for _, column := range creation.Columns {
+			if column.Name == "body" {
+				c.Assert(column.Family, qt.Equals, "cold")
+				found = true
+			}
+		}
+	}
+	c.Assert(found, qt.IsTrue)
 }
 
 // What the provider cannot carry yet is refused by name, by the host for a
@@ -143,8 +178,8 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 			goTable("//ptah:schema:table name=\"host_source_items\" platform.ydb.row_deletion_column=\"created_at\" platform.ydb.row_deletion_interval=\"P1M\"", ""), `decode Go directives of engine "ydb"`},
 		{"an index option in Go", "--root-dir", "entities.go",
 			goTable("//ptah:schema:table name=\"host_source_items\"", "//ptah:schema:index name=\"by_body\" fields=\"body\" auto_partitioning_by_load=\"ENABLED\""), `decode Go directives of engine "ydb"`},
-		{"the columns of a family in YAML", "--schema-file", "schema.yaml",
-			"tables:\n  host_source_items:\n    column_families:\n      cold: {fields: [body]}\n    columns:\n      id: {type: Uint64, primary: true}\n      body: {type: Utf8}\n", `decode source failed`},
+		{"a YAML family names a missing column", "--schema-file", "schema.yaml",
+			"tables:\n  host_source_items:\n    column_families:\n      cold: {fields: [missing]}\n    columns:\n      id: {type: Uint64, primary: true}\n", `missing`},
 		{"a platform property of the ydb group the provider does not read", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    platform:\n      ydb: {row_deletion_column: created_at, row_deletion_interval: PT1H, other: x}\n    columns:\n      id: {type: Uint64, primary: true}\n      created_at: {type: Timestamp}\n", `decode source failed`},
 		{"a column the family names and its struct lacks", "--root-dir", "entities.go",
