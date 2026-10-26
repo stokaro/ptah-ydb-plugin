@@ -5,6 +5,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
@@ -25,6 +26,15 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 	owner := desired.Owner
 	path := tablecreate.TextPath(owner.Schema, owner.Name)
 	switch desired.Kind {
+	case schema.SecretProperties:
+		if !capabilities[secrets.Capability] {
+			return "", fmt.Errorf("secret creation requires capability secrets")
+		}
+		intent, err := schema.DesiredSecret(desired)
+		if err != nil {
+			return "", err
+		}
+		return secrets.CreateStatement(owner.Schema, owner.Name, intent.GetValueEnv()), nil
 	case schema.CoordinationProperties:
 		if !capabilities["coordination_nodes"] {
 			return "", fmt.Errorf("coordination creation requires capability coordination_nodes")

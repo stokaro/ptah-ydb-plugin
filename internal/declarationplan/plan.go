@@ -82,6 +82,11 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 				effects = append(effects, &protocol.PlanningEffect{Subject: ref, Action: protocol.PlanningEffect_READ})
 			}
 		}
+		secretReads, err := sourceSecretEffects(object)
+		if err != nil {
+			return refused(index, object.Kind, err.Error()), nil
+		}
+		effects = append(effects, secretReads...)
 		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: operation.Id}
 		facts := operation.OperationSemantics
 		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Value: operation, Role: protocol.NativeOperation_STATEMENT}, Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}})
