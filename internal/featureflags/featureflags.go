@@ -82,6 +82,9 @@ func (f Flags) Refine(caps map[string]bool) map[string]bool {
 			refined[gate.Key] = value
 		}
 	}
+	if _, owned := refined["streaming_queries"]; owned {
+		refined["streaming_queries"] = f["EnableStreamingQueries"] && f["EnableExternalDataSources"]
+	}
 	return refined
 }
 

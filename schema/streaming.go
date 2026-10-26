@@ -165,6 +165,9 @@ func streamingSemantics(before, after *protocol.Envelope) (*protocol.ChangeSeman
 }
 
 func streamingImpact(change streaming.Change) (*protocol.ChangeSemantics, error) {
+	if _, err := streaming.Statements(change); err != nil {
+		return nil, err
+	}
 	semantics := &protocol.ChangeSemantics{ReplacesOwner: new(false), RemovesState: new(false), Access: protocol.ChangeSemantics_UNCHANGED,
 		AccessReason: "A streaming query change grants and revokes no permission"}
 	if change.Before != nil && change.After != nil && streaming.Equal(*change.Before, *change.After) {

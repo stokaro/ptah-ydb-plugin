@@ -7,14 +7,15 @@ package streaming
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 )
 
 // Capability is a target that keeps streaming queries: one whose
@@ -49,6 +50,40 @@ type Spec struct {
 	Text         string `json:"text"`
 	Run          *bool  `json:"run,omitempty"`
 	ResourcePool string `json:"resource_pool,omitempty"`
+}
+
+// ValidateIdentity requires a relative directory and one exact leaf name.
+func ValidateIdentity(directory, name string) error {
+	if strings.TrimSpace(name) == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\\x00") ||
+		!utf8.ValidString(name) || !utf8.ValidString(directory) || strings.ContainsAny(directory, "\\\x00") ||
+		(directory != "" && (path.IsAbs(directory) || path.Clean(directory) != directory || directory == "." || directory == ".." || strings.HasPrefix(directory, "../"))) {
+		return fmt.Errorf("streaming query requires a relative directory and an exact leaf name")
+	}
+	return nil
+}
+
+// Steps splits a running query's alteration around changes to its inputs.
+// Each returned change renders one statement and retains its own precondition.
+func Steps(change Change) ([]Change, error) {
+	if _, err := Statements(change); err != nil {
+		return nil, err
+	}
+	if change.Before == nil || change.After == nil || !Running(*change.Before) {
+		return []Change{change}, nil
+	}
+	stopped := *change.Before
+	stopped.Run = new(false)
+	stop := Change{Schema: change.Schema, Name: change.Name, Before: change.Before, After: &stopped}
+	if Equal(stopped, *change.After) {
+		return []Change{stop}, nil
+	}
+	change.Before = &stopped
+	return []Change{stop, change}, nil
+}
+
+// Early reports a removal or a stop that must precede changes to its inputs.
+func Early(change Change) bool {
+	return change.After == nil || (change.Before != nil && Running(*change.Before) && !Running(*change.After))
 }
 
 // Running resolves the server default of RUN = TRUE.
@@ -100,6 +135,9 @@ func Validate(spec Spec) error {
 	queries, err := yqlquery.Split(spec.Text)
 	if err != nil {
 		return err
+	}
+	if len(queries) == 0 {
+		return fmt.Errorf("streaming query text must contain a data statement")
 	}
 	for _, query := range queries {
 		if query.Kind != yqlquery.Data {

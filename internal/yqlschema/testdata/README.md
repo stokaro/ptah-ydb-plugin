@@ -28,8 +28,7 @@ it was recorded at in its `host` field.
   documents.
 - `unsupported.txt` lists the accepted loads this provider refuses by name,
   with the construct it names. Ptah reads these statements into objects
-  this provider has no model for: async replications, transfers, streaming
-  queries, secrets, resource pools and resource pool classifiers. The suite
+  this provider has no model for: async replications, transfers and secrets. The suite
   fails when a listed load is accepted, and when an unlisted load is refused
   this way.
 - `oracle/main.go` is the program that records the answers.

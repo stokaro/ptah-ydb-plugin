@@ -148,6 +148,12 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewChangefeed(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.ExternalSourceOperation, schema.ExternalTableOperation:
 				return nativeapi.NewExternal(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case schema.StreamingQueryOperation:
+				read := s.streaming()
+				if read == nil {
+					return false, fmt.Errorf("streaming queries require an established capability")
+				}
+				return (&nativeapi.StreamingQuery{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.WorkloadOperation:
 				read, unread := s.workload()
 				if read == nil {
