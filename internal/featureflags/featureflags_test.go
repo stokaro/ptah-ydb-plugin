@@ -20,7 +20,7 @@ func page(c *qt.C, name string) []byte {
 
 // preset is the session's capability set before the flags are read.
 func preset() map[string]bool {
-	return map[string]bool{"transactional_ddl": false, "tiered_ttl": false, "external_data_sources": false, "external_object_replace": false}
+	return map[string]bool{"transactional_ddl": false, "tiered_ttl": false, "external_data_sources": false, "external_object_replace": false, "resource_pools": false}
 }
 
 // with is the preset with some capabilities set.
@@ -34,9 +34,11 @@ func with(set map[string]bool) map[string]bool {
 
 // linePreset is the preset of one release line: an auto-partitioned
 // changefeed topic is off on 25.1 and on from 25.2.
+// Resource pools default to off on every line.
 func linePreset(autoPartitionedFeeds bool) map[string]bool {
 	caps := preset()
 	caps["changefeed_topic_auto_partitioning"] = autoPartitionedFeeds
+	caps["resource_pools"] = false
 	return caps
 }
 
@@ -91,6 +93,8 @@ func TestRefine_HappyPath(t *testing.T) {
 			want: with(map[string]bool{"changefeed_topic_auto_partitioning": true})},
 		{name: "auto-partitioned changefeed topics off", flags: featureflags.Flags{"EnableTopicAutopartitioningForCDC": false},
 			want: with(map[string]bool{"changefeed_topic_auto_partitioning": false})},
+		{name: "resource pools on", flags: featureflags.Flags{"EnableResourcePools": true},
+			want: with(map[string]bool{"resource_pools": true})},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -124,7 +128,7 @@ func TestGates_NameEveryFlagOnce(t *testing.T) {
 		c.Assert(flags[gate.Flag], qt.IsFalse, qt.Commentf(gate.Flag))
 		keys[gate.Key], flags[gate.Flag] = true, true
 	}
-	c.Assert(keys, qt.DeepEquals, map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "external_object_replace": true})
+	c.Assert(keys, qt.DeepEquals, map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "external_object_replace": true, "resource_pools": true})
 }
 
 func TestDecode_HappyPath(t *testing.T) {

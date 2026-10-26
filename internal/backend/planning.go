@@ -12,6 +12,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workloadplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -46,6 +48,8 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 		if stripped, err = planningWithoutComments(request); err == nil {
 			result, err = tablecreate.Plan(ctx, stripped)
 		}
+	case workloadplan.ServiceID:
+		result, err = workloadplan.Plan(ctx, request)
 	default:
 		err = fmt.Errorf("unsupported YDB planning service")
 	}
@@ -111,6 +115,9 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		}
 		if kind := captured.GetValue().GetKind(); (kind == schema.ExternalSourceOperation || kind == schema.ExternalTableOperation) && !request.Capabilities[externals.CapabilityExternalDataSources] {
 			return nil, status.Error(codes.FailedPrecondition, "external object rendering requires the external_data_sources capability")
+		}
+		if captured.GetValue().GetKind() == schema.WorkloadOperation && !request.Capabilities[workload.CapabilityResourcePools] {
+			return nil, status.Error(codes.FailedPrecondition, "resource pools require target capability resource_pools; "+workload.FlagHint)
 		}
 		normalized, err := normalizeOperation(&protocol.ValueInput{Id: captured.GetId(), Representation: protocol.ValueInput_OPERATION, Value: captured.GetValue()})
 		if err != nil {

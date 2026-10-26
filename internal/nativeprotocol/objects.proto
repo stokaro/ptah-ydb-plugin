@@ -23,3 +23,24 @@ message DescribeExternalTableResult {
     repeated ColumnMeta columns = 5;
     map<string, string> content = 6;
 }
+
+// A resource pool's settings as .sys/resource_pools reports them, an unset
+// setting (YDB's -1) left absent. Both representations of the resource pool
+// model carry it: a pool has no access metadata the provider reads, and its
+// name is the model's owner.
+message ResourcePoolSettings {
+    optional int32 concurrent_query_limit = 1;
+    optional int32 queue_size = 2;
+    optional double database_load_cpu_threshold = 3;
+    optional double query_memory_limit_percent_per_node = 4;
+    optional double query_cpu_limit_percent_per_node = 5;
+    optional double total_cpu_limit_percent_per_node = 6;
+    optional double resource_weight = 7;
+}
+
+// A resource pool classifier as .sys/resource_pool_classifiers reports it.
+message ResourcePoolClassifierSettings {
+    string resource_pool = 1;
+    string member_name = 2;
+    int64 rank = 3;
+}

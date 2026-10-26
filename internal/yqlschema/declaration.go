@@ -61,10 +61,8 @@ func (p *parser) createDeclaration() []statement {
 		p.pos++
 		return p.replacementDeclaration()
 	case p.word("RESOURCE"):
-		if p.pos+2 < len(p.tokens) && p.tokens[p.pos+1].IsWord("POOL") && p.tokens[p.pos+2].IsWord("CLASSIFIER") {
-			return p.unsupported("CREATE RESOURCE POOL CLASSIFIER", "RESOURCE", "POOL", "CLASSIFIER")
-		}
-		return p.unsupported("CREATE RESOURCE POOL", "RESOURCE", "POOL")
+		p.pos++
+		return one(p.resourcePool())
 	default:
 		p.failf("this CREATE object kind is not supported in a desired YQL schema")
 		return nil
@@ -108,13 +106,10 @@ func (p *parser) alterDeclaration() []statement {
 		p.wantWord("ADD")
 		p.wantWord("CONSUMER")
 		return one(&addConsumer{schema: ref.Schema, name: ref.Name, consumer: p.consumer()})
-	case p.word("RESOURCE"):
-		return p.unsupported("ALTER RESOURCE POOL", "RESOURCE", "POOL")
 	default:
 		// The host's reader reads any other ALTER as the server-owned
 		// default resource pool's, and refuses it unless it spells one.
-		p.wantWord("RESOURCE")
-		return nil
+		return one(p.defaultPool())
 	}
 }
 

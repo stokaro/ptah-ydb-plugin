@@ -379,6 +379,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"topics": true, "topic_consumer_availability_period": true,
 		"changefeeds": true, "changefeed_user_sids": true, "changefeed_schema_changes": true, "changefeed_topic_auto_partitioning": true,
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": true,
+		"resource_pools": false,
 	})
 	// 25.1 takes none of the later changefeed options, and 25.1 to 25.3 take
 	// no availability period on a consumer and no secret path on a data
@@ -388,6 +389,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"topics": true, "topic_consumer_availability_period": false,
 		"changefeeds": true, "changefeed_user_sids": false, "changefeed_schema_changes": false, "changefeed_topic_auto_partitioning": false,
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": false,
+		"resource_pools": false,
 	})
 	// Each option arrives on the line the host's presets name.
 	for _, test := range []struct {

@@ -23,6 +23,20 @@ type Family struct {
 	// Capability is the session fact that a present object requires, or ""
 	// for a family that checks its capabilities itself.
 	Capability string
+	// ChangeCapability says that only a change needs Capability: an object
+	// the comparison keeps or leaves undecided needs none, so a target
+	// without it can hold one the comparison reads around.
+	ChangeCapability bool
+	// KeepOmitted keeps an object the desired side leaves out, whatever the
+	// coverage of its kind says, as for a database-wide object a source
+	// declares only in part. An absence the desired side claims for the
+	// object itself is left undecided with OmittedRemoval as the reason.
+	KeepOmitted bool
+	// OmittedRemoval is the reason KeepOmitted gives.
+	OmittedRemoval string
+	// DatabaseWide says that an object belongs to the database rather than to
+	// a directory: it occupies no scheme path, so no relation collides with it.
+	DatabaseWide bool
 	// Noun names one object in a reason, such as "coordination node".
 	Noun string
 	// DesiredModel returns the desired model a preserved record carries.
@@ -149,7 +163,7 @@ func compare(ctx context.Context, request *protocol.CompareModelsRequest, famili
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(captured) > 0 && families[i].Capability != "" && !request.Capabilities[families[i].Capability] {
+		if len(captured) > 0 && !families[i].ChangeCapability && families[i].Capability != "" && !request.Capabilities[families[i].Capability] {
 			return nil, nil, fmt.Errorf("%s capability was not established", families[i].Noun)
 		}
 		objects = append(objects, captured...)
@@ -314,6 +328,16 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		undecided(result, family, item, "The current "+family.Noun+" or its absence was not established")
 		return nil, nil
 	}
+	if item.desired == nil && family.KeepOmitted {
+		if claim, found := subjectKnowledge(request.Desired.Coverage, family.Kind, item.subject); found && claim.GetState() == protocol.ModelKnowledge_ABSENT {
+			undecided(result, family, item, family.OmittedRemoval)
+			return nil, nil
+		}
+		if item.current == nil {
+			return nil, nil
+		}
+		return nil, preserve(result, family, item, id)
+	}
 	if item.desired == nil && unknown(knowledge(request.Desired.Coverage, family.Kind, item.subject)) {
 		if item.current == nil {
 			return nil, nil
@@ -323,7 +347,7 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 	if item.desired == nil && item.current == nil {
 		return nil, nil
 	}
-	if item.desired != nil {
+	if item.desired != nil && !family.DatabaseWide {
 		for _, relation := range request.DeclaredRelations {
 			if relation.GetDatabase().GetNormalized() == item.subject.GetDatabase().GetNormalized() && relation.GetCatalog().GetNormalized() == "" && relation.GetSchema().GetNormalized() == item.subject.GetSchema().GetNormalized() && relation.GetName().GetNormalized() == item.subject.GetName().GetNormalized() && len(relation.GetPath()) == 0 {
 				return nil, fmt.Errorf("%s collides with a declared relation", family.Noun)
@@ -352,6 +376,9 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		if equal {
 			return pair, nil
 		}
+	}
+	if family.ChangeCapability && !request.Capabilities[family.Capability] {
+		return nil, fmt.Errorf("changing %ss requires %s", family.Noun, family.Capability)
 	}
 	change, err := family.Change("change-"+id, reported, pair.Current, pair.Desired)
 	if err != nil {

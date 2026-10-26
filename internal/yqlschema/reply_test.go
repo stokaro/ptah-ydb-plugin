@@ -68,6 +68,13 @@ func gaps(reading *yqlschema.Reading) []string {
 			found = append(found, "password "+role.Name)
 		}
 	}
+	// The host names a pool it reads from a provider as it names a table, so
+	// a pool whose name needs quoting would come back renamed.
+	for _, grant := range append(slices.Clone(reading.Grants), reading.RevokedGrants...) {
+		if grant.ObjectKind == "RESOURCE POOL" && strings.ContainsAny(grant.OnObject, ".\"`[]") {
+			found = append(found, "grant on resource pool "+grant.OnObject)
+		}
+	}
 	for _, object := range reading.Objects {
 		switch object.Kind {
 		case yqlschema.KindCoordinationNode:
@@ -87,6 +94,8 @@ func gaps(reading *yqlschema.Reading) []string {
 			if _, err := externals.TableIntent(*object.Spec.(*ydbdecl.ExternalTable)); err == nil {
 				continue
 			}
+		case yqlschema.KindResourcePool, yqlschema.KindResourcePoolClassifier:
+			continue
 		}
 		found = append(found, string(object.Kind)+" "+object.Name)
 	}
@@ -323,6 +332,20 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 				Payload: decodeAny(c, marshal(c, map[string]any{"spec": spec}))})
 			continue
 		}
+		switch envelope.GetKind() {
+		case schema.ResourcePoolProperties:
+			spec, err := schema.WorkloadPool(envelope)
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindResourcePool), Name: owner.GetName(),
+				Payload: decodeAny(c, marshal(c, map[string]any{"spec": spec}))})
+			continue
+		case schema.ResourcePoolClassifierProperties:
+			spec, err := schema.WorkloadClassifier(envelope)
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindResourcePoolClassifier), Name: owner.GetName(),
+				Payload: decodeAny(c, marshal(c, map[string]any{"spec": spec}))})
+			continue
+		}
 		c.Assert(envelope.GetKind(), qt.Equals, schema.CoordinationProperties)
 		var spec map[string]any
 		c.Assert(json.Unmarshal(envelope.GetPayload(), &spec), qt.IsNil)
@@ -429,13 +452,15 @@ type coverageMeaning struct {
 // claimedHostKinds are the host's models a claim of this provider's models
 // stands for.
 var claimedHostKinds = map[string][]string{
-	schema.TableProperties:          {"ptah.run/ydb/table-partitioning", "ptah.run/ydb/ttl", "ptah.run/ydb/column-families"},
-	schema.ColumnProperties:         {"ptah.run/ydb/column-families"},
-	schema.ColumnStorageProperties:  {"ptah.run/ydb/column-store"},
-	schema.CoordinationProperties:   {"ptah.run/ydb/coordination-node"},
-	schema.TopicProperties:          {"ptah.run/ydb/topic"},
-	schema.ExternalSourceProperties: {"ptah.run/ydb/external-data-source"},
-	schema.ExternalTableProperties:  {"ptah.run/ydb/external-table"},
+	schema.TableProperties:                  {"ptah.run/ydb/table-partitioning", "ptah.run/ydb/ttl", "ptah.run/ydb/column-families"},
+	schema.ColumnProperties:                 {"ptah.run/ydb/column-families"},
+	schema.ColumnStorageProperties:          {"ptah.run/ydb/column-store"},
+	schema.CoordinationProperties:           {"ptah.run/ydb/coordination-node"},
+	schema.TopicProperties:                  {"ptah.run/ydb/topic"},
+	schema.ExternalSourceProperties:         {"ptah.run/ydb/external-data-source"},
+	schema.ExternalTableProperties:          {"ptah.run/ydb/external-table"},
+	schema.ResourcePoolProperties:           {"ptah.run/ydb/resource-pool"},
+	schema.ResourcePoolClassifierProperties: {"ptah.run/ydb/resource-pool-classifier"},
 }
 
 func pluginCoverage(coverage *protocol.ModelCoverage) coverageMeaning {
@@ -476,7 +501,7 @@ func hostCoverage(c *qt.C, coverage *goldenCoverage) coverageMeaning {
 		result.Kinds[record.Model.Kind] = state + " " + knowledge.Outside.Reason
 	}
 	for _, subject := range coverage.Subjects {
-		if !slices.Contains([]string{"ptah.run/ydb/coordination-node", "ptah.run/ydb/topic", "ptah.run/ydb/external-data-source", "ptah.run/ydb/external-table"}, subject.Kind) {
+		if !slices.Contains([]string{"ptah.run/ydb/coordination-node", "ptah.run/ydb/topic", "ptah.run/ydb/external-data-source", "ptah.run/ydb/external-table", "ptah.run/ydb/resource-pool", "ptah.run/ydb/resource-pool-classifier"}, subject.Kind) {
 			continue
 		}
 		var knowledge struct {

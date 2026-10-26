@@ -33,7 +33,7 @@ const (
 
 // ObservedModels returns fresh definitions for the supported native observations.
 func ObservedModels() []*protocol.ValueModel {
-	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties)}
+	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties), model(ResourcePoolProperties), model(ResourcePoolClassifierProperties)}
 }
 
 func message(kind string) proto.Message {
@@ -58,6 +58,10 @@ func message(kind string) proto.Message {
 		return &Ydb_Table.DescribeExternalDataSourceResult{}
 	case ExternalTableProperties:
 		return &native.DescribeExternalTableResult{}
+	case ResourcePoolProperties:
+		return &native.ResourcePoolSettings{}
+	case ResourcePoolClassifierProperties:
+		return &native.ResourcePoolClassifierSettings{}
 	default:
 		return nil
 	}
@@ -77,6 +81,7 @@ var definitions = map[string]*protocol.ValueModel{
 	ColumnStorageProperties: buildModel(ColumnStorageProperties),
 	TableProperties:         buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties), ChangefeedProperties: buildModel(ChangefeedProperties), TopicProperties: buildModel(TopicProperties),
 	ViewProperties: buildModel(ViewProperties), CoordinationProperties: buildModel(CoordinationProperties), ExternalSourceProperties: buildModel(ExternalSourceProperties), ExternalTableProperties: buildModel(ExternalTableProperties),
+	ResourcePoolProperties: buildModel(ResourcePoolProperties), ResourcePoolClassifierProperties: buildModel(ResourcePoolClassifierProperties),
 }
 
 func model(kind string) *protocol.ValueModel { return proto.CloneOf(definitions[kind]) }
@@ -107,6 +112,9 @@ func buildModel(kind string) *protocol.ValueModel {
 	}
 	if kind == TableProperties {
 		definition["row_storage"] = "unspecified storage on a row-table observation normalizes to STORE_TYPE_ROW"
+	}
+	if IsWorkloadObject(kind) {
+		definition["workload_objects"] = workloadDefinition
 	}
 	if kind == ColumnStorageProperties {
 		definition["not_observed"] = []string{"column_table_access", "shared_topic_consumers"}
@@ -258,6 +266,11 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 			return nil, err
 		}
 	}
+	if IsWorkloadObject(value.GetKind()) {
+		if err := validateWorkload(owner, target); err != nil {
+			return nil, err
+		}
+	}
 	if feeds, ok := target.(*native.ChangefeedObservations); ok {
 		if err := normalizeChangefeeds(feeds); err != nil {
 			return nil, err
@@ -302,11 +315,17 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(), TopicChangeModel(), TopicOperationModel(), ExternalSourceChangeModel(), ExternalSourceOperationModel(), ExternalTableChangeModel(), ExternalTableOperationModel(), TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel())
+	return append(ObservedModels(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(), TopicChangeModel(), TopicOperationModel(), ExternalSourceChangeModel(), ExternalSourceOperationModel(), ExternalTableChangeModel(), ExternalTableOperationModel(), TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel(), NativeDesiredModel(ResourcePoolProperties), NativeDesiredModel(ResourcePoolClassifierProperties), ResourcePoolChangeModel(), ResourcePoolClassifierChangeModel(), WorkloadOperationModel())
 }
 
 func validateModelOwner(value *protocol.Envelope) error {
 	owner := value.GetOwner()
+	if IsWorkloadObject(value.GetKind()) {
+		if owner.GetKind() != value.GetKind() {
+			return fmt.Errorf("invalid YDB observation owner")
+		}
+		return ValidateWorkloadOwner(owner)
+	}
 	expected := "table"
 	if IsNativeObject(value.GetKind()) {
 		expected = value.GetKind()
@@ -345,6 +364,10 @@ func modelDisplayName(kind string) string {
 		return "YDB coordination nodes"
 	case ColumnStorageProperties:
 		return "YDB column-storage properties"
+	case ResourcePoolProperties:
+		return "YDB resource pools"
+	case ResourcePoolClassifierProperties:
+		return "YDB resource pool classifiers"
 	default:
 		return ""
 	}

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"sync"
@@ -29,6 +30,10 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workloadcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workloadplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -66,6 +71,8 @@ type session struct {
 	// embeddings is the session's embedding store, made on its first
 	// embedding call.
 	embeddings *embedstore.Store
+	// capabilities are the capabilities the session reported.
+	capabilities map[string]bool
 }
 
 // providerFeatures are the services and behaviors the provider offers.
@@ -105,6 +112,9 @@ func negotiatedFeatures(ctx context.Context) []string {
 // on every line from 25.1 to 26.2. An address that names the monitoring
 // endpoint replaces it with the flag's value (see featureflags).
 //
+// resource_pools is false, because EnableResourcePools is off by default on
+// every line, and the monitoring endpoint's flags decide it the same way.
+//
 // topics is true on every line: the provider declares, reads and plans a
 // standalone topic. topic_consumer_availability_period is a consumer's
 // availability_period, which 25.4 and later take (`AVAILABILITY_PERIOD:
@@ -118,7 +128,7 @@ func negotiatedFeatures(ctx context.Context) []string {
 // (`PASSWORD_SECRET_NAME requires key`).
 func sessionCapabilities(version string) map[string]bool {
 	return map[string]bool{"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
-		"topics": true, "topic_consumer_availability_period": releaseline.AtLeast(version, 25, 4),
+		"topics": true, "topic_consumer_availability_period": releaseline.AtLeast(version, 25, 4), workload.CapabilityResourcePools: false,
 		changefeeds.CapabilityChangefeeds: true, changefeeds.CapabilityUserSIDs: releaseline.AtLeast(version, 26, 1),
 		changefeeds.CapabilitySchemaChanges: releaseline.AtLeast(version, 25, 3), changefeeds.CapabilityTopicAutoPartitioning: releaseline.AtLeast(version, 25, 2),
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": releaseline.AtLeast(version, 25, 4)}
@@ -167,7 +177,7 @@ func Description() *protocol.Description {
 		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: "0.0.0-dev", SemanticIdentity: "ydb-table-lifecycle-2",
 		Features: providerFeatures(),
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel(), tablecreate.DropModel(), tablecreate.CopyModel(), tablecreate.RenameModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: topicplan.ServiceID, ChangeKinds: []string{schema.TopicChange}, OperationKinds: []string{schema.TopicOperation}}, {Id: externalplan.ServiceID, ChangeKinds: externalplan.ChangeKinds(), OperationKinds: externalplan.OperationKinds()}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind, tablecreate.DropOperationKind, tablecreate.CopyOperationKind, tablecreate.RenameOperationKind, schema.ChangefeedOperation}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: topiccompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.TopicProperties}, ChangeKinds: []string{schema.TopicChange}}, {Id: externalcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: externalcompare.Kinds(), ChangeKinds: externalcompare.ChangeKinds()}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: slices.Concat([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey(), topicsource.YAMLKey(), changefeedsource.YAMLKey()}, externalsource.YAMLKeys(), tablesource.YAMLKeys(), tablesource.IndexYAMLKeys()), GoSourceDirectives: slices.Concat(tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{schema.CoordinationGoDirective()}, topicsource.GoDirectives(), externalsource.GoDirectives()), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), SqlSchema: sqlSchemaDeclaration(), Features: engineFeatures(), Embeddings: &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes}, CommonObjects: commonobject.Support(), HclSource: &protocol.HCLSourceDeclaration{Blocks: []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock()}, HeaderKinds: []string{"coordination_node"}}}},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel(), tablecreate.DropModel(), tablecreate.CopyModel(), tablecreate.RenameModel()), Planning: []*protocol.ModelPlanning{{Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: topicplan.ServiceID, ChangeKinds: []string{schema.TopicChange}, OperationKinds: []string{schema.TopicOperation}}, {Id: externalplan.ServiceID, ChangeKinds: externalplan.ChangeKinds(), OperationKinds: externalplan.OperationKinds()}, {Id: workloadplan.ServiceID, ChangeKinds: workloadplan.ChangeKinds(), OperationKinds: []string{schema.WorkloadOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind, tablecreate.DropOperationKind, tablecreate.CopyOperationKind, tablecreate.RenameOperationKind, schema.ChangefeedOperation}}}, Comparisons: []*protocol.ModelComparison{{Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: topiccompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.TopicProperties}, ChangeKinds: []string{schema.TopicChange}}, {Id: externalcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: externalcompare.Kinds(), ChangeKinds: externalcompare.ChangeKinds()}, {Id: workloadcompare.PoolServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolProperties}, ChangeKinds: []string{schema.ResourcePoolChange}}, {Id: workloadcompare.ClassifierServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolClassifierProperties}, ChangeKinds: []string{schema.ResourcePoolClassifierChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: slices.Concat([]*protocol.YAMLSourceKey{schema.CoordinationYAMLKey(), topicsource.YAMLKey(), changefeedsource.YAMLKey()}, externalsource.YAMLKeys(), tablesource.YAMLKeys(), tablesource.IndexYAMLKeys(), workloadsource.YAMLKeys()), GoSourceDirectives: slices.Concat(tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{schema.CoordinationGoDirective()}, topicsource.GoDirectives(), externalsource.GoDirectives(), workloadsource.GoDirectives()), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), SqlSchema: sqlSchemaDeclaration(), Features: engineFeatures(), Embeddings: &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes}, CommonObjects: commonobject.Support(), HclSource: &protocol.HCLSourceDeclaration{Blocks: []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock()}, HeaderKinds: []string{"coordination_node"}}}},
 	}
 }
 
@@ -222,7 +232,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	}
 	id := rand.Text()
 	p.mu.Lock()
-	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != "", version: version}
+	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != "", version: version, capabilities: maps.Clone(capabilities)}
 	p.mu.Unlock()
 	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: commonCapabilities(ctx, capabilities), Features: negotiatedFeatures(ctx)}, nil
 }

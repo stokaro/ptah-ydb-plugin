@@ -218,3 +218,26 @@ func TestValidateSchema_FailurePath(t *testing.T) {
 		c.Assert(result, qt.IsNil)
 	})
 }
+
+// A schema that declares resource pools and classifiers validates: both are
+// models the provider implements, read by their own normalization.
+func TestValidateSchema_WorkloadObjects(t *testing.T) {
+	c := qt.New(t)
+	request := newRequest(keyed("", "items"))
+	for _, object := range []struct {
+		kind, name string
+		payload    string
+	}{
+		{schema.ResourcePoolProperties, "reporting", `{"concurrentQueryLimit":10}`},
+		{schema.ResourcePoolClassifierProperties, "reporters", `{"resourcePool":"reporting","rank":"100"}`},
+	} {
+		model := schema.NativeDesiredModel(object.kind)
+		values, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{
+			{Id: object.name, Representation: protocol.ValueInput_DESIRED, Value: &protocol.Envelope{ProviderId: schema.ProviderID, Kind: object.kind, SchemaVersion: 1,
+				Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: &protocol.Reference{Engine: "ydb", Kind: object.kind, Name: object.name}, Payload: []byte(object.payload)}}}})
+		c.Assert(err, qt.IsNil)
+		request.Features.Objects.Records = append(request.Features.Objects.Records, &protocol.ComparisonRecord{Kind: object.kind,
+			Subject: &protocol.ComparisonIdentity{Kind: object.kind, Schema: testcomparison.Part(""), Name: testcomparison.Part(object.name)}, Value: values.Values[0]})
+	}
+	c.Assert(diagnostics(c, request), qt.HasLen, 0)
+}

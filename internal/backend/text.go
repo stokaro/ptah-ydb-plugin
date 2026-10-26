@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -97,6 +99,8 @@ func textOf(value *protocol.Envelope) (string, error) {
 		return coordinationText(path, value)
 	case schema.ExternalSourceOperation, schema.ExternalTableOperation:
 		return externalText(path, value)
+	case schema.WorkloadOperation:
+		return workloadText(value)
 	default:
 		return "", fmt.Errorf("%w: the native operation %s has no YQL statement", tablecreate.ErrNoTextForm, value.GetKind())
 	}
@@ -199,4 +203,21 @@ func nodeSettings(intent schema.CoordinationIntent) ydbdecl.CoordinationNode {
 		settings.RateLimiterCountersMode = *intent.RateLimiterCountersMode
 	}
 	return settings
+}
+
+// workloadText writes a workload operation as the statements the host's
+// embedded engine writes for it, in the order they run. One query takes them
+// all: measured on 25.1.4.7 and 26.2.1.14, a query that drops a classifier,
+// moves another into its rank and creates the first again leaves both as
+// declared.
+func workloadText(value *protocol.Envelope) (string, error) {
+	changes, err := schema.DecodeWorkloadOperation(value)
+	if err != nil {
+		return "", err
+	}
+	statements, err := workload.Statements(changes.Pools, changes.Classifiers)
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(statements, "\n"), nil
 }
