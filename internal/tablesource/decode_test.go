@@ -41,9 +41,10 @@ func TestClaims(t *testing.T) {
 	// column_store declares a column table, and the TTL of the platform group
 	// is a column table's TTL beside it; every other key declares row-table
 	// settings.
-	for _, key := range keys[:10] {
+	for _, key := range keys[:9] {
 		c.Assert(models[key], qt.DeepEquals, []string{schema.TableProperties}, qt.Commentf(key))
 	}
+	c.Assert(models["column_families"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties})
 	c.Assert(models["platform.ydb"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnStorageProperties})
 	c.Assert(models["column_store"], qt.DeepEquals, []string{schema.ColumnStorageProperties})
 	directives := tablesource.GoDirectives()
@@ -109,7 +110,7 @@ func TestDescriptionAdvertisesTheTableClaims(t *testing.T) {
 		c.Assert(slices.ContainsFunc(engine.GoSourceDirectives, func(declared *protocol.GoSourceDirective) bool { return proto.Equal(declared, directive) }), qt.IsTrue, qt.Commentf(directive.Directive))
 	}
 	c.Assert(schema.TableDesiredModel().SourceFormats, qt.DeepEquals, []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL})
-	c.Assert(schema.ColumnDesiredModel().SourceFormats, qt.DeepEquals, []protocol.SourceDocument_Format{protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL})
+	c.Assert(schema.ColumnDesiredModel().SourceFormats, qt.DeepEquals, []protocol.SourceDocument_Format{protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_YAML, protocol.SourceDocument_SQL})
 }
 
 func TestDecode_HappyPath(t *testing.T) {
@@ -298,7 +299,9 @@ func TestDecode_FailurePath(t *testing.T) {
 		{"a setting no family has", `{"tables":{"items":{"column_families":{"cold":{"barriers":"x"}}}}}`, `table "items": column family "cold": unknown setting "barriers"`},
 		{"a family without a name", `{"tables":{"items":{"column_families":{" ":{}}}}}`, `table "items": column family " ": invalid name "": a column family needs a name`},
 		{"a cache mode", `{"tables":{"items":{"column_families":{"cold":{"cache_mode":"regular"}}}}}`, `table "items": column family "cold": cache_mode is not supported by the YDB provider yet: .*`},
-		{"column placement", `{"tables":{"items":{"column_families":{"cold":{"fields":["body"]}}}}}`, `table "items": column family "cold": fields is not supported by the YDB provider yet: .*`},
+		{"nested fields", `{"tables":{"items":{"column_families":{"cold":{"fields":[["body"]]}}}}}`, `table "items": column family "cold": fields: expected a scalar`},
+		{"null field", `{"tables":{"items":{"column_families":{"cold":{"fields":[null]}}}}}`, `table "items": column family "cold": invalid fields "": .*`},
+		{"empty fields list", `{"tables":{"items":{"column_families":{"cold":{"fields":[]}}}}}`, `table "items": column family "cold": invalid fields "": .*`},
 		{"a platform property the provider does not read", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":"c","row_deletion_interval":"PT1H","other":"x"}}}}}`,
 			`table "items": platform.ydb.other is not supported by the YDB provider yet: .*`},
 		{"a TTL without an interval", `{"tables":{"items":{"platform":{"ydb":{"row_deletion_column":"created_at"}}}}}`,

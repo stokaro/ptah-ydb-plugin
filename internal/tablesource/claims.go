@@ -14,7 +14,7 @@
 //
 // What the bundled decoder in the host reads and this package does not is
 // listed in the package README of the provider and in the tests: column family
-// cache modes, the columns of a family written in YAML, and index options. A
+// cache modes and index options. A
 // table's changefeeds are decoded by internal/changefeedsource. The host
 // refuses a YAML key that no provider claims, and reads a Go comment that none
 // claims as no declaration. So the provider leaves unclaimed the YAML keys it
@@ -103,8 +103,7 @@ const (
 	AttributeCompression = "compression"
 	// AttributeCacheMode is claimed so that the provider can refuse it by name:
 	// the row-table model has no cache mode. AttributeFields lists the columns
-	// of the family. A Go directive places them; a YAML family cannot, because
-	// the host attaches a YAML value to a table only.
+	// of the family in either a Go directive or a YAML mapping.
 	AttributeCacheMode = "cache_mode"
 	AttributeFields    = "fields"
 )
@@ -152,6 +151,8 @@ func YAMLKeys() []*protocol.YAMLSourceKey {
 	for _, key := range keys {
 		models := []string{schema.TableProperties}
 		switch key {
+		case KeyColumnFamilies:
+			models = []string{schema.TableProperties, schema.ColumnProperties}
 		case KeyColumnStore:
 			models = []string{schema.ColumnStorageProperties}
 		case KeyPlatformYDB:

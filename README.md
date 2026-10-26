@@ -7,7 +7,7 @@ sources, and external tables. Native SQL execution and session-bound data transa
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML and Go annotation decoding is available for coordination-node, topic, external data source
 and external table declarations, and
-YAML and Go annotation decoding for the partitioning, TTL, column families and changefeeds of row tables, and in Go the columns of each family.
+YAML and Go annotation decoding for the partitioning, TTL, column families and changefeeds of row tables, including the columns of each family.
 Offline comparison, planning, and rendering produce native coordination,
 topic, changefeed and external object operations (see [Topics](#topics), [Changefeeds](#changefeeds) and
 [External data sources and external tables](#external-data-sources-and-external-tables)). Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
@@ -799,12 +799,16 @@ tables:
     key_bloom_filter: ENABLED
     column_families:
       default: {compression: lz4}               # off or lz4
-      cold: {data: hdd, compression: lz4}       # data is a storage pool kind, kept as written
+      cold: {data: hdd, compression: lz4, fields: [body]} # data is a storage pool kind, kept as written
     platform:
       ydb:                                      # the TTL, spelled as the Go platform properties without the prefix
         row_deletion_column: created_at
         row_deletion_interval: P30D
 ```
+
+In YAML, a family's `fields` lists its column names as a sequence or a
+comma-separated scalar. Each name must match a column in that table. A column
+can belong to only one family, and the default family lists no columns.
 
 The provider claims the `ydb` group of the table's `platform` key as
 `platform.ydb`, and the host keeps no copy of the group. The provider therefore
@@ -873,7 +877,6 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 
 | Setting | Why |
 | --- | --- |
-| `fields` of a column family in YAML | The host attaches a YAML value to a table, never to a column, so a YAML family cannot place columns. Claimed and refused by name; write the family in a Go directive. |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. |

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -125,7 +126,7 @@ func applyFamilies(target *settings, value *protocol.SourceValue) error {
 		return fmt.Errorf("%s: expected a mapping of family names to settings", KeyColumnFamilies)
 	}
 	for _, entry := range mapping.GetEntries() {
-		declared := family{name: entry.GetKey(), yaml: true}
+		declared := family{name: entry.GetKey()}
 		if _, null := entry.GetValue().GetValue().(*protocol.SourceValue_Null); !null {
 			body := entry.GetValue().GetMapping()
 			if body == nil {
@@ -160,18 +161,31 @@ func applyFamilies(target *settings, value *protocol.SourceValue) error {
 }
 
 // familySetting reads one setting of a YAML family. fields is a list written
-// as a sequence or as one comma-separated scalar; the provider refuses it by
-// name whatever it holds, so only its presence is read.
+// as a sequence or as one comma-separated scalar. Null and an empty scalar
+// leave the membership undeclared; an empty sequence declares an invalid list.
 func familySetting(key string, value *protocol.SourceValue) (*string, error) {
 	if key == AttributeFields {
-		if _, null := value.GetValue().(*protocol.SourceValue_Null); null {
-			return nil, nil
+		if sequence := value.GetSequence(); sequence != nil {
+			var fields []string
+			for _, item := range sequence.GetValues() {
+				field, err := optional(item)
+				if err != nil {
+					return nil, err
+				}
+				if field == nil {
+					fields = append(fields, "")
+				} else {
+					fields = append(fields, *field)
+				}
+			}
+			text := strings.Join(fields, ",")
+			return &text, nil
 		}
-		if text, isText := value.GetValue().(*protocol.SourceValue_Text); isText && text.Text == "" {
-			return nil, nil
+		text, err := optional(value)
+		if text != nil && *text == "" {
+			return nil, err
 		}
-		present := "fields"
-		return &present, nil
+		return text, err
 	}
 	return optional(value)
 }

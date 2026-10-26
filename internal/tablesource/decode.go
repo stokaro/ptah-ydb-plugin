@@ -24,16 +24,19 @@ type Table struct {
 	Fragment int
 	// Value is the normalized desired facet.
 	Value *protocol.NormalizedValue
+	// ColumnFragment is the first fragment that places a column. Its claim
+	// names the column model even when an earlier table setting does not.
+	ColumnFragment int
 	// Columns are the column facets of the columns the table's families list,
-	// in the order the declarations list them. The first fragment returns them
-	// with the table's facet.
+	// in the order the declarations list them.
 	Columns []*protocol.NormalizedValue
 }
 
 type pending struct {
-	binding  *protocol.SourceBinding
-	fragment int
-	settings settings
+	binding        *protocol.SourceBinding
+	fragment       int
+	columnFragment int
+	settings       settings
 }
 
 // Decode reads every fragment of document that carries a claim of this
@@ -70,8 +73,12 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 		if err := refuseOtherTableColumns(binding, fragment); err != nil {
 			return nil, fmt.Errorf("table %q: %w", tableLabel(binding.GetObject()), err)
 		}
+		hadColumns := len(target.settings.placements) != 0
 		if err := apply(&target.settings, fragment); err != nil {
 			return nil, fmt.Errorf("table %q: %w", tableLabel(binding.GetObject()), err)
+		}
+		if !hadColumns && len(target.settings.placements) != 0 {
+			target.columnFragment = index
 		}
 	}
 	var tables []Table
@@ -91,7 +98,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 		if err != nil {
 			return nil, fmt.Errorf("table %q: %w", tableLabel(target.binding.GetObject()), err)
 		}
-		tables = append(tables, Table{Binding: target.binding, Fragment: target.fragment, Value: value, Columns: columns})
+		tables = append(tables, Table{Binding: target.binding, Fragment: target.fragment, Value: value, ColumnFragment: target.columnFragment, Columns: columns})
 	}
 	return tables, nil
 }
