@@ -197,6 +197,13 @@ func defaultColumnState(column *native.ColumnMeta) (*native.ColumnMeta, error) {
 	if err != nil {
 		return nil, err
 	}
+	if literal := column.GetFromLiteral(); literal != nil {
+		canonical, err := columnsemantics.CanonicalLiteral(literal)
+		if err != nil {
+			return nil, err
+		}
+		result.DefaultValue = &native.ColumnMeta_FromLiteral{FromLiteral: canonical}
+	}
 	result.NotNull = nil
 	if result.Family == "" {
 		result.Family = DefaultFamily

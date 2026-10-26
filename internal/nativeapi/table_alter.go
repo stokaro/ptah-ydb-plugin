@@ -417,7 +417,10 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 	}
 	for _, added := range request.AddColumns {
 		actual := columnByName(observed.Columns[len(kept):], added.Name)
-		if actual == nil || !proto.Equal(actual.Type, added.Type) || actual.GetNotNull() || familyName(actual.Family) != tablecreate.DefaultFamily {
+		wantType, wantNullable, wantErr := schema.ColumnType(added.Type)
+		actualType, actualNullable, actualErr := schema.ColumnType(actual.GetType())
+		if actual == nil || wantErr != nil || actualErr != nil || actualType != wantType ||
+			(actualNullable && !actual.GetNotNull()) != (wantNullable && !added.GetNotNull()) || familyName(actual.Family) != tablecreate.DefaultFamily {
 			return fmt.Errorf("YDB added column differs from the request")
 		}
 	}

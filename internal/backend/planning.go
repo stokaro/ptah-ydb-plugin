@@ -114,6 +114,15 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 			return nil, status.Error(codes.InvalidArgument, "only standalone native operations are implemented")
 		}
 		captured := native.GetValue()
+		if captured.GetValue().GetKind() == tablecreate.InventoryOperationKind {
+			change, err := tablecreate.DecodeInventory(captured.GetValue())
+			if err != nil {
+				return nil, status.Error(codes.InvalidArgument, err.Error())
+			}
+			if err := change.CheckCapabilities(request.Capabilities); err != nil {
+				return nil, status.Error(codes.FailedPrecondition, err.Error())
+			}
+		}
 		if captured.GetValue().GetKind() == schema.CoordinationOperation && !request.Capabilities["coordination_nodes"] {
 			return nil, status.Error(codes.FailedPrecondition, "native coordination rendering requires established capabilities")
 		}

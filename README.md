@@ -1747,6 +1747,10 @@ write has an unknown outcome and is not retried. The session reports
 
 The parent planner derives column additions and removals from the complete
 captured table. Nullable additions without defaults use native `AlterTable`.
+Additions with typed literal defaults use one pinned YQL `ADD COLUMN`; existing
+rows receive the default, including an empty string for a `NOT NULL` column.
+They require `add_column_with_default`, established from the release line and
+`EnableAddColumsWithDefaults`. A `NOT NULL` addition without a default is refused.
 A removal checks its captured column definition and refuses key, index, TTL, or
 partitioning dependencies before dispatch. Each operation verifies the remaining
 columns and table settings after its single write. The graph orders additions

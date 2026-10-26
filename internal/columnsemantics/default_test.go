@@ -7,6 +7,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestNativeDefaultRoundTrip(t *testing.T) {
@@ -71,4 +72,28 @@ func TestNativeLiteralRejectsWrongScalar(t *testing.T) {
 		c.Assert(err, qt.IsNotNil)
 		c.Assert(literal, qt.Equals, "")
 	}
+}
+
+func TestCanonicalLiteralPreservesTheScalar(t *testing.T) {
+	c := qt.New(t)
+	value, err := columnsemantics.NativeDefault(&protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "5", Nullable: true}, "Int32", nil)
+	c.Assert(err, qt.IsNil)
+	original := proto.CloneOf(value)
+	canonical, err := columnsemantics.CanonicalLiteral(value)
+	c.Assert(err, qt.IsNil)
+	c.Assert(canonical.Type.GetTypeId(), qt.Equals, Ydb.Type_INT32)
+	c.Assert(canonical.Value.GetInt32Value(), qt.Equals, int32(5))
+	c.Assert(proto.Equal(value, original), qt.IsTrue)
+	nested := proto.CloneOf(value)
+	nested.Value = &Ydb.Value{Value: &Ydb.Value_NestedValue{NestedValue: nested.Value}}
+	equivalent, err := columnsemantics.CanonicalLiteral(nested)
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(canonical, equivalent), qt.IsTrue)
+	nested.Value.Items = []*Ydb.Value{{Value: &Ydb.Value_Int32Value{Int32Value: 9}}}
+	rejected, err := columnsemantics.CanonicalLiteral(nested)
+	c.Assert(err, qt.IsNotNil)
+	c.Assert(rejected, qt.IsNil)
+	text, err := columnsemantics.Literal(nested)
+	c.Assert(err, qt.IsNotNil)
+	c.Assert(text, qt.Equals, "")
 }

@@ -54,6 +54,7 @@ type Gate struct {
 var gates = []Gate{
 	{Key: "secrets", Flag: "EnableSchemaSecrets"},
 	{Key: "alter_column_default", Flag: "EnableSetDropDefaultValue"},
+	{Key: "add_column_with_default", Flag: "EnableAddColumsWithDefaults"},
 	{Key: "wide_date_time_types", Flag: "EnableTableDatetime64"},
 	{Key: "parameterized_decimal", Flag: "EnableParameterizedDecimal"},
 	{Key: "tiered_ttl", Flag: "EnableTieringInColumnShard"},
