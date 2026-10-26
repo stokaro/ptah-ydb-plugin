@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -45,25 +43,9 @@ func planDefaults(owner *protocol.Reference, table *protocol.PlanningTable, caps
 		if captured == nil {
 			return nil, "A column default change requires the complete native column observation", nil
 		}
-		held := &native.ColumnMeta{}
-		if err := protojson.Unmarshal(captured.Payload, held); err != nil {
-			return nil, "", err
-		}
-		common := table.Current.Columns[at]
-		if common.IsNullable != "YES" && common.IsNullable != "NO" {
-			return nil, "A column default change requires known column nullability", nil
-		}
-		held.Name = common.Name
-		held.Type, err = schema.StorageType(heldType(common), common.IsNullable == "YES")
+		held, err := capturedColumn(table.Current.Columns[at], captured)
 		if err != nil {
-			return nil, "", err
-		}
-		actual, err := defaultText(held.GetFromLiteral())
-		if err != nil {
-			return nil, "", err
-		}
-		if actual != table.Current.Columns[at].GetDefaultExpression() {
-			return nil, "The common and native column defaults disagree", nil
+			return nil, err.Error(), nil
 		}
 		operation, err := CaptureDefault("pending", owner, &DefaultAlteration{Held: held, Set: column.GetFromLiteral()})
 		if err != nil {

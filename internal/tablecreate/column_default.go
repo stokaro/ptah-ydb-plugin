@@ -168,11 +168,16 @@ func DefaultStatement(path string, change *DefaultAlteration) (string, error) {
 // Native descriptions can express the same nullability through an optional
 // type or NotNull; inspection publishes their effective value once.
 func (c *DefaultAlteration) MatchesHeld(column *native.ColumnMeta) (bool, error) {
-	held, err := defaultColumnState(c.Held)
+	return EqualCapturedColumns(c.Held, column)
+}
+
+// EqualCapturedColumns compares native settings and effective common facts.
+func EqualCapturedColumns(heldColumn, actualColumn *native.ColumnMeta) (bool, error) {
+	held, err := defaultColumnState(heldColumn)
 	if err != nil {
 		return false, err
 	}
-	actual, err := defaultColumnState(column)
+	actual, err := defaultColumnState(actualColumn)
 	if err != nil {
 		return false, err
 	}
@@ -193,5 +198,8 @@ func defaultColumnState(column *native.ColumnMeta) (*native.ColumnMeta, error) {
 		return nil, err
 	}
 	result.NotNull = nil
+	if result.Family == "" {
+		result.Family = DefaultFamily
+	}
 	return result, nil
 }

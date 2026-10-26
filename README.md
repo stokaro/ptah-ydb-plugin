@@ -1115,8 +1115,8 @@ validates the source payload and its captured normalization, retains exact owner
 identity and ordered records, and returns no prefix on failure or cancellation.
 It opens no connection and establishes no inspection coverage.
 
-This supports column-property transport and JSON schema export. Column
-comparison and planning are not advertised by this implementation.
+The column-property models complement the common column service and preserve
+native settings through conversion and JSON schema export.
 
 ## Offline row-table declarations
 
@@ -1729,6 +1729,12 @@ is a present literal. A stale before-state refuses execution; an unconfirmed
 write has an unknown outcome and is not retried. The session reports
 `alter_column_default` from the release line and `EnableSetDropDefaultValue`.
 
+The parent planner derives column additions and removals from the complete
+captured table. Nullable additions without defaults use native `AlterTable`.
+A removal checks its captured column definition and refuses key, index, TTL, or
+partitioning dependencies before dispatch. Each operation verifies the remaining
+columns and table settings after its single write. The graph orders additions
+before dependent settings and removals after them.
 
 The negotiated `schema.columns` service compares the exact columns the host
 pairs inside their full captured tables. It reports type and default

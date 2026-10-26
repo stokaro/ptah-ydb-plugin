@@ -159,7 +159,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			}
 			if column {
 				if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
-					if reason := completeColumnAlteration(owner, table, nil, nil, request.Capabilities); reason != "" {
+					if reason := completeColumnAlteration(owner, table, nil, nil, nil, request.Capabilities); reason != "" {
 						return refused(i, reason), nil
 					}
 				}
@@ -225,6 +225,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				return refused(i, reason), nil
 			}
 			if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
+				item.inventory, reason, err = planInventory(owner, table, item.claims, request.CommonSteps, request.Capabilities)
+				if err != nil {
+					return nil, err
+				}
+				if reason != "" {
+					return refused(i, reason), nil
+				}
 				item.defaults, reason, err = planDefaults(owner, table, request.Capabilities)
 				if err != nil {
 					return nil, err
@@ -232,7 +239,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				if reason != "" {
 					return refused(i, reason), nil
 				}
-				if reason := completeColumnAlteration(owner, table, item.claims, item.defaults, request.Capabilities); reason != "" {
+				if reason := completeColumnAlteration(owner, table, item.claims, item.defaults, item.inventory, request.Capabilities); reason != "" {
 					return refused(i, reason), nil
 				}
 			}
@@ -349,7 +356,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		receiptSteps[item.index] = ids
 	}
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, defaults int
+	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, defaults, inventories int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -372,6 +379,19 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				added = append(added, claim.id)
 			} else {
 				dropped = append(dropped, claim.id)
+			}
+		}
+		for _, change := range item.inventory {
+			step := change.plan(subject, inventories)
+			if change.source != nil {
+				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: []*protocol.StepIdentity{proto.CloneOf(change.source.Id)}, Replacement: proto.CloneOf(step.Id)})
+			}
+			inventories++
+			contribution.Steps = append(contribution.Steps, step)
+			if change.add {
+				added = append(added, step.Id)
+			} else {
+				dropped = append(dropped, step.Id)
 			}
 		}
 		var ordered []*protocol.StepIdentity
@@ -450,7 +470,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			contribution.Dependencies = append(contribution.Dependencies, dependencies...)
 			ordered = append(ordered, item.feeds.id)
 		}
-		receiptSteps[item.index] = append(ordered, dropped...)
+		ordered = append(ordered, dropped...)
+		if len(item.inventory)+len(item.defaults) > 0 {
+			for n := 1; n < len(ordered); n++ {
+				contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(ordered[n-1]), After: proto.CloneOf(ordered[n])})
+			}
+		}
+		receiptSteps[item.index] = ordered
 	}
 	slices.SortFunc(columnTTLs, func(a, b columnTTLStep) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	for number, item := range columnTTLs {

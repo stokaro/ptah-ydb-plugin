@@ -61,6 +61,12 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.RowTableStatement(path, request)
+	case tablecreate.InventoryOperationKind:
+		change, err := tablecreate.DecodeInventory(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.InventoryStatement(path, change)
 	case tablecreate.DefaultOperationKind:
 		change, err := tablecreate.DecodeDefault(value)
 		if err != nil {

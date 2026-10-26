@@ -32,6 +32,7 @@ type alteration struct {
 	feeds                 *changefeedStep
 	claims                []*columnClaim
 	defaults              []defaultStep
+	inventory             []inventoryStep
 }
 
 // indexStep is the native operation of one index change.

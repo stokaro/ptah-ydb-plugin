@@ -1,7 +1,8 @@
 package backend_test
 
 import (
-		"testing"
+	"fmt"
+	"testing"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
@@ -32,7 +33,7 @@ func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
 }
 
 // Column semantics, authored declarations, and lifecycle planning require their contract
-// minor. Later compatible minors retain both contracts.
+// minor. Later compatible minors retain these contracts.
 func TestDescriptionRequiresColumnSemanticsContract(t *testing.T) {
 	for _, test := range []struct {
 		name  string
