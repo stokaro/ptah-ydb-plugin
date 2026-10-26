@@ -21,8 +21,11 @@ func streamingPlanRequest(c *qt.C, before, after *streaming.Spec, allow bool) *p
 	var observed, desired *protocol.Envelope
 	var err error
 	if before != nil {
-		observed, err = schema.CaptureObject(owner, &native.StreamingQuerySettings{Text: before.Text, Run: before.Run, ResourcePool: before.ResourcePool})
+		readOwner := proto.CloneOf(owner)
+		readOwner.Database = "/local"
+		observed, err = schema.CaptureObject(readOwner, &native.StreamingQuerySettings{Text: before.Text, Run: before.Run, ResourcePool: before.ResourcePool})
 		c.Assert(err, qt.IsNil)
+		observed.Owner = proto.CloneOf(owner)
 	}
 	if after != nil {
 		desired, err = schema.CaptureStreamingQueryIntent(owner, *after, allow)
@@ -53,12 +56,17 @@ func TestStreamingPlanningSplitsRunningChanges(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
 			request := streamingPlanRequest(c, test.before, test.after, true)
+			request.CommonSteps = []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "common/dependent-operations"}, Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN, Reason: "Ordering marker"}}}
 			result, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Diagnostics, qt.HasLen, 0)
 			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
 			steps := result.Contributions[0].Steps
 			c.Assert(steps, qt.HasLen, test.count)
+			for _, step := range steps {
+				c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
+			}
+			c.Assert(result.Contributions[0].Dependencies, qt.HasLen, test.count-1)
 			c.Assert(steps[0].Metadata.Placement == protocol.PlanningMetadata_EARLY, qt.Equals, test.early)
 			rendering := testplanning.RenderRequest(result, request.Capabilities)
 			rendering.Form, rendering.TargetFeatures = protocol.RenderRequest_TEXT, []string{provider.TextUnitsFeature}

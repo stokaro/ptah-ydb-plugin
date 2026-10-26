@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -94,6 +93,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			}
 			metadata.Effects = append(metadata.Effects, topicReads(body, receipt.Subject)...)
 			for _, common := range request.CommonSteps {
+				if len(common.GetMetadata().GetEffects()) == 0 {
+					continue
+				}
 				edge := &protocol.PlanningDependency{Before: proto.CloneOf(common.Id), After: proto.CloneOf(id)}
 				if streaming.Early(part) {
 					edge.Before, edge.After = edge.After, edge.Before
@@ -103,7 +105,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			if len(receipt.Steps) > 0 {
 				contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(receipt.Steps[len(receipt.Steps)-1]), After: proto.CloneOf(id)})
 			}
-			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: id, Metadata: metadata, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value}})
+			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: id, Metadata: metadata, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_LIFECYCLE}})
 			receipt.Steps = append(receipt.Steps, proto.CloneOf(id))
 		}
 	}
@@ -115,7 +117,11 @@ func operation(id string, owner *protocol.Reference, change streaming.Change) (*
 	var before, after *protocol.Envelope
 	var err error
 	if change.Before != nil {
-		before, err = schema.CaptureObject(owner, &native.StreamingQuerySettings{Text: change.Before.Text, Run: change.Before.Run, ResourcePool: change.Before.ResourcePool})
+		before, err = schema.CaptureStreamingQueryIntent(owner, *change.Before, false)
+		if err != nil {
+			return nil, err
+		}
+		before, err = schema.ConvertNative(before, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
 		if err != nil {
 			return nil, err
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/servicequery"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
@@ -279,6 +280,20 @@ func confineToRealm(unit *protocol.Unit) error {
 		return &yql.RealmRefusal{Operation: "an external data source"}
 	case schema.ExternalTableOperation:
 		return &yql.RealmRefusal{Operation: "an external table"}
+	case schema.StreamingQueryOperation:
+		change, err := schema.StreamingChangeOf(schema.StreamingQueryOperationChange(unit.GetNative()))
+		if err != nil {
+			return err
+		}
+		statements, err := streaming.Statements(change)
+		if err != nil {
+			return err
+		}
+		for _, statement := range statements {
+			if err := yql.ConfineToRealm(statement); err != nil {
+				return err
+			}
+		}
 	}
 	return yql.ConfineToRealm(unit.GetSql())
 }

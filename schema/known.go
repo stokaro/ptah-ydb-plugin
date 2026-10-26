@@ -52,6 +52,11 @@ func knownValue(field protoreflect.FieldDescriptor, value protoreflect.Value) er
 		return knownMessage(value.Message())
 	case protoreflect.EnumKind:
 		if field.Enum().Values().ByNumber(value.Enum()) == nil {
+			// STREAMING_QUERY has wire value 26 on YDB 26.2. The pinned
+			// vendor binding omits it; inspection handles this exact value.
+			if field.FullName() == "Ydb.Scheme.Entry.type" && value.Enum() == 26 {
+				return nil
+			}
 			return fmt.Errorf("unknown enum in %s", field.FullName())
 		}
 	}

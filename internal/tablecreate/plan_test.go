@@ -43,6 +43,7 @@ func TestNativeTableCreationPlanRenderNormalize(t *testing.T) {
 	c.Assert(proto.Equal(plan.Rewrites[0].Sources[0], commonID), qt.IsTrue)
 	step := plan.Contributions[0].Steps[0]
 	c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
+	c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
 	c.Assert(step.Metadata.Effects, qt.HasLen, 2)
 	c.Assert(step.Metadata.Effects[1].Subject.Kind, qt.Equals, "ydb.scheme-path")
 	c.Assert(step.Operation.Value.Value.Kind, qt.Equals, tablecreate.OperationKind)

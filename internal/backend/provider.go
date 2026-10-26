@@ -164,14 +164,10 @@ func clusterCapabilities(ctx context.Context, opened *connection.Connection, ver
 // New constructs an isolated session service.
 func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
-// minContractMinor is the oldest minor of contract provider.Revision a host
-// must speak to start this provider. Everything the provider uses from a later
-// minor is negotiated: an RPC a host does not know is never called, and an
-// addition to an existing message travels only when the host lists its
-// feature. A host of contract 25.0 therefore keeps every service this provider
-// serves. Raise the minimum only for a provider that cannot serve such a host
-// at all.
-const minContractMinor = 0
+// minContractMinor requires the lifecycle planning phase. Native objects
+// share physical paths with tables, so their replacements must be ordered
+// across the complete common sequence under planning.lifecycle.
+const minContractMinor = 5
 
 // Description advertises native runtime services, offline coordination models,
 // captured row-table creation, column family alteration of existing tables,
