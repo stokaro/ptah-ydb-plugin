@@ -66,6 +66,7 @@ type session struct {
 	locks           map[string]*lockRecord
 	fenced          bool
 	metadataReaders map[string]*metadataReader
+	statementResults map[string]*statementResult
 	// version is what the server answered SELECT Version() with.
 	version string
 	// embeddings is the session's embedding store, made on its first
@@ -77,7 +78,7 @@ type session struct {
 
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
-	return []string{provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature, provider.DevCleanupFeature, provider.ReplayGuardFeature, provider.StatementTimeoutFeature, provider.EmbeddingStoreFeature, provider.ReadSQLSchemaFeature, provider.TextUnitsFeature, provider.PlanningPolicyFeature, provider.CommonObjectsFeature, provider.EntryKeysFeature, provider.HCLSourceFeature, provider.EncodeSourceFeature}
+	return []string{provider.StatementsFeature, provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature, provider.DevCleanupFeature, provider.ReplayGuardFeature, provider.StatementTimeoutFeature, provider.EmbeddingStoreFeature, provider.ReadSQLSchemaFeature, provider.TextUnitsFeature, provider.PlanningPolicyFeature, provider.CommonObjectsFeature, provider.EntryKeysFeature, provider.HCLSourceFeature, provider.EncodeSourceFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -250,6 +251,7 @@ func (p *Provider) Close(_ context.Context, request *protocol.CloseRequest) erro
 	defer opened.mu.Unlock()
 	if !opened.closed {
 		opened.closed = true
+		opened.closeStatements("", true)
 		opened.closeMetadataReaders("", true)
 		opened.rollbackTransactions()
 		opened.closeLocks()
