@@ -17,8 +17,8 @@ import (
 const InventoryOperationKind = schema.ProviderID + "/column-inventory-operation"
 
 var inventoryModel = buildStatementModel(InventoryOperationKind, map[string]any{
-	"payload":      "exactly one of add (a nullable column without a default or family) and drop (the complete effective captured column definition)",
-	"execution":    "one native AlterTable outside transactions, without retries",
+	"payload":      "exactly one of add (a column with a typed literal default, or nullable without a default; no family) and drop (the complete effective captured column definition)",
+	"execution":    "one pinned YQL ADD COLUMN for a default-bearing addition; otherwise one native AlterTable; outside transactions and without retries",
 	"precondition": "the row table exists; an addition is absent; a removal matches its captured column and has no key, index, TTL, or partitioning dependency",
 	"confirmation": "the requested column is added or removed, every other column and all table settings remain unchanged",
 	"semantics":    "add is additive; drop destroys the column and its data",
@@ -62,7 +62,7 @@ func (p inventoryPayload) validate() error {
 		return err
 	}
 	if change.Add != nil {
-		return validateColumnAlteration(&Ydb_Table.AlterTableRequest{AddColumns: []*Ydb_Table.ColumnMeta{change.Add}})
+		return validateInventoryAddition(change.Add)
 	}
 	if !validName(change.Drop.Name) {
 		return fmt.Errorf("a removed column needs its captured name")
@@ -99,7 +99,7 @@ func NormalizeInventory(input *protocol.ValueInput) (*protocol.NormalizedValue, 
 	if err != nil {
 		return nil, err
 	}
-	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Adds one nullable column"
+	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Adds one column without changing existing columns"
 	if len(payload.Drop) != 0 {
 		impact, reason = protocol.ChangeSemantics_DESTRUCTIVE, "Drops the captured column and its data"
 	}
@@ -134,9 +134,9 @@ func InventoryStatement(path string, change *ColumnInventory) (string, error) {
 	if change.Drop != nil {
 		return prefix + " DROP COLUMN " + QuoteIdentifier(change.Drop.Name) + ";", nil
 	}
-	typ, _, err := schema.ColumnType(change.Add.Type)
+	definition, err := columnDefinition(change.Add)
 	if err != nil {
 		return "", err
 	}
-	return prefix + " ADD COLUMN " + QuoteIdentifier(change.Add.Name) + " " + typ + ";", nil
+	return prefix + " ADD COLUMN " + definition + ";", nil
 }

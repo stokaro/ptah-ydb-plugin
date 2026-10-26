@@ -57,6 +57,16 @@ func TestColumnDefaultChecksBeforeAndAfterSingleDispatch(t *testing.T) {
 		{name: "write guard refuses", beforeWriteErr: sentinel, wantError: true},
 		{name: "canceled at guard", cancel: true, wantError: true},
 		{name: "foreign database", database: "/other", wantError: true},
+		{name: "changed literal value", mutate: func(s *defaultSession) {
+			s.before.Columns[1].DefaultValue = &native.ColumnMeta_FromLiteral{FromLiteral: defaultTextValue("different")}
+		}, wantError: true},
+		{name: "changed literal type", mutate: func(s *defaultSession) {
+			s.before.Columns[1].DefaultValue = &native.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_STRING}}, Value: &Ydb.Value{Value: &Ydb.Value_BytesValue{BytesValue: []byte("old")}}}}
+		}, wantError: true},
+		{name: "equivalent optional literal", mutate: func(s *defaultSession) {
+			literal := s.before.Columns[1].GetFromLiteral()
+			literal.Type = &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: literal.Type}}}
+		}, wantDispatch: true},
 		{name: "stale", mutate: func(s *defaultSession) { s.before.Columns[1].DefaultValue = nil }, wantError: true},
 		{name: "wrong default", mutate: func(s *defaultSession) { s.after.Columns[1].DefaultValue = nil }, wantDispatch: true, wantError: true},
 		{name: "neighbor changed", mutate: func(s *defaultSession) { s.after.Columns[0].Name = "other" }, wantDispatch: true, wantError: true},

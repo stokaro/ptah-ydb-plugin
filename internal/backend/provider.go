@@ -175,6 +175,7 @@ func negotiatedFeatures(ctx context.Context) []string {
 func sessionCapabilities(version string) map[string]bool {
 	return map[string]bool{"wide_date_time_types": releaseline.AtLeast(version, 25, 2), "parameterized_decimal": releaseline.AtLeast(version, 25, 2),
 		"alter_column_default":   releaseline.AtLeast(version, 26, 2),
+"add_column_with_default": releaseline.AtLeast(version, 26, 1),
 		"small_integer_defaults": releaseline.AtLeast(version, 25, 2), "document_type_defaults": releaseline.AtLeast(version, 25, 3),
 		"transactional_ddl": false, "secrets": releaseline.AtLeast(version, 25, 4), "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true,
