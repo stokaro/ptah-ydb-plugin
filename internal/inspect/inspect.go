@@ -311,26 +311,16 @@ func readTable(database, directory, name string, described *nativeprotocol.Descr
 	}
 	table.Facets = []*protocol.Envelope{facet}
 	names := map[string]bool{}
-	for _, column := range described.GetColumns() {
+	for position, column := range described.GetColumns() {
 		if column.GetName() == "" || names[column.GetName()] {
 			return nil, fmt.Errorf("invalid YDB column identity")
 		}
 		names[column.GetName()] = true
-		spelling, nullable, err := schema.ColumnType(column.GetType())
+		observed, err := columnsemantics.Observed(column, position+1, slices.Contains(described.GetPrimaryKey(), column.GetName()))
 		if err != nil {
 			return nil, err
 		}
-		if column.GetNotNull() {
-			nullable = false
-		}
-		projected := &protocol.Column{Name: column.GetName(), Type: spelling, Nullable: nullable, PrimaryKey: slices.Contains(described.GetPrimaryKey(), column.GetName())}
-		if literal := column.GetFromLiteral(); literal != nil {
-			text, err := columnsemantics.Literal(literal)
-			if err != nil {
-				return nil, fmt.Errorf("column %q default: %w", column.GetName(), err)
-			}
-			projected.DefaultExpression = new(text)
-		}
+		projected := &protocol.Column{Name: column.GetName(), Observed: observed}
 		facet, err := schema.CaptureColumn(provider.ColumnReference(ref, column.GetName()), column)
 		if err != nil {
 			return nil, err

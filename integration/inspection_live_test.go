@@ -141,9 +141,13 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	c.Assert(table.Identity.Name, qt.Equals, "records")
 	var columns []string
 	for _, column := range table.Columns {
-		columns = append(columns, fmt.Sprintf("%s:%s:%t:%t", column.Name, column.Type, column.Nullable, column.PrimaryKey))
+		columns = append(columns, fmt.Sprintf("%s:%s:%t:%t", column.Name, column.Observed.ColumnType, column.Observed.IsNullable == "YES", column.Observed.PrimaryKey))
 	}
 	c.Assert(columns, qt.DeepEquals, []string{"a:Utf8:false:true", "b:Uint64:false:true", "amount:Decimal(22,9):true:false", "expires:Timestamp:true:false"})
+	c.Assert(table.Columns[2].Observed.GetNumericPrecision(), qt.Equals, int64(22))
+	c.Assert(table.Columns[2].Observed.GetNumericScale(), qt.Equals, int64(9))
+	c.Assert(table.Columns[2].Observed.OrdinalPosition, qt.Equals, int64(3))
+	c.Assert(table.Columns[2].Type, qt.Equals, "")
 	c.Assert(table.Facets[0].Kind, qt.Equals, schema.TableProperties)
 	var native nativeprotocol.DescribeTableResult
 	c.Assert(protojson.Unmarshal(table.Facets[0].Payload, &native), qt.IsNil)

@@ -84,8 +84,8 @@ func TestRowTableCreationSubprocess(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(observed.Tables, qt.HasLen, 1)
 	c.Assert(observed.Tables[0].Columns, qt.HasLen, 5)
-	c.Assert(observed.Tables[0].Columns[0].Type, qt.Equals, "Uint64")
-	c.Assert(observed.Tables[0].Columns[2].Nullable, qt.IsTrue)
+	c.Assert(observed.Tables[0].Columns[0].Observed.ColumnType, qt.Equals, "Uint64")
+	c.Assert(observed.Tables[0].Columns[2].Observed.IsNullable, qt.Equals, "YES")
 	// An already occupied path cannot turn a captured CREATE into replacement.
 	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (first,second) VALUES (1u,\"key\"u)")
 	c.Assert(err, qt.IsNil)

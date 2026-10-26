@@ -11,6 +11,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 )
 
@@ -32,7 +33,7 @@ func startProviderWithDocker(c *qt.C, binary, digest string) *providerruntime.Cl
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	client, err := providerruntime.Start(ctx, providerruntime.Options{
-		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin", Environment: environment,
+		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin", Environment: environment, HostFeatures: []string{provider.ObservedColumnsFeature},
 	})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(client.Close)
