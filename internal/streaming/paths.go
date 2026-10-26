@@ -25,6 +25,7 @@ type pathBinding struct {
 func NamedPaths(text string) ([]string, error) {
 	tokens := bodyTokens(text)
 	bindings := make(map[string]pathBinding)
+	implicit := make(map[int]bool)
 	var paths []string
 	prefix := ""
 	for index, token := range tokens {
@@ -48,7 +49,12 @@ func NamedPaths(text string) ([]string, error) {
 			}
 			prefix = value
 		}
-		if index+1 >= len(tokens) || (!token.IsWord("FROM") && !token.IsWord("JOIN") && !token.IsWord("INTO")) {
+		if token.IsWord("FROM") {
+			for _, operand := range commaSources(tokens, index+1) {
+				implicit[operand-1] = true
+			}
+		}
+		if index+1 >= len(tokens) || (!token.IsWord("FROM") && !token.IsWord("JOIN") && !token.IsWord("INTO") && !implicit[index]) {
 			continue
 		}
 		names, err := sourcePaths(tokens[index+1:], bindings, token.IsWord("INTO"))
@@ -68,6 +74,35 @@ func NamedPaths(text string) ([]string, error) {
 		}
 	}
 	return paths, nil
+}
+
+// commaSources reads implicit cross joins, enabled by AnsiImplicitCrossJoin.
+// Commas inside expressions, subqueries, lists and source settings are not
+// source separators. The enclosing SELECT's next clause ends the source list.
+func commaSources(tokens []yql.Token, start int) []int {
+	var result []int
+	depth := 0
+	for index := start; index < len(tokens); index++ {
+		token := tokens[index]
+		if depth == 0 {
+			if token.Type == yql.TokenSemicolon || token.IsOperator(")") || token.IsOperator("}") ||
+				token.IsWord("WHERE") || token.IsWord("GROUP") || token.IsWord("HAVING") || token.IsWord("ORDER") ||
+				token.IsWord("LIMIT") || token.IsWord("UNION") || token.IsWord("WINDOW") || token.IsWord("QUALIFY") ||
+				token.IsWord("SELECT") || token.IsWord("FLATTEN") {
+				return result
+			}
+			if token.IsOperator(",") && index+1 < len(tokens) {
+				result = append(result, index+1)
+			}
+		}
+		switch {
+		case token.IsOperator("("), token.IsOperator("["), token.IsOperator("{"):
+			depth++
+		case token.IsOperator(")"), token.IsOperator("]"), token.IsOperator("}"):
+			depth--
+		}
+	}
+	return result
 }
 
 func bindPath(tokens []yql.Token, bindings map[string]pathBinding) pathBinding {
