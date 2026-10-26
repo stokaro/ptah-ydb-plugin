@@ -114,6 +114,7 @@ func TestRebuildPlan_HappyPath(t *testing.T) {
 	steps := plan.Contributions[0].Steps
 	var names, kinds []string
 	for _, step := range steps {
+		check.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
 		names = append(names, step.Id.Name)
 		kinds = append(kinds, step.Operation.Value.Value.Kind)
 	}

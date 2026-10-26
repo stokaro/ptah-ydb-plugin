@@ -65,10 +65,10 @@ jobs:
             features: enable_vector_index,enable_external_data_sources
             host: release
           - image: ydbplatform/local-ydb:26.2.1.14
-            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources
+            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources,enable_streaming_queries
             host: release
           - image: ydbplatform/local-ydb:26.2.1.14
-            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources
+            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources,enable_streaming_queries
             host: master
     env:
       GOWORK: 'off'

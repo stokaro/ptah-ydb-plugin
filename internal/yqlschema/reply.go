@@ -33,7 +33,7 @@ func HeaderKinds() []string {
 // Their source formats include SQL.
 func ClaimedModels() []*protocol.ValueModel {
 	return []*protocol.ValueModel{schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel(),
-		schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties), schema.NativeDesiredModel(schema.ResourcePoolProperties), schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties)}
+		schema.NativeDesiredModel(schema.StreamingQueryProperties), schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties), schema.NativeDesiredModel(schema.ResourcePoolProperties), schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties)}
 }
 
 // Reply reads the documents of a ReadSQLSchema request and answers with the
@@ -292,6 +292,13 @@ func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 	case KindChangefeed:
 		return nil, at(fmt.Sprintf("changefeed %s of table %s has no home in a SQL schema reading: "+
 			"the host refuses the owned objects of a table in a SQL schema reading", quoteName(object.Name), quoteName(ydbPath(object.Schema, object.Parent))))
+	case KindStreamingQuery:
+		node := object.Spec.(*createStreamingQuery)
+		envelope, err := schema.CaptureStreamingQueryIntent(&protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: object.Schema, Name: object.Name}, node.spec, node.allowStateReset)
+		if err != nil {
+			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: err.Error()}
+		}
+		return envelope, nil
 	case KindTopic:
 		spec := object.Spec.(*ydbdecl.Topic)
 		invalid := func(err error) *Refusal {
@@ -396,6 +403,7 @@ var limitedKinds = map[string]struct {
 	reason string
 }{
 	"coordination_node":        {schema.CoordinationProperties, coordinationLimit, "the source leaves coordination nodes unmanaged"},
+	"streaming_query":          {schema.StreamingQueryProperties, topicLimit, "the source leaves streaming queries unmanaged"},
 	"topic":                    {schema.TopicProperties, topicLimit, "the source leaves topics unmanaged"},
 	"external_data_source":     {schema.ExternalSourceProperties, externalLimit, "the source leaves external data sources unmanaged"},
 	"external_table":           {schema.ExternalTableProperties, externalLimit, "the source leaves external tables unmanaged"},

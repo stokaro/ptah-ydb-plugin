@@ -145,6 +145,7 @@ const (
 	KindCoordinationNode ObjectKind = "ptah.run/ydb/coordination-node"
 	KindExternalSource   ObjectKind = "ptah.run/ydb/external-data-source"
 	KindExternalTable    ObjectKind = "ptah.run/ydb/external-table"
+	KindStreamingQuery   ObjectKind = "ptah.run/ydb/streaming-query"
 	KindTopic            ObjectKind = "ptah.run/ydb/topic"
 	// KindResourcePool and KindResourcePoolClassifier belong to the whole
 	// database: their objects have no directory.
@@ -239,6 +240,13 @@ func SortedObjects(r *Reading) []Object {
 // ObjectPayload is an object's specification in the form the host's codec
 // writes its payload.
 func ObjectPayload(object Object) any {
+	if object.Kind == KindStreamingQuery {
+		node := object.Spec.(*createStreamingQuery)
+		return struct {
+			Spec            any  `json:"spec"`
+			AllowStateReset bool `json:"allow_state_reset"`
+		}{node.spec, node.allowStateReset}
+	}
 	return struct {
 		Spec any `json:"spec"`
 	}{Spec: object.Spec}

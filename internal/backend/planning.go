@@ -10,6 +10,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
@@ -42,6 +44,8 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	switch request.PlanningId {
 	case coordinationplan.ServiceID:
 		result, err = coordinationplan.Plan(ctx, request)
+	case streamingplan.ServiceID:
+		result, err = streamingplan.Plan(ctx, request)
 	case topicplan.ServiceID:
 		result, err = topicplan.Plan(ctx, request)
 	case externalplan.ServiceID:
@@ -118,6 +122,9 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		}
 		if kind := captured.GetValue().GetKind(); (kind == schema.ExternalSourceOperation || kind == schema.ExternalTableOperation) && !request.Capabilities[externals.CapabilityExternalDataSources] {
 			return nil, status.Error(codes.FailedPrecondition, "external object rendering requires the external_data_sources capability")
+		}
+		if captured.GetValue().GetKind() == schema.StreamingQueryOperation && !request.Capabilities[streaming.Capability] {
+			return nil, status.Error(codes.FailedPrecondition, streaming.CapabilityRefusal("streaming query"))
 		}
 		if captured.GetValue().GetKind() == schema.WorkloadOperation && !request.Capabilities[workload.CapabilityResourcePools] {
 			return nil, status.Error(codes.FailedPrecondition, "resource pools require target capability resource_pools; "+workload.FlagHint)

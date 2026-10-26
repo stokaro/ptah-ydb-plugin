@@ -142,8 +142,10 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 		if err != nil {
 			return refusal(family, item.index, err.Error()), nil
 		}
+		// Native objects share the lifecycle window so a path can pass from
+		// a dropped table or another kind of object to its replacement.
 		facts := item.value.OperationSemantics
-		step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.value}, Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.input.Subject), Action: item.action}, {Subject: slot(item.input.Subject), Action: item.action}}}}
+		step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.value, Phase: protocol.PlanningOperation_LIFECYCLE}, Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.input.Subject), Action: item.action}, {Subject: slot(item.input.Subject), Action: item.action}}}}
 		if len(access.Dependencies)+len(access.Sources) != 0 {
 			if !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
 				return refusal(family, item.index, "Native access ordering requires planning.lifecycle"), nil

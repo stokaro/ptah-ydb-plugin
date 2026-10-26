@@ -245,7 +245,7 @@ func externalPlan(c *qt.C, declared, read []external, comparedWith, capabilities
 	request := externalRequest(c, declared, read, comparedWith)
 	compared, err := backend.New().CompareModels(c.Context(), request)
 	c.Assert(err, qt.IsNil)
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: externalplan.ServiceID, Identifiers: request.Identifiers, Capabilities: capabilities}
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: externalplan.ServiceID, Identifiers: request.Identifiers, Capabilities: capabilities}
 	for _, change := range compared.Changes {
 		planning.Changes = append(planning.Changes, &protocol.PlanningChange{Subject: change.Subject, Value: change.Value})
 	}
@@ -301,7 +301,7 @@ func TestExternalPlanning_HappyPath(t *testing.T) {
 			for i, step := range plan.Contributions[0].Steps {
 				index[step.Id.Name] = i
 				c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
-				c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_DEPENDENT)
+				c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
 				_, operation, err := schema.ExternalOperationChange(step.Operation.Value.Value)
 				c.Assert(err, qt.IsNil)
 				steps = append(steps, stepSummary{step.Operation.Value.Value.Owner.Name, operation, step.Metadata.Effects[0].Action})

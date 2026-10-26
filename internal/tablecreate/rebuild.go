@@ -312,7 +312,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	for i, operation := range []*protocol.NormalizedValue{create, copyOperation, moveOld, moveNew, drop} {
 		facts := operation.OperationSemantics
 		result.steps = append(result.steps, &protocol.PlanningStep{Id: &protocol.StepIdentity{Owner: schema.ProviderID, Name: operation.Id},
-			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: operation,
+			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: operation, Phase: protocol.PlanningOperation_LIFECYCLE,
 				Notes: rebuildNotes(label, i)},
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects[i]}})
 	}

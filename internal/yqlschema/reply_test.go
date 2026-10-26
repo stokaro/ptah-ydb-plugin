@@ -94,7 +94,7 @@ func gaps(reading *yqlschema.Reading) []string {
 			if _, err := externals.TableIntent(*object.Spec.(*ydbdecl.ExternalTable)); err == nil {
 				continue
 			}
-		case yqlschema.KindResourcePool, yqlschema.KindResourcePoolClassifier:
+		case yqlschema.KindResourcePool, yqlschema.KindResourcePoolClassifier, yqlschema.KindStreamingQuery:
 			continue
 		}
 		found = append(found, string(object.Kind)+" "+object.Name)
@@ -333,6 +333,11 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 			continue
 		}
 		switch envelope.GetKind() {
+		case schema.StreamingQueryProperties:
+			spec, allow, err := schema.DesiredStreamingQuery(envelope)
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindStreamingQuery), Schema: owner.GetSchema(), Name: owner.GetName(), Payload: decodeAny(c, marshal(c, map[string]any{"spec": spec, "allow_state_reset": allow}))})
+			continue
 		case schema.ResourcePoolProperties:
 			spec, err := schema.WorkloadPool(envelope)
 			c.Assert(err, qt.IsNil)

@@ -15,6 +15,8 @@ func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, 
 		return declarationplan.Normalize(input)
 	case schema.CoordinationOperation:
 		return schema.NormalizeCoordinationOperation(input)
+	case schema.StreamingQueryOperation:
+		return schema.NormalizeStreamingQueryOperation(input)
 	case schema.TopicOperation:
 		return schema.NormalizeTopicOperation(input)
 	case schema.ChangefeedOperation:

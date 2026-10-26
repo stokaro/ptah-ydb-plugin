@@ -41,7 +41,7 @@ func newDropFixture(c *qt.C, address, definition string) *dropFixture {
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	client := startProviderFor(c, provider.TextUnitsFeature)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: address})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
@@ -67,7 +67,7 @@ func (f *dropFixture) plan(c *qt.C, form protocol.RenderRequest_Form) *protocol.
 	c.Helper()
 	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: f.database, Schema: f.directory, Name: "records"}
 	subject := testplanning.Subject(owner)
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
 		Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Tables: []*protocol.PlanningTable{{Subject: subject, Action: protocol.PlanningTable_DROP, Current: f.observed(c)}},
 		CommonSteps: []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "drop"}, Parent: proto.CloneOf(subject),

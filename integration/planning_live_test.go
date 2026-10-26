@@ -133,7 +133,7 @@ func TestCoordinationPlanningExecutionSubprocess(t *testing.T) {
 		c.Helper()
 		c.Assert(compared.Changes, qt.HasLen, 1)
 		change := compared.Changes[0]
-		request := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: coordinationplan.ServiceID, DatabasePath: database, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)}, Changes: []*protocol.PlanningChange{{Subject: change.Subject, Value: change.Value}}}
+		request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: coordinationplan.ServiceID, DatabasePath: database, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)}, Changes: []*protocol.PlanningChange{{Subject: change.Subject, Value: change.Value}}}
 		plan, err := client.PlanFeatures(ctx, request)
 		c.Assert(err, qt.IsNil)
 		c.Assert(plan.Diagnostics, qt.HasLen, 0)

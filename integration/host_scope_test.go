@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -35,8 +36,10 @@ func TestHostScopesNativeObjectsSubprocess(t *testing.T) {
 		})
 	}
 	inspect := exec.CommandContext(c.Context(), host, "schema", "inspect", "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", directory, "--format", "json")
-	observed, err := inspect.CombinedOutput()
-	c.Assert(err, qt.IsNil, qt.Commentf("%s", observed))
+	var inspectDiagnostics bytes.Buffer
+	inspect.Stderr = &inspectDiagnostics
+	observed, err := inspect.Output()
+	c.Assert(err, qt.IsNil, qt.Commentf("stdout: %s\nstderr: %s", observed, inspectDiagnostics.String()))
 	var document any
 	c.Assert(json.Unmarshal(observed, &document), qt.IsNil)
 	if !hasCapturedHostFeature(document, "scope.selections") {
@@ -57,8 +60,10 @@ func TestHostScopesNativeObjectsSubprocess(t *testing.T) {
 			ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 			defer cancel()
 			command := exec.CommandContext(ctx, host, "schema", "diff", "--provider-config", manifest, "--provider-engine", "ydb", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", source, "--schemas", directory, "--format", "json", test.flag, test.selector)
-			output, err := command.CombinedOutput()
-			c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
+			var diagnostics bytes.Buffer
+			command.Stderr = &diagnostics
+			output, err := command.Output()
+			c.Assert(err, qt.IsNil, qt.Commentf("stdout: %s\nstderr: %s", output, diagnostics.String()))
 			var result struct {
 				Statements []string `json:"statements"`
 			}

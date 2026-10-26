@@ -8,10 +8,31 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestAccessReadsStreamingQueryIdentity(t *testing.T) {
+	c := qt.New(t)
+	snapshot := accessSnapshot()
+	snapshot.NativeObjects = []*protocol.Envelope{{Kind: schema.StreamingQueryProperties,
+		Owner: &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: "/local", Schema: "app", Name: "copy"}}}
+	err := inspect.Access(c.Context(), snapshot, "/local", false, func(_ context.Context, path string) (*Ydb_Scheme.Entry, error) {
+		if path == "/local" {
+			return accessRoot("root"), nil
+		}
+		c.Assert(path, qt.Equals, "/local/app/copy")
+		return &Ydb_Scheme.Entry{Name: "copy", Type: Ydb_Scheme.Entry_Type(26), Owner: "app"}, nil
+	}, func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
+	c.Assert(err, qt.IsNil)
+	c.Assert(snapshot.CommonObjects.ObjectOwners, qt.HasLen, 2)
+	ref := snapshot.CommonObjects.ObjectOwners[1].Object
+	c.Assert(ref.Kind, qt.Equals, "streaming query")
+	c.Assert(ref.Schema, qt.Equals, "app")
+	c.Assert(ref.Name, qt.Equals, "copy")
+}
 
 func TestAccessPreservesIndependentMembershipsAndOwnerKnowledge(t *testing.T) {
 	c := qt.New(t)
