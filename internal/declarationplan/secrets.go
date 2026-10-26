@@ -2,6 +2,7 @@ package declarationplan
 
 import (
 	"fmt"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
@@ -19,11 +20,11 @@ func sourceSecretEffects(object *protocol.ComparisonRecord) ([]*protocol.Plannin
 	if err != nil {
 		return nil, err
 	}
-	spec, err := externals.SourceFromIntent(intent, value.GetOwner().GetDatabase())
+	spec, err := externals.SourceFromIntent(intent, schema.InterpretationRoot(value))
 	if err != nil {
 		return nil, err
 	}
-	paths, err := externals.SecretPaths(spec.Options, value.GetOwner().GetDatabase())
+	paths, err := externalpath.SecretPaths(spec.Options, schema.InterpretationRoot(value))
 	if err != nil {
 		return nil, err
 	}

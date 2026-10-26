@@ -49,7 +49,8 @@ a minor version), its engines and the archive and executable for each platform.
 A host starts the release when its contract has the same major version and a
 minor version at least `min_contract.minor`. The document states the minimum the
 provider declares in its `Describe` reply, so the two cannot disagree. This
-provider requires contract 25.5 and negotiates `planning.lifecycle` to order
+provider requires contract 25.7. It negotiates `database.context` and
+`values.context` to resolve dependency paths, and `planning.lifecycle` to order
 native replacements around common table operations. `ptah providers install`
 reads the document to choose the newest release the host can start, without
 downloading an archive. `release-lines.json` lists the release lines the provider declares.
@@ -70,8 +71,16 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.7.0, which speaks provider contract 25.5.
+The module pins `provider-sdk` v0.9.0, which speaks provider contract 25.7.
 Builds require neither the Ptah application source nor a local SDK checkout.
+
+Database context is resolved without connecting or reading credentials. A dev
+realm carries both its selected root and the authored database root. Context
+is captured separately from object identity and survives normalization,
+conversion, and saved operations. Absolute secret and external data source
+references require this context before selection or planning. Unresolved
+references retain an explicit pending state; they cannot report an empty or
+partial dependency list.
 
 Run the unit suite and build the executable:
 

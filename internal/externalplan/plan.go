@@ -15,6 +15,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"slices"
 	"strings"
 
@@ -156,14 +157,14 @@ func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowere
 		if err != nil {
 			return nil, err
 		}
-		for _, named := range []string{database, owner.Database} {
-			if named == "" {
-				continue
-			}
-			if root != "" && named != root {
+		if database != "" {
+			if root != "" && database != root {
 				return nil, fmt.Errorf("external object change targets another database")
 			}
-			root = named
+			root = database
+		}
+		if owner.Database != "" && root != "" && owner.Database != root {
+			return nil, fmt.Errorf("external object change has a foreign database identity")
 		}
 		inputs = append(inputs, read{subject: input.Subject, change: captured.Value})
 	}
@@ -240,7 +241,7 @@ func lowerSource(index int, input read, replace bool, root string) lowered {
 	result := lowered{input: index, subject: input.subject, kind: schema.ExternalSourceChange}
 	before, after := input.specs.SourceBefore, input.specs.SourceAfter
 	secretPaths := func(source *ydbdecl.ExternalDataSource) []ydbdecl.Path {
-		paths, err := externals.SecretPaths(source.Options, root)
+		paths, err := externalpath.SecretPaths(source.Options, root)
 		if err != nil {
 			result.refused = fmt.Errorf("external data source %s: %w", display(input.subject), err)
 		}
@@ -283,12 +284,12 @@ func lowerTable(index int, input read, replace bool, displaced map[ydbdecl.Path]
 	before, after := input.specs.TableBefore, input.specs.TableAfter
 	var read, wrote []ydbdecl.Path
 	if before != nil {
-		if source, ok := externals.ResolveSource(root, before.DataSource); ok {
+		if source, pathErr := externalpath.SourcePath(root, before.DataSource); pathErr == nil {
 			read = []ydbdecl.Path{source}
 		}
 	}
 	if after != nil {
-		if source, ok := externals.ResolveSource(root, after.DataSource); ok {
+		if source, pathErr := externalpath.SourcePath(root, after.DataSource); pathErr == nil {
 			wrote = []ydbdecl.Path{source}
 		}
 	}

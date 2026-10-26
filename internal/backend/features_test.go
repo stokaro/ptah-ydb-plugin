@@ -33,17 +33,17 @@ func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
 	c.Assert(description.Engines[0].Features, qt.Contains, "database.dev")
 }
 
-// Authored declarations and lifecycle planning require their declared contract
+// Database context and dependency binding require their declared contract
 // minor. Later compatible minors retain both contracts.
-func TestDescriptionRequiresDeclarationAndLifecycleContract(t *testing.T) {
+func TestDescriptionRequiresDatabaseContextContract(t *testing.T) {
 	for _, test := range []struct {
 		name  string
 		minor uint32
 		want  error
 	}{
-		{"earlier minor", 4, provider.ErrProtocol},
-		{"declaration and lifecycle minor", 5, nil},
-		{"later minor", 6, nil},
+		{"earlier minor", 6, provider.ErrProtocol},
+		{"database context minor", 7, nil},
+		{"later minor", 8, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -64,8 +64,8 @@ func TestDescriptionRefusesAnotherMajor_FailurePath(t *testing.T) {
 	c.Assert(err, qt.ErrorIs, provider.ErrProtocol)
 }
 
-func TestDescriptionRefusesHostsWithoutDeclarationContract(t *testing.T) {
-	for minor := range uint32(5) {
+func TestDescriptionRefusesHostsWithoutDatabaseContextContract(t *testing.T) {
+	for minor := range uint32(7) {
 		t.Run(fmt.Sprintf("%d.%d", provider.Revision, minor), func(t *testing.T) {
 			c := qt.New(t)
 			host := &protocol.ContractVersion{Major: provider.Revision, Minor: minor}

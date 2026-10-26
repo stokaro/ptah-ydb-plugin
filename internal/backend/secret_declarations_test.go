@@ -87,7 +87,7 @@ func TestAuthoredSecretRefusalsDiscardAllOutput(t *testing.T) {
 		capability bool
 	}{
 		{name: "disabled secrets", secretPath: "app/z.pw"},
-		{name: "foreign secret", secretPath: "/other/app/z.pw", capability: true},
+
 		{name: "self reference", secretPath: "app/a.source", capability: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {

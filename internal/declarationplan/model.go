@@ -45,7 +45,7 @@ func Capture(id string, desired *protocol.Envelope) (*protocol.NormalizedValue, 
 		return nil, err
 	}
 	model := Model()
-	return Normalize(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: proto.CloneOf(desired.GetOwner()), Payload: raw}})
+	return Normalize(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: proto.CloneOf(desired.GetOwner()), Context: proto.CloneOf(desired.GetContext()), Payload: raw}})
 }
 
 // Normalize validates the complete desired definition and derives CREATE facts.
@@ -92,6 +92,16 @@ func Declaration(value *protocol.Envelope) (*protocol.Envelope, error) {
 	}
 	if !proto.Equal(value.GetOwner(), desired.GetOwner()) {
 		return nil, fmt.Errorf("authored CREATE owner differs from its declaration")
+	}
+	if !proto.Equal(value.GetContext(), desired.GetContext()) {
+		return nil, fmt.Errorf("authored CREATE context differs from its declaration")
+	}
+	_, pending, err := schema.RequiredObjects(desired)
+	if err != nil {
+		return nil, err
+	}
+	if pending {
+		return nil, fmt.Errorf("authored CREATE requires resolved database context")
 	}
 	return desired, nil
 }

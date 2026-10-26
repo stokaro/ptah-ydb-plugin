@@ -123,7 +123,7 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			}
 			decoded.Fragments = append(decoded.Fragments, &protocol.DecodedSourceFragment{Id: fragment.Id, Values: values})
 			for _, value := range values {
-				value.Value.RequiredObjects, err = schema.RequiredObjects(value.Value.Value)
+				value.Value.RequiredObjects, value.Value.RequiresDatabaseContext, err = schema.RequiredObjects(value.Value.Value)
 				if err != nil {
 					return nil, status.Error(codes.InvalidArgument, err.Error())
 				}

@@ -28,7 +28,7 @@ func Subject(owner *protocol.Reference) *protocol.ComparisonIdentity {
 // RenderRequest captures the planned native operations without scheduling changes.
 // Tests use it only for a single provider contribution without common steps.
 func RenderRequest(plan *protocol.PlannedFeatures, capabilities map[string]bool) *protocol.RenderRequest {
-	request := &protocol.RenderRequest{Engine: "ydb", Capabilities: capabilities}
+	request := &protocol.RenderRequest{Engine: "ydb", TargetFeatures: backend.Description().Engines[0].Features, Capabilities: capabilities}
 	for _, contribution := range plan.Contributions {
 		for _, step := range contribution.Steps {
 			value := proto.CloneOf(step.Operation.Value)
