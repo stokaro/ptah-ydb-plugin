@@ -13,10 +13,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// PrepareCommonObjects returns a declaration of views and comments in YDB's
+// PrepareCommonObjects returns common declarations in YDB's
 // spelling, offline: each view's query as the server stores it, so the host
 // compares a declared view with a read one and a view applied once is not
-// planned again.
+// planned again. Permission aliases become canonical YDB permission names.
 func (*Provider) PrepareCommonObjects(ctx context.Context, request *protocol.PrepareCommonObjectsRequest) (*protocol.PreparedCommonObjects, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -33,7 +33,7 @@ func (*Provider) PrepareCommonObjects(ctx context.Context, request *protocol.Pre
 }
 
 // carriesCommon reports a target profile that negotiated the common wire,
-// on which views and comments are the host's common objects.
+// on which shared declarations travel between the host and provider.
 func carriesCommon(features []string) bool {
 	return slices.Contains(features, provider.CommonObjectsFeature)
 }

@@ -70,7 +70,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.5.0, which speaks provider contract 25.3.
+The module pins `provider-sdk` v0.7.0, which speaks provider contract 25.5.
 Builds require neither the Ptah application source nor a local SDK checkout.
 
 Run the unit suite and build the executable:
@@ -418,14 +418,14 @@ changefeed operation. A host that does not list the feature gets native units.
 ## Common objects
 
 The provider lists `schema.common-objects` (contract 25.3, ADR 0033 in Ptah),
-and the ydb engine declares the kinds `VIEW` and `COMMENT`. A host that lists
-the feature compares and orders views and comments in its shared code, as it
+and the ydb engine declares views, comments, roles and grants. A host that lists
+the feature compares and orders these objects in its shared code, as it
 does for every engine; the provider reads them, spells a declaration the way
 YDB does, and writes each change as the host's embedded engine writes it. A
 host that does not list it gets none of this: views stay native objects, and a
 declared comment is refused as a table setting no creation states.
 
-What each step does with the two kinds:
+Views and comments use these shared stages:
 
 | Step | Views | Comments |
 | --- | --- | --- |
@@ -453,8 +453,35 @@ runs. A comment is never a table property: the table facet leaves Ptah's
 comment keys out, a declared attribute under one of them is refused, and the
 new table of a rebuild takes the comments the read reported.
 
-Sequences, roles and grants are not carried yet, so a host that negotiates the
-wire refuses them by name, as it does every kind an engine does not declare.
+Users and groups share YDB's principal namespace. Creation accepts lower-case
+ASCII letters and digits. Groups have no login or password settings. Membership
+can name a cluster-managed group, but cannot declare self-membership or make a
+principal a member of a declared user. Inspection preserves every observed
+membership, including edges whose principals are outside the managed role list.
+
+`schema.common-access` (contract 25.5) carries independently covered owners and
+memberships. An owner's login state is optional: unknown remains unknown,
+including when the server refuses its principal views. Principal queries read
+names and login settings without reading passwords or hashes. The host refuses
+security analysis with incomplete access knowledge. A host that does not
+negotiate this feature receives uninspected role and grant coverage.
+
+Permissions use canonical YDB names after preparation. Column grants,
+`WITH GRANT OPTION`, `PUBLIC`, and permissions YDB does not recognize are
+refused. Database grants name the opened database. On older release lines a
+root-level grant also needs the captured absolute database path; rendering
+refuses an unbound path. Native grant targets retain the provider's naming,
+including literal dots in resource-pool names.
+
+Mixed plans check captured native state before changing its access. A native
+alteration precedes grants, revocations, and principal changes. A final native
+drop accounts for matching revocations by removing the object's access; a
+temporary external-table drop keeps revocations after restoration. These plans
+require the negotiated `planning.lifecycle` feature. Workload operations retain
+their routing order after principal creation and before principal removal.
+
+Standalone sequences are unsupported. A sequence declaration is refused before
+rendering.
 
 ## Migration history
 

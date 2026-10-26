@@ -68,7 +68,7 @@ func TestRender_HappyPath(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := qt.New(t)
-			got, err := commonobject.Render(tc.change)
+			got, err := commonobject.Render(tc.change, nil)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, tc.want)
 		})
@@ -99,11 +99,11 @@ func TestRender_FailurePath(t *testing.T) {
 		{"comment not UTF-8", setComment(table, "\xff"), `unsupported feature: the comment on table t: the comment is not UTF-8 text, which YDB keeps in an attribute value`},
 		{"column without its table", setComment(&protocol.Reference{Engine: "ydb", Kind: "column", Name: "c"}, "x"), `a YDB column comment names its table`},
 		{"sequence", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateSequence{CreateSequence: &protocol.SQLSequence{Name: "s"}}},
-			`unsupported feature: the YDB provider carries views and comments on the common wire, and this change is another kind`},
+			`unsupported feature: the YDB provider cannot render this common object change`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := qt.New(t)
-			got, err := commonobject.Render(tc.change)
+			got, err := commonobject.Render(tc.change, nil)
 			c.Assert(err, qt.ErrorMatches, tc.want)
 			c.Assert(got, qt.Equals, "")
 		})
@@ -157,7 +157,7 @@ func TestTableCommentRefusal(t *testing.T) {
 
 func TestSupport(t *testing.T) {
 	c := qt.New(t)
-	c.Assert(commonobject.Support().Kinds, qt.DeepEquals, []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_VIEW, protocol.CommonObjectSupport_COMMENT})
+	c.Assert(commonobject.Support().Kinds, qt.DeepEquals, []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_VIEW, protocol.CommonObjectSupport_COMMENT, protocol.CommonObjectSupport_ROLE, protocol.CommonObjectSupport_GRANT, protocol.CommonObjectSupport_OBJECT_OWNER, protocol.CommonObjectSupport_ROLE_MEMBERSHIP})
 	capabilities := commonobject.Capabilities()
 	c.Assert(capabilities["views"] && capabilities["view_comments"] && capabilities["comment_attributes"], qt.IsTrue)
 	c.Assert(capabilities["create_or_replace_view"] || capabilities["materialized_views"] || capabilities["schema_comments"], qt.IsFalse)

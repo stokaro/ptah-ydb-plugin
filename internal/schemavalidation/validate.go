@@ -138,6 +138,16 @@ func tableName(table *protocol.DeclaredTable) string {
 // validateCommonObjects checks the views a declaration holds against what a
 // YDB view can be. The SDK has refused every kind the engine does not carry.
 func validateCommonObjects(declared *protocol.DeclaredCommonObjects, add addFunc) {
+	for _, role := range declared.GetRoles() {
+		if err := commonobject.DeclaredRoleRefusal(role, declared.GetRoles()); err != nil {
+			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "role", role.GetName(), "", "%s", err)
+		}
+	}
+	for _, grant := range declared.GetGrants() {
+		if err := commonobject.GrantRefusal(grant); err != nil {
+			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "grant", grant.GetRole(), "", "%s", err)
+		}
+	}
 	for _, view := range declared.GetViews() {
 		if err := commonobject.Refusal(view); err != nil {
 			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, kindView, tableName(&protocol.DeclaredTable{Schema: view.GetSchema(), Name: view.GetName()}), "", "%s", err)

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -92,14 +93,37 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	facts := operation.OperationSemantics
 	metadata := &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason}
 	result := &protocol.PlannedFeatures{Complete: true, Changes: make([]*protocol.PlanningReceipt, len(request.Changes))}
+	var accessDependencies []*protocol.PlanningDependency
+	var accessSources []*protocol.StepIdentity
 	for _, item := range planned {
+		noun := "resource pool"
+		if item.classifier {
+			noun = "resource pool classifier"
+		}
+		access, err := objectplan.OrderAccess(request, objectplan.Family{Noun: noun}, item.input.Subject, item.action, id)
+		if err != nil {
+			return refusal(request, item.index, err.Error()), nil
+		}
+		if len(access.Dependencies)+len(access.Sources) != 0 && !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
+			return refusal(request, item.index, "Native access ordering requires planning.lifecycle"), nil
+		}
+		accessDependencies = append(accessDependencies, access.Dependencies...)
+		accessSources = append(accessSources, access.Sources...)
+		metadata.Effects = append(metadata.Effects, access.Effects...)
 		metadata.Effects = append(metadata.Effects, &protocol.PlanningEffect{Subject: proto.CloneOf(item.input.Subject), Action: item.action})
 		result.Changes[item.index] = &protocol.PlanningReceipt{Subject: proto.CloneOf(item.input.Subject), Kind: item.input.Value.GetValue().GetKind(),
 			Strategy: strategy, Steps: []*protocol.StepIdentity{proto.CloneOf(id)}}
 	}
 	slices.SortFunc(metadata.Effects, func(a, b *protocol.PlanningEffect) int { return provider.CompareIdentities(a.Subject, b.Subject) })
 	step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: operation}, Metadata: metadata}
-	result.Contributions = []*protocol.PlanningContribution{{Owner: schema.ProviderID, Steps: []*protocol.PlanningStep{step}, Dependencies: principalDependencies(id, request.CommonSteps)}}
+	if len(accessDependencies)+len(accessSources) != 0 {
+		step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
+	}
+	if len(accessSources) != 0 {
+		result.Rewrites = []*protocol.PlanningRewrite{{Sources: accessSources, Replacement: proto.CloneOf(id)}}
+	}
+	dependencies := append(principalDependencies(id, request.CommonSteps), accessDependencies...)
+	result.Contributions = []*protocol.PlanningContribution{{Owner: schema.ProviderID, Steps: []*protocol.PlanningStep{step}, Dependencies: dependencies}}
 	return result, ctx.Err()
 }
 

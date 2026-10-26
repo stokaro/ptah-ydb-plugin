@@ -129,12 +129,32 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 		}
 		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", family.StepPrefix, i)}
 		item.value.Id = id.Name
-		edges, err := dependencies(request, family, item, id)
+		access, err := OrderAccess(request, family, item.input.Subject, item.action, id)
+		if err != nil {
+			return refusal(family, item.index, err.Error()), nil
+		}
+		access.Dependencies = append(access.Dependencies, BeforePrincipalChanges(request, item.action, id)...)
+		pathRequest, err := PathContext(request)
+		if err != nil {
+			return refusal(family, item.index, err.Error()), nil
+		}
+		edges, err := dependencies(pathRequest, family, item, id)
 		if err != nil {
 			return refusal(family, item.index, err.Error()), nil
 		}
 		facts := item.value.OperationSemantics
 		step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.value}, Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.input.Subject), Action: item.action}, {Subject: slot(item.input.Subject), Action: item.action}}}}
+		if len(access.Dependencies)+len(access.Sources) != 0 {
+			if !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
+				return refusal(family, item.index, "Native access ordering requires planning.lifecycle"), nil
+			}
+			step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
+			step.Metadata.Effects = append(step.Metadata.Effects, access.Effects...)
+			contribution.Dependencies = append(contribution.Dependencies, access.Dependencies...)
+			if len(access.Sources) != 0 {
+				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: access.Sources, Replacement: proto.CloneOf(id)})
+			}
+		}
 		contribution.Steps = append(contribution.Steps, step)
 		contribution.Dependencies = append(contribution.Dependencies, edges...)
 		result.Changes[item.index] = &protocol.PlanningReceipt{Subject: proto.CloneOf(item.input.Subject), Kind: family.ChangeKind, Strategy: family.Strategy, Steps: []*protocol.StepIdentity{proto.CloneOf(id)}}

@@ -92,7 +92,7 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 			return nil, status.FromContextError(err).Err()
 		}
 		if common := change.GetCommonObject(); common != nil {
-			statement, err := commonobject.Render(common)
+			statement, err := commonobject.Render(common, request.GetCapabilities())
 			if err != nil {
 				return nil, status.Error(codes.FailedPrecondition, err.Error())
 			}

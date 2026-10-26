@@ -1,5 +1,5 @@
 // Package commonobject carries the YDB objects beyond tables that travel on
-// the common wire of provider contract 25.3: views and Ptah's comments. The
+// the common provider wire: views, principals, permissions and comments. The
 // host compares and orders them for every engine; this package says what YDB
 // holds of each, gives a declaration in YDB's spelling, and writes the YQL
 // each change is made with, as the host's embedded YDB engine writes it.
@@ -8,9 +8,8 @@
 // internal/ydbview names and keeps as the query's tokens. It has no comment
 // statement: Ptah keeps a comment as a user attribute of its table or view
 // (internal/ydbcomment), and execution runs Ptah's COMMENT ON statement
-// through the table service. Sequences, roles and grants are not carried yet,
-// so a host that negotiates the wire refuses them by name, as it does every
-// kind an engine does not declare.
+// through the table service. Ownership and memberships travel independently
+// for access analysis. Standalone sequences are unsupported.
 package commonobject
 
 import (
@@ -18,6 +17,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
@@ -34,7 +34,8 @@ func unsupported(format string, args ...any) error {
 
 // Support is the declaration of the kinds the ydb engine carries.
 func Support() *protocol.CommonObjectSupport {
-	return &protocol.CommonObjectSupport{Kinds: []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_VIEW, protocol.CommonObjectSupport_COMMENT}}
+	return &protocol.CommonObjectSupport{Kinds: []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_VIEW, protocol.CommonObjectSupport_COMMENT,
+		protocol.CommonObjectSupport_ROLE, protocol.CommonObjectSupport_GRANT, protocol.CommonObjectSupport_OBJECT_OWNER, protocol.CommonObjectSupport_ROLE_MEMBERSHIP}}
 }
 
 // Capabilities are the capability facts a session on a host that negotiated
@@ -53,8 +54,8 @@ func Capabilities() map[string]bool {
 
 // Prepare returns a declaration in YDB's spelling: each view's query in the
 // form the server stores it, its tokens joined by single spaces without
-// comments and terminators. Nothing else is respelled, and no entry changes
-// its identity.
+// comments and terminators. Privileges use canonical permission names. No
+// entry changes its identity.
 func Prepare(declared *protocol.DeclaredCommonObjects) *protocol.DeclaredCommonObjects {
 	prepared := proto.CloneOf(declared)
 	if prepared == nil {
@@ -62,6 +63,13 @@ func Prepare(declared *protocol.DeclaredCommonObjects) *protocol.DeclaredCommonO
 	}
 	for _, view := range prepared.GetViews() {
 		view.Body = ydbview.QueryText(view.GetBody())
+	}
+	for _, grant := range prepared.GetGrants() {
+		for i, privilege := range grant.GetPrivileges() {
+			if permission, known := ydbacl.Permission(privilege); known {
+				grant.Privileges[i] = permission
+			}
+		}
 	}
 	return prepared
 }
@@ -96,7 +104,7 @@ func Refusal(view *protocol.SQLView) error {
 // declares follows as Ptah's COMMENT ON VIEW. A comment is Ptah's COMMENT ON
 // statement, which execution runs through the table service. A change YDB
 // cannot make is refused with [ErrUnsupported].
-func Render(change *protocol.CommonObjectChange) (string, error) {
+func Render(change *protocol.CommonObjectChange, capabilities map[string]bool) (string, error) {
 	switch operation := change.GetOperation().(type) {
 	case *protocol.CommonObjectChange_CreateView:
 		return createView(operation.CreateView)
@@ -114,8 +122,12 @@ func Render(change *protocol.CommonObjectChange) (string, error) {
 			return "", err
 		}
 		return statement.Text()
+	case *protocol.CommonObjectChange_CreateRole, *protocol.CommonObjectChange_AlterRole, *protocol.CommonObjectChange_DropRole,
+		*protocol.CommonObjectChange_AddMember, *protocol.CommonObjectChange_RemoveMember,
+		*protocol.CommonObjectChange_Grant, *protocol.CommonObjectChange_Revoke:
+		return renderAccess(change, capabilities)
 	default:
-		return "", unsupported("the YDB provider carries views and comments on the common wire, and this change is another kind")
+		return "", unsupported("the YDB provider cannot render this common object change")
 	}
 }
 
@@ -137,7 +149,7 @@ func createView(creation *protocol.ViewCreation) (string, error) {
 	if view.GetComment() == "" {
 		return text, nil
 	}
-	comment, err := ydbcomment.Statement{Object: ydbcomment.View, Path: path(view.GetSchema(), view.GetName()), Comment: view.GetComment()}.Text()
+	comment, err := ydbcomment.Statement{Object: ydbcomment.View, Path: objectPath(view.GetSchema(), view.GetName()), Comment: view.GetComment()}.Text()
 	if err != nil {
 		return "", err
 	}
@@ -148,7 +160,7 @@ func createView(creation *protocol.ViewCreation) (string, error) {
 // column or an index, which YDB keeps on its table, or on a view.
 func commentStatement(comment *protocol.ObjectComment) (ydbcomment.Statement, error) {
 	object := comment.GetObject()
-	statement := ydbcomment.Statement{Path: path(object.GetSchema(), object.GetName()), Comment: comment.GetText()}
+	statement := ydbcomment.Statement{Path: objectPath(object.GetSchema(), object.GetName()), Comment: comment.GetText()}
 	switch object.GetKind() {
 	case "table":
 		statement.Object = ydbcomment.Table
@@ -158,7 +170,7 @@ func commentStatement(comment *protocol.ObjectComment) (ydbcomment.Statement, er
 		if len(object.GetPath()) != 1 {
 			return ydbcomment.Statement{}, fmt.Errorf("a YDB %s comment names its table", object.GetKind())
 		}
-		statement.Object, statement.Path, statement.Name = ydbcomment.Column, path(object.GetSchema(), object.GetPath()[0]), object.GetName()
+		statement.Object, statement.Path, statement.Name = ydbcomment.Column, objectPath(object.GetSchema(), object.GetPath()[0]), object.GetName()
 		if object.GetKind() == "index" {
 			statement.Object = ydbcomment.Index
 		}
@@ -174,16 +186,18 @@ func commentStatement(comment *protocol.ObjectComment) (ydbcomment.Statement, er
 	return statement, nil
 }
 
-// path is an object's path relative to the database, as a text unit names it
+// objectPath is an object's path relative to the database, as a text unit names it
 // so it runs in whatever database the migration is applied to.
-func path(directory, name string) string {
+func objectPath(directory, name string) string {
 	if strings.TrimSpace(directory) == "" {
 		return name
 	}
 	return strings.TrimRight(directory, "/") + "/" + name
 }
 
-func quoted(directory, name string) string { return ydbtype.QuoteIdentifier(path(directory, name)) }
+func quoted(directory, name string) string {
+	return ydbtype.QuoteIdentifier(objectPath(directory, name))
+}
 
 // qualified names an object in a message.
-func qualified(directory, name string) string { return path(directory, name) }
+func qualified(directory, name string) string { return objectPath(directory, name) }
