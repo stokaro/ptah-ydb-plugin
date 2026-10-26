@@ -52,8 +52,7 @@ func Validate(ctx context.Context, request *protocol.ValidateSchemaRequest) (*pr
 	add := func(code protocol.SchemaDiagnostic_Code, kind, object, feature, format string, args ...any) {
 		result.Diagnostics = append(result.Diagnostics, &protocol.SchemaDiagnostic{Code: code, Kind: kind, Object: object, Feature: feature, Message: fmt.Sprintf(format, args...)})
 	}
-	carried := slices.Contains(request.GetTargetFeatures(), provider.CommonObjectsFeature)
-	if err := validateTables(ctx, request.Tables, carried, add); err != nil {
+	if err := validateTables(ctx, request.Tables, request.TargetFeatures, request.Capabilities, add); err != nil {
 		return nil, err
 	}
 	validateCommonObjects(request.GetCommonObjects(), add)
@@ -77,7 +76,8 @@ type addFunc func(code protocol.SchemaDiagnostic_Code, kind, object, feature, fo
 // the common wire, carried, a comment a table declares on itself, a column or
 // an index is the comment's own change: it is held to what YDB keeps in a
 // table attribute, and the table is checked without it.
-func validateTables(ctx context.Context, tables []*protocol.ValidationTable, carried bool, add addFunc) error {
+func validateTables(ctx context.Context, tables []*protocol.ValidationTable, features []string, caps map[string]bool, add addFunc) error {
+	carried := slices.Contains(features, provider.CommonObjectsFeature)
 	paths := make(map[string]map[string]string)
 	for _, table := range tables {
 		if err := ctx.Err(); err != nil {
@@ -93,7 +93,7 @@ func validateTables(ctx context.Context, tables []*protocol.ValidationTable, car
 			}
 			declaration = commonobject.WithoutComments(declaration)
 		}
-		if err := tablecreate.ValidateDeclaration(table.Subject, declaration); err != nil {
+		if err := tablecreate.ValidateDeclaration(table.Subject, declaration, caps); err != nil {
 			if tablecreate.IsUnsupported(err) {
 				code = protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE
 			}

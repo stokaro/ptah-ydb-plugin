@@ -3,12 +3,11 @@ package tablecreate
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -157,7 +156,7 @@ func columnDefinition(column *Ydb_Table.ColumnMeta) (string, error) {
 	switch value := column.GetDefaultValue().(type) {
 	case nil:
 	case *Ydb_Table.ColumnMeta_FromLiteral:
-		literal, err := Literal(value.FromLiteral)
+		literal, err := columnsemantics.Literal(value.FromLiteral)
 		if err != nil {
 			return "", noTextForm("the default of column %q has no YQL literal", column.GetName())
 		}
@@ -369,94 +368,6 @@ func splitValueText(kind *Ydb.Type, value *Ydb.Value) (string, error) {
 	default:
 		return "", noTextForm("a split point holds a value YQL's PARTITION_AT_KEYS does not take")
 	}
-}
-
-// Literal writes a typed default value as the canonical YQL literal of its
-// type, as the host's embedded engine writes a default: `5`, `'a'u`,
-// `Date('2026-01-02')`. A value of a type it has no literal for is an error.
-func Literal(value *Ydb.TypedValue) (string, error) {
-	kind := value.GetType()
-	if kind.GetOptionalType() != nil {
-		kind = kind.GetOptionalType().GetItem()
-	}
-	if _, isNull := value.GetValue().GetValue().(*Ydb.Value_NullFlagValue); isNull {
-		return "", errors.New("a NULL default has no literal")
-	}
-	name, _, err := schema.ColumnType(kind)
-	if err != nil {
-		return "", err
-	}
-	text, err := literalText(kind, value.GetValue())
-	if err != nil {
-		return "", err
-	}
-	return ydbtype.ValueLiteral(name, text)
-}
-
-// literalText is the text spelling of a value, which the column's type reads
-// back into the same value.
-func literalText(kind *Ydb.Type, value *Ydb.Value) (any, error) {
-	if decimal := kind.GetDecimalType(); decimal != nil {
-		return decimalText(value.GetLow_128(), value.GetHigh_128(), decimal.GetScale()), nil
-	}
-	switch kind.GetTypeId() {
-	case Ydb.Type_BOOL:
-		return value.GetBoolValue(), nil
-	case Ydb.Type_INT8, Ydb.Type_INT16, Ydb.Type_INT32:
-		return int64(value.GetInt32Value()), nil
-	case Ydb.Type_INT64:
-		return value.GetInt64Value(), nil
-	case Ydb.Type_UINT8, Ydb.Type_UINT16, Ydb.Type_UINT32:
-		return uint64(value.GetUint32Value()), nil
-	case Ydb.Type_UINT64:
-		return value.GetUint64Value(), nil
-	case Ydb.Type_FLOAT:
-		return value.GetFloatValue(), nil
-	case Ydb.Type_DOUBLE:
-		return value.GetDoubleValue(), nil
-	case Ydb.Type_UTF8, Ydb.Type_JSON, Ydb.Type_JSON_DOCUMENT, Ydb.Type_DYNUMBER:
-		return value.GetTextValue(), nil
-	case Ydb.Type_STRING, Ydb.Type_YSON:
-		return value.GetBytesValue(), nil
-	case Ydb.Type_DATE:
-		return time.Unix(int64(value.GetUint32Value())*86400, 0).UTC(), nil
-	case Ydb.Type_DATETIME:
-		return time.Unix(int64(value.GetUint32Value()), 0).UTC(), nil
-	case Ydb.Type_TIMESTAMP:
-		return time.UnixMicro(int64(value.GetUint64Value())).UTC(), nil
-	case Ydb.Type_DATE32:
-		return time.Unix(int64(value.GetInt32Value())*86400, 0).UTC(), nil
-	case Ydb.Type_DATETIME64:
-		return time.Unix(value.GetInt64Value(), 0).UTC(), nil
-	case Ydb.Type_TIMESTAMP64:
-		return time.UnixMicro(value.GetInt64Value()).UTC(), nil
-	case Ydb.Type_INTERVAL, Ydb.Type_INTERVAL64:
-		return time.Duration(value.GetInt64Value()) * time.Microsecond, nil
-	default:
-		return nil, fmt.Errorf("YQL has no literal of this type")
-	}
-}
-
-// decimalText writes a Decimal's 128-bit two's-complement integer at scale as
-// decimal text.
-func decimalText(low, high uint64, scale uint32) string {
-	integer := new(big.Int).Lsh(new(big.Int).SetUint64(high), 64)
-	integer.Or(integer, new(big.Int).SetUint64(low))
-	if high>>63 == 1 {
-		integer.Sub(integer, new(big.Int).Lsh(big.NewInt(1), 128))
-	}
-	digits := new(big.Int).Abs(integer).String()
-	sign := ""
-	if integer.Sign() < 0 {
-		sign = "-"
-	}
-	if scale == 0 {
-		return sign + digits
-	}
-	for len(digits) <= int(scale) {
-		digits = "0" + digits
-	}
-	return sign + digits[:len(digits)-int(scale)] + "." + digits[len(digits)-int(scale):]
 }
 
 // AlterationStatement writes the one ALTER TABLE a valid row-table alteration

@@ -53,6 +53,9 @@ type Gate struct {
 // disabled`), and the second refuses CREATE OR REPLACE of either object.
 var gates = []Gate{
 	{Key: "secrets", Flag: "EnableSchemaSecrets"},
+	{Key: "alter_column_default", Flag: "EnableSetDropDefaultValue"},
+	{Key: "wide_date_time_types", Flag: "EnableTableDatetime64"},
+	{Key: "parameterized_decimal", Flag: "EnableParameterizedDecimal"},
 	{Key: "tiered_ttl", Flag: "EnableTieringInColumnShard"},
 	// Off on 25.1 and on from 25.2. With the flag on, 25.1 takes a changefeed
 	// with TOPIC_AUTO_PARTITIONING = 'ENABLED' and reads it back as an

@@ -71,7 +71,7 @@ func IsColumnTable(table *protocol.DeclaredTable) bool {
 // The result has no path: execution binds it after checking the captured
 // owner. A declaration CREATE TABLE cannot carry, or that YDB refuses only
 // after the statement runs, is refused.
-func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable) (*native.ColumnTableCreation, error) {
+func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) (*native.ColumnTableCreation, error) {
 	if err := validateOwner(owner); err != nil {
 		return nil, err
 	}
@@ -106,6 +106,16 @@ func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable
 	if len(captured.storage.LocalIndexes) != 0 {
 		return nil, unsupported("the local indexes of a column table are not created by the provider yet")
 	}
+	if err := compileColumnTableColumns(result, table, captured, caps); err != nil {
+		return nil, err
+	}
+	if err := ValidateColumnTableCreation(result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func compileColumnTableColumns(result *native.ColumnTableCreation, table *protocol.DeclaredTable, captured declaredFacets, caps map[string]bool) error {
 	var marked []string
 	for _, column := range table.Columns {
 		if column.GetPrimary() {
@@ -114,20 +124,14 @@ func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable
 	}
 	if len(result.PrimaryKey) == 0 {
 		if len(marked) != 1 {
-			return nil, unsupported("YDB table creation requires an ordered primary key")
+			return unsupported("YDB table creation requires an ordered primary key")
 		}
 		result.PrimaryKey = slices.Clone(marked)
 	}
 	names := make(map[string]bool, len(table.Columns))
 	for _, column := range table.Columns {
-		settings := captured.columns[column.GetName()]
-		if settings != nil {
-			if settings.GetDefaultValue() != nil || settings.Compression != nil || len(settings.Encoding) != 0 {
-				return nil, unsupported("column tables do not support defaults or Serial columns")
-			}
-			if settings.Family != "" {
-				return nil, unsupported("%s", schema.ColumnTableRowSettingsRefusal)
-			}
+		if err := validateColumnTableColumn(column, captured.columns[column.GetName()]); err != nil {
+			return err
 		}
 		// Every key column is written NOT NULL, as the host's embedded engine
 		// writes it: YDB refuses a nullable key column in a column table, and a
@@ -137,33 +141,46 @@ func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable
 			declared = proto.CloneOf(column)
 			declared.Nullable = false
 		}
-		compiled, err := compileColumn(declared, nil)
+		compiled, err := compileColumn(declared, nil, caps)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if names[column.Name] {
-			return nil, fmt.Errorf("duplicate YDB column")
+			return fmt.Errorf("duplicate YDB column")
 		}
 		names[column.Name] = true
 		result.Columns = append(result.Columns, compiled)
 	}
 	for name := range captured.columns {
 		if !names[name] {
-			return nil, fmt.Errorf("YDB column properties name no declared column")
+			return fmt.Errorf("YDB column properties name no declared column")
 		}
 	}
 	if len(result.Columns) == 0 {
-		return nil, unsupported("YDB table creation requires columns")
+		return unsupported("YDB table creation requires columns")
 	}
 	for _, key := range marked {
 		if !slices.Contains(result.PrimaryKey, key) {
-			return nil, fmt.Errorf("YDB column key membership disagrees with the ordered key")
+			return fmt.Errorf("YDB column key membership disagrees with the ordered key")
 		}
 	}
-	if err := ValidateColumnTableCreation(result); err != nil {
-		return nil, err
+	return nil
+}
+
+func validateColumnTableColumn(column *protocol.DeclaredColumn, settings *native.ColumnIntent) error {
+	if column.DefaultSet || column.DefaultValue != "" || column.DefaultExpression != "" {
+		return unsupported("column tables do not support defaults or Serial columns")
 	}
-	return result, nil
+	if settings == nil {
+		return nil
+	}
+	if settings.GetDefaultValue() != nil || settings.Compression != nil || len(settings.Encoding) != 0 {
+		return unsupported("column tables do not support defaults or Serial columns")
+	}
+	if settings.Family != "" {
+		return unsupported("%s", schema.ColumnTableRowSettingsRefusal)
+	}
+	return nil
 }
 
 // ValidateColumnTableCreation holds a creation to what CREATE TABLE writes and
@@ -270,8 +287,8 @@ func tieredTTLRefusal(capabilities map[string]bool, subject string, ttl *native.
 
 // CaptureColumnTable compiles a column table's declaration after its caller
 // established the CREATE lifecycle.
-func CaptureColumnTable(id string, owner *protocol.Reference, table *protocol.DeclaredTable) (*protocol.NormalizedValue, error) {
-	creation, err := CompileColumnTable(owner, table)
+func CaptureColumnTable(id string, owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) (*protocol.NormalizedValue, error) {
+	creation, err := CompileColumnTable(owner, table, caps)
 	if err != nil {
 		return nil, err
 	}

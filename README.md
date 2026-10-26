@@ -1123,8 +1123,8 @@ validates the source payload and its captured normalization, retains exact owner
 identity and ordered records, and returns no prefix on failure or cancellation.
 It opens no connection and establishes no inspection coverage.
 
-This supports column-property transport and JSON schema export. Column
-comparison and planning are not advertised by this implementation.
+The column-property models complement the common column service and preserve
+native settings through conversion and JSON schema export.
 
 ## Offline row-table declarations
 
@@ -1727,6 +1727,39 @@ table in place, each keeping its owner and access entries.
 `ptah schema apply` from a YAML, a Go and a YQL source: it creates both
 objects, finds nothing to change, moves the data source, adds a column to the
 table, finds nothing to change after each, and drops both.
+
+## Common column semantics
+
+Column default changes use captured native before-state and typed values. The
+provider plans one `ALTER COLUMN SET DEFAULT` or `DROP DEFAULT`, outside a
+transaction, and verifies the column before and after execution. An empty string
+is a present literal. A stale before-state refuses execution; an unconfirmed
+write has an unknown outcome and is not retried. The session reports
+`alter_column_default` from the release line and `EnableSetDropDefaultValue`.
+
+The parent planner derives column additions and removals from the complete
+captured table. Nullable additions without defaults use native `AlterTable`.
+A removal checks its captured column definition and refuses key, index, TTL, or
+partitioning dependencies before dispatch. Each operation verifies the remaining
+columns and table settings after its single write. The graph orders additions
+before dependent settings and removals after them.
+
+The negotiated `schema.columns` service compares the exact columns the host
+pairs inside their full captured tables. It reports type and default
+equivalence, effective nullability, and sequence start and increment differences.
+Primary and serial columns have effective `NOT NULL`; the original declaration
+is retained. Readback distinguishes absent defaults, empty literal values and
+expressions. Creation projection reports every effective column in declaration
+order, including its typed literal default and comment.
+
+Table compilation maps supported SQL aliases using the selected target's
+capabilities. Row-table literal defaults compile into typed native values;
+expressions are refused. A default has one source declaration, either a common
+column field or native column settings. Wide date/time types and parameterized
+Decimal follow the cluster flags; small integer and document defaults follow the
+measured release line. A column table accepts no defaults or serial columns.
+Serial creation and sequence changes still require their separate operation
+implementation before the extraction is complete.
 
 ## Offline table preparation
 

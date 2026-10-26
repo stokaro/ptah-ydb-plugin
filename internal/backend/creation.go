@@ -17,7 +17,7 @@ func (*Provider) ProjectTableCreations(ctx context.Context, request *protocol.Pr
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := Description()
+	description := provider.NegotiatedDescription(Description(), request.GetTargetFeatures())
 	if err := provider.ValidateCreationRequest(description, request); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -34,6 +34,13 @@ func (*Provider) ProjectTableCreations(ctx context.Context, request *protocol.Pr
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	// Common comments are rendered separately, but remain part of the effective
+	// column definition that source projection returns.
+	for i, table := range result.Tables {
+		for j, column := range table.Columns {
+			column.Comment = request.Tables[i].Declaration.Columns[j].Comment
+		}
 	}
 	if err := provider.ValidateProjectedCreations(description, request, result); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())

@@ -7,11 +7,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
 )
 
 // corpusTable is one table a document of the YQL schema corpus declares that
@@ -39,7 +38,7 @@ func corpusTables(c *qt.C) []corpusTable {
 		reply := yqlschema.Reply(&protocol.ReadSQLSchemaRequest{Engine: "ydb", Documents: []*protocol.SQLDocument{{Id: "d", Path: "01.sql", Text: string(text)}}})
 		for _, table := range reply.GetTables() {
 			owner := &protocol.Reference{Engine: "ydb", Kind: "table", Schema: table.GetSchema(), Name: table.GetName()}
-			request, err := tablecreate.Compile(owner, table)
+			request, err := tablecreate.Compile(owner, table, nil)
 			if err != nil {
 				continue
 			}
@@ -62,7 +61,7 @@ func TestRowTableStatementReadsBackToItsDeclaration(t *testing.T) {
 		back := yqlschema.Reply(&protocol.ReadSQLSchemaRequest{Engine: "ydb", Documents: []*protocol.SQLDocument{{Id: "d", Path: "01.sql", Text: table.request}}})
 		c.Assert(back.GetComplete(), qt.IsTrue, qt.Commentf("%s:\n%s\n%v", table.document, table.request, back.GetDiagnostics()))
 		c.Assert(back.GetTables(), qt.HasLen, 1)
-		c.Assert(proto.Equal(back.GetTables()[0], table.table), qt.IsTrue, qt.Commentf("%s:\n%s", table.document, table.request))
+		c.Assert(proto.Equal(back.GetTables()[0], withoutNullDefaults(table.table)), qt.IsTrue, qt.Commentf("%s:\n%s", table.document, table.request))
 	}
 }
 
@@ -82,4 +81,17 @@ func TestRowTableStatementMatchesTheEmbeddedRendering(t *testing.T) {
 		c.Assert(table.text, qt.Contains, strings.TrimSuffix(table.request, ";"), qt.Commentf("%s", table.document))
 	}
 	c.Assert(rendered >= 8, qt.IsTrue, qt.Commentf("%d rendered tables", rendered))
+}
+
+// A source NULL default is an explicit absence. YDB stores no value for it,
+// and its canonical CREATE therefore has no DEFAULT clause.
+func withoutNullDefaults(source *protocol.DeclaredTable) *protocol.DeclaredTable {
+	result := proto.CloneOf(source)
+	for _, column := range result.Columns {
+		if column.DefaultSet && strings.EqualFold(column.DefaultValue, "NULL") {
+			column.DefaultSet = false
+			column.DefaultValue = ""
+		}
+	}
+	return result
 }

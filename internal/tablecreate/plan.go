@@ -101,7 +101,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				// table, whatever the host proposes.
 				return refused(i, fmt.Sprintf("rebuilding table %q, which Ptah plans when asked with %s", tableLabel(owner), requestedWith(request.GetPolicy()))), nil
 			}
-			desired, err := Compile(owner, table.Desired)
+			desired, err := Compile(owner, table.Desired, request.Capabilities)
 			if err != nil {
 				return refused(i, fmt.Sprintf("table %q: %v", tableLabel(owner), err)), nil
 			}
@@ -158,13 +158,18 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				return refused(i, reason), nil
 			}
 			if column {
+				if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
+					if reason := completeColumnAlteration(owner, table, nil, nil, nil, request.Capabilities); reason != "" {
+						return refused(i, reason), nil
+					}
+				}
 				columnAlterations = append(columnAlterations, i)
 				if columnTTL != nil {
 					columnTTLs = append(columnTTLs, columnTTLStep{index: i, table: table, owner: owner, change: *columnTTL})
 				}
 				continue
 			}
-			if needs, desired := rebuildNeeds(owner, table); len(needs) != 0 {
+			if needs, desired := rebuildNeeds(owner, table, request.Capabilities); len(needs) != 0 {
 				if !request.GetPolicy().GetAllowTableRebuild() {
 					return refused(i, rebuildRefusal(needs[0], request.GetPolicy())), nil
 				}
@@ -219,6 +224,25 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			if reason != "" {
 				return refused(i, reason), nil
 			}
+			if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
+				item.inventory, reason, err = planInventory(owner, table, item.claims, request.CommonSteps, request.Capabilities)
+				if err != nil {
+					return nil, err
+				}
+				if reason != "" {
+					return refused(i, reason), nil
+				}
+				item.defaults, reason, err = planDefaults(owner, table, request.Capabilities)
+				if err != nil {
+					return nil, err
+				}
+				if reason != "" {
+					return refused(i, reason), nil
+				}
+				if reason := completeColumnAlteration(owner, table, item.claims, item.defaults, item.inventory, request.Capabilities); reason != "" {
+					return refused(i, reason), nil
+				}
+			}
 			for _, claim := range item.claims {
 				if claim.operation, err = captureColumns("pending", owner, claim); err != nil {
 					return refused(i, err.Error()), nil
@@ -234,7 +258,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		if IsColumnTable(table.Desired) {
 			capture = CaptureColumnTable
 		}
-		operation, err := capture("pending", owner, table.Desired)
+		operation, err := capture("pending", owner, table.Desired, request.Capabilities)
 		if err != nil {
 			return refused(i, err.Error()), nil
 		}
@@ -332,7 +356,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		receiptSteps[item.index] = ids
 	}
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals int
+	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, defaults, inventories int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -357,8 +381,27 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				dropped = append(dropped, claim.id)
 			}
 		}
+		for _, change := range item.inventory {
+			step := change.plan(subject, inventories)
+			if change.source != nil {
+				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: []*protocol.StepIdentity{proto.CloneOf(change.source.Id)}, Replacement: proto.CloneOf(step.Id)})
+			}
+			inventories++
+			contribution.Steps = append(contribution.Steps, step)
+			if change.add {
+				added = append(added, step.Id)
+			} else {
+				dropped = append(dropped, step.Id)
+			}
+		}
 		var ordered []*protocol.StepIdentity
 		ordered = append(ordered, added...)
+		for _, change := range item.defaults {
+			step := change.plan(subject, defaults)
+			defaults++
+			contribution.Steps = append(contribution.Steps, step)
+			ordered = append(ordered, step.Id)
+		}
 		if item.operation != nil {
 			item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-alter/%06d", families)}
 			families++
@@ -427,7 +470,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			contribution.Dependencies = append(contribution.Dependencies, dependencies...)
 			ordered = append(ordered, item.feeds.id)
 		}
-		receiptSteps[item.index] = append(ordered, dropped...)
+		ordered = append(ordered, dropped...)
+		if len(item.inventory)+len(item.defaults) > 0 {
+			for n := 1; n < len(ordered); n++ {
+				contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(ordered[n-1]), After: proto.CloneOf(ordered[n])})
+			}
+		}
+		receiptSteps[item.index] = ordered
 	}
 	slices.SortFunc(columnTTLs, func(a, b columnTTLStep) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	for number, item := range columnTTLs {

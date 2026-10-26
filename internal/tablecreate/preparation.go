@@ -24,7 +24,7 @@ func PrepareTables(ctx context.Context, request *protocol.PrepareTablesRequest) 
 		if err != nil {
 			return nil, err
 		}
-		key, err := compiledKey(owner, input.Desired)
+		key, err := compiledKey(owner, input.Desired, request.Capabilities)
 		if err != nil {
 			return nil, err
 		}
@@ -41,15 +41,15 @@ func PrepareTables(ctx context.Context, request *protocol.PrepareTablesRequest) 
 
 // compiledKey returns the ordered key the CREATE of a declaration writes, a
 // row table's or a column table's.
-func compiledKey(owner *protocol.Reference, table *protocol.DeclaredTable) ([]string, error) {
+func compiledKey(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) ([]string, error) {
 	if IsColumnTable(table) {
-		created, err := CompileColumnTable(owner, table)
+		created, err := CompileColumnTable(owner, table, caps)
 		if err != nil {
 			return nil, err
 		}
 		return slices.Clone(created.PrimaryKey), nil
 	}
-	compiled, err := Compile(owner, table)
+	compiled, err := Compile(owner, table, caps)
 	if err != nil {
 		return nil, err
 	}

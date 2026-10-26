@@ -294,6 +294,16 @@ func intervalLiteral(ydbType, value string) (string, error) {
 	return ydbType + "(" + StringLiteral(IntervalText(micros)) + ")", nil
 }
 
+// IntervalMicroseconds reads a literal interval without converting it to a Go
+// duration, whose nanosecond range is smaller than YDB's microsecond range.
+func IntervalMicroseconds(text string) (int64, error) {
+	value, ok := parseDuration(strings.TrimSpace(text))
+	if !ok {
+		return 0, fmt.Errorf("invalid ISO 8601 interval")
+	}
+	return value, nil
+}
+
 // parseDuration reads an ISO 8601 duration in the form YDB's Interval takes
 // into microseconds. A week is seven days and a day is 24 hours, which is how
 // YDB stores them.

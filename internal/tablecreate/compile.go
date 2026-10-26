@@ -8,8 +8,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -20,41 +22,40 @@ import (
 // Compile preserves explicit key order and native settings. The result has no
 // session or path: execution must bind both after checking the captured owner.
 // Unknown or unimplemented populated fields refuse the complete declaration.
-func Compile(owner *protocol.Reference, table *protocol.DeclaredTable) (*Ydb_Table.CreateTableRequest, error) {
-	return compile(owner, table, true)
+func Compile(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) (*Ydb_Table.CreateTableRequest, error) {
+	result, settings, err := compile(owner, table, caps)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCreateSettings(settings); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
-// compile is Compile with the policy only CREATE needs made optional. Access
-// requirements and session-scoped tables are valid declarations that creation
-// cannot establish, so validating the declaration alone leaves them be.
-func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating bool) (*Ydb_Table.CreateTableRequest, error) {
+// compile checks the captured declaration and returns its creation operands.
+// Access and session lifetime policy are checked by the creation entry point.
+func compile(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) (*Ydb_Table.CreateTableRequest, *native.RowTableIntent, error) {
 	if err := validateOwner(owner); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	key, err := declaredKey(table)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := only(table, "name", "schema", "primary_key", "primary_key_parts", "columns", "features", "indexes"); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if table.Name != owner.Name || table.Schema != owner.Schema {
-		return nil, fmt.Errorf("YDB table declaration has a different identity")
+		return nil, nil, fmt.Errorf("YDB table declaration has a different identity")
 	}
 	settings, columns, err := features(owner, table.Features)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if creating && settings.Access != nil {
-		return nil, fmt.Errorf("YDB table creation cannot establish access requirements before creation")
-	}
-	if creating && settings.Temporary {
-		return nil, fmt.Errorf("temporary YDB tables need an explicit session lifetime")
-	}
-	for key := range settings.Attributes {
-		if ydbcomment.IsKey(key) {
-			return nil, unsupported("YDB table attribute %q is where Ptah keeps a comment; declare the comment instead", key)
-		}
+
+	if err := validateTableAttributes(settings.Attributes); err != nil {
+		return nil, nil, err
 	}
 	result := &Ydb_Table.CreateTableRequest{
 		PrimaryKey:           key,
@@ -72,14 +73,60 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating 
 	}
 	if len(settings.PrimaryKey) > 0 {
 		if len(result.PrimaryKey) != 0 && !slices.Equal(result.PrimaryKey, settings.PrimaryKey) {
-			return nil, fmt.Errorf("common and native YDB primary key orders disagree")
+			return nil, nil, fmt.Errorf("common and native YDB primary key orders disagree")
 		}
 		result.PrimaryKey = slices.Clone(settings.PrimaryKey)
 	}
+	names, err := compileRowColumns(result, table, columns, caps)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := validateReferences(result, names); err != nil {
+		return nil, nil, err
+	}
+	if result.Indexes, err = declaredIndexes(table, result.PrimaryKey, result.Columns); err != nil {
+		return nil, nil, err
+	}
+	if wanted := layoutOf(settings); wanted.partitions() != 0 {
+		types, err := keyTypes(result.PrimaryKey, result.Columns)
+		if err != nil {
+			return nil, nil, err
+		}
+		started, err := wanted.request(types)
+		if err != nil {
+			return nil, nil, fmt.Errorf("the starting layout: %w", err)
+		}
+		result.Partitions = started.Partitions
+	}
+	return result, settings, nil
+}
+
+func validateTableAttributes(attributes map[string]string) error {
+	for key := range attributes {
+		if ydbcomment.IsKey(key) {
+			return unsupported("YDB table attribute %q is where Ptah keeps a comment; declare the comment instead", key)
+		}
+	}
+	return nil
+}
+
+func validateCreateSettings(settings *native.RowTableIntent) error {
+	if settings.Access != nil {
+		return fmt.Errorf("YDB table creation cannot establish access requirements before creation")
+	}
+	if settings.Temporary {
+		return fmt.Errorf("temporary YDB tables need an explicit session lifetime")
+	}
+	return nil
+}
+
+func compileRowColumns(result *Ydb_Table.CreateTableRequest, table *protocol.DeclaredTable, columns map[string]*native.ColumnIntent, caps map[string]bool) (map[string]bool, error) {
 	names := make(map[string]bool, len(table.Columns))
 	var marked []string
 	for _, column := range table.Columns {
-		compiled, err := compileColumn(column, columns[column.GetName()])
+		declared := proto.CloneOf(column)
+		declared.Nullable = columnsemantics.EffectiveNullable(column, column.Primary || slices.Contains(result.PrimaryKey, column.Name))
+		compiled, err := compileColumn(declared, columns[column.GetName()], caps)
 		if err != nil {
 			return nil, err
 		}
@@ -118,24 +165,7 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating 
 			return nil, fmt.Errorf("YDB column key membership disagrees with the ordered key")
 		}
 	}
-	if err := validateReferences(result, names); err != nil {
-		return nil, err
-	}
-	if result.Indexes, err = declaredIndexes(table, result.PrimaryKey, result.Columns); err != nil {
-		return nil, err
-	}
-	if wanted := layoutOf(settings); wanted.partitions() != 0 {
-		types, err := keyTypes(result.PrimaryKey, result.Columns)
-		if err != nil {
-			return nil, err
-		}
-		started, err := wanted.request(types)
-		if err != nil {
-			return nil, fmt.Errorf("the starting layout: %w", err)
-		}
-		result.Partitions = started.Partitions
-	}
-	return result, nil
+	return names, nil
 }
 
 // declaredKey is the ordered key a declaration states: its key columns, as
@@ -160,23 +190,43 @@ func declaredKey(table *protocol.DeclaredTable) ([]string, error) {
 	return parts, nil
 }
 
-func compileColumn(column *protocol.DeclaredColumn, settings *native.ColumnIntent) (*Ydb_Table.ColumnMeta, error) {
-	if err := only(column, "name", "type", "type_raw_sql", "type_is_declared_text", "nullable", "primary"); err != nil {
+func compileColumn(column *protocol.DeclaredColumn, settings *native.ColumnIntent, caps map[string]bool) (*Ydb_Table.ColumnMeta, error) {
+	if err := only(column, "name", "type", "type_raw_sql", "type_is_declared_text", "nullable", "primary", "default_value", "default_set", "default_expression"); err != nil {
 		return nil, err
 	}
 	if !validName(column.Name) {
 		return nil, fmt.Errorf("invalid YDB column name")
 	}
-	value, err := schema.StorageType(column.Type, column.Nullable)
+	mapping, err := ydbtype.Map(column.Type, ydbtype.Capabilities(caps))
+	if err != nil {
+		return nil, unsupported("%s", err)
+	}
+	if mapping.Serial {
+		return nil, unsupported("Serial creation requires its owned sequence lifecycle")
+	}
+	if mapping.Dropped != "" {
+		return nil, unsupported("YDB column type does not preserve %s", mapping.Dropped)
+	}
+	value, err := schema.StorageType(mapping.Type, column.Nullable)
 	if err != nil {
 		return nil, unsupported("%s", err)
 	}
 	result := &Ydb_Table.ColumnMeta{Name: column.Name, Type: value, NotNull: new(!column.Nullable)}
+	literal, err := columnsemantics.NativeDefault(column, mapping.Type, caps)
+	if err != nil {
+		return nil, unsupported("%s", err)
+	}
+	if literal != nil {
+		result.DefaultValue = &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: literal}
+	}
 	if settings == nil {
 		return result, nil
 	}
 	if err := only(settings, "family", "literal", "drop_default"); err != nil {
 		return nil, err
+	}
+	if settings.GetDefaultValue() != nil && (column.DefaultSet || column.DefaultValue != "") {
+		return nil, unsupported("a column default must have one declaration, common or native")
 	}
 	result.Family = settings.Family
 	if literal := settings.GetLiteral(); literal != nil {

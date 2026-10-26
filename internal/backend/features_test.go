@@ -5,10 +5,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
-
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 )
 
 // TestDescriptionListsOneFeatureSet pins that the engine offers every
