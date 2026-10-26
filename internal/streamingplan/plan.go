@@ -5,13 +5,13 @@ package streamingplan
 import (
 	"context"
 	"fmt"
- "slices"
+	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
- "github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -36,13 +36,17 @@ func family() objectplan.Family {
 // Plan validates the entire batch before returning graph contributions. Every
 // stop and restart holds an independent precondition and renders one statement.
 func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol.PlannedFeatures, error) {
-	if !slices.Contains(request.GetTargetFeatures(), provider.PlanningObjectContextFeature) || !slices.Equal(request.ContextKinds, []string{schema.StreamingQueryProperties}) { return nil, fmt.Errorf("streaming planning requires complete planning.object-context assignment") }
+	if !slices.Contains(request.GetTargetFeatures(), provider.PlanningObjectContextFeature) || !slices.Equal(request.ContextKinds, []string{schema.StreamingQueryProperties}) {
+		return nil, fmt.Errorf("streaming planning requires complete planning.object-context assignment")
+	}
 	result, err := objectplan.Plan(ctx, request, family())
 	if err != nil || len(result.GetDiagnostics()) != 0 {
 		return result, err
 	}
 	var base []*protocol.PlanningStep
-	for _, contribution := range result.Contributions { base = append(base, contribution.Steps...) }
+	for _, contribution := range result.Contributions {
+		base = append(base, contribution.Steps...)
+	}
 	pathRequest, err := objectplan.PathContext(request)
 	if err != nil {
 		return nil, err
@@ -74,12 +78,20 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		receipt.Steps = nil
 		receipt.Steps, err = builder.add(step.Id.Name, receipt.Subject, step.Operation.Value.NormalizedOwner, step.Operation.Value.Value.GetContext(), parts)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 	}
-	if err := assessObjects(ctx, request, result, builder); err != nil { return nil, err }
-	if len(result.Diagnostics) != 0 { return &protocol.PlannedFeatures{Complete:true,Diagnostics:result.Diagnostics}, nil }
+	if err := assessObjects(ctx, request, result, builder); err != nil {
+		return nil, err
+	}
+	if len(result.Diagnostics) != 0 {
+		return &protocol.PlannedFeatures{Complete: true, Diagnostics: result.Diagnostics}, nil
+	}
 	result.Contributions = nil
-	if len(builder.contribution.Steps) != 0 { result.Contributions = []*protocol.PlanningContribution{builder.contribution} }
+	if len(builder.contribution.Steps) != 0 {
+		result.Contributions = []*protocol.PlanningContribution{builder.contribution}
+	}
 	result.Rewrites = builder.rewrites
 	return result, nil
 }

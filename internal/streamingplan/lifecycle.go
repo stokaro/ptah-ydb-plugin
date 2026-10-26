@@ -1,22 +1,23 @@
 package streamingplan
 
 import (
- "fmt"
- "github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
- "github.com/stokaro/ptah-ydb-plugin/internal/streaming"
- "github.com/stokaro/ptah-ydb-plugin/schema"
- protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
- "google.golang.org/protobuf/proto"
+	"fmt"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
 )
 
 type lifecycleBuilder struct {
- request, paths *protocol.PlanFeaturesRequest
- contribution *protocol.PlanningContribution
- rewrites []*protocol.PlanningRewrite
+	request, paths *protocol.PlanFeaturesRequest
+	contribution   *protocol.PlanningContribution
+	rewrites       []*protocol.PlanningRewrite
 }
 
 func (b *lifecycleBuilder) add(prefix string, subject *protocol.ComparisonIdentity, owner *protocol.Reference, bound *protocol.DatabaseContext, parts []streaming.Change) ([]*protocol.StepIdentity, error) {
- var steps []*protocol.StepIdentity
+	var steps []*protocol.StepIdentity
 	for ordinal, part := range parts {
 		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%d", prefix, ordinal)}
 		value, err := operation(id.Name, owner, bound, part)
@@ -65,5 +66,5 @@ func (b *lifecycleBuilder) add(prefix string, subject *protocol.ComparisonIdenti
 		b.contribution.Steps = append(b.contribution.Steps, &protocol.PlanningStep{Id: id, Metadata: metadata, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_LIFECYCLE}})
 		steps = append(steps, proto.CloneOf(id))
 	}
- return steps, nil
+	return steps, nil
 }

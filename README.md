@@ -1428,8 +1428,14 @@ query values require `planning.object-context` (contract 25.7), and each query
 receives an assessment receipt. A changed input restarts a running query only
 when the desired capture establishes every surviving input and resource pool.
 Missing definitions, conflicting occupants, and foreign database inputs refuse
-the complete plan. Stopped queries retain their stopped state. Native and text
-rendering carry the same operations and preconditions.
+the complete plan. An unscoped inspection walks every directory for streaming
+queries, including dot-prefixed user directories. A failed directory listing
+refuses the read; an unread query keeps explicit unknown coverage. Scoped
+inspection and reads that exclude other dev realms cannot establish the full
+dependent set, so input mutations refuse when that inventory is incomplete.
+A disabled query reader does not prove absence: directory listings do, and a
+listed unread query remains unknown. Stopped queries retain their stopped
+state. Native and text rendering carry the same operations and preconditions.
 
 Input dependencies use physical scheme paths, including absolute paths inside
 the selected database or dev realm. A constant `PRAGMA TablePathPrefix` applies
