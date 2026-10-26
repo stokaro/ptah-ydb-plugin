@@ -33,11 +33,10 @@ func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
 	c.Assert(description.Engines[0].Features, qt.Contains, "database.dev")
 }
 
-// TestDescriptionStartsOnEveryHostOfItsMajor pins the declared minimum: every
-// addition after contract 25.0 the provider uses is negotiated, so a host of
-// contract 25.0 starts it, and so does every later minor.
-func TestDescriptionStartsOnEveryHostOfItsMajor(t *testing.T) {
-	for minor := range provider.ContractMinor + 1 {
+// TestDescriptionStartsOnSupportedHosts pins the authored-declaration contract
+// floor while leaving later compatible minors usable.
+func TestDescriptionStartsOnSupportedHosts(t *testing.T) {
+	for minor := uint32(5); minor <= provider.ContractMinor; minor++ {
 		t.Run(fmt.Sprintf("%d.%d", provider.Revision, minor), func(t *testing.T) {
 			c := qt.New(t)
 			host := &protocol.ContractVersion{Major: provider.Revision, Minor: minor}
@@ -56,4 +55,14 @@ func TestDescriptionRefusesAnotherMajor_FailurePath(t *testing.T) {
 	err := provider.CheckContract(host, provider.MinimumContract(backend.Description()))
 
 	c.Assert(err, qt.ErrorIs, provider.ErrProtocol)
+}
+
+func TestDescriptionRefusesHostsWithoutDeclarationContract(t *testing.T) {
+ for minor := range uint32(5) {
+  t.Run(fmt.Sprintf("%d.%d", provider.Revision, minor), func(t *testing.T) {
+   c:=qt.New(t)
+   host:=&protocol.ContractVersion{Major:provider.Revision,Minor:minor}
+   c.Assert(provider.CheckContract(host,provider.MinimumContract(backend.Description())),qt.ErrorIs,provider.ErrProtocol)
+  })
+ }
 }
