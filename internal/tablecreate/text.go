@@ -44,6 +44,7 @@ func TextPath(schemaPath, name string) string {
 //	CREATE TABLE `path` (
 //	    `c` Type [FAMILY `f`] [NOT NULL] [DEFAULT literal],
 //	    PRIMARY KEY (`k`),
+//	    INDEX `i` GLOBAL SYNC ON (`c`) COVER (`d`),
 //	    FAMILY `f` (DATA = 'ssd', COMPRESSION = 'lz4')
 //	) WITH (TTL = ..., AUTO_PARTITIONING_..., KEY_BLOOM_FILTER = ..., UNIFORM_PARTITIONS = n);
 //
@@ -61,8 +62,6 @@ func RowTableStatement(path string, request *Ydb_Table.CreateTableRequest) (stri
 		return "", noTextForm("YQL has no setting for a row table's tiering")
 	case len(request.GetPartitioningSettings().GetPartitionBy()) != 0:
 		return "", noTextForm("YQL has no setting for a row table's partition columns")
-	case len(request.GetIndexes()) != 0:
-		return "", noTextForm("the native creation request names indexes")
 	}
 	lines := make([]string, 0, len(request.GetColumns())+len(request.GetColumnFamilies())+1)
 	for _, column := range request.GetColumns() {
@@ -73,6 +72,13 @@ func RowTableStatement(path string, request *Ydb_Table.CreateTableRequest) (stri
 		lines = append(lines, line)
 	}
 	lines = append(lines, "PRIMARY KEY ("+quoteList(request.GetPrimaryKey())+")")
+	for _, index := range request.GetIndexes() {
+		clause, err := indexClause(index)
+		if err != nil {
+			return "", err
+		}
+		lines = append(lines, clause)
+	}
 	entries, err := familyEntries(request.GetColumnFamilies())
 	if err != nil {
 		return "", err

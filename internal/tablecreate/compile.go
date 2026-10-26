@@ -34,7 +34,7 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating 
 	if err != nil {
 		return nil, err
 	}
-	if err := only(table, "name", "schema", "primary_key", "primary_key_parts", "columns", "features"); err != nil {
+	if err := only(table, "name", "schema", "primary_key", "primary_key_parts", "columns", "features", "indexes"); err != nil {
 		return nil, err
 	}
 	if table.Name != owner.Name || table.Schema != owner.Schema {
@@ -113,6 +113,9 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, creating 
 		}
 	}
 	if err := validateReferences(result, names); err != nil {
+		return nil, err
+	}
+	if result.Indexes, err = declaredIndexes(table, result.PrimaryKey, result.Columns); err != nil {
 		return nil, err
 	}
 	if wanted := layoutOf(settings); wanted.partitions() != 0 {

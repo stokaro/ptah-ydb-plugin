@@ -16,11 +16,11 @@ import (
 // and copies no column table into a new one, so each needs an explicit data
 // migration. The words are the host's embedded engine's.
 const (
-	kindChangeRefusal   = "changing between row and column storage requires an explicit data migration"
-	layoutChangeRefusal = "changing a column table's hash key or shard count requires an explicit data migration"
-	rebuildRefusal      = "column-table rebuilds require an explicit data migration"
-	localIndexRefusal   = "the local indexes of a column table are not added or dropped by the provider yet"
-	columnStepRefusal   = "A common step is outside the supported column table lifecycle: the provider adds and drops no column of a column table yet"
+	kindChangeRefusal    = "changing between row and column storage requires an explicit data migration"
+	layoutChangeRefusal  = "changing a column table's hash key or shard count requires an explicit data migration"
+	columnRebuildRefusal = "column-table rebuilds require an explicit data migration"
+	localIndexRefusal    = "the local indexes of a column table are not added or dropped by the provider yet"
+	columnStepRefusal    = "A common step is outside the supported column table lifecycle: the provider adds and drops no column of a column table yet"
 )
 
 // columnTTLChange is an in-place change of a column table's TTL: the TTL the

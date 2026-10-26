@@ -118,7 +118,8 @@ jobs:
           host_binary="$RUNNER_TEMP/ptah-contract"
           CGO_ENABLED=0 go build -C .host-contract -o "$host_binary" ./cmd/ptah
           printf 'PTAH_HOST_TEST_BIN=%s\n' "$host_binary" >> "$GITHUB_ENV"
-      # The suite against Ptah's master, the host-driven tests included, runs
-      # past forty-five minutes on a hosted runner.
+      # The suite, the host-driven tests included, takes from under an hour to
+      # past ninety minutes on a hosted runner: the same run of 25.1.4.7 took
+      # 57 minutes on one runner and passed the 90-minute limit on another.
       - if: steps.host.outputs.skip != 'true'
-        run: go test -race -tags integration ./integration -count=1 -v -timeout 90m
+        run: go test -race -tags integration ./integration -count=1 -v -timeout 150m

@@ -90,8 +90,11 @@ func confirmTableCreation(owner *protocol.Reference, wanted *Ydb_Table.CreateTab
 	if observed.GetSelf().GetName() != owner.Name || observed.GetSelf().GetType() != Ydb_Scheme.Entry_TABLE ||
 		(observed.StoreType != Ydb_Table.StoreType_STORE_TYPE_ROW && observed.StoreType != Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED) ||
 		!slices.Equal(wanted.PrimaryKey, observed.PrimaryKey) || len(wanted.Columns) != len(observed.Columns) ||
-		len(observed.Indexes)+len(observed.Changefeeds) != 0 {
+		len(observed.Changefeeds) != 0 {
 		return fmt.Errorf("YDB created table identity or structure differs from the request")
+	}
+	if err := confirmCreatedIndexes(wanted.Indexes, observed.Indexes); err != nil {
+		return err
 	}
 	for i, column := range wanted.Columns {
 		actual := observed.Columns[i]
@@ -200,4 +203,32 @@ func messageContains(wanted, actual proto.Message) bool {
 		return matches
 	})
 	return matches
+}
+
+// confirmCreatedIndexes requires the table read back to hold exactly the
+// indexes the creation asked for, each ready, of the requested kind, on the
+// requested key columns and covering the requested columns.
+func confirmCreatedIndexes(wanted []*Ydb_Table.TableIndex, observed []*native.TableIndexDescription) error {
+	if len(wanted) != len(observed) {
+		return fmt.Errorf("YDB created table holds other indexes than the request")
+	}
+	kind := func(message protoreflect.Message) string {
+		field := message.WhichOneof(message.Descriptor().Oneofs().ByName("type"))
+		if field == nil {
+			return ""
+		}
+		return string(field.Name())
+	}
+	for _, index := range wanted {
+		at := slices.IndexFunc(observed, func(held *native.TableIndexDescription) bool { return held.GetName() == index.GetName() })
+		if at < 0 {
+			return fmt.Errorf("YDB created table lacks index %q", index.GetName())
+		}
+		held := observed[at]
+		if held.GetStatus() != native.TableIndexDescription_STATUS_READY || !slices.Equal(held.GetIndexColumns(), index.GetIndexColumns()) ||
+			!slices.Equal(held.GetDataColumns(), index.GetDataColumns()) || kind(held.ProtoReflect()) != kind(index.ProtoReflect()) {
+			return fmt.Errorf("YDB created index %q differs from the request", index.GetName())
+		}
+	}
+	return nil
 }

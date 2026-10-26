@@ -1370,9 +1370,21 @@ indexes or changefeeds. A failed reply or unconfirmed result remains UNKNOWN.
 The native API provides no atomic compare-and-set; these checks do not establish
 exclusive ownership against another schema writer.
 
-Access requirements, temporary tables, indexes, changefeeds, sequence defaults,
-column compression or encoding, and richer common constraints are refused.
-Table removal and rebuild remain unsupported, and alteration covers column
+A table is created with the global indexes it declares, synchronous or
+asynchronous, unique or not, with their key and covered columns, in the one
+CreateTable request, as the host's embedded engine writes them inside its
+CREATE TABLE. That is the only way to give a new table a unique index on a
+release that refuses one on an existing table. What a YDB index has no clause
+for is refused in the embedded engine's words: an expression, an order, a
+prefix, a NULLS order or an operator class on a key column, an index on the
+table's key, a covered key column. A vector, full-text or local index is
+refused too, since the pinned table protocol builds none of them with a table.
+Execution confirms each index by reading it back. In the TEXT form each index
+is an INDEX clause of the CREATE TABLE.
+
+Access requirements, temporary tables, changefeeds, sequence defaults, column
+compression or encoding, and richer common constraints are refused.
+Removal and rebuild are described below, and alteration covers column
 families, the addition and removal of columns, the TTL and the automatic partitioning settings (see below). An unknown populated
 field cannot disappear during compilation. A mixed SQL/native batch is validated
 before its first unit executes.
@@ -1385,6 +1397,58 @@ gets past validation and stops at the host's common-step stage ("A common step i
 outside the supported table creation lifecycle"), because the host's common table
 comparison does not yet preserve complete native declarations. These SDK checks do
 not establish a complete native CLI table migration workflow.
+
+## Native table removal
+
+A table the declaration no longer holds, which the host plans to drop, is
+dropped by this provider: the planner replaces the host's steps for the table
+with one removal step, and its receipts name it for every table facet. A row
+table goes with its indexes and changefeeds, and a column table the same way.
+The removal is written as YQL's `DROP TABLE`, as the host's embedded engine
+writes it, in either form: execution runs it through the query service once,
+outside a transaction, and confirms that the path is gone.
+
+Before the statement is sent, execution reads the path: it must still hold a
+table of the store the plan read, with the columns the plan read, in order, and
+the same key columns. A table that changed or went since the plan is refused
+with nothing dropped (`NOT_STARTED`). This is not an atomic compare-and-set: the
+native API has none. The live tests drop a row table natively and by text, a
+column table, and refuse a table a column was added to after planning.
+
+## Native table rebuild
+
+YDB changes neither a table's key nor a column's type in place, and makes no
+column NOT NULL. With the host's planning policy asking for a rebuild (contract
+25.3, `planning.policy`; `--allow-table-rebuild` on the native CLI), the
+planner makes such a change the way the host's embedded engine does, in five
+steps: it creates the table anew from the declaration under a scratch name
+(`__ptah_rebuild_<table>`), copies the rows with one `INSERT ... SELECT`,
+renames the old table out of the way (`__ptah_replaced_<table>`), renames the
+new one into its place, and drops the old one. The host's steps for the table
+are rewritten to the rename that puts the new table in place. A REBUILD the
+host proposes is planned the same way, and refused like any other rebuild
+without the policy.
+
+The copy reads each column as the new table declares it. A changed type is
+converted with `CAST` and unwrapped, so a value that does not convert fails the
+copy with a message naming the table and the column instead of becoming NULL;
+a column made NOT NULL is unwrapped too, which fails the copy on a NULL row.
+The new table keeps the old table's attributes, and with them the comments Ptah
+keeps there, but none of its storage settings: what the declaration states is
+what it gets. Without the policy, the change is refused in the embedded
+engine's words, naming the request the host passes, such as
+`--allow-table-rebuild`.
+
+Every step writes as a YQL statement in the TEXT form, so a migration file
+holds the rebuild, unless the old table holds user attributes: YQL's CREATE
+TABLE sets none, so such a rebuild has no TEXT form (`NO_TEXT_FORM`) and runs
+natively. A native execution checks each step's precondition first:
+the copy needs the new table empty and the source holding every copied column,
+a rename needs the table holding the captured columns and key, and a free
+target. A table holding a changefeed is refused, since YDB renames no such
+table; so is a column table, whose rebuild needs an explicit data migration.
+The live tests rebuild a table natively and by text on both release lines,
+read the copied rows back, and fail a copy whose value does not convert.
 
 ## Native table alteration
 
@@ -1677,7 +1741,7 @@ carry is refused by name, with no partial reading:
   resource pool classifiers, which this provider has no model for.
 
 Some of what a reading carries is not planned yet. Table creation refuses
-column defaults, indexes and table comments. Ptah refuses views and roles from
+column defaults and table comments. Ptah refuses views and roles from
 a provider's reading. A coordination node is planned as the coordination
 services describe.
 
@@ -1940,10 +2004,10 @@ refusals, and the answers an agent reads, which carry no source content.
 
 The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes more source formats, comparison, the alteration of table
-settings other than column families, table removal and rebuild, planning, rendering and operation models for other objects,
+settings other than column families, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML source decoding, comparison, planning,
-rendering, text units, SQL, offline schema validation, native coordination, topic lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
+rendering, text units, table rebuilds the planning policy asks for, SQL, offline schema validation, native coordination, topic lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 

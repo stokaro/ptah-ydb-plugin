@@ -26,6 +26,10 @@ type creationFixture struct {
 	attributeDrift                                             bool
 	// minimum is the minimum partition count the described table reports.
 	minimum uint64
+	// indexes are the indexes the described table reports.
+	indexes []*native.TableIndexDescription
+	// columns are extra columns the described table reports after id.
+	columns []*native.ColumnMeta
 }
 
 func (f *creationFixture) ListDirectory(_ context.Context, _ *Ydb_Scheme.ListDirectoryRequest, _ ...grpc.CallOption) (*Ydb_Scheme.ListDirectoryResponse, error) {
@@ -64,7 +68,8 @@ func (f *creationFixture) Describe(_ context.Context, _ string) (*native.Describ
 		partitioning = &Ydb_Table.PartitioningSettings{MinPartitionsCount: f.minimum}
 	}
 	return &native.DescribeTableResult{PartitioningSettings: partitioning, Attributes: attributes, Self: &Ydb_Scheme.Entry{Name: "records", Type: Ydb_Scheme.Entry_TABLE},
-		PrimaryKey: []string{"id"}, Columns: []*native.ColumnMeta{{Name: name, Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UINT64}}, NotNull: new(true)}}}, nil
+		PrimaryKey: []string{"id"}, Indexes: f.indexes,
+		Columns: append([]*native.ColumnMeta{{Name: name, Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UINT64}}, NotNull: new(true)}}, f.columns...)}, nil
 }
 func (f *creationFixture) Close() error {
 	f.events = append(f.events, "close")
@@ -172,4 +177,70 @@ func TestNativeTableCreationConfirmsAStartingLayout(t *testing.T) {
 		c.Assert(dispatched, qt.IsTrue)
 		c.Assert(err, qt.IsNil)
 	})
+}
+
+// readyIndex is a ready index the table reads back with, of kind sync, async
+// or unique.
+func readyIndex(name, kind string, keys ...string) *native.TableIndexDescription {
+	index := &native.TableIndexDescription{Name: name, IndexColumns: keys, Status: native.TableIndexDescription_STATUS_READY}
+	switch kind {
+	case "unique":
+		index.Type = &native.TableIndexDescription_GlobalUniqueIndex{GlobalUniqueIndex: &native.GlobalUniqueIndex{}}
+	case "async":
+		index.Type = &native.TableIndexDescription_GlobalAsyncIndex{GlobalAsyncIndex: &native.GlobalAsyncIndex{}}
+	default:
+		index.Type = &native.TableIndexDescription_GlobalIndex{GlobalIndex: &native.GlobalIndex{}}
+	}
+	return index
+}
+
+// indexedCreation creates app.records with a unique index on mail and an
+// async index on note, against a table that reads back with held.
+func indexedCreation(c *qt.C, held []*native.TableIndexDescription) (bool, error) {
+	c.Helper()
+	utf8 := &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}}}}
+	fixture := creationFixture{indexes: held, columns: []*native.ColumnMeta{{Name: "mail", Type: utf8, NotNull: new(false)}, {Name: "note", Type: utf8, NotNull: new(false)}}}
+	api := &nativeapi.TableCreation{Scheme: &fixture, Open: func(context.Context) (nativeapi.CreationSession, error) { return &fixture, nil }}
+	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
+	operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"},
+		Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "mail", Type: "Utf8", Nullable: true}, {Name: "note", Type: "Utf8", Nullable: true}},
+		Indexes: []*protocol.DeclaredIndex{{Name: "by_mail", Fields: []string{"mail"}, Unique: true}, {Name: "by_note", Fields: []string{"note"}, Type: "async"}}})
+	c.Assert(err, qt.IsNil)
+	return api.Apply(c.Context(), "/local", operation.Value, func(context.Context) error { return nil })
+}
+
+// A creation with indexes is confirmed by the indexes the table reads back
+// with: each ready, of its kind, on its columns, and no other.
+func TestNativeTableCreationConfirmsItsIndexes_HappyPath(t *testing.T) {
+	c := qt.New(t)
+	dispatched, err := indexedCreation(c, []*native.TableIndexDescription{readyIndex("by_mail", "unique", "mail"), readyIndex("by_note", "async", "note")})
+	c.Assert(err, qt.IsNil)
+	c.Assert(dispatched, qt.IsTrue)
+}
+
+func TestNativeTableCreationConfirmsItsIndexes_FailurePath(t *testing.T) {
+	building := readyIndex("by_mail", "unique", "mail")
+	building.Status = native.TableIndexDescription_STATUS_BUILDING
+	for _, test := range []struct {
+		name string
+		held []*native.TableIndexDescription
+		want string
+	}{
+		{name: "one missing", held: []*native.TableIndexDescription{readyIndex("by_mail", "unique", "mail")}, want: "YDB created table holds other indexes than the request"},
+		{name: "another kind", held: []*native.TableIndexDescription{readyIndex("by_mail", "sync", "mail"), readyIndex("by_note", "async", "note")},
+			want: `YDB created index "by_mail" differs from the request`},
+		{name: "not ready", held: []*native.TableIndexDescription{building, readyIndex("by_note", "async", "note")},
+			want: `YDB created index "by_mail" differs from the request`},
+		{name: "another name", held: []*native.TableIndexDescription{readyIndex("by_mail", "unique", "mail"), readyIndex("by_other", "async", "note")},
+			want: `YDB created table lacks index "by_note"`},
+		{name: "other columns", held: []*native.TableIndexDescription{readyIndex("by_mail", "unique", "note"), readyIndex("by_note", "async", "note")},
+			want: `YDB created index "by_mail" differs from the request`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			dispatched, err := indexedCreation(c, test.held)
+			c.Assert(err, qt.ErrorMatches, test.want)
+			c.Assert(dispatched, qt.IsTrue)
+		})
+	}
 }
