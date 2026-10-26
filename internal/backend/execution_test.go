@@ -376,6 +376,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 	c := qt.New(t)
 	c.Assert(sessionCapabilities("26.2.1.14"), qt.DeepEquals, map[string]bool{
 		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true, "relative_grant_paths": true,
 		"topics": true, "topic_consumer_availability_period": true,
 		"changefeeds": true, "changefeed_user_sids": true, "changefeed_schema_changes": true, "changefeed_topic_auto_partitioning": true,
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": true,
@@ -386,6 +387,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 	// source.
 	c.Assert(sessionCapabilities("25.1.4.7"), qt.DeepEquals, map[string]bool{
 		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true, "relative_grant_paths": false,
 		"topics": true, "topic_consumer_availability_period": false,
 		"changefeeds": true, "changefeed_user_sids": false, "changefeed_schema_changes": false, "changefeed_topic_auto_partitioning": false,
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": false,

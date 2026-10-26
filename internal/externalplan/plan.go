@@ -430,10 +430,25 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 		if err != nil {
 			return nil, err
 		}
-		edges, err := objectplan.PathDependencies(request, family(planned.subject.GetKind()), planned.subject, planned.action, id)
+		pathRequest, err := objectplan.PathContext(request)
 		if err != nil {
 			return refused(changes[planned.input], err), nil
 		}
+		edges, err := objectplan.PathDependencies(pathRequest, family(planned.subject.GetKind()), planned.subject, planned.action, id)
+		if err != nil {
+			return refused(changes[planned.input], err), nil
+		}
+		accessAction := planned.action
+		if len(changes[planned.input].steps) > 1 {
+			// A temporary drop must preserve a revoke until the replacement
+			// object exists and its captured access has been restored.
+			accessAction = protocol.PlanningEffect_ALTER
+		}
+		access, err := objectplan.OrderAccess(request, family(planned.subject.GetKind()), planned.subject, accessAction, id)
+		if err != nil {
+			return refused(changes[planned.input], err), nil
+		}
+		access.Dependencies = append(access.Dependencies, objectplan.BeforePrincipalChanges(request, accessAction, id)...)
 		contribution.Dependencies = append(contribution.Dependencies, edges...)
 		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(planned.subject), Action: planned.action}, {Subject: objectplan.Slot(planned.subject), Action: planned.action}}
 		if !planned.source() && planned.action != protocol.PlanningEffect_DROP {
@@ -446,8 +461,21 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 		// window a host shares between creations and drops: a table dropped
 		// before the data source it reads is created again after it, and the
 		// batch orders its own steps there.
-		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_DEPENDENT},
-			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Placement: protocol.PlanningMetadata_EARLY, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}})
+		step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_DEPENDENT},
+			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Placement: protocol.PlanningMetadata_EARLY, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}}
+		if len(access.Dependencies)+len(access.Sources) != 0 {
+			if !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
+				return refused(changes[planned.input], fmt.Errorf("native access ordering requires planning.lifecycle")), nil
+			}
+			step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
+			step.Metadata.Placement = protocol.PlanningMetadata_DEFAULT
+			step.Metadata.Effects = append(step.Metadata.Effects, access.Effects...)
+			contribution.Dependencies = append(contribution.Dependencies, access.Dependencies...)
+			if len(access.Sources) != 0 {
+				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: access.Sources, Replacement: proto.CloneOf(id)})
+			}
+		}
+		contribution.Steps = append(contribution.Steps, step)
 		byInput[planned.input] = append(byInput[planned.input], proto.CloneOf(id))
 	}
 	contribution.Dependencies = append(contribution.Dependencies, order(steps, ids)...)

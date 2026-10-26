@@ -32,6 +32,9 @@ func rebuildRequest(c *qt.C, policy *protocol.PlanningPolicy) *protocol.PlanFeat
 		&protocol.PlanningEffect{Subject: proto.CloneOf(table.Subject), Action: protocol.PlanningEffect_READ},
 		&protocol.PlanningEffect{Subject: column, Action: protocol.PlanningEffect_ALTER})}
 	request.Policy = policy
+	if policy != nil {
+		request.TargetFeatures = append(request.TargetFeatures, provider.PlanningPolicyFeature)
+	}
 	return request
 }
 
@@ -166,13 +169,15 @@ func TestRebuildPlanRefusesChangefeeds(t *testing.T) {
 func TestRebuildPlanKeepsTheComments(t *testing.T) {
 	check := qt.New(t)
 	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
-	request.TargetFeatures = []string{provider.CommonObjectsFeature}
+	request.TargetFeatures = append(request.TargetFeatures, provider.CommonObjectsFeature)
 	comment := func(kind, name, text string, path ...string) *protocol.ObjectComment {
 		return &protocol.ObjectComment{Object: &protocol.Reference{Engine: "ydb", Kind: kind, Schema: "app", Name: name, Path: path}, Text: text}
 	}
 	request.CurrentCommon = &protocol.ObservedCommonObjects{
 		Coverage: []*protocol.CommonObjectCoverage{{Kind: protocol.CommonObjectSupport_VIEW, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}},
-			{Kind: protocol.CommonObjectSupport_COMMENT, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}}},
+			{Kind: protocol.CommonObjectSupport_COMMENT, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}},
+			{Kind: protocol.CommonObjectSupport_ROLE, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "The fixture did not inspect principals"}},
+			{Kind: protocol.CommonObjectSupport_GRANT, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "The fixture did not inspect grants"}}},
 		Comments: []*protocol.ObjectComment{comment("table", "records", "rows"), comment("column", "payload", "the text", "records"),
 			comment("column", "gone", "dropped", "records"), comment("table", "other", "another table")},
 	}

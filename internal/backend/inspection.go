@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/url"
+	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
@@ -54,6 +55,24 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	}
+	if carriesCommon(provider.HostFeatures(ctx)) {
+		if slices.Contains(provider.HostFeatures(ctx), provider.CommonAccessFeature) {
+			principals := func(ctx context.Context) (nativeapi.Principals, error) {
+				return nativeapi.ReadPrincipals(ctx, session.connection.DB, session.connection.Database())
+			}
+			if err := inspect.Access(ctx, result, session.database, session.realm, nativeapi.AccessReader(session.connection.Driver), principals); err != nil {
+				if ctx.Err() != nil {
+					return nil, status.FromContextError(ctx.Err()).Err()
+				}
+				return nil, status.Error(codes.FailedPrecondition, err.Error())
+			}
+		} else {
+			for _, kind := range []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_ROLE, protocol.CommonObjectSupport_GRANT} {
+				result.CommonObjects.Coverage = append(result.CommonObjects.Coverage, &protocol.CommonObjectCoverage{Kind: kind,
+					Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Access inspection requires schema.common-access"}})
+			}
+		}
 	}
 	result.TargetFeatures = negotiatedFeatures(ctx)
 	// The reply is checked against the description the host holds: one that

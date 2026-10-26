@@ -47,7 +47,7 @@ func commonRead(c *qt.C, client *providerruntime.Client, session *protocol.Sessi
 	c.Helper()
 	snapshot, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session.Id, Schemas: directories})
 	c.Assert(err, qt.IsNil)
-	c.Assert(snapshot.CommonObjects.GetCoverage(), qt.HasLen, 2)
+	c.Assert(snapshot.CommonObjects.GetCoverage(), qt.HasLen, 4)
 	for _, record := range snapshot.Tables {
 		for _, facet := range record.Facets {
 			c.Assert(string(facet.Payload), qt.Not(qt.Contains), "ptah.comment", qt.Commentf("a comment is no table property"))

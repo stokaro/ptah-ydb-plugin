@@ -27,7 +27,9 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := Description()
+	// Optional common kinds belong to the negotiated request profile. A host
+	// without independent access observations cannot supply their coverage.
+	description := provider.NegotiatedDescription(Description(), request.GetTargetFeatures())
 	if err := provider.ValidatePlanningRequest(description, request); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -92,7 +94,7 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 			return nil, status.FromContextError(err).Err()
 		}
 		if common := change.GetCommonObject(); common != nil {
-			statement, err := commonobject.Render(common)
+			statement, err := commonobject.Render(common, request.GetCapabilities())
 			if err != nil {
 				return nil, status.Error(codes.FailedPrecondition, err.Error())
 			}

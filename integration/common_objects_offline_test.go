@@ -55,7 +55,7 @@ func TestCommonObjectsOfflineSubprocess(t *testing.T) {
 	listing := startProviderFor(c, provider.CommonObjectsFeature, provider.TextUnitsFeature)
 	engine := listing.Description().Engines[0]
 	c.Assert(engine.Features, qt.Contains, provider.CommonObjectsFeature)
-	c.Assert(engine.CommonObjects.GetKinds(), qt.DeepEquals, []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_VIEW, protocol.CommonObjectSupport_COMMENT})
+	c.Assert(engine.CommonObjects.GetKinds(), qt.DeepEquals, []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_VIEW, protocol.CommonObjectSupport_COMMENT, protocol.CommonObjectSupport_ROLE, protocol.CommonObjectSupport_GRANT})
 
 	prepared, err := listing.PrepareCommonObjects(c.Context(), &protocol.PrepareCommonObjectsRequest{Engine: "ydb", Identifiers: commonIdentifiers(listing),
 		Capabilities: map[string]bool{"transactional_ddl": false}, TargetFeatures: engine.Features,
