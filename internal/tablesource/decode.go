@@ -51,9 +51,6 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 		if !Owns(fragment) {
 			continue
 		}
-		if directive := fragment.GetGoDirective().GetDirective(); directive == DirectiveChangefeed || directive == DirectiveChangefeedConsumer {
-			return nil, &UnsupportedError{Setting: directive, Reason: "the provider plans no changefeed yet"}
-		}
 		if fragment.GetGoDirective().GetDirective() == DirectiveIndex {
 			return nil, indexRefusal(fragment)
 		}
@@ -161,13 +158,21 @@ func normalized(document *protocol.SourceDocument, target *pending) (*protocol.N
 		CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)}, nil
 }
 
-// bindingOf resolves the common table a fragment declares for. A Go directive
-// may name another table of the file with its table attribute, which wins over
-// the table of the struct it is written on.
+// bindingOf resolves the common table a fragment declares for, a column
+// family's table where a Go directive names one.
 func bindingOf(document *protocol.SourceDocument, fragment *protocol.SourceFragment) (*protocol.SourceBinding, error) {
+	return Binding(document, fragment, "a column family")
+}
+
+// Binding resolves the common table a fragment declares for. A Go directive
+// may name another table of the file with its table attribute, which wins over
+// the table of the struct it is written on. part names what the directive
+// declares, such as "a changefeed", as the refusal of a table the file does
+// not declare reads it.
+func Binding(document *protocol.SourceDocument, fragment *protocol.SourceFragment, part string) (*protocol.SourceBinding, error) {
 	if fragment.GetGoDirective() != nil {
 		if written, named := goAttribute(fragment, AttributeTable); named {
-			return namedBinding(document, written)
+			return namedBinding(document, written, part)
 		}
 	}
 	for _, binding := range document.GetBindings() {
@@ -194,7 +199,7 @@ func goAttribute(fragment *protocol.SourceFragment, name string) (string, bool) 
 // with its schema as schema.table. A name without a schema matches the table of
 // that name in any schema, and is refused when the file declares it in more
 // than one.
-func namedBinding(document *protocol.SourceDocument, written string) (*protocol.SourceBinding, error) {
+func namedBinding(document *protocol.SourceDocument, written, part string) (*protocol.SourceBinding, error) {
 	schemaName, name, err := splitTable(written)
 	if err != nil {
 		return nil, &DeclarationError{Attribute: AttributeTable, Value: written, Reason: err.Error()}
@@ -210,7 +215,7 @@ func namedBinding(document *protocol.SourceDocument, written string) (*protocol.
 	case 1:
 		return matches[0], nil
 	case 0:
-		return nil, fmt.Errorf("table %q is not declared in this file, and a column family is declared beside its table", written)
+		return nil, fmt.Errorf("table %q is not declared in this file, and %s is declared beside its table", written, part)
 	}
 	schemas := make([]string, 0, len(matches))
 	for _, match := range matches {

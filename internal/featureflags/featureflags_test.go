@@ -23,17 +23,31 @@ func preset() map[string]bool {
 	return map[string]bool{"transactional_ddl": false, "tiered_ttl": false}
 }
 
+// linePreset is the preset of one release line: an auto-partitioned
+// changefeed topic is off on 25.1 and on from 25.2.
+func linePreset(autoPartitionedFeeds bool) map[string]bool {
+	caps := preset()
+	caps["changefeed_topic_auto_partitioning"] = autoPartitionedFeeds
+	return caps
+}
+
 // TestRefine_EveryLineDefaultIsThePreset is the measurement the mapping rests
 // on: a line's flags at their defaults leave the session's preset as it is. A
 // gate whose flag defaulted otherwise would turn a cluster nobody configured
 // into one the provider plans for differently.
 func TestRefine_EveryLineDefaultIsThePreset(t *testing.T) {
-	for _, name := range []string{"local-ydb-25.1.4.7.json", "local-ydb-26.2.1.14.json"} {
-		t.Run(name, func(t *testing.T) {
+	for _, test := range []struct {
+		page   string
+		preset map[string]bool
+	}{
+		{page: "local-ydb-25.1.4.7.json", preset: linePreset(false)},
+		{page: "local-ydb-26.2.1.14.json", preset: linePreset(true)},
+	} {
+		t.Run(test.page, func(t *testing.T) {
 			c := qt.New(t)
-			flags, err := featureflags.Decode(page(c, name), "/local")
+			flags, err := featureflags.Decode(page(c, test.page), "/local")
 			c.Assert(err, qt.IsNil)
-			c.Assert(flags.Refine(preset()), qt.DeepEquals, preset())
+			c.Assert(flags.Refine(test.preset), qt.DeepEquals, test.preset)
 		})
 	}
 }
@@ -45,7 +59,7 @@ func TestRefine_ClusterThatTurnedTieringOn(t *testing.T) {
 	flags, err := featureflags.Decode(page(c, "local-ydb-26.2.1.14-tiering-on.json"), "/local")
 	c.Assert(err, qt.IsNil)
 	c.Assert(flags["EnableTieringInColumnShard"], qt.IsTrue)
-	c.Assert(flags.Refine(preset()), qt.DeepEquals, map[string]bool{"transactional_ddl": false, "tiered_ttl": true})
+	c.Assert(flags.Refine(linePreset(true)), qt.DeepEquals, map[string]bool{"transactional_ddl": false, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true})
 }
 
 // TestRefine_HappyPath pins what each flag does to its capability, and that a
@@ -60,6 +74,12 @@ func TestRefine_HappyPath(t *testing.T) {
 		{name: "tiering off", flags: featureflags.Flags{"EnableTieringInColumnShard": false}, want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false}},
 		{name: "tiering not listed", flags: featureflags.Flags{"EnableVectorIndex": true}, want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false}},
 		{name: "a flag of a capability the host owns", flags: featureflags.Flags{"EnableMoveIndex": true}, want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false}},
+		// A 25.1 cluster with the flag on takes an auto-partitioned changefeed
+		// topic, and a later one with it off refuses one.
+		{name: "auto-partitioned changefeed topics on", flags: featureflags.Flags{"EnableTopicAutopartitioningForCDC": true},
+			want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false, "changefeed_topic_auto_partitioning": true}},
+		{name: "auto-partitioned changefeed topics off", flags: featureflags.Flags{"EnableTopicAutopartitioningForCDC": false},
+			want: map[string]bool{"transactional_ddl": false, "tiered_ttl": false, "changefeed_topic_auto_partitioning": false}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
@@ -93,7 +113,7 @@ func TestGates_NameEveryFlagOnce(t *testing.T) {
 		c.Assert(flags[gate.Flag], qt.IsFalse, qt.Commentf(gate.Flag))
 		keys[gate.Key], flags[gate.Flag] = true, true
 	}
-	c.Assert(keys, qt.DeepEquals, map[string]bool{"tiered_ttl": true})
+	c.Assert(keys, qt.DeepEquals, map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true})
 }
 
 func TestDecode_HappyPath(t *testing.T) {

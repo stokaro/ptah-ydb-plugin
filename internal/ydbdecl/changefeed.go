@@ -124,6 +124,24 @@ func feedBoolean(values map[string]string, attribute string) (bool, error) {
 	}
 }
 
+// FeedSeconds reads one of a changefeed's intervals as whole seconds, in any
+// case. YDB's Interval grammar holds weeks, days, hours, minutes and seconds,
+// and a changefeed refuses an interval of no length, which a TTL takes.
+func FeedSeconds(text string) (uint64, error) {
+	seconds, err := IntervalSeconds(strings.ToUpper(strings.TrimSpace(text)))
+	if err != nil {
+		return 0, err
+	}
+	if seconds == 0 {
+		return 0, fmt.Errorf("interval %q is no time at all, and YDB takes only a positive interval", text)
+	}
+	return seconds, nil
+}
+
+// FormatInterval writes seconds as the shortest ISO 8601 duration of days,
+// hours, minutes and seconds, as the host writes a changefeed's interval.
+func FormatInterval(seconds uint64) string { return formatInterval(seconds) }
+
 func feedInterval(values map[string]string, attribute string) (string, error) {
 	raw, ok := present(values, attribute)
 	if !ok {

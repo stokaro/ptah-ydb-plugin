@@ -58,14 +58,38 @@ func CaptureChangefeeds(owner *protocol.Reference, observed *native.ChangefeedOb
 	}
 	projected := proto.CloneOf(observed)
 	for _, feed := range projected.Changefeeds {
-		if feed.Description == nil || feed.Topic == nil {
-			return nil, fmt.Errorf("incomplete YDB changefeed observation")
+		if err := projectChangefeed(feed); err != nil {
+			return nil, err
 		}
-		feed.InitialScan = feed.Description.InitialScanProgress != nil
-		feed.Description.InitialScanProgress = nil
-		projectTopic(feed.Topic)
 	}
 	return capture(ChangefeedProperties, owner, projected)
+}
+
+// ProjectChangefeed returns one changefeed read as inspection captures it:
+// the presence of an initial scan without its progress, and its topic without
+// partitions, statistics or transient identity, consumers in name order.
+func ProjectChangefeed(observed *native.ObservedChangefeed) (*native.ObservedChangefeed, error) {
+	set := &native.ChangefeedObservations{Changefeeds: []*native.ObservedChangefeed{proto.CloneOf(observed)}}
+	if err := Known(set); err != nil {
+		return nil, err
+	}
+	if err := projectChangefeed(set.Changefeeds[0]); err != nil {
+		return nil, err
+	}
+	if err := normalizeChangefeeds(set); err != nil {
+		return nil, err
+	}
+	return set.Changefeeds[0], nil
+}
+
+func projectChangefeed(feed *native.ObservedChangefeed) error {
+	if feed.Description == nil || feed.Topic == nil {
+		return fmt.Errorf("incomplete YDB changefeed observation")
+	}
+	feed.InitialScan = feed.Description.InitialScanProgress != nil
+	feed.Description.InitialScanProgress = nil
+	projectTopic(feed.Topic)
+	return nil
 }
 
 func normalizeChangefeeds(observed *native.ChangefeedObservations) error {

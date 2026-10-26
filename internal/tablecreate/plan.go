@@ -17,8 +17,7 @@ const ServiceID = "ydb-row-table-create"
 
 // ParentKinds assigns the native table and column settings, the storage of a
 // column table, and the changefeeds of a table to this assessment: the host
-// plans no table whose facets no planning service claims, and the comparison
-// reports no changefeed change, so an alteration keeps them as they are.
+// plans no table whose facets no planning service claims.
 func ParentKinds() []string {
 	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
 }
@@ -28,6 +27,8 @@ type creation struct {
 	table     *protocol.PlanningTable
 	operation *protocol.NormalizedValue
 	id        *protocol.StepIdentity
+	// feeds adds the changefeeds the new table declares, after its creation.
+	feeds *changefeedStep
 }
 
 // removal is a table the plan drops, and the host's steps its drop replaces.
@@ -178,7 +179,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				rebuilds = append(rebuilds, item)
 				continue
 			}
-			changes, reason, err := planAlteration(owner, table)
+			changes, reason, err := planAlteration(owner, table, request.Capabilities)
 			if err != nil {
 				return nil, err
 			}
@@ -193,6 +194,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 					return refused(i, err.Error()), nil
 				}
 				item.indexes = append(item.indexes, step)
+			}
+			if item.feeds, reason = captureChangefeedStep(owner, changes.changefeeds); reason != "" {
+				return refused(i, reason), nil
 			}
 			if !change.empty() {
 				if item.operation, err = CaptureAlteration("pending", owner, change); err != nil {
@@ -243,12 +247,20 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				return refused(i, reason), nil
 			}
 		}
-		creations = append(creations, creation{index: i, table: table, operation: operation})
+		feeds, reason, err := plannedCreationChangefeeds(owner, table.Desired, request.Capabilities)
+		if err != nil {
+			return nil, err
+		}
+		if reason != "" {
+			return refused(i, reason), nil
+		}
+		creations = append(creations, creation{index: i, table: table, operation: operation, feeds: feeds})
 	}
 	slices.SortFunc(creations, func(a, b creation) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
 	receiptSteps := make(map[int][]*protocol.StepIdentity)
 	var rowCreations, columnCreations int
+	feedNumber := 0
 	for i := range creations {
 		item := &creations[i]
 		prefix, number := "row-table-create", &rowCreations
@@ -285,6 +297,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
 				Effects: effects}})
 		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
+		if item.feeds != nil {
+			step, dependencies := item.feeds.planningStep(feedNumber, item.table.Subject, []*protocol.StepIdentity{item.id})
+			feedNumber++
+			contribution.Steps = append(contribution.Steps, step)
+			contribution.Dependencies = append(contribution.Dependencies, dependencies...)
+			receiptSteps[item.index] = append(receiptSteps[item.index], item.feeds.id)
+		}
 	}
 	slices.SortFunc(drops, func(a, b removal) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	for number := range drops {
@@ -401,6 +420,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			contribution.Dependencies = append(contribution.Dependencies, indexStepDependencies(*item, index, request.CommonSteps)...)
 			ordered = append(ordered, index.id)
 		}
+		if item.feeds != nil {
+			step, dependencies := item.feeds.planningStep(feedNumber, subject, nil)
+			feedNumber++
+			contribution.Steps = append(contribution.Steps, step)
+			contribution.Dependencies = append(contribution.Dependencies, dependencies...)
+			ordered = append(ordered, item.feeds.id)
+		}
 		receiptSteps[item.index] = append(ordered, dropped...)
 	}
 	slices.SortFunc(columnTTLs, func(a, b columnTTLStep) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
@@ -489,7 +515,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		if table.Action == protocol.PlanningTable_CONTEXT {
 			continue
 		}
-		strategy := "Create the complete captured row table through the native table service"
+		strategy := "Create the complete captured row table through the native table service, then add its changefeeds with YQL's ALTER TABLE through the query service"
 		if slices.Contains(columnAlterations, i) {
 			strategy = "The column table already holds the declared storage: its kind, its hash key and its shard count are fixed when YDB creates it, and its TTL is the declared one"
 			if len(receiptSteps[i]) != 0 {
@@ -510,9 +536,10 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			steps = append(steps, proto.CloneOf(id))
 		}
 		if table.Action == protocol.PlanningTable_ALTER && !slices.Contains(columnAlterations, i) {
-			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, change the automatic partitioning settings, and add or drop global secondary indexes, through the native table service; changefeeds stay as they are, and other settings and column steps the native call cannot state stay with the host"
+			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, change the automatic partitioning settings, and add or drop global secondary indexes, through the native table service; " +
+				"add, drop and change changefeeds with YQL's ALTER TABLE and ALTER TOPIC through the query service; other settings and column steps the native call cannot state stay with the host"
 			if steps == nil {
-				strategy = "The column families, column placements, TTL, partitioning settings and indexes already match the declaration, changefeeds stay as they are, and the host has no column step this service can carry out"
+				strategy = "The column families, column placements, TTL, partitioning settings, indexes and changefeeds already match the declaration, and the host has no column step this service can carry out"
 			}
 		}
 		for _, kind := range request.ParentKinds {

@@ -2,6 +2,7 @@ package tablecreate_test
 
 import (
 	"encoding/json"
+	"maps"
 	"slices"
 	"testing"
 
@@ -37,6 +38,14 @@ type alterCase struct {
 	// desiredSubjectKnowledge is what the source established about this table
 	// alone: an absence or a request for defaults, which only a subject states.
 	desiredSubjectKnowledge protocol.ModelKnowledge_State
+	// desiredChangefeeds and heldChangefeeds are the changefeed sets of both
+	// sides; empty states none.
+	desiredChangefeeds, heldChangefeeds string
+	// changefeedKnowledge is what the declaring source established about the
+	// changefeeds of every table it declares; zero states nothing.
+	changefeedKnowledge protocol.ModelKnowledge_State
+	// capabilities are the session's, beside its nontransactional DDL.
+	capabilities map[string]bool
 }
 
 const plainTable = `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}]}`
@@ -119,6 +128,18 @@ func alterRequest(c *qt.C, in alterCase) *protocol.PlanFeaturesRequest {
 	if in.heldIndexes != "" {
 		current.Features.Facets.Records = append(current.Features.Facets.Records, observedFacet(c, schema.IndexProperties, "", in.heldIndexes))
 	}
+	if in.desiredChangefeeds != "" {
+		desired.Features.Facets.Records = append(desired.Features.Facets.Records, facet(c, schema.ChangefeedProperties, "", in.desiredChangefeeds))
+	}
+	if in.heldChangefeeds != "" {
+		current.Features.Facets.Records = append(current.Features.Facets.Records, observedFacet(c, schema.ChangefeedProperties, "", in.heldChangefeeds))
+	}
+	if in.changefeedKnowledge != protocol.ModelKnowledge_STATE_UNSPECIFIED {
+		desired.Features.Facets.Coverage.Kinds = append(desired.Features.Facets.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: schema.NativeDesiredModel(schema.ChangefeedProperties),
+			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: in.changefeedKnowledge, Reason: "fixture"}}}})
+	}
+	capabilities := map[string]bool{"transactional_ddl": false}
+	maps.Copy(capabilities, in.capabilities)
 	if in.heldTable != "" {
 		current.Features.Facets.Records = append(current.Features.Facets.Records, observedFacet(c, schema.TableProperties, "", in.heldTable))
 	}
@@ -133,7 +154,7 @@ func alterRequest(c *qt.C, in alterCase) *protocol.PlanFeaturesRequest {
 	}
 	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
 		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
-		Capabilities: map[string]bool{"transactional_ddl": false},
+		Capabilities: capabilities,
 		Tables:       []*protocol.PlanningTable{{Subject: tableSubject(), Action: protocol.PlanningTable_ALTER, Desired: desired, Current: current}}}
 }
 

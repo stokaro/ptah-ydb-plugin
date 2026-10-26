@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -28,6 +29,7 @@ type alteration struct {
 	partitioningOperation *protocol.NormalizedValue
 	partitioningID        *protocol.StepIdentity
 	indexes               []*indexStep
+	feeds                 *changefeedStep
 	claims                []*columnClaim
 }
 
@@ -44,6 +46,7 @@ type alterationChanges struct {
 	ttl          ttlChange
 	partitioning partitioningChange
 	indexes      []indexChange
+	changefeeds  []changefeeds.Change
 }
 
 func stepKey(id *protocol.StepIdentity) string { return id.GetOwner() + "\x00" + id.GetName() }
@@ -51,7 +54,7 @@ func stepKey(id *protocol.StepIdentity) string { return id.GetOwner() + "\x00" +
 // planAlteration reads the families, column placements and TTL a captured ALTER
 // carries on both sides and returns the changes that give the table what the
 // declaration states. A non-empty reason refuses the whole request.
-func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable) (alterationChanges, string, error) {
+func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, capabilities map[string]bool) (alterationChanges, string, error) {
 	desired, err := facetEnvelopes(owner, table.Desired.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
 	if err != nil {
 		return alterationChanges{}, "", err
@@ -159,19 +162,62 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable) (a
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
-	return alterationChanges{family: change, ttl: ttl, partitioning: partitioning, indexes: indexes}, "", nil
+	// The changefeeds are managed by a declaration that states them, and by a
+	// source that describes the changefeeds of every table it declares. Without
+	// the table's own read, a changefeed the table already holds would look
+	// absent, and adding it would fail after dispatch.
+	if desired.changefeeds != nil && observed.changefeeds == nil {
+		return alterationChanges{}, "The table's current changefeeds were not captured", nil
+	}
+	indexNames := heldIndexNames(&heldIndexes)
+	if desired.indexes != nil {
+		indexNames = nil
+		for _, index := range wantedIndexes.GetIndexes() {
+			indexNames = append(indexNames, index.GetSpecification().GetName())
+		}
+	}
+	// YDB never changes a table's key, so the declaration's first key column
+	// is the one the table holds.
+	keyType := firstKeyType(table.Desired)
+	var droppedIndexes, addedIndexes []string
+	for _, index := range indexes {
+		if index.add != nil {
+			addedIndexes = append(addedIndexes, index.name())
+		} else {
+			droppedIndexes = append(droppedIndexes, index.name())
+		}
+	}
+	feeds, reason, err := planChangefeeds(changefeedInput{owner: owner, desired: desired.changefeeds, held: observed.changefeeds, indexes: indexNames,
+		droppedIndexes: droppedIndexes, addedIndexes: addedIndexes, keyType: keyType, capabilities: capabilities,
+		managed: desired.changefeeds != nil || observed.changefeeds != nil &&
+			FacetKnown(table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.ChangefeedProperties, table.Subject, true)})
+	if err != nil || reason != "" {
+		return alterationChanges{}, reason, err
+	}
+	return alterationChanges{family: change, ttl: ttl, partitioning: partitioning, indexes: indexes, changefeeds: feeds}, "", nil
+}
+
+// heldIndexNames lists the indexes a table holds.
+func heldIndexNames(held *native.IndexObservations) []string {
+	var names []string
+	for _, index := range held.GetIndexes() {
+		names = append(names, index.GetDescription().GetName())
+	}
+	return names
 }
 
 // capturedFacets are the table and column facets one side of a table carries.
 type capturedFacets struct {
-	table   *protocol.Envelope
-	indexes *protocol.Envelope
-	columns map[string]*protocol.Envelope
+	table       *protocol.Envelope
+	indexes     *protocol.Envelope
+	changefeeds *protocol.Envelope
+	columns     map[string]*protocol.Envelope
 }
 
 // facetEnvelopes returns the table and column properties a captured state
-// carries for owner, with the index set of the table. A facet excluded for this target, a facet bound to other
-// targets and a kind this service does not own state nothing here.
+// carries for owner, with the index set and the changefeed set of the table. A
+// facet excluded for this target, a facet bound to other targets and a kind
+// this service does not own state nothing here.
 func facetEnvelopes(owner *protocol.Reference, state *protocol.ComparisonState, representation protocol.ValueInput_Representation) (capturedFacets, error) {
 	result := capturedFacets{columns: map[string]*protocol.Envelope{}}
 	if state == nil {
@@ -181,7 +227,7 @@ func facetEnvelopes(owner *protocol.Reference, state *protocol.ComparisonState, 
 		return result, fmt.Errorf("YDB table alteration requires %s facets", representation)
 	}
 	for _, record := range state.Records {
-		if record.Kind != schema.TableProperties && record.Kind != schema.ColumnProperties && record.Kind != schema.IndexProperties {
+		if record.Kind != schema.TableProperties && record.Kind != schema.ColumnProperties && record.Kind != schema.IndexProperties && record.Kind != schema.ChangefeedProperties {
 			continue
 		}
 		if (len(record.Targets) > 0 && !slices.Contains(record.Targets, "ydb")) || record.Value == nil {
@@ -205,6 +251,9 @@ func facetEnvelopes(owner *protocol.Reference, state *protocol.ComparisonState, 
 			continue
 		case schema.IndexProperties:
 			result.indexes = value
+			continue
+		case schema.ChangefeedProperties:
+			result.changefeeds = value
 			continue
 		}
 		result.columns[value.Owner.Name] = value

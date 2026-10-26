@@ -191,21 +191,6 @@ func TestGoDirectives_AttributeOutsideTheClaim(t *testing.T) {
 	c.Assert(decoded == nil, qt.IsTrue)
 }
 
-func TestGoDirectives_ChangefeedsAreRefusedByName(t *testing.T) {
-	for _, directive := range []string{"ptah:schema:changefeed", "ptah:schema:changefeed:consumer"} {
-		t.Run(directive, func(t *testing.T) {
-			c := qt.New(t)
-			written := declaration(2, "Item", map[string]string{"name": "updates"})
-			written.Directive = directive
-			request := goRequest(c, written)
-			decoded, err := backend.New().DecodeSource(c.Context(), request)
-			c.Assert(err, qt.ErrorMatches, `(?s).*`+directive+` is not supported by the YDB provider yet: the provider plans no changefeed yet`)
-			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-			c.Assert(decoded == nil, qt.IsTrue)
-		})
-	}
-}
-
 // attributes is a ptah:schema:table directive on its own line of the file,
 // carrying only the attributes the provider claimed, as the host sends them.
 func tableDeclaration(line int, structName string, attributes map[string]string) testsource.GoDeclaration {

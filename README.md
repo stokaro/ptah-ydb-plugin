@@ -6,9 +6,9 @@ changefeeds, column tables, topics, views, coordination nodes, external data
 sources, and external tables. Native SQL execution and session-bound data transactions are
 implemented, together with provider-owned migration history, event journals,
 tags, and coordination locks. Offline YAML and Go annotation decoding is available for coordination-node and topic declarations, and
-YAML and Go annotation decoding for the partitioning, TTL and column families of row tables, and in Go the columns of each family.
-Offline comparison, planning, and rendering produce native coordination
-and topic operations (see [Topics](#topics)). Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
+YAML and Go annotation decoding for the partitioning, TTL, column families and changefeeds of row tables, and in Go the columns of each family.
+Offline comparison, planning, and rendering produce native coordination,
+topic and changefeed operations (see [Topics](#topics) and [Changefeeds](#changefeeds)). Native row-table creation and alteration of column families, columns, the TTL and the automatic partitioning settings are available through captured SDK planning requests.
 Execution verifies captured preconditions and reads back the result.
 Offline migration lint splits YQL migrations and checks YD rules; see
 [Migration lint](#migration-lint).
@@ -193,6 +193,7 @@ reports the defaults of every supported line.
 | Capability | Flag | Default |
 | --- | --- | --- |
 | `tiered_ttl` | `EnableTieringInColumnShard` | `false` on every line from 25.1 to 26.2 |
+| `changefeed_topic_auto_partitioning` | `EnableTopicAutopartitioningForCDC` | `false` on 25.1, `true` from 25.2 |
 
 The host maps more flags than these. The provider reports only the
 capabilities it plans with, because the host plans with the others itself: an
@@ -369,7 +370,8 @@ DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
 Coordination, row-table creation and row-table alteration operations use native envelopes, or
-YQL statements in the TEXT form; see [Text units](#text-units). Other operation
+YQL statements in the TEXT form; see [Text units](#text-units). Topic and
+changefeed operations have native envelopes only. Other operation
 models remain to be extracted. A SQL unit that runs one of the host's
 coordination node statements is run through the coordination service; the
 host's extended comment statements are not implemented here.
@@ -401,8 +403,9 @@ transaction, or one that cannot be read, refuses the batch before any unit runs.
 A change only the native call makes refuses the batch with `NO_TEXT_FORM` and
 no unit: user attributes other than Ptah's comments, storage settings, tiering, the partition columns, a
 family kept in memory, a default from a sequence or of a type without a
-literal, a TTL run interval other than YDB's own, and a coordination node that
-declares its access. A host that does not list the feature gets native units.
+literal, a TTL run interval other than YDB's own, a coordination node that
+declares its access, and every topic and changefeed operation. A host that
+does not list the feature gets native units.
 
 ## Common objects
 
@@ -837,8 +840,6 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `fields` of a column family in YAML | The host attaches a YAML value to a table, never to a column, so a YAML family cannot place columns. Claimed and refused by name; write the family in a Go directive. |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
-| `changefeeds` in YAML | The comparison and planning of changefeeds do not exist yet. Not claimed, so the host refuses the key. |
-| `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` in Go | The same. The host reads a Go comment that no provider claims as no declaration, so the provider claims both and refuses them by name. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name. YAML has no index key claim. |
 | Resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` and `topics` at document scope (see [Topics](#topics)). |
 
@@ -1087,8 +1088,8 @@ without an open session, retains exact owner identity, and returns no prefix
 when any value in a mixed batch fails. Conversion establishes no inspection
 coverage. The index model advertises comparison and planning, for adding and
 dropping global secondary indexes of an existing row table (see
-[Index alteration](#index-alteration)), and so does the topic model (see
-[Topics](#topics)); the changefeed model does not.
+[Index alteration](#index-alteration)), and so do the topic model (see
+[Topics](#topics)) and the changefeed model (see [Changefeeds](#changefeeds)).
 
 Index declarations retain the native index kind, ordered index/data columns,
 and kind-specific settings. Each declaration includes complete requirements on
@@ -1314,6 +1315,104 @@ drives `ptah schema apply` from a YAML, a Go and a YQL source: it creates a
 topic with its consumers, finds nothing to change, changes the retention and
 the consumers, finds nothing to change again, and drops the topic.
 
+## Changefeeds
+
+The provider declares, compares, plans and applies the changefeeds of row
+tables and the consumers of their topics, with the syntax, the rules and the
+statements of the host's embedded YDB engine (`internal/ydbchangefeed`).
+
+A YAML table declares its changefeeds under the table key `changefeeds`, and a
+Go file with the directives `ptah:schema:changefeed` and
+`ptah:schema:changefeed:consumer` on the table's struct, or on another struct
+with the `table` attribute:
+
+```yaml
+tables:
+  orders:
+    columns:
+      id: {type: Uint64, primary: true}
+    changefeeds:
+      updates:
+        mode: NEW_AND_OLD_IMAGES
+        format: JSON
+        retention_period: PT12H
+        consumers:
+          billing:
+            important: true
+          search: {}
+```
+
+```go
+//ptah:schema:table name="orders"
+//ptah:schema:changefeed name="updates" mode="NEW_AND_OLD_IMAGES" format="JSON" retention_period="PT12H"
+//ptah:schema:changefeed:consumer name="billing" changefeed="updates" important="true"
+//ptah:schema:changefeed:consumer name="search" changefeed="updates"
+type Order struct {
+	//ptah:schema:field name="id" type="Uint64" primary="true"
+	ID uint64
+}
+```
+
+The options are the host's: `mode` and `format`, which YDB requires,
+`virtual_timestamps`, `resolved_timestamps`, `initial_scan`, `user_sids`,
+`schema_changes`, `topic_min_active_partitions`, `topic_auto_partitioning` and
+`retention_period`; a consumer takes `important`, `read_from`,
+`supported_codecs` and `availability_period`. Each is parsed and refused with
+the host's words, and a Go consumer names a changefeed its table declares. A
+YAML or Go source describes the changefeeds of every table it declares, so a
+table it declares with none is declared to have none and the changefeeds it
+holds are dropped. A YQL source cannot declare one (see
+[SQL schema reading](#sql-schema-reading)) and leaves them as they are. A
+column table takes no changefeed.
+
+The comparison reads both sides as the host's specification: a mode, a format
+and a codec in any case, an interval by the seconds it denotes, YDB's 24 hours
+for a retention left out, consumers by name and their codecs as a set, and a
+topic's starting partition count only where both sides name one. A changefeed
+the read cannot represent (an AWS region, attributes, a fraction of a second,
+an auto-partitioning strategy no changefeed declares, a consumer attribute
+other than YDB's own) leaves the table's changefeeds undecided, and so does a
+change to a stream an asynchronous replication controller owns; such a stream
+the declaration leaves out is kept.
+
+The table lifecycle service plans every changefeed change of a table as one
+step, outside a transaction: the host runs a step that drops an object after
+every step that creates one, and YDB keeps a limit on the changefeeds of one
+table, so a swap at the limit and a changefeed dropped and added again need
+one step. The operation runs the host's statements: `ALTER TABLE ... DROP
+CHANGEFEED` for every removal, then `ALTER TABLE ... ADD CHANGEFEED` with an
+`ALTER TOPIC ... ADD CONSUMER` per consumer for every addition, then `ALTER
+TOPIC` for a retention or a consumer that changes in place. YDB changes no
+option of a changefeed in place (`MODE alter is not supported`), so such a
+change drops the changefeed and adds it again, and a consumer whose codec list
+the declaration empties is dropped and added again. A new table's changefeeds
+follow its creation. The planner refuses an option the session lacks with the
+host's capability key: `changefeed_user_sids` before 26.1,
+`changefeed_schema_changes` before 25.3, `changefeed_topic_auto_partitioning`
+before 25.2 or with the feature flag off, and a consumer's
+`availability_period` before 25.4. It refuses the shapes YDB refuses on every
+line, a topic of several partitions on a first key column other than Uint32
+or Uint64, a changefeed named after an index of its table, and a changefeed
+and an index that trade a name in one plan. A removal or a recreation, and a
+consumer dropped or restarted, is destructive.
+
+Execution reads the table and each changefeed's topic before the first
+statement and refuses a changefeed that changed since the plan read it; it runs
+each statement once and reads the table back, requiring each declared
+changefeed with its topic's retention and consumers, or a removed one's
+absence. An unconfirmed result is UNKNOWN and is never retried. A changefeed
+operation has no TEXT form yet, so a host that writes a migration file is
+refused with `NO_TEXT_FORM`.
+
+`TestChangefeedLifecycleSubprocess` adds a changefeed with an initial scan and
+two consumers, restarts a consumer, refuses a change planned before another
+writer changed the topic, drops and adds the changefeed for a mode change, and
+drops it, reading the server back after each step.
+`TestHostAppliesChangefeeds_HappyPath` drives `ptah schema apply` from a YAML
+and a Go source: it creates a table with two changefeeds, finds nothing to
+change, changes a topic in place and recreates a changefeed, finds nothing to
+change again, and drops both.
+
 ## Offline table preparation
 
 The experimental `schema.prepare-tables` service derives column key membership
@@ -1499,9 +1598,8 @@ families, the addition and removal of its columns, its TTL, its automatic
 partitioning settings, and its global secondary indexes. Each becomes native
 AlterTable calls. Everything else about an altered table stays with the host:
 other table settings, and any column step the native call cannot state. The
-service also claims the changefeeds of an altered table and keeps them as they
-are: the host plans no table that holds a facet no planning service claims, and
-the comparison reports no changefeed change.
+service also plans the changefeeds of a new or an altered table (see
+[Changefeeds](#changefeeds)).
 
 ### Column families
 
@@ -1729,7 +1827,10 @@ differ from the declaration, one for each column that sits in another
 family, and one for a table whose index set differs from the declared one: an
 index added, removed or changed. An index change carries both complete index
 sets and names them with a `facet` key, so a table can have a property change
-and an index change at once. The comparison applies the rules of the alteration planner, so a
+and an index change at once. A changefeed set that differs is reported the same
+way, with the changefeed set as its facet; a source that describes the
+changefeeds of every table it declares states a table with none as one without
+changefeeds (see [Changefeeds](#changefeeds)). The comparison applies the rules of the alteration planner, so a
 difference it reports is one the planner acts on, and a table that differs only
 in its TTL, its partitioning settings or its families still reaches the planner. A change carries both
 complete facets, replaces no owner, removes no state and leaves access
@@ -1775,8 +1876,12 @@ carry is refused by name, with no partial reading:
 - the partitioning settings, column families, TTL and column storage of a
   table, which Ptah refuses in a SQL schema reading;
 - the partitioning and vector settings of an index;
-- changefeeds, external data sources and external tables, which this
-  provider declares from no source document;
+- changefeeds and the consumers of their topics: the host refuses the facets
+  of a table in a SQL schema reading, and a changefeed is one. A YQL source
+  therefore leaves the changefeeds of its tables as they are; declare them in
+  YAML or Go;
+- external data sources and external tables, which this provider declares
+  from no source document;
 - a user's password;
 - async replications, transfers, streaming queries, secrets, resource pools and
   resource pool classifiers, which this provider has no model for.

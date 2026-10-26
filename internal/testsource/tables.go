@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -44,7 +45,7 @@ func YAMLTables(source string) (*protocol.DecodeSourceRequest, error) {
 	document := &protocol.SourceDocument{Id: "doc", File: "captured.yaml", ByteLength: uint64(len(source)), Format: protocol.SourceDocument_YAML,
 		Models: desiredModels(protocol.SourceDocument_YAML)}
 	claims := make(map[string]*protocol.YAMLSourceKey)
-	for _, claim := range tablesource.YAMLKeys() {
+	for _, claim := range append(tablesource.YAMLKeys(), changefeedsource.YAMLKey()) {
 		claims[claim.Key] = claim
 	}
 	for _, section := range root.GetMapping().GetEntries() {
@@ -132,7 +133,7 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 		if i == 0 {
 			document.File, document.ByteLength = declaration.File, uint64(declaration.FileSize)
 		}
-		claims := append(tablesource.GoDirectives(), schema.CoordinationGoDirective())
+		claims := slices.Concat(tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{schema.CoordinationGoDirective()})
 		claim := slices.IndexFunc(claims, func(claim *protocol.GoSourceDirective) bool { return claim.Directive == declaration.Directive })
 		if claim < 0 {
 			return nil, fmt.Errorf("the provider claims no Go directive %q", declaration.Directive)

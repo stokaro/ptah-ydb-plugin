@@ -38,9 +38,11 @@ func UnstatedTableFacet(owner *protocol.Reference) (*protocol.Envelope, error) {
 // FacetDiffers reports whether the table the observed facet describes does not
 // already satisfy the desired facet. It applies the rules the alteration
 // planner applies, so a difference reported here is one the planner can act on:
-// the TTL, the automatic partitioning settings and the column families of a table facet, the family a column
-// sits in for a column facet (changefeeds never differ), and the names and definitions of the indexes for an index set. Both envelopes must be validated and belong to one
-// owner.
+// the TTL, the automatic partitioning settings and the column families of a
+// table facet, the family a column sits in for a column facet, and the names
+// and definitions of the indexes for an index set. A changefeed set compares
+// through ChangefeedDifference, which can also leave it undecided. Both
+// envelopes must be validated and belong to one owner.
 func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
 	if desired.GetKind() != observed.GetKind() {
 		return false, fmt.Errorf("YDB facet comparison requires one model")
@@ -76,10 +78,6 @@ func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
 			return false, err
 		}
 		return indexDiffers(&want, &held), nil
-	case schema.ChangefeedProperties:
-		// The alteration planner does not create, alter or drop changefeeds, so a
-		// difference here is one no step could carry out.
-		return false, nil
 	default:
 		return false, fmt.Errorf("YDB facet comparison does not support %s", desired.GetKind())
 	}

@@ -377,9 +377,29 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 	c.Assert(sessionCapabilities("26.2.1.14"), qt.DeepEquals, map[string]bool{
 		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 		"topics": true, "topic_consumer_availability_period": true,
+		"changefeeds": true, "changefeed_user_sids": true, "changefeed_schema_changes": true, "changefeed_topic_auto_partitioning": true,
 	})
-	// 25.1 to 25.3 take no availability period on a consumer.
-	c.Assert(sessionCapabilities("25.1.4.7")["topic_consumer_availability_period"], qt.IsFalse)
+	// 25.1 takes none of the later changefeed options, and 25.1 to 25.3 take
+	// no availability period on a consumer.
+	c.Assert(sessionCapabilities("25.1.4.7"), qt.DeepEquals, map[string]bool{
+		"transactional_ddl": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+		"topics": true, "topic_consumer_availability_period": false,
+		"changefeeds": true, "changefeed_user_sids": false, "changefeed_schema_changes": false, "changefeed_topic_auto_partitioning": false,
+	})
+	// Each option arrives on the line the host's presets name.
+	for _, test := range []struct {
+		version string
+		key     string
+		want    bool
+	}{
+		{"25.2.1", "changefeed_topic_auto_partitioning", true},
+		{"25.2.1", "changefeed_schema_changes", false},
+		{"25.3.1", "changefeed_schema_changes", true},
+		{"25.4.1", "changefeed_user_sids", false},
+		{"26.1.1", "changefeed_user_sids", true},
+	} {
+		c.Assert(sessionCapabilities(test.version)[test.key], qt.Equals, test.want, qt.Commentf("%s on %s", test.key, test.version))
+	}
 }
 
 // blockUntilDone is a unit that runs until its context ends.

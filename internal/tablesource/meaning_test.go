@@ -219,6 +219,11 @@ func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning 
 			for _, value := range fragment.Values {
 				envelope := value.Value.Value
 				c.Assert(value.Placement, qt.Equals, protocol.SourceModelValue_FACET)
+				if envelope.Kind == "github.com/stokaro/ptah-ydb-plugin/table-changefeeds" {
+					// A table's changefeeds are internal/changefeedsource's,
+					// and the host's golden facets do not record them.
+					continue
+				}
 				if envelope.Kind == "github.com/stokaro/ptah-ydb-plugin/column-properties" {
 					var intent native.ColumnIntent
 					c.Assert(protojson.Unmarshal(envelope.Payload, &intent), qt.IsNil)
