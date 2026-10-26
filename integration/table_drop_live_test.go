@@ -41,7 +41,7 @@ func newDropFixture(c *qt.C, address, definition string) *dropFixture {
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	client := startProviderFor(c, provider.TextUnitsFeature)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: address})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })

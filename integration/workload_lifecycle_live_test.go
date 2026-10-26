@@ -106,7 +106,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 		}
 		_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL `"+poolName+"`")
 	})
-	client := startProviderFor(c, provider.TextUnitsFeature)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })

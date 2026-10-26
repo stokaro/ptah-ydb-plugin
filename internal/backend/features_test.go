@@ -36,9 +36,9 @@ func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
 // retain it. Older hosts must refuse before planning native replacements.
 func TestDescriptionRequiresLifecycleContract(t *testing.T) {
 	for _, test := range []struct {
-		name string
+		name  string
 		minor uint32
-		want error
+		want  error
 	}{
 		{"earlier minor", 4, provider.ErrProtocol},
 		{"lifecycle minor", 5, nil},

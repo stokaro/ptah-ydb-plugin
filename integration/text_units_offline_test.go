@@ -46,7 +46,7 @@ func offlineCreation(c *qt.C, client *providerruntime.Client, payload string) *p
 // them. No database session is opened.
 func TestTextUnitsOfflineSubprocess(t *testing.T) {
 	c := qt.New(t)
-	listing := startProviderFor(c, provider.TextUnitsFeature)
+	listing := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	c.Assert(listing.Description().Engines[0].Features, qt.Contains, provider.TextUnitsFeature)
 	rendering := offlineCreation(c, listing, `{"primaryKey":["id"],"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600}}}`)
 	rendered, err := listing.Render(c.Context(), rendering)
@@ -69,7 +69,7 @@ func TestTextUnitsOfflineSubprocess(t *testing.T) {
 	// A host of an earlier minor, or one that does not act on text units,
 	// negotiates no TEXT form: the client refuses the request before it is
 	// sent, and the ANY form renders the native call.
-	unlisted := startProviderFor(c)
+	unlisted := startProviderFor(c, provider.PlanningLifecycleFeature)
 	c.Assert(unlisted.Description().Engines[0].Features, qt.Not(qt.Contains), provider.TextUnitsFeature)
 	rendering = offlineCreation(c, unlisted, `{"primaryKey":["id"]}`)
 	refused, err = unlisted.Render(c.Context(), rendering)

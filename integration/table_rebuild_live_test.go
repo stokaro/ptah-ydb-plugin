@@ -47,7 +47,7 @@ func newRebuildFixture(c *qt.C, columns, rows string) *rebuildFixture {
 	})
 	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` "+rows)
 	c.Assert(err, qt.IsNil)
-	client := startProviderFor(c, provider.TextUnitsFeature, provider.PlanningPolicyFeature)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature, provider.PlanningPolicyFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })

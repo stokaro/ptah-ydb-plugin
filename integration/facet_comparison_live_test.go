@@ -72,7 +72,7 @@ func newFacetFixtureListing(c *qt.C, clauses, options string, hostFeatures ...st
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	client := startProviderFor(c, hostFeatures...)
+	client := startProviderFor(c, append([]string{provider.PlanningLifecycleFeature}, hostFeatures...)...)
 	session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })

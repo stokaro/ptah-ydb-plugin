@@ -29,7 +29,7 @@ import (
 func TestTableCreationWithIndexesSubprocess(t *testing.T) {
 	c := qt.New(t)
 	opened, directory, database := inspectionFixture(c)
-	client := startProviderFor(c, provider.TextUnitsFeature)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
