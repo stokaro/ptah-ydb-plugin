@@ -23,6 +23,13 @@ import (
 // under --root-dir for "go", and a schema file for "yaml" and "sql".
 func hostApplySource(c *qt.C, directory, format, text string) (string, error) {
 	c.Helper()
+	return hostApplySelected(c, directory, format, text)
+}
+
+// hostApplySelected is hostApplySource over the comma-separated selectors
+// given, such as a directory and the database root.
+func hostApplySelected(c *qt.C, selectors, format, text string) (string, error) {
+	c.Helper()
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
 	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql"}[format]
@@ -34,7 +41,7 @@ func hostApplySource(c *qt.C, directory, format, text string) (string, error) {
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
 	arguments := append([]string{"schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
-		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", directory}, source...)
+		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", selectors}, source...)
 	cmd := exec.CommandContext(ctx, host, arguments...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output

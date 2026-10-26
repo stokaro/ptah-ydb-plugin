@@ -193,7 +193,7 @@ func validateObjects(ctx context.Context, request *protocol.ValidateSchemaReques
 			add(protocol.SchemaDiagnostic_INVALID_SCHEMA, record.Kind, object, "", "YDB cannot satisfy an excluded object")
 			continue
 		}
-		if !schema.IsNativeObject(record.Kind) {
+		if !schema.IsNativeObject(record.Kind) && !schema.IsWorkloadObject(record.Kind) {
 			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, record.Kind, object, "", "YDB does not implement object model %s", record.Kind)
 			continue
 		}

@@ -172,6 +172,10 @@ func (c *converter) convert(statement statement) error {
 		return c.declareExternalSource(node)
 	case *createExternalTable:
 		return c.declareExternalTable(node)
+	case *createPool:
+		return c.declare(Object{Kind: KindResourcePool, Name: node.name, Spec: new(node.spec)})
+	case *createClassifier:
+		return c.declare(Object{Kind: KindResourcePoolClassifier, Name: node.name, Spec: new(node.spec)})
 	case *unsupported:
 		return unsupportedError(node.construct + " declares an object this provider has no model for in a SQL schema reading")
 	default:

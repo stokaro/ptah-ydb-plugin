@@ -60,6 +60,10 @@ var gates = []Gate{
 	{Key: "changefeed_topic_auto_partitioning", Flag: "EnableTopicAutopartitioningForCDC"},
 	{Key: "external_data_sources", Flag: "EnableExternalDataSources"},
 	{Key: "external_object_replace", Flag: "EnableReplaceIfExistsForExternalEntities"},
+	// Off by default on every line from 25.1.4.7 to 26.2.1.14. With it off,
+	// YDB answers `Resource pools are disabled` and `Resource pool classifiers
+	// are disabled`, and .sys/resource_pools lists nothing.
+	{Key: "resource_pools", Flag: "EnableResourcePools"},
 }
 
 // Gates returns every capability a flag decides, in a fixed order.

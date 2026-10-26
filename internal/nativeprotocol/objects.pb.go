@@ -165,6 +165,163 @@ func (x *DescribeExternalTableResult) GetContent() map[string]string {
 	return nil
 }
 
+// A resource pool's settings as .sys/resource_pools reports them, an unset
+// setting (YDB's -1) left absent. Both representations of the resource pool
+// model carry it: a pool has no access metadata the provider reads, and its
+// name is the model's owner.
+type ResourcePoolSettings struct {
+	state                          protoimpl.MessageState `protogen:"open.v1"`
+	ConcurrentQueryLimit           *int32                 `protobuf:"varint,1,opt,name=concurrent_query_limit,json=concurrentQueryLimit,proto3,oneof" json:"concurrent_query_limit,omitempty"`
+	QueueSize                      *int32                 `protobuf:"varint,2,opt,name=queue_size,json=queueSize,proto3,oneof" json:"queue_size,omitempty"`
+	DatabaseLoadCpuThreshold       *float64               `protobuf:"fixed64,3,opt,name=database_load_cpu_threshold,json=databaseLoadCpuThreshold,proto3,oneof" json:"database_load_cpu_threshold,omitempty"`
+	QueryMemoryLimitPercentPerNode *float64               `protobuf:"fixed64,4,opt,name=query_memory_limit_percent_per_node,json=queryMemoryLimitPercentPerNode,proto3,oneof" json:"query_memory_limit_percent_per_node,omitempty"`
+	QueryCpuLimitPercentPerNode    *float64               `protobuf:"fixed64,5,opt,name=query_cpu_limit_percent_per_node,json=queryCpuLimitPercentPerNode,proto3,oneof" json:"query_cpu_limit_percent_per_node,omitempty"`
+	TotalCpuLimitPercentPerNode    *float64               `protobuf:"fixed64,6,opt,name=total_cpu_limit_percent_per_node,json=totalCpuLimitPercentPerNode,proto3,oneof" json:"total_cpu_limit_percent_per_node,omitempty"`
+	ResourceWeight                 *float64               `protobuf:"fixed64,7,opt,name=resource_weight,json=resourceWeight,proto3,oneof" json:"resource_weight,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
+}
+
+func (x *ResourcePoolSettings) Reset() {
+	*x = ResourcePoolSettings{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResourcePoolSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResourcePoolSettings) ProtoMessage() {}
+
+func (x *ResourcePoolSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResourcePoolSettings.ProtoReflect.Descriptor instead.
+func (*ResourcePoolSettings) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ResourcePoolSettings) GetConcurrentQueryLimit() int32 {
+	if x != nil && x.ConcurrentQueryLimit != nil {
+		return *x.ConcurrentQueryLimit
+	}
+	return 0
+}
+
+func (x *ResourcePoolSettings) GetQueueSize() int32 {
+	if x != nil && x.QueueSize != nil {
+		return *x.QueueSize
+	}
+	return 0
+}
+
+func (x *ResourcePoolSettings) GetDatabaseLoadCpuThreshold() float64 {
+	if x != nil && x.DatabaseLoadCpuThreshold != nil {
+		return *x.DatabaseLoadCpuThreshold
+	}
+	return 0
+}
+
+func (x *ResourcePoolSettings) GetQueryMemoryLimitPercentPerNode() float64 {
+	if x != nil && x.QueryMemoryLimitPercentPerNode != nil {
+		return *x.QueryMemoryLimitPercentPerNode
+	}
+	return 0
+}
+
+func (x *ResourcePoolSettings) GetQueryCpuLimitPercentPerNode() float64 {
+	if x != nil && x.QueryCpuLimitPercentPerNode != nil {
+		return *x.QueryCpuLimitPercentPerNode
+	}
+	return 0
+}
+
+func (x *ResourcePoolSettings) GetTotalCpuLimitPercentPerNode() float64 {
+	if x != nil && x.TotalCpuLimitPercentPerNode != nil {
+		return *x.TotalCpuLimitPercentPerNode
+	}
+	return 0
+}
+
+func (x *ResourcePoolSettings) GetResourceWeight() float64 {
+	if x != nil && x.ResourceWeight != nil {
+		return *x.ResourceWeight
+	}
+	return 0
+}
+
+// A resource pool classifier as .sys/resource_pool_classifiers reports it.
+type ResourcePoolClassifierSettings struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ResourcePool  string                 `protobuf:"bytes,1,opt,name=resource_pool,json=resourcePool,proto3" json:"resource_pool,omitempty"`
+	MemberName    string                 `protobuf:"bytes,2,opt,name=member_name,json=memberName,proto3" json:"member_name,omitempty"`
+	Rank          int64                  `protobuf:"varint,3,opt,name=rank,proto3" json:"rank,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResourcePoolClassifierSettings) Reset() {
+	*x = ResourcePoolClassifierSettings{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResourcePoolClassifierSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResourcePoolClassifierSettings) ProtoMessage() {}
+
+func (x *ResourcePoolClassifierSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResourcePoolClassifierSettings.ProtoReflect.Descriptor instead.
+func (*ResourcePoolClassifierSettings) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ResourcePoolClassifierSettings) GetResourcePool() string {
+	if x != nil {
+		return x.ResourcePool
+	}
+	return ""
+}
+
+func (x *ResourcePoolClassifierSettings) GetMemberName() string {
+	if x != nil {
+		return x.MemberName
+	}
+	return ""
+}
+
+func (x *ResourcePoolClassifierSettings) GetRank() int64 {
+	if x != nil {
+		return x.Rank
+	}
+	return 0
+}
+
 var File_internal_nativeprotocol_objects_proto protoreflect.FileDescriptor
 
 const file_internal_nativeprotocol_objects_proto_rawDesc = "" +
@@ -188,7 +345,28 @@ const file_internal_nativeprotocol_objects_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x0e\n" +
 	"\f_source_typeB\x13\n" +
 	"\x11_data_source_pathB\v\n" +
-	"\t_locationB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
+	"\t_location\"\xa1\x05\n" +
+	"\x14ResourcePoolSettings\x129\n" +
+	"\x16concurrent_query_limit\x18\x01 \x01(\x05H\x00R\x14concurrentQueryLimit\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"queue_size\x18\x02 \x01(\x05H\x01R\tqueueSize\x88\x01\x01\x12B\n" +
+	"\x1bdatabase_load_cpu_threshold\x18\x03 \x01(\x01H\x02R\x18databaseLoadCpuThreshold\x88\x01\x01\x12P\n" +
+	"#query_memory_limit_percent_per_node\x18\x04 \x01(\x01H\x03R\x1equeryMemoryLimitPercentPerNode\x88\x01\x01\x12J\n" +
+	" query_cpu_limit_percent_per_node\x18\x05 \x01(\x01H\x04R\x1bqueryCpuLimitPercentPerNode\x88\x01\x01\x12J\n" +
+	" total_cpu_limit_percent_per_node\x18\x06 \x01(\x01H\x05R\x1btotalCpuLimitPercentPerNode\x88\x01\x01\x12,\n" +
+	"\x0fresource_weight\x18\a \x01(\x01H\x06R\x0eresourceWeight\x88\x01\x01B\x19\n" +
+	"\x17_concurrent_query_limitB\r\n" +
+	"\v_queue_sizeB\x1e\n" +
+	"\x1c_database_load_cpu_thresholdB&\n" +
+	"$_query_memory_limit_percent_per_nodeB#\n" +
+	"!_query_cpu_limit_percent_per_nodeB#\n" +
+	"!_total_cpu_limit_percent_per_nodeB\x12\n" +
+	"\x10_resource_weight\"z\n" +
+	"\x1eResourcePoolClassifierSettings\x12#\n" +
+	"\rresource_pool\x18\x01 \x01(\tR\fresourcePool\x12\x1f\n" +
+	"\vmember_name\x18\x02 \x01(\tR\n" +
+	"memberName\x12\x12\n" +
+	"\x04rank\x18\x03 \x01(\x03R\x04rankB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
 
 var (
 	file_internal_nativeprotocol_objects_proto_rawDescOnce sync.Once
@@ -202,22 +380,24 @@ func file_internal_nativeprotocol_objects_proto_rawDescGZIP() []byte {
 	return file_internal_nativeprotocol_objects_proto_rawDescData
 }
 
-var file_internal_nativeprotocol_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_internal_nativeprotocol_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_internal_nativeprotocol_objects_proto_goTypes = []any{
-	(*ViewObservation)(nil),             // 0: ptah.ydb.native.ViewObservation
-	(*DescribeExternalTableResult)(nil), // 1: ptah.ydb.native.DescribeExternalTableResult
-	nil,                                 // 2: ptah.ydb.native.DescribeExternalTableResult.ContentEntry
-	(*Ydb_View.DescribeViewResult)(nil), // 3: Ydb.View.DescribeViewResult
-	(*DescribeTableResult)(nil),         // 4: ptah.ydb.native.DescribeTableResult
-	(*Ydb_Scheme.Entry)(nil),            // 5: Ydb.Scheme.Entry
-	(*ColumnMeta)(nil),                  // 6: ptah.ydb.native.ColumnMeta
+	(*ViewObservation)(nil),                // 0: ptah.ydb.native.ViewObservation
+	(*DescribeExternalTableResult)(nil),    // 1: ptah.ydb.native.DescribeExternalTableResult
+	(*ResourcePoolSettings)(nil),           // 2: ptah.ydb.native.ResourcePoolSettings
+	(*ResourcePoolClassifierSettings)(nil), // 3: ptah.ydb.native.ResourcePoolClassifierSettings
+	nil,                                    // 4: ptah.ydb.native.DescribeExternalTableResult.ContentEntry
+	(*Ydb_View.DescribeViewResult)(nil),    // 5: Ydb.View.DescribeViewResult
+	(*DescribeTableResult)(nil),            // 6: ptah.ydb.native.DescribeTableResult
+	(*Ydb_Scheme.Entry)(nil),               // 7: Ydb.Scheme.Entry
+	(*ColumnMeta)(nil),                     // 8: ptah.ydb.native.ColumnMeta
 }
 var file_internal_nativeprotocol_objects_proto_depIdxs = []int32{
-	3, // 0: ptah.ydb.native.ViewObservation.view:type_name -> Ydb.View.DescribeViewResult
-	4, // 1: ptah.ydb.native.ViewObservation.properties:type_name -> ptah.ydb.native.DescribeTableResult
-	5, // 2: ptah.ydb.native.DescribeExternalTableResult.self:type_name -> Ydb.Scheme.Entry
-	6, // 3: ptah.ydb.native.DescribeExternalTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
-	2, // 4: ptah.ydb.native.DescribeExternalTableResult.content:type_name -> ptah.ydb.native.DescribeExternalTableResult.ContentEntry
+	5, // 0: ptah.ydb.native.ViewObservation.view:type_name -> Ydb.View.DescribeViewResult
+	6, // 1: ptah.ydb.native.ViewObservation.properties:type_name -> ptah.ydb.native.DescribeTableResult
+	7, // 2: ptah.ydb.native.DescribeExternalTableResult.self:type_name -> Ydb.Scheme.Entry
+	8, // 3: ptah.ydb.native.DescribeExternalTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
+	4, // 4: ptah.ydb.native.DescribeExternalTableResult.content:type_name -> ptah.ydb.native.DescribeExternalTableResult.ContentEntry
 	5, // [5:5] is the sub-list for method output_type
 	5, // [5:5] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
@@ -232,13 +412,14 @@ func file_internal_nativeprotocol_objects_proto_init() {
 	}
 	file_internal_nativeprotocol_indexes_proto_init()
 	file_internal_nativeprotocol_objects_proto_msgTypes[1].OneofWrappers = []any{}
+	file_internal_nativeprotocol_objects_proto_msgTypes[2].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_nativeprotocol_objects_proto_rawDesc), len(file_internal_nativeprotocol_objects_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

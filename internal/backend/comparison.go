@@ -7,6 +7,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workloadcompare"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
@@ -36,6 +37,10 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 		compare = topiccompare.Compare
 	case externalcompare.ServiceID:
 		compare = externalcompare.Compare
+	case workloadcompare.PoolServiceID:
+		compare = workloadcompare.ComparePools
+	case workloadcompare.ClassifierServiceID:
+		compare = workloadcompare.CompareClassifiers
 	}
 	result, err := compare(ctx, request)
 	if err != nil {

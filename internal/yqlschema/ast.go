@@ -1,6 +1,9 @@
 package yqlschema
 
-import "github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+import (
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+)
 
 // span is the bytes of a document a statement was read from.
 type span struct{ start, end int }
@@ -147,6 +150,21 @@ type createExternalTable struct {
 	spanned
 	schema, name string
 	spec         ydbdecl.ExternalTable
+}
+
+// createPool is a CREATE RESOURCE POOL, or the ALTER RESOURCE POOL default
+// SET that declares the default pool's settings.
+type createPool struct {
+	spanned
+	name string
+	spec workload.PoolSpec
+}
+
+// createClassifier is a CREATE RESOURCE POOL CLASSIFIER.
+type createClassifier struct {
+	spanned
+	name string
+	spec workload.ClassifierSpec
 }
 
 // unsupported is a statement the host's reader reads and this provider has

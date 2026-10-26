@@ -18,6 +18,8 @@ import (
 // the safety facts the object's family derives from them. before is the
 // object's observed model and after its desired model.
 type objectChanges struct {
+	// operation is empty for a family whose changes run inside an operation
+	// of their own, such as the workload operation.
 	kind, change, operation string
 	noun                    string
 	// semantics derives a change's safety facts from its normalized
@@ -53,6 +55,10 @@ func newObjectChanges(c objectChanges) *objectChanges {
 		definition[key] = value
 	}
 	c.changeModel = buildJSONModel(c.change, protocol.ValueInput_CHANGE, definition)
+	if c.operation == "" {
+		// The family's changes run as part of an operation of its own.
+		return &c
+	}
 	operation := map[string]any{"kind": c.operation, "representation": "operation", "schema_version": 1, "payload": json.RawMessage(c.changeModel.DefinitionJson)}
 	if c.operations != nil {
 		operation["operation"] = map[string]any{"required": true, "enum": c.operations,

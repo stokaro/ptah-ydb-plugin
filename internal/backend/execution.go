@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
@@ -147,6 +148,12 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewChangefeed(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.ExternalSourceOperation, schema.ExternalTableOperation:
 				return nativeapi.NewExternal(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case schema.WorkloadOperation:
+				read, unread := s.workload()
+				if read == nil {
+					return false, fmt.Errorf("resource pools cannot change here: %s", unread)
+				}
+				return (&nativeapi.Workload{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			}
 			return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 		}

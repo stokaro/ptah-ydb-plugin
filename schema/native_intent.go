@@ -24,6 +24,7 @@ func NativeDesiredModel(kind string) *protocol.ValueModel {
 var nativeIntentDefinitions = map[string]*protocol.ValueModel{
 	IndexProperties: buildNativeIntentModel(IndexProperties), ChangefeedProperties: buildNativeIntentModel(ChangefeedProperties), TopicProperties: buildNativeIntentModel(TopicProperties),
 	ViewProperties: buildNativeIntentModel(ViewProperties), ExternalSourceProperties: buildNativeIntentModel(ExternalSourceProperties), ExternalTableProperties: buildNativeIntentModel(ExternalTableProperties), ColumnStorageProperties: buildNativeIntentModel(ColumnStorageProperties),
+	ResourcePoolProperties: buildNativeIntentModel(ResourcePoolProperties), ResourcePoolClassifierProperties: buildNativeIntentModel(ResourcePoolClassifierProperties),
 }
 
 func nativeIntentMessage(kind string) proto.Message {
@@ -42,6 +43,10 @@ func nativeIntentMessage(kind string) proto.Message {
 		return &native.ExternalTableIntent{}
 	case ColumnStorageProperties:
 		return &native.ColumnStorageIntent{}
+	case ResourcePoolProperties:
+		return &native.ResourcePoolSettings{}
+	case ResourcePoolClassifierProperties:
+		return &native.ResourcePoolClassifierSettings{}
 	default:
 		return nil
 	}
@@ -66,6 +71,9 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		"topic_declarations":   "a topic setting or consumer setting left at zero is one the declaration leaves out, which requests the value YDB gives a new topic; attributes and access are not declared",
 		"column_storage":       "preserves hash order, partition and data-channel counts, local indexes and TTL tiers; excludes native IDs and runtime topology; a declaration may omit the hash key, the shard count and the data channels, which the server then chooses, and states the whole TTL of the table, a TTL that only deletes as one deleting tier; the server's derived expiration is not declared",
 	}
+	if IsWorkloadObject(kind) {
+		definition["workload_objects"] = workloadDefinition
+	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
 		panic(err)
@@ -77,12 +85,14 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	digest := sha256.Sum256(canonical)
 	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
 	switch kind {
-	case ColumnStorageProperties, TopicProperties, ExternalSourceProperties, ExternalTableProperties:
+	case ColumnStorageProperties, TopicProperties, ExternalSourceProperties, ExternalTableProperties, ResourcePoolProperties, ResourcePoolClassifierProperties:
 		// A YAML, Go or SQL source says whether a table stores columns, so the
 		// absence of the facet on a table such a source describes is a request
 		// for row storage. Each of them declares topics, external data sources
 		// and external tables too, and describes them completely, as for the
 		// host's embedded engine.
+		// Resource pools and classifiers are also declared by these formats;
+		// a source that leaves one out keeps it (see the source service).
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}
 	case ChangefeedProperties:
 		// A YAML or Go source declares the changefeeds of each table it
@@ -117,6 +127,11 @@ func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error)
 	}
 	if err := Known(target); err != nil {
 		return nil, err
+	}
+	if IsWorkloadObject(value.GetKind()) {
+		if err := validateWorkload(value.GetOwner(), target); err != nil {
+			return nil, err
+		}
 	}
 	if storage, ok := target.(*native.ColumnStorageIntent); ok {
 		if err := validateColumnStorageIntent(storage); err != nil {
@@ -207,6 +222,8 @@ func nativeIntent(value proto.Message) (proto.Message, error) {
 		return changefeedIntents(v), nil
 	case *native.DescribeTopicResult:
 		return topicIntent(v), nil
+	case *native.ResourcePoolSettings, *native.ResourcePoolClassifierSettings:
+		return proto.Clone(v), nil
 	default:
 		return objectIntent(value)
 	}
@@ -227,6 +244,8 @@ func nativeObservation(value proto.Message) (proto.Message, error) {
 			return nil, err
 		}
 		return observed, nil
+	case *native.ResourcePoolSettings, *native.ResourcePoolClassifierSettings:
+		return proto.Clone(v), nil
 	default:
 		return objectObservation(value)
 	}

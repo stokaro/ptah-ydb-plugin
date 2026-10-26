@@ -13,6 +13,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -75,6 +76,13 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			}
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		workloads, err := workloadsource.Decode(ctx, document)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, status.FromContextError(ctx.Err()).Err()
+			}
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		if err := refuseColumnTableChangefeeds(tables, feeds); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
@@ -84,6 +92,8 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			switch {
 			case topicsource.Owns(fragment):
 				values = topics[index]
+			case workloadsource.Owns(fragment):
+				values = workloads[index]
 			case changefeedsource.Owns(fragment):
 				values = changefeedValues(document, fragment, index, feeds)
 			case externalsource.Owns(fragment):

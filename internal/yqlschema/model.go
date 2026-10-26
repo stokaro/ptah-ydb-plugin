@@ -146,6 +146,10 @@ const (
 	KindExternalSource   ObjectKind = "ptah.run/ydb/external-data-source"
 	KindExternalTable    ObjectKind = "ptah.run/ydb/external-table"
 	KindTopic            ObjectKind = "ptah.run/ydb/topic"
+	// KindResourcePool and KindResourcePoolClassifier belong to the whole
+	// database: their objects have no directory.
+	KindResourcePool           ObjectKind = "ptah.run/ydb/resource-pool"
+	KindResourcePoolClassifier ObjectKind = "ptah.run/ydb/resource-pool-classifier"
 )
 
 // Object is one YDB object the load declares: its kind, its directory, its
@@ -156,8 +160,8 @@ type Object struct {
 	Parent string
 	Name   string
 	// Spec is a *ydbdecl.Topic, *ydbdecl.CoordinationNode,
-	// *ydbdecl.ExternalDataSource, *ydbdecl.ExternalTable or
-	// *ydbdecl.Changefeed.
+	// *ydbdecl.ExternalDataSource, *ydbdecl.ExternalTable,
+	// *ydbdecl.Changefeed, *workload.PoolSpec or *workload.ClassifierSpec.
 	Spec     any
 	span     span
 	document int

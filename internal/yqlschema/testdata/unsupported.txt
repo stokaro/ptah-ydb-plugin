@@ -1,13 +1,8 @@
 # Loads this provider refuses by name, because they hold a statement the host
 # reads into an object this provider has no model for: <case> <construct>.
-builtin-workload-source-comparison-and-rank-swap-reach-registered-plan-01 CREATE RESOURCE POOL
-builtin-workload-source-comparison-and-rank-swap-reach-registered-plan-02 CREATE RESOURCE POOL
 edge-secret-then-table CREATE SECRET
 edge-streaming-body-semicolons CREATE STREAMING QUERY
-fixture-054-ydb-resource-pools CREATE RESOURCE POOL
 fixture-055-ydb-streaming-queries CREATE STREAMING QUERY
-live-ydb-01 CREATE RESOURCE POOL
-live-ydb-02 CREATE RESOURCE POOL
 live-ydb-05 CREATE SECRET
 live-ydb-06 CREATE SECRET
 live-ydb-09 CREATE ASYNC REPLICATION
@@ -38,7 +33,6 @@ parse-lint-ydbrules-say-what-areplication-statement-leaves-01 CREATE TRANSFER
 parse-lint-ydbstreaming-checkpoint-lint-03 CREATE OR REPLACE STREAMING QUERY
 parse-lint-ydbstreaming-checkpoint-lint-04 CREATE OR REPLACE STREAMING QUERY
 parse-lint-ydbstreaming-checkpoint-lint-05 CREATE STREAMING QUERY
-parse-lint-ydbworkload-rules-leave-what-the-server-keeps-01 ALTER RESOURCE POOL
 render-050-ydb-replication CREATE ASYNC REPLICATION
 render-052-ydb-secrets CREATE SECRET
 schemadiff-compare-yqlsecrets-declared-and-omitted-01 CREATE SECRET
@@ -46,33 +40,16 @@ schemadiff-compare-yqlstreaming-query-body-change-requires-permission-01 CREATE 
 schemadiff-compare-yqlstreaming-query-omission-and-reset-01 CREATE OR REPLACE STREAMING QUERY
 schemadiff-compare-yqlstreaming-query-omission-and-reset-02 CREATE STREAMING QUERY
 schemafile-yqlreplication-changes-across-files-01 CREATE ASYNC REPLICATION
-schemafile-yqlworkload-header-limits-survive-file-loading-01 CREATE RESOURCE POOL
 ydbsource-yqlsecret-limits-read-the-path-01 CREATE SECRET
 ydbsql-read-yqlcredential-changes-01 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-02 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-03 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-04 CREATE ASYNC REPLICATION
-ydbsql-read-yqlprivilege-refusals-01 CREATE RESOURCE POOL
 ydbsql-read-yqlprivileges-03 CREATE SECRET
 ydbsql-read-yqlprivileges-13 CREATE ASYNC REPLICATION
 ydbsql-read-yqlprivileges-15 CREATE STREAMING QUERY
-ydbsql-read-yqlprivileges-18 CREATE RESOURCE POOL
 ydbsql-read-yqlreplication-01 CREATE ASYNC REPLICATION
 ydbsql-read-yqlreplication-changes-01 CREATE ASYNC REPLICATION
-ydbsql-read-yqlresource-pools-01 CREATE RESOURCE POOL
-ydbsql-read-yqlresource-pools-round-trip-01 ALTER RESOURCE POOL
-ydbsql-read-yqlresource-pools-round-trip-02 ALTER RESOURCE POOL
-ydbsql-read-yqlresource-refusals-01 ALTER RESOURCE POOL
-ydbsql-read-yqlresource-refusals-02 ALTER RESOURCE POOL
-ydbsql-read-yqlresource-refusals-07 CREATE RESOURCE POOL CLASSIFIER
-ydbsql-read-yqlresource-refusals-08 CREATE RESOURCE POOL CLASSIFIER
-ydbsql-read-yqlresource-refusals-09 CREATE RESOURCE POOL CLASSIFIER
-ydbsql-read-yqlresource-refusals-10 CREATE RESOURCE POOL
-ydbsql-read-yqlresource-refusals-11 CREATE RESOURCE POOL
-ydbsql-read-yqlresource-refusals-12 CREATE RESOURCE POOL
-ydbsql-read-yqlresource-refusals-13 CREATE RESOURCE POOL
-ydbsql-read-yqlresource-refusals-14 CREATE RESOURCE POOL
-ydbsql-read-yqlresource-refusals-15 CREATE RESOURCE POOL
 ydbsql-read-yqlsecret-declared-twice-01 CREATE SECRET
 ydbsql-read-yqlsecret-refusals-redact-declaration-01 CREATE SECRET
 ydbsql-read-yqlsecret-refusals-redact-declaration-02 CREATE SECRET

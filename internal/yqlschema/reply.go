@@ -11,6 +11,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -32,7 +33,7 @@ func HeaderKinds() []string {
 // Their source formats include SQL.
 func ClaimedModels() []*protocol.ValueModel {
 	return []*protocol.ValueModel{schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel(),
-		schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties)}
+		schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties), schema.NativeDesiredModel(schema.ResourcePoolProperties), schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties)}
 }
 
 // Reply reads the documents of a ReadSQLSchema request and answers with the
@@ -194,6 +195,10 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading) (*protocol.S
 			grants = reading.RevokedGrants
 		}
 		for _, grant := range grants {
+			if grant.target.kind == "resource pool" && strings.ContainsAny(grant.target.name, ".\"`[]") {
+				gaps = append(gaps, gap(grant.document, grant.span, fmt.Sprintf("a grant on resource pool %s has no home in a SQL schema reading: "+
+					"the host names a pool it reads from a provider as it names a table, which renames a pool whose name holds a dot, a quote or a bracket", quoteName(grant.target.name))))
+			}
 			trace(protocol.SQLObjectTrace_GRANTS, len(reply.Grants), grant.document, grant.span)
 			reply.Grants = append(reply.Grants, &protocol.SQLGrant{Role: grant.Role, Privileges: slices.Clone(grant.Privileges), Revoked: revoked,
 				Target: &protocol.Reference{Kind: grant.target.kind, Schema: grant.target.schema, Name: grant.target.name}})
@@ -302,6 +307,19 @@ func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 			return nil, invalid(err)
 		}
 		return envelope, nil
+	case KindResourcePool, KindResourcePoolClassifier:
+		kind, settings, noun := schema.ResourcePoolProperties, proto.Message(nil), "resource pool"
+		if spec, ok := object.Spec.(*workload.PoolSpec); ok {
+			settings = schema.PoolSettings(*spec)
+		} else {
+			kind, settings, noun = schema.ResourcePoolClassifierProperties, schema.ClassifierSettings(*object.Spec.(*workload.ClassifierSpec)), "resource pool classifier"
+		}
+		envelope, err := schema.CaptureWorkloadIntent(&protocol.Reference{Engine: "ydb", Kind: kind, Name: object.Name}, settings)
+		if err != nil {
+			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
+				Message: fmt.Sprintf("%s %s: %v", noun, quoteName(object.Name), err)}
+		}
+		return envelope, nil
 	default:
 		return externalObject(object)
 	}
@@ -377,10 +395,12 @@ var limitedKinds = map[string]struct {
 	path   func(string) (string, string)
 	reason string
 }{
-	"coordination_node":    {schema.CoordinationProperties, coordinationLimit, "the source leaves coordination nodes unmanaged"},
-	"topic":                {schema.TopicProperties, topicLimit, "the source leaves topics unmanaged"},
-	"external_data_source": {schema.ExternalSourceProperties, externalLimit, "the source leaves external data sources unmanaged"},
-	"external_table":       {schema.ExternalTableProperties, externalLimit, "the source leaves external tables unmanaged"},
+	"coordination_node":        {schema.CoordinationProperties, coordinationLimit, "the source leaves coordination nodes unmanaged"},
+	"topic":                    {schema.TopicProperties, topicLimit, "the source leaves topics unmanaged"},
+	"external_data_source":     {schema.ExternalSourceProperties, externalLimit, "the source leaves external data sources unmanaged"},
+	"external_table":           {schema.ExternalTableProperties, externalLimit, "the source leaves external tables unmanaged"},
+	"resource_pool":            {schema.ResourcePoolProperties, workloadLimit, "the source leaves resource pools unmanaged"},
+	"resource_pool_classifier": {schema.ResourcePoolClassifierProperties, workloadLimit, "the source leaves resource pool classifiers unmanaged"},
 }
 
 // claim is the coverage a load claims: every claimed model complete, less
@@ -437,6 +457,10 @@ func CheckLimits(limits []*protocol.SchemaCoverageLimit) error {
 	}
 	return nil
 }
+
+// workloadLimit is the name of the pool or the classifier a header names,
+// which belongs to the database and has no directory.
+func workloadLimit(written string) (string, string) { return "", written }
 
 // topicLimit is the directory and the name of the topic a header names: a
 // path relative to the database root, a dot being part of a name.

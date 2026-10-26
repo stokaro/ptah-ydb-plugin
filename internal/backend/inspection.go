@@ -7,6 +7,8 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -46,6 +48,13 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		}
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
+	read, unread := session.workload()
+	if err := inspect.Workload(ctx, result, session.database, request.GetSchemas(), read, unread); err != nil {
+		if ctx.Err() != nil {
+			return nil, status.FromContextError(ctx.Err()).Err()
+		}
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	}
 	result.TargetFeatures = negotiatedFeatures(ctx)
 	// The reply is checked against the description the host holds: one that
 	// did not list the common wire declares no common object.
@@ -56,6 +65,21 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		return nil, status.FromContextError(err).Err()
 	}
 	return result, nil
+}
+
+// workload reads the database's resource pools and classifiers, or is nil
+// with the reason they are not read: a dev realm holds none of its own, and a
+// target without resource pools lists none.
+func (s *session) workload() (func(context.Context) (nativeapi.HeldWorkload, error), string) {
+	switch {
+	case s.realm:
+		return nil, "A dev realm holds no resource pools or classifiers of its own: they belong to the whole database"
+	case !s.capabilities[workload.CapabilityResourcePools]:
+		return nil, "The target does not keep resource pools, so its empty system views establish no absence; " + workload.FlagHint
+	}
+	return func(ctx context.Context) (nativeapi.HeldWorkload, error) {
+		return nativeapi.ReadWorkload(ctx, s.connection.DB, s.database)
+	}, ""
 }
 
 // columnTables reads a column table's monitoring description with the
@@ -103,6 +127,8 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 				normalize = schema.NormalizeTopicChange
 			case schema.ExternalSourceChange, schema.ExternalTableChange:
 				normalize = schema.NormalizeExternalChange
+			case schema.ResourcePoolChange, schema.ResourcePoolClassifierChange:
+				normalize = schema.NormalizeWorkloadChange
 			}
 			normalized, changeErr := normalize(input)
 			if changeErr != nil {

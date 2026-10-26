@@ -198,6 +198,7 @@ reports the defaults of every supported line.
 | `changefeed_topic_auto_partitioning` | `EnableTopicAutopartitioningForCDC` | `false` on 25.1, `true` from 25.2 |
 | `external_data_sources` | `EnableExternalDataSources` | `false` on every line from 25.1 to 26.2 |
 | `external_object_replace` | `EnableReplaceIfExistsForExternalEntities` | `false` on every line from 25.1 to 26.2 |
+| `resource_pools` | `EnableResourcePools` | `false` on every line from 25.1 to 26.2 |
 
 The host maps more flags than these. The provider reports only the
 capabilities it plans with, because the host plans with the others itself: an
@@ -876,7 +877,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. |
-| Resource pools, secrets, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes`, `topics`, `external_data_sources` and `external_tables` at document scope (see [Topics](#topics) and [External data sources and external tables](#external-data-sources-and-external-tables)). |
+| Secrets, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes`, `topics`, `external_data_sources`, `external_tables`, `resource_pools` and `resource_pool_classifiers` at document scope (see [Topics](#topics) and [External data sources and external tables](#external-data-sources-and-external-tables) and [Resource pools and classifiers](#resource-pools-and-classifiers)). |
 
 A table is managed for its TTL when its source states table properties for it,
 or when the host reports complete knowledge of the table properties of the
@@ -1349,6 +1350,83 @@ the topic back from the server after each step. `TestHostAppliesATopic_HappyPath
 drives `ptah schema apply` from a YAML, a Go and a YQL source: it creates a
 topic with its consumers, finds nothing to change, changes the retention and
 the consumers, finds nothing to change again, and drops the topic.
+
+## Resource pools and classifiers
+
+The provider declares, compares, plans and applies resource pools and resource
+pool classifiers, with the syntax, the rules and the statements of the host's
+embedded YDB engine (`dialect/ydb/ydbworkload`). Both belong to the whole
+database rather than to a directory, and YDB keeps them behind the
+`EnableResourcePools` flag, off by default on every line: a session reports
+`resource_pools` from the cluster's flags, so the address must name the
+monitoring endpoint (see [Feature flags](#feature-flags)).
+
+A YAML document declares them under the document keys `resource_pools` and
+`resource_pool_classifiers`, a Go file with the directives
+`ptah:schema:resourcepool` and `ptah:schema:resourcepool:classifier`, and a YQL
+schema with `CREATE RESOURCE POOL`, `CREATE RESOURCE POOL CLASSIFIER` and, for
+the pool YDB creates with the database, `ALTER RESOURCE POOL default SET`:
+
+```yaml
+resource_pools:
+  reporting:
+    concurrent_query_limit: 10
+    queue_size: 20
+    query_memory_limit_percent_per_node: 25.5
+  default:
+    resource_weight: 30
+resource_pool_classifiers:
+  reporters:
+    resource_pool: reporting
+    member_name: analysts
+    rank: 100
+```
+
+```go
+//ptah:schema:resourcepool name="reporting" concurrent_query_limit="10" queue_size="20" query_memory_limit_percent_per_node="25.5"
+//ptah:schema:resourcepool:classifier name="reporters" resource_pool="reporting" member_name="analysts" rank="100"
+type Pools struct{}
+```
+
+A pool takes `concurrent_query_limit` and `queue_size` as whole numbers from 0,
+and `database_load_cpu_threshold`, the three `*_percent_per_node` limits and
+`resource_weight` as percentages from 0 to 100; a setting left out has no
+limit, and zero is a limit. A queue needs a query limit or a load threshold
+beside it, and the pool `default` takes neither of those. A classifier names
+its pool and its rank, and its member when it matches one user or group. Each
+rule refuses with the host's words.
+
+A source declares the pools and classifiers it manages, not every one of the
+database, so the comparison keeps one a source leaves out, as the host does;
+an absence a source claims for one object is left undecided. A pool compares
+setting by setting and a classifier as a whole. The `default` pool must be read
+before its settings change, and it is never created or dropped.
+
+The planner writes every workload change of a plan as one step, outside a
+transaction, ordered after the steps that create or change a role and before
+those that drop one, since a classifier names one. The step runs the host's
+statements in the host's order: classifier removals, pool removals, pool
+creations and changes, classifier changes, then classifier creations. YDB keeps
+one classifier per rank and checks it at every statement, so a classifier that
+moves to a rank another changed classifier leaves is dropped and created again
+around the move. In a migration file the step is the same statements in one
+unit, which one query takes.
+
+Execution reads `.sys/resource_pools` and `.sys/resource_pool_classifiers`
+before the first statement and refuses objects that changed since the plan read
+them; it runs each statement once and reads both views back. Inspection reads
+the views on a target with resource pools, for a read of the whole database or
+one that selects the root, `/`: a read filtered to other directories cannot
+report what belongs to the database, so it leaves both kinds uninspected. A dev
+realm holds none of its own.
+
+`TestWorkloadLifecycleSubprocess` creates a pool and two classifiers, swaps
+their ranks from the text of a migration file, refuses a change planned before
+another writer changed the pool, and removes them, reading the views back after
+each step. `TestHostAppliesResourcePools_HappyPath` drives `ptah schema apply`
+over the fixture directory and the root from a YAML, a Go and a YQL source: it
+creates them, finds nothing to change, changes a pool and swaps two ranks,
+finds nothing to change again, and keeps them when the source leaves them out.
 
 ## Changefeeds
 
@@ -2021,8 +2099,11 @@ carry is refused by name, with no partial reading:
   therefore leaves the changefeeds of its tables as they are; declare them in
   YAML or Go;
 - a user's password;
-- async replications, transfers, streaming queries, secrets, resource pools and
-  resource pool classifiers, which this provider has no model for.
+- a grant on a resource pool whose name holds a dot, a quote or a bracket: Ptah
+  names a pool it reads from a provider as it names a table, so the grant
+  would come back on a renamed pool;
+- async replications, transfers, streaming queries and secrets, which this
+  provider has no model for.
 
 Some of what a reading carries is not planned yet. Table creation refuses
 column defaults, and table comments on a host that does not list
@@ -2292,7 +2373,7 @@ Remaining work includes more source formats, comparison, the alteration of table
 settings other than column families, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
-rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic and external object lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
+rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object and resource pool lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 

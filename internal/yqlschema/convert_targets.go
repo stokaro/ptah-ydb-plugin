@@ -18,7 +18,12 @@ var grantObjectKinds = []struct {
 	{"COORDINATION NODE", KindCoordinationNode},
 	{"EXTERNAL DATA SOURCE", KindExternalSource},
 	{"EXTERNAL TABLE", KindExternalTable},
+	{"RESOURCE POOL", KindResourcePool},
 }
+
+// poolDirectory is where YDB keeps a resource pool's access entries: the
+// path a grant on the pool names.
+const poolDirectory = ".metadata/workload_manager/pools"
 
 // privilegeTarget resolves the path a GRANT or a REVOKE names to the object
 // the load declares there: the database, a table, a view, another scheme
@@ -69,6 +74,16 @@ func (r *Reading) declaredSchemeObject(relative string) (Grant, bool) {
 			return kind.kind == object.Kind
 		})
 		if index < 0 {
+			continue
+		}
+		if object.Kind == KindResourcePool {
+			// A pool belongs to the database, and a grant names it by the
+			// directory of its access entries; the host names the pool as
+			// it is written.
+			if path.Join(poolDirectory, object.Name) == relative {
+				return Grant{OnObject: object.Name, ObjectKind: grantObjectKinds[index].objectKind,
+					target: grantTarget{kind: strings.ToLower(grantObjectKinds[index].objectKind), name: object.Name}}, true
+			}
 			continue
 		}
 		if path.Join(object.Schema, object.Name) == relative {
