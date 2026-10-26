@@ -210,6 +210,9 @@ func ConvertNative(value *protocol.Envelope, from, to protocol.ValueInput_Repres
 		if secret, ok := intent.(*native.SecretIntent); ok {
 			secret.ValueEnv = secrets.DefaultValueEnv(value.Owner.GetSchema(), value.Owner.GetName())
 		}
+		if err := convertExternalContext(value, intent, to); err != nil {
+			return nil, err
+		}
 		return convertedEnvelope(value, NativeDesiredModel(value.Kind), intent, NormalizeDesired)
 	}
 	if from == protocol.ValueInput_DESIRED && to == protocol.ValueInput_OBSERVED {
@@ -223,6 +226,9 @@ func ConvertNative(value *protocol.Envelope, from, to protocol.ValueInput_Repres
 		}
 		observed, err := nativeObservation(intent)
 		if err != nil {
+			return nil, err
+		}
+		if err := convertExternalContext(value, observed, to); err != nil {
 			return nil, err
 		}
 		return convertedEnvelope(value, model(value.Kind), observed, Normalize)

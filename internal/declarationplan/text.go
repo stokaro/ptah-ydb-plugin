@@ -87,7 +87,7 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 		if intent.Access != nil {
 			return "", accessRefusal()
 		}
-		spec, err := externals.SourceFromIntent(intent, "")
+		spec, err := externals.SourceFromIntent(intent, schema.InterpretationRoot(desired))
 		if err != nil {
 			return "", err
 		}
@@ -103,7 +103,7 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 		if intent.Access != nil {
 			return "", accessRefusal()
 		}
-		spec, err := externals.TableFromIntent(intent, "")
+		spec, err := externals.TableFromIntent(intent, schema.InterpretationRoot(desired))
 		if err != nil {
 			return "", err
 		}

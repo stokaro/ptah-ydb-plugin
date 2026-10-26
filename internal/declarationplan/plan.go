@@ -3,10 +3,10 @@ package declarationplan
 import (
 	"context"
 	"fmt"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -74,7 +74,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 			if err != nil {
 				return nil, err
 			}
-			if path, known := externals.ResolveSource(desired.Owner.Database, intent.GetDataSourcePath()); known {
+			if path, pathErr := externalpath.SourcePath(schema.InterpretationRoot(desired), intent.GetDataSourcePath()); pathErr == nil {
 				ref := proto.CloneOf(object.Subject)
 				ref.Kind = schema.ExternalSourceProperties
 				ref.Schema = &protocol.ComparisonPart{Source: path.Schema, Normalized: path.Schema}

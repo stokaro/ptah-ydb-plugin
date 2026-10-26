@@ -9,6 +9,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
@@ -20,7 +21,7 @@ import (
 func TestNativeObjectConversionOfflineSubprocess(t *testing.T) {
 	c := qt.New(t)
 	self := &Ydb_Scheme.Entry{Owner: "alice", Permissions: []*Ydb_Scheme.Permissions{{Subject: "reader", PermissionNames: []string{"read"}}}}
-	request := &protocol.NormalizeValuesRequest{Engine: "ydb"}
+	request := &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.PlanningLifecycleFeature}}
 	for _, test := range []struct {
 		kind  string
 		value proto.Message
@@ -33,6 +34,7 @@ func TestNativeObjectConversionOfflineSubprocess(t *testing.T) {
 		owner := &protocol.Reference{Engine: "ydb", Database: "/local", Schema: "App", Kind: test.kind, Name: "Object"}
 		value, err := schema.CaptureObject(owner, test.value)
 		c.Assert(err, qt.IsNil)
+		value.Context = &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
 		request.Values = append(request.Values, &protocol.ValueInput{Id: test.kind, Representation: protocol.ValueInput_OBSERVED, Value: value})
 	}
 	binary, digest := providerBinary(c)

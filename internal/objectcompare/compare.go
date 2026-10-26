@@ -47,7 +47,7 @@ type Family struct {
 	NormalizeDesired, NormalizeObserved func(*protocol.Envelope) (*protocol.Envelope, error)
 	// RequiredObjects derives the prerequisites captured in a normalization
 	// receipt. A nil function means the family has no prerequisites.
-	RequiredObjects func(*protocol.Envelope) ([]*protocol.ComparisonIdentity, error)
+	RequiredObjects func(*protocol.Envelope) ([]*protocol.ComparisonIdentity, bool, error)
 	// Reserved says why a subject belongs to the provider's runtime, or "".
 	Reserved func(*protocol.ComparisonIdentity) string
 	// Unread says why a target holding capabilities leaves every object of
@@ -155,7 +155,7 @@ func compare(ctx context.Context, request *protocol.CompareModelsRequest, famili
 	for _, family := range families {
 		kinds = append(kinds, family.Kind)
 	}
-	session, err := SessionDatabase(request, kinds...)
+	session, err := SessionDatabase(request)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -265,9 +265,12 @@ func captureRecord(state *protocol.ComparisonState, family Family, record *proto
 	}
 	expected := &protocol.NormalizedValue{Id: record.Value.Id, Value: normalized, NormalizedOwner: proto.CloneOf(normalized.Owner), CanonicalFormat: format, CanonicalProjection: bytes.Clone(normalized.Payload)}
 	if family.RequiredObjects != nil {
-		expected.RequiredObjects, err = family.RequiredObjects(normalized)
+		expected.RequiredObjects, expected.RequiresDatabaseContext, err = family.RequiredObjects(normalized)
 		if err != nil {
 			return nil, err
+		}
+		if expected.RequiresDatabaseContext {
+			return nil, fmt.Errorf("%s comparison requires resolved database context", family.Noun)
 		}
 	}
 	if !proto.Equal(expected, record.Value) {
@@ -403,6 +406,7 @@ func preserve(result *protocol.ComparedModels, family Family, item object, id st
 	if err != nil {
 		return err
 	}
+	value.Context = proto.CloneOf(item.current.GetContext())
 	// The preserved record gets a separate ID namespace from all authored input.
 	used := func(candidate string) bool {
 		return slices.ContainsFunc(result.Desired.Records, func(record *protocol.ComparisonRecord) bool { return record.GetValue().GetId() == candidate })
@@ -414,9 +418,12 @@ func preserve(result *protocol.ComparedModels, family Family, item object, id st
 	model := family.DesiredModel()
 	normalized := &protocol.NormalizedValue{Id: candidate, Value: value, NormalizedOwner: proto.CloneOf(value.Owner), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)}
 	if family.RequiredObjects != nil {
-		normalized.RequiredObjects, err = family.RequiredObjects(value)
+		normalized.RequiredObjects, normalized.RequiresDatabaseContext, err = family.RequiredObjects(value)
 		if err != nil {
 			return err
+		}
+		if normalized.RequiresDatabaseContext {
+			return fmt.Errorf("%s preservation requires resolved database context", family.Noun)
 		}
 	}
 	result.Desired.Records = append(result.Desired.Records, &protocol.ComparisonRecord{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Value: normalized})

@@ -254,7 +254,12 @@ func (e *External) read(ctx context.Context, owner *protocol.Reference) (*protoc
 	if self.GetName() != owner.Name || self.GetType() != expected {
 		return nil, fmt.Errorf("YDB external object observation has a different identity")
 	}
-	return schema.CaptureObject(owner, described)
+	value, err := schema.CaptureObject(owner, described)
+	if err != nil {
+		return nil, err
+	}
+	value.Context = &protocol.DatabaseContext{Database: owner.Database, SourceDatabase: owner.Database}
+	return value, nil
 }
 
 // sameObservation reports whether the object read now is the one the plan

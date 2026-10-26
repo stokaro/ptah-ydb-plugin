@@ -15,8 +15,8 @@ func scopeSelections() []*protocol.ScopeSelection {
 		{Kind: schema.StreamingQueryProperties, SelectorType: "streaming_query", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "STREAMING QUERY", KeepsRequired: []string{schema.ResourcePoolProperties}},
 		{Kind: schema.CoordinationProperties, SelectorType: "coordination_node", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "COORDINATION NODE"},
 		{Kind: schema.TopicProperties, SelectorType: "topic", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "TOPIC"},
-		{Kind: schema.ExternalSourceProperties, SelectorType: "external_data_source", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "EXTERNAL DATA SOURCE"},
-		{Kind: schema.ExternalTableProperties, SelectorType: "external_table", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "EXTERNAL TABLE"},
+		{Kind: schema.ExternalSourceProperties, SelectorType: "external_data_source", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "EXTERNAL DATA SOURCE", KeepsRequired: []string{schema.SecretProperties}},
+		{Kind: schema.ExternalTableProperties, SelectorType: "external_table", Naming: protocol.ScopeSelection_IN_SCHEMA, GrantObjectType: "EXTERNAL TABLE", KeepsRequired: []string{schema.ExternalSourceProperties}},
 		{Kind: schema.ResourcePoolProperties, SelectorType: "resource_pool", Naming: protocol.ScopeSelection_DATABASE_WIDE, GrantObjectType: "RESOURCE POOL"},
 		{Kind: schema.ResourcePoolClassifierProperties, SelectorType: "resource_pool_classifier", Naming: protocol.ScopeSelection_DATABASE_WIDE, KeepsRequired: []string{schema.ResourcePoolProperties}},
 	}

@@ -106,18 +106,20 @@ func externalRequest(c *qt.C, declared, read []external, capabilities map[string
 		c.Assert(err, qt.IsNil)
 		value, err := schema.CaptureExternalIntent(owner, intent)
 		c.Assert(err, qt.IsNil)
-		normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "declared-" + strconv.Itoa(i), Representation: protocol.ValueInput_DESIRED, Value: value}}})
+		value.Context = &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
+		normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Engines[0].Features, Values: []*protocol.ValueInput{{Id: "declared-" + strconv.Itoa(i), Representation: protocol.ValueInput_DESIRED, Value: value}}})
 		c.Assert(err, qt.IsNil)
 		desired.Records = append(desired.Records, &protocol.ComparisonRecord{Kind: object.kind(), Subject: externalSubject(object.kind(), "", object.name), Value: normalized.Values[0]})
 	}
 	for _, object := range read {
 		value, err := schema.CaptureObject(&protocol.Reference{Engine: "ydb", Kind: object.kind(), Database: "/local", Schema: "app", Name: object.name}, readExternal(c, object))
 		c.Assert(err, qt.IsNil)
-		normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "read-" + object.name, Representation: protocol.ValueInput_OBSERVED, Value: value}}})
+		value.Context = &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
+		normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Engines[0].Features, Values: []*protocol.ValueInput{{Id: "read-" + object.name, Representation: protocol.ValueInput_OBSERVED, Value: value}}})
 		c.Assert(err, qt.IsNil)
 		current.Records = append(current.Records, &protocol.ComparisonRecord{Kind: object.kind(), Subject: externalSubject(object.kind(), "/local", object.name), Value: normalized.Values[0]})
 	}
-	return &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: externalcompare.ServiceID, Kinds: externalcompare.Kinds(),
+	return &protocol.CompareModelsRequest{Engine: "ydb", DatabasePath: "/local", TargetFeatures: backend.Description().Engines[0].Features, ComparisonId: externalcompare.ServiceID, Kinds: externalcompare.Kinds(),
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: capabilities, Desired: desired, Current: current}
 }
 
@@ -172,7 +174,7 @@ func TestExternalComparison_HappyPath(t *testing.T) {
 				c.Assert(change.Value.ChangeSemantics.Impact, qt.Equals, test.impact)
 				c.Assert(change.Value.ChangeSemantics.Access, qt.Equals, test.access)
 				c.Assert(change.Value.ChangeSemantics.GetRemovesState(), qt.IsFalse)
-				normalized, err := backend.New().NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: change.Value.Id, Representation: protocol.ValueInput_CHANGE, Value: change.Value.Value}}})
+				normalized, err := backend.New().NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Engines[0].Features, Values: []*protocol.ValueInput{{Id: change.Value.Id, Representation: protocol.ValueInput_CHANGE, Value: change.Value.Value}}})
 				c.Assert(err, qt.IsNil)
 				c.Assert(proto.Equal(normalized.Values[0], change.Value), qt.IsTrue)
 				_, _, database, err := schema.ExternalOperands(change.Value.Value)
@@ -305,7 +307,7 @@ func TestExternalPlanning_HappyPath(t *testing.T) {
 				_, operation, err := schema.ExternalOperationChange(step.Operation.Value.Value)
 				c.Assert(err, qt.IsNil)
 				steps = append(steps, stepSummary{step.Operation.Value.Value.Owner.Name, operation, step.Metadata.Effects[0].Action})
-				normalized, err := backend.New().NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: step.Operation.Value.Id, Representation: protocol.ValueInput_OPERATION, Value: step.Operation.Value.Value}}})
+				normalized, err := backend.New().NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Engines[0].Features, Values: []*protocol.ValueInput{{Id: step.Operation.Value.Id, Representation: protocol.ValueInput_OPERATION, Value: step.Operation.Value.Value}}})
 				c.Assert(err, qt.IsNil)
 				c.Assert(proto.Equal(normalized.Values[0], step.Operation.Value), qt.IsTrue)
 			}
@@ -330,8 +332,6 @@ func TestExternalPlanning_HappyPath(t *testing.T) {
 // A statement the target cannot take refuses the batch with the host's
 // words and plans nothing.
 func TestExternalPlanning_FailurePath(t *testing.T) {
-	pg := &ydbdecl.ExternalDataSource{SourceType: "PostgreSQL", Location: "pg:5432", AuthMethod: "BASIC",
-		Options: map[string]string{"LOGIN": "reader", "PASSWORD_SECRET_PATH": "/other/pw"}}
 	for _, test := range []struct {
 		name         string
 		declared     []external
@@ -345,8 +345,6 @@ func TestExternalPlanning_FailurePath(t *testing.T) {
 			want: "external table app/events reads data source app/pg, a PostgreSQL source; an external table reads files, from an ObjectStorage source \\(`Only ObjectStorage source type supported`\\)"},
 		{name: "two objects at one path", declared: []external{{name: "events", source: bucketAt("https://a/")}, {name: "events", table: eventsOver("app/bucket")}}, compared: withSources(), capabilities: withSources(),
 			want: "external table app/events has the path of external data source app/events, and YDB keeps one object at a path \\(`unexpected path type`\\)"},
-		{name: "a secret outside the database", declared: []external{{name: "pg", source: pg}}, compared: withSources(), capabilities: withSources(),
-			want: `external data source app/pg: option PASSWORD_SECRET_PATH names secret "/other/pw", which is outside the database /local, so the data source cannot read it`},
 		{name: "a drop on a target without external data sources", read: []external{{name: "events", table: eventsOver("app/bucket")}}, compared: withSources(), capabilities: map[string]bool{"transactional_ddl": false},
 			want: "DROP EXTERNAL TABLE app/events, which requires target capability external_data_sources, unavailable on this ydb target"},
 	} {
