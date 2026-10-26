@@ -162,6 +162,19 @@ func YAMLKeys() []*protocol.YAMLSourceKey {
 	return claims
 }
 
+// IndexYAMLKeys returns the index-entry YAML keys the provider claims
+// (contract 25.3, under source.entry-keys): the index directive's attributes,
+// which a YAML index entry spells alike, as the host's bundled YAML source
+// reads them. Each is claimed so that it is refused by name, as the
+// directive's attributes are; the provider carries no index setting yet.
+func IndexYAMLKeys() []*protocol.YAMLSourceKey {
+	var claims []*protocol.YAMLSourceKey
+	for _, key := range indexAttributes() {
+		claims = append(claims, &protocol.YAMLSourceKey{Scope: protocol.YAMLSourceKey_INDEX, Key: key, Selector: "index." + key, Models: []string{schema.TableProperties}})
+	}
+	return claims
+}
+
 // GoDirectives returns the Go claims of this package: the attributes it adds
 // to the host's table and index directives, and the column family directive.
 func GoDirectives() []*protocol.GoSourceDirective {
@@ -189,7 +202,9 @@ func GoDirectives() []*protocol.GoSourceDirective {
 // Owns reports whether the fragment carries one of the claims of this package.
 func Owns(fragment *protocol.SourceFragment) bool {
 	if key := fragment.GetYamlKey(); key != nil {
-		return key.GetScope() == protocol.YAMLSourceKey_TABLE && slices.ContainsFunc(YAMLKeys(), func(claim *protocol.YAMLSourceKey) bool { return claim.GetKey() == key.GetKey() })
+		return slices.ContainsFunc(slices.Concat(YAMLKeys(), IndexYAMLKeys()), func(claim *protocol.YAMLSourceKey) bool {
+			return claim.GetScope() == key.GetScope() && claim.GetKey() == key.GetKey()
+		})
 	}
 	if directive := fragment.GetGoDirective(); directive != nil {
 		return slices.ContainsFunc(GoDirectives(), func(claim *protocol.GoSourceDirective) bool {

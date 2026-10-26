@@ -732,10 +732,38 @@ A YAML document that writes `coordination_nodes`, and every Go source, describes
 the nodes completely, as they do for the host's embedded engine: a node the
 source does not declare is one the plan removes from the directories it reads.
 
-The subprocess tests exercise decoding, normalization, and representation
-conversion without a database address. An HCL adapter remains pending (it needs
-the HCL claims of provider contract 25.3); a YQL schema declares coordination
-nodes through [SQL schema reading](#sql-schema-reading).
+A host that lists `source.hcl` (contract 25.3, ADR 0036 in Ptah) reads the
+top-level `coordination_node` block the engine claims, as the host's bundled
+YDB source reads it: labeled with the node's name, or its directory and its
+name, its settings string attributes spelled as above, and named
+`coordination_node` by a permission's `for`.
+
+```hcl
+coordination_node "app" "limits" {
+  self_check_period     = "PT2S"
+  read_consistency_mode = "strict"
+}
+```
+
+A `ptah:not-described coordination_node` header entry, with a node's path or
+none, is the one header kind the engine declares; the host applies it to the
+document's claim, and the provider refuses a name no node can take with the
+host's words. A host that does not list the feature reads no such block.
+
+`EncodeSource` (`source.encode`, ADR 0037) writes a desired node back as the
+fragment each format reads: an entry of `coordination_nodes`, one directive, or
+one block placed after the tables, which decode to the same node. Access
+constraints are reported as losses because no source can represent them.
+`struct_name` is written in YAML alone. Incomplete kind or subject coverage
+refuses the export, because these fragments cannot preserve that knowledge.
+A table's YDB settings are reported as losses: this provider holds them as one
+value, which a source writes as several declarations, and the contract writes
+one value with one fragment; HCL has no spelling for them at all, as the host's
+embedded engine reports. Every other native object is a loss too.
+
+The subprocess tests exercise decoding, encoding, normalization, and
+representation conversion without a database address; a YQL schema declares
+coordination nodes through [SQL schema reading](#sql-schema-reading).
 
 ## Offline row-table declarations
 
@@ -840,7 +868,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | `fields` of a column family in YAML | The host attaches a YAML value to a table, never to a column, so a YAML family cannot place columns. Claimed and refused by name; write the family in a Go directive. |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
-| Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name. YAML has no index key claim. |
+| Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. |
 | Resource pools, secrets, external objects, replications and transfers | Document-scope objects; the provider reads only `coordination_nodes` and `topics` at document scope (see [Topics](#topics)). |
 
 A table is managed for its TTL when its source states table properties for it,
@@ -2153,7 +2181,7 @@ The source reference is Ptah commit `7b4b19f49fadf03ce81def2f6168ea60b3261a71`.
 Remaining work includes more source formats, comparison, the alteration of table
 settings other than column families, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
-inspection, normalization, coordination YAML source decoding, comparison, planning,
+inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
 rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic lifecycles, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.

@@ -1,6 +1,7 @@
 package yqlschema
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -385,6 +386,18 @@ func claim(limits []*protocol.SchemaCoverageLimit) (*protocol.ModelCoverage, *Re
 	}
 	coverage.Subjects = subjects
 	return coverage, nil
+}
+
+// CheckLimits refuses, with the host's words, a `ptah:not-described` limit
+// whose name no object of its kind can take, as a YQL document's header is
+// read. A source of another format names its limits alike.
+func CheckLimits(limits []*protocol.SchemaCoverageLimit) error {
+	for _, limit := range limits {
+		if refusal := checkLimit(limit); refusal != nil {
+			return errors.New(refusal.Message)
+		}
+	}
+	return nil
 }
 
 // topicLimit is the directory and the name of the topic a header names: a
