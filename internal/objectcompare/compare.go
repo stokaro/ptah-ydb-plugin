@@ -14,7 +14,7 @@ import (
 )
 
 // Family is what one kind of standalone object brings to a comparison. Every
-// function is required.
+// function is required unless its comment permits nil.
 type Family struct {
 	// ServiceID is the comparison the host asks for the family's kind.
 	ServiceID string
@@ -45,6 +45,9 @@ type Family struct {
 	Owner func(*protocol.ComparisonIdentity) (*protocol.Reference, error)
 	// NormalizeDesired and NormalizeObserved validate one envelope of each side.
 	NormalizeDesired, NormalizeObserved func(*protocol.Envelope) (*protocol.Envelope, error)
+	// RequiredObjects derives the prerequisites captured in a normalization
+	// receipt. A nil function means the family has no prerequisites.
+	RequiredObjects func(*protocol.Envelope) ([]*protocol.ComparisonIdentity, error)
 	// Reserved says why a subject belongs to the provider's runtime, or "".
 	Reserved func(*protocol.ComparisonIdentity) string
 	// Unread says why a target holding capabilities leaves every object of
@@ -261,6 +264,12 @@ func captureRecord(state *protocol.ComparisonState, family Family, record *proto
 		return nil, err
 	}
 	expected := &protocol.NormalizedValue{Id: record.Value.Id, Value: normalized, NormalizedOwner: proto.CloneOf(normalized.Owner), CanonicalFormat: format, CanonicalProjection: bytes.Clone(normalized.Payload)}
+	if family.RequiredObjects != nil {
+		expected.RequiredObjects, err = family.RequiredObjects(normalized)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if !proto.Equal(expected, record.Value) {
 		return nil, fmt.Errorf("%s normalization receipt differs from its payload", family.Noun)
 	}
@@ -403,7 +412,14 @@ func preserve(result *protocol.ComparedModels, family Family, item object, id st
 		candidate += "-"
 	}
 	model := family.DesiredModel()
-	result.Desired.Records = append(result.Desired.Records, &protocol.ComparisonRecord{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Value: &protocol.NormalizedValue{Id: candidate, Value: value, NormalizedOwner: proto.CloneOf(value.Owner), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)}})
+	normalized := &protocol.NormalizedValue{Id: candidate, Value: value, NormalizedOwner: proto.CloneOf(value.Owner), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)}
+	if family.RequiredObjects != nil {
+		normalized.RequiredObjects, err = family.RequiredObjects(value)
+		if err != nil {
+			return err
+		}
+	}
+	result.Desired.Records = append(result.Desired.Records, &protocol.ComparisonRecord{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Value: normalized})
 	if result.Desired.Coverage == nil {
 		result.Desired.Coverage = &protocol.ComparisonCoverage{}
 	}

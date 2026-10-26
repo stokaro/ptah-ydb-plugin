@@ -13,14 +13,15 @@ import (
 )
 
 const pageBytes = 3 << 20
+const metadataBytes = 256 << 10
 
 // Cursor owns rows. Its caller serializes reads and Close and owns the
 // connection and transaction that keep the result alive.
 type Cursor struct {
-	rows *sql.Rows
-	columns []*protocol.DataColumn
-	pending *protocol.Row
-	closed bool
+	rows     *sql.Rows
+	columns  []*protocol.DataColumn
+	pending  *protocol.Row
+	closed   bool
 	closeErr error
 }
 
@@ -28,15 +29,23 @@ type Cursor struct {
 // success; the caller closes rows after an error.
 func New(rows *sql.Rows) (*Cursor, error) {
 	types, err := rows.ColumnTypes()
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	cursor := &Cursor{rows: rows}
+	size := 0
 	for _, column := range types {
 		name := rowdata.ColumnType(column.DatabaseTypeName())
 		kind := rowdata.Kind(name)
 		if kind == protocol.DataKind_DATA_KIND_UNSPECIFIED {
 			return nil, fmt.Errorf("result column %q has unsupported YDB type %s", column.Name(), name)
 		}
-		cursor.columns = append(cursor.columns, &protocol.DataColumn{Name: column.Name(), Type: name, Kind: kind})
+		metadata := &protocol.DataColumn{Name: column.Name(), Type: name, Kind: kind}
+		size += proto.Size(metadata) + 8
+		if size > metadataBytes {
+			return nil, errors.New("statement columns exceed the metadata byte limit")
+		}
+		cursor.columns = append(cursor.columns, metadata)
 	}
 	return cursor, nil
 }
@@ -44,7 +53,9 @@ func New(rows *sql.Rows) (*Cursor, error) {
 // Columns returns independent wire metadata for the first page.
 func (c *Cursor) Columns() []*protocol.DataColumn {
 	columns := make([]*protocol.DataColumn, len(c.columns))
-	for i, column := range c.columns { columns[i] = proto.CloneOf(column) }
+	for i, column := range c.columns {
+		columns[i] = proto.CloneOf(column)
+	}
 	return columns
 }
 
@@ -52,7 +63,9 @@ func (c *Cursor) Columns() []*protocol.DataColumn {
 // page. An error returns no prefix. EOF checks that no second result set was
 // hidden by the one-statement contract.
 func (c *Cursor) Page(max uint32) ([]*protocol.Row, bool, error) {
-	if c.closed { return nil, false, errors.New("statement result is closed") }
+	if c.closed {
+		return nil, false, errors.New("statement result is closed")
+	}
 	var result []*protocol.Row
 	size := 0
 	for {
@@ -60,18 +73,28 @@ func (c *Cursor) Page(max uint32) ([]*protocol.Row, bool, error) {
 		c.pending = nil
 		if row == nil {
 			if !c.rows.Next() {
-				if err := c.rows.Err(); err != nil { return nil, false, err }
-				if c.rows.NextResultSet() { return nil, false, errors.New("statement returned more than one result set") }
-				if err := c.rows.Err(); err != nil { return nil, false, err }
+				if err := c.rows.Err(); err != nil {
+					return nil, false, err
+				}
+				if c.rows.NextResultSet() {
+					return nil, false, errors.New("statement returned more than one result set")
+				}
+				if err := c.rows.Err(); err != nil {
+					return nil, false, err
+				}
 				return result, false, c.Close()
 			}
 			var err error
 			row, err = c.scan()
-			if err != nil { return nil, false, err }
+			if err != nil {
+				return nil, false, err
+			}
 		}
 		rowSize := proto.Size(row) + 8
-		if rowSize > pageBytes { return nil, false, errors.New("statement row exceeds the page byte limit") }
-		if len(result) == int(max) || size + rowSize > pageBytes {
+		if rowSize > pageBytes {
+			return nil, false, errors.New("statement row exceeds the page byte limit")
+		}
+		if len(result) == int(max) || size+rowSize > pageBytes {
 			c.pending = row
 			return result, true, nil
 		}
@@ -83,13 +106,19 @@ func (c *Cursor) Page(max uint32) ([]*protocol.Row, bool, error) {
 func (c *Cursor) scan() (*protocol.Row, error) {
 	values := make([]any, len(c.columns))
 	arguments := make([]any, len(values))
-	for i := range values { arguments[i] = &values[i] }
-	if err := c.rows.Scan(arguments...); err != nil { return nil, err }
+	for i := range values {
+		arguments[i] = &values[i]
+	}
+	if err := c.rows.Scan(arguments...); err != nil {
+		return nil, err
+	}
 	row := &protocol.Row{Values: make([]*protocol.DataValue, len(values))}
 	for i, value := range values {
 		var err error
 		row.Values[i], err = rowdata.Scanned(c.columns[i].Type, value)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 	}
 	return row, nil
 }

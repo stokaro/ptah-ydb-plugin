@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
-
 )
 
 // ErrReadLeavesDatabase is wrapped by every refusal of [ProveLocalReads] that
@@ -110,4 +109,3 @@ func absolutePath(base, name string) string {
 	}
 	return path.Join(base, name)
 }
-

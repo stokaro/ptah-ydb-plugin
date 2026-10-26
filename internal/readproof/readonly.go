@@ -49,8 +49,8 @@ const yqlReadOnlyRefusal = "a YDB statement is proved read-only only when it is 
 //
 // What a read may still reach -- a UDF module, an external source, a pragma,
 // a translation setting -- is [ReadSources]'s question, and a caller that
-// proves a statement read-only asks both. The text is the whole proof: no read-only
-// YDB session backs it up.
+// proves a statement read-only asks both. The caller also executes it inside a
+// snapshot read-only transaction, which refuses writes on the server.
 func ReadOnly(statement string) error {
 	tokens := yqlTokens(statement)
 	if len(tokens) == 0 || !isKeyword(tokens[0], "SELECT") {

@@ -66,6 +66,7 @@ func ClassifierFamily() objectcompare.Family {
 		}
 		return before == after, nil
 	}
+	family.RequiredObjects = schema.RequiredObjects
 	family.Change = schema.CaptureResourcePoolClassifierChange
 	return family
 }

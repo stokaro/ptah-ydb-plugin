@@ -61,7 +61,9 @@ func ReadSources(text string) (Reads, error) {
 		if err := ReadOnly(statement); err != nil {
 			return Reads{}, fmt.Errorf("%w: %w", errYQLSource, err)
 		}
-		if err := localCalls(tokens); err != nil { return Reads{}, err }
+		if err := localCalls(tokens); err != nil {
+			return Reads{}, err
+		}
 		reads.Selects = append(reads.Selects, strings.TrimSpace(statement))
 		sources, err := yqlSourceNames(tokens)
 		if err != nil {
