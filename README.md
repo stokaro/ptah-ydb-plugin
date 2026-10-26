@@ -2457,6 +2457,20 @@ inference flows through this provider: two generations from plan to cutover, a
 rollback and a retirement, a chunked generation in a table of its own, the
 refusals, and the answers an agent reads, which carry no source content.
 
+## Offline schema rendering
+
+The provider uses `schema.declarations` to create authored coordination nodes,
+topics, external sources and tables, resource pools, and classifiers. The host
+validates the whole schema and combines these creations with table and common
+object steps before rendering SQL. Declaration operations retain their desired
+definitions and contain no observed-state claims.
+
+A rendered schema opens no session. Capability limits, conflicting object paths,
+duplicate classifier ranks, and explicit native access requirements refuse the
+whole batch. Use live schema planning for access requirements that a CREATE
+statement cannot express. External tables follow their declared data sources;
+classifiers follow their declared resource pools.
+
 ## Operator statements and object scopes
 
 The `sessions.statements` service runs operator checks, migration test

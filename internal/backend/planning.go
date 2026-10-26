@@ -7,6 +7,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
@@ -134,6 +135,14 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		}
 		if !proto.Equal(normalized, captured) {
 			return nil, status.Error(codes.InvalidArgument, "native operation metadata changed")
+		}
+		if normalized.Value.Kind == declarationplan.OperationKind {
+			statement, err := declarationplan.Text(normalized.Value, request.Capabilities)
+			if err != nil {
+				return nil, status.Error(codes.FailedPrecondition, err.Error())
+			}
+			statements[i] = statement
+			continue
 		}
 		operations[i] = normalized.Value
 	}
