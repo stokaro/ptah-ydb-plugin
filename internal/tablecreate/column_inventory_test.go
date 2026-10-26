@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -97,4 +98,49 @@ func TestColumnInventoryRewritesTheRealAliasStep(t *testing.T) {
 	add, err := tablecreate.DecodeInventory(plan.Contributions[0].Steps[0].Operation.Value.Value)
 	c.Assert(err, qt.IsNil)
 	c.Assert(add.Add.Type.GetOptionalType().GetItem().GetTypeId().String(), qt.Equals, "INT32")
+}
+
+func TestColumnInventoryAddsTypedDefaults(t *testing.T) {
+	for _, test := range []struct {
+		name, kind, value, statement string
+		nullable                     bool
+	}{
+		{name: "nullable integer", kind: "Int32", value: "5", nullable: true, statement: "ALTER TABLE `app.records` ADD COLUMN `new` Int32 DEFAULT 5;"},
+		{name: "not null empty text", kind: "Utf8", value: "", statement: "ALTER TABLE `app.records` ADD COLUMN `new` Utf8 NOT NULL DEFAULT ''u;"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			request := inventoryRequest(c)
+			request.Capabilities["add_column_with_default"] = true
+			column := request.Tables[0].Desired.Columns[1]
+			column.Type, column.Nullable, column.DefaultSet, column.DefaultValue = test.kind, test.nullable, true, test.value
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Diagnostics, qt.HasLen, 0)
+			c.Assert(plan.Contributions, qt.HasLen, 1)
+			step := plan.Contributions[0].Steps[0]
+			change, err := tablecreate.DecodeInventory(step.Operation.Value.Value)
+			c.Assert(err, qt.IsNil)
+			c.Assert(change.Add.GetFromLiteral(), qt.IsNotNil)
+			c.Assert(change.Add.GetNotNull(), qt.Equals, !test.nullable)
+			text, err := tablecreate.InventoryStatement("app.records", change)
+			c.Assert(err, qt.IsNil)
+			c.Assert(text, qt.Equals, test.statement)
+			rendering := testplanning.RenderRequest(plan, request.Capabilities)
+			rendering.Form = protocol.RenderRequest_TEXT
+			rendered, err := backend.New().Render(c.Context(), rendering)
+			c.Assert(err, qt.IsNil)
+			c.Assert(rendered.Units, qt.HasLen, 2)
+			c.Assert(provider.ValidateRenderedBatch(backend.Description(), rendering, rendered), qt.IsNil)
+			c.Assert(rendered.Units[0].GetSql(), qt.Contains, "DEFAULT")
+			request.Capabilities["add_column_with_default"] = false
+			rejected, renderErr := backend.New().Render(c.Context(), rendering)
+			c.Assert(renderErr, qt.IsNotNil)
+			c.Assert(rejected, qt.IsNil)
+			refused, err := backend.New().PlanFeatures(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(refused.Diagnostics, qt.HasLen, 1)
+			c.Assert(refused.Contributions, qt.HasLen, 0)
+		})
+	}
 }

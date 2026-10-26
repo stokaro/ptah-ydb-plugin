@@ -97,6 +97,17 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		}
 	}
 	for _, unit := range request.Units {
+		if unit.GetNative().GetKind() == tablecreate.InventoryOperationKind {
+			change, err := tablecreate.DecodeInventory(unit.GetNative())
+			if err != nil {
+				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.invalid-native-unit"}, nil
+			}
+			if err := change.CheckCapabilities(s.capabilities); err != nil {
+				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.column-addition-unsupported", Message: err.Error()}, nil
+			}
+		}
+	}
+	for _, unit := range request.Units {
 		if native := unit.GetNative(); native != nil && native.GetOwner().GetDatabase() != "" && native.GetOwner().GetDatabase() != s.database {
 			return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.foreign-database"}, nil
 		}
@@ -144,7 +155,7 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 			case tablecreate.OperationKind:
 				return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.InventoryOperationKind:
-				return nativeapi.NewColumnInventory(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewColumnInventory(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.capabilities, s.verifyLocks)
 			case tablecreate.DefaultOperationKind:
 				return nativeapi.NewColumnDefault(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.AlterOperationKind:
