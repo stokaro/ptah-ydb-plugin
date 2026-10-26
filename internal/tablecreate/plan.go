@@ -159,7 +159,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			}
 			if column {
 				if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
-					if reason := completeColumnAlteration(owner, table, nil, request.Capabilities); reason != "" {
+					if reason := completeColumnAlteration(owner, table, nil, nil, request.Capabilities); reason != "" {
 						return refused(i, reason), nil
 					}
 				}
@@ -225,7 +225,14 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				return refused(i, reason), nil
 			}
 			if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
-				if reason := completeColumnAlteration(owner, table, item.claims, request.Capabilities); reason != "" {
+				item.defaults, reason, err = planDefaults(owner, table, request.Capabilities)
+				if err != nil {
+					return nil, err
+				}
+				if reason != "" {
+					return refused(i, reason), nil
+				}
+				if reason := completeColumnAlteration(owner, table, item.claims, item.defaults, request.Capabilities); reason != "" {
 					return refused(i, reason), nil
 				}
 			}
@@ -342,7 +349,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		receiptSteps[item.index] = ids
 	}
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals int
+	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, defaults int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -369,6 +376,12 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		var ordered []*protocol.StepIdentity
 		ordered = append(ordered, added...)
+		for _, change := range item.defaults {
+			step := change.plan(subject, defaults)
+			defaults++
+			contribution.Steps = append(contribution.Steps, step)
+			ordered = append(ordered, step.Id)
+		}
 		if item.operation != nil {
 			item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-alter/%06d", families)}
 			families++

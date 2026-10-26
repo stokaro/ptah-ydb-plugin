@@ -13,7 +13,7 @@ import (
 // completeColumnAlteration refuses a parent receipt that would acknowledge an
 // owned column change without an operation. Common steps can be absent because
 // the host delegates the complete parent definition to this planner.
-func completeColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, claims []*columnClaim, caps map[string]bool) string {
+func completeColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, claims []*columnClaim, defaults []defaultStep, caps map[string]bool) string {
 	columns, err := compileDefinitionColumns(owner, table.Desired, caps)
 	if err != nil {
 		return err.Error()
@@ -42,7 +42,7 @@ func completeColumnAlteration(owner *protocol.Reference, table *protocol.Plannin
 				return err.Error()
 			}
 		}
-		if held.GetDefaultExpression() != literal {
+		if held.GetDefaultExpression() != literal && !slices.ContainsFunc(defaults, func(d defaultStep) bool { return d.name == column.Name }) {
 			return fmt.Sprintf("Column %q default change requires an owned column operation", column.Name)
 		}
 	}

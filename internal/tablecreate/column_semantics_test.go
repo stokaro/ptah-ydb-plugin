@@ -142,7 +142,7 @@ func TestColumnParentRefusesUnplannedDefaultChange(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			if changed {
 				c.Assert(plan.Diagnostics, qt.HasLen, 1)
-				c.Assert(plan.Diagnostics[0].Message, qt.Contains, "default change")
+				c.Assert(plan.Diagnostics[0].Message, qt.Contains, "alter_column_default")
 				c.Assert(plan.Parents, qt.HasLen, 0)
 			} else {
 				c.Assert(plan.Diagnostics, qt.HasLen, 0)

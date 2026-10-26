@@ -52,6 +52,7 @@ type Gate struct {
 // every external data source and external table (`External data sources are
 // disabled`), and the second refuses CREATE OR REPLACE of either object.
 var gates = []Gate{
+	{Key: "alter_column_default", Flag: "EnableSetDropDefaultValue"},
 	{Key: "wide_date_time_types", Flag: "EnableTableDatetime64"},
 	{Key: "parameterized_decimal", Flag: "EnableParameterizedDecimal"},
 	{Key: "tiered_ttl", Flag: "EnableTieringInColumnShard"},

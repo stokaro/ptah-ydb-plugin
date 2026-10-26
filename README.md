@@ -1722,6 +1722,14 @@ table, finds nothing to change after each, and drops both.
 
 ## Common column semantics
 
+Column default changes use captured native before-state and typed values. The
+provider plans one `ALTER COLUMN SET DEFAULT` or `DROP DEFAULT`, outside a
+transaction, and verifies the column before and after execution. An empty string
+is a present literal. A stale before-state refuses execution; an unconfirmed
+write has an unknown outcome and is not retried. The session reports
+`alter_column_default` from the release line and `EnableSetDropDefaultValue`.
+
+
 The negotiated `schema.columns` service compares the exact columns the host
 pairs inside their full captured tables. It reports type and default
 equivalence, effective nullability, and sequence start and increment differences.

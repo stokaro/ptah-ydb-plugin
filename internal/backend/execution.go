@@ -131,6 +131,8 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 			switch unit.GetNative().GetKind() {
 			case tablecreate.OperationKind:
 				return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case tablecreate.DefaultOperationKind:
+				return nativeapi.NewColumnDefault(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.AlterOperationKind:
 				return nativeapi.NewTableAlteration(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.ColumnOperationKind:

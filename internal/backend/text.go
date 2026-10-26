@@ -61,6 +61,12 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.RowTableStatement(path, request)
+	case tablecreate.DefaultOperationKind:
+		change, err := tablecreate.DecodeDefault(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.DefaultStatement(path, change)
 	case tablecreate.AlterOperationKind:
 		alteration, err := tablecreate.DecodeAlteration(value)
 		if err != nil {

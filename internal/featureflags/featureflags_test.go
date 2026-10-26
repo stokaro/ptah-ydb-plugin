@@ -41,6 +41,9 @@ func linePreset(autoPartitionedFeeds bool) map[string]bool {
 	caps["wide_date_time_types"] = autoPartitionedFeeds
 	caps["parameterized_decimal"] = autoPartitionedFeeds
 	caps["resource_pools"] = false
+	if autoPartitionedFeeds {
+		caps["alter_column_default"] = true
+	}
 	return caps
 }
 
@@ -72,7 +75,7 @@ func TestRefine_ClusterThatTurnedTieringOn(t *testing.T) {
 	flags, err := featureflags.Decode(page(c, "local-ydb-26.2.1.14-tiering-on.json"), "/local")
 	c.Assert(err, qt.IsNil)
 	c.Assert(flags["EnableTieringInColumnShard"], qt.IsTrue)
-	c.Assert(flags.Refine(linePreset(true)), qt.DeepEquals, with(map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "wide_date_time_types": true, "parameterized_decimal": true}))
+	c.Assert(flags.Refine(linePreset(true)), qt.DeepEquals, with(map[string]bool{"alter_column_default": true, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "wide_date_time_types": true, "parameterized_decimal": true}))
 }
 
 // TestRefine_HappyPath pins what each flag does to its capability, and that a
@@ -83,6 +86,8 @@ func TestRefine_HappyPath(t *testing.T) {
 		flags featureflags.Flags
 		want  map[string]bool
 	}{
+		{name: "default alteration off", flags: featureflags.Flags{"EnableSetDropDefaultValue": false}, want: with(map[string]bool{"alter_column_default": false})},
+		{name: "default alteration on", flags: featureflags.Flags{"EnableSetDropDefaultValue": true}, want: with(map[string]bool{"alter_column_default": true})},
 		{name: "wide time types on", flags: featureflags.Flags{"EnableTableDatetime64": true}, want: with(map[string]bool{"wide_date_time_types": true})},
 		{name: "parameterized decimal on", flags: featureflags.Flags{"EnableParameterizedDecimal": true}, want: with(map[string]bool{"parameterized_decimal": true})},
 		{name: "tiering on", flags: featureflags.Flags{"EnableTieringInColumnShard": true}, want: with(map[string]bool{"tiered_ttl": true})},
@@ -132,7 +137,7 @@ func TestGates_NameEveryFlagOnce(t *testing.T) {
 		c.Assert(flags[gate.Flag], qt.IsFalse, qt.Commentf(gate.Flag))
 		keys[gate.Key], flags[gate.Flag] = true, true
 	}
-	c.Assert(keys, qt.DeepEquals, map[string]bool{"tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "external_object_replace": true, "resource_pools": true, "wide_date_time_types": true, "parameterized_decimal": true})
+	c.Assert(keys, qt.DeepEquals, map[string]bool{"alter_column_default": true, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "external_object_replace": true, "resource_pools": true, "wide_date_time_types": true, "parameterized_decimal": true})
 }
 
 func TestDecode_HappyPath(t *testing.T) {
