@@ -56,7 +56,7 @@ func (f *dropFixture) observed(c *qt.C) *protocol.ObservedTable {
 	snapshot, err := f.client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: f.session.Id, Schemas: []string{f.directory}})
 	c.Assert(err, qt.IsNil)
 	for i, column := range snapshot.Tables[0].Columns {
-		table.Columns[i].PrimaryKey = column.PrimaryKey
+		table.Columns[i].PrimaryKey = column.Observed.PrimaryKey
 	}
 	return table
 }

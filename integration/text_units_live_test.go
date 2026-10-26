@@ -218,7 +218,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 	for _, table := range snapshot.Tables {
 		var columns []any
 		for _, column := range table.Columns {
-			columns = append(columns, []any{column.Name, column.Type, column.Nullable, column.PrimaryKey, column.GetDefaultExpression()})
+			columns = append(columns, []any{column.Name, column.Observed.ColumnType, column.Observed.IsNullable == "YES", column.Observed.PrimaryKey, column.Observed.GetDefaultExpression()})
 		}
 		held[table.Identity.Name] = append(held[table.Identity.Name], columns)
 	}

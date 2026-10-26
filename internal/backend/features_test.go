@@ -72,3 +72,16 @@ func TestDescriptionRefusesHostsWithoutDatabaseContextContract(t *testing.T) {
 		})
 	}
 }
+
+// Negotiating a recent contract alone does not opt a host into complete
+// column observations. Refuse before opening a database or returning a prefix.
+func TestInspectionRequiresObservedColumnsFeature(t *testing.T) {
+	c := qt.New(t)
+	result, err := backend.New().Inspect(c.Context(), &protocol.InspectRequest{})
+	c.Assert(result, qt.IsNil)
+	c.Assert(err, qt.ErrorMatches, "rpc error: code = FailedPrecondition desc = YDB inspection requires schema.observed-columns")
+	ctx := provider.ContextWithHostFeatures(c.Context(), []string{provider.ObservedColumnsFeature})
+	result, err = backend.New().Inspect(ctx, &protocol.InspectRequest{})
+	c.Assert(result, qt.IsNil)
+	c.Assert(err, qt.ErrorMatches, "rpc error: code = NotFound desc = unknown YDB session")
+}

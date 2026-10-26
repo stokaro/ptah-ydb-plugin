@@ -1730,6 +1730,14 @@ table, finds nothing to change after each, and drops both.
 
 ## Common column semantics
 
+Inspection requires the negotiated `schema.observed-columns` feature. Row and
+column tables report complete common column facts, including decimal precision
+and scale, literal default presence, and serial start and increment settings.
+The last sequence restart remains observed evidence; it is not a request to
+restart the sequence during source conversion. Native column facets retain the
+exact settings needed to check execution before-state. Unknown or contradictory
+native metadata refuses the complete inspection reply.
+
 Column default changes use captured native before-state and typed values. The
 provider plans one `ALTER COLUMN SET DEFAULT` or `DROP DEFAULT`, outside a
 transaction, and verifies the column before and after execution. An empty string
