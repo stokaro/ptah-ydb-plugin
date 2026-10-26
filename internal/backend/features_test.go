@@ -33,16 +33,22 @@ func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
 	c.Assert(description.Engines[0].Features, qt.Contains, "database.dev")
 }
 
-// TestDescriptionStartsOnEveryHostOfItsMajor pins the declared minimum: every
-// addition after contract 25.0 the provider uses is negotiated, so a host of
-// contract 25.0 starts it, and so does every later minor.
-func TestDescriptionStartsOnEveryHostOfItsMajor(t *testing.T) {
-	for minor := range provider.ContractMinor + 1 {
-		t.Run(fmt.Sprintf("%d.%d", provider.Revision, minor), func(t *testing.T) {
+// Authored declarations and lifecycle planning require their declared contract
+// minor. Later compatible minors retain both contracts.
+func TestDescriptionRequiresDeclarationAndLifecycleContract(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		minor uint32
+		want  error
+	}{
+		{"earlier minor", 4, provider.ErrProtocol},
+		{"declaration and lifecycle minor", 5, nil},
+		{"later minor", 6, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
-			host := &protocol.ContractVersion{Major: provider.Revision, Minor: minor}
-
-			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.IsNil)
+			host := &protocol.ContractVersion{Major: provider.Revision, Minor: test.minor}
+			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.ErrorIs, test.want)
 		})
 	}
 }
@@ -56,4 +62,14 @@ func TestDescriptionRefusesAnotherMajor_FailurePath(t *testing.T) {
 	err := provider.CheckContract(host, provider.MinimumContract(backend.Description()))
 
 	c.Assert(err, qt.ErrorIs, provider.ErrProtocol)
+}
+
+func TestDescriptionRefusesHostsWithoutDeclarationContract(t *testing.T) {
+	for minor := range uint32(5) {
+		t.Run(fmt.Sprintf("%d.%d", provider.Revision, minor), func(t *testing.T) {
+			c := qt.New(t)
+			host := &protocol.ContractVersion{Major: provider.Revision, Minor: minor}
+			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.ErrorIs, provider.ErrProtocol)
+		})
+	}
 }

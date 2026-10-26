@@ -27,6 +27,7 @@ var nativeIntentDefinitions = map[string]*protocol.ValueModel{
 	IndexProperties:  buildNativeIntentModel(IndexProperties), ChangefeedProperties: buildNativeIntentModel(ChangefeedProperties), TopicProperties: buildNativeIntentModel(TopicProperties),
 	ViewProperties: buildNativeIntentModel(ViewProperties), ExternalSourceProperties: buildNativeIntentModel(ExternalSourceProperties), ExternalTableProperties: buildNativeIntentModel(ExternalTableProperties), ColumnStorageProperties: buildNativeIntentModel(ColumnStorageProperties),
 	ResourcePoolProperties: buildNativeIntentModel(ResourcePoolProperties), ResourcePoolClassifierProperties: buildNativeIntentModel(ResourcePoolClassifierProperties),
+	StreamingQueryProperties: buildNativeIntentModel(StreamingQueryProperties),
 }
 
 func nativeIntentMessage(kind string) proto.Message {
@@ -51,6 +52,8 @@ func nativeIntentMessage(kind string) proto.Message {
 		return &native.ResourcePoolSettings{}
 	case ResourcePoolClassifierProperties:
 		return &native.ResourcePoolClassifierSettings{}
+	case StreamingQueryProperties:
+		return &native.StreamingQueryIntent{}
 	default:
 		return nil
 	}
@@ -81,6 +84,9 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	if IsWorkloadObject(kind) {
 		definition["workload_objects"] = workloadDefinition
 	}
+	if kind == StreamingQueryProperties {
+		definition["streaming_queries"] = streamingDefinition
+	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
 		panic(err)
@@ -92,7 +98,7 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	digest := sha256.Sum256(canonical)
 	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
 	switch kind {
-	case SecretProperties, ColumnStorageProperties, TopicProperties, ExternalSourceProperties, ExternalTableProperties, ResourcePoolProperties, ResourcePoolClassifierProperties:
+	case SecretProperties, ColumnStorageProperties, TopicProperties, ExternalSourceProperties, ExternalTableProperties, ResourcePoolProperties, ResourcePoolClassifierProperties, StreamingQueryProperties:
 		// A YAML, Go or SQL source says whether a table stores columns, so the
 		// absence of the facet on a table such a source describes is a request
 		// for row storage. Each of them declares topics, external data sources
@@ -236,6 +242,8 @@ func nativeIntent(value proto.Message) (proto.Message, error) {
 		return topicIntent(v), nil
 	case *native.ResourcePoolSettings, *native.ResourcePoolClassifierSettings:
 		return proto.Clone(v), nil
+	case *native.StreamingQuerySettings:
+		return &native.StreamingQueryIntent{Text: v.GetText(), Run: v.Run, ResourcePool: v.GetResourcePool()}, nil
 	default:
 		return objectIntent(value)
 	}
@@ -263,6 +271,12 @@ func nativeObservation(value proto.Message) (proto.Message, error) {
 		return observed, nil
 	case *native.ResourcePoolSettings, *native.ResourcePoolClassifierSettings:
 		return proto.Clone(v), nil
+	case *native.StreamingQueryIntent:
+		observed := &native.StreamingQuerySettings{Text: v.GetText(), Run: v.Run, ResourcePool: v.GetResourcePool()}
+		if err := normalizeObject(observed); err != nil {
+			return nil, err
+		}
+		return observed, nil
 	default:
 		return objectObservation(value)
 	}

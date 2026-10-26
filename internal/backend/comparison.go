@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streamingcompare"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalcompare"
@@ -36,6 +37,8 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 		compare = secretcompare.Compare
 	case tablecompare.ServiceID:
 		compare = tablecompare.Compare
+	case streamingcompare.ServiceID:
+		compare = streamingcompare.Compare
 	case topiccompare.ServiceID:
 		compare = topiccompare.Compare
 	case externalcompare.ServiceID:

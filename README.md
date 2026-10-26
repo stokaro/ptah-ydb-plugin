@@ -49,8 +49,8 @@ a minor version), its engines and the archive and executable for each platform.
 A host starts the release when its contract has the same major version and a
 minor version at least `min_contract.minor`. The document states the minimum the
 provider declares in its `Describe` reply, so the two cannot disagree. This
-provider declares 25.0: everything it uses from a later minor is negotiated, so
-a host of contract 25.0 keeps every service it serves. `ptah providers install`
+provider requires contract 25.5 and negotiates `planning.lifecycle` to order
+native replacements around common table operations. `ptah providers install`
 reads the document to choose the newest release the host can start, without
 downloading an archive. `release-lines.json` lists the release lines the provider declares.
 
@@ -1382,6 +1382,66 @@ drives `ptah schema apply` from a YAML, a Go and a YQL source: it creates a
 topic with its consumers, finds nothing to change, changes the retention and
 the consumers, finds nothing to change again, and drops the topic.
 
+## Streaming queries
+
+The provider reads, compares, plans and applies streaming queries from YAML,
+Go and SQL sources. A session enables `streaming_queries` only when the target
+reports both `EnableStreamingQueries` and `EnableExternalDataSources` through
+its monitoring endpoint. A target without that evidence refuses a streaming
+operation. A listed query whose system view cannot establish every setting is
+uninspected, so an incomplete reading cannot authorize its removal.
+
+```yaml
+streaming_queries:
+  copy_events:
+    schema: app
+    text: INSERT INTO `app/sink` SELECT * FROM `app/source`;
+    run: true
+    resource_pool: default
+    allow_state_reset: false
+```
+
+The Go directive is `ptah:schema:streamingquery`, with the same attributes and
+an explicit `name`. SQL accepts `CREATE STREAMING QUERY ... DO BEGIN ... END
+DO`, including `IF NOT EXISTS` and `OR REPLACE`. `OR REPLACE` grants the same
+state-reset permission as `allow_state_reset: true`. HCL has no streaming
+query block. A complete source drops a query it omits; the SQL header
+`ptah:not-described streaming_query` preserves queries outside its coverage.
+
+An omitted `run` means true and an omitted resource pool means `default`.
+Comparison ignores query whitespace and comments but preserves literal values.
+A changed body requires explicit state-reset permission because it discards
+checkpoints. Stopping or changing the resource pool keeps topic offsets. The
+planner stops a running query before changing its inputs and restarts it after
+its new inputs exist; a change that only stops the query emits one statement.
+Native and text rendering carry the same operations and preconditions.
+
+Input dependencies use physical scheme paths, including absolute paths inside
+the selected database or dev realm. A constant `PRAGMA TablePathPrefix` applies
+to subsequent relative paths. A foreign path or an unresolved prefix refuses
+planning. Constant named paths, named subqueries, `AS_TABLE`, static `CONCAT`
+and `EACH` inputs retain their dependencies. A qualified external reference
+retains the local external data source as its dependency. Unresolved named
+paths, `USE`, and dynamic table functions such as `RANGE` refuse planning:
+their complete physical inputs cannot be proven from the captured body.
+Ordinary strings outside a table expression create no path dependency.
+A named resource pool remains a database-wide dependency, including
+a literal dot in its name. Scope selection keeps that pool when it keeps the
+query, unless the pool is explicitly excluded. Access changes follow a query's
+stop and restart; a final drop accounts for revoking that query's access.
+
+Execution verifies the stored query settings before dispatch, checks
+cancellation and held locks before each statement, and reads back the result.
+This precondition contains no ACL or principal state; access ordering remains
+explicit in the complete plan. Each statement
+runs once. A dispatched operation whose result cannot be confirmed is UNKNOWN.
+The dev-realm guard checks the query body as well as the query's own path.
+
+`TestHostStreamingQueryGraph` exercises the combined host graph on YDB 26.2:
+it stops a query, removes its old source, replaces a table with the new source
+topic at the same path, restarts the query, verifies a synced second apply,
+and stops it without changing its body.
+
 ## Resource pools and classifiers
 
 The provider declares, compares, plans and applies resource pools and resource
@@ -2157,13 +2217,14 @@ revocations; coordination nodes as this provider's coordination model; and
 topics with the consumers `CREATE TOPIC` and `ALTER TOPIC ... ADD CONSUMER`
 declare, as this provider's topic model; and the data sources and external
 tables `CREATE [OR REPLACE] EXTERNAL DATA SOURCE` and `CREATE [OR REPLACE]
-EXTERNAL TABLE` declare, as this provider's external object models; and secrets
-whose values are approved input references. It
+EXTERNAL TABLE` declare, as this provider's external object models; and
+streaming query definitions as the streaming query model; and secrets whose
+values are approved input references. It
 says what each document declares, traces every object to its statement, and
 claims complete coverage of the row-table, column, column-storage,
-coordination, topic, external data source, external table and secret models. A
+coordination, topic, external data source, external table, streaming query and secret models. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
-`external_data_source`, `external_table` or `secret` limits that claim, for one object
+`external_data_source`, `external_table`, `streaming_query` or `secret` limits that claim, for one object
 or, without a name, for the kind.
 
 A refused token is quoted with at most its first 64 bytes, where Ptah quotes it
@@ -2183,7 +2244,7 @@ carry is refused by name, with no partial reading:
 - a grant on a resource pool whose name holds a dot, a quote or a bracket: Ptah
   names a pool it reads from a provider as it names a table, so the grant
   would come back on a renamed pool;
-- async replications, transfers and streaming queries, which this
+- async replications and transfers, which this
   provider has no model for.
 
 Some of what a reading carries is not planned yet. Table creation refuses
@@ -2447,6 +2508,20 @@ inference flows through this provider: two generations from plan to cutover, a
 rollback and a retirement, a chunked generation in a table of its own, the
 refusals, and the answers an agent reads, which carry no source content.
 
+## Offline schema rendering
+
+The provider uses `schema.declarations` to create authored coordination nodes,
+topics, external sources and tables, resource pools, and classifiers. The host
+validates the whole schema and combines these creations with table and common
+object steps before rendering SQL. Declaration operations retain their desired
+definitions and contain no observed-state claims.
+
+A rendered schema opens no session. Capability limits, conflicting object paths,
+duplicate classifier ranks, and explicit native access requirements refuse the
+whole batch. Use live schema planning for access requirements that a CREATE
+statement cannot express. External tables follow their declared data sources;
+classifiers follow their declared resource pools.
+
 ## Operator statements and object scopes
 
 The `sessions.statements` service runs operator checks, migration test
@@ -2478,7 +2553,7 @@ Remaining work includes more source formats, comparison, the alteration of table
 settings other than column families, planning, rendering and operation models for other objects,
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
-rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object, secret and resource pool lifecycles, approved execution inputs, row-table creation and row-table alteration execution, transaction, history, metadata,
+rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object, resource pool, streaming query and secret lifecycles, approved execution inputs, row-table creation and row-table alteration execution, transaction, history, metadata,
 lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 

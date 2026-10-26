@@ -188,7 +188,7 @@ func (h *externalHarness) plan(location string, columns ...string) []*protocol.U
 	if len(compared.Changes) == 0 {
 		return nil
 	}
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: externalplan.ServiceID, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}}
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: externalplan.ServiceID, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}}
 	for _, change := range compared.Changes {
 		planning.Changes = append(planning.Changes, &protocol.PlanningChange{Subject: change.Subject, Value: change.Value})
 	}

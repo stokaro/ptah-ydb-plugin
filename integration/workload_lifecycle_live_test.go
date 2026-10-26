@@ -106,7 +106,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 		}
 		_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL `"+poolName+"`")
 	})
-	client := startProviderFor(c, provider.TextUnitsFeature)
+	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
@@ -119,7 +119,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 		c.Helper()
 		snapshot, err := client.Inspect(ctx, &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{"/"}})
 		c.Assert(err, qt.IsNil)
-		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: workloadplan.ServiceID, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}}
+		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: workloadplan.ServiceID, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}}
 		for _, family := range []struct {
 			kind, service string
 			declared      map[string]proto.Message

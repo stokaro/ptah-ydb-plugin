@@ -301,7 +301,7 @@ func TestExternalPlanning_HappyPath(t *testing.T) {
 			for i, step := range plan.Contributions[0].Steps {
 				index[step.Id.Name] = i
 				c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
-				c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_DEPENDENT)
+				c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
 				_, operation, err := schema.ExternalOperationChange(step.Operation.Value.Value)
 				c.Assert(err, qt.IsNil)
 				steps = append(steps, stepSummary{step.Operation.Value.Value.Owner.Name, operation, step.Metadata.Effects[0].Action})

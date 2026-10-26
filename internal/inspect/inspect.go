@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -17,6 +18,9 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
 )
+
+// The pinned vendor protobuf does not name STREAMING_QUERY.
+const streamingQueryEntry = Ydb_Scheme.Entry_Type(26)
 
 // ColumnTables reads the monitoring endpoint's description of the column table
 // at an absolute path: the page columnstore.Decode reads.
@@ -41,6 +45,16 @@ func Read(ctx context.Context, driver *ydb.Driver, columns ColumnTables, databas
 // ReadCommon is [Read] that also reports the common objects common names,
 // each kind complete for the directories the read lists.
 func ReadCommon(ctx context.Context, driver *ydb.Driver, columns ColumnTables, database string, selectors []string, common Common, leaveOut ...string) (result *protocol.Schema, err error) {
+	return ReadObjects(ctx, driver, columns, database, selectors, common, nil, leaveOut...)
+}
+
+// StreamingQuery reads the stored settings of an absolute streaming query
+// path. A nil reader leaves this family uninspected.
+type StreamingQuery func(context.Context, string) (*streaming.Spec, error)
+
+// ReadObjects includes streaming queries where their capability and system
+// view are available. An unread query has explicit incomplete coverage.
+func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, database string, selectors []string, common Common, queries StreamingQuery, leaveOut ...string) (result *protocol.Schema, err error) {
 	schemas, bindings, err := scopes(database, selectors, leaveOut)
 	if err != nil {
 		return nil, err
@@ -99,6 +113,26 @@ func ReadCommon(ctx context.Context, driver *ydb.Driver, columns ColumnTables, d
 				continue
 			}
 			switch entry.GetType() {
+			case streamingQueryEntry:
+				owner := &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: schema.StreamingQueryProperties, Name: name}
+				var spec *streaming.Spec
+				readErr := fmt.Errorf("the streaming query capability was not established")
+				if queries != nil {
+					spec, readErr = queries(ctx, path.Join(database, selected, name))
+					if readErr == nil && spec == nil {
+						readErr = fmt.Errorf("the listed streaming query has no stored settings")
+					}
+				}
+				if readErr != nil {
+					result.Coverage.Subjects = append(result.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: owner.Kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: readErr.Error()}})
+					break
+				}
+				value, err := schema.CaptureObject(owner, &nativeprotocol.StreamingQuerySettings{Text: spec.Text, Run: spec.Run, ResourcePool: spec.ResourcePool})
+				if err != nil {
+					return nil, err
+				}
+				result.NativeObjects = append(result.NativeObjects, value)
+				observe(result, []*protocol.Envelope{value})
 			case Ydb_Scheme.Entry_DIRECTORY:
 				if len(selectors) == 0 {
 					schemas = append(schemas, path.Join(selected, name))
@@ -194,6 +228,9 @@ func ReadCommon(ctx context.Context, driver *ydb.Driver, columns ColumnTables, d
 		// A successful list and complete child reads prove native-object
 		// absence only in this exact directory, never in skipped descendants.
 		for _, record := range result.Coverage.Kinds {
+			if record.Model.Kind == schema.StreamingQueryProperties && queries == nil {
+				continue
+			}
 			// Views the common wire carries are not read as native objects.
 			if schema.IsNativeObject(record.Model.Kind) && (record.Model.Kind != schema.ViewProperties || !common.Views) {
 				record.Regions = append(record.Regions, &protocol.ModelNamespaceKnowledge{

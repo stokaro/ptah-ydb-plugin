@@ -9,8 +9,28 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
+
+func TestRealmRefusesNativeStreamingBodyEscape(t *testing.T) {
+	c := qt.New(t)
+	probe := &driverProbe{}
+	p := realmProvider(c, probe)
+	owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Name: "copy"}
+	desired, err := schema.CaptureStreamingQueryIntent(owner, streaming.Spec{Text: "INSERT INTO `/local/outside` SELECT * FROM inside;"}, false)
+	c.Assert(err, qt.IsNil)
+	change, err := schema.CaptureStreamingQueryChange("change", owner, nil, desired)
+	c.Assert(err, qt.IsNil)
+	operation, err := schema.StreamingQueryOperationFromChange("streaming", change.Value)
+	c.Assert(err, qt.IsNil)
+	result, err := p.Execute(c.Context(), &protocol.ExecuteRequest{SessionId: "session", RequestId: "streaming", Units: []*protocol.Unit{{ChangeId: "streaming", Body: &protocol.Unit_Native{Native: operation.Value}}}})
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
+	c.Assert(result.DiagnosticCode, qt.Equals, "ydb.realm-escape")
+	c.Assert(probe.execCalls.Load(), qt.Equals, int32(0))
+}
 
 func realmProvider(c *qt.C, probe *driverProbe) *Provider {
 	c.Helper()

@@ -18,6 +18,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 )
 
@@ -45,6 +46,7 @@ func startProvider(c *qt.C, binary, digest string) *providerruntime.Client {
 	defer cancel()
 	client, err := providerruntime.Start(ctx, providerruntime.Options{
 		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin",
+		HostFeatures: []string{provider.PlanningLifecycleFeature},
 	})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(client.Close)

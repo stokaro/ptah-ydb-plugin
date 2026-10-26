@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -12,8 +13,12 @@ func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, 
 	switch input.GetValue().GetKind() {
 	case schema.SecretOperation:
 		return schema.NormalizeSecretOperation(input)
+	case declarationplan.OperationKind:
+		return declarationplan.Normalize(input)
 	case schema.CoordinationOperation:
 		return schema.NormalizeCoordinationOperation(input)
+	case schema.StreamingQueryOperation:
+		return schema.NormalizeStreamingQueryOperation(input)
 	case schema.TopicOperation:
 		return schema.NormalizeTopicOperation(input)
 	case schema.ChangefeedOperation:

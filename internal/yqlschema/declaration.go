@@ -33,7 +33,7 @@ func (p *parser) createDeclaration() []statement {
 	case p.word("TRANSFER"):
 		return p.unsupportedReplication("CREATE TRANSFER", "TRANSFER")
 	case p.word("STREAMING"):
-		return p.unsupported("CREATE STREAMING QUERY", "STREAMING", "QUERY")
+		return one(p.streamingQuery(false))
 	case p.word("USER"):
 		p.pos++
 		return one(p.createUser())
@@ -73,7 +73,7 @@ func (p *parser) createDeclaration() []statement {
 func (p *parser) replacementDeclaration() []statement {
 	p.wantWord("REPLACE")
 	if p.word("STREAMING") {
-		return p.unsupported("CREATE OR REPLACE STREAMING QUERY", "STREAMING", "QUERY")
+		return one(p.streamingQuery(true))
 	}
 	p.wantWord("EXTERNAL")
 	return p.external()

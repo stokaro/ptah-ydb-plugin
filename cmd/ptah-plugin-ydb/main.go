@@ -24,7 +24,7 @@ func main() {
 		_ = dev.Close()
 		os.Exit(1) //revive:disable-line:deep-exit the provider process must not outlive the signal that stopped it
 	}()
-	err := runtime.Serve(runtime.Server{DevProvisioner: dev, Description: backend.Description(), Sessions: owner, Inspector: owner, ValueNormalizer: owner, ValueConverter: owner, ModelComparer: owner, FeaturePlanner: owner, TablePreparer: owner, TableCreations: owner, SchemaValidator: owner, Renderer: owner, SourceDecoder: owner, SQLSchemaReader: owner, Executor: owner, ExecutionInputs: owner, Transactions: owner, Statements: owner, History: owner, Locks: owner, Metadata: owner, SQLAnalyzer: owner, Linter: owner, RowTyper: owner, RowReader: owner, RowWriter: owner, Seeds: owner, DevCleaner: owner, ReplayGuard: owner, EmbeddingStore: owner, CommonObjects: owner, SourceEncoder: owner})
+	err := runtime.Serve(runtime.Server{DevProvisioner: dev, Description: backend.Description(), Sessions: owner, Inspector: owner, ValueNormalizer: owner, ValueConverter: owner, ModelComparer: owner, FeaturePlanner: owner, Declarations: owner, TablePreparer: owner, TableCreations: owner, SchemaValidator: owner, Renderer: owner, SourceDecoder: owner, SQLSchemaReader: owner, Executor: owner, ExecutionInputs: owner, Transactions: owner, Statements: owner, History: owner, Locks: owner, Metadata: owner, SQLAnalyzer: owner, Linter: owner, RowTyper: owner, RowReader: owner, RowWriter: owner, Seeds: owner, DevCleaner: owner, ReplayGuard: owner, EmbeddingStore: owner, CommonObjects: owner, SourceEncoder: owner})
 	if closeErr := dev.Close(); closeErr != nil {
 		fmt.Fprintln(os.Stderr, closeErr)
 	}

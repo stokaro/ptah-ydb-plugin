@@ -1,17 +1,9 @@
 # Loads this provider refuses by name, because they hold a statement the host
 # reads into an object this provider has no model for: <case> <construct>.
-edge-streaming-body-semicolons CREATE STREAMING QUERY
-fixture-055-ydb-streaming-queries CREATE STREAMING QUERY
 live-ydb-09 CREATE ASYNC REPLICATION
 live-ydb-10 CREATE ASYNC REPLICATION
 live-ydb-23 CREATE TRANSFER
 live-ydb-24 CREATE TRANSFER
-live-ydb-26 CREATE OR REPLACE STREAMING QUERY
-live-ydb-27 CREATE STREAMING QUERY
-live-ydb-29 CREATE OR REPLACE STREAMING QUERY
-live-ydb-30 CREATE STREAMING QUERY
-live-ydb-31 CREATE STREAMING QUERY
-live-ydb-32 CREATE STREAMING QUERY
 parse-builtin-desired-yqlreplication-renders-its-paths-and-lambda-01 CREATE ASYNC REPLICATION
 parse-lint-ydbrules-leave-replication-statements-ydbkeeps-01 ALTER ASYNC REPLICATION
 parse-lint-ydbrules-leave-replication-statements-ydbkeeps-02 CREATE ASYNC REPLICATION
@@ -23,44 +15,15 @@ parse-lint-ydbrules-report-replication-traps-03 CREATE ASYNC REPLICATION
 parse-lint-ydbrules-report-replication-traps-04 CREATE ASYNC REPLICATION
 parse-lint-ydbrules-report-replication-traps-05 CREATE TRANSFER
 parse-lint-ydbrules-say-what-areplication-statement-leaves-01 CREATE TRANSFER
-parse-lint-ydbstreaming-checkpoint-lint-03 CREATE OR REPLACE STREAMING QUERY
-parse-lint-ydbstreaming-checkpoint-lint-04 CREATE OR REPLACE STREAMING QUERY
-parse-lint-ydbstreaming-checkpoint-lint-05 CREATE STREAMING QUERY
 render-050-ydb-replication CREATE ASYNC REPLICATION
-schemadiff-compare-yqlstreaming-query-body-change-requires-permission-01 CREATE STREAMING QUERY
-schemadiff-compare-yqlstreaming-query-omission-and-reset-01 CREATE OR REPLACE STREAMING QUERY
-schemadiff-compare-yqlstreaming-query-omission-and-reset-02 CREATE STREAMING QUERY
 schemafile-yqlreplication-changes-across-files-01 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-01 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-02 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-03 CREATE ASYNC REPLICATION
 ydbsql-read-yqlcredential-changes-04 CREATE ASYNC REPLICATION
 ydbsql-read-yqlprivileges-13 CREATE ASYNC REPLICATION
-ydbsql-read-yqlprivileges-15 CREATE STREAMING QUERY
 ydbsql-read-yqlreplication-01 CREATE ASYNC REPLICATION
 ydbsql-read-yqlreplication-changes-01 CREATE ASYNC REPLICATION
-ydbsql-read-yqlstreaming-query-01 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-02 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-03 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-guard-does-not-authorize-reset-01 CREATE OR REPLACE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-guards-across-files-01 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-guards-across-files-02 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-guards-across-files-03 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-01 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-02 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-03 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-04 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-06 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-07 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-08 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-09 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-10 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-11 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-refusals-12 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-round-trip-01 CREATE OR REPLACE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-round-trip-02 CREATE OR REPLACE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-round-trip-03 CREATE STREAMING QUERY
-ydbsql-read-yqlstreaming-query-round-trip-04 CREATE STREAMING QUERY
 ydbsql-read-yqltransfer-01 CREATE TRANSFER
 ydbsql-read-yqltransfer-changes-01 CREATE TRANSFER
 ydbsql-yqlreplication-refusals-hide-values-01 ALTER ASYNC REPLICATION

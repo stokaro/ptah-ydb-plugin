@@ -322,6 +322,140 @@ func (x *ResourcePoolClassifierSettings) GetRank() int64 {
 	return 0
 }
 
+// A streaming query's persistent settings as .sys/streaming_queries reports
+// them: the body inside DO BEGIN ... END DO, whether it runs, and its resource
+// pool. Runtime status, retries, offsets and checkpoints are not settings.
+type StreamingQuerySettings struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	Run           *bool                  `protobuf:"varint,2,opt,name=run,proto3,oneof" json:"run,omitempty"`
+	ResourcePool  string                 `protobuf:"bytes,3,opt,name=resource_pool,json=resourcePool,proto3" json:"resource_pool,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamingQuerySettings) Reset() {
+	*x = StreamingQuerySettings{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamingQuerySettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamingQuerySettings) ProtoMessage() {}
+
+func (x *StreamingQuerySettings) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamingQuerySettings.ProtoReflect.Descriptor instead.
+func (*StreamingQuerySettings) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *StreamingQuerySettings) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *StreamingQuerySettings) GetRun() bool {
+	if x != nil && x.Run != nil {
+		return *x.Run
+	}
+	return false
+}
+
+func (x *StreamingQuerySettings) GetResourcePool() string {
+	if x != nil {
+		return x.ResourcePool
+	}
+	return ""
+}
+
+// A declared streaming query: its settings, an unset run starting it and an
+// empty pool selecting the pool default, and the declaration's permission to
+// reset the query's aggregation state, which the database does not keep.
+type StreamingQueryIntent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Text            string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	Run             *bool                  `protobuf:"varint,2,opt,name=run,proto3,oneof" json:"run,omitempty"`
+	ResourcePool    string                 `protobuf:"bytes,3,opt,name=resource_pool,json=resourcePool,proto3" json:"resource_pool,omitempty"`
+	AllowStateReset bool                   `protobuf:"varint,4,opt,name=allow_state_reset,json=allowStateReset,proto3" json:"allow_state_reset,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *StreamingQueryIntent) Reset() {
+	*x = StreamingQueryIntent{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamingQueryIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamingQueryIntent) ProtoMessage() {}
+
+func (x *StreamingQueryIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamingQueryIntent.ProtoReflect.Descriptor instead.
+func (*StreamingQueryIntent) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *StreamingQueryIntent) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *StreamingQueryIntent) GetRun() bool {
+	if x != nil && x.Run != nil {
+		return *x.Run
+	}
+	return false
+}
+
+func (x *StreamingQueryIntent) GetResourcePool() string {
+	if x != nil {
+		return x.ResourcePool
+	}
+	return ""
+}
+
+func (x *StreamingQueryIntent) GetAllowStateReset() bool {
+	if x != nil {
+		return x.AllowStateReset
+	}
+	return false
+}
+
 // A scheme secret is observed only by identity. Its value is never read.
 type SecretPresence struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -331,7 +465,7 @@ type SecretPresence struct {
 
 func (x *SecretPresence) Reset() {
 	*x = SecretPresence{}
-	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[4]
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -343,7 +477,7 @@ func (x *SecretPresence) String() string {
 func (*SecretPresence) ProtoMessage() {}
 
 func (x *SecretPresence) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[4]
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -356,7 +490,7 @@ func (x *SecretPresence) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecretPresence.ProtoReflect.Descriptor instead.
 func (*SecretPresence) Descriptor() ([]byte, []int) {
-	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{4}
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{6}
 }
 
 // A desired scheme secret holds a host-approved input reference only.
@@ -369,7 +503,7 @@ type SecretIntent struct {
 
 func (x *SecretIntent) Reset() {
 	*x = SecretIntent{}
-	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[5]
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -381,7 +515,7 @@ func (x *SecretIntent) String() string {
 func (*SecretIntent) ProtoMessage() {}
 
 func (x *SecretIntent) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[5]
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -394,7 +528,7 @@ func (x *SecretIntent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecretIntent.ProtoReflect.Descriptor instead.
 func (*SecretIntent) Descriptor() ([]byte, []int) {
-	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{5}
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SecretIntent) GetValueEnv() string {
@@ -448,7 +582,18 @@ const file_internal_nativeprotocol_objects_proto_rawDesc = "" +
 	"\rresource_pool\x18\x01 \x01(\tR\fresourcePool\x12\x1f\n" +
 	"\vmember_name\x18\x02 \x01(\tR\n" +
 	"memberName\x12\x12\n" +
-	"\x04rank\x18\x03 \x01(\x03R\x04rank\"\x10\n" +
+	"\x04rank\x18\x03 \x01(\x03R\x04rank\"p\n" +
+	"\x16StreamingQuerySettings\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x15\n" +
+	"\x03run\x18\x02 \x01(\bH\x00R\x03run\x88\x01\x01\x12#\n" +
+	"\rresource_pool\x18\x03 \x01(\tR\fresourcePoolB\x06\n" +
+	"\x04_run\"\x9a\x01\n" +
+	"\x14StreamingQueryIntent\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x15\n" +
+	"\x03run\x18\x02 \x01(\bH\x00R\x03run\x88\x01\x01\x12#\n" +
+	"\rresource_pool\x18\x03 \x01(\tR\fresourcePool\x12*\n" +
+	"\x11allow_state_reset\x18\x04 \x01(\bR\x0fallowStateResetB\x06\n" +
+	"\x04_run\"\x10\n" +
 	"\x0eSecretPresence\"+\n" +
 	"\fSecretIntent\x12\x1b\n" +
 	"\tvalue_env\x18\x01 \x01(\tR\bvalueEnvB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
@@ -465,26 +610,28 @@ func file_internal_nativeprotocol_objects_proto_rawDescGZIP() []byte {
 	return file_internal_nativeprotocol_objects_proto_rawDescData
 }
 
-var file_internal_nativeprotocol_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_internal_nativeprotocol_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_internal_nativeprotocol_objects_proto_goTypes = []any{
 	(*ViewObservation)(nil),                // 0: ptah.ydb.native.ViewObservation
 	(*DescribeExternalTableResult)(nil),    // 1: ptah.ydb.native.DescribeExternalTableResult
 	(*ResourcePoolSettings)(nil),           // 2: ptah.ydb.native.ResourcePoolSettings
 	(*ResourcePoolClassifierSettings)(nil), // 3: ptah.ydb.native.ResourcePoolClassifierSettings
-	(*SecretPresence)(nil),                 // 4: ptah.ydb.native.SecretPresence
-	(*SecretIntent)(nil),                   // 5: ptah.ydb.native.SecretIntent
-	nil,                                    // 6: ptah.ydb.native.DescribeExternalTableResult.ContentEntry
-	(*Ydb_View.DescribeViewResult)(nil),    // 7: Ydb.View.DescribeViewResult
-	(*DescribeTableResult)(nil),            // 8: ptah.ydb.native.DescribeTableResult
-	(*Ydb_Scheme.Entry)(nil),               // 9: Ydb.Scheme.Entry
-	(*ColumnMeta)(nil),                     // 10: ptah.ydb.native.ColumnMeta
+	(*StreamingQuerySettings)(nil),         // 4: ptah.ydb.native.StreamingQuerySettings
+	(*StreamingQueryIntent)(nil),           // 5: ptah.ydb.native.StreamingQueryIntent
+	(*SecretPresence)(nil),                 // 6: ptah.ydb.native.SecretPresence
+	(*SecretIntent)(nil),                   // 7: ptah.ydb.native.SecretIntent
+	nil,                                    // 8: ptah.ydb.native.DescribeExternalTableResult.ContentEntry
+	(*Ydb_View.DescribeViewResult)(nil),    // 9: Ydb.View.DescribeViewResult
+	(*DescribeTableResult)(nil),            // 10: ptah.ydb.native.DescribeTableResult
+	(*Ydb_Scheme.Entry)(nil),               // 11: Ydb.Scheme.Entry
+	(*ColumnMeta)(nil),                     // 12: ptah.ydb.native.ColumnMeta
 }
 var file_internal_nativeprotocol_objects_proto_depIdxs = []int32{
-	7,  // 0: ptah.ydb.native.ViewObservation.view:type_name -> Ydb.View.DescribeViewResult
-	8,  // 1: ptah.ydb.native.ViewObservation.properties:type_name -> ptah.ydb.native.DescribeTableResult
-	9,  // 2: ptah.ydb.native.DescribeExternalTableResult.self:type_name -> Ydb.Scheme.Entry
-	10, // 3: ptah.ydb.native.DescribeExternalTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
-	6,  // 4: ptah.ydb.native.DescribeExternalTableResult.content:type_name -> ptah.ydb.native.DescribeExternalTableResult.ContentEntry
+	9,  // 0: ptah.ydb.native.ViewObservation.view:type_name -> Ydb.View.DescribeViewResult
+	10, // 1: ptah.ydb.native.ViewObservation.properties:type_name -> ptah.ydb.native.DescribeTableResult
+	11, // 2: ptah.ydb.native.DescribeExternalTableResult.self:type_name -> Ydb.Scheme.Entry
+	12, // 3: ptah.ydb.native.DescribeExternalTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
+	8,  // 4: ptah.ydb.native.DescribeExternalTableResult.content:type_name -> ptah.ydb.native.DescribeExternalTableResult.ContentEntry
 	5,  // [5:5] is the sub-list for method output_type
 	5,  // [5:5] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
@@ -500,13 +647,15 @@ func file_internal_nativeprotocol_objects_proto_init() {
 	file_internal_nativeprotocol_indexes_proto_init()
 	file_internal_nativeprotocol_objects_proto_msgTypes[1].OneofWrappers = []any{}
 	file_internal_nativeprotocol_objects_proto_msgTypes[2].OneofWrappers = []any{}
+	file_internal_nativeprotocol_objects_proto_msgTypes[4].OneofWrappers = []any{}
+	file_internal_nativeprotocol_objects_proto_msgTypes[5].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_nativeprotocol_objects_proto_rawDesc), len(file_internal_nativeprotocol_objects_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

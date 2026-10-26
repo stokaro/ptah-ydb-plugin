@@ -36,7 +36,7 @@ jobs:
       # a hosted runner, so the default per-package timeout is too tight.
       - run: go test -race -timeout 30m ./...
       - run: go vet -tags integration ./...
-      - run: go test -race -tags integration ./integration -run 'TestRowTableCreationOfflineSubprocess|TestSchemaValidationOfflineSubprocess|TestNativeObjectConversionOfflineSubprocess|TestChildConversionOfflineSubprocess|TestTableConversionOfflineSubprocess|TestColumnConversionOfflineSubprocess|TestColumnStorageOfflineSubprocess|TestCoordinationSourceOfflineSubprocess|TestCoordinationComparisonOfflineSubprocess|TestYQLAnalysisOfflineSubprocess|TestMigrationLintOfflineSubprocess|TestRowServicesOfflineSubprocess|TestStatementFactsOfflineSubprocess|TestStatementFactsAnnotationOfflineSubprocess|TestEmbeddingStoreNeedsTheHostsFeatureSubprocess|TestSQLSchemaOfflineSubprocess|TestTextUnitsOfflineSubprocess|TestCommonObjectsOfflineSubprocess|TestSourceClaimsOfflineSubprocess' -count=1
+      - run: go test -race -tags integration ./integration -run 'TestRowTableCreationOfflineSubprocess|TestSchemaValidationOfflineSubprocess|TestNativeObjectConversionOfflineSubprocess|TestChildConversionOfflineSubprocess|TestTableConversionOfflineSubprocess|TestColumnConversionOfflineSubprocess|TestColumnStorageOfflineSubprocess|TestCoordinationSourceOfflineSubprocess|TestCoordinationComparisonOfflineSubprocess|TestYQLAnalysisOfflineSubprocess|TestMigrationLintOfflineSubprocess|TestRowServicesOfflineSubprocess|TestStatementFactsOfflineSubprocess|TestStatementFactsAnnotationOfflineSubprocess|TestEmbeddingStoreNeedsTheHostsFeatureSubprocess|TestSQLSchemaOfflineSubprocess|TestTextUnitsOfflineSubprocess|TestCommonObjectsOfflineSubprocess|TestSourceClaimsOfflineSubprocess|TestDeclarationsOfflineSubprocess' -count=1
       - run: CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
   windows-unit:
     runs-on: windows-latest
@@ -65,10 +65,10 @@ jobs:
             features: enable_vector_index,enable_external_data_sources
             host: release
           - image: ydbplatform/local-ydb:26.2.1.14
-            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources
+            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources,enable_streaming_queries
             host: release
           - image: ydbplatform/local-ydb:26.2.1.14
-            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources
+            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources,enable_streaming_queries
             host: master
     env:
       GOWORK: 'off'

@@ -9,6 +9,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -42,7 +43,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 			common.Realm = session.database
 		}
 	}
-	result, err := inspect.ReadCommon(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), common, session.leftOut()...)
+	result, err := inspect.ReadObjects(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), common, session.streaming(), session.leftOut()...)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
@@ -87,6 +88,15 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		return nil, status.FromContextError(err).Err()
 	}
 	return result, nil
+}
+
+func (s *session) streaming() inspect.StreamingQuery {
+	if !s.capabilities[streaming.Capability] {
+		return nil
+	}
+	return func(ctx context.Context, absolute string) (*streaming.Spec, error) {
+		return nativeapi.ReadStreamingQuery(ctx, s.connection.DB, s.connection.Database(), absolute)
+	}
 }
 
 // workload reads the database's resource pools and classifiers, or is nil
@@ -153,6 +163,8 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 				normalize = schema.NormalizeExternalChange
 			case schema.ResourcePoolChange, schema.ResourcePoolClassifierChange:
 				normalize = schema.NormalizeWorkloadChange
+			case schema.StreamingQueryChange:
+				normalize = schema.NormalizeStreamingQueryChange
 			}
 			normalized, changeErr := normalize(input)
 			if changeErr != nil {

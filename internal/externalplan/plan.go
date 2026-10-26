@@ -478,11 +478,11 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 			}
 		}
 		facts := value.OperationSemantics
-		// Every statement of the batch asks for the dependent phase, the one
-		// window a host shares between creations and drops: a table dropped
+		// Every statement of the batch asks for the lifecycle phase, which
+		// orders operations around common changes: a table dropped
 		// before the data source it reads is created again after it, and the
 		// batch orders its own steps there.
-		step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_DEPENDENT},
+		step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_LIFECYCLE},
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Placement: protocol.PlanningMetadata_EARLY, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}}
 		if len(access.Dependencies)+len(access.Sources)+len(planned.secrets) != 0 {
 			if !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {

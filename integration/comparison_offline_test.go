@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/protobuf/proto"
@@ -41,10 +42,14 @@ func TestCoordinationComparisonOfflineSubprocess(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(change, normalized.Values[0]), qt.IsTrue)
 
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: coordinationplan.ServiceID, DatabasePath: request.DatabasePath, Identifiers: request.Identifiers, Capabilities: map[string]bool{"coordination_nodes": true, "transactional_ddl": false}, Changes: []*protocol.PlanningChange{{Subject: compared.Changes[0].Subject, Value: change}}}
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: coordinationplan.ServiceID, DatabasePath: request.DatabasePath, Identifiers: request.Identifiers, Capabilities: map[string]bool{"coordination_nodes": true, "transactional_ddl": false}, Changes: []*protocol.PlanningChange{{Subject: compared.Changes[0].Subject, Value: change}}}
 	plan, err := client.PlanFeatures(t.Context(), planning)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	withoutLifecycle := startProviderFor(c)
+	unnegotiated, err := withoutLifecycle.PlanFeatures(t.Context(), planning)
+	c.Assert(err, qt.IsNotNil)
+	c.Assert(unnegotiated, qt.IsNil)
 	rendered, err := client.Render(t.Context(), testplanning.RenderRequest(plan, planning.Capabilities))
 	c.Assert(err, qt.IsNil)
 	c.Assert(rendered.Units, qt.HasLen, 1)

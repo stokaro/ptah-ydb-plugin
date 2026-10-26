@@ -182,7 +182,7 @@ func TestColumnTableStatement_EpochTTLAndQuoting(t *testing.T) {
 func columnCreationRequest(c *qt.C, storage string, capabilities map[string]bool) *protocol.PlanFeaturesRequest {
 	c.Helper()
 	subject := tableSubject()
-	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: capabilities,
 		Tables: []*protocol.PlanningTable{{Subject: subject, Action: protocol.PlanningTable_CREATE, Desired: columnDeclaration(c, storage)}},
 		CommonSteps: []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "create"}, Parent: proto.CloneOf(subject),
@@ -258,7 +258,7 @@ func columnAlterRequest(c *qt.C, desired, held []*protocol.ComparisonRecord, ste
 		Features: &protocol.CapturedFeatures{
 			Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}},
 			Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}, Records: held}}}
-	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
 		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
 		Capabilities: map[string]bool{"transactional_ddl": false}, CommonSteps: steps,
 		Tables: []*protocol.PlanningTable{{Subject: tableSubject(), Action: protocol.PlanningTable_ALTER, Desired: declared, Current: current}}}

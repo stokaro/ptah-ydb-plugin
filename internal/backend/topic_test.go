@@ -149,7 +149,7 @@ func topicPlan(c *qt.C, declared *ydbdecl.Topic, read *native.DescribeTopicResul
 	compared, err := backend.New().CompareModels(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(compared.Changes, qt.HasLen, 1)
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: topicplan.ServiceID, Identifiers: request.Identifiers, Capabilities: capabilities,
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: topicplan.ServiceID, Identifiers: request.Identifiers, Capabilities: capabilities,
 		Changes: []*protocol.PlanningChange{{Subject: compared.Changes[0].Subject, Value: compared.Changes[0].Value}}}
 	plan, err := backend.New().PlanFeatures(c.Context(), planning)
 	c.Assert(err, qt.IsNil)

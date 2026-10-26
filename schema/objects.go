@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
@@ -28,7 +29,7 @@ const (
 // Inspection coverage and owner validation must use the same classification.
 func IsNativeObject(kind string) bool {
 	switch kind {
-	case SecretProperties, ViewProperties, CoordinationProperties, ExternalSourceProperties, ExternalTableProperties, TopicProperties:
+	case SecretProperties, ViewProperties, CoordinationProperties, ExternalSourceProperties, ExternalTableProperties, TopicProperties, StreamingQueryProperties:
 		return true
 	default:
 		return false
@@ -144,6 +145,8 @@ func normalizeObject(described proto.Message) error {
 		}
 	case *native.DescribeTopicResult:
 		return normalizeTopic(value)
+	case *native.StreamingQuerySettings:
+		return streaming.Validate(streaming.Spec{Text: value.GetText(), Run: value.Run, ResourcePool: value.GetResourcePool()})
 	default:
 		return fmt.Errorf("unsupported native YDB object model")
 	}

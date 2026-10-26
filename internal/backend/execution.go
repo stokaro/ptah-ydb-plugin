@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/servicequery"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
@@ -172,6 +173,12 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewChangefeed(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.ExternalSourceOperation, schema.ExternalTableOperation:
 				return nativeapi.NewExternal(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case schema.StreamingQueryOperation:
+				read := s.streaming()
+				if read == nil {
+					return false, fmt.Errorf("streaming queries require an established capability")
+				}
+				return (&nativeapi.StreamingQuery{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.WorkloadOperation:
 				read, unread := s.workload()
 				if read == nil {
@@ -297,6 +304,20 @@ func confineToRealm(unit *protocol.Unit) error {
 		return &yql.RealmRefusal{Operation: "an external data source"}
 	case schema.ExternalTableOperation:
 		return &yql.RealmRefusal{Operation: "an external table"}
+	case schema.StreamingQueryOperation:
+		change, err := schema.StreamingChangeOf(schema.StreamingQueryOperationChange(unit.GetNative()))
+		if err != nil {
+			return err
+		}
+		statements, err := streaming.Statements(change)
+		if err != nil {
+			return err
+		}
+		for _, statement := range statements {
+			if err := yql.ConfineToRealm(statement); err != nil {
+				return err
+			}
+		}
 	}
 	return yql.ConfineToRealm(unit.GetSql())
 }

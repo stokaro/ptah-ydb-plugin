@@ -178,6 +178,8 @@ func (c *converter) convert(statement statement) error {
 		return c.declareExternalSource(node)
 	case *createExternalTable:
 		return c.declareExternalTable(node)
+	case *createStreamingQuery:
+		return c.declareStreaming(node)
 	case *createPool:
 		return c.declare(Object{Kind: KindResourcePool, Name: node.name, Spec: new(node.spec)})
 	case *createClassifier:

@@ -147,7 +147,7 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 		if request.Access == protocol.RunStatementRequest_READ_ONLY {
 			record.readOnly, err = record.conn.BeginTx(lifetime, &sql.TxOptions{Isolation: sql.LevelSnapshot, ReadOnly: true})
 			if err != nil {
-				s.releaseStatement(record)
+				_ = s.releaseStatement(record)
 				return refuse("cannot open a snapshot read-only transaction")
 			}
 			runner = record.readOnly
@@ -265,7 +265,9 @@ func (s *session) failStatement(record *statementResult) {
 	if tx := s.transactions[record.transaction]; tx != nil {
 		tx.failed = true
 	}
-	s.releaseStatement(record)
+	// releaseStatement retains cleanup failures on the session, so a later
+	// commit or close cannot report success after the original statement failed.
+	_ = s.releaseStatement(record)
 }
 
 func (s *session) releaseStatement(record *statementResult) error {
@@ -303,7 +305,7 @@ func (s *session) releaseStatement(record *statementResult) error {
 func (s *session) closeStatements(transaction string, all bool) {
 	for _, record := range s.statementResults {
 		if all || record.transaction == transaction {
-			s.releaseStatement(record)
+			_ = s.releaseStatement(record)
 		}
 	}
 }
