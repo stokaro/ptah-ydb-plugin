@@ -21,7 +21,7 @@ const ServiceID = "ydb-secrets"
 // must name a declared secret; missing or unknown current state follows the
 // same coverage rules as creation and removal.
 func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*protocol.ComparedModels, error) {
-	database, err := objectcompare.SessionDatabase(request, schema.SecretProperties)
+	database, err := objectcompare.SessionDatabase(request)
 	if err != nil {
 		return nil, err
 	}

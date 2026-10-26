@@ -86,7 +86,7 @@ type session struct {
 
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
-	return []string{provider.SchemaDeclarationsFeature, provider.SensitiveInputsFeature, provider.ScopeSelectionsFeature, provider.StatementsFeature, provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature, provider.DevCleanupFeature, provider.ReplayGuardFeature, provider.StatementTimeoutFeature, provider.EmbeddingStoreFeature, provider.ReadSQLSchemaFeature, provider.TextUnitsFeature, provider.PlanningPolicyFeature, provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature, provider.EntryKeysFeature, provider.HCLSourceFeature, provider.EncodeSourceFeature}
+	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.SchemaDeclarationsFeature, provider.SensitiveInputsFeature, provider.ScopeSelectionsFeature, provider.StatementsFeature, provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature, provider.DevCleanupFeature, provider.ReplayGuardFeature, provider.StatementTimeoutFeature, provider.EmbeddingStoreFeature, provider.ReadSQLSchemaFeature, provider.TextUnitsFeature, provider.PlanningPolicyFeature, provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature, provider.EntryKeysFeature, provider.HCLSourceFeature, provider.EncodeSourceFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -168,10 +168,10 @@ func clusterCapabilities(ctx context.Context, opened *connection.Connection, ver
 // New constructs an isolated session service.
 func New() *Provider { return &Provider{sessions: make(map[string]*session)} }
 
-// minContractMinor requires authored declarations and lifecycle planning.
+// minContractMinor requires durable database context and dependency readiness.
 // Native replacements share physical paths with common objects, so their
 // ordering requires the complete sequence under planning.lifecycle.
-const minContractMinor = 5
+const minContractMinor = 7
 
 // Description advertises native runtime services, offline coordination models,
 // captured row-table creation, column family alteration of existing tables,
@@ -240,7 +240,11 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	p.mu.Lock()
 	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != "", version: version, capabilities: maps.Clone(capabilities)}
 	p.mu.Unlock()
-	return &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: commonCapabilities(ctx, capabilities), Features: negotiatedFeatures(ctx)}, nil
+	result := &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: commonCapabilities(ctx, capabilities), Features: negotiatedFeatures(ctx)}
+	if slices.Contains(result.Features, provider.DatabaseContextFeature) {
+		result.Context = databaseContext(address)
+	}
+	return result, nil
 }
 
 // Close releases only the named session. Repeated closes return the original

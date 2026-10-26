@@ -91,7 +91,7 @@ func secretRequest(c *qt.C, present bool) *protocol.CompareModelsRequest {
 		c.Assert(err, qt.IsNil)
 		add(current, value)
 	}
-	return &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: secretcompare.ServiceID, Kinds: []string{schema.SecretProperties}, TargetFeatures: backend.Description().Features,
+	return &protocol.CompareModelsRequest{Engine: "ydb", DatabasePath: "/local", ComparisonId: secretcompare.ServiceID, Kinds: []string{schema.SecretProperties}, TargetFeatures: backend.Description().Features,
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: map[string]bool{"secrets": true, "transactional_ddl": false}, Desired: desired, Current: current}
 }
 

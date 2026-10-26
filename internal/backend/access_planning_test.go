@@ -98,7 +98,7 @@ func TestExternalRecreationKeepsRevokesAfterRestoration(t *testing.T) {
 	moved := external{name: "bucket", source: bucketAt("https://b/")}
 	events := external{name: "events", table: eventsOver("app/bucket")}
 	request, _ := externalPlan(c, []external{moved, events}, []external{bucket, events}, withSources(), withSources())
-	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
+	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature}
 	for _, change := range request.Changes {
 		if change.Subject.Kind == schema.ExternalTableProperties {
 			request.CommonSteps = []*protocol.CommonPlanningStep{commonAccessFor(change.Subject, "external table", true)}

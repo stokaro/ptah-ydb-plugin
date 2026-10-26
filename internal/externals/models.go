@@ -23,7 +23,7 @@ func SourcePair(current, desired *protocol.Envelope, root string) (*ydbdecl.Exte
 		if err != nil {
 			return nil, nil, err
 		}
-		spec, err := SourceFromObserved(observed, root)
+		spec, err := SourceFromObserved(observed, schema.InterpretationRoot(current))
 		if err != nil {
 			return nil, nil, fmt.Errorf("external data source %s: %w", Display(current.GetOwner()), err)
 		}
@@ -34,7 +34,7 @@ func SourcePair(current, desired *protocol.Envelope, root string) (*ydbdecl.Exte
 		if err != nil {
 			return nil, nil, err
 		}
-		spec, err := SourceFromIntent(intent, root)
+		spec, err := SourceFromIntent(intent, schema.InterpretationRoot(desired))
 		if err != nil {
 			return nil, nil, fmt.Errorf("external data source %s: %w", Display(desired.GetOwner()), err)
 		}
@@ -52,7 +52,7 @@ func TablePair(current, desired *protocol.Envelope, root string) (*ydbdecl.Exter
 		if err != nil {
 			return nil, nil, err
 		}
-		spec, err := TableFromObserved(observed, root)
+		spec, err := TableFromObserved(observed, schema.InterpretationRoot(current))
 		if err != nil {
 			return nil, nil, fmt.Errorf("external table %s: %w", Display(current.GetOwner()), err)
 		}
@@ -63,7 +63,7 @@ func TablePair(current, desired *protocol.Envelope, root string) (*ydbdecl.Exter
 		if err != nil {
 			return nil, nil, err
 		}
-		spec, err := TableFromIntent(intent, root)
+		spec, err := TableFromIntent(intent, schema.InterpretationRoot(desired))
 		if err != nil {
 			return nil, nil, fmt.Errorf("external table %s: %w", Display(desired.GetOwner()), err)
 		}

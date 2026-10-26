@@ -8,6 +8,7 @@ package externalcompare
 import (
 	"context"
 	"fmt"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
@@ -38,7 +39,7 @@ func ChangeKinds() []string { return []string{schema.ExternalSourceChange, schem
 // validation refuses it, and an object a read of such a target found is left
 // undecided, as the host's reader leaves it unread.
 func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*protocol.ComparedModels, error) {
-	root, err := objectcompare.SessionDatabase(request, Kinds()...)
+	root, err := objectcompare.SessionDatabase(request)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +88,7 @@ func Family(kind, root string) objectcompare.Family {
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 			return schema.NativeBoundOwner(kind, subject)
 		},
-		NormalizeDesired: schema.NormalizeDesired, NormalizeObserved: schema.Normalize,
+		NormalizeDesired: schema.NormalizeDesired, NormalizeObserved: schema.Normalize, RequiredObjects: schema.RequiredObjects,
 		Reserved: func(*protocol.ComparisonIdentity) string { return "" },
 		Unread: func(capabilities map[string]bool) string {
 			if capabilities[externals.CapabilityExternalDataSources] {
@@ -140,7 +141,7 @@ func declarations(request *protocol.CompareModelsRequest, root string) ([]declar
 			if err != nil {
 				return nil, err
 			}
-			spec, err := externals.SourceFromIntent(intent, root)
+			spec, err := externals.SourceFromIntent(intent, schema.InterpretationRoot(value))
 			if err != nil {
 				return nil, fmt.Errorf("external data source %s: %w", object.display, err)
 			}
@@ -150,7 +151,7 @@ func declarations(request *protocol.CompareModelsRequest, root string) ([]declar
 			if err != nil {
 				return nil, err
 			}
-			spec, err := externals.TableFromIntent(intent, root)
+			spec, err := externals.TableFromIntent(intent, schema.InterpretationRoot(value))
 			if err != nil {
 				return nil, fmt.Errorf("external table %s: %w", object.display, err)
 			}
@@ -186,8 +187,8 @@ func refuseOrphanedTables(decided []objectcompare.Decided, tables []declared, ro
 		if table.table == nil {
 			continue
 		}
-		source, found := externals.ResolveSource(root, table.table.DataSource)
-		if name, gone := dropped[source]; found && gone {
+		source, pathErr := externalpath.SourcePath(root, table.table.DataSource)
+		if name, gone := dropped[source]; pathErr == nil && gone {
 			return fmt.Errorf("external table %s reads data source %s, which the plan drops; declare the data source or move the table to one the plan keeps", table.display, name)
 		}
 	}
@@ -226,8 +227,8 @@ func tablesOverRecreatedSources(decided []objectcompare.Decided, replace bool, r
 		if err != nil {
 			return nil, err
 		}
-		source, found := externals.ResolveSource(root, desired.DataSource)
-		if !found || !recreated[source] {
+		source, pathErr := externalpath.SourcePath(root, desired.DataSource)
+		if pathErr != nil || !recreated[source] {
 			continue
 		}
 		change, err := schema.CaptureExternalChange(schema.ExternalTableProperties, fmt.Sprintf("change-together-%d", len(extra)), object.Owner, root, object.Current, object.Desired)

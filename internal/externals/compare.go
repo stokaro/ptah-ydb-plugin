@@ -1,6 +1,7 @@
 package externals
 
 import (
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"slices"
 	"strings"
 
@@ -21,7 +22,7 @@ func SameDataSource(declared, current ydbdecl.ExternalDataSource, root string) b
 // the columns in order, and the options, with PARTITIONED_BY compared as the
 // list of names it holds.
 func SameTable(declared, current ydbdecl.ExternalTable, root string) bool {
-	return RelativePath(declared.DataSource, root) == RelativePath(current.DataSource, root) && declared.Location == current.Location &&
+	return externalpath.RelativePath(declared.DataSource, root) == externalpath.RelativePath(current.DataSource, root) && declared.Location == current.Location &&
 		slices.EqualFunc(declared.Columns, current.Columns, sameColumn) &&
 		equalOptions(canonicalTableOptions(declared.Options), canonicalTableOptions(current.Options))
 }
@@ -40,8 +41,8 @@ func canonicalSourceOptions(options map[string]string, root string) map[string]s
 	canonical := make(map[string]string, len(options))
 	for name, value := range options {
 		name = strings.ToUpper(name)
-		if strings.HasSuffix(name, secretPathSuffix) {
-			value = RelativePath(value, root)
+		if externalpath.IsSecretOption(name) {
+			value = externalpath.RelativePath(value, root)
 		}
 		canonical[name] = value
 	}

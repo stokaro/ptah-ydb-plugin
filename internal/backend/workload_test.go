@@ -46,7 +46,7 @@ func workloadRequest(c *qt.C, kind string, declared, read map[string]proto.Messa
 		service = workloadcompare.ClassifierServiceID
 	}
 	desiredState, currentState := testcomparison.State(schema.NativeDesiredModel(kind)), testcomparison.State(observedModel)
-	request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: service, Kinds: []string{kind},
+	request := &protocol.CompareModelsRequest{Engine: "ydb", DatabasePath: "/local", ComparisonId: service, Kinds: []string{kind},
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: workloadCapabilities(),
 		Desired: desiredState, Current: currentState}
 	for _, side := range []struct {
