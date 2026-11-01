@@ -322,7 +322,7 @@ func TestExternalPlanning_HappyPath(t *testing.T) {
 				edges = append(edges, [2]int{index[edge.Before.Name], index[edge.After.Name]})
 			}
 			c.Assert(edges, qt.DeepEquals, test.edges)
-			rendered, err := backend.New().Render(t.Context(), testplanning.RenderRequest(plan, test.capabilities))
+			rendered, err := backend.New().Render(t.Context(), testplanning.RenderRequest(backend.Description(), plan, test.capabilities))
 			c.Assert(err, qt.IsNil)
 			c.Assert(rendered.Units, qt.HasLen, len(test.steps))
 		})
@@ -401,7 +401,7 @@ func TestExternalRendersText(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
 			_, plan := externalPlan(c, test.declared, test.read, test.capabilities, test.capabilities)
-			rendering := testplanning.RenderRequest(plan, test.capabilities)
+			rendering := testplanning.RenderRequest(backend.Description(), plan, test.capabilities)
 			rendering.Form = protocol.RenderRequest_TEXT
 			rendered, err := backend.New().Render(c.Context(), rendering)
 			c.Assert(err, qt.IsNil)
@@ -421,7 +421,7 @@ func TestExternalRendersText_FailurePath(t *testing.T) {
 	c := qt.New(t)
 	_, plan := externalPlan(c, []external{{name: "bucket", source: bucketAt("https://b/")}, {name: "events", table: eventsOver("app/bucket")}},
 		[]external{{name: "bucket", source: bucketAt("https://a/")}, {name: "events", table: eventsOver("app/bucket")}}, withSources(), withSources())
-	rendering := testplanning.RenderRequest(plan, withSources())
+	rendering := testplanning.RenderRequest(backend.Description(), plan, withSources())
 	rendering.Form = protocol.RenderRequest_TEXT
 	rendered, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)

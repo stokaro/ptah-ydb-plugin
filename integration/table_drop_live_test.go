@@ -77,7 +77,7 @@ func (f *dropFixture) plan(c *qt.C, form protocol.RenderRequest_Form) *protocol.
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
 	c.Assert(plan.Rewrites, qt.HasLen, 1)
-	rendering := testplanning.RenderRequest(plan, f.session.Capabilities)
+	rendering := testplanning.RenderRequest(f.client.Description(), plan, f.session.Capabilities)
 	rendering.Form = form
 	rendered, err := f.client.Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)

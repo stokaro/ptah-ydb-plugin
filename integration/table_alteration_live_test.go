@@ -155,7 +155,7 @@ func TestRowTableFamilyAlterationSubprocess(t *testing.T) {
 			c.Assert(alteration.Request.AddColumnFamilies, qt.HasLen, step.wantAdd)
 			c.Assert(alteration.Request.AlterColumnFamilies, qt.HasLen, step.wantAlter)
 			c.Assert(alteration.Request.AlterColumns, qt.HasLen, step.wantMoves)
-			applied, err = client.Render(ctx, testplanning.RenderRequest(result, session.Capabilities))
+			applied, err = client.Render(ctx, testplanning.RenderRequest(client.Description(), result, session.Capabilities))
 			c.Assert(err, qt.IsNil)
 			c.Assert(applied.Units, qt.HasLen, 1)
 			execution, err := client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "alter-" + step.name, Units: applied.Units})

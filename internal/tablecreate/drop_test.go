@@ -47,7 +47,7 @@ func TestDropPlan_HappyPath(t *testing.T) {
 	c.Assert(plan.Parents, qt.HasLen, len(tablecreate.ParentKinds()))
 	c.Assert(plan.Parents[0].Action, qt.Equals, protocol.PlanningTable_DROP)
 
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	native, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)
 	c.Assert(native.Units[0].GetNative().Kind, qt.Equals, tablecreate.DropOperationKind)

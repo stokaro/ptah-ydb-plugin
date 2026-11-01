@@ -84,7 +84,7 @@ func (f *columnTableFixture) create(c *qt.C, session *protocol.Session, id, stor
 	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
 	c.Assert(plan.Contributions, qt.HasLen, 1)
 	c.Assert(plan.Contributions[0].Steps[0].Operation.Value.Value.Kind, qt.Equals, tablecreate.ColumnOperationKind)
-	rendered, err := f.client.Render(ctx, testplanning.RenderRequest(plan, session.Capabilities))
+	rendered, err := f.client.Render(ctx, testplanning.RenderRequest(f.client.Description(), plan, session.Capabilities))
 	c.Assert(err, qt.IsNil)
 	return f.client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: id, Units: rendered.Units})
 }
@@ -148,7 +148,7 @@ func (f *columnTableFixture) change(c *qt.C, id, storage string) (*protocol.Plan
 	c.Assert(plan.Contributions, qt.HasLen, 1)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	rendered, err := f.client.Render(ctx, testplanning.RenderRequest(plan, f.session.Capabilities))
+	rendered, err := f.client.Render(ctx, testplanning.RenderRequest(f.client.Description(), plan, f.session.Capabilities))
 	c.Assert(err, qt.IsNil)
 	execution, err := f.client.Execute(ctx, &protocol.ExecuteRequest{SessionId: f.session.Id, RequestId: id, Units: rendered.Units})
 	return plan, execution, err
@@ -323,7 +323,7 @@ func TestColumnTableTTLChangeSubprocess(t *testing.T) {
 	_, execution, err = fixture.change(c, "ttl-moved-on", noTTL)
 	c.Assert(err, qt.IsNil)
 	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
-	rendered, err := fixture.client.Render(c.Context(), testplanning.RenderRequest(stale, fixture.session.Capabilities))
+	rendered, err := fixture.client.Render(c.Context(), testplanning.RenderRequest(fixture.client.Description(), stale, fixture.session.Capabilities))
 	c.Assert(err, qt.IsNil)
 	execution, err = fixture.client.Execute(c.Context(), &protocol.ExecuteRequest{SessionId: fixture.session.Id, RequestId: "ttl-stale", Units: rendered.Units})
 	c.Assert(err, qt.ErrorIs, provider.ErrExecution)

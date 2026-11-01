@@ -57,7 +57,7 @@ func TestTableCreationWithIndexesSubprocess(t *testing.T) {
 		plan, err := client.PlanFeatures(c.Context(), planning)
 		c.Assert(err, qt.IsNil)
 		c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
-		rendering := testplanning.RenderRequest(plan, session.Capabilities)
+		rendering := testplanning.RenderRequest(client.Description(), plan, session.Capabilities)
 		rendering.Form = form
 		rendered, err := client.Render(c.Context(), rendering)
 		c.Assert(err, qt.IsNil)

@@ -18,7 +18,7 @@ func textRendering(c *qt.C, request *protocol.PlanFeaturesRequest) *protocol.Ren
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	rendering.Form = protocol.RenderRequest_TEXT
 	return rendering
 }

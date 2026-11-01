@@ -61,7 +61,7 @@ func TestAuthoredSecretRetainsOnlyApprovedReferenceAndDependencyEffects(t *testi
 		}
 	}
 	c.Assert(reads, qt.DeepEquals, []string{schema.SecretProperties, objectplan.PathKind})
-	rendering := testplanning.RenderRequest(&protocol.PlannedFeatures{Contributions: result.Contributions}, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), &protocol.PlannedFeatures{Contributions: result.Contributions}, request.Capabilities)
 	rendering.TargetFeatures, rendering.Form = request.TargetFeatures, protocol.RenderRequest_ANY
 	text, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)

@@ -152,6 +152,22 @@ func TestCoordinationConversionPreservesOmissionAndAccess(t *testing.T) {
 	}
 }
 
+// A converted coordination node keeps the database context its source
+// carried, in both directions, so the converted value names the same object.
+func TestCoordinationConversionKeepsTheDatabaseContext(t *testing.T) {
+	c := qt.New(t)
+	input := &Ydb_Coordination.DescribeNodeResult{Self: objectSelf(), Config: &Ydb_Coordination.Config{SelfCheckPeriodMillis: 2000}}
+	observed, err := schema.CaptureObject(objectOwner(schema.CoordinationProperties), input)
+	c.Assert(err, qt.IsNil)
+	observed.Context = &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
+	desired, err := schema.ConvertCoordination(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(desired.Context, observed.Context), qt.IsTrue)
+	back, err := schema.ConvertCoordination(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(back, observed), qt.IsTrue)
+}
+
 func TestCoordinationConversionRefusesSourceHolderAndMalformedAccess(t *testing.T) {
 	c := qt.New(t)
 	value, err := schema.CaptureCoordinationIntent(objectOwner(schema.CoordinationProperties), schema.CoordinationIntent{StructName: "Holder"})

@@ -212,7 +212,7 @@ func TestColumnTablePlan_Create(t *testing.T) {
 		{Id: step.Operation.Value.Id, Representation: protocol.ValueInput_OPERATION, Value: step.Operation.Value.Value}}})
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(normalized.Values[0], step.Operation.Value), qt.IsTrue)
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	rendered, err := service.Render(t.Context(), rendering)
 	c.Assert(err, qt.IsNil)
 	c.Assert(rendered.Units, qt.HasLen, 1)

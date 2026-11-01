@@ -77,7 +77,7 @@ func TestPlanOrdersCommonObjectSteps(t *testing.T) {
 
 	// The comments a table declares are the common wire's: the creation
 	// carries none of them.
-	rendered, err := backend.New().Render(c.Context(), testplanning.RenderRequest(plan, request.Capabilities))
+	rendered, err := backend.New().Render(c.Context(), testplanning.RenderRequest(backend.Description(), plan, request.Capabilities))
 	c.Assert(err, qt.IsNil)
 	c.Assert(rendered.Units, qt.HasLen, 1)
 	c.Assert(string(rendered.Units[0].GetNative().GetPayload()), qt.Not(qt.Contains), "ptah.comment")
