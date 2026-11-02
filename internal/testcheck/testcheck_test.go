@@ -27,7 +27,7 @@ func TestFormat_HappyPath(t *testing.T) {
 		{"a string", "text", `"text"`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(testcheck.Format(test.value), qt.Matches, test.want)
 		})
 	}
@@ -36,7 +36,7 @@ func TestFormat_HappyPath(t *testing.T) {
 // A failed check made through a checker New built reports the value as
 // protobuf text rather than the message's reflection state.
 func TestNew_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	recorded := &recorder{}
 	checker := testcheck.New(recorded)
 	checker.Check([]*protocol.ComparisonUndecided{{Kind: "external-table"}}, qt.HasLen, 0)
