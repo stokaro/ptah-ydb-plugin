@@ -17,7 +17,7 @@ func TestStreamingInventoryKeepsIndependentReservationConflicts(t *testing.T) {
 	c := testcheck.New(t)
 	snapshot := &protocol.Schema{Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}}
 	reserve(snapshot, &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Name: "history"}, protocol.ReservedObject_HISTORY)
-	reservations := proto.CloneOf(snapshot).ReservedObjects
+	reservations, subjects := proto.CloneOf(snapshot).ReservedObjects, proto.CloneOf(snapshot).Coverage.Subjects
 	var observed *protocol.ValueModel
 	for _, model := range schema.ObservedModels() {
 		if model.Kind == schema.StreamingQueryProperties {
@@ -28,8 +28,10 @@ func TestStreamingInventoryKeepsIndependentReservationConflicts(t *testing.T) {
 	replaceStreamingInventory(snapshot, inventory)
 	c.Assert(snapshot.ReservedObjects, qt.CmpEquals(protocmp.Transform()), reservations)
 	c.Assert(snapshot.ReservedObjects[0].ConflictKinds, qt.Contains, schema.StreamingQueryProperties)
-	for _, covered := range snapshot.Coverage.Subjects {
-		c.Assert(covered.Kind, qt.Not(qt.Equals), schema.StreamingQueryProperties)
-	}
+	// The reservation lists the streaming query kind as a conflict, and the
+	// SDK refuses a reply whose conflict has no unrepresentable subject, so
+	// every subject reserve wrote survives the inventory, which has none of
+	// its own here.
+	c.Assert(snapshot.Coverage.Subjects, qt.CmpEquals(protocmp.Transform()), subjects)
 	c.Assert(snapshot.Coverage.Kinds[0].Knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
 }
