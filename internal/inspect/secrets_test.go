@@ -7,6 +7,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -14,7 +15,7 @@ import (
 )
 
 func TestUnavailableSecretRetainsUnknownIdentity(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	read := snapshot()
 	description := backend.Description()
 	read.TargetFeatures = description.Features

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
@@ -31,7 +32,7 @@ func tag() *protocol.MigrationTagRecord {
 	return &protocol.MigrationTagRecord{Name: "exact π", Version: -9223372036854775808, RecordedAtSeconds: 253402300799, RecordedAtNanos: 999999999}
 }
 func TestMetadataCodecPreservesFactsAndRefusesUnknownFormats(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	for _, test := range []struct {
 		kind protocol.MetadataScope_Kind
 		row  proto.Message
@@ -72,7 +73,7 @@ func TestMetadataSnapshotRefusesTruncatedAndTrailingData(t *testing.T) {
 		truncate bool
 	}{{"missing record", 2, false}, {"trailing record", 0, false}, {"short frame", 1, true}} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			s := testStore(c, protocol.MetadataScope_TAGS)
 			payload, err := s.Encode(tag())
 			c.Assert(err, qt.IsNil)
@@ -190,7 +191,7 @@ func TestMetadataMutationPreservesUncertainAndAbsentOutcomes(t *testing.T) {
 		{"delete absent", protocol.MetadataScope_TAGS, &protocol.MutateMetadataRequest{Mutation: &protocol.MutateMetadataRequest_DeleteTag{DeleteTag: tag().Name}}, false, false, false, protocol.MetadataResult_APPLIED, false, 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			s := testStore(c, test.kind)
 			p := &storageProbe{}
 			if test.present {
@@ -223,7 +224,7 @@ func TestMetadataMutationPreservesUncertainAndAbsentOutcomes(t *testing.T) {
 	}
 }
 func TestMetadataSnapshotChecksCountKeysAndCompleteRecords(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	s := testStore(c, protocol.MetadataScope_TAGS)
 	payload, err := s.Encode(tag())
 	c.Assert(err, qt.IsNil)
@@ -236,7 +237,7 @@ func TestMetadataSnapshotChecksCountKeysAndCompleteRecords(t *testing.T) {
 		{"complete", 1, [][]driver.Value{{tag().Name, payload}}, true}, {"empty", 0, nil, true}, {"truncated", 2, [][]driver.Value{{tag().Name, payload}}, false}, {"wrong key", 1, [][]driver.Value{{"other", payload}}, false}, {"duplicate", 2, [][]driver.Value{{tag().Name, payload}, {tag().Name, payload}}, false}, {"corrupt", 1, [][]driver.Value{{tag().Name, []byte("bad")}}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			snapshot, err := s.Snapshot(t.Context(), transactionProbe(c, &storageProbe{count: test.count, rows: test.rows}))
 			if !test.valid {
 				c.Assert(err, qt.IsNotNil)

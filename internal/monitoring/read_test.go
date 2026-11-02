@@ -10,6 +10,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/monitoring"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // serve starts an endpoint that answers every request with handler and returns
@@ -39,7 +40,7 @@ func recording(received *atomic.Pointer[request], body string) http.HandlerFunc 
 // with: the ticket travels as YDB's bare Authorization header. A cluster that
 // enforces authentication serves the page only to a user it knows.
 func TestRead_SendsTheConnectionCredential(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var received atomic.Pointer[request]
 	endpoint := serve(c, recording(&received, `{"Version":2}`))
 	body, err := monitoring.Read(c.Context(), endpoint, "feature flags", "/viewer/json/feature_flags", "/local", "ticket-value", url.Values{"database": {"/local"}})
@@ -51,7 +52,7 @@ func TestRead_SendsTheConnectionCredential(t *testing.T) {
 // TestRead_SendsNoCredentialForAnAnonymousConnection pins the other half: an
 // anonymous connection has no ticket, and no header is invented for it.
 func TestRead_SendsNoCredentialForAnAnonymousConnection(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var received atomic.Pointer[request]
 	endpoint := serve(c, recording(&received, `{}`))
 	_, err := monitoring.Read(c.Context(), endpoint, "feature flags", "/viewer/json/feature_flags", "/local", "", nil)
@@ -62,7 +63,7 @@ func TestRead_SendsNoCredentialForAnAnonymousConnection(t *testing.T) {
 // TestRead_ReadsThePageItNames replaces whatever path and query the endpoint
 // carries with the page's own.
 func TestRead_ReadsThePageItNames(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var received atomic.Pointer[request]
 	endpoint := serve(c, recording(&received, `{}`))
 	endpoint.Path, endpoint.RawQuery, endpoint.Fragment = "/other", "page=1", "top"
@@ -76,7 +77,7 @@ func TestRead_ReadsThePageItNames(t *testing.T) {
 // answered as the status it is, and the place it points at receives nothing,
 // so the credential never leaves for an endpoint the operator did not name.
 func TestRead_FollowsNoRedirect(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var reached atomic.Int32
 	elsewhere := serve(c, func(w http.ResponseWriter, _ *http.Request) {
 		reached.Add(1)
@@ -93,7 +94,7 @@ func TestRead_FollowsNoRedirect(t *testing.T) {
 
 // TestRead_RefusesAnOversizedPage bounds the page at MaxBody.
 func TestRead_RefusesAnOversizedPage(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	endpoint := serve(c, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(strings.Repeat("x", monitoring.MaxBody+1)))
 	})
@@ -104,7 +105,7 @@ func TestRead_RefusesAnOversizedPage(t *testing.T) {
 
 // TestRead_AcceptsAPageAtTheBound reads a page of exactly MaxBody bytes.
 func TestRead_AcceptsAPageAtTheBound(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	endpoint := serve(c, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(strings.Repeat("x", monitoring.MaxBody)))
 	})
@@ -117,7 +118,7 @@ func TestRead_AcceptsAPageAtTheBound(t *testing.T) {
 // the endpoint's own message: an endpoint that echoes the request's headers
 // would otherwise repeat the credential.
 func TestRead_RefusalRepeatsNeitherTheTicketNorTheEndpoint(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	endpoint := serve(c, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte("Failed to resolve database for " + r.Header.Get("Authorization")))
@@ -132,7 +133,7 @@ func TestRead_RefusalRepeatsNeitherTheTicketNorTheEndpoint(t *testing.T) {
 // TestRead_RefusalOfAnUnreachableEndpointNamesNoAddress keeps the endpoint
 // out of a transport error, which net/http would spell with the whole URL.
 func TestRead_RefusalOfAnUnreachableEndpointNamesNoAddress(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	server := httptest.NewServer(http.NotFoundHandler())
 	endpoint, err := url.Parse(server.URL)
 	c.Assert(err, qt.IsNil)
@@ -143,7 +144,7 @@ func TestRead_RefusalOfAnUnreachableEndpointNamesNoAddress(t *testing.T) {
 
 // TestRead_RefusesWithoutAnEndpoint names the missing endpoint.
 func TestRead_RefusesWithoutAnEndpoint(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	body, err := monitoring.Read(c.Context(), nil, "column table", "/viewer/json/describe", "/local", "", nil)
 	c.Assert(err, qt.ErrorMatches, `no monitoring endpoint to read the YDB column table from`)
 	c.Assert(body, qt.IsNil)

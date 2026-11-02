@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -28,7 +29,7 @@ func TestObservedColumnPreservesCommonMetadata(t *testing.T) {
 		{name: "integer literal", spelling: "Int64", literal: &protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "5"}, want: &protocol.ObservedColumn{IsNullable: "NO", DefaultExpression: new("5l")}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			kind, err := schema.StorageType(test.spelling, test.nullable)
 			c.Assert(err, qt.IsNil)
 			column := &native.ColumnMeta{Name: "value", Type: kind, NotNull: new(test.notNull)}
@@ -60,7 +61,7 @@ func TestObservedSequenceRetainsConfigurationAndRestartEvidence(t *testing.T) {
 		{name: "present zero restart", sequence: &native.SequenceDescription{SetVal: &native.SequenceDescription_SetVal{NextValue: new(int64(0))}}, restart: "0"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			kind, err := schema.StorageType("Int32", false)
 			c.Assert(err, qt.IsNil)
 			column := &native.ColumnMeta{Name: "id", Type: kind, DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: test.sequence}}
@@ -85,7 +86,7 @@ func TestObservedColumnRefusesUnrepresentableFacts(t *testing.T) {
 		{"sequence type", &native.SequenceDescription{DataType: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_INT32}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			kind, err := schema.StorageType("Int64", false)
 			c.Assert(err, qt.IsNil)
 			got, err := columnsemantics.Observed(&native.ColumnMeta{Name: "id", Type: kind, DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: test.sequence}}, 1, true)
@@ -96,7 +97,7 @@ func TestObservedColumnRefusesUnrepresentableFacts(t *testing.T) {
 }
 
 func TestObservedColumnRejectsUnknownOrContradictoryMetadata(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	kind, err := schema.StorageType("Int32", false)
 	c.Assert(err, qt.IsNil)
 	literal, err := columnsemantics.NativeDefault(&protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "wrong type"}, "Utf8", nil)
@@ -111,7 +112,7 @@ func TestObservedColumnRejectsUnknownOrContradictoryMetadata(t *testing.T) {
 }
 
 func TestProjectedColumnUsesInspectionSemantics(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	kind, err := schema.StorageType("Decimal(22,9)", true)
 	c.Assert(err, qt.IsNil)
 	projected, err := columnsemantics.Projected(&Ydb_Table.ColumnMeta{Name: "amount", Type: kind}, 2, false)

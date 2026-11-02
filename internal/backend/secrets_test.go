@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
@@ -37,7 +38,7 @@ func TestExternalSecretDependencies(t *testing.T) {
 		{name: "replace before old secret removal", desired: []external{source("app/new.pw")}, current: []external{source("app/old.pw")}, reads: []string{"new.pw", "old.pw"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, plan := externalPlan(c, test.desired, test.current, withSources(), withSources())
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
@@ -108,7 +109,7 @@ func TestSecretsPresenceAndExplicitRotation(t *testing.T) {
 		{name: "rotation of absent secret creates", rotate: true, changes: 1, impact: protocol.ChangeSemantics_ADDITIVE},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := secretRequest(c, test.present)
 			if test.rotate {
 				request.Requests = []*protocol.RequestedChange{{Action: "rotate", Written: "app/pg.pw"}}
@@ -143,7 +144,7 @@ func TestSecretsPresenceAndExplicitRotation(t *testing.T) {
 func TestSecretRotationRefusesUndeclaredAndUnknownPresence(t *testing.T) {
 	for _, written := range []string{"missing", "app/missing", "/local/app/pg.pw", "../app/pg.pw", "app//pg.pw"} {
 		t.Run(written, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := secretRequest(c, true)
 			request.Requests = []*protocol.RequestedChange{{Action: "rotate", Written: written}}
 			result, err := backend.New().CompareModels(c.Context(), request)
@@ -151,7 +152,7 @@ func TestSecretRotationRefusesUndeclaredAndUnknownPresence(t *testing.T) {
 			c.Assert(result, qt.IsNil)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := secretRequest(c, false)
 	request.Current.Coverage.Kinds[0].Sources[0].Regions = nil
 	request.Requests = []*protocol.RequestedChange{{Action: "rotate", Written: "app/pg.pw"}}
@@ -162,7 +163,7 @@ func TestSecretRotationRefusesUndeclaredAndUnknownPresence(t *testing.T) {
 }
 
 func TestSecretComparisonKeepsUnsupportedObservationsUndecided(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := secretRequest(c, true)
 	request.Capabilities["secrets"] = false
 	request.Desired.Records = nil
@@ -173,7 +174,7 @@ func TestSecretComparisonKeepsUnsupportedObservationsUndecided(t *testing.T) {
 }
 
 func TestSecretSourceRefusesInlineValuesAndPreservesReferences(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.YAMLDocument(`{"secrets":{"a.b":{"schema":"app","value_env":"PTAH_SECRET_PG"}}}`, secretsource.YAMLKey(), schema.NativeDesiredModel(schema.SecretProperties))
 	c.Assert(err, qt.IsNil)
 	result, err := backend.New().DecodeSource(c.Context(), request)
@@ -192,7 +193,7 @@ func TestSecretSourceRefusesInlineValuesAndPreservesReferences(t *testing.T) {
 }
 
 func TestSecretInputDiscoveryRejectsAnUnsafeSuffixBeforeExecution(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p := backend.New()
 	valid := &protocol.Unit{ChangeId: "create", Body: &protocol.Unit_Sql{Sql: "CREATE SECRET s WITH (value = $PTAH_SECRET_S);"}}
 	inputs, err := p.DescribeExecutionInputs(c.Context(), &protocol.DescribeExecutionInputsRequest{Engine: "ydb", Units: []*protocol.Unit{valid}})

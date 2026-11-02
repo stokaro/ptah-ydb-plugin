@@ -17,6 +17,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -40,13 +41,27 @@ func providerBinary(c *qt.C) (string, string) {
 	return binary, hex.EncodeToString(digest[:])
 }
 
+// hostFeatures are the features startProvider's host negotiates.
+func hostFeatures() []string {
+	return []string{provider.ObservedColumnsFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature}
+}
+
+// negotiated are the engine features client negotiated with the provider,
+// which a host names on every request. A request that carries what a session
+// read has to name them: once value context is negotiated, inspection binds
+// each value to the database it was read in, and the SDK refuses a value whose
+// context the request's target features do not name.
+func negotiated(client *providerruntime.Client) []string {
+	return client.Description().GetEngines()[0].GetFeatures()
+}
+
 func startProvider(c *qt.C, binary, digest string) *providerruntime.Client {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	client, err := providerruntime.Start(ctx, providerruntime.Options{
 		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin",
-		HostFeatures: []string{provider.ObservedColumnsFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature},
+		HostFeatures: hostFeatures(),
 	})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(client.Close)
@@ -54,7 +69,7 @@ func startProvider(c *qt.C, binary, digest string) *providerruntime.Client {
 }
 
 func TestNativeSessionsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address := os.Getenv("PTAH_YDB_TEST_URL")
 	c.Assert(address, qt.Not(qt.Equals), "", qt.Commentf("PTAH_YDB_TEST_URL must select a live YDB test database"))
 	binary, digest := providerBinary(c)
@@ -95,7 +110,7 @@ func TestNativeSessionsSubprocess(t *testing.T) {
 }
 
 func TestNativeSessionConcurrentClose(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address := os.Getenv("PTAH_YDB_TEST_URL")
 	c.Assert(address, qt.Not(qt.Equals), "")
 	service := backend.New()
@@ -119,7 +134,7 @@ func TestNativeSessionConcurrentClose(t *testing.T) {
 }
 
 func TestNativeConnectionReleasesBothOwners(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

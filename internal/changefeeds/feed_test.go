@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
@@ -65,7 +66,7 @@ func TestFromObserved_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := changefeeds.FromObserved(test.observed)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.DeepEquals, test.want)
@@ -118,7 +119,7 @@ func TestFromObserved_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := changefeeds.FromObserved(test.observed)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(got, qt.DeepEquals, changefeeds.Feed{})
@@ -147,7 +148,7 @@ func TestIntent_RoundTrip(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			intent, err := changefeeds.Intent(test.spec)
 			c.Assert(err, qt.IsNil)
 			got, err := changefeeds.FromIntent(intent)
@@ -172,7 +173,7 @@ func TestIntent_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := changefeeds.Intent(test.spec)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(got, qt.IsNil)
@@ -203,7 +204,7 @@ func TestFromIntent_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := changefeeds.FromIntent(test.intent)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(got, qt.DeepEquals, changefeeds.Feed{})

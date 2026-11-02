@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -45,7 +46,7 @@ func TestFacetKnown_HappyPath(t *testing.T) {
 			Outside: knowledgeOf(complete), Regions: []*protocol.ComparisonRegion{{Scope: &protocol.ComparisonNamespace{PathExact: true}, Knowledge: knowledgeOf(complete)}}})}}, true, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(tablecreate.FacetKnown(test.coverage, schema.TableProperties, tableSubject(), test.desired), qt.IsTrue)
 		})
 	}
@@ -74,7 +75,7 @@ func TestFacetKnown_NotKnown(t *testing.T) {
 		{"a subject record for another engine", &protocol.ComparisonCoverage{Subjects: []*protocol.ComparisonSubjectCoverage{subjectCoverage(complete, "mysql")}}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(tablecreate.FacetKnown(test.coverage, schema.TableProperties, tableSubject(), test.desired), qt.IsFalse)
 		})
 	}

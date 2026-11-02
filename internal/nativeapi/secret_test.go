@@ -9,6 +9,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
@@ -83,7 +84,7 @@ func TestSecretNativeLifecycle(t *testing.T) {
 		{name: "drop", before: true, parent: true, statement: "DROP SECRET `/local/app/pg.pw`;"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			scheme := &secretScheme{present: test.before, parent: test.parent}
 			var statements []string
 			runner := &nativeapi.Secret{Scheme: scheme, Execute: func(_ context.Context, query string) error {
@@ -117,7 +118,7 @@ func TestSecretNativeRefusalsAndUnknownOutcome(t *testing.T) {
 		{name: "rotation access changed", before: true, scheme: secretScheme{parent: true, present: true, changedAccess: true}, writes: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			scheme := test.scheme
 			runner := &nativeapi.Secret{Scheme: &scheme, Execute: func(context.Context, string) error {
 				scheme.calls++

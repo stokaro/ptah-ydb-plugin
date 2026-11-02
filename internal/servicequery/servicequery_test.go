@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/servicequery"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
@@ -24,7 +25,7 @@ func TestLocate_HappyPath(t *testing.T) {
 		{name: "a later prefix wins", text: "PRAGMA TablePathPrefix('/a'); PRAGMA TablePathPrefix = \"/b\"; MARK x;", opening: "MARK X", prefix: "/b"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			located, found, err := servicequery.Locate(tc.text, opensWith("MARK"), "test service")
 			c.Assert(err, qt.IsNil)
 			c.Assert(found, qt.IsTrue)
@@ -35,7 +36,7 @@ func TestLocate_HappyPath(t *testing.T) {
 }
 
 func TestLocateLeavesOtherQueries(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	located, found, err := servicequery.Locate("SELECT 'MARK'; -- MARK\n", opensWith("MARK"), "test service")
 	c.Assert(err, qt.IsNil)
 	c.Assert(found, qt.IsFalse)
@@ -53,7 +54,7 @@ func TestLocate_FailurePath(t *testing.T) {
 			want: "MARK A follows a TablePathPrefix pragma whose path is not a plain string"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			located, found, err := servicequery.Locate(tc.text, opensWith("MARK"), "test service")
 			c.Assert(err, qt.ErrorMatches, tc.want)
 			c.Assert(found, qt.IsTrue)
@@ -75,7 +76,7 @@ func TestStringValue(t *testing.T) {
 		{token: `'a'b'`},
 	} {
 		t.Run(tc.token, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, ok := servicequery.StringValue(yql.Token{Type: yql.TokenString, Value: tc.token})
 			c.Assert(ok, qt.Equals, tc.ok)
 			c.Assert(got, qt.Equals, tc.want)

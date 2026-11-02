@@ -12,6 +12,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -21,7 +22,7 @@ import (
 )
 
 func TestRowTableCreationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
@@ -65,7 +66,7 @@ func TestRowTableCreationSubprocess(t *testing.T) {
 		}
 		source.Features.Facets.Records = append(source.Features.Facets.Records, &protocol.ComparisonRecord{Kind: model.Kind, Subject: subject, Value: values.Values[0]})
 	}
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 		Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE, Desired: source}}}
 	prepareCapturedCreation(c, client, planning)
@@ -114,7 +115,7 @@ func TestRowTableCreationSubprocess(t *testing.T) {
 
 // No database session is opened: creation compilation and rendering are offline.
 func TestRowTableCreationOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Schema: "app", Name: "records"}
@@ -122,7 +123,7 @@ func TestRowTableCreationOfflineSubprocess(t *testing.T) {
 		Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 		Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 	}
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(),
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(),
 		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)},
 		Capabilities: map[string]bool{"transactional_ddl": false},
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE,

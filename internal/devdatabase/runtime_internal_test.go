@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestEndpointHost(t *testing.T) {
@@ -25,7 +26,7 @@ func TestEndpointHost(t *testing.T) {
 		{"remote over tcp", "tcp://192.0.2.10:2375", "192.0.2.10", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			host, remote, err := endpointHost(test.endpoint)
 
@@ -42,7 +43,7 @@ func TestEndpointHost_FailurePath(t *testing.T) {
 		{"unreadable", "tcp://host:%zz"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			_, _, err := endpointHost(test.endpoint)
 

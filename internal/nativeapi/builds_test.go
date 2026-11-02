@@ -6,6 +6,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Operation_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Operations"
@@ -66,7 +67,7 @@ func TestCancelRunningBuilds(t *testing.T) {
 		{name: "two on the table", builds: map[string]string{"b1": "/local/t", "b2": "/local/t"}, outcome: nativeapi.BuildUnsettled},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			service := &operations{builds: test.builds, final: test.final}
 
 			outcome, err := nativeapi.NewBuilds(service, "/local").CancelRunning(context.Background(), "t", quick)

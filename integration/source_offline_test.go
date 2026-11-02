@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestCoordinationSourceOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	request, err := testsource.Request(`{"coordination_nodes":{"workers":{"schema":"app","self_check_period":"PT2S","session_grace_period":"PT5S","read_consistency_mode":"strict","attach_consistency_mode":"relaxed"}}}`)

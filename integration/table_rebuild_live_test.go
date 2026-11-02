@@ -14,6 +14,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -76,7 +77,7 @@ func (f *rebuildFixture) plan(c *qt.C, columns []*protocol.DeclaredColumn, polic
 		Features: &protocol.CapturedFeatures{
 			Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 			Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}}}}
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
 		Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)}, Policy: policy,
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_ALTER, Desired: desired, Current: f.observed(c)}}}
 	plan, err := f.client.PlanFeatures(c.Context(), request)
@@ -127,7 +128,7 @@ var rebuiltColumns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Pri
 // calls and by the statements a migration file holds alike.
 func TestTableRebuildSubprocess(t *testing.T) {
 	const rows = "(id, payload, n) VALUES (1ul, 'a'u, 5), (2ul, 'b'u, 7)"
-	c := qt.New(t)
+	c := testcheck.New(t)
 	refused := newRebuildFixture(c, "id Uint64, payload Utf8, n Int32", rows)
 	plan := refused.plan(c, rebuiltColumns, &protocol.PlanningPolicy{TableRebuildRequest: "--allow-table-rebuild"})
 	c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -158,7 +159,7 @@ func TestTableRebuildSubprocess(t *testing.T) {
 // rows does not convert to the declared type: the copy fails whole, after the
 // new table was created, and the old table keeps every row.
 func TestTableRebuildKeepsTheOldTableSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newRebuildFixture(c, "id Uint64, payload Utf8, n Utf8", "(id, payload, n) VALUES (1ul, 'a'u, '5'u), (2ul, 'b'u, 'x'u)")
 	plan := f.plan(c, []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "payload", Type: "Utf8", Nullable: true},
 		{Name: "n", Type: "Int64", Nullable: true}}, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 )
 
@@ -28,7 +29,7 @@ func TestIntervalSeconds_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.interval, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := ttlgrammar.IntervalSeconds(test.interval)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, test.want)
@@ -61,7 +62,7 @@ func TestIntervalSeconds_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.interval, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := ttlgrammar.IntervalSeconds(test.interval)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(got, qt.Equals, uint64(0))
@@ -79,7 +80,7 @@ func TestUnit_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.declared, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := ttlgrammar.Unit(test.declared)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, test.want)
@@ -88,7 +89,7 @@ func TestUnit_HappyPath(t *testing.T) {
 }
 
 func TestUnit_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	got, err := ttlgrammar.Unit("ms")
 	c.Assert(err, qt.ErrorMatches, `unit "ms" is not one YDB takes: use SECONDS, MILLISECONDS, MICROSECONDS, NANOSECONDS`)
 	c.Assert(got, qt.Equals, "")

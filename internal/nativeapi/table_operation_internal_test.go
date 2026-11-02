@@ -13,6 +13,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Operation_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -74,7 +75,7 @@ func TestTableAlter_IndexBuildHappyPath(t *testing.T) {
 			[]*Ydb_Operations.Operation{finished(Ydb.StatusIds_SUCCESS)}, []string{"build"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			var reads []string
 
 			err := table(fakeAlter{reply: test.reply}, fakeOperations{replies: test.replies, reads: &reads}).Alter(c.Context(), test.request)
@@ -110,7 +111,7 @@ func TestTableAlter_IndexBuildFailurePath(t *testing.T) {
 		{"the wait is canceled", canceled, addIndex, fakeAlter{reply: running("build")}, []*Ydb_Operations.Operation{running("build")}, nil, "context canceled"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			var reads []string
 
 			err := table(test.alter, fakeOperations{replies: test.replies, err: test.opErr, reads: &reads}).Alter(test.ctx, test.request)

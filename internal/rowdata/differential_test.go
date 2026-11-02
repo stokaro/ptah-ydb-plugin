@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -234,12 +235,12 @@ func corpusRows(c *qt.C, rows []*protocol.Row) [][]tagged {
 }
 
 func TestTypeRowsMatchesTheHost_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := typeCorpus(c, true)
 	c.Assert(len(rows) >= 25, qt.IsTrue, qt.Commentf("%d accepted type cases", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := typeRequest(c, row.input)
 
 			result, err := rowdata.TypeRows(request)
@@ -258,12 +259,12 @@ func TestTypeRowsMatchesTheHost_HappyPath(t *testing.T) {
 }
 
 func TestTypeRowsMatchesTheHost_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := typeCorpus(c, false)
 	c.Assert(len(rows) >= 32, qt.IsTrue, qt.Commentf("%d refused type cases", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			result, err := rowdata.TypeRows(typeRequest(c, row.input))
 
@@ -347,12 +348,12 @@ func expectedStatement(answer writeAnswer) string {
 }
 
 func TestRenderRowWritesMatchesTheHost_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := writeCorpus(c, true)
 	c.Assert(len(rows) >= 10, qt.IsTrue, qt.Commentf("%d rendered write cases", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := writeRequest(c, row.writes)
 
 			result, err := rowdata.RenderRowWrites(request)
@@ -385,12 +386,12 @@ func refusalMessage(host string) string {
 }
 
 func TestRenderRowWritesMatchesTheHost_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := writeCorpus(c, false)
 	c.Assert(len(rows) >= 6, qt.IsTrue, qt.Commentf("%d refused write cases", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := writeRequest(c, row.writes)
 			first := row.answers[slices.IndexFunc(row.answers, func(answer writeAnswer) bool { return answer.Error != "" })]
 
@@ -409,7 +410,7 @@ func TestRenderRowWritesMatchesTheHost_FailurePath(t *testing.T) {
 // TestCorpusNamesOneHostCommit pins that every answer was recorded at one host
 // commit, so the corpus is one measurement.
 func TestCorpusNamesOneHostCommit(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	paths, err := filepath.Glob(filepath.Join(corpusDirectory, "*.golden.json"))
 	c.Assert(err, qt.IsNil)
 	paths = append(paths, "testdata/query-dialect.golden.json")
@@ -429,7 +430,7 @@ func TestCorpusNamesOneHostCommit(t *testing.T) {
 // declares to the host's YDB descriptor and the default capabilities the host
 // assumes for YDB.
 func TestQueryDialectMatchesTheHost(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var golden struct {
 		Placeholder string `json:"placeholder"`
 		Quoting     struct {

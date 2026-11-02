@@ -10,10 +10,11 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestReadPrincipalsDoesNotReadPasswordState(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	connector := principalFixture()
 	db := sql.OpenDB(connector)
 	c.Cleanup(func() { c.Check(db.Close(), qt.IsNil) })
@@ -48,7 +49,7 @@ func TestReadPrincipalsRefusesAnIncompleteSnapshot(t *testing.T) {
 		{"close failed", func(f *principalConnector) { f.results[2].closeError = errors.New("close failed") }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			connector := principalFixture()
 			test.change(connector)
 			db := sql.OpenDB(connector)
@@ -65,7 +66,7 @@ func TestReadPrincipalsRefusesAnIncompleteSnapshot(t *testing.T) {
 }
 
 func TestReadPrincipalsPreservesObservedSelfMembership(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	connector := principalFixture()
 	connector.results[2].values[0][1] = "DATA-READERS"
 	db := sql.OpenDB(connector)

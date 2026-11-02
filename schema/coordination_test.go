@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestCoordinationIntentPreservesOmission(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: "app", Name: "node"}
 	base, err := schema.CaptureCoordinationIntent(owner, schema.CoordinationIntent{})
 	c.Assert(err, qt.IsNil)
@@ -35,7 +36,7 @@ func TestCoordinationIntentPreservesOmission(t *testing.T) {
 }
 
 func TestCoordinationIntentRefusesLossySourceHolder(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Name: "node"}
 	value, err := schema.CaptureCoordinationIntent(owner, schema.CoordinationIntent{StructName: string([]byte{0xff})})
 	c.Assert(err, qt.IsNotNil)

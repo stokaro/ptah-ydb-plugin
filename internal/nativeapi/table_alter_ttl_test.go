@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -59,7 +60,7 @@ func TestNativeTableAlteration_TTLHappyPath(t *testing.T) {
 		{"removes the TTL", ttlTableOf(hourlyTS, tsCol), ttlTableOf("", tsCol), dropTTL(hourlyTS), "", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := &alterFixture{before: test.before, after: test.after}
 			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
 			c.Assert(err, qt.IsNil)
@@ -125,7 +126,7 @@ func TestNativeTableAlteration_TTLFailurePath(t *testing.T) {
 		{"lost reply", alterFixture{before: ttlTableOf("", tsCol), alterFailure: true}, setTTL(hourlyTS, ""), true, []string{"open", "describe", "guard", "alter", "close"}, "lost native reply"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := test.fixture
 			dispatched, err := applyAlteration(c, &fixture, "", test.payload, false)
 			c.Assert(err, qt.ErrorMatches, test.message)

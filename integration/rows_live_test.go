@@ -12,6 +12,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -159,7 +160,7 @@ func declaredRows() []*protocol.Row {
 // a declaration the table already holds compares equal to what the table
 // holds.
 func TestRowServicesRoundTripSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newRowsFixture(c)
 	declared := f.typeRows(c, declaredRows(), nil)
 	f.write(c, declared, protocol.RowWrite_INSERT, declared.GetDeclared(), f.columnNames())
@@ -176,7 +177,7 @@ func TestRowServicesRoundTripSubprocess(t *testing.T) {
 // TestRowServicesWriteModesSubprocess runs an update, an upsert and a delete
 // by key and reads the table back.
 func TestRowServicesWriteModesSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newRowsFixture(c)
 	declared := f.typeRows(c, declaredRows(), nil)
 	f.write(c, declared, protocol.RowWrite_INSERT, declared.GetDeclared(), f.columnNames())
@@ -197,7 +198,7 @@ func TestRowServicesWriteModesSubprocess(t *testing.T) {
 // TestReadRowsInATransactionSubprocess reads what an open transaction wrote
 // and has not committed.
 func TestReadRowsInATransactionSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newRowsFixture(c)
 	_, err := f.client.BeginTransaction(c.Context(), &protocol.BeginTransactionRequest{SessionId: f.session, TransactionId: "read",
 		Isolation: protocol.TransactionIsolation_SERIALIZABLE})
@@ -220,7 +221,7 @@ func TestReadRowsInATransactionSubprocess(t *testing.T) {
 // ordering key holds nulls and repeats, so the cursor has to step past a null
 // and past equal keys.
 func TestReadRowsOrdersANullableKeySubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newRowsFixture(c)
 	table := path.Join(f.directory, "nullable")
 	c.Assert(executeSQL(c, f.client, f.session, "", "CREATE TABLE `"+table+"` (k Utf8, id Uint64 NOT NULL, PRIMARY KEY (k, id))").Outcome,
@@ -250,7 +251,7 @@ func TestReadRowsOrdersANullableKeySubprocess(t *testing.T) {
 
 // TestReadRowsOfAMissingTableSubprocess reads a table that does not exist.
 func TestReadRowsOfAMissingTableSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newRowsFixture(c)
 
 	page, err := f.client.ReadRows(c.Context(), &protocol.ReadRowsRequest{SessionId: f.session,

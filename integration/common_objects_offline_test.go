@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -51,7 +52,7 @@ func commonIdentifiers(client *providerruntime.Client) *protocol.ComparisonIdent
 // rendered as the host's embedded engine writes them; a host that does not
 // list it gets none of it. No database session is opened.
 func TestCommonObjectsOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	listing := startProviderFor(c, provider.CommonObjectsFeature, provider.TextUnitsFeature)
 	engine := listing.Description().Engines[0]
 	c.Assert(engine.Features, qt.Contains, provider.CommonObjectsFeature)
@@ -107,7 +108,7 @@ func TestCommonObjectsOfflineSubprocess(t *testing.T) {
 		{"directory comment", commentChange(&protocol.Reference{Engine: "ydb", Kind: "schema", Name: "app"}, "a directory")},
 	} {
 		t.Run(refused.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			rendered, err := commonRender(c, listing, protocol.RenderRequest_TEXT, refused.change)
 			c.Assert(err, qt.ErrorMatches, `provider render failed \(FailedPrecondition\)`)
 			c.Assert(rendered, qt.IsNil)

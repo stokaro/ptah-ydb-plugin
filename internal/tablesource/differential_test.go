@@ -12,6 +12,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -158,7 +159,7 @@ func request(c *qt.C, r row) *protocol.DecodeSourceRequest {
 // The corpus is the measurement, so it must not shrink without notice and every
 // golden file must come from one run of one host commit.
 func TestCorpusShape(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := corpus(c, func(string) bool { return true })
 	c.Assert(len(rows) >= 240, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
 	hosts := map[string]bool{}
@@ -179,10 +180,10 @@ func TestCorpusShape(t *testing.T) {
 // TestDifferential_HappyPath decodes every input the host accepts and requires
 // the facets to mean what the host's facets mean, table by table.
 func TestDifferential_HappyPath(t *testing.T) {
-	rows := corpus(qt.New(t), isAccepted)
+	rows := corpus(testcheck.New(t), isAccepted)
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, r))
 			c.Assert(err, qt.IsNil)
 			c.Assert(pluginMeaning(c, decoded), qt.DeepEquals, hostMeaning(c, r.golden), qt.Commentf("host %s", r.golden.Host))
@@ -193,10 +194,10 @@ func TestDifferential_HappyPath(t *testing.T) {
 // TestDifferential_FailurePath requires the provider to refuse every input the
 // host refuses, and to return no partial result.
 func TestDifferential_FailurePath(t *testing.T) {
-	rows := corpus(qt.New(t), isRefused)
+	rows := corpus(testcheck.New(t), isRefused)
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, r))
 			c.Assert(err, qt.IsNotNil, qt.Commentf("the host refuses it with: %s", r.golden.Error))
 			c.Assert(decoded == nil, qt.IsTrue)
@@ -270,7 +271,7 @@ var stricterRefusals = map[string]string{
 // TestStricter_AreRefusedAtDecode requires every stricter row to be named, the
 // host to have accepted it, and the provider to refuse it with the stated words.
 func TestStricter_AreRefusedAtDecode(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var rows []string
 	for _, r := range corpus(c, isStricter) {
 		rows = append(rows, r.name)
@@ -279,7 +280,7 @@ func TestStricter_AreRefusedAtDecode(t *testing.T) {
 	c.Assert(slices.Sorted(slices.Values(rows)), qt.DeepEquals, slices.Sorted(maps.Keys(stricterRefusals)))
 	for name, words := range stricterRefusals {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			rows := corpus(c, func(candidate string) bool { return candidate == name })
 			c.Assert(len(rows), qt.Equals, 1)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
@@ -292,7 +293,7 @@ func TestStricter_AreRefusedAtDecode(t *testing.T) {
 // TestLater_AreRefusedAtDecode requires every later row to be named, the host
 // to have accepted it, and the provider to refuse it with the stated words.
 func TestLater_AreRefusedAtDecode(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var rows []string
 	for _, r := range corpus(c, isLater) {
 		rows = append(rows, r.name)
@@ -301,7 +302,7 @@ func TestLater_AreRefusedAtDecode(t *testing.T) {
 	c.Assert(slices.Sorted(slices.Values(rows)), qt.DeepEquals, slices.Sorted(maps.Keys(laterRefusals)))
 	for name, words := range laterRefusals {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			rows := corpus(c, func(candidate string) bool { return candidate == name })
 			c.Assert(len(rows), qt.Equals, 1)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
@@ -314,7 +315,7 @@ func TestLater_AreRefusedAtDecode(t *testing.T) {
 // TestDeferred_AreAllNamed requires every deferred row to say what the
 // provider does with it, and no statement to name a row that is gone.
 func TestDeferred_AreAllNamed(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var rows []string
 	for _, r := range corpus(c, isDeferred) {
 		rows = append(rows, r.name)
@@ -329,7 +330,7 @@ func TestDeferred_AreAllNamed(t *testing.T) {
 func TestDeferred_Unclaimed(t *testing.T) {
 	for name, key := range unclaimed {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(claimedNames()[key], qt.IsFalse)
 		})
 	}
@@ -340,7 +341,7 @@ func TestDeferred_Unclaimed(t *testing.T) {
 func TestDeferred_RefusedByName(t *testing.T) {
 	for name, words := range refusals {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			rows := corpus(c, func(candidate string) bool { return candidate == name })
 			c.Assert(len(rows), qt.Equals, 1)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
@@ -356,7 +357,7 @@ func TestDeferred_RefusedByName(t *testing.T) {
 func TestDeferred_DecodedElsewhere(t *testing.T) {
 	for name, kind := range elsewhere {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			rows := corpus(c, func(candidate string) bool { return candidate == name })
 			c.Assert(len(rows), qt.Equals, 1)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))

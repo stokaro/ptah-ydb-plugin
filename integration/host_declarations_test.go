@@ -13,10 +13,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestHostRendersAuthoredSchemaOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	host, manifest := hostManifest(c)
 	node := "coordination_nodes:\n  workers:\n    schema: app\n    self_check_period: PT2S\n"
 	for _, test := range []struct {
@@ -29,7 +30,7 @@ func TestHostRendersAuthoredSchemaOfflineSubprocess(t *testing.T) {
 		{"HCL native object", "desired.hcl", "coordination_node \"app\" \"workers\" {\n self_check_period = \"PT2S\"\n}\n", "--schema-file", []string{"CREATE COORDINATION NODE `app/workers` WITH (self_check_period = Interval('PT2S'))"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			directory := c.TempDir()
 			file := filepath.Join(directory, test.filename)
 			c.Assert(os.WriteFile(file, []byte(test.source), 0o600), qt.IsNil)
@@ -58,7 +59,7 @@ func TestHostRendersAuthoredSchemaOfflineSubprocess(t *testing.T) {
 }
 
 func TestHostOrdersAuthoredNativeCreateBeforeGrantSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	host, manifest := hostManifest(c)
 	file := filepath.Join(c.TempDir(), "desired.yaml")
 	source := "roles:\n  readers:\n    group: true\ncoordination_nodes:\n  workers:\n    schema: app\n    self_check_period: PT2S\ngrants:\n  readers_describe:\n    role: readers\n    privileges: [DESCRIBE SCHEMA]\n    on_coordination_node: app.workers\n"

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
@@ -47,7 +48,7 @@ func TestCreateStatement_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(topics.CreateStatement(test.path, test.spec), qt.Equals, test.want)
 			c.Assert(topics.Statements(test.path, nil, &test.spec), qt.DeepEquals, []string{test.want})
 		})
@@ -55,7 +56,7 @@ func TestCreateStatement_HappyPath(t *testing.T) {
 }
 
 func TestDropStatement_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(topics.Statements("/local/app/events", &ydbdecl.Topic{}, nil), qt.DeepEquals, []string{"DROP TOPIC `/local/app/events`;"})
 }
 
@@ -98,7 +99,7 @@ func TestAlterStatements_NamesEverySetting(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(topics.AlterStatements("events", test.declared, created), qt.DeepEquals, []string{test.want})
 		})
 	}
@@ -121,7 +122,7 @@ func TestAlterStatements_Consumers(t *testing.T) {
 		{Name: "narrowed", Important: true},
 		{Name: "fresh", Important: true},
 	}}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(topics.Statements("events", &current, &desired), qt.DeepEquals, []string{
 		"ALTER TOPIC `events` DROP CONSUMER `gone`, DROP CONSUMER `narrowed`, " +
 			"ALTER CONSUMER `kept` SET (important = FALSE, read_from = Timestamp('2026-01-01T00:00:00Z'), supported_codecs = 'zstd'), " +
@@ -133,7 +134,7 @@ func TestAlterStatements_Consumers(t *testing.T) {
 }
 
 func TestAlterStatements_NothingToChange(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	read := ydbdecl.Topic{MinActivePartitions: 1, AutoPartitioningStrategy: "disabled", RetentionPeriod: "P1D",
 		PartitionWriteSpeedBytesPerSecond: 1048576, PartitionWriteBurstBytes: 1048576,
 		Consumers: []ydbdecl.Consumer{{Name: "c"}}}

@@ -14,6 +14,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -72,7 +73,7 @@ func (f *columnTableFixture) create(c *qt.C, session *protocol.Session, id, stor
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
 	subject := testplanning.Subject(f.owner)
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
 		Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 		Tables: []*protocol.PlanningTable{{Subject: subject, Action: protocol.PlanningTable_CREATE, Desired: f.declaration(c, storage)}},
 		CommonSteps: []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "create"}, Parent: proto.CloneOf(subject),
@@ -111,7 +112,7 @@ func (f *columnTableFixture) compare(c *qt.C, storage string) *protocol.Compared
 	c.Helper()
 	current := observedTable(c, f.client, f.session, f.directory).Features.Facets.Records
 	subject := testplanning.Subject(f.owner)
-	request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
+	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Desired:     facetState(protocol.ValueInput_DESIRED, []*protocol.ComparisonRecord{desiredFacet(c, f.client, f.owner, schema.ColumnStorageProperties, storage)}),
 		Current:     facetState(protocol.ValueInput_OBSERVED, current), Parents: []*protocol.ComparisonParent{{Subject: subject, Desired: true, Current: true}}}
@@ -124,7 +125,7 @@ func (f *columnTableFixture) compare(c *qt.C, storage string) *protocol.Compared
 // alter plans the changes a comparison reported against the live table.
 func (f *columnTableFixture) alter(c *qt.C, storage string, changes []*protocol.ComparedChange) *protocol.PlannedFeatures {
 	c.Helper()
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
 		Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(f.owner), Action: protocol.PlanningTable_ALTER, Desired: f.declaration(c, storage),
 			Current: observedTable(c, f.client, f.session, f.directory)}}}
@@ -170,7 +171,7 @@ const columnStorage = `{"hashColumns":["id"],"partitions":"3","ttl":{"enabled":{
 // back, finds nothing to change on a second run, and refuses a change of the
 // shard count with the reason.
 func TestColumnTableCreationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
 	execution, err := fixture.create(c, fixture.session, "create-column-table", columnStorage)
 	c.Assert(err, qt.IsNil)
@@ -207,7 +208,7 @@ func TestColumnTableCreationSubprocess(t *testing.T) {
 // before anything is written in a session whose address names no monitoring
 // endpoint, since the creation is confirmed by the shard count read there.
 func TestColumnTableCreationWithoutMonitoringSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
 	plain, err := fixture.client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: withoutMonitoring(c, monitoredAddress(c))})
 	c.Assert(err, qt.IsNil)
@@ -224,7 +225,7 @@ func TestColumnTableCreationWithoutMonitoringSubprocess(t *testing.T) {
 // server's dynamic configuration, creates a column table whose TTL moves rows
 // to an external data source before it deletes them, and reads the tiers back.
 func TestColumnTableTieredTTLCreationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address := monitoredAddress(c)
 	parsed, err := connection.Parse(address)
 	c.Assert(err, qt.IsNil)
@@ -288,7 +289,7 @@ func TestColumnTableTieredTTLCreationSubprocess(t *testing.T) {
 // sets one on the table without it, and refuses a step planned against a TTL
 // the table no longer holds before anything is written.
 func TestColumnTableTTLChangeSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
 	execution, err := fixture.create(c, fixture.session, "create-column-table", columnStorage)
 	c.Assert(err, qt.IsNil)

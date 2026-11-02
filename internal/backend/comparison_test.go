@@ -8,6 +8,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -37,7 +38,7 @@ func TestCoordinationComparisonLifecycle(t *testing.T) {
 		{name: "empty"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, err := testcomparison.Request(test.desired, test.observed)
 			c.Assert(err, qt.IsNil)
 			original := proto.CloneOf(request)
@@ -136,7 +137,7 @@ func TestCoordinationComparisonCoverage(t *testing.T) {
 		}, preserved: 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, err := testcomparison.Request(&schema.CoordinationIntent{}, nil)
 			c.Assert(err, qt.IsNil)
 			if test.mutate != nil {
@@ -193,7 +194,7 @@ func TestCoordinationComparisonRejectsUntrustedInputs(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, err := testcomparison.Request(&schema.CoordinationIntent{}, nil)
 			c.Assert(err, qt.IsNil)
 			test.mutate(request)
@@ -205,7 +206,7 @@ func TestCoordinationComparisonRejectsUntrustedInputs(t *testing.T) {
 }
 
 func TestCoordinationComparisonPreservesPolicy(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testcomparison.Request(&schema.CoordinationIntent{}, nil)
 	c.Assert(err, qt.IsNil)
 	record := request.Desired.Records[0]
@@ -267,7 +268,7 @@ func TestCoordinationAccessRequirementsCannotBecomeIgnoredChanges(t *testing.T) 
 		{"creation requirements", nil, "original-owner", 0, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			desired := &schema.CoordinationIntent{ReadConsistencyMode: new("strict"), Access: &native.AccessIntent{Owner: new(test.owner), DirectGrants: []*Ydb_Scheme.Permissions{{Subject: "reader", PermissionNames: []string{"ydb.generic.read"}}}}}
 			request, err := testcomparison.Request(desired, test.observed)
 			c.Assert(err, qt.IsNil)
@@ -320,7 +321,7 @@ func TestCoordinationComparisonReadsHostIdentities_HappyPath(t *testing.T) {
 		{name: "drop", observed: coordinationObserved(), impact: protocol.ChangeSemantics_DESTRUCTIVE, database: "/local"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, err := testcomparison.Request(test.desired, test.observed)
 			c.Assert(err, qt.IsNil)
 			scopeCurrent(request, "app")
@@ -339,7 +340,7 @@ func TestCoordinationComparisonReadsHostIdentities_HappyPath(t *testing.T) {
 
 // Conflicting physical context receipts are refused before identity pairing.
 func TestCoordinationComparisonReadsHostIdentities_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testcomparison.Request(&schema.CoordinationIntent{}, coordinationObserved())
 	c.Assert(err, qt.IsNil)
 	scopeCurrent(request, "app")

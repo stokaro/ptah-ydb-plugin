@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -162,7 +163,7 @@ func TestExternalComparison_HappyPath(t *testing.T) {
 			changes: []string{"events"}, impact: protocol.ChangeSemantics_BEHAVIORAL, access: protocol.ChangeSemantics_UNCHANGED},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := externalRequest(c, test.declared, test.read, test.capabilities)
 			result, err := backend.New().CompareModels(t.Context(), request)
 			c.Assert(err, qt.IsNil)
@@ -189,7 +190,7 @@ func TestExternalComparison_HappyPath(t *testing.T) {
 // A target without external data sources leaves an object its read found
 // unmanaged, as the host's reader leaves it unread, rather than dropping it.
 func TestExternalComparisonLeavesAnObjectOfATargetWithoutTheCapability_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := externalRequest(c, nil, []external{{name: "bucket", source: bucketAt("https://a/")}}, map[string]bool{"transactional_ddl": false})
 	result, err := backend.New().CompareModels(t.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -201,7 +202,7 @@ func TestExternalComparisonLeavesAnObjectOfATargetWithoutTheCapability_HappyPath
 
 // An object the desired source does not describe is kept as YDB holds it.
 func TestExternalComparisonKeepsAnUndescribedObject_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := externalRequest(c, nil, []external{{name: "bucket", source: bucketAt("https://a/")}}, withSources())
 	request.Desired.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
 	result, err := backend.New().CompareModels(t.Context(), request)
@@ -232,7 +233,7 @@ func TestExternalComparison_FailurePath(t *testing.T) {
 			want: "external data source app/bucket, which requires target capability external_data_sources, unavailable on this ydb target"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := backend.New().CompareModels(t.Context(), externalRequest(c, test.declared, test.read, test.capabilities))
 			c.Assert(err, qt.ErrorMatches, ".*"+test.want)
 			c.Assert(result, qt.IsNil)
@@ -294,7 +295,7 @@ func TestExternalPlanning_HappyPath(t *testing.T) {
 			steps: []stepSummary{{"bucket", schema.ExternalReplace, protocol.PlanningEffect_ALTER}}, strategies: []string{"replace the data source in place with CREATE OR REPLACE"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			planning, plan := externalPlan(c, test.declared, test.read, test.capabilities, test.capabilities)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), planning, plan), qt.IsNil)
@@ -349,7 +350,7 @@ func TestExternalPlanning_FailurePath(t *testing.T) {
 			want: "DROP EXTERNAL TABLE app/events, which requires target capability external_data_sources, unavailable on this ydb target"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			_, plan := externalPlan(c, test.declared, test.read, test.compared, test.capabilities)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
 			c.Assert(plan.Diagnostics, qt.Not(qt.HasLen), 0)
@@ -361,7 +362,7 @@ func TestExternalPlanning_FailurePath(t *testing.T) {
 // An operation whose operands cannot be carried out the way it names is
 // refused by its normalization.
 func TestExternalOperation_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.ExternalTableProperties, Schema: "app", Name: "events"}
 	intent, err := externals.TableIntent(*eventsOver("app/bucket"))
 	c.Assert(err, qt.IsNil)
@@ -399,7 +400,7 @@ func TestExternalRendersText(t *testing.T) {
 			want: []string{"CREATE OR REPLACE EXTERNAL DATA SOURCE `app/bucket` WITH (\n    SOURCE_TYPE = 'ObjectStorage',\n    LOCATION = 'https://b/',\n    AUTH_METHOD = 'NONE'\n);"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			_, plan := externalPlan(c, test.declared, test.read, test.capabilities, test.capabilities)
 			rendering := testplanning.RenderRequest(backend.Description(), plan, test.capabilities)
 			rendering.Form = protocol.RenderRequest_TEXT
@@ -418,7 +419,7 @@ func TestExternalRendersText(t *testing.T) {
 // An object dropped and created again gets the old one's owner and access
 // entries from a native call, so the batch has no TEXT form.
 func TestExternalRendersText_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	_, plan := externalPlan(c, []external{{name: "bucket", source: bucketAt("https://b/")}, {name: "events", table: eventsOver("app/bucket")}},
 		[]external{{name: "bucket", source: bucketAt("https://a/")}, {name: "events", table: eventsOver("app/bucket")}}, withSources(), withSources())
 	rendering := testplanning.RenderRequest(backend.Description(), plan, withSources())

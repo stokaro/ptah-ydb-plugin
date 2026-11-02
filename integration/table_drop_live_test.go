@@ -13,6 +13,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -67,7 +68,7 @@ func (f *dropFixture) plan(c *qt.C, form protocol.RenderRequest_Form) *protocol.
 	c.Helper()
 	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: f.database, Schema: f.directory, Name: "records"}
 	subject := testplanning.Subject(owner)
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
 		Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Tables: []*protocol.PlanningTable{{Subject: subject, Action: protocol.PlanningTable_DROP, Current: f.observed(c)}},
 		CommonSteps: []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "drop"}, Parent: proto.CloneOf(subject),
@@ -105,7 +106,7 @@ func TestTableDropSubprocess(t *testing.T) {
 			form: protocol.RenderRequest_TEXT},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			f := newDropFixture(c, monitoredAddress(c), tc.definition)
 			rendered := f.plan(c, tc.form)
 			c.Assert(rendered.Units, qt.HasLen, 1)
@@ -121,7 +122,7 @@ func TestTableDropSubprocess(t *testing.T) {
 // read it: the native removal refuses before it drops anything, and the
 // table keeps its rows.
 func TestTableDropRefusesAChangedTableSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newDropFixture(c, os.Getenv("PTAH_YDB_TEST_URL"), "(id Uint64, payload Utf8, PRIMARY KEY (id))")
 	rendered := f.plan(c, protocol.RenderRequest_ANY)
 	absolute := path.Join(f.database, f.directory, "records")

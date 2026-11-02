@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 )
@@ -39,7 +40,7 @@ func TestCreatePoolStatement(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(workload.CreatePoolStatement("batch", test.spec), qt.Equals, test.want)
 		})
 	}
@@ -82,7 +83,7 @@ func TestAlterPoolStatement(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(workload.AlterPoolStatement("batch", test.desired, test.current), qt.Equals, test.want)
 		})
 	}
@@ -150,7 +151,7 @@ func TestClassifierStatements(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(test.statement, qt.Equals, test.want)
 		})
 	}
@@ -184,7 +185,7 @@ func TestPoolsEqual(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(workload.PoolsEqual(test.left, test.right), qt.Equals, test.wantEquivalent)
 			c.Assert(workload.PoolsEqual(test.right, test.left), qt.Equals, test.wantEquivalent)
 		})

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 )
@@ -59,12 +60,12 @@ func splitCorpus(c *qt.C, split bool) []splitRow {
 }
 
 func TestSplitMatchesTheHost_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := splitCorpus(c, true)
 	c.Assert(len(rows) >= 18, qt.IsTrue, qt.Commentf("%d split texts", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			queries, err := yqlquery.Split(row.text)
 
@@ -79,12 +80,12 @@ func TestSplitMatchesTheHost_HappyPath(t *testing.T) {
 }
 
 func TestSplitMatchesTheHost_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := splitCorpus(c, false)
 	c.Assert(len(rows) >= 3, qt.IsTrue, qt.Commentf("%d refused texts", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			queries, err := yqlquery.Split(row.text)
 

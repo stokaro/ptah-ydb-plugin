@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -65,7 +66,7 @@ func declaredSpec(c *qt.C, value *protocol.SourceModelValue) (string, ydbdecl.To
 // numbers or booleans, a codec list as a sequence, and consumers. A name key
 // overrides the entry's key. The model keeps consumers sorted by name.
 func TestDecodeYAML_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	number := func(value string) *protocol.SourceValue {
 		return &protocol.SourceValue{Value: &protocol.SourceValue_Number{Number: value}}
 	}
@@ -107,7 +108,7 @@ func TestDecodeYAML_FailurePath(t *testing.T) {
 		{"a slash in a name", mapping(entry("events", mapping(entry("name", text("a/b"))))), `invalid name "a/b": holds a slash; name the directory with schema`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			values, err := topicsource.Decode(context.Background(), yamlDocument(test.value))
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(values, qt.IsNil)
@@ -119,7 +120,7 @@ func TestDecodeYAML_FailurePath(t *testing.T) {
 // ptah:schema:topic:consumer that names it, as the host's directives do; the
 // consumer's directive itself contributes no value.
 func TestDecodeGo_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	document := goDocument(
 		[2]any{topicsource.DirectiveTopic, map[string]string{"name": "order_events", "schema": "app", "min_active_partitions": "2", "retention_period": "PT36H", "supported_codecs": "raw,gzip"}},
 		[2]any{topicsource.DirectiveConsumer, map[string]string{"name": "billing", "topic": "order_events", "schema": "app", "important": "true"}},
@@ -156,7 +157,7 @@ func TestDecodeGo_FailurePath(t *testing.T) {
 		{"an absolute directory", [][2]any{{topicsource.DirectiveTopic, map[string]string{"name": "events", "schema": "/local/app"}}}, `invalid schema "/local/app": starts with a slash; .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			values, err := topicsource.Decode(context.Background(), goDocument(test.directives...))
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(values, qt.IsNil)

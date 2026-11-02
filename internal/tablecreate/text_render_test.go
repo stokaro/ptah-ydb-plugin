@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 
@@ -26,7 +27,7 @@ func textRendering(c *qt.C, request *protocol.PlanFeaturesRequest) *protocol.Ren
 // A planned creation renders in the TEXT form as the YQL statement of its
 // native call, which the SDK takes as a text unit.
 func TestTableCreationRendersText_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := creationPlan(c)
 	request.Tables[0].Desired.Features.Facets.Records = []*protocol.ComparisonRecord{
 		facet(c, schema.TableProperties, "", `{"primaryKey":["second","first"],"columnFamilies":[{"name":"archive"}],"keyBloomFilter":"DISABLED","partitioningSettings":{"minPartitionsCount":"1","maxPartitionsCount":"2"}}`),
@@ -47,7 +48,7 @@ func TestTableCreationRendersText_HappyPath(t *testing.T) {
 // set, refuses the whole TEXT batch with NO_TEXT_FORM and no unit; the ANY
 // form renders it natively.
 func TestTableCreationRendersText_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rendering := textRendering(c, creationPlan(c))
 	rendered, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)

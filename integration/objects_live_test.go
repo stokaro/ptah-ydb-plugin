@@ -12,6 +12,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -26,7 +27,7 @@ import (
 )
 
 func TestNativeObjectsAndNamespaceCoverageSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -180,7 +181,7 @@ func assertExactObjectRegions(c *qt.C, snapshot *protocol.Schema, database strin
 }
 
 func TestEmptyDirectoryHasBoundedObjectAbsence(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	snapshot, err := inspect.Read(c.Context(), opened.Driver, columnTables(opened), database, []string{directory})
 	c.Assert(err, qt.IsNil)

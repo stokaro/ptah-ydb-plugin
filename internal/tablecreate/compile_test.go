@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -60,7 +61,7 @@ func withSettings(c *qt.C) *protocol.DeclaredTable {
 	return table
 }
 func TestCompileNativeCreation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	table := withSettings(c)
 	original := proto.CloneOf(table)
 	request, err := tablecreate.Compile(owner(), table, nil)
@@ -98,7 +99,7 @@ func TestCompilePrimaryKeySources(t *testing.T) {
 		{"extra key membership", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = []string{"first"} }, nil, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			d := withSettings(c)
 			test.change(d)
 			result, err := tablecreate.Compile(owner(), d, nil)
@@ -176,7 +177,7 @@ func TestCompileRefusesUnimplementedOrForgedState(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			o, d := owner(), withSettings(c)
 			test.change(c, o, d)
 			before, _ := proto.Marshal(d)

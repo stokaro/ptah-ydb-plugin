@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -16,7 +17,7 @@ import (
 )
 
 func TestCoordinationSourcePreservesIntentAndTrace(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.Request(`{"coordination_nodes":{"z":{"name":"queue","schema":"app/workers","self_check_period":"PT0.5S","session_grace_period":"PT2S","read_consistency_mode":" STRICT ","rate_limiter_counters_mode":"DETAILED","struct_name":"Worker"},"default":{}}}`)
 	c.Assert(err, qt.IsNil)
 	before := proto.CloneOf(request)
@@ -54,7 +55,7 @@ func TestCoordinationSourceRefusesWholeInvalidBatch(t *testing.T) {
 		`{"name":".sys"}`, `{"name":"ptah_locks"}`, `{"name":"x","name":"y"}`,
 	} {
 		t.Run(bad, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, err := testsource.Request(`{"coordination_nodes":{"good":{},"bad":` + bad + `}}`)
 			c.Assert(err, qt.IsNil)
 			result, err := backend.New().DecodeSource(c.Context(), request)
@@ -62,7 +63,7 @@ func TestCoordinationSourceRefusesWholeInvalidBatch(t *testing.T) {
 			c.Assert(result, qt.IsNil)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	duplicate, err := testsource.Request(`{"coordination_nodes":{"a":{"name":"same"},"b":{"name":"same"}}}`)
 	c.Assert(err, qt.IsNil)
 	result, err := backend.New().DecodeSource(c.Context(), duplicate)
@@ -71,7 +72,7 @@ func TestCoordinationSourceRefusesWholeInvalidBatch(t *testing.T) {
 }
 
 func TestCoordinationSourceKeepsEmptyScopeAndRejectsAttachments(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.Request(`{"coordination_nodes":{}}`)
 	c.Assert(err, qt.IsNil)
 	result, err := backend.New().DecodeSource(c.Context(), request)
@@ -94,7 +95,7 @@ func TestCoordinationSourceKeepsEmptyScopeAndRejectsAttachments(t *testing.T) {
 }
 
 func TestCoordinationSourceCanceledWithoutOutput(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.Request(`{"coordination_nodes":{"node":{}}}`)
 	c.Assert(err, qt.IsNil)
 	ctx, cancel := context.WithCancel(c.Context())
@@ -105,7 +106,7 @@ func TestCoordinationSourceCanceledWithoutOutput(t *testing.T) {
 }
 
 func TestCoordinationSourceRefusesDeclaredTableCollision(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.Request(`{"coordination_nodes":{"node":{"schema":"app"}}}`)
 	c.Assert(err, qt.IsNil)
 	request.Documents[0].Bindings = []*protocol.SourceBinding{{Id: "table", EntryKey: "node", Object: &protocol.Reference{Engine: "ydb", Kind: "table", Schema: "app", Name: "node"}}}
@@ -118,7 +119,7 @@ func TestCoordinationSourceRefusesDeclaredTableCollision(t *testing.T) {
 }
 
 func TestEmptyNormalizationHonorsCancellation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	ctx, cancel := context.WithCancel(c.Context())
 	cancel()
 	result, err := backend.New().NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb"})
@@ -136,7 +137,7 @@ func goNode(attributes map[string]string) (*protocol.DecodeSourceRequest, error)
 // A Go directive declares the node the host's own directive of the same name
 // declares, with the settings in the same model as a YAML entry.
 func TestCoordinationGoSource_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := goNode(map[string]string{"name": "limits", "schema": "app", "self_check_period": "PT2S", "session_grace_period": "PT15S",
 		"read_consistency_mode": "strict", "attach_consistency_mode": "relaxed", "rate_limiter_counters_mode": "detailed"})
 	c.Assert(err, qt.IsNil)
@@ -156,7 +157,7 @@ func TestCoordinationGoSource_HappyPath(t *testing.T) {
 // A Go source that declares no node claims the namespace whole, as YAML and
 // YQL do: an undeclared node is one the plan removes.
 func TestCoordinationGoSourceClaimsTheNamespace_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.GoDirectives(nil, nil)
 	c.Assert(err, qt.IsNil)
 	result, err := backend.New().DecodeSource(c.Context(), request)
@@ -183,7 +184,7 @@ func TestCoordinationGoSource_FailurePath(t *testing.T) {
 		{"runtime lock node", map[string]string{"name": "ptah_locks"}, `.*reserved for provider runtime use`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, err := goNode(test.attributes)
 			c.Assert(err, qt.IsNil)
 			result, err := backend.New().DecodeSource(c.Context(), request)
@@ -196,7 +197,7 @@ func TestCoordinationGoSource_FailurePath(t *testing.T) {
 // Two directives that name one node are refused, as the host refuses a node
 // declared twice.
 func TestCoordinationGoSourceRefusesADuplicate_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	declaration := testsource.GoDeclaration{Directive: schema.CoordinationGoDirective().Directive, Attributes: map[string]string{"name": "limits", "schema": "app"}, Struct: "Limits", File: "nodes.go", FileSize: 120,
 		Start: testsource.GoPosition{Offset: 10, Line: 2, Column: 1}, End: testsource.GoPosition{Offset: 50, Line: 2, Column: 41}}
 	again := declaration
@@ -212,7 +213,7 @@ func TestCoordinationGoSourceRefusesADuplicate_FailurePath(t *testing.T) {
 // once: the host's annotation tools list a directive only while some owner
 // claims it.
 func TestDescriptionClaimsTheGoDirectives_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var directives []string
 	for _, claim := range backend.Description().Engines[0].GoSourceDirectives {
 		directives = append(directives, claim.Directive)

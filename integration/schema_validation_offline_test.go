@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 )
@@ -33,7 +34,7 @@ func validationRequest(client interface {
 // subprocess is the one the host starts: it must advertise the service and
 // answer through the runtime's checked client.
 func TestSchemaValidationOfflineSubprocess_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	c.Assert(client.Description().Features, qt.Contains, "schema.validate")
@@ -47,7 +48,7 @@ func TestSchemaValidationOfflineSubprocess_HappyPath(t *testing.T) {
 }
 
 func TestSchemaValidationOfflineSubprocess_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	request := validationRequest(client, "keyless", nil, &protocol.DeclaredColumn{Name: "id", Type: "Uint64"})

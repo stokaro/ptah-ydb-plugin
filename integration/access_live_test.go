@@ -14,6 +14,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -34,7 +35,7 @@ func runAccess(c *qt.C, client *providerruntime.Client, session *protocol.Sessio
 }
 
 func TestCommonAccessSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	createFixtureTable(c, opened, database, directory)
 	client := startProviderFor(c, provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.TextUnitsFeature)

@@ -9,6 +9,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -195,7 +196,7 @@ func TestAlterPlan_HappyPath(t *testing.T) {
 			want:      `{"addColumnFamilies":[{"name":"archive"}],"alterColumns":[{"name":"payload","family":"archive"}]}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := alterRequest(c, test)
 			original := proto.CloneOf(request)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -255,7 +256,7 @@ func TestAlterPlan_NoChange(t *testing.T) {
 			heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`, heldColumns: map[string]string{"gone": `{"family":"archive"}`}, held: []string{"gone"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := alterRequest(c, test)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
@@ -288,7 +289,7 @@ func TestAlterPlan_FailurePath(t *testing.T) {
 			`Column properties name column "ghost".*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, test.in))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -313,7 +314,7 @@ func TestAlterPlan_RefusesLifecyclesItDoesNotOwn(t *testing.T) {
 			"YDB table creation requires established nontransactional DDL"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := alterRequest(c, alterCase{desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`, heldTable: plainTable})
 			test.modify(request)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -335,7 +336,7 @@ func commonStep(name string, parent *protocol.ComparisonIdentity, added string, 
 }
 
 func TestAlterPlan_OrdersAgainstColumnSteps(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, alterCase{
 		desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`, desiredColumns: map[string]string{"payload": `{"family":"archive"}`}, declared: []string{"payload", "other"},
 		heldTable: plainTable})
@@ -360,7 +361,7 @@ func TestAlterPlan_OrdersAgainstColumnSteps(t *testing.T) {
 }
 
 func TestAlterPlan_LeavesColumnStepsAloneWithoutFamilyChange(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable})
 	request.CommonSteps = []*protocol.CommonPlanningStep{commonStep("add-payload", request.Tables[0].Subject, "payload")}
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -371,7 +372,7 @@ func TestAlterPlan_LeavesColumnStepsAloneWithoutFamilyChange(t *testing.T) {
 }
 
 func TestAlterPlan_RenderAndNormalizeRoundTrip(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	service := backend.New()
 	request := alterRequest(c, alterCase{desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`, heldTable: plainTable})
 	plan, err := service.PlanFeatures(c.Context(), request)
@@ -397,7 +398,7 @@ func TestAlterPlan_RenderAndNormalizeRoundTrip(t *testing.T) {
 }
 
 func TestAlterPlan_MovesAreBehavioral(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, alterCase{desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`, desiredColumns: map[string]string{"payload": `{"family":"archive"}`},
 		declared: []string{"payload"}, heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`, held: []string{"payload"}})
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -431,7 +432,7 @@ func TestAlterOperation_FailurePath(t *testing.T) {
 		`{"request":{"alterColumns":[{"name":"a","family":"f/g"}]},"held_columns":[{"name":"a","family":""}]}`,
 	} {
 		t.Run(payload, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := tablecreate.AlterModel()
 			normalized, err := tablecreate.NormalizeAlteration(&protocol.ValueInput{Id: "operation", Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
 				ProviderId: schema.ProviderID, Kind: tablecreate.AlterOperationKind, Owner: owner(), SchemaVersion: 1, Encoding: definition.Encoding,
@@ -443,7 +444,7 @@ func TestAlterOperation_FailurePath(t *testing.T) {
 }
 
 func TestAlterOperation_RefusesAnotherModel(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, alterCase{desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`, heldTable: plainTable})
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -473,7 +474,7 @@ func TestAlterPlan_ExcludedAndForeignFacets(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := alterRequest(c, base)
 			test.modify(c, request)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -502,7 +503,7 @@ func TestAlterPlan_RefusesFacetsOfOtherOwners(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := alterRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable})
 			test.modify(c, request)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -522,7 +523,7 @@ func TestAlterOperation_RefusesInvalidOwner(t *testing.T) {
 		{Engine: "ydb", Kind: "table", Schema: "ptah_dev/r1", Name: "records"},
 	} {
 		t.Run(bad.String(), func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := tablecreate.AlterModel()
 			normalized, err := tablecreate.NormalizeAlteration(&protocol.ValueInput{Id: "operation", Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
 				ProviderId: schema.ProviderID, Kind: tablecreate.AlterOperationKind, Owner: bad, SchemaVersion: 1, Encoding: definition.Encoding,

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
@@ -25,7 +26,7 @@ type scopedRow struct {
 }
 
 func TestGuardReplayAgreesWithHost(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	raw, err := os.ReadFile("testdata/realm/scopes.json")
 	c.Assert(err, qt.IsNil)
 	var golden struct {
@@ -38,7 +39,7 @@ func TestGuardReplayAgreesWithHost(t *testing.T) {
 		c.Assert(row.Scopes, qt.HasLen, len(server))
 		for scope, verdict := range row.Scopes {
 			t.Run(scope+"/"+row.Statement, func(t *testing.T) {
-				c := qt.New(t)
+				c := testcheck.New(t)
 
 				err := yql.GuardReplay(row.Statement, server[scope])
 

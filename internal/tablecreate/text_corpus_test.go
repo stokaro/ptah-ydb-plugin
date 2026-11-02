@@ -8,6 +8,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
@@ -53,7 +54,7 @@ func corpusTables(c *qt.C) []corpusTable {
 // What this provider writes for a table reads back to the declaration it was
 // written from, for every table of the corpus it creates.
 func TestRowTableStatementReadsBackToItsDeclaration(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	tables := corpusTables(c)
 	// A glob that stopped matching would pass with no table at all.
 	c.Assert(len(tables) >= 80, qt.IsTrue, qt.Commentf("%d tables", len(tables)))
@@ -70,7 +71,7 @@ func TestRowTableStatementReadsBackToItsDeclaration(t *testing.T) {
 // provider writes the same statement byte for byte. A statement in that
 // layout opens with the quoted path and a line break.
 func TestRowTableStatementMatchesTheEmbeddedRendering(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var rendered int
 	for _, table := range corpusTables(c) {
 		opening := "CREATE TABLE " + tablecreate.QuoteIdentifier(tablecreate.TextPath(table.table.GetSchema(), table.table.GetName())) + " (\n    "

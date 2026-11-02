@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -127,7 +128,7 @@ func TestColumnTableTTLStep_HappyPath(t *testing.T) {
 			func(_, none, _ ttlState) ttlState { return none }, func(_, _, twoHours ttlState) ttlState { return twoHours }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			hourly, none, twoHours := ttlStates(c)
 			fixture := &ttlFixture{before: test.before(hourly, none, twoHours), after: test.after(hourly, none, twoHours)}
 			step := ttlStep(c, test.payload)
@@ -173,7 +174,7 @@ func TestColumnTableTTLStep_FailurePath(t *testing.T) {
 			func(f *ttlFixture) { f.after = f.before }, nil, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			hourly, none, _ := ttlStates(c)
 			fixture := &ttlFixture{before: hourly, after: none}
 			test.modify(fixture)

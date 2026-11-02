@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
@@ -23,14 +24,14 @@ func TestChangeRefusal_FailurePath(t *testing.T) {
 			"topic app/events: its auto-partitioning is scale_up and is declared disabled, and YDB does not disable auto-partitioning once it is on \\(`Can't disable auto partitioning.`\\); declare auto_partitioning_strategy paused to stop it"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(topics.ChangeRefusal("app", "events", test.desired, test.current), qt.ErrorMatches, test.want)
 		})
 	}
 }
 
 func TestChangeRefusal_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(topics.ChangeRefusal("app", "events", ydbdecl.Topic{MinActivePartitions: 4}, ydbdecl.Topic{MinActivePartitions: 3}), qt.IsNil)
 	c.Assert(topics.ChangeRefusal("app", "events", ydbdecl.Topic{AutoPartitioningStrategy: "paused"}, ydbdecl.Topic{AutoPartitioningStrategy: "scale_up"}), qt.IsNil)
 }
@@ -49,14 +50,14 @@ func TestCheck_FailurePath(t *testing.T) {
 			`consumer "c" of topic app/events takes availability_period, which requires target capability topic_consumer_availability_period, unavailable on this ydb target`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(topics.Check("app", "events", test.spec, test.capabilities), qt.ErrorMatches, test.want)
 		})
 	}
 }
 
 func TestCheck_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	spec := ydbdecl.Topic{Consumers: []ydbdecl.Consumer{{Name: "c", AvailabilityPeriod: "PT2H"}}}
 	c.Assert(topics.Check("app", "events", spec, map[string]bool{"topics": true, "topic_consumer_availability_period": true}), qt.IsNil)
 }

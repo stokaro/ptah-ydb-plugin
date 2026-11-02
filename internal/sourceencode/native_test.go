@@ -10,6 +10,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/sourceencode"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -52,7 +53,7 @@ func TestNativeFragmentsRoundTripWithoutMutatingInputs(t *testing.T) {
 	for _, format := range []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS} {
 		for _, kind := range []string{schema.SecretProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties} {
 			t.Run(format.String()+"/"+kind, func(t *testing.T) {
-				c := qt.New(t)
+				c := testcheck.New(t)
 				var intent proto.Message
 				encode := sourceencode.Secret
 				decode := secretsource.Decode
@@ -86,7 +87,7 @@ func TestNativeFragmentsRoundTripWithoutMutatingInputs(t *testing.T) {
 }
 
 func TestNativeFragmentsRefuseLostFactsWithoutPartialOutput(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	for _, test := range []struct {
 		name   string
 		value  *protocol.NormalizedValue
@@ -97,7 +98,7 @@ func TestNativeFragmentsRefuseLostFactsWithoutPartialOutput(t *testing.T) {
 		{name: "external table HCL", value: normalized(c, schema.ExternalTableProperties, tableIntent(c)), encode: sourceencode.ExternalTable},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := test.encode(protocol.SourceDocument_HCL, test.value)
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Loss, qt.Not(qt.Equals), "")
@@ -120,7 +121,7 @@ func TestNativeFragmentsRefuseLostFactsWithoutPartialOutput(t *testing.T) {
 }
 
 func TestNativeFragmentsRejectMalformedValues(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value := normalized(c, schema.SecretProperties, &native.SecretIntent{ValueEnv: "PTAH_SECRET_REFERENCE"})
 	value.Value.Payload = []byte(`{"value_env":"SECRET_INLINE"}`)
 	result, err := sourceencode.Secret(protocol.SourceDocument_YAML, value)
@@ -130,7 +131,7 @@ func TestNativeFragmentsRejectMalformedValues(t *testing.T) {
 }
 
 func TestExternalSourceReportsIncompleteIntentAsLoss(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value := normalized(c, schema.ExternalSourceProperties, &native.ExternalSourceIntent{SourceType: new("ObjectStorage"), Location: new("bucket")})
 	result, err := sourceencode.ExternalSource(protocol.SourceDocument_YAML, value)
 	c.Assert(err, qt.IsNil)
@@ -139,7 +140,7 @@ func TestExternalSourceReportsIncompleteIntentAsLoss(t *testing.T) {
 }
 
 func TestExternalTableReportsIncompleteIntentAsLoss(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	intent := tableIntent(c)
 	intent.Location = new("")
 	value := normalized(c, schema.ExternalTableProperties, intent)
@@ -152,7 +153,7 @@ func TestExternalTableReportsIncompleteIntentAsLoss(t *testing.T) {
 func TestExternalColumnNameThatGoCannotRepresentRemainsExactInYAML(t *testing.T) {
 	for _, name := range []string{"part,whole", "quoted`name"} {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			intent := tableIntent(c)
 			intent.Columns[0].Name = name
 			value := normalized(c, schema.ExternalTableProperties, intent)

@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 )
 
 func TestRead(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	comments := ydbcomment.Read(map[string]string{
 		"ptah.comment": "rows", "ptah.comment.column.id": "the key", "ptah.comment.index.by.dot": "dotted",
 		"ptah.comment.column.": "no name", "ptah.comment.column.empty": "", "purpose": "not a comment",
@@ -28,14 +29,14 @@ func TestIsKey(t *testing.T) {
 		{"ptah.commentary", false}, {"purpose", false}, {"__async_replica", false},
 	} {
 		t.Run(tc.key, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(ydbcomment.IsKey(tc.key), qt.Equals, tc.want)
 		})
 	}
 }
 
 func TestSizeRefusal(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(ydbcomment.Comments{Own: strings.Repeat("x", 4096), Columns: map[string]string{"a": strings.Repeat("y", 4096)}}.SizeRefusal("table t"), qt.Equals, "")
 	c.Assert(ydbcomment.Comments{Own: strings.Repeat("x", 4096), Columns: map[string]string{"a": strings.Repeat("y", 4096), "b": strings.Repeat("z", 2000)}}.SizeRefusal("table t"),
 		qt.Equals, "the comments of table t take 10246 bytes as YDB table attributes, keys and text together, and YDB keeps at most 10240 bytes of attributes on one object")
@@ -54,7 +55,7 @@ func TestStatementText(t *testing.T) {
 		{"view", ydbcomment.Statement{Object: ydbcomment.View, Path: "v`w", Comment: "привет"}, "COMMENT ON VIEW `v\\`w` IS 'привет';"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			text, err := tc.statement.Text()
 			c.Assert(err, qt.IsNil)
 			c.Assert(text, qt.Equals, tc.want)
@@ -78,7 +79,7 @@ func TestStatementText_FailurePath(t *testing.T) {
 			`invalid comment statement: the comment is 4097 bytes long, and YDB keeps at most 4096 bytes in an attribute value`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			text, err := tc.statement.Text()
 			c.Assert(err, qt.ErrorIs, ydbcomment.ErrStatement)
 			c.Assert(err, qt.ErrorMatches, tc.want)
@@ -97,7 +98,7 @@ func TestQueryAbsolute(t *testing.T) {
 		{"absolute", "COMMENT ON TABLE `/local/x/t` IS 'x'", "", "/local/x/t"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			query, recognized, err := ydbcomment.Recognize(tc.text)
 			c.Assert(err, qt.IsNil)
 			c.Assert(recognized, qt.IsTrue)

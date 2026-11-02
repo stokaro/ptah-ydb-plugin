@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -31,7 +32,7 @@ func ttlOnlyRequest(c *qt.C) *protocol.PlanFeaturesRequest {
 }
 
 func TestChangePlan_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := ttlOnlyRequest(c)
 	original := proto.CloneOf(request)
 
@@ -52,7 +53,7 @@ func TestChangePlan_HappyPath(t *testing.T) {
 }
 
 func TestChangePlan_ColumnChangeBelongsToItsTable(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, alterCase{desiredColumns: map[string]string{"note": `{"family":"archive"}`}, declared: []string{"note"},
 		desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`, heldTable: plainTable, held: []string{"note"},
 		heldColumns: map[string]string{"note": `{}`}})
@@ -70,7 +71,7 @@ func TestChangePlan_ColumnChangeBelongsToItsTable(t *testing.T) {
 }
 
 func TestChangePlan_AlreadySatisfied(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, ttlCase(ttlTable(hourly), ttlTable(hourly), "ts"))
 	request.Changes = []*protocol.PlanningChange{tableChange(c, ttlTable(hourly), ttlTable(hourly))}
 
@@ -84,7 +85,7 @@ func TestChangePlan_AlreadySatisfied(t *testing.T) {
 
 func TestChangePlan_FailurePath(t *testing.T) {
 	t.Run("a change of a table the request does not capture", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := ttlOnlyRequest(c)
 		request.Tables = nil
 
@@ -98,7 +99,7 @@ func TestChangePlan_FailurePath(t *testing.T) {
 		c.Assert(plan.Changes, qt.HasLen, 0)
 	})
 	t.Run("a forged normalization receipt", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := ttlOnlyRequest(c)
 		request.Changes[0].Value.Id = "forged"
 		request.Changes[0].Value.CanonicalProjection = []byte("{}")
@@ -108,7 +109,7 @@ func TestChangePlan_FailurePath(t *testing.T) {
 		c.Assert(err, qt.ErrorMatches, "YDB table change has a forged normalization receipt")
 	})
 	t.Run("a change of another model", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := ttlOnlyRequest(c)
 		request.Changes[0].Value.Value.Kind = schema.CoordinationChange
 
@@ -117,7 +118,7 @@ func TestChangePlan_FailurePath(t *testing.T) {
 		c.Assert(err, qt.ErrorMatches, "YDB table planning received an unowned change")
 	})
 	t.Run("a change on the wrong subject", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := ttlOnlyRequest(c)
 		request.Changes[0].Subject.Name = &protocol.ComparisonPart{Source: "other", Normalized: "other"}
 

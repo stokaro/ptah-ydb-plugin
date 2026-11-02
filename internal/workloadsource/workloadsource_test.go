@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -89,7 +90,7 @@ func declared(c *qt.C, values map[int][]*protocol.SourceModelValue) (map[string]
 // A YAML document declares pools and classifiers keyed by name with the
 // host's keys, the default pool among them.
 func TestDecodeYAML_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	document := yamlDocument(
 		mapping(entry("reporting", mapping(entry("concurrent_query_limit", number("10")), entry("queue_size", number("20")),
 			entry("query_memory_limit_percent_per_node", number("25.5")))), entry("default", mapping(entry("resource_weight", number("30")))), entry("idle", mapping())),
@@ -113,7 +114,7 @@ func TestDecodeYAML_HappyPath(t *testing.T) {
 // A Go file declares them with the host's directives and attributes: the
 // fixture 054-ydb-resource-pools of the host.
 func TestDecodeGo_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	document := goDocument(
 		[]string{workloadsource.DirectivePool, "name", "reporting", "concurrent_query_limit", "10", "queue_size", "20", "query_memory_limit_percent_per_node", "25.5"},
 		[]string{workloadsource.DirectiveClassifier, "name", "reporting_group", "resource_pool", "reporting", "member_name", "reporters", "rank", "100"},
@@ -154,7 +155,7 @@ func TestDecode_FailurePath(t *testing.T) {
 			wantErr: `resource pool "p" is declared twice`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			values, err := workloadsource.Decode(context.Background(), test.document)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(values, qt.IsNil)

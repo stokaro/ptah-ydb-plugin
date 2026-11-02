@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
@@ -28,7 +29,7 @@ func dropRequest(c *qt.C) *protocol.PlanFeaturesRequest {
 }
 
 func TestDropPlan_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := dropRequest(c)
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -60,7 +61,7 @@ func TestDropPlan_HappyPath(t *testing.T) {
 // The removal of a table its properties read keyed in another order keeps
 // that order, and a column table's is held in the column store.
 func TestCaptureDropKeepsTheKeyAndTheStore(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	table := dropRequest(c).Tables[0]
 	table.Current.Columns = append(table.Current.Columns, &protocol.ObservedColumn{Name: "second", PrimaryKey: true})
 	table.Current.Features.Facets.Records[0] = observedFacet(c, schema.TableProperties, "", `{"primaryKey":["second","id"]}`)
@@ -72,7 +73,7 @@ func TestCaptureDropKeepsTheKeyAndTheStore(t *testing.T) {
 }
 
 func TestDropPlan_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	// The SDK refuses a removal without the read of the table it drops.
 	request := dropRequest(c)
 	request.Tables[0].Current = nil
@@ -106,7 +107,7 @@ func TestDecodeDrop_FailurePath(t *testing.T) {
 		{name: "an unknown field", payload: `{"store":"row","columns":["id"],"key":["id"],"extra":1}`, want: "invalid YDB table removal payload"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := tablecreate.DropModel()
 			value := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: tablecreate.DropOperationKind, Owner: owner(), SchemaVersion: 1,
 				Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: []byte(tc.payload)}

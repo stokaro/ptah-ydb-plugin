@@ -12,6 +12,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -125,7 +126,7 @@ func TestHostAppliesExternalObjects_HappyPath(t *testing.T) {
 	const first, moved = "https://storage.example.test/events/", "https://storage.example.test/archive/"
 	for _, format := range []string{"yaml", "go", "sql"} {
 		t.Run(format, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			opened, directory, database := lockFixture(c)
 			c.Cleanup(func() {
 				cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)

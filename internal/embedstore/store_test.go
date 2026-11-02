@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/embedstore"
@@ -28,7 +29,7 @@ func TestLineCapabilities(t *testing.T) {
 		{version: "trunk", want: embedstore.Capabilities{WideTimestamps: true, VectorIndexes: true, MaintainedOnWrite: true}},
 	} {
 		t.Run(test.version, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(embedstore.LineCapabilities(test.version, test.flags), qt.Equals, test.want)
 		})
 	}
@@ -37,7 +38,7 @@ func TestLineCapabilities(t *testing.T) {
 // A refusal's text is one line of at most 512 bytes, as the contract
 // requires of a refusal.
 func TestDescribeTargetRefusesInOneLine(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	spec := &protocol.EmbeddingSpec{Generation: "g", Target: &protocol.EmbeddingTarget{Representation: "uint8\nbits", Table: &protocol.Reference{Name: "t"}},
 		Source: &protocol.EmbeddingSource{Table: &protocol.Reference{Name: "s"}}}
 

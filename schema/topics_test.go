@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -44,7 +45,7 @@ func nativeFeed(name string) *native.ObservedChangefeed {
 }
 
 func TestTopicObservationPreservesSettingsAndOmitsRuntimeState(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := nativeTopic()
 	result, err := schema.CaptureObject(topicOwner(), input)
 	c.Assert(err, qt.IsNil)
@@ -72,7 +73,7 @@ func TestTopicObservationPreservesSettingsAndOmitsRuntimeState(t *testing.T) {
 }
 
 func TestChangefeedsRetainScanProvenanceAndOwnershipAttributes(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := &native.ChangefeedObservations{Changefeeds: []*native.ObservedChangefeed{nativeFeed("z"), nativeFeed("a")}}
 	input.Changefeeds[1].Description.State = native.ChangefeedDescription_STATE_DISABLED
 	result, err := schema.CaptureChangefeeds(tableOwner(), input)
@@ -93,7 +94,7 @@ func TestChangefeedsRetainScanProvenanceAndOwnershipAttributes(t *testing.T) {
 }
 
 func TestStreamModelsRefuseIncompleteAndRuntimePayloads(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	topic, err := schema.CaptureObject(topicOwner(), nativeTopic())
 	c.Assert(err, qt.IsNil)
 	feeds, err := schema.CaptureChangefeeds(tableOwner(), &native.ChangefeedObservations{})
@@ -113,7 +114,7 @@ func TestStreamModelsRefuseIncompleteAndRuntimePayloads(t *testing.T) {
 		{"progress counters", `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED","initialScanProgress":{}},"topic":{"partitioningSettings":{}}}]}`, feeds},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value := proto.CloneOf(test.model)
 			value.Payload = []byte(test.payload)
 			result, err := schema.Normalize(value)
@@ -133,13 +134,13 @@ func TestUnknownConsumerArmsAndNestedMissingMessagesCannotDisappear(t *testing.T
 		value *native.DescribeTopicResult
 	}{{"shared consumer", shared}, {"nil consumer", missing}} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, err := schema.CaptureObject(topicOwner(), test.value)
 			c.Assert(value, qt.IsNil)
 			c.Assert(err, qt.IsNotNil)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	incomplete := &native.ChangefeedObservations{Changefeeds: []*native.ObservedChangefeed{nativeFeed("a")}}
 	incomplete.Changefeeds[0].Topic = nil
 	value, err := schema.CaptureChangefeeds(tableOwner(), incomplete)

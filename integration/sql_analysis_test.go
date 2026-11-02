@@ -9,12 +9,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 func TestYQLAnalysisOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	c.Assert(client.Description().Features, qt.Contains, provider.AnalyzeSQLFeature)
@@ -40,7 +41,7 @@ func TestYQLAnalysisOfflineSubprocess(t *testing.T) {
 }
 
 func TestYQLAnalysisMatchesLiveQueries(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, _, _ := inspectionFixture(c)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
@@ -60,7 +61,7 @@ func TestYQLAnalysisMatchesLiveQueries(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			ctx, cancel := context.WithTimeout(c.Context(), time.Minute)
 			defer cancel()
 			request := &protocol.AnalyzeSQLRequest{Engine: "ydb", Sources: []string{test.source}}

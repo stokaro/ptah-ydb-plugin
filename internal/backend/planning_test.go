@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -36,7 +37,7 @@ func nativePlan(c *qt.C, action string) *protocol.PlanFeaturesRequest {
 func TestCoordinationPlanningAndNativeRendering(t *testing.T) {
 	for _, action := range []string{"create", "alter", "drop"} {
 		t.Run(action, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := nativePlan(c, action)
 			original := proto.CloneOf(request)
 			plan, err := backend.New().PlanFeatures(t.Context(), request)
@@ -90,7 +91,7 @@ func TestCoordinationPlanningOrdersSharedPaths(t *testing.T) {
 		{"unordered reader", "create", protocol.PlanningEffect_READ, true, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := nativePlan(c, test.action)
 			request.CommonSteps = []*protocol.CommonPlanningStep{commonPath(request, test.common)}
 			result, err := backend.New().PlanFeatures(t.Context(), request)
@@ -110,7 +111,7 @@ func TestCoordinationPlanningOrdersSharedPaths(t *testing.T) {
 }
 
 func TestCoordinationPlanningRefusesWholeBatch(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := nativePlan(c, "create")
 	second := proto.CloneOf(request.Changes[0])
 	second.Subject.Name.Source = "other"
@@ -146,7 +147,7 @@ func TestCoordinationPlanningRefusesWholeBatch(t *testing.T) {
 }
 
 func TestCoordinationOperationRefusesSemanticNoop(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := nativePlan(c, "alter")
 	input := request.Changes[0]
 	before, _, err := schema.CoordinationOperands(input.Value.Value)
@@ -183,7 +184,7 @@ func TestCoordinationPlanningRefusesUnestablishedFootprints(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := nativePlan(c, "create")
 			common := commonPath(request, protocol.PlanningEffect_DROP)
 			test.modify(common)
@@ -197,7 +198,7 @@ func TestCoordinationPlanningRefusesUnestablishedFootprints(t *testing.T) {
 }
 
 func TestCoordinationRenderRefusesWholeBatch(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := nativePlan(c, "create")
 	plan, err := backend.New().PlanFeatures(t.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -222,7 +223,7 @@ func TestCoordinationRenderRefusesWholeBatch(t *testing.T) {
 // host names its table without a database; the node names the session's, and
 // both name one path.
 func TestCoordinationPlanningPassesOverMarkersAndColumns_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := nativePlan(c, "create")
 	marker := &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: "common/feature-creations"}, Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN}}
 	table := proto.CloneOf(request.Changes[0].Subject)

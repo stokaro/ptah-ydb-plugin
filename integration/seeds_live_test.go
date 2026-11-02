@@ -12,6 +12,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -99,7 +100,7 @@ func (f *seedsFixture) names(c *qt.C) []string {
 // TestSeedApplySubprocess runs a seed file and its ledger row together, and
 // keeps nothing of a file that hits an existing key.
 func TestSeedApplySubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newSeedsFixture(c)
 	c.Assert(f.ledger(c), qt.CmpEquals(protocmp.Transform()), &protocol.SeedLedger{Exists: false, Complete: true})
 	file := seedFile("regions.sql", "$north = 'North'u;\nINSERT INTO `regions` (id, name) VALUES (1, $north);\nUPSERT INTO `regions` (id, name) VALUES (2, 'South'u);\n")
@@ -133,7 +134,7 @@ func TestSeedApplySubprocess(t *testing.T) {
 // TestSeedRefusalsSubprocess refuses, before anything runs, a seed that holds
 // a scheme statement and one that writes outside the dev realm.
 func TestSeedRefusalsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newSeedsFixture(c)
 	for _, test := range []struct {
 		name, text string
@@ -143,7 +144,7 @@ func TestSeedRefusalsSubprocess(t *testing.T) {
 		{"outside the realm", "UPSERT INTO `/local/regions` (id, name) VALUES (5, 'Five'u);\n", 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			refused := f.apply(c, seedFile(test.name+".sql", test.text))
 
@@ -157,7 +158,7 @@ func TestSeedRefusalsSubprocess(t *testing.T) {
 // TestSeedLedgerTheHostWroteSubprocess reads a ledger the host's embedded
 // engine created and wrote, with the host's own statements, and adds to it.
 func TestSeedLedgerTheHostWroteSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newSeedsFixture(c)
 	f.exec(c, "CREATE TABLE IF NOT EXISTS schema_seeds (\n    seed_path Utf8 NOT NULL,\n    env Utf8 NOT NULL,\n    checksum Utf8 NOT NULL,\n"+
 		"    applied_at Timestamp NOT NULL,\n    PRIMARY KEY (seed_path)\n)")
@@ -176,7 +177,7 @@ func TestSeedLedgerTheHostWroteSubprocess(t *testing.T) {
 // TestSeedLedgerOfAnotherLayoutSubprocess refuses a table named like the
 // ledger that does not have its layout, and never adopts it.
 func TestSeedLedgerOfAnotherLayoutSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newSeedsFixture(c)
 	f.exec(c, "CREATE TABLE schema_seeds (seed_path Utf8 NOT NULL, applied Bool, PRIMARY KEY (seed_path))")
 
@@ -193,7 +194,7 @@ func TestSeedLedgerOfAnotherLayoutSubprocess(t *testing.T) {
 // TestSeedTablesSubprocess lists the tables of the realm's root and of a
 // directory that does not exist.
 func TestSeedTablesSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newSeedsFixture(c)
 
 	listed, err := f.client.ListSeedTables(c.Context(), &protocol.ListSeedTablesRequest{SessionId: f.session})

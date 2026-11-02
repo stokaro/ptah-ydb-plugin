@@ -8,6 +8,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -213,7 +214,7 @@ func compare(c *qt.C, request *protocol.CompareModelsRequest) *protocol.Compared
 }
 
 func TestDescription_DeclaresTheFacetComparison(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	description := backend.Description()
 
 	c.Assert(provider.ValidateDescription(description, nil), qt.IsNil)
@@ -290,7 +291,7 @@ func TestCompare_ReportsAChange(t *testing.T) {
 			side{table: plain, columns: map[string]string{"note": `{}`}}, []string{"note", "records"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result := compare(c, request(c, test.desired, test.current))
 			var subjects []string
 			for _, change := range result.Changes {
@@ -369,7 +370,7 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"changefeeds beside a table that differs in no setting", side{table: plain, changefeeds: declaredFeed}, side{table: plain, changefeeds: heldFeed}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result := compare(c, request(c, test.desired, test.current))
 			c.Assert(result.Changes, qt.HasLen, 0)
 		})
@@ -397,7 +398,7 @@ func TestCompare_ReportsAChangefeedChange(t *testing.T) {
 		{"a longer retention", side{changefeeds: declaredLonger}, side{changefeeds: heldFeed}, protocol.ChangeSemantics_BEHAVIORAL, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result := compare(c, request(c, test.desired, test.current))
 			c.Assert(result.Changes, qt.HasLen, 1)
 			change := result.Changes[0]
@@ -432,7 +433,7 @@ func TestCompare_LeavesAChangefeedUndecided(t *testing.T) {
 			`changefeed "f" is a replication-managed stream, .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			req := request(c, test.desired, test.current)
 			result, err := backend.New().CompareModels(c.Context(), req)
 			c.Assert(err, qt.IsNil)
@@ -448,7 +449,7 @@ func TestCompare_LeavesAChangefeedUndecided(t *testing.T) {
 // TestCompare_KeepsAReplicationManagedStream leaves a replication-managed
 // stream the declaration leaves out as it is: its controller owns it.
 func TestCompare_KeepsAReplicationManagedStream(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	result := compare(c, request(c, side{}, side{changefeeds: heldReplicated}))
 	c.Assert(result.Changes, qt.HasLen, 0)
 }
@@ -465,7 +466,7 @@ func TestCompare_ReadsFacetsByTarget(t *testing.T) {
 		{"another target only", []string{"postgres"}, 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			req := request(c, side{table: withTTL(hourly)}, side{table: plain})
 			req.Desired.Records[0].Targets = test.targets
 
@@ -477,7 +478,7 @@ func TestCompare_ReadsFacetsByTarget(t *testing.T) {
 }
 
 func TestCompare_KeepsTheDesiredStateWhole(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	req := request(c, side{table: withTTL(hourly)}, side{table: plain})
 
 	result := compare(c, req)
@@ -487,7 +488,7 @@ func TestCompare_KeepsTheDesiredStateWhole(t *testing.T) {
 
 func TestCompare_FailurePath(t *testing.T) {
 	t.Run("a forged normalization receipt", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		req := request(c, side{table: withTTL(hourly)}, side{table: plain})
 		req.Current.Records[0].Value.CanonicalProjection = []byte(`{"forged":true}`)
 
@@ -496,7 +497,7 @@ func TestCompare_FailurePath(t *testing.T) {
 		c.Assert(err, qt.ErrorMatches, `(?s).*normalization.*`)
 	})
 	t.Run("a canceled context", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		ctx, cancel := context.WithCancel(c.Context())
 		cancel()
 
@@ -505,7 +506,7 @@ func TestCompare_FailurePath(t *testing.T) {
 		c.Assert(err, qt.ErrorIs, context.Canceled)
 	})
 	t.Run("another comparison", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		req := request(c, side{table: withTTL(hourly)}, side{table: plain})
 		req.ComparisonId = "other"
 
@@ -516,7 +517,7 @@ func TestCompare_FailurePath(t *testing.T) {
 }
 
 func TestCompare_IndexChangeNamesTheIndexSets(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	result := compare(c, request(c, side{indexes: declaredIndexes(syncByLabel)}, side{indexes: heldIndexes()}))
 
@@ -533,7 +534,7 @@ func TestCompare_IndexChangeNamesTheIndexSets(t *testing.T) {
 func TestCompare_ReportsAChangeForATableTheSourceStatesKnowledgeFor(t *testing.T) {
 	for _, state := range []protocol.ModelKnowledge_State{protocol.ModelKnowledge_ABSENT, protocol.ModelKnowledge_DEFAULTED} {
 		t.Run(state.String(), func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			compared := request(c, side{uninspected: true}, side{table: withTTL(hourly)})
 			compared.Desired.Coverage.Subjects = []*protocol.ComparisonSubjectCoverage{{Kind: schema.TableProperties, Subject: subject("table", ""), Knowledge: testcomparison.Knowledge(state)}}
 

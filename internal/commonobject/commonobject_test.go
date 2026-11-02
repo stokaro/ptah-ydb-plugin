@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 )
@@ -33,7 +34,7 @@ var (
 )
 
 func TestPrepare(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	declared := &protocol.DeclaredCommonObjects{Views: []*protocol.SQLView{
 		view(func(v *protocol.SQLView) { v.Body, v.Comment = "select a>=1,\n $x -- c\n from `t`;", "kept" }),
 		view(func(v *protocol.SQLView) { v.Name, v.Body = "w", "SELECT 1" }),
@@ -67,7 +68,7 @@ func TestRender_HappyPath(t *testing.T) {
 			"COMMENT ON VIEW `app/v` IS 'line\\nbreak';"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := commonobject.Render(tc.change, nil)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, tc.want)
@@ -102,7 +103,7 @@ func TestRender_FailurePath(t *testing.T) {
 			`unsupported feature: the YDB provider cannot render this common object change`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := commonobject.Render(tc.change, nil)
 			c.Assert(err, qt.ErrorMatches, tc.want)
 			c.Assert(got, qt.Equals, "")
@@ -121,7 +122,7 @@ func TestTableCommentRefusal(t *testing.T) {
 		return result
 	}
 	t.Run("held", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		c.Assert(commonobject.TableCommentRefusal(declared(nil)), qt.IsNil)
 	})
 	for _, tc := range []struct {
@@ -140,12 +141,12 @@ func TestTableCommentRefusal(t *testing.T) {
 		}, `unsupported feature: the comments of table app/t take 12\d\d\d bytes as YDB table attributes, keys and text together, and YDB keeps at most 10240 bytes of attributes on one object`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(commonobject.TableCommentRefusal(declared(tc.mutate)), qt.ErrorMatches, tc.want)
 		})
 	}
 	t.Run("without comments", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		original := declared(nil)
 		stripped := commonobject.WithoutComments(original)
 		c.Assert(stripped.Comment+stripped.Columns[0].Comment+stripped.Indexes[0].Comment, qt.Equals, "")
@@ -156,7 +157,7 @@ func TestTableCommentRefusal(t *testing.T) {
 }
 
 func TestSupport(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(commonobject.Support().Kinds, qt.DeepEquals, []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_VIEW, protocol.CommonObjectSupport_COMMENT, protocol.CommonObjectSupport_ROLE, protocol.CommonObjectSupport_GRANT, protocol.CommonObjectSupport_OBJECT_OWNER, protocol.CommonObjectSupport_ROLE_MEMBERSHIP})
 	capabilities := commonobject.Capabilities()
 	c.Assert(capabilities["views"] && capabilities["view_comments"] && capabilities["comment_attributes"], qt.IsTrue)

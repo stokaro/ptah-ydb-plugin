@@ -7,6 +7,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestAddress(t *testing.T) {
@@ -30,7 +31,7 @@ func TestAddress(t *testing.T) {
 		{"monitoring endpoint", "ydb://host/local?monitoring=http://host:8765", "grpc://host:2136/local", "/local"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			address, err := connection.Parse(test.input)
 			c.Assert(err, qt.IsNil)
 			c.Assert(address.String(), qt.Equals, test.dsn)
@@ -99,7 +100,7 @@ func TestAddressRefusesBeforeConnecting(t *testing.T) {
 		{"duplicate environment credentials", "ydb://host/local?use_env_credentials&use_env_credentials"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			_, err := connection.Parse(test.input)
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(err.Error(), qt.Not(qt.Contains), "test-secret")
@@ -125,7 +126,7 @@ func TestCheckEnvironment_HappyPath(t *testing.T) {
 		{"static", map[string]string{"YDB_STATIC_CREDENTIALS_USER": "alice", "YDB_STATIC_CREDENTIALS_PASSWORD": "test-secret", "YDB_STATIC_CREDENTIALS_ENDPOINT": "grpc://host:2136"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(connection.CheckEnvironment(environment(test.values)), qt.IsNil)
 		})
 	}
@@ -141,7 +142,7 @@ func TestCheckEnvironment_FailurePath(t *testing.T) {
 		{"static without password", "without YDB_STATIC_CREDENTIALS_PASSWORD and", map[string]string{"YDB_STATIC_CREDENTIALS_USER": "alice"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			err := connection.CheckEnvironment(environment(test.values))
 			c.Assert(err, qt.ErrorMatches, "(?s).*"+test.want+".*")
 			c.Assert(err, qt.Not(qt.ErrorMatches), "(?s).*test-secret.*")
@@ -158,7 +159,7 @@ func TestAddressMonitoring(t *testing.T) {
 		{"default port", "ydb://host/local?monitoring=http://host", "http://host"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			address, err := connection.Parse(test.input)
 			c.Assert(err, qt.IsNil)
 			c.Assert(fmt.Sprint(address.Monitoring()), qt.Equals, cmp.Or(test.want, "<nil>"))
@@ -167,7 +168,7 @@ func TestAddressMonitoring(t *testing.T) {
 }
 
 func TestAddressMonitoring_CopyIsIndependent(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address, err := connection.Parse("ydb://host/local?monitoring=http://host:8765")
 	c.Assert(err, qt.IsNil)
 	address.Monitoring().Host = "elsewhere:1"
@@ -175,7 +176,7 @@ func TestAddressMonitoring_CopyIsIndependent(t *testing.T) {
 }
 
 func TestAddressRefusalNamesAcceptedParameters(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	_, err := connection.Parse("ydb://host/local?test-secret=true")
 	c.Assert(err, qt.ErrorMatches, `unsupported YDB URL parameter; supported parameters: database, monitoring, dev_realm, token, use_env_credentials, go_balancer, balancer, go_query_mode, query_mode, go_default_idempotent, prefetch_query_result_parts`)
 }
@@ -189,7 +190,7 @@ func TestAddressRealm(t *testing.T) {
 		{"with SDK parameters", "ydb://host/local?dev_realm=r1&go_balancer=disable&monitoring=http://host:8765", "r1", "/local/ptah_dev/r1", "grpc://host:2136/local?go_balancer=disable"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			address, err := connection.Parse(test.input)
 			c.Assert(err, qt.IsNil)
 			c.Assert(address.Realm(), qt.Equals, test.realm)

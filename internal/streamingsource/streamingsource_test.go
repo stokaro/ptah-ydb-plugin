@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -65,7 +66,7 @@ func TestDecodeDeclarations(t *testing.T) {
 			entry("run", text("false")), entry("resource_pool", text("batch")), entry("allow_state_reset", text("true"))))},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			values, err := streamingsource.Decode(c.Context(), tc.document)
 			c.Assert(err, qt.IsNil)
 			c.Assert(len(values), qt.Equals, 1)
@@ -91,7 +92,7 @@ func TestDecodeDeclarations(t *testing.T) {
 }
 
 func TestDecodeDefaultsAndKeyOrder(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	document := yamlDocument(mapping(entry("z", mapping(entry("text", text("SELECT 1;")))),
 		entry("a", mapping(entry("text", text("SELECT 2;")), entry("run", null()), entry("allow_state_reset", null()), entry("resource_pool", number("10"))))))
 	values, err := streamingsource.Decode(c.Context(), document)
@@ -127,7 +128,7 @@ func TestDecodeBooleanGrammars(t *testing.T) {
 		{"Go false", protocol.SourceDocument_GO_ANNOTATIONS, text("FALSE"), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fields := mapping(entry("name", text("q")), entry("text", text("SELECT 1;")), entry("run", tc.value), entry("allow_state_reset", tc.value))
 			document := goDocument(fields)
 			if tc.format == protocol.SourceDocument_YAML {
@@ -177,7 +178,7 @@ func TestDecodeRefusesInvalidDeclarations(t *testing.T) {
 		{"absolute directory", yamlDocument(mapping(entry("q", valid(entry("schema", text("/app")))))), `.*relative directory and an exact leaf name.*`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			values, err := streamingsource.Decode(c.Context(), tc.document)
 			c.Assert(err, qt.ErrorMatches, tc.want)
 			c.Assert(values, qt.IsNil)
@@ -199,7 +200,7 @@ func TestDecodeRefusesAttachmentsAndFormats(t *testing.T) {
 		{"wrong selector", func(doc *protocol.SourceDocument) { doc.Fragments[0].Selector = "other" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			doc := yamlDocument(mapping())
 			tc.mutate(doc)
 			values, err := streamingsource.Decode(c.Context(), doc)
@@ -210,7 +211,7 @@ func TestDecodeRefusesAttachmentsAndFormats(t *testing.T) {
 }
 
 func TestDecodeCanceled(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	ctx, cancel := context.WithCancel(c.Context())
 	cancel()
 	values, err := streamingsource.Decode(ctx, yamlDocument(mapping()))

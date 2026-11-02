@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -69,7 +70,7 @@ func TestCompileStartingLayout_HappyPath(t *testing.T) {
 		{"no layout", `"keyBloomFilter":"ENABLED"`, []*protocol.DeclaredColumn{key("id", "Utf8")}, `{}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, err := tablecreate.Compile(owner(), layoutDeclaration(c, test.fields, test.columns...), nil)
 			c.Assert(err, qt.IsNil)
 			encoded, err := protojson.Marshal(&Ydb_Table.CreateTableRequest{Partitions: request.Partitions})
@@ -105,7 +106,7 @@ func TestCompileStartingLayout_FailurePath(t *testing.T) {
 			"the starting layout: split point 1 of partition_at_keys: its key column is Timestamp, and YDB takes only literal numbers and strings here.*"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			table := layoutDeclaration(c, test.fields, test.columns...)
 			request, err := tablecreate.Compile(owner(), table, nil)
 			c.Assert(err, qt.ErrorMatches, test.message)
@@ -115,7 +116,7 @@ func TestCompileStartingLayout_FailurePath(t *testing.T) {
 }
 
 func TestStartingLayout_BothLayouts_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	model := schema.TableDesiredModel()
 
 	_, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{
@@ -128,7 +129,7 @@ func TestStartingLayout_BothLayouts_FailurePath(t *testing.T) {
 }
 
 func TestStartingLayout_ReachesTheCreationOperation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	table := layoutDeclaration(c, `"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`, key("id", "Uint64"))
 
 	captured, err := tablecreate.Capture("create", owner(), table, nil)
@@ -164,14 +165,14 @@ func TestStartingLayout_ForgedOperation_FailurePath(t *testing.T) {
 			"split point 1 of partition_at_keys: \"\" is not a whole number.*"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			payload := `{"columns":[{"name":"id","type":{"optionalType":{"item":{"typeId":"` + test.key + `"}}},"notNull":false}],"primaryKey":["id"],"storeType":"STORE_TYPE_ROW",` + test.partitions + `}`
 			_, err := tablecreate.Normalize(&protocol.ValueInput{Id: "forged", Representation: protocol.ValueInput_OPERATION, Value: operationEnvelope(payload)})
 			c.Assert(err, qt.ErrorMatches, test.message)
 		})
 	}
 	t.Run("the shape the provider writes", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		payload := `{"columns":[{"name":"id","type":{"optionalType":{"item":{"typeId":"UINT64"}}},"notNull":false}],"primaryKey":["id"],"storeType":"STORE_TYPE_ROW",` +
 			`"partitionAtKeys":{"splitPoints":[` + good + `]}}`
 		_, err := tablecreate.Normalize(&protocol.ValueInput{Id: "good", Representation: protocol.ValueInput_OPERATION, Value: operationEnvelope(payload)})

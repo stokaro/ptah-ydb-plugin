@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -51,7 +52,7 @@ func TestColumnStorageChange_HappyPath(t *testing.T) {
 			`{"before":{"dataChannelCount":"64","hashColumns":["id"],"partitions":"3"}}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			before := optionalStorage(c, protocol.ValueInput_OBSERVED, test.before)
 			after := optionalStorage(c, protocol.ValueInput_DESIRED, test.after)
 			change, err := schema.CaptureColumnStorageChange("change", tableOwner(), before, after)
@@ -76,7 +77,7 @@ func TestColumnStorageChange_FailurePath(t *testing.T) {
 		{"not an object", `[]`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			change, err := schema.NormalizeColumnStorageChange(&protocol.ValueInput{Id: "change", Representation: protocol.ValueInput_CHANGE, Value: &protocol.Envelope{
 				ProviderId: schema.ProviderID, Kind: model.Kind, Owner: tableOwner(), SchemaVersion: 1, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256,
 				Payload: []byte(test.payload)}})
@@ -84,7 +85,7 @@ func TestColumnStorageChange_FailurePath(t *testing.T) {
 			c.Assert(change, qt.IsNil)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	change, err := schema.CaptureColumnStorageChange("change", tableOwner(), nil, nil)
 	c.Assert(err, qt.ErrorMatches, `column storage change requires an operand`)
 	c.Assert(change, qt.IsNil)
@@ -94,7 +95,7 @@ func TestColumnStorageChange_FailurePath(t *testing.T) {
 // whose TTL carries the expiration the server derives into a declaration that
 // states the tiers alone.
 func TestColumnStorageConversionLeavesTheExpirationOut(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	observed := storageEnvelope(c, protocol.ValueInput_OBSERVED, `{"hashColumns":["id"],"partitions":"3","dataChannelCount":"64",`+
 		`"ttl":{"enabled":{"column":"ts","expireAfterSeconds":"4294967295","tiers":[{"applyAfterSeconds":"86400","externalStorage":"/local/ext"}]}}}`)
 	desired, err := schema.ConvertNative(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)

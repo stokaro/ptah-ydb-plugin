@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
@@ -64,7 +65,7 @@ func hostAlteration(c *qt.C, in alterCase) (*protocol.CompareModelsRequest, *pro
 // database and whose declared ones carry none. Both sides name one table, so
 // the comparison reports the change and the planner carries it out.
 func TestHostIdentitiesCompareAndPlan(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	comparison, planning := hostAlteration(c, ttlCase(ttlTable(hourly), plainTable, "ts"))
 	compared, err := backend.New().CompareModels(c.Context(), comparison)
 	c.Assert(err, qt.IsNil)
@@ -88,7 +89,7 @@ func TestHostIdentitiesCompareAndPlan(t *testing.T) {
 // TestHostIdentitiesCompareEqualFacets finds nothing to change in a table the
 // host names without its database when both sides hold the same facets.
 func TestHostIdentitiesCompareEqualFacets(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	comparison, _ := hostAlteration(c, alterCase{desiredTable: ttlTable(hourly), heldTable: ttlTable(hourly), declared: []string{"ts", "note"}, types: ttlTypes,
 		held: []string{"ts", "note"}, desiredColumns: map[string]string{"note": `{}`}, heldColumns: map[string]string{"note": `{}`}})
 	compared, err := backend.New().CompareModels(c.Context(), comparison)
@@ -101,7 +102,7 @@ func TestHostIdentitiesCompareEqualFacets(t *testing.T) {
 // another table than its subject names: only the database the host leaves out
 // is taken from the owner.
 func TestHostIdentitiesKeepTheOwnersSchema(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	_, planning := hostAlteration(c, ttlCase(ttlTable(hourly), plainTable, "ts"))
 	planning.Tables[0].Current.Features.Facets.Records[0].Subject.Schema = part("other")
 	plan, err := backend.New().PlanFeatures(c.Context(), planning)

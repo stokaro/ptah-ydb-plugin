@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestAddressCredentials_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Setenv("YDB_ACCESS_TOKEN_CREDENTIALS", "test-secret")
 	address, err := Parse("ydb://host/local?use_env_credentials=true")
 	c.Assert(err, qt.IsNil)
@@ -20,7 +21,7 @@ func TestAddressCredentials_HappyPath(t *testing.T) {
 }
 
 func TestAddressCredentials_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Setenv("YDB_METADATA_CREDENTIALS", "true")
 	address, err := Parse("ydb://host/local?use_env_credentials=true")
 	c.Assert(err, qt.IsNil)

@@ -7,6 +7,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -35,7 +36,7 @@ func hclNode(claim *protocol.HCLSourceBlock) *protocol.DecodeSourceRequest {
 // host that lists neither gets no HCL claim and no index key. No database
 // session is opened.
 func TestSourceClaimsOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	listing := startProviderFor(c, provider.HCLSourceFeature, provider.EntryKeysFeature)
 	engine := listing.Description().Engines[0]
 	c.Assert(engine.Features, qt.Contains, provider.EncodeSourceFeature)

@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -52,7 +53,7 @@ func labeled(settings map[string]string, labels ...string) *protocol.SourceBlock
 // entry declare, named by its labels. A ptah:not-described header names the
 // nodes the host leaves outside the document's claim.
 func TestCoordinationHCLSource_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := hclNodes([]*protocol.SchemaCoverageLimit{{Kind: "coordination_node", Name: "app/legacy"}},
 		labeled(map[string]string{"self_check_period": "PT0.5S", "read_consistency_mode": "STRICT"}, "app/workers", "queue"),
 		labeled(nil, "plain"))
@@ -81,14 +82,14 @@ func TestCoordinationHCLSource_FailurePath(t *testing.T) {
 		{"a limit no node can take", hclNodes([]*protocol.SchemaCoverageLimit{{Kind: "coordination_node", Name: "/absolute/node"}}), `.*coverage of github.com/stokaro/ptah-ydb-plugin: .*`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := backend.New().DecodeSource(c.Context(), tc.request)
 			c.Assert(err, qt.ErrorMatches, tc.want)
 			c.Assert(result, qt.IsNil)
 		})
 	}
 	t.Run("a block of another claim", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := hclNodes(nil, labeled(nil, "queue"))
 		claim := proto.CloneOf(schema.CoordinationHCLBlock())
 		claim.Naming = protocol.HCLSourceBlock_JOINED_NAME
@@ -102,7 +103,7 @@ func TestCoordinationHCLSource_FailurePath(t *testing.T) {
 // An index entry's YAML keys are claimed so that each is refused by name, as
 // the index directive's attributes are.
 func TestIndexYAMLKeysAreRefusedByName(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	claim := tablesource.IndexYAMLKeys()[0]
 	table := &protocol.Reference{Engine: "ydb", Kind: "table", Name: "records"}
 	document := &protocol.SourceDocument{Id: "doc", File: "schema.yaml", Format: protocol.SourceDocument_YAML, ByteLength: 1,
@@ -119,7 +120,7 @@ func TestIndexYAMLKeysAreRefusedByName(t *testing.T) {
 // Both claims are two-way: a host that does not list a feature gets none of
 // its claims.
 func TestSourceClaimsAreNegotiated(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	listed := provider.NegotiatedDescription(backend.Description(), []string{provider.EntryKeysFeature, provider.HCLSourceFeature}).Engines[0]
 	c.Assert(proto.Equal(listed.HclSource.Blocks[0], schema.CoordinationHCLBlock()), qt.IsTrue)
 	c.Assert(listed.HclSource.HeaderKinds, qt.DeepEquals, []string{"coordination_node"})

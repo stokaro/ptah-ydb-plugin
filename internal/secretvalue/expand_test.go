@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretvalue"
 )
@@ -80,7 +81,7 @@ func TestExpand_HappyPath(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := secretvalue.Expand(tc.query, env)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got.Text, qt.Equals, tc.want)
@@ -113,7 +114,7 @@ func TestExpand_FailurePath(t *testing.T) {
 	}
 	for _, tc := range references {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := secretvalue.Expand(tc.query, env)
 			c.Assert(err, qt.ErrorIs, secretvalue.ErrReference)
 			c.Assert(err, qt.Not(qt.ErrorMatches), ".*SENTINEL.*")
@@ -123,7 +124,7 @@ func TestExpand_FailurePath(t *testing.T) {
 	}
 
 	t.Run("a variable that is not set", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		got, err := secretvalue.Expand("CREATE SECRET s WITH (value = $PTAH_SECRET_MISSING);", env)
 		c.Assert(err, qt.ErrorMatches,
 			"a secret requires approved input PTAH_SECRET_MISSING, which was not supplied")
@@ -132,7 +133,7 @@ func TestExpand_FailurePath(t *testing.T) {
 	})
 
 	t.Run("a value spelled in another case than the prefix", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		got, err := secretvalue.Expand("CREATE SECRET s WITH (value = $ptah_secret_key);", env)
 		c.Assert(err, qt.ErrorMatches, `secret value \$ptah_secret_key: invalid value_env: "ptah_secret_key" does `+
 			`not start with PTAH_SECRET_ .*`)
@@ -142,7 +143,7 @@ func TestExpand_FailurePath(t *testing.T) {
 }
 
 func TestExpansion_Redact_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	env := environment(map[string]string{"PTAH_SECRET_A": "abc", "PTAH_SECRET_B": "abcdef"})
 	expanded, err := secretvalue.Expand(
 		"CREATE SECRET a WITH (value = $PTAH_SECRET_A); CREATE SECRET b WITH (value = $PTAH_SECRET_B);", env)
@@ -168,7 +169,7 @@ func TestReferences_HappyPath(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(secretvalue.References(tc.query), qt.DeepEquals, tc.want)
 		})
 	}
@@ -202,7 +203,7 @@ func TestClearValue_HappyPath(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			form, path, writes := secretvalue.ClearValue(tc.statement)
 			c.Assert(form, qt.Equals, tc.form)
 			c.Assert(path, qt.Equals, tc.path)

@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
@@ -25,14 +26,14 @@ func TestObjectConversionsPreserveNativeOptions(t *testing.T) {
 		{"table", schema.ExternalTableProperties, &native.DescribeExternalTableResult{Self: objectSelf(), SourceType: proto.String("ObjectStorage"), DataSourcePath: proto.String("/local/App/bucket"), Location: proto.String(""), Content: map[string]string{"FORMAT": `["json_each_row"]`}, Columns: []*native.ColumnMeta{{Name: "z", Type: primitive(Ydb.Type_INT64), NotNull: proto.Bool(true)}, {Name: "a", Type: optional(primitive(Ydb.Type_UTF8)), Family: "cold", DefaultValue: &native.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: primitive(Ydb.Type_UTF8), Value: &Ydb.Value{Value: &Ydb.Value_TextValue{TextValue: "Default"}}}}}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			observed, err := schema.CaptureObject(objectOwner(test.kind), test.value)
 			c.Assert(err, qt.IsNil)
 			observed.Context = &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
 			assertChildRoundTrip(c, observed)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	observed, err := schema.CaptureColumnStorage(tableOwner(), storageObservation())
 	c.Assert(err, qt.IsNil)
 	desired := assertChildRoundTrip(c, observed)
@@ -56,7 +57,7 @@ func TestViewConversionRefusesContradictoryOrUnmodeledProperties(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			view := &native.ViewObservation{View: &Ydb_View.DescribeViewResult{Self: objectSelf(), QueryText: "SELECT 1"}, Properties: &native.DescribeTableResult{Self: objectSelf()}}
 			test.edit(view)
 			observed, err := schema.CaptureObject(objectOwner(schema.ViewProperties), view)
@@ -94,7 +95,7 @@ func TestDesiredObjectsRefuseInvalidValues(t *testing.T) {
 		{"storage malformed TTL", schema.ColumnStorageProperties, `{"hashColumns":["id"],"partitions":"1","dataChannelCount":"64","ttl":{}}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := schema.NativeDesiredModel(test.kind)
 			owner := objectOwner(test.kind)
 			if test.kind == schema.ColumnStorageProperties {
@@ -121,7 +122,7 @@ func TestDesiredColumnStorageLeavesServerChoicesOut(t *testing.T) {
 		`{"ttl":{"enabled":{"column":"at","columnUnit":"4","tiers":[{"applyAfterSeconds":"60","externalStorage":"/local/a"},{"applyAfterSeconds":"120","externalStorage":"/local/b"},{"applyAfterSeconds":"4294967295","delete":{}}]}}}`,
 	} {
 		t.Run(payload, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := schema.NativeDesiredModel(schema.ColumnStorageProperties)
 			value := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: schema.ColumnStorageProperties, Owner: tableOwner(), SchemaVersion: definition.SchemaVersion,
 				Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: []byte(payload)}
@@ -136,7 +137,7 @@ func TestDesiredColumnStorageLeavesServerChoicesOut(t *testing.T) {
 
 func TestCoordinationConversionPreservesOmissionAndAccess(t *testing.T) {
 	for _, config := range []*Ydb_Coordination.Config{{}, {SelfCheckPeriodMillis: 2000, SessionGracePeriodMillis: 9000, ReadConsistencyMode: Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT, AttachConsistencyMode: Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_RELAXED, RateLimiterCountersMode: Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_DETAILED}} {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		input := &Ydb_Coordination.DescribeNodeResult{Self: objectSelf(), Config: config}
 		observed, err := schema.CaptureObject(objectOwner(schema.CoordinationProperties), input)
 		c.Assert(err, qt.IsNil)
@@ -155,7 +156,7 @@ func TestCoordinationConversionPreservesOmissionAndAccess(t *testing.T) {
 // A converted coordination node keeps the database context its source
 // carried, in both directions, so the converted value names the same object.
 func TestCoordinationConversionKeepsTheDatabaseContext(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := &Ydb_Coordination.DescribeNodeResult{Self: objectSelf(), Config: &Ydb_Coordination.Config{SelfCheckPeriodMillis: 2000}}
 	observed, err := schema.CaptureObject(objectOwner(schema.CoordinationProperties), input)
 	c.Assert(err, qt.IsNil)
@@ -169,7 +170,7 @@ func TestCoordinationConversionKeepsTheDatabaseContext(t *testing.T) {
 }
 
 func TestCoordinationConversionRefusesSourceHolderAndMalformedAccess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value, err := schema.CaptureCoordinationIntent(objectOwner(schema.CoordinationProperties), schema.CoordinationIntent{StructName: "Holder"})
 	c.Assert(err, qt.IsNil)
 	back, err := schema.ConvertCoordination(value, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
@@ -187,7 +188,7 @@ func TestCoordinationConversionRefusesSourceHolderAndMalformedAccess(t *testing.
 }
 
 func TestEveryObservedKindHasItsOwnDesiredContract(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	for _, observed := range schema.ObservedModels() {
 		var found *protocol.ValueModel
 		for _, model := range schema.Models() {
@@ -203,7 +204,7 @@ func TestEveryObservedKindHasItsOwnDesiredContract(t *testing.T) {
 }
 
 func TestViewCaptureExcludesOnlyMeasuredDisabledPartitionSwitches(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	view := &native.ViewObservation{View: &Ydb_View.DescribeViewResult{Self: objectSelf(), QueryText: "SELECT 1"}, Properties: &native.DescribeTableResult{Self: objectSelf(), PartitioningSettings: &Ydb_Table.PartitioningSettings{PartitioningBySize: Ydb.FeatureFlag_DISABLED, PartitioningByLoad: Ydb.FeatureFlag_DISABLED}}}
 	observed, err := schema.CaptureObject(objectOwner(schema.ViewProperties), view)
 	c.Assert(err, qt.IsNil)

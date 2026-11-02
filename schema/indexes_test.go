@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -24,7 +25,7 @@ func indexObservation(name string) *native.ObservedIndex {
 }
 
 func TestIndexObservationsCanonicalizeOnlyUnorderedLists(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := &native.IndexObservations{Indexes: []*native.ObservedIndex{indexObservation("z"), indexObservation("a")}}
 	input.Indexes[0].Description.SizeBytes = 200
 	input.Indexes[0].Tables[0].Description.TableStats = &Ydb_Table.TableStats{}
@@ -46,7 +47,7 @@ func TestIndexObservationsCanonicalizeOnlyUnorderedLists(t *testing.T) {
 }
 
 func TestIndexObservationsRefuseIncompleteOrUnknownState(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	base, err := schema.CaptureIndexes(tableOwner(), &native.IndexObservations{})
 	c.Assert(err, qt.IsNil)
 	for _, test := range []struct{ name, payload string }{
@@ -57,7 +58,7 @@ func TestIndexObservationsRefuseIncompleteOrUnknownState(t *testing.T) {
 		{"path escape", `{"indexes":[{"description":{"name":"../idx","indexColumns":["v"],"status":"STATUS_READY","globalIndex":{}}}]}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value := proto.CloneOf(base)
 			value.Payload = []byte(test.payload)
 			result, err := schema.Normalize(value)
@@ -81,7 +82,7 @@ func TestIndexObservationsRefuseIncompleteOrUnknownState(t *testing.T) {
 		{"unknown physical column", &native.IndexObservations{Indexes: []*native.ObservedIndex{unknown}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := schema.CaptureIndexes(tableOwner(), test.value)
 			c.Assert(result, qt.IsNil)
 			c.Assert(err, qt.IsNotNil)
@@ -92,7 +93,7 @@ func TestIndexObservationsRefuseIncompleteOrUnknownState(t *testing.T) {
 // Field 9 is returned by YDB for the vector-prefix implementation sequence,
 // but the upstream Go bindings cannot decode it. Keep it typed in our model.
 func TestNativeSequenceTypeSurvivesWireAndOfflineNormalization(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	dataType, err := proto.Marshal(primitive(Ydb.Type_INT64))
 	c.Assert(err, qt.IsNil)
 	sequence := &Ydb_Table.SequenceDescription{Name: proto.String("_serial"), Increment: proto.Int64(1)}

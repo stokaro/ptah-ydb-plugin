@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
@@ -15,7 +16,7 @@ func TestAlteredTable_HappyPath(t *testing.T) {
 		{"--!syntax_v1\n-- add\nALTER TABLE `/local/a\\`b` ADD COLUMN v Utf8", "/local/a`b"},
 	} {
 		t.Run(test.text, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			table, ok := yql.AlteredTable(test.text)
 
@@ -36,7 +37,7 @@ func TestAlteredTable_FailurePath(t *testing.T) {
 		"ALTER TABLE `t ADD COLUMN v Utf8",
 	} {
 		t.Run(text, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			table, ok := yql.AlteredTable(text)
 

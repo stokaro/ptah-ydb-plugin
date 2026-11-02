@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -12,7 +13,7 @@ import (
 )
 
 func TestScopeSelectionsNegotiation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	description := backend.Description()
 	c.Assert(provider.ValidateDescription(description, description.Features), qt.IsNil)
 	c.Assert(description.Features, qt.Contains, provider.StatementsFeature)
@@ -45,7 +46,7 @@ func TestScopeSelectionsNegotiation(t *testing.T) {
 func TestClassifierScopeKeepsItsPool(t *testing.T) {
 	for _, representation := range []protocol.ValueInput_Representation{protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED} {
 		t.Run(representation.String(), func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			owner := &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolClassifierProperties, Name: "batch.reader"}
 			settings := schema.ClassifierSettings(workload.ClassifierSpec{ResourcePool: "batch.pool", Rank: 1})
 			capture := schema.CaptureWorkloadIntent

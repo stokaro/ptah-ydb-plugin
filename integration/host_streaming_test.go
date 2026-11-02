@@ -15,6 +15,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -23,7 +24,7 @@ import (
 // topic, removes the old source, and restarts the query with the new body.
 // This exercises the host's combined graph rather than provider slice order.
 func TestHostStreamingQueryGraph(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	client := startProviderFor(c)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
@@ -86,7 +87,7 @@ func TestHostStreamingQueryGraph(t *testing.T) {
 }
 
 func TestHostRefusesStreamingWithoutCapability(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	client := startProviderFor(c)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})

@@ -15,13 +15,14 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // Rendering needs no session. Applying that authored text and comparing the
 // resulting catalog establishes that CREATE retains each declared property.
 func TestHostAuthoredSchemaAppliesAndReplansSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	host, manifest := hostManifest(c)
 	opened, directory, database := inspectionFixture(c)
 	source := filepath.Join(c.TempDir(), "desired.yaml")

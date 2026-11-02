@@ -9,6 +9,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/devdatabase"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 type hostRow struct {
@@ -38,12 +39,12 @@ func readCorpus(c *qt.C) []hostRow {
 }
 
 func TestParseSpecAgreesWithHost_Verdict(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := readCorpus(c)
 	c.Assert(len(rows) >= 30, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
 	for _, row := range rows {
 		t.Run(row.Spec, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			want := cmp.Or(map[bool]string{true: "refused"}[divergences[row.Spec] != ""], row.Outcome)
 
 			_, err := devdatabase.ParseSpec(row.Spec)
@@ -54,7 +55,7 @@ func TestParseSpecAgreesWithHost_Verdict(t *testing.T) {
 }
 
 func TestParseSpecAgreesWithHost_Address(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var agreed []hostRow
 	for _, row := range readCorpus(c) {
 		if _, diverges := divergences[row.Spec]; row.Outcome == "ok" && !diverges {
@@ -64,7 +65,7 @@ func TestParseSpecAgreesWithHost_Address(t *testing.T) {
 	c.Assert(len(agreed) >= 10, qt.IsTrue, qt.Commentf("the corpus holds %d accepted rows", len(agreed)))
 	for _, row := range agreed {
 		t.Run(row.Spec, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			spec, err := devdatabase.ParseSpec(row.Spec)
 
@@ -97,7 +98,7 @@ func TestParseSpec_FailurePath(t *testing.T) {
 		{"image form token", "docker+ydb://_/ydbplatform/local-ydb:26.2.1.14?token=test-secret", `docker parameter "token" would point .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			spec, err := devdatabase.ParseSpec(test.spec)
 
@@ -124,7 +125,7 @@ func TestParseSpec_HappyPath(t *testing.T) {
 		{"image form in upper case", "DOCKER+YDB://_/ydbplatform/local-ydb:26.2.1.14/local?go_balancer=single", "ydbplatform/local-ydb:26.2.1.14", "ydb://127.0.0.1:1/local?go_balancer=single"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			spec, err := devdatabase.ParseSpec(test.spec)
 

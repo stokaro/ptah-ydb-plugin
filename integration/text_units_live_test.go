@@ -16,6 +16,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -131,7 +132,7 @@ func alterationScenarios() []alterationScenario {
 func TestTextUnitsAlterAsTheNativeCallSubprocess(t *testing.T) {
 	for _, scenario := range alterationScenarios() {
 		t.Run(scenario.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			native := newFacetFixture(c, scenario.clauses, "")
 			text := newFacetFixtureListing(c, scenario.clauses, "", provider.TextUnitsFeature)
 			text.form = protocol.RenderRequest_TEXT
@@ -149,7 +150,7 @@ func TestTextUnitsAlterAsTheNativeCallSubprocess(t *testing.T) {
 // through the native call, and through the CREATE TABLE the TEXT form writes.
 // The two tables read back the same.
 func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()
@@ -184,7 +185,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 		for _, column := range declared.Features.Facets.Records[1:] {
 			column.Subject.Parent = &protocol.ComparisonPart{Source: name, Normalized: name}
 		}
-		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 			Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE, Desired: declared}}}
 		prepareCapturedCreation(c, client, planning)
@@ -282,7 +283,7 @@ func (f *coordinationText) plan(c *qt.C, mode string, drop bool) *protocol.Compa
 	c.Assert(err, qt.IsNil)
 	snapshot, err := f.client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: f.session.Id, Schemas: []string{f.directory}})
 	c.Assert(err, qt.IsNil)
-	request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: coordinationcompare.ServiceID, Kinds: []string{schema.CoordinationProperties},
+	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), ComparisonId: coordinationcompare.ServiceID, Kinds: []string{schema.CoordinationProperties},
 		DatabasePath: f.database, Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Desired: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: capturedCoordinationCoverage(decoded.Documents[0].Coverage, f.database)},
 		Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedCoordinationCoverage(snapshot.Coverage, f.database)}}
@@ -297,7 +298,7 @@ func (f *coordinationText) plan(c *qt.C, mode string, drop bool) *protocol.Compa
 		if value.Kind != schema.CoordinationProperties {
 			continue
 		}
-		normalized, err := f.client.NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "observed",
+		normalized, err := f.client.NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), Values: []*protocol.ValueInput{{Id: "observed",
 			Representation: protocol.ValueInput_OBSERVED, Value: value}}})
 		c.Assert(err, qt.IsNil)
 		request.Current.Records = append(request.Current.Records, &protocol.ComparisonRecord{Kind: schema.CoordinationProperties, Subject: testplanning.Subject(value.Owner),
@@ -313,7 +314,7 @@ func (f *coordinationText) text(c *qt.C, compared *protocol.ComparedModels) *pro
 	c.Helper()
 	c.Assert(compared.Changes, qt.HasLen, 1)
 	change := compared.Changes[0]
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: coordinationplan.ServiceID, DatabasePath: f.database, Capabilities: f.session.Capabilities,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), PlanningId: coordinationplan.ServiceID, DatabasePath: f.database, Capabilities: f.session.Capabilities,
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Changes:     []*protocol.PlanningChange{{Subject: change.Subject, Value: change.Value}}}
 	plan, err := f.client.PlanFeatures(c.Context(), request)
@@ -347,7 +348,7 @@ func (f *coordinationText) execute(c *qt.C, transaction string, units ...*protoc
 // provider runs through the coordination service, and reads each result
 // back from the server.
 func TestCoordinationTextUnitsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	nodes := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(opened.Driver))
 	c.Cleanup(func() {
@@ -416,7 +417,7 @@ func TestCoordinationTextUnitsSubprocess(t *testing.T) {
 // migration file the host's embedded engine wrote holds, read with the path
 // prefix the file sets and in a dev realm, and reads the nodes back.
 func TestCoordinationStatementsOfAMigrationFileSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	nodes := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(opened.Driver))
 	client := startProviderFor(c, provider.PlanningLifecycleFeature)

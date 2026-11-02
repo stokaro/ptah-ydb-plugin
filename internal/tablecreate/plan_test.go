@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -25,7 +26,7 @@ func creationPlan(c *qt.C) *protocol.PlanFeaturesRequest {
 			Action: protocol.PlanningTable_CREATE, Desired: table}}}
 }
 func TestNativeTableCreationPlanRenderNormalize(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	service := backend.New()
 	request := creationPlan(c)
 	subject := request.Tables[0].Subject
@@ -64,7 +65,7 @@ func TestNativeTableCreationPlanRenderNormalize(t *testing.T) {
 	c.Assert(refused, qt.IsNil)
 }
 func TestTableCreationSkipsOrderingMarkers(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := creationPlan(c)
 	subject := request.Tables[0].Subject
 	commonID := &protocol.StepIdentity{Owner: "host", Name: "create"}
@@ -86,7 +87,7 @@ func TestTableCreationSkipsOrderingMarkers(t *testing.T) {
 	c.Assert(proto.Equal(plan.Rewrites[0].Sources[0], commonID), qt.IsTrue)
 }
 func TestTableCreationRefusesParentlessStepWithEffects(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := creationPlan(c)
 	subject := request.Tables[0].Subject
 	request.CommonSteps = []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "other"},
@@ -115,7 +116,7 @@ func TestTableCreationRefusesPartialPlanning(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := creationPlan(c)
 			test.modify(request)
 			result, err := backend.New().PlanFeatures(t.Context(), request)
@@ -126,7 +127,7 @@ func TestTableCreationRefusesPartialPlanning(t *testing.T) {
 			c.Assert(result.Rewrites, qt.HasLen, 0)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := creationPlan(c)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -141,7 +142,7 @@ func TestCreationOperationRefusesSessionAndPathInjection(t *testing.T) {
 		`{"columns":[{"name":"id","type":{"typeId":"UINT64"},"notNull":true}],"primaryKey":["id"],"storeType":"STORE_TYPE_COLUMN"}`,
 	} {
 		t.Run(payload, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, err := tablecreate.Capture("operation", owner(), declaration(), nil)
 			c.Assert(err, qt.IsNil)
 			value.Value.Payload = []byte(payload)

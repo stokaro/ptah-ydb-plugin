@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -34,7 +35,7 @@ func TestColumnConversionRetainsNativeSettings(t *testing.T) {
 			Encoding: []*native.ColumnEncoding{{EncodingSettings: &native.ColumnEncoding_Dictionary_{Dictionary: &native.ColumnEncoding_Dictionary{}}}, {EncodingSettings: &native.ColumnEncoding_Off_{Off: &native.ColumnEncoding_Off{}}}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			observed, err := schema.CaptureColumn(columnOwner(), test.column)
 			c.Assert(err, qt.IsNil)
 			original := proto.CloneOf(observed)
@@ -55,7 +56,7 @@ func TestColumnConversionRetainsNativeSettings(t *testing.T) {
 }
 
 func TestColumnConversionRefusesMutableSequencePosition(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	observed, err := schema.CaptureColumn(columnOwner(), &native.ColumnMeta{DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: &native.SequenceDescription{SetVal: &native.SequenceDescription_SetVal{NextValue: proto.Int64(7)}}}})
 	c.Assert(err, qt.IsNil)
 	result, err := schema.ConvertColumn(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
@@ -81,7 +82,7 @@ func TestDesiredColumnRefusesAmbiguousOrForeignSettings(t *testing.T) {
 		{"unknown setting", `{"surprise":true}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := schema.ColumnDesiredModel()
 			input := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: definition.Kind, Owner: columnOwner(), SchemaVersion: definition.SchemaVersion,
 				Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: []byte(test.payload)}

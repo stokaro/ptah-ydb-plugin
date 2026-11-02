@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestEqualUsesTokensAndDefaults(t *testing.T) {
@@ -27,7 +28,7 @@ func TestEqualUsesTokensAndDefaults(t *testing.T) {
 }
 
 func TestStepsRetainPreconditions(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	before := &streaming.Spec{Text: "SELECT 1;"}
 	after := &streaming.Spec{Text: "SELECT 2;", ResourcePool: "batch"}
 	change := streaming.Change{Schema: "app", Name: "copy", Before: before, After: after, AllowStateReset: true}
@@ -72,7 +73,7 @@ func TestStepsAndCheckpointImpact(t *testing.T) {
 		{"change stopped body", streaming.Change{Before: stopped, After: &streaming.Spec{Text: "SELECT 2;", Run: new(false)}, AllowStateReset: true}, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			tc.change.Name = "copy"
 			steps, err := streaming.Steps(tc.change)
 			c.Assert(err, qt.IsNil)
@@ -95,7 +96,7 @@ func TestStatementsRefuseInvalidChanges(t *testing.T) {
 		{"unapproved reset", streaming.Change{Before: query, After: &streaming.Spec{Text: "SELECT 2;"}}, ".*declare allow_state_reset=true.*"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			statements, err := streaming.Statements(tc.change)
 			c.Assert(err, qt.ErrorMatches, tc.want)
 			c.Assert(statements, qt.IsNil)

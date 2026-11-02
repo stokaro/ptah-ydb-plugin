@@ -8,6 +8,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -25,7 +26,7 @@ func yamlRequest(c *qt.C, source string) *protocol.DecodeSourceRequest {
 }
 
 func TestClaims(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var keys []string
 	models := map[string][]string{}
 	for _, claim := range tablesource.YAMLKeys() {
@@ -78,7 +79,7 @@ func TestClaims(t *testing.T) {
 // directive reads itself, and the YAML keys and the Go table attributes spell
 // the shared settings alike.
 func TestClaims_TableAttributesAreTheYAMLKeysAndMore(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var table *protocol.GoSourceDirective
 	for _, directive := range tablesource.GoDirectives() {
 		if directive.Directive == tablesource.DirectiveTable {
@@ -99,7 +100,7 @@ func TestClaims_TableAttributesAreTheYAMLKeysAndMore(t *testing.T) {
 }
 
 func TestDescriptionAdvertisesTheTableClaims(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	description := backend.Description()
 	c.Assert(provider.ValidateDescription(description, nil), qt.IsNil)
 	engine := description.Engines[0]
@@ -140,7 +141,7 @@ func TestDecode_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := yamlRequest(c, test.source)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.IsNil)
@@ -173,7 +174,7 @@ func TestDecode_ColumnStore(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := yamlRequest(c, test.source)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.IsNil)
@@ -212,7 +213,7 @@ func TestDecode_ColumnStoreFailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := yamlRequest(c, test.source)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
@@ -224,7 +225,7 @@ func TestDecode_ColumnStoreFailurePath(t *testing.T) {
 // A document may carry one facet of a kind for a table, so the fragments of a
 // table declare one together, and the first of them returns it.
 func TestDecodeSource_OneFacetForAllFragmentsOfATable(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := yamlRequest(c, `{"tables":{"orders":{"schema":"shop","key_bloom_filter":"ENABLED","auto_partitioning_by_load":"ENABLED","column_families":{"cold":{}}},`+
 		`"items":{"read_replicas_settings":"ANY_AZ:1"},"plain":{}}}`)
 	decoded, err := backend.New().DecodeSource(c.Context(), request)
@@ -266,7 +267,7 @@ func TestDecode_DeclaringNothingGivesNoFacet(t *testing.T) {
 		`{"tables":{"items":{}}}`,
 	} {
 		t.Run(source, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := yamlRequest(c, source)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.IsNil)
@@ -320,7 +321,7 @@ func TestDecode_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := yamlRequest(c, test.source)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
@@ -333,7 +334,7 @@ func TestDecode_FailurePath(t *testing.T) {
 }
 
 func TestDecode_NullFamilySettingsAreLeftOut(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := yamlRequest(c, `{"tables":{"items":{"column_families":{"cold":{"data":null,"compression":null,"cache_mode":null,"fields":null},"warm":null}}}}`)
 	tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 	c.Assert(err, qt.IsNil)
@@ -341,7 +342,7 @@ func TestDecode_NullFamilySettingsAreLeftOut(t *testing.T) {
 }
 
 func TestDecodeSource_CanceledWithoutOutput(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := yamlRequest(c, `{"tables":{"items":{"key_bloom_filter":"ENABLED"}}}`)
 	ctx, cancel := context.WithCancel(c.Context())
 	cancel()
@@ -354,7 +355,7 @@ func TestDecodeSource_CanceledWithoutOutput(t *testing.T) {
 }
 
 func TestDecodeSource_DoesNotChangeItsInput(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := yamlRequest(c, `{"tables":{"items":{"key_bloom_filter":"ENABLED","column_families":{"cold":{"data":"hdd"}}}}}`)
 	before := proto.CloneOf(request)
 	_, err := backend.New().DecodeSource(c.Context(), request)

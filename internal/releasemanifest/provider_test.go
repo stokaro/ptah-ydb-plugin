@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 
@@ -13,7 +14,7 @@ import (
 )
 
 func TestBuildProvider_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	out, err := releasemanifest.BuildProvider(backend.Description(), "0.2.0", "ptah-plugin-ydb", "ptah-plugin-ydb")
 	c.Assert(err, qt.IsNil)
@@ -50,7 +51,7 @@ func TestBuildProviderReadsTheDeclaredMinimum_HappyPath(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			description := backend.Description()
 			description.MinContract = tc.minimum
 
@@ -65,7 +66,7 @@ func TestBuildProviderReadsTheDeclaredMinimum_HappyPath(t *testing.T) {
 }
 
 func TestBuildProviderIsDeterministic_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	first, err := releasemanifest.BuildProvider(backend.Description(), "0.2.0", "ptah-plugin-ydb", "ptah-plugin-ydb")
 	c.Assert(err, qt.IsNil)
@@ -77,7 +78,7 @@ func TestBuildProviderIsDeterministic_HappyPath(t *testing.T) {
 func TestBuildProvider_FailurePath(t *testing.T) {
 	for _, version := range []string{"", "v0.2.0"} {
 		t.Run(version, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			out, err := releasemanifest.BuildProvider(backend.Description(), version, "ptah-plugin-ydb", "ptah-plugin-ydb")
 			c.Assert(err, qt.ErrorMatches, `release version ".*" must be the tag without its leading v`)
 			c.Assert(out, qt.IsNil)

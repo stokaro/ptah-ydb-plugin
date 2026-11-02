@@ -10,12 +10,13 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 func TestRealmRefusesNativeStreamingBodyEscape(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &driverProbe{}
 	p := realmProvider(c, probe)
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Name: "copy"}
@@ -48,7 +49,7 @@ func sqlUnits(statements ...string) *protocol.ExecuteRequest {
 }
 
 func TestRealmSessionExecutesConfinedStatements(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &driverProbe{}
 	p := realmProvider(c, probe)
 
@@ -67,7 +68,7 @@ func TestRealmSessionRefusesAnEscapeBeforeAnyUnitRuns(t *testing.T) {
 		{"prefix change", "PRAGMA TablePathPrefix = \"/local\"", "YDB dev realm session rejects PRAGMA TablePathPrefix because its effects cannot be confined to the dev realm"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			probe := &driverProbe{}
 			p := realmProvider(c, probe)
 
@@ -84,7 +85,7 @@ func TestRealmSessionRefusesAnEscapeBeforeAnyUnitRuns(t *testing.T) {
 }
 
 func TestSessionOutsideARealmExecutesWhatItIsGiven(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &driverProbe{}
 	p := probeProvider(c, probe)
 
@@ -105,7 +106,7 @@ func TestSessionLeavesTheRealmDirectoryOutOfWhatItReads(t *testing.T) {
 		{"realm", true, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			s := &session{realm: test.realm}
 			c.Assert(s.leftOut(), qt.DeepEquals, test.want)
 		})

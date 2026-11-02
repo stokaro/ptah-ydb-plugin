@@ -7,6 +7,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -66,7 +67,7 @@ func TestColumnTablePlan_TTLChange_HappyPath(t *testing.T) {
 			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_ALTER, protocol.PlanningEffect_ALTER}, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := columnTTLRequest(c, test.declared, test.held, test.capabilities)
 			original := proto.CloneOf(request)
 			plan, err := backend.New().PlanFeatures(t.Context(), request)
@@ -106,7 +107,7 @@ func TestColumnTablePlan_TTLChange_HappyPath(t *testing.T) {
 // the comparison reports for a column table's TTL with the steps of its
 // alteration.
 func TestColumnTablePlan_TTLChangeAccountsForTheComparison(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := columnTTLRequest(c, `{"ttl":`+deleteTwoDays+`}`, heldStorage, nil)
 	table := request.Tables[0]
 	comparison := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
@@ -140,7 +141,7 @@ func TestColumnTablePlan_TTLChange_FailurePath(t *testing.T) {
 			`the TTL reads column "gone", which the table does not declare`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(t.Context(), columnTTLRequest(c, test.declared, heldStorage, nil))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -157,7 +158,7 @@ func TestColumnTTLStatement(t *testing.T) {
 			"ALTER TABLE `/local/app/records` SET (TTL = Interval(\"PT86400S\") TO EXTERNAL DATA SOURCE `/local/ext`, Interval(\"PT604800S\") DELETE ON `ts`);"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			model := tablecreate.ColumnTTLModel()
 			alteration, err := tablecreate.ColumnTTLAlteration(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: tablecreate.ColumnTTLOperationKind, Owner: owner(),
 				SchemaVersion: 1, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Payload: []byte(test.payload)})
@@ -182,7 +183,7 @@ func TestColumnTTLOperation_FailurePath(t *testing.T) {
 		{"an unknown field", `{"set":` + deleteDaily + `,"mode":"x"}`, `invalid YDB column table TTL step JSON`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			normalized, err := tablecreate.NormalizeColumnTTLAlteration(&protocol.ValueInput{Id: "forged", Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
 				ProviderId: schema.ProviderID, Kind: tablecreate.ColumnTTLOperationKind, Owner: owner(), SchemaVersion: 1, Encoding: model.Encoding,
 				DefinitionSha256: model.DefinitionSha256, Payload: []byte(test.payload)}})

@@ -9,12 +9,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestOperatorStatementsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	table := path.Join(database, directory, "operator_rows")
 	_, err := opened.DB.ExecContext(c.Context(), "CREATE TABLE `"+table+"` (id Uint64 NOT NULL, value Utf8, PRIMARY KEY(id))")
@@ -83,7 +84,7 @@ func TestOperatorStatementsSubprocess(t *testing.T) {
 }
 
 func TestOperatorStatementTypedArgumentsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
@@ -99,7 +100,7 @@ func TestOperatorStatementTypedArgumentsSubprocess(t *testing.T) {
 		{"interval", &protocol.DataValue{Value: &protocol.DataValue_IntervalValue{IntervalValue: &protocol.IntervalValue{Nanoseconds: 2000000}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := client.RunStatement(c.Context(), &protocol.RunStatementRequest{SessionId: session.Id, RequestId: test.name, Sql: "SELECT $p1 AS value", Arguments: []*protocol.DataValue{test.value}, Access: protocol.RunStatementRequest_READ_ONLY, MaxRows: 1})
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Outcome, qt.Equals, protocol.StatementResult_SUCCEEDED)

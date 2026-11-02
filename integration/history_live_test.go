@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -66,11 +67,11 @@ func historyRow(format protocol.HistoryScope_Format, version string) *protocol.H
 }
 
 func TestNativeHistorySubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	for _, format := range []protocol.HistoryScope_Format{protocol.HistoryScope_NATIVE, protocol.HistoryScope_ATLAS} {
 		t.Run(format.String(), func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			opened, directory, database := inspectionFixture(c)
 			table := path.Join(database, directory, "revisions")
 			created := false
@@ -136,7 +137,7 @@ func TestNativeHistorySubprocess(t *testing.T) {
 }
 
 func TestNativeHistorySharesExecutionTransaction(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	historyPath := path.Join(database, directory, "revisions")
 	appPath := path.Join(database, directory, "application")
@@ -200,7 +201,7 @@ func TestNativeHistorySharesExecutionTransaction(t *testing.T) {
 }
 
 func TestNativeHistoryRefusesForeignAndChangedStorage(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	table := path.Join(database, directory, "foreign")
 	_, err := opened.DB.ExecContext(c.Context(), "CREATE TABLE `"+table+"` (version Int64 NOT NULL, description Utf8, PRIMARY KEY (version))")
@@ -232,7 +233,7 @@ func TestNativeHistoryRefusesForeignAndChangedStorage(t *testing.T) {
 }
 
 func TestNativeHistoryConcurrentCASCannotOverwriteCommittedRow(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	table := path.Join(database, directory, "revisions")
 	created := false
@@ -280,7 +281,7 @@ func TestNativeHistoryConcurrentCASCannotOverwriteCommittedRow(t *testing.T) {
 }
 
 func TestNativeHistoryChecksFormatAndLayoutOnEveryOperation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	table := path.Join(database, directory, "revisions")
 	created := false
@@ -319,7 +320,7 @@ func TestNativeHistoryChecksFormatAndLayoutOnEveryOperation(t *testing.T) {
 }
 
 func TestNativeHistoryCreatesMissingDirectories(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	opened, directory, database := inspectionFixture(c)
 	nested := path.Join(directory, "history", "nested")

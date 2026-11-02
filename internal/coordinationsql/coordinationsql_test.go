@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -33,7 +34,7 @@ func TestStatementText_HappyPath(t *testing.T) {
 			want: "DROP COORDINATION NODE `app/limits`;"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := tc.statement.Text()
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, tc.want)
@@ -54,7 +55,7 @@ func TestStatementText_FailurePath(t *testing.T) {
 			want: "invalid coordination node statement: DROP COORDINATION NODE n takes no setting"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := tc.statement.Text()
 			c.Assert(err, qt.ErrorIs, coordinationsql.ErrStatement)
 			c.Assert(err, qt.ErrorMatches, tc.want)
@@ -72,7 +73,7 @@ func TestRecognizeReadsWhatTextWrites(t *testing.T) {
 		{Verb: coordinationsql.Drop, Path: "/local/app/limits"},
 	} {
 		t.Run(statement.Path, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			text, err := statement.Text()
 			c.Assert(err, qt.IsNil)
 			query, recognized, err := coordinationsql.Recognize(text)
@@ -109,7 +110,7 @@ func TestRecognize_HappyPath(t *testing.T) {
 				Settings: ydbdecl.CoordinationNode{SelfCheckPeriodMillis: 10_000}}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			query, recognized, err := coordinationsql.Recognize(tc.text)
 			c.Assert(err, qt.IsNil)
 			c.Assert(recognized, qt.IsTrue)
@@ -129,7 +130,7 @@ func TestRecognizeLeavesOtherText(t *testing.T) {
 		"",
 	} {
 		t.Run(text, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			query, recognized, err := coordinationsql.Recognize(text)
 			c.Assert(err, qt.IsNil)
 			c.Assert(recognized, qt.IsFalse)
@@ -182,7 +183,7 @@ func TestRecognize_FailurePath(t *testing.T) {
 			want: "CREATE COORDINATION NODE n: the settings end early; write name = value, separated by commas, in parentheses"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			query, recognized, err := coordinationsql.Recognize(tc.text)
 			c.Assert(err, qt.ErrorIs, coordinationsql.ErrStatement)
 			c.Assert(err, qt.ErrorMatches, "invalid coordination node statement: "+tc.want)
@@ -207,7 +208,7 @@ func TestQueryAbsolute_HappyPath(t *testing.T) {
 			prefix: "/local/ptah_dev/r1", want: "/local/app/n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := tc.query.Absolute("local", tc.prefix)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, tc.want)
@@ -216,7 +217,7 @@ func TestQueryAbsolute_HappyPath(t *testing.T) {
 }
 
 func TestQueryAbsolute_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	query := coordinationsql.Query{Statement: coordinationsql.Statement{Path: "n"}, PathPrefix: "relp"}
 	got, err := query.Absolute("/local", "")
 	c.Assert(err, qt.ErrorIs, coordinationsql.ErrStatement)
@@ -239,14 +240,14 @@ func TestChanges(t *testing.T) {
 			current: ydbdecl.CoordinationNode{SelfCheckPeriodMillis: 2_000}, want: ydbdecl.CoordinationNode{SessionGracePeriodMillis: 15_000}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(coordinationsql.Changes(tc.desired, tc.current), qt.DeepEquals, tc.want)
 		})
 	}
 }
 
 func TestMerge(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	merged := coordinationsql.Merge(every, ydbdecl.CoordinationNode{ReadConsistencyMode: "relaxed", SelfCheckPeriodMillis: 500})
 	c.Assert(merged, qt.DeepEquals, ydbdecl.CoordinationNode{SelfCheckPeriodMillis: 500, SessionGracePeriodMillis: 15_000, ReadConsistencyMode: "relaxed",
 		AttachConsistencyMode: "relaxed", RateLimiterCountersMode: "detailed"})

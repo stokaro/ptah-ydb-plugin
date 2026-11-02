@@ -7,6 +7,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/readproof"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 )
 
@@ -49,7 +50,7 @@ func TestProveLocalReads(t *testing.T) {
 		{name: "file call in view", query: "SELECT * FROM v", view: "SELECT FileContent('x')", fails: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			catalog := catalog{kinds: map[string]Ydb_Scheme.Entry_Type{"/local/app/t": tc.kind, "/local/app/v": Ydb_Scheme.Entry_VIEW, "/local/v": Ydb_Scheme.Entry_VIEW, "/local/t": tc.kind}, views: map[string]string{"/local/app/v": tc.view, "/local/v": tc.view}}
 			err := readproof.ProveLocalReads(c.Context(), catalog, "/local/app", tc.query)
 			c.Assert(err != nil, qt.Equals, tc.fails)

@@ -16,6 +16,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 )
@@ -89,7 +90,7 @@ func statementRequest() *protocol.RunStatementRequest {
 }
 
 func TestStatementsPageAndClose(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &statementProbe{columns: []string{"n", "text"}, types: []string{"Uint64", "Optional<Utf8>"}, rows: [][]driver.Value{{uint64(1), "first"}, {uint64(2), nil}, {uint64(3), "last"}}}
 	p := statementProvider(c, probe)
 	request := statementRequest()
@@ -119,7 +120,7 @@ func TestStatementsPageAndClose(t *testing.T) {
 }
 
 func TestStatementsOwnReadOnlyTransaction(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &statementProbe{columns: []string{"n"}, types: []string{"Int64"}, rows: [][]driver.Value{{int64(1)}}}
 	p := statementProvider(c, probe)
 	request := statementRequest()
@@ -133,7 +134,7 @@ func TestStatementsOwnReadOnlyTransaction(t *testing.T) {
 }
 
 func TestStatementsUnknownFailureDoesNotRetry(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &statementProbe{queryErr: driver.ErrBadConn}
 	p := statementProvider(c, probe)
 	result, err := p.RunStatement(c.Context(), statementRequest())
@@ -146,7 +147,7 @@ func TestStatementsUnknownFailureDoesNotRetry(t *testing.T) {
 func TestStatementsRefuseBeforeRunning(t *testing.T) {
 	for _, text := range []string{"SELECT 1; DELETE FROM t", "SELECT FileContent('secret')", "SELECT PgCall('version')", "SELECT String::Contains('a', 'b')", "DELETE FROM t"} {
 		t.Run(text, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			probe := &statementProbe{}
 			p := statementProvider(c, probe)
 			request := statementRequest()
@@ -161,7 +162,7 @@ func TestStatementsRefuseBeforeRunning(t *testing.T) {
 }
 
 func TestStatementsTransactionEndClosesRows(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &statementProbe{columns: []string{"n"}, types: []string{"Int64"}, rows: [][]driver.Value{{int64(1)}, {int64(2)}}}
 	p := statementProvider(c, probe)
 	_, err := p.BeginTransaction(c.Context(), &protocol.BeginTransactionRequest{SessionId: "session", TransactionId: "tx", Isolation: protocol.TransactionIsolation_SERIALIZABLE})
@@ -177,7 +178,7 @@ func TestStatementsTransactionEndClosesRows(t *testing.T) {
 }
 
 func TestStatementPageFailureDiscardsPrefix(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &statementProbe{columns: []string{"n"}, types: []string{"Int64"}, rows: [][]driver.Value{{int64(1)}}, readErr: errors.New("private transport details")}
 	p := statementProvider(c, probe)
 	result, err := p.RunStatement(c.Context(), statementRequest())
@@ -189,7 +190,7 @@ func TestStatementPageFailureDiscardsPrefix(t *testing.T) {
 }
 
 func TestStatementsCloseAfterCancellation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &statementProbe{columns: []string{"n"}, types: []string{"Int64"}, rows: [][]driver.Value{{int64(1)}, {int64(2)}}}
 	p := statementProvider(c, probe)
 	result, err := p.RunStatement(c.Context(), statementRequest())
@@ -202,7 +203,7 @@ func TestStatementsCloseAfterCancellation(t *testing.T) {
 }
 
 func TestStatementsBoundRetainedResults(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &statementProbe{columns: []string{"n"}, types: []string{"Int64"}, rows: [][]driver.Value{{int64(1)}, {int64(2)}}}
 	p := statementProvider(c, probe)
 	var tokens []string
@@ -224,7 +225,7 @@ func TestStatementsBoundRetainedResults(t *testing.T) {
 }
 
 func TestStatementsRefuseOversizedMetadata(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &statementProbe{columns: []string{strings.Repeat("x", 1<<20)}, types: []string{"Int64"}}
 	p := statementProvider(c, probe)
 	result, err := p.RunStatement(c.Context(), statementRequest())

@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/schemavalidation"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -58,28 +59,28 @@ func diagnostics(c *qt.C, request *protocol.ValidateSchemaRequest) []*protocol.S
 
 func TestValidateSchema_HappyPath(t *testing.T) {
 	t.Run("an empty schema completes", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		c.Assert(diagnostics(c, newRequest()), qt.HasLen, 0)
 	})
 	t.Run("keyed tables in nested directories", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := newRequest(keyed("", "plain"), keyed("app/sub", "nested"), keyed("app", "sibling"))
 		c.Assert(diagnostics(c, request), qt.HasLen, 0)
 	})
 	t.Run("a composite key", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		composite := table("", "pairs", column("a", "Uint64", true), column("b", "Utf8", true))
 		composite.Declaration.PrimaryKey = []string{"a", "b"}
 		c.Assert(diagnostics(c, newRequest(composite)), qt.HasLen, 0)
 	})
 	t.Run("directory settings are accepted unless nothing may be skipped", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := newRequest(keyed("app", "items"))
 		request.Namespaces = []*protocol.DeclaredNamespace{{Subject: &protocol.ComparisonIdentity{Kind: "schema", Name: testcomparison.Part("app")}, Name: "app", Comment: "notes"}}
 		c.Assert(diagnostics(c, request), qt.HasLen, 0)
 	})
 	t.Run("standalone enums are accepted unless nothing may be skipped", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := newRequest()
 		request.Enums = []*protocol.DeclaredEnum{{Name: "mood", Values: []string{"a", "b"}}}
 		c.Assert(diagnostics(c, request), qt.HasLen, 0)
@@ -138,7 +139,7 @@ func TestValidateSchema_Diagnostics(t *testing.T) {
 		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "enum", "mood", `enum mood, which requires .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got := diagnostics(c, test.request())
 			c.Assert(got, qt.HasLen, 1)
 			c.Assert(got[0].Code, qt.Equals, test.code)
@@ -150,7 +151,7 @@ func TestValidateSchema_Diagnostics(t *testing.T) {
 }
 
 func TestValidateSchema_ReportsEveryRefusalInADeterministicOrder(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := newRequest(
 		table("", "zeta", column("id", "Uint64", true), column("b", "Wibble", false)),
 		table("", "alpha", column("id", "Uint64", true), column("b", "Wibble", false)),
@@ -170,7 +171,7 @@ func TestValidateSchema_ReportsEveryRefusalInADeterministicOrder(t *testing.T) {
 func TestValidateSchema_AccessRequirementsAndTemporaryTablesAreValidDeclarations(t *testing.T) {
 	for _, payload := range []string{`{"temporary":true}`, `{"access":{}}`} {
 		t.Run(payload, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			declared := keyed("", "settings")
 			declared.Declaration.Features = tableFacet(c, "settings", payload)
 			c.Assert(diagnostics(c, newRequest(declared)), qt.HasLen, 0)
@@ -193,7 +194,7 @@ func tableFacet(c *qt.C, name, payload string) *protocol.CapturedFeatures {
 
 func TestValidateSchema_FailurePath(t *testing.T) {
 	t.Run("a canceled context returns no diagnostics", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		ctx, cancel := context.WithCancel(c.Context())
 		cancel()
 		result, err := backend.New().ValidateSchema(ctx, newRequest(keyed("", "items")))
@@ -204,7 +205,7 @@ func TestValidateSchema_FailurePath(t *testing.T) {
 		c.Assert(direct, qt.IsNil)
 	})
 	t.Run("an identifier context the provider cannot interpret", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := newRequest(keyed("", "items"))
 		request.Identifiers.DefaultSchema = "public"
 		result, err := backend.New().ValidateSchema(c.Context(), request)
@@ -212,7 +213,7 @@ func TestValidateSchema_FailurePath(t *testing.T) {
 		c.Assert(result, qt.IsNil)
 	})
 	t.Run("a request without the service negotiated", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		result, err := backend.New().ValidateSchema(c.Context(), nil)
 		c.Assert(err, qt.ErrorMatches, `.*schema validation is unavailable.*`)
 		c.Assert(result, qt.IsNil)
@@ -222,7 +223,7 @@ func TestValidateSchema_FailurePath(t *testing.T) {
 // A schema that declares resource pools and classifiers validates: both are
 // models the provider implements, read by their own normalization.
 func TestValidateSchema_WorkloadObjects(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := newRequest(keyed("", "items"))
 	for _, object := range []struct {
 		kind, name string
@@ -252,7 +253,7 @@ func TestValidateSchema_SecretCapability(t *testing.T) {
 		{name: "unavailable", findings: 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := newRequest()
 			request.Capabilities["secrets"] = test.supported
 			model := schema.NativeDesiredModel(schema.SecretProperties)

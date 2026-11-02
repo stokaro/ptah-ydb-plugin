@@ -8,6 +8,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The corpus holds the addresses the host's YDB connection layer was run over
@@ -67,12 +68,12 @@ func agreed(rows []hostRow) []hostRow {
 }
 
 func TestAddressAgreesWithHost_Verdict(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := readCorpus(c)
 	c.Assert(len(rows) >= 80, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
 	for _, row := range rows {
 		t.Run(row.URL, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Setenv("YDB_ACCESS_TOKEN_CREDENTIALS", "test-secret")
 
 			_, err := connection.Parse(row.URL)
@@ -84,12 +85,12 @@ func TestAddressAgreesWithHost_Verdict(t *testing.T) {
 }
 
 func TestAddressAgreesWithHost_SDKAddress(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := agreed(readCorpus(c))
 	c.Assert(len(rows) >= 30, qt.IsTrue, qt.Commentf("the corpus holds %d accepted rows", len(rows)))
 	for _, row := range rows {
 		t.Run(row.URL, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			address, err := connection.Parse(row.URL)
 

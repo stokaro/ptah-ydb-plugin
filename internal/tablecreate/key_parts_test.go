@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
@@ -41,7 +42,7 @@ func TestCompileKeyParts_HappyPath(t *testing.T) {
 		{name: "parts that repeat the key", key: []string{"second", "first"}, parts: keyParts("second", "first"), want: []string{"second", "first"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			table := unfaceted()
 			table.PrimaryKey, table.PrimaryKeyParts = test.key, test.parts
 			result, err := tablecreate.Compile(owner(), table, nil)
@@ -70,7 +71,7 @@ func TestCompileKeyParts_FailurePath(t *testing.T) {
 			want: `.*YDB table creation does not support .*prefix.*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			table := unfaceted()
 			table.PrimaryKey, table.PrimaryKeyParts = test.key, test.parts
 			result, err := tablecreate.Compile(owner(), table, nil)

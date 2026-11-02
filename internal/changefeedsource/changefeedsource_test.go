@@ -8,6 +8,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -43,7 +44,7 @@ func declared(c *qt.C, request *protocol.DecodeSourceRequest) map[string][]chang
 func feed(spec ydbdecl.Changefeed) changefeeds.Feed { return changefeeds.Feed{Changefeed: spec} }
 
 func TestClaims_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	key := changefeedsource.YAMLKey()
 	c.Assert(key.Scope, qt.Equals, protocol.YAMLSourceKey_TABLE)
 	c.Assert(key.Key, qt.Equals, "changefeeds")
@@ -70,7 +71,7 @@ func TestClaims_HappyPath(t *testing.T) {
 // as the annotation keys it and the consumers of its topic keyed by name. The
 // facet keeps the changefeeds and each topic's consumers by name.
 func TestDecodeYAML_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.YAMLTables(`{"tables": {"items": {"columns": {"id": {"type": "bigint", "primary": true}}, "changefeeds": {
 		"updates": {"mode": "updates", "format": "JSON", "retention_period": "PT12H", "initial_scan": true, "topic_min_active_partitions": 2,
 			"consumers": {"billing": {"important": true}, "audit": {"supported_codecs": ["raw", "gzip"], "read_from": "2026-01-01T00:00:00Z"}}},
@@ -103,7 +104,7 @@ func TestDecodeYAML_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, err := testsource.YAMLTables(`{"tables": {"items": {"columns": {"id": {"type": "bigint", "primary": true}}, "changefeeds": ` + test.changefeeds + `}}}`)
 			c.Assert(err, qt.IsNil)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
@@ -131,7 +132,7 @@ func goRequest(c *qt.C, declarations ...testsource.GoDeclaration) *protocol.Deco
 // with the table attribute, and each consumer of its topic with a directive of
 // its own that names the changefeed.
 func TestDecodeGo_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := goRequest(c,
 		declaration(2, "Item", "ptah:schema:changefeed", map[string]string{"name": "updates", "mode": "UPDATES", "format": "JSON", "retention_period": "PT6H"}),
 		declaration(3, "Item", "ptah:schema:changefeed:consumer", map[string]string{"name": "billing", "changefeed": "updates", "important": "true"}),
@@ -185,7 +186,7 @@ func TestDecodeGo_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			decoded, err := backend.New().DecodeSource(c.Context(), goRequest(c, test.declarations...))
 			c.Assert(err, qt.ErrorMatches, `(?s).*`+test.wantErr+`.*`)
 			c.Assert(decoded == nil, qt.IsTrue)
@@ -196,7 +197,7 @@ func TestDecodeGo_FailurePath(t *testing.T) {
 // A column table takes no changefeed, and the source refuses one with the
 // words of the host's bundled source.
 func TestDecode_ColumnTableTakesNoChangefeed(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := goRequest(c,
 		declaration(1, "Item", "ptah:schema:table", map[string]string{"store": "column"}),
 		declaration(2, "Item", "ptah:schema:changefeed", map[string]string{"name": "f", "mode": "UPDATES", "format": "JSON"}))

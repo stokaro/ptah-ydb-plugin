@@ -16,6 +16,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -113,7 +114,7 @@ func finishRequest(action protocol.FinishTransactionRequest_Action) *protocol.Fi
 }
 
 func TestExecutionDoesNotRetryBadConnection(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &driverProbe{execErr: driver.ErrBadConn}
 	p := probeProvider(c, probe)
 	result, err := p.Execute(c.Context(), sqlRequest(""))
@@ -124,7 +125,7 @@ func TestExecutionDoesNotRetryBadConnection(t *testing.T) {
 }
 
 func TestTransactionOutlivesBeginRPCAndFinishesOnce(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &driverProbe{}
 	p := probeProvider(c, probe)
 	ctx, cancel := context.WithCancel(c.Context())
@@ -160,7 +161,7 @@ func TestTransactionOutlivesBeginRPCAndFinishesOnce(t *testing.T) {
 }
 
 func TestUncertainCommitCannotBeRetriedOrReclassified(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &driverProbe{commitErr: errors.New("raw secret diagnostic")}
 	p := probeProvider(c, probe)
 	_, err := p.BeginTransaction(c.Context(), beginRequest())
@@ -177,7 +178,7 @@ func TestUncertainCommitCannotBeRetriedOrReclassified(t *testing.T) {
 }
 
 func TestCanceledBeginReservesItsHandle(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	started := make(chan struct{})
 	probe := &driverProbe{onBegin: func(ctx context.Context) error { close(started); <-ctx.Done(); return ctx.Err() }}
 	p := probeProvider(c, probe)
@@ -196,7 +197,7 @@ func TestCanceledBeginReservesItsHandle(t *testing.T) {
 }
 
 func TestCanceledFinishRetainsUncertainty(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	started := make(chan struct{})
 	probe := &driverProbe{onCommit: func(ctx context.Context) error { close(started); <-ctx.Done(); return ctx.Err() }}
 	p := probeProvider(c, probe)
@@ -221,7 +222,7 @@ func TestCanceledFinishRetainsUncertainty(t *testing.T) {
 }
 
 func TestRollbackFencesUnusedHandleAndBoundsRetention(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	probe := &driverProbe{}
 	p := probeProvider(c, probe)
 	result, err := p.FinishTransaction(c.Context(), finishRequest(protocol.FinishTransactionRequest_ROLLBACK))
@@ -251,7 +252,7 @@ func (r *cancelAfterExecution) ExecContext(context.Context, string, ...any) (sql
 }
 
 func TestCancellationBetweenUnitsPreservesConfirmedPrefix(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	ctx, cancel := context.WithCancel(c.Context())
 	defer cancel()
 	runner := &cancelAfterExecution{cancel: cancel}
@@ -277,7 +278,7 @@ func TestNativeBatchPreflightPreventsSQLPrefix(t *testing.T) {
 		{"transaction", func(r *protocol.ExecuteRequest) { r.TransactionId = "tx" }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			probe := &driverProbe{}
 			p := probeProvider(c, probe)
 			p.sessions["session"].database = "/local"
@@ -310,7 +311,7 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 		{"preflight", 0, false, protocol.Execution_NOT_STARTED}, {"prefix refused", 1, false, protocol.Execution_PARTIAL}, {"lost reply", 0, true, protocol.Execution_UNKNOWN}, {"prefix lost reply", 1, true, protocol.Execution_UNKNOWN},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			calls := 0
 			result := executeUnits(t.Context(), 0, nil, func(context.Context, *protocol.Unit) (bool, error) {
 				calls++
@@ -331,7 +332,7 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 // A unit the deadline stops has been dispatched and YDB may keep running it, so
 // the outcome is unknown, no later unit runs, and the unit is not sent again.
 func TestExecutionStoppedByADeadlineIsUnknown(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	started := make(chan struct{})
 	probe := &driverProbe{onExec: func(ctx context.Context) error { close(started); <-ctx.Done(); return ctx.Err() }}
 	p := probeProvider(c, probe)
@@ -352,7 +353,7 @@ func TestExecutionStoppedByADeadlineIsUnknown(t *testing.T) {
 
 // A deadline that expires after earlier units were confirmed keeps them counted.
 func TestExecutionStoppedByADeadlineKeepsTheConfirmedPrefix(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var calls atomic.Int32
 	probe := &driverProbe{onExec: func(ctx context.Context) error {
 		if calls.Add(1) == 1 {
@@ -376,7 +377,7 @@ func TestExecutionStoppedByADeadlineKeepsTheConfirmedPrefix(t *testing.T) {
 }
 
 func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(sessionCapabilities("26.2.1.14"), qt.DeepEquals, map[string]bool{
 		"transactional_ddl": false, "secrets": true, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true, "relative_grant_paths": true,
@@ -445,7 +446,7 @@ func TestStatementTimeoutAnswersForTheStoppedUnit(t *testing.T) {
 		{"applied after all", []*protocol.Unit{{ChangeId: "slow"}, {ChangeId: "quick"}}, stopApplied, protocol.Execution_APPLIED, 2, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			var asked []string
 			stopped := func(unit *protocol.Unit) stopOutcome {
 				asked = append(asked, unit.GetChangeId())
@@ -465,7 +466,7 @@ func TestStatementTimeoutAnswersForTheStoppedUnit(t *testing.T) {
 // TestCanceledCallIsNotATimeout pins that a call the caller canceled is not
 // reported as stopped by the statement timeout.
 func TestCanceledCallIsNotATimeout(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
 	stopped := func(*protocol.Unit) stopOutcome { return stopNotApplied }
@@ -482,7 +483,7 @@ func TestDefaultAdditionRefusesTheWholeBatchBeforeDispatch(t *testing.T) {
 		{name: "transaction", transaction: "tx", code: "ydb.native-transaction-forbidden"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			probe := &driverProbe{}
 			service := probeProvider(c, probe)
 			kind := &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}

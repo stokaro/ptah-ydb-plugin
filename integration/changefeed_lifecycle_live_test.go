@@ -14,6 +14,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -32,7 +33,7 @@ import (
 // changefeed, a mode change that drops the changefeed and adds it again in one
 // operation, and a removal.
 func TestChangefeedLifecycleSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()

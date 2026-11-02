@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/protobuf/proto"
@@ -26,7 +27,7 @@ func TestNativeDefaultRoundTrip(t *testing.T) {
 		{"Interval", "PT26H", "Interval('P1DT2H')"}, {"Interval64", "P1000000D", "Interval64('P1000000D')"}, {"Decimal(10,2)", "-001.50", "Decimal('-1.5', 10, 2)"},
 	} {
 		t.Run(test.kind, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, err := columnsemantics.NativeDefault(&protocol.DeclaredColumn{Type: test.kind, DefaultSet: true, DefaultValue: test.value, Nullable: true}, test.kind, map[string]bool{"small_integer_defaults": true, "document_type_defaults": true})
 			c.Assert(err, qt.IsNil)
 			literal, err := columnsemantics.Literal(value)
@@ -48,7 +49,7 @@ func TestNativeDefaultRefusal(t *testing.T) {
 		{"serial literal", "BigSerial", &protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "3"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, err := columnsemantics.NativeDefault(test.column, test.kind, nil)
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(value, qt.IsNil)
@@ -58,7 +59,7 @@ func TestNativeDefaultRefusal(t *testing.T) {
 
 func TestNativeDefaultAbsence(t *testing.T) {
 	for _, column := range []*protocol.DeclaredColumn{{}, {DefaultSet: true, DefaultValue: "NULL"}} {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		value, err := columnsemantics.NativeDefault(column, "Int64", nil)
 		c.Assert(err, qt.IsNil)
 		c.Assert(value, qt.IsNil)
@@ -67,7 +68,7 @@ func TestNativeDefaultAbsence(t *testing.T) {
 
 func TestNativeLiteralRejectsWrongScalar(t *testing.T) {
 	for _, value := range []*Ydb.Value{{}, {Value: &Ydb.Value_TextValue{TextValue: "5"}}, {Value: &Ydb.Value_Int32Value{Int32Value: 5}, Items: []*Ydb.Value{{}}}} {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		literal, err := columnsemantics.Literal(&Ydb.TypedValue{Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_INT32}}, Value: value})
 		c.Assert(err, qt.IsNotNil)
 		c.Assert(literal, qt.Equals, "")
@@ -75,7 +76,7 @@ func TestNativeLiteralRejectsWrongScalar(t *testing.T) {
 }
 
 func TestCanonicalLiteralPreservesTheScalar(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value, err := columnsemantics.NativeDefault(&protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "5", Nullable: true}, "Int32", nil)
 	c.Assert(err, qt.IsNil)
 	original := proto.CloneOf(value)

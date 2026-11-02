@@ -19,6 +19,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -71,7 +72,7 @@ func createColumnTable(c *qt.C, opened *connection.Connection, absolute, definit
 // shard count it was created with, which the table service leaves out, and
 // its TTL, and with no row-table facet.
 func TestColumnTableInspectionSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address := monitoredAddress(c)
 	opened, directory, database := inspectionFixture(c)
 	createFixtureTable(c, opened, database, directory)
@@ -126,7 +127,7 @@ func TestColumnTableInspectionSubprocess(t *testing.T) {
 // hands the host the status code alone, so the message is checked on the
 // provider's own reply.
 func TestColumnTableInspectionWithoutMonitoringSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address := withoutMonitoring(c, monitoredAddress(c))
 	opened, directory, database := inspectionFixture(c)
 	createFixtureTable(c, opened, database, directory)
@@ -276,7 +277,7 @@ func (f *clusterFlags) await(c *qt.C, want map[string]bool) {
 // off on the test server through its dynamic configuration, and reads the
 // tiered_ttl capability a new session reports each time.
 func TestFeatureFlagCapabilitySubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address := monitoredAddress(c)
 	parsed, err := connection.Parse(address)
 	c.Assert(err, qt.IsNil)

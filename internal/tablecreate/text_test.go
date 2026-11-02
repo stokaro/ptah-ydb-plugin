@@ -8,6 +8,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -157,7 +158,7 @@ func TestRowTableStatement_HappyPath(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := tablecreate.RowTableStatement(tc.path, creationRequest(c, tc.request))
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, tc.want)
@@ -192,7 +193,7 @@ func TestRowTableStatement_FailurePath(t *testing.T) {
 			want: "PARTITION_AT_KEYS does not take"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := tablecreate.RowTableStatement("app/jobs", creationRequest(c, tc.request))
 			c.Assert(err, qt.ErrorIs, tablecreate.ErrNoTextForm)
 			c.Assert(err, qt.ErrorMatches, ".*"+regexp.QuoteMeta(tc.want)+".*")
@@ -279,7 +280,7 @@ func TestAlterationStatement_HappyPath(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			alteration := &tablecreate.Alteration{Request: alterationRequest(c, tc.request), HeldPartitioning: heldPartitioning(c, tc.held)}
 			got, err := tablecreate.AlterationStatement("app/jobs", alteration)
 			c.Assert(err, qt.IsNil)
@@ -302,7 +303,7 @@ func TestAlterationStatement_FailurePath(t *testing.T) {
 			want: `column family "hot" changes keep_in_memory`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := tablecreate.AlterationStatement("app/jobs", &tablecreate.Alteration{Request: alterationRequest(c, tc.request)})
 			c.Assert(err, qt.ErrorIs, tablecreate.ErrNoTextForm)
 			c.Assert(err, qt.ErrorMatches, ".*"+regexp.QuoteMeta(tc.want)+".*")
@@ -312,14 +313,14 @@ func TestAlterationStatement_FailurePath(t *testing.T) {
 }
 
 func TestTextPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(tablecreate.TextPath("", "t"), qt.Equals, "t")
 	c.Assert(tablecreate.TextPath("app/", "t"), qt.Equals, "app/t")
 	c.Assert(tablecreate.TextPath("app/sub", "t"), qt.Equals, "app/sub/t")
 }
 
 func TestLiteral_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	null := &Ydb.TypedValue{Type: &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}}}},
 		Value: &Ydb.Value{Value: &Ydb.Value_NullFlagValue{}}}
 	got, err := columnsemantics.Literal(null)
@@ -330,7 +331,7 @@ func TestLiteral_FailurePath(t *testing.T) {
 // The held index of a removal travels for the confirmation only; the text
 // names the index alone.
 func TestAlterationStatementDropsAnIndexByName(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	alteration := &tablecreate.Alteration{Request: alterationRequest(c, `{"dropIndexes":["by_ts"]}`),
 		HeldIndexes: []*native.TableIndexDescription{{Name: "by_ts", IndexColumns: []string{"ts"}}}}
 	got, err := tablecreate.AlterationStatement("t", alteration)

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 )
 
@@ -23,7 +24,7 @@ import (
 // inspected envelopes retain that database as provenance. This read-only diff
 // checks that both sides of the public host path use the same selector identity.
 func TestHostScopesNativeObjectsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	host, manifest := hostManifest(c)
 	opened, directory, database := inspectionFixture(c)
 	for _, name := range []string{"workers", "unchanged"} {
@@ -56,7 +57,7 @@ func TestHostScopesNativeObjectsSubprocess(t *testing.T) {
 		{"excluded node", "--exclude", directory + ".workers[type=coordination_node]", []string{}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 			defer cancel()
 			command := exec.CommandContext(ctx, host, "schema", "diff", "--provider-config", manifest, "--provider-engine", "ydb", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", source, "--schemas", directory, "--format", "json", test.flag, test.selector)

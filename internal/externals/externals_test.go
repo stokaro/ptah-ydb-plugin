@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -26,7 +27,7 @@ func TestParseOptions_HappyPath(t *testing.T) {
 		{name: "an escaped separator and backslash", text: `CSV_DELIMITER=\;;PATH=a\\b`, want: map[string]string{"CSV_DELIMITER": ";", "PATH": `a\b`}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := externals.ParseOptions(test.text, externals.DataSourceReserved...)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.DeepEquals, test.want)
@@ -48,7 +49,7 @@ func TestParseOptions_FailurePath(t *testing.T) {
 		{name: "a name written twice", text: "LOGIN=a;login=b", want: `invalid options: LOGIN is written twice`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := externals.ParseOptions(test.text, externals.DataSourceReserved...)
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(got, qt.IsNil)
@@ -57,7 +58,7 @@ func TestParseOptions_FailurePath(t *testing.T) {
 }
 
 func TestParseColumns_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	got, err := externals.ParseColumns("id Int64 NOT NULL, `the name` Utf8, amount Decimal(22, 9) null, tags List<Utf8>")
 	c.Assert(err, qt.IsNil)
 	c.Assert(got, qt.DeepEquals, []ydbdecl.ExternalColumn{
@@ -85,7 +86,7 @@ func TestParseColumns_FailurePath(t *testing.T) {
 		{name: "an unclosed quote", text: "`id Int64", want: `invalid columns: "` + "`" + `id Int64" opens a quoted name it does not close`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := externals.ParseColumns(test.text)
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(got, qt.IsNil)
@@ -107,7 +108,7 @@ func eventsTable() ydbdecl.ExternalTable {
 }
 
 func TestCheck_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	capabilities := map[string]bool{externals.CapabilityExternalDataSources: true, externals.CapabilitySecretPaths: true}
 	c.Assert(externals.CheckDataSource("ext/pg", postgresSource(), capabilities), qt.IsNil)
 	c.Assert(externals.CheckTable("ext/events", eventsTable(), capabilities), qt.IsNil)
@@ -143,21 +144,21 @@ func TestCheck_FailurePath(t *testing.T) {
 			want: "external table ext/events replaced in place, which requires target capability external_object_replace, unavailable on this ydb target"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(test.got, qt.ErrorMatches, test.want)
 		})
 	}
 }
 
 func TestSecretPaths_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/local/ext/pw", "TOKEN_SECRET_PATH": "ext/pw", "AWS_SECRET_PATH": "ext/aws", "LOGIN": "reader"}, "/local")
 	c.Assert(err, qt.IsNil)
 	c.Assert(got, qt.DeepEquals, []ydbdecl.Path{{Schema: "ext", Name: "aws"}, {Schema: "ext", Name: "pw"}})
 }
 
 func TestSecretPaths_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/other/ext/pw"}, "/local")
 	c.Assert(err, qt.ErrorMatches, `option PASSWORD_SECRET_PATH names secret "/other/ext/pw", which is outside the database /local, so the data source cannot read it`)
 	c.Assert(got, qt.IsNil)
@@ -166,7 +167,7 @@ func TestSecretPaths_FailurePath(t *testing.T) {
 func TestSecretPathsRejectsMalformedReferences(t *testing.T) {
 	for _, path := range []string{"../pw", "app//pw", "app/../pw", "app/", "\\pw"} {
 		t.Run(path, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": path}, "/local")
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(got, qt.IsNil)
@@ -193,7 +194,7 @@ func TestStatements(t *testing.T) {
 		{name: "an external table dropped", got: externals.DropTableStatement("ext/events"), want: "DROP EXTERNAL TABLE `ext/events`;"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(test.got, qt.Equals, test.want)
 		})
 	}
@@ -203,7 +204,7 @@ func TestStatements(t *testing.T) {
 // upper case and a secret's path as an absolute one, and adds REFERENCES.
 func TestSameDataSource(t *testing.T) {
 	read := func(options map[string]string, sourceType string) ydbdecl.ExternalDataSource {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		properties := map[string]string{"AUTH_METHOD": "BASIC", "REFERENCES": `["/local/ext/events"]`}
 		for name, value := range options {
 			properties[name] = value
@@ -224,7 +225,7 @@ func TestSameDataSource(t *testing.T) {
 		{name: "a source type in another case", current: read(map[string]string{"DATABASE_NAME": "app", "LOGIN": "reader", "PASSWORD_SECRET_PATH": "/local/ext/pg_password"}, "postgresql")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(externals.SameDataSource(postgresSource(), test.current, "/local"), qt.Equals, test.want)
 		})
 	}
@@ -234,7 +235,7 @@ func TestSameDataSource(t *testing.T) {
 // option as a JSON array, and PARTITIONED_BY as the array it was given.
 func TestSameTable(t *testing.T) {
 	read := func(dataSource string, columns []*native.ColumnMeta, format string) ydbdecl.ExternalTable {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		spec, err := externals.TableFromObserved(&native.DescribeExternalTableResult{SourceType: new("ObjectStorage"), DataSourcePath: new(dataSource), Location: new("events/"),
 			Columns: columns, Content: map[string]string{"FORMAT": `["` + format + `"]`, "PARTITIONED_BY": `["id"]`}}, "/local")
 		c.Assert(err, qt.IsNil)
@@ -262,7 +263,7 @@ func TestSameTable(t *testing.T) {
 		{name: "another format", declared: eventsTable(), current: read("/local/ext/s3", columns, "csv_with_names")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(externals.SameTable(test.declared, test.current, "/local"), qt.Equals, test.want)
 		})
 	}
@@ -271,7 +272,7 @@ func TestSameTable(t *testing.T) {
 // A declaration written as the provider's desired model reads back as the
 // declaration it wrote.
 func TestIntents_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	source, err := externals.SourceIntent(postgresSource())
 	c.Assert(err, qt.IsNil)
 	c.Assert(source.GetProperties()["AUTH_METHOD"], qt.Equals, "BASIC")
@@ -290,7 +291,7 @@ func TestIntents_HappyPath(t *testing.T) {
 func TestDescribedTableOption_FailurePath(t *testing.T) {
 	for _, described := range []string{`json_each_row`, `["a","b"]`, `[]`} {
 		t.Run(described, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := externals.DescribedTableOption("FORMAT", described)
 			c.Assert(err, qt.ErrorMatches, `external table option FORMAT is .*, where the server writes a JSON array of one string`)
 			c.Assert(got, qt.Equals, "")
@@ -310,7 +311,7 @@ func TestRelativePath(t *testing.T) {
 		{value: "/localx/s3", want: "/localx/s3"},
 	} {
 		t.Run(test.value, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(externalpath.RelativePath(test.value, "/local"), qt.Equals, test.want)
 		})
 	}
@@ -335,7 +336,7 @@ func TestDisplaces(t *testing.T) {
 		{name: "a new source type", desired: &retyped, replace: true, displaces: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(externals.Displaces(&bucket, test.desired, test.replace), qt.Equals, test.displaces)
 			c.Assert(externals.Recreates(&bucket, test.desired, test.replace), qt.Equals, test.again)
 		})

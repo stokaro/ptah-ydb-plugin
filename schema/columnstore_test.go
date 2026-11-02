@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/protowire"
@@ -29,7 +30,7 @@ func storageObservation() *native.ColumnStorageObservation {
 }
 
 func TestColumnStorageCanonicalOrderAndOptionalDefaults(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := storageObservation()
 	envelope, err := schema.CaptureColumnStorage(tableOwner(), input)
 	c.Assert(err, qt.IsNil)
@@ -90,7 +91,7 @@ func TestColumnStorageRejectsInvalidModels(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			input := storageObservation()
 			test.change(input)
 			result, err := schema.CaptureColumnStorage(tableOwner(), input)
@@ -104,14 +105,14 @@ func TestColumnStorageRejectsInvalidModels(t *testing.T) {
 // leaves the hash key, the shard count and the data channels out, as a
 // prediction from a declaration that leaves them to the server does.
 func TestColumnStorageProjectedFromADeclaration(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	envelope, err := schema.CaptureColumnStorage(tableOwner(), &native.ColumnStorageObservation{})
 	c.Assert(err, qt.IsNil)
 	c.Assert(string(envelope.Payload), qt.Equals, `{}`)
 }
 
 func TestColumnStorageDisabledTTLAndAbsentTTLDiffer(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := storageObservation()
 	input.Ttl = nil
 	absent, err := schema.CaptureColumnStorage(tableOwner(), input)

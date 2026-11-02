@@ -5,6 +5,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -68,7 +69,7 @@ func TestNativeTableAlteration_IndexHappyPath(t *testing.T) {
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := &alterFixture{before: test.before, after: test.after, later: test.later}
 			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
 			c.Assert(err, qt.IsNil)
@@ -115,7 +116,7 @@ func TestNativeTableAlteration_IndexFailurePath(t *testing.T) {
 		{"lost reply", alterFixture{before: indexedTable(), alterFailure: true}, addByLabel, true, []string{"open", "describe", "guard", "alter", "close"}, "lost native reply"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := test.fixture
 			dispatched, err := applyAlteration(c, &fixture, "", test.payload, false)
 			c.Assert(err, qt.ErrorMatches, test.message)

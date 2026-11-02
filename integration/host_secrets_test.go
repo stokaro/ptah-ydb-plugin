@@ -16,6 +16,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
@@ -23,7 +24,7 @@ import (
 // references, refuse missing inputs before writes, and reach a presence fixed
 // point without resolving an input until an explicit rotation asks for it.
 func TestHostSecretPresenceAndApprovedRotation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	host, manifest := hostManifest(c)
 	binary, digest := providerBinary(c)

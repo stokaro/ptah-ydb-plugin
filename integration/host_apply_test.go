@@ -13,6 +13,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // hostApply runs the pinned host's `schema apply` over one Go source with this
@@ -49,7 +50,7 @@ func hostItems(directory, attributes string) string {
 // run after the first compares the two. Each run takes the provider's schema
 // lock, whose node the lock fixture removes again.
 func TestHostAppliesAndAltersARowTable_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	c.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)

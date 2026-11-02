@@ -10,6 +10,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 )
@@ -59,11 +60,11 @@ func decode[T any](c *qt.C, data json.RawMessage) T {
 // TestRequests_SplitAsTheHost requires the provider's split of every split
 // request the host's owner answered to be the owner's.
 func TestRequests_SplitAsTheHost(t *testing.T) {
-	cases := requestCases(qt.New(t), "split")
-	qt.New(t).Assert(len(cases) >= 6, qt.IsTrue)
+	cases := requestCases(testcheck.New(t), "split")
+	testcheck.New(t).Assert(len(cases) >= 6, qt.IsTrue)
 	for _, row := range cases {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := decode[splitInput](c, row.request)
 			want := decode[splitCall](c, row.golden.Result)
 			want.Sources = request.Sources
@@ -98,11 +99,11 @@ func wireAnnotateRequest(input annotateInput) *protocol.AnnotateLintRequest {
 // TestRequests_AnnotateAsTheHost requires the provider's answer to every
 // annotate request the host's owner answered to be the owner's.
 func TestRequests_AnnotateAsTheHost(t *testing.T) {
-	cases := answeredAnnotations(qt.New(t))
-	qt.New(t).Assert(len(cases) >= 12, qt.IsTrue)
+	cases := answeredAnnotations(testcheck.New(t))
+	testcheck.New(t).Assert(len(cases) >= 12, qt.IsTrue)
 	for _, row := range cases {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := decode[annotateInput](c, row.request)
 			want := decode[annotationsOf](c, row.golden.Result)
 			c.Assert(pluginAnnotations(c, wireAnnotateRequest(request)), sameAnswer, want.Files)
@@ -114,11 +115,11 @@ func TestRequests_AnnotateAsTheHost(t *testing.T) {
 // request the host's owner refused to be refused before it reaches the
 // provider: the SDK validates a request against the provider's description.
 func TestRequests_AnnotateRefusesWhatTheHostRefuses(t *testing.T) {
-	cases := refusedAnnotations(qt.New(t))
-	qt.New(t).Assert(cases, qt.Not(qt.HasLen), 0)
+	cases := refusedAnnotations(testcheck.New(t))
+	testcheck.New(t).Assert(cases, qt.Not(qt.HasLen), 0)
 	for _, row := range cases {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := decode[annotateInput](c, row.request)
 			err := provider.ValidateAnnotateLintRequest(backend.Description(), wireAnnotateRequest(request))
 			c.Assert(err, qt.ErrorIs, provider.ErrProtocol, qt.Commentf("the host refuses it with: %s", row.golden.Error))
@@ -129,11 +130,11 @@ func TestRequests_AnnotateRefusesWhatTheHostRefuses(t *testing.T) {
 // TestRequests_CheckAsTheHost requires the provider's findings for every
 // check request the host's owner answered to be the owner's.
 func TestRequests_CheckAsTheHost(t *testing.T) {
-	cases := requestCases(qt.New(t), "check")
-	qt.New(t).Assert(len(cases) >= 5, qt.IsTrue)
+	cases := requestCases(testcheck.New(t), "check")
+	testcheck.New(t).Assert(len(cases) >= 5, qt.IsTrue)
 	for _, row := range cases {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := decode[checkInput](c, row.request)
 			want := decode[struct {
 				Complete bool      `json:"complete"`
@@ -171,7 +172,7 @@ var severityNames = map[protocol.LintRule_Severity]string{
 // down migrations and the rules it subsumes. Every one reads the statement
 // text and judges YDB alone, which the wire takes as given.
 func TestRules_AreTheHosts(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var recorded struct {
 		Rules []publishedRule `json:"rules"`
 	}

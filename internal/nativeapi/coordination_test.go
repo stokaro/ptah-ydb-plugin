@@ -8,6 +8,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
@@ -120,7 +121,7 @@ func allow(context.Context) error { return nil }
 func TestCoordinationNativeDispatchAndConfirmation(t *testing.T) {
 	for _, action := range []string{"create", "alter", "drop"} {
 		t.Run(action, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, transport := operation(c, action)
 			dispatched, err := executor(transport).Apply(t.Context(), "/local", value, allow)
 			c.Assert(err, qt.IsNil)
@@ -148,7 +149,7 @@ func TestCoordinationNativePreflightRefusesBeforeDispatch(t *testing.T) {
 		{name: "lost lease", guard: func(context.Context) error { return errors.New("lease lost") }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, transport := operation(c, "alter")
 			if test.mutate != nil {
 				test.mutate(value, transport)
@@ -175,7 +176,7 @@ func TestCoordinationNativeUnconfirmedWriteNeverRetries(t *testing.T) {
 		{"access changed", func(f *coordinationTransport) { f.changeAccess = true }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, transport := operation(c, "alter")
 			test.mutate(transport)
 			dispatched, err := executor(transport).Apply(t.Context(), "/local", value, allow)
@@ -188,7 +189,7 @@ func TestCoordinationNativeUnconfirmedWriteNeverRetries(t *testing.T) {
 }
 
 func TestCoordinationCancellationBeforeWrite(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value, transport := operation(c, "create")
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -199,7 +200,7 @@ func TestCoordinationCancellationBeforeWrite(t *testing.T) {
 }
 
 func TestCoordinationDropRequiresConfirmedAbsence(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value, transport := operation(c, "drop")
 	transport.ignoreWrite = true
 	dispatched, err := executor(transport).Apply(t.Context(), "/local", value, allow)

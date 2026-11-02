@@ -10,6 +10,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -21,7 +22,7 @@ import (
 )
 
 func TestCoordinationInspectionComparisonSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
@@ -52,8 +53,11 @@ func TestCoordinationInspectionComparisonSubprocess(t *testing.T) {
 	desired.Subject.Schema = testcomparison.Part(directory)
 	desired.Value.Value.Owner.Schema = directory
 	desired.Value.NormalizedOwner.Schema = directory
-	normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "observed", Representation: protocol.ValueInput_OBSERVED, Value: snapshot.NativeObjects[0]}}})
+	// The snapshot names the features the provider read it under, and the
+	// requests that carry its values name them too, as a host does.
+	normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: snapshot.TargetFeatures, Values: []*protocol.ValueInput{{Id: "observed", Representation: protocol.ValueInput_OBSERVED, Value: snapshot.NativeObjects[0]}}})
 	c.Assert(err, qt.IsNil)
+	request.TargetFeatures = snapshot.TargetFeatures
 	request.Current.Records = []*protocol.ComparisonRecord{{Kind: schema.CoordinationProperties, Subject: proto.CloneOf(desired.Subject), Value: normalized.Values[0]}}
 	// The single-directory inspection establishes this node, not all namespaces.
 	request.Current.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)

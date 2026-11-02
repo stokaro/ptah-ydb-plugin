@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
 
@@ -25,7 +26,7 @@ func TestConfineToRealm_HappyPath(t *testing.T) {
 		{"comment on a relative view", "CREATE VIEW `v` WITH (security_invoker = TRUE) AS SELECT 1;\nCOMMENT ON VIEW `v` IS 'text';"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(yql.ConfineToRealm(test.source), qt.IsNil)
 		})
 	}
@@ -47,7 +48,7 @@ func TestConfineToRealm_FailurePath(t *testing.T) {
 		{"comment on another object", "COMMENT ON SCHEMA `app` IS 'text'", "unrecognized object COMMENT ON SCHEMA"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			err := yql.ConfineToRealm(test.source)
 

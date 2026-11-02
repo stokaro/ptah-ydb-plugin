@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -36,7 +37,7 @@ func authoredSecretSource(c *qt.C, secretPath string) *protocol.Envelope {
 }
 
 func TestAuthoredSecretRetainsOnlyApprovedReferenceAndDependencyEffects(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	t.Setenv("PTAH_SECRET_DECLARATION_INPUT", "SECRET_VALUE_MUST_NOT_BE_CAPTURED")
 	request := declarationRequest(c, authoredSecretSource(c, "app/z.pw"), authoredSecret(c))
 	request.Capabilities["secrets"], request.Capabilities["external_data_source_secret_paths"] = true, true
@@ -91,7 +92,7 @@ func TestAuthoredSecretRefusalsDiscardAllOutput(t *testing.T) {
 		{name: "self reference", secretPath: "app/a.source", capability: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := declarationRequest(c, authoredSecretSource(c, test.secretPath), authoredSecret(c))
 			request.Capabilities["secrets"], request.Capabilities["external_data_source_secret_paths"] = test.capability, true
 			result, err := backend.New().PlanDeclarations(c.Context(), request)

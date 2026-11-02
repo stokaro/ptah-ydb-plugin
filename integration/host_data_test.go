@@ -14,6 +14,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
@@ -123,7 +124,7 @@ func (f *hostData) stored(c *qt.C) map[string]string {
 // spells each write. The declared "1" and the stored 1 are one value once
 // typed, so a converged table plans nothing.
 func TestHostWritesDeclaredRowsThroughTheProvider_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newHostData(c)
 	f.declare(c, "- code: NO\n  name: Norway\n  rank: 2\n- code: CZ\n  name: Czechia\n  rank: \"1\"\n")
 
@@ -145,7 +146,7 @@ func TestHostWritesDeclaredRowsThroughTheProvider_HappyPath(t *testing.T) {
 // file that hits an existing key is refused and leaves nothing, and with
 // --idempotent it is recorded without its rows.
 func TestHostRunsSeedFilesThroughTheProvider_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newHostData(c)
 	ctx, cancel := context.WithTimeout(c.Context(), time.Minute)
 	defer cancel()

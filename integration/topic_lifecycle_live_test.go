@@ -10,6 +10,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
@@ -29,7 +30,7 @@ import (
 // and adding it again, a change another writer made after the plan read the
 // topic, and a removal.
 func TestTopicLifecycleSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()
@@ -54,7 +55,7 @@ func TestTopicLifecycleSubprocess(t *testing.T) {
 		snapshot, err := client.Inspect(ctx, &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
 		c.Assert(err, qt.IsNil)
 		desiredModel := schema.NativeDesiredModel(schema.TopicProperties)
-		request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: topiccompare.ServiceID, Kinds: []string{schema.TopicProperties}, Capabilities: session.Capabilities,
+		request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: negotiated(client), DatabasePath: session.Database, ComparisonId: topiccompare.ServiceID, Kinds: []string{schema.TopicProperties}, Capabilities: session.Capabilities,
 			Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}, Desired: testcomparison.State(desiredModel),
 			Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedTopicCoverage(snapshot.Coverage)}}
 		if declared != nil {
@@ -71,7 +72,7 @@ func TestTopicLifecycleSubprocess(t *testing.T) {
 			if value.Kind != schema.TopicProperties {
 				continue
 			}
-			normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "read", Representation: protocol.ValueInput_OBSERVED, Value: value}}})
+			normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: negotiated(client), Values: []*protocol.ValueInput{{Id: "read", Representation: protocol.ValueInput_OBSERVED, Value: value}}})
 			c.Assert(err, qt.IsNil)
 			request.Current.Records = append(request.Current.Records, &protocol.ComparisonRecord{Kind: schema.TopicProperties, Subject: testplanning.Subject(value.Owner), Value: normalized.Values[0]})
 		}
@@ -82,7 +83,7 @@ func TestTopicLifecycleSubprocess(t *testing.T) {
 			return nil
 		}
 		c.Assert(compared.Changes, qt.HasLen, 1)
-		planned, err := client.PlanFeatures(ctx, &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: topicplan.ServiceID, Capabilities: session.Capabilities,
+		planned, err := client.PlanFeatures(ctx, &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(client), PlanningId: topicplan.ServiceID, Capabilities: session.Capabilities,
 			Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}, Changes: []*protocol.PlanningChange{{Subject: compared.Changes[0].Subject, Value: compared.Changes[0].Value}}})
 		c.Assert(err, qt.IsNil)
 		c.Assert(planned.Diagnostics, qt.HasLen, 0)

@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -56,7 +57,7 @@ func TestGoDirectives_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := goRequest(c, test.declarations...)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(err, qt.IsNil)
@@ -77,7 +78,7 @@ func TestGoDirectives_HappyPath(t *testing.T) {
 // A family that lists columns places each of them, and the host attaches the
 // column facet to the field of the struct the directive is written on.
 func TestGoDirectives_FamilyPlacesItsColumns(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := goRequest(c,
 		declaration(2, "Item", map[string]string{"name": "cold", "data": "hdd", "fields": "body, notes"}),
 		declaration(3, "Item", map[string]string{"name": "warm", "fields": "title"}),
@@ -105,7 +106,7 @@ func TestGoDirectives_FamilyPlacesItsColumns(t *testing.T) {
 }
 
 func TestGoDirectives_TablesGetTheirOwnFacets(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := goRequest(c,
 		declaration(2, "Item", map[string]string{"name": "cold"}),
 		declaration(3, "Order", map[string]string{"name": "hot", "data": "ssd"}),
@@ -169,7 +170,7 @@ func TestGoDirectives_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := goRequest(c, test.declarations...)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
@@ -184,7 +185,7 @@ func TestGoDirectives_FailurePath(t *testing.T) {
 // The host refuses an attribute outside the claim before it dispatches, and
 // the SDK validator refuses it again on the way in.
 func TestGoDirectives_AttributeOutsideTheClaim(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := goRequest(c, declaration(2, "Item", map[string]string{"name": "cold", "barriers": "x"}))
 	decoded, err := backend.New().DecodeSource(c.Context(), request)
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
@@ -232,7 +233,7 @@ func TestTableDirective_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := goRequest(c, test.declarations...)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.IsNil)
@@ -266,7 +267,7 @@ func TestTableDirective_ColumnTable(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := goRequest(c, tableDeclaration(2, "Item", test.attributes))
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.IsNil)
@@ -283,7 +284,7 @@ func TestTableDirective_ColumnTable(t *testing.T) {
 // A table that states row storage and nothing else declares nothing, so the
 // host gets no facet for it and the table's settings stay as they are.
 func TestTableDirective_RowStorageAloneDeclaresNothing(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := goRequest(c, tableDeclaration(2, "Item", map[string]string{"store": "ROW"}))
 	tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 	c.Assert(err, qt.IsNil)
@@ -341,7 +342,7 @@ func TestTableDirective_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := goRequest(c, tableDeclaration(2, "Item", test.attributes))
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
@@ -359,7 +360,7 @@ func TestTableDirective_FailurePath(t *testing.T) {
 func TestIndexDirective_RefusedByName(t *testing.T) {
 	for _, attribute := range []string{"auto_partitioning_by_load", "read_replicas_settings", "tokenizer", "false_positive_probability", "distance", "clusters"} {
 		t.Run(attribute, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := goRequest(c, indexDeclaration(2, "Item", map[string]string{attribute: "x"}))
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(err, qt.ErrorMatches, `(?s).*`+attribute+` is not supported by the YDB provider yet: an index states no settings of its own.*`)

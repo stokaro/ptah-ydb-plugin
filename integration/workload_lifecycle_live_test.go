@@ -14,6 +14,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
@@ -90,7 +91,7 @@ func workloadRanks(directory string) (int64, int64) {
 // a migration file's text, a change another writer made after the plan read
 // the pool, and a removal.
 func TestWorkloadLifecycleSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	enableResourcePools(c, opened)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
@@ -119,7 +120,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 		c.Helper()
 		snapshot, err := client.Inspect(ctx, &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{"/"}})
 		c.Assert(err, qt.IsNil)
-		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: workloadplan.ServiceID, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}}
+		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(client), PlanningId: workloadplan.ServiceID, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}}
 		for _, family := range []struct {
 			kind, service string
 			declared      map[string]proto.Message
@@ -127,7 +128,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 			{schema.ResourcePoolProperties, workloadcompare.PoolServiceID, poolSettings(declaredPools)},
 			{schema.ResourcePoolClassifierProperties, workloadcompare.ClassifierServiceID, classifierSettings(declaredClassifiers)},
 		} {
-			request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: family.service, Kinds: []string{family.kind}, Capabilities: session.Capabilities,
+			request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: negotiated(client), DatabasePath: session.Database, ComparisonId: family.service, Kinds: []string{family.kind}, Capabilities: session.Capabilities,
 				Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}, Desired: testcomparison.State(schema.NativeDesiredModel(family.kind)),
 				Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedKindCoverage(snapshot.Coverage, family.kind)}}
 			for name, settings := range family.declared {
@@ -141,7 +142,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 				if value.Kind != family.kind {
 					continue
 				}
-				normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "read-" + value.Owner.Name, Representation: protocol.ValueInput_OBSERVED, Value: value}}})
+				normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: negotiated(client), Values: []*protocol.ValueInput{{Id: "read-" + value.Owner.Name, Representation: protocol.ValueInput_OBSERVED, Value: value}}})
 				c.Assert(err, qt.IsNil)
 				request.Current.Records = append(request.Current.Records, &protocol.ComparisonRecord{Kind: family.kind, Subject: testplanning.Subject(value.Owner), Value: normalized.Values[0]})
 			}

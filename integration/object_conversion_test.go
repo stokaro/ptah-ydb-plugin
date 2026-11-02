@@ -7,6 +7,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -19,7 +20,7 @@ import (
 )
 
 func TestNativeObjectConversionOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	self := &Ydb_Scheme.Entry{Owner: "alice", Permissions: []*Ydb_Scheme.Permissions{{Subject: "reader", PermissionNames: []string{"read"}}}}
 	request := &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.PlanningLifecycleFeature}}
 	for _, test := range []struct {

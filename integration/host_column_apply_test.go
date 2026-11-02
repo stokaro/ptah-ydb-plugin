@@ -9,6 +9,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // hostEvents declares events in the fixture directory, keyed by (ts, id), with
@@ -44,7 +45,7 @@ func hostColumnFixture(c *qt.C) string {
 // fields leave nullable is created NOT NULL, as the host's embedded engine
 // creates it, and the read table matches the declaration.
 func TestHostAppliesAColumnTable_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	directory := hostColumnFixture(c)
 	const twoDays = ` store="COLUMN" partition_by_hash="id" column_shards="3" platform.ydb.row_deletion_column="ts" platform.ydb.row_deletion_interval="P2D"`
 	for _, run := range []struct{ name, attributes, want string }{
@@ -62,7 +63,7 @@ func TestHostAppliesAColumnTable_HappyPath(t *testing.T) {
 // What YDB fixes when it creates a column table is refused with the reason
 // when a later declaration changes it.
 func TestHostRefusesAColumnTableChange_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	directory := hostColumnFixture(c)
 	output, err := hostApply(c, directory, hostEvents(directory, hostColumnTable))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))

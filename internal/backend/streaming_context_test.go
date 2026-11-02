@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -69,7 +70,7 @@ func unchangedStreamingRequest(c *qt.C, run *bool) *protocol.PlanFeaturesRequest
 }
 
 func TestUnchangedStreamingQueryRestartsAroundChangedInput(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -97,7 +98,7 @@ func TestUnchangedStreamingQueryFixedPoints(t *testing.T) {
 		change bool
 	}{{"unchanged input", nil, false}, {"stopped query", new(false), true}} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := unchangedStreamingRequest(c, test.run)
 			if !test.change {
 				request.ChangedSubjects = nil
@@ -113,7 +114,7 @@ func TestUnchangedStreamingQueryFixedPoints(t *testing.T) {
 }
 
 func TestUnchangedStreamingQueryRefusesMissingInput(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
 	request.DesiredObjects.Records = request.DesiredObjects.Records[:1]
 	result, err := backend.New().PlanFeatures(c.Context(), request)
@@ -126,7 +127,7 @@ func TestUnchangedStreamingQueryRefusesMissingInput(t *testing.T) {
 }
 
 func TestStreamingCaptureRequiresUnchangedObjectAssessment(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
 	value := request.DesiredObjects.Records[0].Value.Value
 	c.Assert(value.RequiredFeatures, qt.Contains, provider.PlanningObjectContextFeature)
@@ -136,7 +137,7 @@ func TestStreamingCaptureRequiresUnchangedObjectAssessment(t *testing.T) {
 }
 
 func TestUnchangedStreamingQueryRefusesIncompleteObservation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
 	request.CurrentObjects.Records = request.CurrentObjects.Records[1:]
 	request.CurrentObjects.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
@@ -148,7 +149,7 @@ func TestUnchangedStreamingQueryRefusesIncompleteObservation(t *testing.T) {
 }
 
 func TestUnchangedStreamingQueryDoesNotUseAnotherDatabaseInput(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
 	foreign := request.DesiredObjects.Records[1]
 	foreign.Subject.Database = testcomparison.Part("/other")
@@ -180,7 +181,7 @@ func replaceContextQuery(c *qt.C, request *protocol.PlanFeaturesRequest, spec st
 }
 
 func TestUnchangedStreamingRestartPreservesCapturedContext(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
 	bound := &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
 	replaceContextQuery(c, request, streaming.Spec{Text: "SELECT * FROM `/local/app/input`;"}, bound)
@@ -200,7 +201,7 @@ func TestUnchangedStreamingRestartPreservesCapturedContext(t *testing.T) {
 func TestUnchangedStreamingQueryUsesDatabaseWidePoolIdentity(t *testing.T) {
 	for _, survives := range []bool{true, false} {
 		t.Run(map[bool]string{true: "surviving pool", false: "removed pool"}[survives], func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := unchangedStreamingRequest(c, nil)
 			replaceContextQuery(c, request, streaming.Spec{Text: "SELECT * FROM `app/input`;", ResourcePool: "team.batch"}, nil)
 			owner := &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Name: "team.batch"}
@@ -238,7 +239,7 @@ func TestUnchangedStreamingQueryUsesDatabaseWidePoolIdentity(t *testing.T) {
 }
 
 func TestUnchangedStreamingQueryOrdersCommonInputReplacement(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
 	request.ChangedSubjects = nil
 	table := &protocol.ComparisonIdentity{Kind: "table", Schema: testcomparison.Part("app"), Name: testcomparison.Part("input")}
@@ -258,7 +259,7 @@ func TestUnchangedStreamingQueryOrdersCommonInputReplacement(t *testing.T) {
 }
 
 func TestUnchangedStreamingRestartRetainsAccessOrdering(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
 	access := commonAccessFor(request.DesiredObjects.Records[0].Subject, "streaming query", true)
 	request.CommonSteps = []*protocol.CommonPlanningStep{access}
@@ -282,7 +283,7 @@ func TestStreamingContextRequiresCompleteUnnamedInventoryForWrites(t *testing.T)
 		writes, complete bool
 	}{{"unknown inventory with writes", true, false}, {"unknown inventory fixed point", false, false}, {"complete selected database", true, true}} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := unchangedStreamingRequest(c, nil)
 			request.CurrentObjects.Records = request.CurrentObjects.Records[1:]
 			request.DesiredObjects.Records = request.DesiredObjects.Records[1:]

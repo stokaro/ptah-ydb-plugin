@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/readproof"
 )
@@ -56,7 +57,7 @@ func TestReadSources_HappyPath(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := readproof.ReadSources(tc.text)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got.Prefix, qt.Equals, tc.prefix)
@@ -90,7 +91,7 @@ func TestReadSources_FailurePath(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := readproof.ReadSources(tc.text)
 			c.Assert(err, qt.ErrorMatches, tc.want)
 			c.Assert(got, qt.DeepEquals, readproof.Reads{})

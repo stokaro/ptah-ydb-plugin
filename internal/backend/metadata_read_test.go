@@ -9,6 +9,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,7 +24,7 @@ func readerFixture() (*Provider, *session, *protocol.MetadataReadRequest) {
 	return p, s, request
 }
 func TestMetadataReaderCloseFencesOpenAndRetainsScope(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p, s, request := readerFixture()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -40,7 +41,7 @@ func TestMetadataReaderCloseFencesOpenAndRetainsScope(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 }
 func TestMetadataPageFailureClosesSnapshot(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p, s, request := readerFixture()
 	store, err := metadata.Resolve("/local", request.Scope)
 	c.Assert(err, qt.IsNil)
@@ -59,7 +60,7 @@ func TestMetadataPageFailureClosesSnapshot(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 }
 func TestMetadataReaderBoundsAndTransactionCleanup(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p, s, request := readerFixture()
 	for i := 0; i < metadataOpenLimit; i++ {
 		s.metadataReaders[strconv.Itoa(i)] = &metadataReader{scope: proto.CloneOf(request.Scope)}
@@ -83,7 +84,7 @@ func TestMetadataReaderBoundsAndTransactionCleanup(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 }
 func TestMetadataSnapshotScopeCannotCloseAnotherTransaction(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	_, s, request := readerFixture()
 	bound := proto.CloneOf(request.Scope)
 	bound.TransactionId = "tx"

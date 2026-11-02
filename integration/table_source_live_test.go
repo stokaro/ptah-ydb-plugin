@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -37,7 +38,7 @@ func (f *facetFixture) decodedTableFacet(c *qt.C, request *protocol.DecodeSource
 // alteration planner read: it is compared with the live table, planned,
 // executed, and read back.
 func TestTableSourceYAMLReachesAlterationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, ", FAMILY archive (COMPRESSION = 'off')", "")
 	source := fmt.Sprintf(`{"tables":{"records":{"schema":%q,"auto_partitioning_by_load":"ENABLED","auto_partitioning_min_partitions_count":2,`+
 		`"column_families":{"archive":{"compression":"LZ4"}}}}}`, fixture.directory)
@@ -58,7 +59,7 @@ func TestTableSourceYAMLReachesAlterationSubprocess(t *testing.T) {
 
 // The same for a Go directive, which names the table of its struct.
 func TestTableSourceGoDirectiveReachesAlterationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, ", FAMILY archive (COMPRESSION = 'lz4')", "")
 	declaration := testsource.GoDeclaration{Directive: "ptah:schema:columnfamily", Struct: "Record", File: "records.go", FileSize: 1000,
 		Attributes: map[string]string{"name": "archive", "compression": "off"},
@@ -91,7 +92,7 @@ func (f *facetFixture) goTable(c *qt.C, attributes map[string]string) *protocol.
 // directive's attributes of the bundled source do: the partitioning is set, and
 // so is a TTL, which the table keeps while the source states it.
 func TestTableSourceGoTableAttributesReachAlterationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, "", ` WITH (TTL = Interval("PT1H") ON ts)`)
 	ttl := func(interval string) map[string]string {
 		return map[string]string{"platform.ydb.row_deletion_column": "ts", "platform.ydb.row_deletion_interval": interval}
@@ -108,7 +109,7 @@ func TestTableSourceGoTableAttributesReachAlterationSubprocess(t *testing.T) {
 	}
 	for _, step := range steps {
 		t.Run(step.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			declared := fixture.goTable(c, step.attributes)
 			found := fixture.compareRecords(c, declared)
 			c.Assert(found.Changes, qt.HasLen, 1)
@@ -131,7 +132,7 @@ func TestTableSourceGoTableAttributesReachAlterationSubprocess(t *testing.T) {
 // could not describe them leaves the TTL alone.
 func TestTableSourceStatingNoTTLRemovesTheTTLSubprocess(t *testing.T) {
 	t.Run("a table with a facet", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		fixture := newFacetFixture(c, "", ` WITH (TTL = Interval("PT1H") ON ts)`)
 		declared := fixture.goTable(c, map[string]string{"auto_partitioning_by_load": "ENABLED"})
 		found := fixture.compareRecords(c, declared)
@@ -141,7 +142,7 @@ func TestTableSourceStatingNoTTLRemovesTheTTLSubprocess(t *testing.T) {
 		c.Assert(string(fixture.heldTable(c)), qt.Contains, `"partitioningByLoad":"ENABLED"`)
 	})
 	t.Run("a table the source states nothing for", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		fixture := newFacetFixture(c, "", ` WITH (TTL = Interval("PT1H") ON ts)`)
 		found := fixture.compareRecords(c)
 		c.Assert(found.Changes, qt.HasLen, 1)
@@ -150,13 +151,13 @@ func TestTableSourceStatingNoTTLRemovesTheTTLSubprocess(t *testing.T) {
 		c.Assert(fixture.compareRecords(c).Changes, qt.HasLen, 0)
 	})
 	t.Run("a table that holds no TTL", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		fixture := newFacetFixture(c, "", "")
 		c.Assert(fixture.compareRecords(c).Changes, qt.HasLen, 0)
 		c.Assert(fixture.heldTTL(c), qt.Equals, "null")
 	})
 	t.Run("a source that could not describe the table properties", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		fixture := newFacetFixture(c, "", ` WITH (TTL = Interval("PT1H") ON ts)`)
 		fixture.desiredKnowledge = protocol.ModelKnowledge_UNINSPECTED
 		c.Assert(fixture.compareRecords(c).Changes, qt.HasLen, 0)

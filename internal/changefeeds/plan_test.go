@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -82,7 +83,7 @@ func TestDiff_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			planned, undecided := changefeeds.Diff(declared(c, test.desired...), test.held)
 			c.Assert(undecided, qt.Equals, "")
 			c.Assert(steps(planned), qt.DeepEquals, test.want)
@@ -93,7 +94,7 @@ func TestDiff_HappyPath(t *testing.T) {
 // TestDiff_CarriesTheOperands holds that each change carries the operands its
 // statements and its precondition read.
 func TestDiff_CarriesTheOperands(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	keysOnly := ydbdecl.Changefeed{Name: "a", Mode: "KEYS_ONLY", Format: "JSON"}
 	planned, undecided := changefeeds.Diff(declared(c, keysOnly), held("a"))
 	c.Assert(undecided, qt.Equals, "")
@@ -106,7 +107,7 @@ func TestDiff_CarriesTheOperands(t *testing.T) {
 // them, so a table at YDB's limit on changefeeds can swap one; then every
 // addition with its consumers; then every topic change.
 func TestStatements_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	updates := func(name string, consumers ...ydbdecl.Consumer) ydbdecl.Changefeed {
 		return ydbdecl.Changefeed{Name: name, Mode: "UPDATES", Format: "JSON", Consumers: consumers}
 	}
@@ -155,7 +156,7 @@ func TestDiff_LeavesUndecidedWhatItCannotRead(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			planned, undecided := changefeeds.Diff(declared(c, test.desired...), test.held)
 			c.Assert(undecided, qt.Matches, test.wantUndecided)
 			c.Assert(planned, qt.HasLen, 0)
@@ -166,7 +167,7 @@ func TestDiff_LeavesUndecidedWhatItCannotRead(t *testing.T) {
 // TestDiff_DesiredTheDeclarationCannotState holds a desired set holding a
 // changefeed no declaration states, as a conversion of an unusual read makes.
 func TestDiff_DesiredTheDeclarationCannotState(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	set := declared(c, ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON"})
 	set.Changefeeds[0].AwsRegion = "eu-west-1"
 	planned, undecided := changefeeds.Diff(set, held())

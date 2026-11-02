@@ -14,6 +14,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -96,7 +97,7 @@ func drainMetadata(c *qt.C, client *providerruntime.Client, reader *protocol.Met
 }
 
 func TestNativeMetadataDurabilityTransactionsAndSnapshots(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	binary, digest := providerBinary(c)
 	client, id, _ := historySession(c, binary, digest)
@@ -179,7 +180,7 @@ func TestNativeMetadataDurabilityTransactionsAndSnapshots(t *testing.T) {
 }
 
 func TestNativeMetadataPagesExceedOneRPCWithoutChangingSnapshot(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	binary, digest := providerBinary(c)
 	client, id, _ := historySession(c, binary, digest)
@@ -221,7 +222,7 @@ func TestNativeMetadataPagesExceedOneRPCWithoutChangingSnapshot(t *testing.T) {
 }
 
 func TestNativeMetadataOwnershipInspectionAndCorruption(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	binary, digest := providerBinary(c)
 	client, id, _ := historySession(c, binary, digest)
@@ -283,7 +284,7 @@ func TestNativeMetadataOwnershipInspectionAndCorruption(t *testing.T) {
 }
 
 func TestNativeMetadataReaderFencingAndSessionCleanup(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	binary, digest := providerBinary(c)
 	client, id, closeSession := historySession(c, binary, digest)

@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -63,7 +64,7 @@ func columnRequest(c *qt.C, in alterCase, steps ...*protocol.CommonPlanningStep)
 }
 
 func TestColumnPlan_ClaimsAdditionsAndRemovals(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload", "other"}, held: []string{"old", "older"}},
 		additionStep("add-payload", "payload", nil), additionStep("add-other", "other", nil),
 		removalStep("drop-old", "old"), removalStep("drop-older", "older"))
@@ -105,7 +106,7 @@ func TestColumnPlan_ClaimsAdditionsAndRemovals(t *testing.T) {
 }
 
 func TestColumnPlan_FamilyOperationFollowsAdditionsAndPrecedesRemovals(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := columnRequest(c, alterCase{
 		desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`, desiredColumns: map[string]string{"payload": `{"family":"archive"}`},
 		declared: []string{"payload", "other"}, heldTable: plainTable, held: []string{"old"}},
@@ -193,7 +194,7 @@ func TestColumnPlan_LeavesWhatTheCallCannotState(t *testing.T) {
 			&protocol.PlanningEffect{Subject: columnSubject("payload"), Action: protocol.PlanningEffect_CREATE})},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}}, test.step)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
@@ -205,7 +206,7 @@ func TestColumnPlan_LeavesWhatTheCallCannotState(t *testing.T) {
 }
 
 func TestColumnPlan_ClaimsOnlyStepsOfItsOwnTable(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}})
 	second := alterRequest(c, alterCase{declared: []string{"payload"}})
 	accounts := &protocol.ComparisonIdentity{Kind: "table", Database: part("/local"), Schema: part("app"), Name: part("accounts")}
@@ -225,7 +226,7 @@ func TestColumnPlan_ClaimsOnlyStepsOfItsOwnTable(t *testing.T) {
 }
 
 func TestColumnPlan_KeepsPlacement(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	step := additionStep("add", "payload", nil)
 	step.Metadata.Placement = protocol.PlanningMetadata_EARLY
 	plan, err := backend.New().PlanFeatures(c.Context(), columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}}, step))
@@ -244,7 +245,7 @@ func TestColumnPlan_ClaimsWhatTheCallCanState(t *testing.T) {
 		{"empty default", func(c *protocol.PlanningColumn) { c.Default = &protocol.PlanningDefault{} }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}}, additionStep("add", "payload", test.change))
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
@@ -277,7 +278,7 @@ func TestColumnPlan_AddedColumnFacets(t *testing.T) {
 		}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}},
 				additionStep("add", "payload", func(column *protocol.PlanningColumn) { column.Facets = []*protocol.CapturedFacet{test.facet(c)} }))
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -317,7 +318,7 @@ func TestColumnPlan_RefusesForgedAddedColumnFacets(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			record := facet(c, schema.ColumnProperties, "payload", `{"family":"archive"}`)
 			captured := &protocol.CapturedFacet{Kind: record.Kind, Value: proto.CloneOf(record.Value)}
 			test.modify(c, captured)
@@ -345,7 +346,7 @@ func TestColumnPlan_RefusesWhatTheDeclarationContradicts(t *testing.T) {
 			[]*protocol.CommonPlanningStep{additionStep("add", "payload", nil), additionStep("again", "payload", nil)}, `The host changes column "payload" more than once`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), columnRequest(c, test.in, test.steps...))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -358,7 +359,7 @@ func TestColumnPlan_RefusesWhatTheDeclarationContradicts(t *testing.T) {
 }
 
 func TestColumnPlan_NumbersStepsAcrossTables(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}}, additionStep("add-a", "payload", nil))
 	second := alterRequest(c, alterCase{declared: []string{"payload"}})
 	accounts := &protocol.ComparisonIdentity{Kind: "table", Database: part("/local"), Schema: part("app"), Name: part("accounts")}
@@ -407,7 +408,7 @@ func TestColumnOperation_FailurePath(t *testing.T) {
 		`{"request":{"addColumns":[{"name":"a","type":{"optionalType":{"item":{"typeId":"UTF8"}}},"notNull":false}]},"held_families":[{"name":"f"}]}`,
 	} {
 		t.Run(payload, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := tablecreate.AlterModel()
 			normalized, err := tablecreate.NormalizeAlteration(&protocol.ValueInput{Id: "operation", Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
 				ProviderId: schema.ProviderID, Kind: tablecreate.AlterOperationKind, Owner: owner(), SchemaVersion: 1, Encoding: definition.Encoding,
@@ -428,7 +429,7 @@ func TestColumnOperation_HappyPath(t *testing.T) {
 		{"removal", `{"request":{"dropColumns":["a","b"]}}`, protocol.ChangeSemantics_DESTRUCTIVE},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := tablecreate.AlterModel()
 			normalized, err := tablecreate.NormalizeAlteration(&protocol.ValueInput{Id: "operation", Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
 				ProviderId: schema.ProviderID, Kind: tablecreate.AlterOperationKind, Owner: owner(), SchemaVersion: 1, Encoding: definition.Encoding,

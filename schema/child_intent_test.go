@@ -7,6 +7,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -36,7 +37,7 @@ func assertChildRoundTrip(c *qt.C, observed *protocol.Envelope) *protocol.Envelo
 func TestIndexDeclarationsPreserveEveryKindAndImplementation(t *testing.T) {
 	for _, kind := range []string{"globalIndex", "globalAsyncIndex", "globalUniqueIndex", "globalVectorKmeansTreeIndex", "globalFulltextPlainIndex", "globalFulltextRelevanceIndex"} {
 		t.Run(kind, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			index := indexObservation("idx")
 			c.Assert(protojson.Unmarshal([]byte(fmt.Sprintf(`{"name":"idx","indexColumns":["tenant","label"],"dataColumns":["extra"],"status":"STATUS_READY","%s":{}}`, kind)), index.Description), qt.IsNil)
 			names, err := schema.ImplementationNames(index.Description)
@@ -64,7 +65,7 @@ func TestIndexDeclarationsPreserveEveryKindAndImplementation(t *testing.T) {
 }
 
 func TestIndexSequenceProjectionValidatesBeforeExcludingPosition(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := &native.IndexObservations{Indexes: []*native.ObservedIndex{indexObservation("idx")}}
 	sequence := &native.SequenceDescription{Name: proto.String("_serial"), DataType: primitive(Ydb.Type_INT64), Increment: proto.Int64(3), Cycle: proto.Bool(false), SetVal: &native.SequenceDescription_SetVal{NextValue: proto.Int64(19)}}
 	input.Indexes[0].Tables[0].Description.Columns[1].DefaultValue = &native.ColumnMeta_FromSequence{FromSequence: sequence}
@@ -85,7 +86,7 @@ func TestIndexSequenceProjectionValidatesBeforeExcludingPosition(t *testing.T) {
 }
 
 func TestIndexConversionRefusesPhysicalBoundaries(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := &native.IndexObservations{Indexes: []*native.ObservedIndex{indexObservation("idx")}}
 	input.Indexes[0].Tables[0].Description.ShardKeyBounds = []*Ydb.TypedValue{{Type: primitive(Ydb.Type_UINT64), Value: &Ydb.Value{Value: &Ydb.Value_Uint64Value{Uint64Value: 10}}}}
 	observed, err := schema.CaptureIndexes(tableOwner(), input)
@@ -96,7 +97,7 @@ func TestIndexConversionRefusesPhysicalBoundaries(t *testing.T) {
 }
 
 func TestTopicDeclarationsPreserveConfigurationAndAccess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := nativeTopic()
 	input.Self.Permissions = []*Ydb_Scheme.Permissions{{Subject: "writer", PermissionNames: []string{"write"}}}
 	input.Self.EffectivePermissions = []*Ydb_Scheme.Permissions{{Subject: "reader", PermissionNames: []string{"read"}}}
@@ -124,7 +125,7 @@ func TestTopicDeclarationsPreserveConfigurationAndAccess(t *testing.T) {
 func TestChangefeedDeclarationsSeparateInitialScanFromProgress(t *testing.T) {
 	for _, state := range []native.ChangefeedDescription_State{native.ChangefeedDescription_STATE_ENABLED, native.ChangefeedDescription_STATE_DISABLED, native.ChangefeedDescription_STATE_INITIAL_SCAN} {
 		t.Run(state.String(), func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			feed := nativeFeed("events")
 			feed.Description.State = state
 			feed.Description.VirtualTimestamps = true
@@ -159,7 +160,7 @@ func TestChangefeedDeclarationsSeparateInitialScanFromProgress(t *testing.T) {
 }
 
 func TestEmptyChildSetsHaveIndependentDesiredContracts(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	indexes, err := schema.CaptureIndexes(tableOwner(), &native.IndexObservations{})
 	c.Assert(err, qt.IsNil)
 	feeds, err := schema.CaptureChangefeeds(tableOwner(), &native.ChangefeedObservations{})
@@ -193,7 +194,7 @@ func TestDesiredChildrenRefuseIncompleteAndRuntimeSettings(t *testing.T) {
 		{"runtime scan progress", schema.ChangefeedProperties, `{"changefeeds":[{"name":"f","initialScanProgress":{}}]}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := schema.NativeDesiredModel(test.kind)
 			owner := tableOwner()
 			if test.kind == schema.TopicProperties {
@@ -226,7 +227,7 @@ func TestDesiredIndexRefusesIncompleteImplementation(t *testing.T) {
 		{"unknown implementation", func(i *native.IndexDeclaration) { i.Implementation[0].Name = "other" }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			observed, err := schema.CaptureIndexes(tableOwner(), &native.IndexObservations{Indexes: []*native.ObservedIndex{indexObservation("idx")}})
 			c.Assert(err, qt.IsNil)
 			desired, err := schema.ConvertNative(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)

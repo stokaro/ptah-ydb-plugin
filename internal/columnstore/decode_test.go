@@ -10,6 +10,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -86,7 +87,7 @@ func TestCapturedDescriptionsPreserveStorage(t *testing.T) {
 		{"inline", inlineDescription, table("ptah_inline_probe", column("id", Ydb.Type_UINT64, false), column("body", Ydb.Type_UTF8, true)), 1, 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := columnstore.Decode(test.body, "/local/"+test.table.Self.Name, test.table)
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Partitions, qt.Equals, test.partitions)
@@ -96,7 +97,7 @@ func TestCapturedDescriptionsPreserveStorage(t *testing.T) {
 			c.Assert(result.Ttl, qt.IsNil)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	result, err := columnstore.Decode(indexDescription, "/local/col_index_probe", indexTable())
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.LocalIndexes[0].Name, qt.Equals, "bf")
@@ -123,7 +124,7 @@ func TestCapturedTTLRetainsUnitsActionsAndPresence(t *testing.T) {
 		{"col_epoch_probe", epochDescription, Ydb.Type_UINT64, Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_SECONDS, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := columnstore.Decode(test.body, "/local/"+test.name, tieredTable(test.name, test.typ, test.unit))
 			c.Assert(err, qt.IsNil)
 			ttl := result.Ttl.GetEnabled()
@@ -207,7 +208,7 @@ func TestCapturedLivePairs(t *testing.T) {
 			ttl: policy{Column: "ts", Unit: 1, Tiers: []tier{{Seconds: 86400, Storage: "/local/probe/ext"}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			body, described := captured(c, test.name)
 			result, err := columnstore.Decode(body, test.path, described)
 			c.Assert(err, qt.IsNil)
@@ -248,7 +249,7 @@ func TestCapturedTTLDisagreementReturnsNoFacet(t *testing.T) {
 		{"run interval", func(v *native.ColumnTableDescribeResult) { v.TtlSettings.RunIntervalSeconds = 3600 }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			body, described := captured(c, "26-2-tiered-inline")
 			test.change(described)
 			result, err := columnstore.Decode(body, "/local/probe/c7", described)
@@ -261,7 +262,7 @@ func TestCapturedTTLDisagreementReturnsNoFacet(t *testing.T) {
 // TestCapturedDeleteOnlyTTLAsAMode reads the table service's delete-only TTL,
 // which it writes as a date mode, against the one tier the page reports.
 func TestCapturedDeleteOnlyTTLAsAMode(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	body, described := captured(c, "26-2-delete-ttl")
 	c.Assert(described.GetTtlSettings().GetDateTypeColumn().GetExpireAfterSeconds(), qt.Equals, uint32(7200))
 	described.GetTtlSettings().GetDateTypeColumn().ExpireAfterSeconds = 3600
@@ -302,7 +303,7 @@ func TestMonitoringRefusesUnknownIncompleteOrConflictingSettings(t *testing.T) {
 		{"duplicate description", `"ColumnTableDescription": {`, `"ColumnTableDescription": {}, "ColumnTableDescription": {`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(strings.Contains(string(indexDescription), test.old), qt.IsTrue)
 			body := strings.Replace(string(indexDescription), test.old, test.replacement, 1)
 			result, err := columnstore.Decode([]byte(body), "/local/col_index_probe", indexTable())
@@ -316,7 +317,7 @@ func TestMonitoringRefusesUnknownIncompleteOrConflictingSettings(t *testing.T) {
 // lists are raw bytes, as every live page is; the description itself has to be
 // canonical JSON.
 func TestMonitoringPageMayHoldBytesOutsideTheDescription(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	body, described := captured(c, "26-2-hash")
 	c.Assert(strings.ToValidUTF8(string(body), "") != string(body), qt.IsTrue, qt.Commentf("the capture holds no raw bytes"))
 	result, err := columnstore.Decode(body, "/local/probe/c1", described)
@@ -363,7 +364,7 @@ func TestNativeDisagreementReturnsNoFacet(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			source := indexTable()
 			test.change(source)
 			result, err := columnstore.Decode(indexDescription, "/local/col_index_probe", source)

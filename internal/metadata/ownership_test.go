@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -15,7 +16,7 @@ import (
 func TestMetadataOwnershipUsesCompleteFormat(t *testing.T) {
 	for _, kind := range []protocol.MetadataScope_Kind{protocol.MetadataScope_LOG, protocol.MetadataScope_TAGS} {
 		t.Run(kind.String(), func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			store, err := metadata.Resolve("/local", &protocol.MetadataScope{SessionId: "s", Schema: "app", Table: "store", Kind: kind})
 			c.Assert(err, qt.IsNil)
 			request := store.CreateRequest()
@@ -37,7 +38,7 @@ func TestMetadataOwnershipUsesCompleteFormat(t *testing.T) {
 				{"index", func(v *native.DescribeTableResult) { v.Indexes = []*native.TableIndexDescription{{Name: "extra"}} }, false, true},
 			} {
 				t.Run(test.name, func(t *testing.T) {
-					c := qt.New(t)
+					c := testcheck.New(t)
 					value := proto.CloneOf(original)
 					test.mutate(value)
 					purpose, err := metadata.Owned("store", value)

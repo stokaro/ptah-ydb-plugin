@@ -8,6 +8,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -25,7 +26,7 @@ func TestDatabaseContextResolvesWithoutCredentialsOrNetwork(t *testing.T) {
 		{"static credentials", "ydbs://reader:DO_NOT_CAPTURE@127.0.0.1:1/local", "/local", "/local"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := backend.New().ResolveDatabaseContext(c.Context(), &protocol.DatabaseContextRequest{Engine: "ydb", Address: test.address})
 			c.Assert(err, qt.IsNil)
 			c.Assert(result, qt.CmpEquals(protocmp.Transform()), &protocol.DatabaseContext{Database: test.database, SourceDatabase: test.source})
@@ -35,13 +36,13 @@ func TestDatabaseContextResolvesWithoutCredentialsOrNetwork(t *testing.T) {
 
 func TestDatabaseContextRefusalsDoNotRepeatAddresses(t *testing.T) {
 	for _, address := range []string{"ydb://reader:DO_NOT_CAPTURE@host/local?unknown=DO_NOT_CAPTURE", "ydb://host/local/../other?token=DO_NOT_CAPTURE"} {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		result, err := backend.New().ResolveDatabaseContext(c.Context(), &protocol.DatabaseContextRequest{Engine: "ydb", Address: address})
 		c.Assert(err, qt.IsNotNil)
 		c.Assert(result, qt.IsNil)
 		c.Assert(err.Error(), qt.Not(qt.Contains), "DO_NOT_CAPTURE")
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	ctx, cancel := context.WithCancel(c.Context())
 	cancel()
 	result, err := backend.New().ResolveDatabaseContext(ctx, &protocol.DatabaseContextRequest{Engine: "ydb", Address: "ydb://host/local"})
@@ -60,7 +61,7 @@ func normalizeContextValue(c *qt.C, value *protocol.Envelope, representation pro
 }
 
 func TestAbsoluteSecretDependencyWaitsForContextWithoutChangingIdentity(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value := authoredSecretSource(c, "/local/app/z.pw")
 	// A database in the object identity cannot authorize path interpretation.
 	value.Owner.Database = "/identity"
@@ -81,7 +82,7 @@ func TestAbsoluteSecretDependencyWaitsForContextWithoutChangingIdentity(t *testi
 
 func TestContextDependencyFailureDiscardsCompleteBatch(t *testing.T) {
 	for _, root := range []string{"/other", "/local-other", "/local/../other"} {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		value := authoredSecretSource(c, "/local/app/z.pw")
 		value.Context = &protocol.DatabaseContext{Database: root, SourceDatabase: root}
 		result, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Engines[0].Features,
@@ -92,7 +93,7 @@ func TestContextDependencyFailureDiscardsCompleteBatch(t *testing.T) {
 }
 
 func TestExternalContextConversionRetainsDependencyMeaning(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value := authoredSecretSource(c, "/local/app/z.pw")
 	value.Context = &protocol.DatabaseContext{Database: "/local/ptah_dev/proof", SourceDatabase: "/local"}
 	desired := normalizeContextValue(c, value, protocol.ValueInput_DESIRED)
@@ -112,7 +113,7 @@ func TestExternalContextConversionRetainsDependencyMeaning(t *testing.T) {
 }
 
 func TestCapturedExternalOperationsRetainOperandContext(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value := authoredSecretSource(c, "/local/app/z.pw")
 	value.Context = &protocol.DatabaseContext{Database: "/local/ptah_dev/proof", SourceDatabase: "/local"}
 	change, err := schema.CaptureExternalChange(schema.ExternalSourceProperties, "create", value.Owner, value.Context.Database, nil, value)
@@ -140,7 +141,7 @@ func TestCapturedExternalOperationsRetainOperandContext(t *testing.T) {
 }
 
 func TestSourceDecodeRetainsPendingAbsoluteDependencies(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.Request(`{"coordination_nodes":{"source":{"schema":"app","source_type":"PostgreSQL","location":"pg:5432","auth_method":"BASIC","options":{"PASSWORD_SECRET_PATH":"/local/app/z.pw","TOKEN_SECRET_PATH":"app/token"}}}}`)
 	c.Assert(err, qt.IsNil)
 	request.TargetFeatures = backend.Description().Engines[0].Features

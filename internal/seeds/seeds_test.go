@@ -9,6 +9,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 
@@ -99,7 +100,7 @@ func split(c *qt.C, text string) []yqlquery.Query {
 }
 
 func TestApply_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	db := &fakeDatabase{}
 
 	outcome := seeds.Apply(context.Background(), db.begin, classify,
@@ -116,7 +117,7 @@ func TestApply_HappyPath(t *testing.T) {
 // answered for a conflicting transaction, at a statement or at the commit,
 // runs the whole transaction again from its first statement.
 func TestApplyRunsAnAbortedTransactionAgain_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	db := &fakeDatabase{scripts: []script{{fail: 1, statement: errAborted}, {fail: -1, commit: errAborted}, {fail: -1}}}
 
 	outcome := seeds.Apply(context.Background(), db.begin, classify, split(c, "UPSERT INTO t (id) VALUES (1);"), seed(), moment)
@@ -132,7 +133,7 @@ func TestApplyRunsAnAbortedTransactionAgain_HappyPath(t *testing.T) {
 }
 
 func TestRecord_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	db := &fakeDatabase{}
 
 	outcome := seeds.Record(context.Background(), db.begin, classify, seed(), moment)
@@ -183,7 +184,7 @@ func TestApply_FailurePath(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			db := &fakeDatabase{scripts: test.scripts}
 
 			outcome := seeds.Apply(context.Background(), db.begin, classify, split(c, "UPSERT INTO t (id) VALUES (1);"), seed(), moment)
@@ -196,7 +197,7 @@ func TestApply_FailurePath(t *testing.T) {
 }
 
 func TestApplyStopsWhenTheBeginFails_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	begin := func(context.Context) (seeds.Tx, error) { return nil, context.Canceled }
 
 	outcome := seeds.Apply(context.Background(), begin, classify, split(c, "UPSERT INTO t (id) VALUES (1);"), seed(), moment)
@@ -213,7 +214,7 @@ func TestRefusal_HappyPath(t *testing.T) {
 		"DEFINE ACTION $a($v) AS UPSERT INTO t (id) VALUES ($v); END DEFINE;\nDO $a(1);\n",
 	} {
 		t.Run(text, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			offset, reason, refused := seeds.Refusal(text)
 
@@ -261,7 +262,7 @@ func TestRefusal_FailurePath(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			offset, reason, refused := seeds.Refusal(test.text)
 
@@ -289,7 +290,7 @@ func ledger() *native.DescribeTableResult {
 }
 
 func TestCheckLayout_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	reordered := ledger()
 	reordered.Columns[0], reordered.Columns[3] = reordered.Columns[3], reordered.Columns[0]
 
@@ -320,7 +321,7 @@ func TestCheckLayout_FailurePath(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			table := ledger()
 			test.change(table)
 
@@ -335,7 +336,7 @@ func TestCheckLayout_FailurePath(t *testing.T) {
 // host's tracker statement for YDB (internal/builtindialects), so a ledger
 // either engine created is the other's.
 func TestCreateStatementIsTheHostTracker(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	c.Assert(seeds.CreateStatement, qt.Equals, "CREATE TABLE IF NOT EXISTS `schema_seeds` (\n"+
 		"    seed_path Utf8 NOT NULL,\n    env Utf8 NOT NULL,\n    checksum Utf8 NOT NULL,\n"+

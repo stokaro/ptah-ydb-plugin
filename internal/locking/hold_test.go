@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination/options"
 	"sync"
@@ -40,7 +41,7 @@ func ownedDescription() *coordination.SemaphoreDescription {
 	return &coordination.SemaphoreDescription{Name: "lock", Ephemeral: true, Count: coordination.Exclusive, Limit: coordination.Exclusive, Owners: []*coordination.SemaphoreSession{{SessionID: 7, Count: coordination.Exclusive}}}
 }
 func TestHoldRejectsExpiredConfirmationBeforeRefresh(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	now := time.Now()
 	native := &fakeSession{description: ownedDescription()}
 	h := newHold(native, fakeLease{context.Background()}, "lock", now, func() time.Time { return now }, func(context.Context) error { return nil })
@@ -56,7 +57,7 @@ func TestHoldRejectsExpiredConfirmationBeforeRefresh(t *testing.T) {
 func TestHoldRequiresExactFreshExclusiveOwnership(t *testing.T) {
 	for _, name := range []string{"missing", "different owner", "shared", "durable", "wrong name", "query error", "stale reply", "expired lease", "node config"} {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			now := time.Now()
 			native := &fakeSession{description: ownedDescription()}
 			lease, cancel := context.WithCancel(context.Background())
@@ -97,7 +98,7 @@ func TestHoldRequiresExactFreshExclusiveOwnership(t *testing.T) {
 	}
 }
 func TestHoldCloseRetainsFailureAndClosesOnce(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	native := &fakeSession{description: ownedDescription(), closeErr: errors.New("lost reply")}
 	h := newHold(native, fakeLease{context.Background()}, "lock", time.Now(), time.Now, func(context.Context) error { return nil })
 	h.start()
@@ -114,7 +115,7 @@ func TestHoldCloseRetainsFailureAndClosesOnce(t *testing.T) {
 	c.Assert(h.Context().Err(), qt.ErrorIs, context.Canceled)
 }
 func TestWatchCancelsWorkWhenNativeLeaseEnds(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	lease, cancel := context.WithCancel(context.Background())
 	native := &fakeSession{description: ownedDescription()}
 	h := newHold(native, fakeLease{lease}, "lock", time.Now(), time.Now, func(context.Context) error { return nil })

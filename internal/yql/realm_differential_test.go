@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
 
@@ -29,12 +30,12 @@ func readGuardCorpus(c *qt.C) []guardRow {
 }
 
 func TestConfineToRealmAgreesWithHost(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := readGuardCorpus(c)
 	c.Assert(len(rows) >= 80, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
 	for _, row := range rows {
 		t.Run(row.Statement, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			err := yql.ConfineToRealm(row.Statement)
 

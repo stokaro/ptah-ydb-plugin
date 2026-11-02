@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 )
@@ -15,7 +16,7 @@ import (
 // the engine alone, and the statement facts of its lint, which the contract
 // lists beside the engine's lint.
 func TestDescriptionListsOneFeatureSet(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	description := backend.Description()
 
@@ -24,7 +25,7 @@ func TestDescriptionListsOneFeatureSet(t *testing.T) {
 }
 
 func TestDescriptionAdvertisesTheDevDatabaseService(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	description := backend.Description()
 
@@ -45,7 +46,7 @@ func TestDescriptionRequiresDatabaseContextContract(t *testing.T) {
 		{"later minor", 8, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			host := &protocol.ContractVersion{Major: provider.Revision, Minor: test.minor}
 			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.ErrorIs, test.want)
 		})
@@ -55,7 +56,7 @@ func TestDescriptionRequiresDatabaseContextContract(t *testing.T) {
 // TestDescriptionRefusesAnotherMajor_FailurePath is the control: the declared
 // minimum is a real version, not one every host meets.
 func TestDescriptionRefusesAnotherMajor_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	host := &protocol.ContractVersion{Major: provider.Revision - 1, Minor: provider.ContractMinor}
 
 	err := provider.CheckContract(host, provider.MinimumContract(backend.Description()))
@@ -66,7 +67,7 @@ func TestDescriptionRefusesAnotherMajor_FailurePath(t *testing.T) {
 func TestDescriptionRefusesHostsWithoutDatabaseContextContract(t *testing.T) {
 	for minor := range uint32(7) {
 		t.Run(fmt.Sprintf("%d.%d", provider.Revision, minor), func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			host := &protocol.ContractVersion{Major: provider.Revision, Minor: minor}
 			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.ErrorIs, provider.ErrProtocol)
 		})
@@ -76,7 +77,7 @@ func TestDescriptionRefusesHostsWithoutDatabaseContextContract(t *testing.T) {
 // Negotiating a recent contract alone does not opt a host into complete
 // column observations. Refuse before opening a database or returning a prefix.
 func TestInspectionRequiresObservedColumnsFeature(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	result, err := backend.New().Inspect(c.Context(), &protocol.InspectRequest{})
 	c.Assert(result, qt.IsNil)
 	c.Assert(err, qt.ErrorMatches, "rpc error: code = FailedPrecondition desc = YDB inspection requires schema.observed-columns")
