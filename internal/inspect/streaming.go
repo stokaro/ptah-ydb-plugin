@@ -102,21 +102,6 @@ func ReadStreamingInventory(ctx context.Context, database string, list func(cont
 	return result, nil
 }
 
-// ScopeStreamingInventory gives snapshot the streaming query coverage that
-// inventory, a read of every directory in the database, establishes. An
-// unscoped read takes the whole inventory. A scoped read takes it only when the
-// database holds no streaming query at all: absence everywhere is absence in
-// the selected directories too, and it lets a table change proceed that would
-// otherwise wait on queries the read could not see. A query elsewhere keeps the
-// scoped coverage, so a change to an input such a query might read is still
-// refused rather than planned past it.
-func ScopeStreamingInventory(snapshot, inventory *protocol.Schema, scoped bool) {
-	if scoped && (len(inventory.NativeObjects) != 0 || len(inventory.Coverage.Subjects) != 0) {
-		return
-	}
-	replaceStreamingInventory(snapshot, inventory)
-}
-
 func replaceStreamingInventory(snapshot, inventory *protocol.Schema) {
 	snapshot.NativeObjects = slices.DeleteFunc(snapshot.NativeObjects, func(value *protocol.Envelope) bool { return value.Kind == schema.StreamingQueryProperties })
 	snapshot.NativeObjects = append(snapshot.NativeObjects, inventory.NativeObjects...)
