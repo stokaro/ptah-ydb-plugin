@@ -29,6 +29,10 @@ func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, 
 		return schema.NormalizeWorkloadOperation(input)
 	case tablecreate.OperationKind:
 		return tablecreate.Normalize(input)
+	case tablecreate.InventoryOperationKind:
+		return tablecreate.NormalizeInventory(input)
+	case tablecreate.DefaultOperationKind:
+		return tablecreate.NormalizeDefault(input)
 	case tablecreate.AlterOperationKind:
 		return tablecreate.NormalizeAlteration(input)
 	case tablecreate.ColumnOperationKind:

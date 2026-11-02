@@ -93,8 +93,7 @@ func TestCreationProjectionDiscardsValidPrefix(t *testing.T) {
 	invalid.FacetOwners = []*protocol.ComparisonIdentity{proto.CloneOf(invalid.Subject)}
 	invalid.Declaration.Name = "invalid"
 	invalid.Declaration.Features.Facets.Records = nil
-	invalid.Declaration.Columns[0].DefaultSet = true
-	invalid.Declaration.Columns[0].DefaultValue = "2"
+	invalid.Declaration.Columns[0].DefaultExpression = "CurrentUtcTimestamp()"
 	request.Tables = append(request.Tables, invalid)
 	result, err := backend.New().ProjectTableCreations(c.Context(), request)
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)

@@ -118,7 +118,7 @@ func tableOperation(c *qt.C, declared *protocol.DeclaredTable, storage string) *
 		NormalizedOwner: proto.CloneOf(owner), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: facet.Payload}}
 	declared = proto.CloneOf(declared)
 	declared.Features = &protocol.CapturedFeatures{Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Records: []*protocol.ComparisonRecord{record}}}
-	operation, err := tablecreate.CaptureColumnTable("create", owner, declared)
+	operation, err := tablecreate.CaptureColumnTable("create", owner, declared, nil)
 	c.Assert(err, qt.IsNil)
 	return operation
 }

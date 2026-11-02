@@ -70,7 +70,7 @@ func TestCompileStartingLayout_HappyPath(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
-			request, err := tablecreate.Compile(owner(), layoutDeclaration(c, test.fields, test.columns...))
+			request, err := tablecreate.Compile(owner(), layoutDeclaration(c, test.fields, test.columns...), nil)
 			c.Assert(err, qt.IsNil)
 			encoded, err := protojson.Marshal(&Ydb_Table.CreateTableRequest{Partitions: request.Partitions})
 			c.Assert(err, qt.IsNil)
@@ -107,7 +107,7 @@ func TestCompileStartingLayout_FailurePath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
 			table := layoutDeclaration(c, test.fields, test.columns...)
-			request, err := tablecreate.Compile(owner(), table)
+			request, err := tablecreate.Compile(owner(), table, nil)
 			c.Assert(err, qt.ErrorMatches, test.message)
 			c.Assert(request, qt.IsNil)
 		})
@@ -131,7 +131,7 @@ func TestStartingLayout_ReachesTheCreationOperation(t *testing.T) {
 	c := qt.New(t)
 	table := layoutDeclaration(c, `"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`, key("id", "Uint64"))
 
-	captured, err := tablecreate.Capture("create", owner(), table)
+	captured, err := tablecreate.Capture("create", owner(), table, nil)
 
 	c.Assert(err, qt.IsNil)
 	request, err := tablecreate.Request(captured.Value)

@@ -74,7 +74,7 @@ func TestCompileColumnTable_HappyPath(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
-			created, err := tablecreate.CompileColumnTable(owner(), columnDeclaration(c, test.storage))
+			created, err := tablecreate.CompileColumnTable(owner(), columnDeclaration(c, test.storage), nil)
 			c.Assert(err, qt.IsNil)
 			encoded, err := protojson.Marshal(created)
 			c.Assert(err, qt.IsNil)
@@ -92,7 +92,7 @@ func TestCompileColumnTableWritesTheKeyNotNull(t *testing.T) {
 	table := columnDeclaration(c, `{}`)
 	table.Columns[0].Nullable, table.Columns[1].Nullable = true, true
 	declared := proto.CloneOf(table)
-	created, err := tablecreate.CompileColumnTable(owner(), table)
+	created, err := tablecreate.CompileColumnTable(owner(), table, nil)
 	c.Assert(err, qt.IsNil)
 	encoded, err := protojson.Marshal(created)
 	c.Assert(err, qt.IsNil)
@@ -140,7 +140,7 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 			c := qt.New(t)
 			table := columnDeclaration(c, test.storage)
 			test.modify(c, table)
-			created, err := tablecreate.CompileColumnTable(owner(), table)
+			created, err := tablecreate.CompileColumnTable(owner(), table, nil)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(created, qt.IsNil)
 		})
@@ -158,7 +158,7 @@ func TestColumnTableStatement(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := qt.New(t)
-			created, err := tablecreate.CompileColumnTable(owner(), columnDeclaration(c, test.storage))
+			created, err := tablecreate.CompileColumnTable(owner(), columnDeclaration(c, test.storage), nil)
 			c.Assert(err, qt.IsNil)
 			c.Assert(tablecreate.ColumnTableStatement("/local/app/records", created), qt.Equals, test.want)
 		})
@@ -172,7 +172,7 @@ func TestColumnTableStatement_EpochTTLAndQuoting(t *testing.T) {
 	table := columnDeclaration(c, `{"ttl":{"enabled":{"column":"n`+"`"+`s","columnUnit":"2","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`)
 	table.PrimaryKey = []string{"n`s", "id"}
 	table.Columns[0] = &protocol.DeclaredColumn{Name: "n`s", Type: "Uint64", Primary: true}
-	created, err := tablecreate.CompileColumnTable(owner(), table)
+	created, err := tablecreate.CompileColumnTable(owner(), table, nil)
 	c.Assert(err, qt.IsNil)
 	c.Assert(tablecreate.ColumnTableStatement(`/local/app\records`, created), qt.Equals, "CREATE TABLE `/local/app\\\\records` (\n    `n\\`s` Uint64 NOT NULL,\n"+
 		"    `id` Uint64 NOT NULL,\n    `count` Uint64,\n    `body` Utf8,\n    PRIMARY KEY (`n\\`s`, `id`)\n) WITH (STORE = COLUMN, TTL = Interval(\"PT60S\") DELETE ON `n\\`s` AS MILLISECONDS);")

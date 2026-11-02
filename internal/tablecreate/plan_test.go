@@ -142,7 +142,7 @@ func TestCreationOperationRefusesSessionAndPathInjection(t *testing.T) {
 	} {
 		t.Run(payload, func(t *testing.T) {
 			c := qt.New(t)
-			value, err := tablecreate.Capture("operation", owner(), declaration())
+			value, err := tablecreate.Capture("operation", owner(), declaration(), nil)
 			c.Assert(err, qt.IsNil)
 			value.Value.Payload = []byte(payload)
 			normalized, err := tablecreate.Normalize(&protocol.ValueInput{Id: "operation", Representation: protocol.ValueInput_OPERATION, Value: value.Value})

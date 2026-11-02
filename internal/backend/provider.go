@@ -86,7 +86,44 @@ type session struct {
 
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
-	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.SchemaDeclarationsFeature, provider.SensitiveInputsFeature, provider.ScopeSelectionsFeature, provider.StatementsFeature, provider.ValidateSchemaFeature, provider.ProjectTableCreationsFeature, provider.PrepareTablesFeature, provider.PlanFeaturesFeature, provider.RenderFeature, provider.CompareModelsFeature, provider.DecodeSourceFeature, provider.InspectFeature, provider.NormalizeValuesFeature, provider.ConvertValuesFeature, provider.ExecuteFeature, provider.TransactionsFeature, provider.HistoryFeature, provider.LocksFeature, provider.MetadataFeature, provider.AnalyzeSQLFeature, provider.DevDatabaseFeature, provider.LintFeature, provider.TypeRowsFeature, provider.ReadRowsFeature, provider.RenderRowWritesFeature, provider.SeedsFeature, provider.DevCleanupFeature, provider.ReplayGuardFeature, provider.StatementTimeoutFeature, provider.EmbeddingStoreFeature, provider.ReadSQLSchemaFeature, provider.TextUnitsFeature, provider.PlanningPolicyFeature, provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature, provider.EntryKeysFeature, provider.HCLSourceFeature, provider.EncodeSourceFeature}
+	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
+		provider.ScopeSelectionsFeature,
+		provider.StatementsFeature,
+		provider.ValidateSchemaFeature,
+		provider.ProjectTableCreationsFeature,
+		provider.PrepareTablesFeature,
+		provider.PlanFeaturesFeature,
+		provider.RenderFeature,
+		provider.CompareModelsFeature,
+		provider.DecodeSourceFeature,
+		provider.InspectFeature,
+		provider.NormalizeValuesFeature,
+		provider.ConvertValuesFeature,
+		provider.ExecuteFeature,
+		provider.TransactionsFeature,
+		provider.HistoryFeature,
+		provider.LocksFeature,
+		provider.MetadataFeature,
+		provider.AnalyzeSQLFeature,
+		provider.DevDatabaseFeature,
+		provider.LintFeature,
+		provider.TypeRowsFeature,
+		provider.ReadRowsFeature,
+		provider.RenderRowWritesFeature,
+		provider.SeedsFeature,
+		provider.DevCleanupFeature,
+		provider.ReplayGuardFeature,
+		provider.StatementTimeoutFeature,
+		provider.EmbeddingStoreFeature,
+		provider.ReadSQLSchemaFeature,
+		provider.TextUnitsFeature,
+		provider.PlanningPolicyFeature,
+		provider.CommonObjectsFeature,
+		provider.CommonAccessFeature,
+		provider.PlanningLifecycleFeature,
+		provider.EntryKeysFeature,
+		provider.HCLSourceFeature,
+		provider.EncodeSourceFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -136,7 +173,10 @@ func negotiatedFeatures(ctx context.Context) []string {
 // which 25.4 and later take and 25.1 to 25.3 read as a missing name
 // (`PASSWORD_SECRET_NAME requires key`).
 func sessionCapabilities(version string) map[string]bool {
-	return map[string]bool{"transactional_ddl": false, "secrets": releaseline.AtLeast(version, 25, 4), "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+	return map[string]bool{"wide_date_time_types": releaseline.AtLeast(version, 25, 2), "parameterized_decimal": releaseline.AtLeast(version, 25, 2),
+		"alter_column_default":   releaseline.AtLeast(version, 26, 2),
+		"small_integer_defaults": releaseline.AtLeast(version, 25, 2), "document_type_defaults": releaseline.AtLeast(version, 25, 3),
+		"transactional_ddl": false, "secrets": releaseline.AtLeast(version, 25, 4), "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true,
 		"relative_grant_paths": releaseline.AtLeast(version, 26, 1), "topics": true, "topic_consumer_availability_period": releaseline.AtLeast(version, 25, 4), workload.CapabilityResourcePools: false, streaming.Capability: false,
 		changefeeds.CapabilityChangefeeds: true, changefeeds.CapabilityUserSIDs: releaseline.AtLeast(version, 26, 1),
@@ -183,7 +223,7 @@ func Description() *protocol.Description {
 		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: "0.0.0-dev", SemanticIdentity: "ydb-table-lifecycle-2",
 		Features: providerFeatures(),
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel(), tablecreate.DropModel(), tablecreate.CopyModel(), tablecreate.RenameModel(), declarationplan.Model()), Declarations: []*protocol.ModelDeclarations{{Id: declarationplan.ServiceID, Kinds: declarationplan.Kinds(), OperationKinds: []string{declarationplan.OperationKind}}}, Planning: []*protocol.ModelPlanning{{Id: secretplan.ServiceID, ChangeKinds: []string{schema.SecretChange}, OperationKinds: []string{schema.SecretOperation}}, {Id: streamingplan.ServiceID, ChangeKinds: []string{schema.StreamingQueryChange}, OperationKinds: []string{schema.StreamingQueryOperation}}, {Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: topicplan.ServiceID, ChangeKinds: []string{schema.TopicChange}, OperationKinds: []string{schema.TopicOperation}}, {Id: externalplan.ServiceID, ChangeKinds: externalplan.ChangeKinds(), OperationKinds: externalplan.OperationKinds()}, {Id: workloadplan.ServiceID, ChangeKinds: workloadplan.ChangeKinds(), OperationKinds: []string{schema.WorkloadOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind, tablecreate.DropOperationKind, tablecreate.CopyOperationKind, tablecreate.RenameOperationKind, schema.ChangefeedOperation}}}, Comparisons: []*protocol.ModelComparison{{Id: secretcompare.ServiceID, Actions: []string{"rotate"}, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.SecretProperties}, ChangeKinds: []string{schema.SecretChange}}, {Id: streamingcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.StreamingQueryProperties}, ChangeKinds: []string{schema.StreamingQueryChange}}, {Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: topiccompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.TopicProperties}, ChangeKinds: []string{schema.TopicChange}}, {Id: externalcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: externalcompare.Kinds(), ChangeKinds: externalcompare.ChangeKinds()}, {Id: workloadcompare.PoolServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolProperties}, ChangeKinds: []string{schema.ResourcePoolChange}}, {Id: workloadcompare.ClassifierServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolClassifierProperties}, ChangeKinds: []string{schema.ResourcePoolClassifierChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: slices.Concat([]*protocol.YAMLSourceKey{secretsource.YAMLKey(), schema.CoordinationYAMLKey(), streamingsource.YAMLKey(), topicsource.YAMLKey(), changefeedsource.YAMLKey()}, externalsource.YAMLKeys(), tablesource.YAMLKeys(), tablesource.IndexYAMLKeys(), workloadsource.YAMLKeys()), GoSourceDirectives: slices.Concat(streamingsource.GoDirectives(), tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{secretsource.GoDirective(), schema.CoordinationGoDirective()}, topicsource.GoDirectives(), externalsource.GoDirectives(), workloadsource.GoDirectives()), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), SqlSchema: sqlSchemaDeclaration(), Features: engineFeatures(), Embeddings: &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes}, CommonObjects: commonobject.Support(), ScopeSelections: scopeSelections(), HclSource: &protocol.HCLSourceDeclaration{Blocks: []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock()}, HeaderKinds: []string{"coordination_node"}}}},
+		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.DefaultModel(), tablecreate.InventoryModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel(), tablecreate.DropModel(), tablecreate.CopyModel(), tablecreate.RenameModel(), declarationplan.Model()), Declarations: []*protocol.ModelDeclarations{{Id: declarationplan.ServiceID, Kinds: declarationplan.Kinds(), OperationKinds: []string{declarationplan.OperationKind}}}, Planning: []*protocol.ModelPlanning{{Id: secretplan.ServiceID, ChangeKinds: []string{schema.SecretChange}, OperationKinds: []string{schema.SecretOperation}}, {Id: streamingplan.ServiceID, ChangeKinds: []string{schema.StreamingQueryChange}, OperationKinds: []string{schema.StreamingQueryOperation}}, {Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: topicplan.ServiceID, ChangeKinds: []string{schema.TopicChange}, OperationKinds: []string{schema.TopicOperation}}, {Id: externalplan.ServiceID, ChangeKinds: externalplan.ChangeKinds(), OperationKinds: externalplan.OperationKinds()}, {Id: workloadplan.ServiceID, ChangeKinds: workloadplan.ChangeKinds(), OperationKinds: []string{schema.WorkloadOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.DefaultOperationKind, tablecreate.InventoryOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind, tablecreate.DropOperationKind, tablecreate.CopyOperationKind, tablecreate.RenameOperationKind, schema.ChangefeedOperation}}}, Comparisons: []*protocol.ModelComparison{{Id: secretcompare.ServiceID, Actions: []string{"rotate"}, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.SecretProperties}, ChangeKinds: []string{schema.SecretChange}}, {Id: streamingcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.StreamingQueryProperties}, ChangeKinds: []string{schema.StreamingQueryChange}}, {Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: topiccompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.TopicProperties}, ChangeKinds: []string{schema.TopicChange}}, {Id: externalcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: externalcompare.Kinds(), ChangeKinds: externalcompare.ChangeKinds()}, {Id: workloadcompare.PoolServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolProperties}, ChangeKinds: []string{schema.ResourcePoolChange}}, {Id: workloadcompare.ClassifierServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolClassifierProperties}, ChangeKinds: []string{schema.ResourcePoolClassifierChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: slices.Concat([]*protocol.YAMLSourceKey{secretsource.YAMLKey(), schema.CoordinationYAMLKey(), streamingsource.YAMLKey(), topicsource.YAMLKey(), changefeedsource.YAMLKey()}, externalsource.YAMLKeys(), tablesource.YAMLKeys(), tablesource.IndexYAMLKeys(), workloadsource.YAMLKeys()), GoSourceDirectives: slices.Concat(streamingsource.GoDirectives(), tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{secretsource.GoDirective(), schema.CoordinationGoDirective()}, topicsource.GoDirectives(), externalsource.GoDirectives(), workloadsource.GoDirectives()), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), SqlSchema: sqlSchemaDeclaration(), Features: engineFeatures(), Embeddings: &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes}, CommonObjects: commonobject.Support(), ScopeSelections: scopeSelections(), HclSource: &protocol.HCLSourceDeclaration{Blocks: []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock()}, HeaderKinds: []string{"coordination_node"}}}},
 	}
 }
 

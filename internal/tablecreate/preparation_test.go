@@ -49,8 +49,7 @@ func TestPrepareNativeTableRefusesWholeBatch(t *testing.T) {
 	invalid.Subject.Name = part("invalid")
 	invalid.Desired.Name = "invalid"
 	invalid.Desired.Features.Facets.Records = nil
-	invalid.Desired.Columns[0].DefaultSet = true
-	invalid.Desired.Columns[0].DefaultValue = "2"
+	invalid.Desired.Columns[0].DefaultExpression = "CurrentUtcTimestamp()"
 	request.Tables = append(request.Tables, invalid)
 	result, err := backend.New().PrepareTables(c.Context(), request)
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)

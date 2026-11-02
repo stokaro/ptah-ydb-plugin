@@ -104,7 +104,7 @@ func TestValidateSchema_Diagnostics(t *testing.T) {
 			protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "hollow", `YDB table creation requires columns`},
 		{"unknown type", func() *protocol.ValidateSchemaRequest {
 			return newRequest(table("", "typed", column("id", "Uint64", true), column("b", "Wibble", false)))
-		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "typed", `unsupported YDB storage column type`},
+		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "typed", `Wibble has no YDB counterpart: YDB has no type of that name`},
 		{"key names no column", func() *protocol.ValidateSchemaRequest {
 			misdirected := keyed("", "misdirected")
 			misdirected.Declaration.PrimaryKey = []string{"nope"}

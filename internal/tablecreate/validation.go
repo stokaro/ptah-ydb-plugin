@@ -33,16 +33,16 @@ func ValidateIdentifiers(facts *protocol.ComparisonIdentifiers) error {
 // ValidateDeclaration checks one captured row-table declaration against the
 // rules CREATE compiles with, without the policy that only creation needs.
 // It reads the declaration and opens nothing.
-func ValidateDeclaration(subject *protocol.ComparisonIdentity, table *protocol.DeclaredTable) error {
+func ValidateDeclaration(subject *protocol.ComparisonIdentity, table *protocol.DeclaredTable, caps map[string]bool) error {
 	owner, err := boundOwner(subject)
 	if err != nil {
 		return err
 	}
 	if IsColumnTable(table) {
-		_, err = CompileColumnTable(owner, table)
+		_, err = CompileColumnTable(owner, table, caps)
 		return err
 	}
-	_, err = compile(owner, table, false)
+	_, _, err = compile(owner, table, caps)
 	return err
 }
 
