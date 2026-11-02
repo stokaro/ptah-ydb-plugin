@@ -4,25 +4,42 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
+// dependencyWrites reports whether the plan writes an object a streaming
+// query may read. A creation writes none: no query reads an object the
+// database does not hold yet, so creating one needs no inventory of the
+// queries. A replacement drops the object first, and an alteration changes
+// one the database holds; both count.
 func dependencyWrites(request, paths *protocol.PlanFeaturesRequest) bool {
 	for _, subject := range request.ChangedSubjects {
-		if localContextSubject(request, subject) && (queryInputKind(subject.Kind) || subject.Kind == schema.ResourcePoolProperties) {
+		if localContextSubject(request, subject) && (queryInputKind(subject.Kind) || subject.Kind == schema.ResourcePoolProperties) && !created(request, subject) {
 			return true
 		}
 	}
 	for _, common := range paths.CommonSteps {
 		for _, effect := range common.GetMetadata().GetEffects() {
-			if effect.Action != protocol.PlanningEffect_READ && localContextSubject(request, effect.Subject) && (queryInputKind(effect.Subject.Kind) || effect.Subject.Kind == objectplan.PathKind || effect.Subject.Kind == schema.ResourcePoolProperties) {
+			if effect.Action != protocol.PlanningEffect_READ && effect.Action != protocol.PlanningEffect_CREATE && localContextSubject(request, effect.Subject) &&
+				(queryInputKind(effect.Subject.Kind) || effect.Subject.Kind == objectplan.PathKind || effect.Subject.Kind == schema.ResourcePoolProperties) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// created reports a changed object the read established absent: it has no
+// observed record, and the read covered its name completely.
+func created(request *protocol.PlanFeaturesRequest, subject *protocol.ComparisonIdentity) bool {
+	if contextRecord(request.CurrentObjects, subject) != nil {
+		return false
+	}
+	known := objectcompare.Knowledge(request.CurrentObjects.GetCoverage(), subject.Kind, subject, request.DatabasePath)
+	return known.GetState() == protocol.ModelKnowledge_COMPLETE || known.GetState() == protocol.ModelKnowledge_ABSENT
 }
 
 // An unknown query in another directory can still read a changed input.

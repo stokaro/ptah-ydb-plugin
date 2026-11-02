@@ -241,14 +241,20 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		}
 	}
 	// Complete streaming dependency assessment needs queries in every user
-	// directory, including dot-prefixed paths. Excluded realms and explicit
-	// selectors retain the narrower coverage captured above.
-	if len(selectors) == 0 && !skippedRealm {
+	// directory, including dot-prefixed paths. Explicit selectors retain the
+	// narrower coverage captured above: a filtered read may claim nothing
+	// outside them. A read that left out dev realms takes the inventory unless
+	// a query lives in one of them; see RealmStreamingInventory.
+	if len(selectors) == 0 {
 		inventory, err := ReadStreamingInventory(ctx, database, source.directory, queries)
-		if err != nil {
+		switch {
+		case err != nil && (!skippedRealm || ctx.Err() != nil):
 			return nil, err
+		case err == nil && !skippedRealm:
+			replaceStreamingInventory(result, inventory)
+		case err == nil:
+			RealmStreamingInventory(result, inventory, leaveOut)
 		}
-		replaceStreamingInventory(result, inventory)
 	}
 	slices.SortFunc(result.Tables, func(a, b *protocol.Table) int {
 		if compared := strings.Compare(a.Identity.Schema, b.Identity.Schema); compared != 0 {

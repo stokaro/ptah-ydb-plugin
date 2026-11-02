@@ -102,6 +102,23 @@ func ReadStreamingInventory(ctx context.Context, database string, list func(cont
 	return result, nil
 }
 
+// RealmStreamingInventory gives a read that left out the dev realm
+// directories realms the streaming query coverage that inventory, a read of
+// every directory in the database, establishes, when no query lives in a
+// realm. Absence there is what lets a query the read left out be no input
+// reader, so a change to an input proceeds. A query in a realm keeps the
+// narrower coverage, and a change to an input it might read is refused.
+func RealmStreamingInventory(snapshot, inventory *protocol.Schema, realms []string) {
+	inRealm := func(directory string) bool {
+		return slices.ContainsFunc(realms, func(realm string) bool { return directory == realm || strings.HasPrefix(directory, realm+"/") })
+	}
+	if slices.ContainsFunc(inventory.NativeObjects, func(value *protocol.Envelope) bool { return inRealm(value.GetOwner().GetSchema()) }) ||
+		slices.ContainsFunc(inventory.Coverage.GetSubjects(), func(value *protocol.ModelSubjectCoverage) bool { return inRealm(value.GetSubject().GetSchema()) }) {
+		return
+	}
+	replaceStreamingInventory(snapshot, inventory)
+}
+
 func replaceStreamingInventory(snapshot, inventory *protocol.Schema) {
 	snapshot.NativeObjects = slices.DeleteFunc(snapshot.NativeObjects, func(value *protocol.Envelope) bool { return value.Kind == schema.StreamingQueryProperties })
 	snapshot.NativeObjects = append(snapshot.NativeObjects, inventory.NativeObjects...)

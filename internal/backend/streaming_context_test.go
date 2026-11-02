@@ -307,3 +307,28 @@ func TestStreamingContextRequiresCompleteUnnamedInventoryForWrites(t *testing.T)
 		})
 	}
 }
+
+// Creating an object needs no inventory of the streaming queries, since no
+// query reads an object the database does not hold yet. Dropping one does.
+func TestStreamingContextCreationNeedsNoInventory(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		action      protocol.PlanningEffect_Action
+		diagnostics int
+	}{{"a table creation", protocol.PlanningEffect_CREATE, 0}, {"a table removal", protocol.PlanningEffect_DROP, 1}} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := unchangedStreamingRequest(c, nil)
+			request.CurrentObjects.Records = request.CurrentObjects.Records[1:]
+			request.DesiredObjects.Records = request.DesiredObjects.Records[1:]
+			request.CurrentObjects.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
+			request.ChangedSubjects = nil
+			table := &protocol.ComparisonIdentity{Kind: "table", Schema: testcomparison.Part("app"), Name: testcomparison.Part("fresh")}
+			request.CommonSteps = []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "change-table"},
+				Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Change a table", Effects: []*protocol.PlanningEffect{{Subject: table, Action: test.action}}}}}
+			result, err := backend.New().PlanFeatures(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Diagnostics, qt.HasLen, test.diagnostics)
+		})
+	}
+}

@@ -121,3 +121,46 @@ func TestStreamingInventoryStopsAfterCancellation(t *testing.T) {
 	c.Assert(result, qt.IsNil)
 	c.Assert(calls, qt.Equals, 1)
 }
+
+func realmInventory(c *qt.C, queries ...string) *protocol.Schema {
+	c.Helper()
+	tree := map[string]*Ydb_Scheme.ListDirectoryResult{
+		"/local":                directory("/local", &Ydb_Scheme.Entry{Name: "app", Type: Ydb_Scheme.Entry_DIRECTORY}, &Ydb_Scheme.Entry{Name: "ptah_dev", Type: Ydb_Scheme.Entry_DIRECTORY}),
+		"/local/app":            directory("/local/app"),
+		"/local/ptah_dev":       directory("/local/ptah_dev", &Ydb_Scheme.Entry{Name: "realm", Type: Ydb_Scheme.Entry_DIRECTORY}),
+		"/local/ptah_dev/realm": directory("/local/ptah_dev/realm"),
+	}
+	for _, query := range queries {
+		parent := path.Dir(query)
+		tree[parent].Children = append(tree[parent].Children, &Ydb_Scheme.Entry{Name: path.Base(query), Type: queryEntry})
+	}
+	inventory, err := inspect.ReadStreamingInventory(c.Context(), "/local", func(_ context.Context, absolute string) (*Ydb_Scheme.ListDirectoryResult, error) {
+		return tree[absolute], nil
+	}, func(context.Context, string) (*streaming.Spec, error) {
+		return &streaming.Spec{Text: "SELECT 1;"}, nil
+	})
+	c.Assert(err, qt.IsNil)
+	return inventory
+}
+
+// A read that left out a dev realm takes the database-wide inventory when no
+// query lives in the realm, and keeps its narrower coverage when one does.
+func TestRealmStreamingInventory(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		queries []string
+		taken   bool
+	}{
+		{"no query anywhere", nil, true},
+		{"a query outside the realm", []string{"/local/app/copy"}, true},
+		{"a query inside the realm", []string{"/local/ptah_dev/realm/copy"}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			inventory := realmInventory(c, test.queries...)
+			snapshot := &protocol.Schema{Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}}
+			inspect.RealmStreamingInventory(snapshot, inventory, []string{"ptah_dev"})
+			c.Assert(len(snapshot.Coverage.Kinds) == 1, qt.Equals, test.taken)
+		})
+	}
+}
