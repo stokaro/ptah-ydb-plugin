@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"path"
+	"slices"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -124,8 +125,9 @@ func TestAlteredHistoryRefusesInspectionBeforeChildProjection(t *testing.T) {
 	c.Assert(owned, qt.IsFalse)
 }
 
-// A repeated create returns SUCCESS, so a creation receipt cannot authorize
-// claiming an entire coordination node as provider-owned operational storage.
+// A repeated create returns SUCCESS, so a creation receipt does not show that
+// the node is one the provider made. The lock service checks the settings of
+// the node it finds instead.
 func TestLockNodeCreateSuccessDoesNotProveOwnership(t *testing.T) {
 	c := testcheck.New(t)
 	opened, _, database := lockFixture(c)
@@ -143,7 +145,10 @@ func TestLockNodeCreateSuccessDoesNotProveOwnership(t *testing.T) {
 	c.Assert(second.GetOperation().GetStatus(), qt.Equals, Ydb.StatusIds_SUCCESS)
 }
 
-func TestLockNodeRemainsInManagedObservations(t *testing.T) {
+// The lock node at the root is reserved operational storage: a read reports
+// its name as taken and describes no node there, so an export of the read
+// declares nothing the declarations refuse.
+func TestLockNodeIsReservedOperationalStorage(t *testing.T) {
 	c := testcheck.New(t)
 	_, _, database := lockFixture(c)
 	binary, digest := providerBinary(c)
@@ -151,11 +156,14 @@ func TestLockNodeRemainsInManagedObservations(t *testing.T) {
 	acquireNativeLock(c, client, nativeLockRequest(id, "held", "migration"))
 	snapshot, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: id, Schemas: []string{"/"}})
 	c.Assert(err, qt.IsNil)
-	c.Assert(snapshot.ReservedObjects, qt.HasLen, 0)
-	c.Assert(snapshot.NativeObjects, qt.HasLen, 1)
-	c.Assert(snapshot.NativeObjects[0].Owner.Name, qt.Equals, locking.NodeName)
-	c.Assert(snapshot.NativeObjects[0].Owner.Database, qt.Equals, database)
-	c.Assert(snapshot.NativeObjects[0].Kind, qt.Equals, schema.CoordinationProperties)
+	// Other objects may sit at the root of a shared server; none of them is
+	// the lock node.
+	c.Assert(slices.ContainsFunc(snapshot.NativeObjects, func(value *protocol.Envelope) bool { return value.GetOwner().GetName() == locking.NodeName }), qt.IsFalse)
+	c.Assert(snapshot.ReservedObjects, qt.HasLen, 1)
+	c.Assert(snapshot.ReservedObjects[0].Purpose, qt.Equals, protocol.ReservedObject_LOCK)
+	c.Assert(snapshot.ReservedObjects[0].Object.Name, qt.Equals, locking.NodeName)
+	c.Assert(snapshot.ReservedObjects[0].Object.Database, qt.Equals, database)
+	c.Assert(snapshot.ReservedObjects[0].Object.Kind, qt.Equals, schema.CoordinationProperties)
 	inputs, err := provider.InspectionValues(client.Description(), &protocol.InspectRequest{SessionId: id, Schemas: []string{"/"}}, snapshot)
 	c.Assert(err, qt.IsNil)
 	t.Run("host export", func(t *testing.T) { assertHostSchemaExport(t, client, binary, digest, []string{"/"}, inputs) })

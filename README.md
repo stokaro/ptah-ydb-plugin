@@ -642,13 +642,15 @@ directory completeness at these occupied names, so omission does not assert
 absence. Filtered reads return reservations only from the exact directories
 they inspect. Names or layout alone never establish ownership.
 
-Coordination nodes remain managed observations. YDB returns SUCCESS for repeated
-native CreateNode requests, so a successful create cannot prove that this
-provider created the node. Installing an ownership marker based on that result
-could claim a concurrently created foreign node. Lock-node ownership and
-reservation need a separate initialization contract and remain pending. No
-node is hidden or reserved merely because it is named `ptah_locks` or has
-strict consistency settings.
+The coordination node `ptah_locks` at the root of the session's database is
+reserved with purpose LOCK by its name alone. The lock service takes whatever
+node it finds at that path, after checking its consistency settings, so the
+name is the reservation; YDB returns SUCCESS for a repeated CreateNode, so no
+creation receipt could prove more. A read reports the name as taken and
+describes no node there, so `db read` and an export leave it out, as the host's
+embedded engine does. A reservation never changes or drops the node. Every
+other coordination node, one named `ptah_locks` in a directory included, is a
+managed observation.
 
 Operational storage reservations support host collision and reference guards. They do not
 establish native directory-cascade safety; containment qualification remains
@@ -1087,13 +1089,11 @@ cannot promise inherited permissions or apply grants.
 The comparison refuses contradictory identities, forged normalization receipts,
 and collisions with declared relations. Required nodes are not removed.
 Exclusions for this model match exact relative paths such as `app/workers`,
-without case folding or trimming. The comparison leaves the database-root
-`ptah_locks` node out, as the host's embedded engine leaves it out of every
-read: it plans no removal of it and reports nothing about it. A declaration at
-that path is the one case it reports, as undecided. Offline conversion and host
-schema export retain this observation, including its configuration and access
-metadata. Export does not authorize management: YAML and Go declarations and
-change normalization still reject this root path.
+without case folding or trimming. Inspection reserves the database-root
+`ptah_locks` node (see the reservations above), and the comparison leaves that
+path out too: it plans no removal and reports nothing about it. A declaration
+at that path is the one case it reports, as undecided; YAML and Go declarations
+and change normalization reject it.
 This changes the desired model definition; pre-v1, no compatibility with the
 earlier experimental definition is owed.
 

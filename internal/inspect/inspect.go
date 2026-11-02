@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -202,7 +203,17 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				}
 				result.NativeObjects = append(result.NativeObjects, value)
 				observe(result, []*protocol.Envelope{value})
-			case Ydb_Scheme.Entry_SECRET, Ydb_Scheme.Entry_VIEW, Ydb_Scheme.Entry_COORDINATION_NODE, Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE, Ydb_Scheme.Entry_EXTERNAL_TABLE:
+			case Ydb_Scheme.Entry_COORDINATION_NODE:
+				if selected == "" && name == locking.NodeName {
+					// The lock service takes the node at the root of the
+					// session's database by its name, so the name is the
+					// reservation. Read as a managed node, it would be
+					// exported into a source that declarations then refuse.
+					reserve(result, &protocol.Reference{Engine: "ydb", Database: database, Kind: schema.CoordinationProperties, Name: name}, protocol.ReservedObject_LOCK)
+					break
+				}
+				fallthrough
+			case Ydb_Scheme.Entry_SECRET, Ydb_Scheme.Entry_VIEW, Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE, Ydb_Scheme.Entry_EXTERNAL_TABLE:
 				kind, described, err := source.readObject(ctx, path.Join(database, selected, name), entry.GetType())
 				if err != nil {
 					return nil, err
