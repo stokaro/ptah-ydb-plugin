@@ -23,7 +23,7 @@ func convertProperties(c *qt.C, client *providerruntime.Client, request *protoco
 	defer cancel()
 	observed, err := client.NormalizeValues(ctx, request)
 	c.Assert(err, qt.IsNil)
-	conversion := &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_OBSERVED, To: protocol.ValueInput_DESIRED, Values: observed.Values}
+	conversion := &protocol.ConvertValuesRequest{Engine: "ydb", TargetFeatures: request.TargetFeatures, From: protocol.ValueInput_OBSERVED, To: protocol.ValueInput_DESIRED, Values: observed.Values}
 	desired, err := client.ConvertValues(ctx, conversion)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidateConvertedValues(client.Description(), conversion, desired), qt.IsNil)
@@ -32,7 +32,7 @@ func convertProperties(c *qt.C, client *providerruntime.Client, request *protoco
 		definitions := map[string]string{schema.ColumnProperties: schema.ColumnDesiredModel().DefinitionSha256, schema.TableProperties: schema.TableDesiredModel().DefinitionSha256}
 		c.Assert(value.Value.DefinitionSha256, qt.Equals, definitions[value.Value.Kind])
 	}
-	back, err := client.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_DESIRED, To: protocol.ValueInput_OBSERVED, Values: desired.Values})
+	back, err := client.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", TargetFeatures: request.TargetFeatures, From: protocol.ValueInput_DESIRED, To: protocol.ValueInput_OBSERVED, Values: desired.Values})
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(observed, back), qt.IsTrue)
 }

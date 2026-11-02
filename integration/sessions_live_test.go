@@ -40,13 +40,22 @@ func providerBinary(c *qt.C) (string, string) {
 	return binary, hex.EncodeToString(digest[:])
 }
 
+// hostFeatures are the features the test host negotiates. A host names them
+// on every request too, and a request that carries a value a session read has
+// to: once value context is negotiated, inspection binds each value to the
+// database it was read in, and the SDK refuses a value whose context the
+// request's target features do not name.
+func hostFeatures() []string {
+	return []string{provider.ObservedColumnsFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature}
+}
+
 func startProvider(c *qt.C, binary, digest string) *providerruntime.Client {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	client, err := providerruntime.Start(ctx, providerruntime.Options{
 		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin",
-		HostFeatures: []string{provider.ObservedColumnsFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature},
+		HostFeatures: hostFeatures(),
 	})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(client.Close)

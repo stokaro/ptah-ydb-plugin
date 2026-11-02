@@ -148,7 +148,7 @@ func (h *externalHarness) plan(location string, columns ...string) []*protocol.U
 	rules := proto.CloneOf(client.Description().Engines[0].Identifiers)
 	snapshot, err := client.Inspect(ctx, &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{h.directory}})
 	c.Assert(err, qt.IsNil)
-	request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: externalcompare.ServiceID, Kinds: externalcompare.Kinds(), Capabilities: session.Capabilities,
+	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), ComparisonId: externalcompare.ServiceID, Kinds: externalcompare.Kinds(), Capabilities: session.Capabilities,
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}, Desired: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 		Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedCoverage(snapshot.Coverage, externalcompare.Kinds()...)}}
 	for _, kind := range externalcompare.Kinds() {
@@ -178,7 +178,7 @@ func (h *externalHarness) plan(location string, columns ...string) []*protocol.U
 		if !slices.Contains(externalcompare.Kinds(), value.Kind) {
 			continue
 		}
-		normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "read-" + strconv.Itoa(i), Representation: protocol.ValueInput_OBSERVED, Value: value}}})
+		normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: hostFeatures(), Values: []*protocol.ValueInput{{Id: "read-" + strconv.Itoa(i), Representation: protocol.ValueInput_OBSERVED, Value: value}}})
 		c.Assert(err, qt.IsNil)
 		request.Current.Records = append(request.Current.Records, &protocol.ComparisonRecord{Kind: value.Kind, Subject: testplanning.Subject(value.Owner), Value: normalized.Values[0]})
 	}
@@ -188,7 +188,7 @@ func (h *externalHarness) plan(location string, columns ...string) []*protocol.U
 	if len(compared.Changes) == 0 {
 		return nil
 	}
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: externalplan.ServiceID, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}}
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: hostFeatures(), PlanningId: externalplan.ServiceID, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}}
 	for _, change := range compared.Changes {
 		planning.Changes = append(planning.Changes, &protocol.PlanningChange{Subject: change.Subject, Value: change.Value})
 	}

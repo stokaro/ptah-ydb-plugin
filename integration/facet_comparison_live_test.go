@@ -138,7 +138,7 @@ func (f *facetFixture) compareRecords(c *qt.C, desired ...*protocol.ComparisonRe
 		key := record.Subject.Kind + "/" + record.Subject.Name.Normalized
 		held[key] = sides{subject: record.Subject, desired: held[key].desired, current: true}
 	}
-	request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
+	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Desired:     f.desiredFacets(desired), Current: facetState(protocol.ValueInput_OBSERVED, current)}
 	// The table is declared whether or not its source states a facet for it.
@@ -174,7 +174,7 @@ func (f *facetFixture) plan(c *qt.C, changes []*protocol.ComparedChange, records
 			Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 			Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: f.desiredFacets(nil).Coverage,
 				Records: records}}}
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: hostFeatures(), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: f.database,
 		Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)}, CommonSteps: f.steps,
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(f.owner), Action: protocol.PlanningTable_ALTER, Desired: desired,
 			Current: observedTable(c, f.client, f.session, f.directory)}}}
