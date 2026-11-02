@@ -32,7 +32,7 @@ func TestTableConversionPreservesConfigurationAndAccessRequirements(t *testing.T
 	observed, err := schema.CaptureTable(tableOwner(), original)
 	c.Assert(err, qt.IsNil)
 	before := proto.CloneOf(observed)
-	desired, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	desired, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED, false)
 	c.Assert(err, qt.IsNil)
 	c.Assert(desired.DefinitionSha256, qt.Equals, schema.TableDesiredModel().DefinitionSha256)
 	var intent native.RowTableIntent
@@ -46,7 +46,7 @@ func TestTableConversionPreservesConfigurationAndAccessRequirements(t *testing.T
 	c.Assert(intent.ColumnFamilies[0].Name, qt.Equals, "cold")
 	c.Assert(intent.ColumnFamilies[1].Name, qt.Equals, "default")
 	c.Assert(intent.Attributes, qt.DeepEquals, original.Attributes)
-	back, err := schema.ConvertTable(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+	back, err := schema.ConvertTable(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED, false)
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(back, observed), qt.IsTrue)
 	c.Assert(proto.Equal(observed, before), qt.IsTrue)
@@ -65,9 +65,9 @@ func TestTableConversionKeepsNativeDefaultsAndEpochTTL(t *testing.T) {
 			c := testcheck.New(t)
 			observed, err := schema.CaptureTable(tableOwner(), test.table)
 			c.Assert(err, qt.IsNil)
-			desired, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+			desired, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED, false)
 			c.Assert(err, qt.IsNil)
-			back, err := schema.ConvertTable(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+			back, err := schema.ConvertTable(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED, false)
 			c.Assert(err, qt.IsNil)
 			c.Assert(proto.Equal(back, observed), qt.IsTrue)
 		})
@@ -78,7 +78,7 @@ func TestTableConversionRefusesPhysicalTopology(t *testing.T) {
 	c := testcheck.New(t)
 	observed, err := schema.CaptureTable(tableOwner(), &native.DescribeTableResult{PrimaryKey: []string{"id"}, ShardKeyBounds: []*Ydb.TypedValue{{Type: primitive(Ydb.Type_UINT64), Value: &Ydb.Value{Value: &Ydb.Value_Uint64Value{Uint64Value: 100}}}}})
 	c.Assert(err, qt.IsNil)
-	result, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	result, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED, false)
 	c.Assert(result, qt.IsNil)
 	c.Assert(err, qt.ErrorMatches, "YDB physical shard boundaries cannot become schema split points")
 }
@@ -134,7 +134,23 @@ func TestDesiredTableWithoutAKeyIsNotAnObservation(t *testing.T) {
 	definition := schema.TableDesiredModel()
 	input := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: definition.Kind, Owner: tableOwner(), SchemaVersion: definition.SchemaVersion, Encoding: definition.Encoding,
 		DefinitionSha256: definition.DefinitionSha256, Payload: []byte(`{"keyBloomFilter":"ENABLED"}`)}
-	result, err := schema.ConvertTable(input, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+	result, err := schema.ConvertTable(input, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED, false)
 	c.Assert(result == nil, qt.IsTrue)
 	c.Assert(err, qt.ErrorMatches, "observed YDB table properties require a primary key")
+}
+
+// On a target that carries grants on the common wire, a read converts to a
+// declaration without the native access requirement, which a creation cannot
+// establish; the grants travel as common grants.
+func TestTableConversionLeavesAccessToTheCommonWire(t *testing.T) {
+	c := testcheck.New(t)
+	observed, err := schema.CaptureTable(tableOwner(), &native.DescribeTableResult{PrimaryKey: []string{"id"},
+		Self: &Ydb_Scheme.Entry{Owner: "alice", Permissions: []*Ydb_Scheme.Permissions{{Subject: "writer", PermissionNames: []string{"ydb.generic.write"}}}}})
+	c.Assert(err, qt.IsNil)
+	desired, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED, true)
+	c.Assert(err, qt.IsNil)
+	var intent native.RowTableIntent
+	c.Assert(protojson.Unmarshal(desired.Payload, &intent), qt.IsNil)
+	c.Assert(intent.Access, qt.IsNil)
+	c.Assert(intent.PrimaryKey, qt.DeepEquals, []string{"id"})
 }

@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -41,7 +42,7 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 		case schema.ColumnProperties:
 			converted, err = schema.ConvertColumn(value.Value, request.From, request.To)
 		case schema.TableProperties:
-			converted, err = schema.ConvertTable(value.Value, request.From, request.To)
+			converted, err = schema.ConvertTable(value.Value, request.From, request.To, slices.Contains(request.TargetFeatures, provider.CommonAccessFeature))
 		case schema.SecretProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.TopicProperties, schema.ViewProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties, schema.ColumnStorageProperties,
 			schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties, schema.StreamingQueryProperties:
 			converted, err = schema.ConvertNative(value.Value, request.From, request.To)

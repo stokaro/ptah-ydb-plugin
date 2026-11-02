@@ -157,8 +157,11 @@ func validatePermissionSet(grants []*Ydb_Scheme.Permissions) error {
 }
 
 // ConvertTable changes row-table representations without treating physical
-// topology as creation intent or inherited permissions as direct grants.
-func ConvertTable(value *protocol.Envelope, from, to protocol.ValueInput_Representation) (*protocol.Envelope, error) {
+// topology as creation intent or inherited permissions as direct grants. With
+// commonAccess, the target carries a table's grants on the common wire, so a
+// read converts to a declaration without the native access requirement: the
+// grants would repeat it, and a creation cannot establish it.
+func ConvertTable(value *protocol.Envelope, from, to protocol.ValueInput_Representation, commonAccess bool) (*protocol.Envelope, error) {
 	if value.GetKind() != TableProperties {
 		return nil, fmt.Errorf("YDB table conversion requires a row-table model")
 	}
@@ -174,7 +177,11 @@ func ConvertTable(value *protocol.Envelope, from, to protocol.ValueInput_Represe
 		if len(observed.ShardKeyBounds) != 0 {
 			return nil, fmt.Errorf("YDB physical shard boundaries cannot become schema split points")
 		}
-		return convertedEnvelope(value, TableDesiredModel(), tableIntent(&observed), NormalizeDesired)
+		intent := tableIntent(&observed)
+		if commonAccess {
+			intent.Access = nil
+		}
+		return convertedEnvelope(value, TableDesiredModel(), intent, NormalizeDesired)
 	}
 	if from == protocol.ValueInput_DESIRED && to == protocol.ValueInput_OBSERVED {
 		normalized, err := normalizeTableIntent(value)
