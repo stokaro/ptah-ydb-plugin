@@ -126,7 +126,7 @@ func TestColumnInventoryAddsTypedDefaults(t *testing.T) {
 			text, err := tablecreate.InventoryStatement("app.records", change)
 			c.Assert(err, qt.IsNil)
 			c.Assert(text, qt.Equals, test.statement)
-			rendering := testplanning.RenderRequest(plan, request.Capabilities)
+			rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 			rendering.Form = protocol.RenderRequest_TEXT
 			rendered, err := backend.New().Render(c.Context(), rendering)
 			c.Assert(err, qt.IsNil)

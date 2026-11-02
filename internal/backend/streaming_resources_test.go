@@ -19,6 +19,7 @@ func TestStreamingSourcePreservesPoolThroughConversion(t *testing.T) {
 	c := qt.New(t)
 	request, err := testsource.Request(`{"coordination_nodes":{"copy":{"schema":"app","text":"SELECT 1;","resource_pool":"team.batch"}}}`)
 	c.Assert(err, qt.IsNil)
+	request.TargetFeatures = []string{provider.PlanningObjectContextFeature}
 	document := request.Documents[0]
 	document.Models = []*protocol.ValueModel{schema.NativeDesiredModel(schema.StreamingQueryProperties)}
 	document.Fragments[0].YamlKey = streamingsource.YAMLKey()
@@ -27,7 +28,7 @@ func TestStreamingSourcePreservesPoolThroughConversion(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	value := decoded.Documents[0].Fragments[0].Values[0].Value
 	c.Assert(value.RequiredObjects, qt.HasLen, 1)
-	converted, err := backend.New().ConvertValues(c.Context(), &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_DESIRED,
+	converted, err := backend.New().ConvertValues(c.Context(), &protocol.ConvertValuesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningObjectContextFeature}, From: protocol.ValueInput_DESIRED,
 		To: protocol.ValueInput_OBSERVED, Values: []*protocol.NormalizedValue{value}})
 	c.Assert(err, qt.IsNil)
 	c.Assert(converted.Values[0].RequiredObjects, qt.CmpEquals(protocmp.Transform()), value.RequiredObjects)
@@ -155,7 +156,7 @@ func TestStreamingResourcePoolSurvivesNormalization(t *testing.T) {
 			owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: "/local", Schema: "app", Name: "copy"}
 			value, err := schema.CaptureStreamingQueryIntent(owner, streaming.Spec{Text: "SELECT 1;", ResourcePool: pool}, true)
 			c.Assert(err, qt.IsNil)
-			result, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "query", Representation: protocol.ValueInput_DESIRED, Value: value}}})
+			result, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningObjectContextFeature}, Values: []*protocol.ValueInput{{Id: "query", Representation: protocol.ValueInput_DESIRED, Value: value}}})
 			c.Assert(err, qt.IsNil)
 			if pool == "" || pool == "default" {
 				c.Assert(result.Values[0].RequiredObjects, qt.HasLen, 0)
