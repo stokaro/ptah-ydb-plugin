@@ -385,11 +385,12 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"changefeeds": true, "changefeed_user_sids": true, "changefeed_schema_changes": true, "changefeed_topic_auto_partitioning": true,
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": true,
 		"resource_pools": false, "streaming_queries": false,
+		"async_replication": true, "transfers": true, "replication_secret_paths": true,
 		"wide_date_time_types": true, "parameterized_decimal": true, "alter_column_default": true, "add_column_with_default": true, "small_integer_defaults": true, "document_type_defaults": true,
 	})
-	// 25.1 takes none of the later changefeed options, and 25.1 to 25.3 take
-	// no availability period on a consumer and no secret path on a data
-	// source.
+	// 25.1 takes none of the later changefeed options and no transfer, and
+	// 25.1 to 25.3 take no availability period on a consumer and no secret
+	// path on a data source or a replication.
 	c.Assert(sessionCapabilities("25.1.4.7"), qt.DeepEquals, map[string]bool{
 		"transactional_ddl": false, "secrets": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true, "relative_grant_paths": false,
@@ -397,6 +398,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"changefeeds": true, "changefeed_user_sids": false, "changefeed_schema_changes": false, "changefeed_topic_auto_partitioning": false,
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": false,
 		"resource_pools": false, "streaming_queries": false,
+		"async_replication": true, "transfers": false, "replication_secret_paths": false,
 		"wide_date_time_types": false, "parameterized_decimal": false, "alter_column_default": false, "add_column_with_default": false, "small_integer_defaults": false, "document_type_defaults": false,
 	})
 	// Each option arrives on the line the host's presets name.

@@ -64,6 +64,10 @@ type Family struct {
 	// Preserve returns the desired value that keeps the current object as it
 	// is, for an object the desired source does not describe.
 	Preserve func(owner *protocol.Reference, current *protocol.Envelope) (*protocol.Envelope, error)
+	// Unkeepable says why the current object has no declaration that keeps
+	// it, which leaves it undecided rather than preserved, or "". A nil
+	// Unkeepable keeps every object.
+	Unkeepable func(current *protocol.Envelope) (string, error)
 }
 
 type object struct {
@@ -348,13 +352,13 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		if item.current == nil {
 			return nil, nil
 		}
-		return nil, preserve(result, family, item, id)
+		return nil, keep(result, family, item, id)
 	}
 	if item.desired == nil && unknown(knowledge(request.Desired.Coverage, family.Kind, item.subject)) {
 		if item.current == nil {
 			return nil, nil
 		}
-		return nil, preserve(result, family, item, id)
+		return nil, keep(result, family, item, id)
 	}
 	if item.desired == nil && item.current == nil {
 		return nil, nil
@@ -399,6 +403,22 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Value: change})
 	pair.Change = change
 	return pair, nil
+}
+
+// keep preserves the current object, or leaves undecided one the family has
+// no declaration for.
+func keep(result *protocol.ComparedModels, family Family, item object, id string) error {
+	if family.Unkeepable != nil {
+		reason, err := family.Unkeepable(item.current)
+		if err != nil {
+			return err
+		}
+		if reason != "" {
+			undecided(result, family, item, reason)
+			return nil
+		}
+	}
+	return preserve(result, family, item, id)
 }
 
 func preserve(result *protocol.ComparedModels, family Family, item object, id string) error {

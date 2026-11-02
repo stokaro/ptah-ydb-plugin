@@ -194,6 +194,10 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 					return false, fmt.Errorf("streaming queries require an established capability")
 				}
 				return (&nativeapi.StreamingQuery{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case schema.ReplicationOperation:
+				return nativeapi.NewReplications(s.connection.Driver, s.executeSchema).ApplyReplication(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case schema.TransferOperation:
+				return nativeapi.NewReplications(s.connection.Driver, s.executeSchema).ApplyTransfer(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.WorkloadOperation:
 				read, unread := s.workload()
 				if read == nil {
@@ -319,6 +323,10 @@ func confineToRealm(unit *protocol.Unit) error {
 		return &yql.RealmRefusal{Operation: "an external data source"}
 	case schema.ExternalTableOperation:
 		return &yql.RealmRefusal{Operation: "an external table"}
+	case schema.ReplicationOperation:
+		return &yql.RealmRefusal{Operation: "an async replication"}
+	case schema.TransferOperation:
+		return &yql.RealmRefusal{Operation: "a transfer"}
 	case schema.StreamingQueryOperation:
 		change, err := schema.StreamingChangeOf(schema.StreamingQueryOperationChange(unit.GetNative()))
 		if err != nil {
