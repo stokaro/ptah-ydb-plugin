@@ -28,7 +28,7 @@ func startProviderFor(c *qt.C, hostFeatures ...string) *providerruntime.Client {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	client, err := providerruntime.Start(ctx, providerruntime.Options{
-		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin", HostFeatures: hostFeatures,
+		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin", HostFeatures: append([]string{provider.ObservedColumnsFeature}, hostFeatures...),
 	})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(client.Close)

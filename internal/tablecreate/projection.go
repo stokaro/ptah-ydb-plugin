@@ -104,21 +104,9 @@ func tablePropertiesExcluded(table *protocol.DeclaredTable) bool {
 func projectedColumns(columns []*Ydb_Table.ColumnMeta, key []string) ([]*protocol.ObservedColumn, error) {
 	result := make([]*protocol.ObservedColumn, 0, len(columns))
 	for i, column := range columns {
-		spelling, nullable, err := schema.ColumnType(column.Type)
+		item, err := columnsemantics.Projected(column, i+1, slices.Contains(key, column.Name))
 		if err != nil {
 			return nil, err
-		}
-		nullability := "NO"
-		if nullable && !column.GetNotNull() {
-			nullability = "YES"
-		}
-		item := &protocol.ObservedColumn{Name: column.Name, DataType: spelling, ColumnType: spelling, IsNullable: nullability, PrimaryKey: slices.Contains(key, column.Name), OrdinalPosition: int64(i + 1)}
-		if value := column.GetFromLiteral(); value != nil {
-			literal, err := columnsemantics.Literal(value)
-			if err != nil {
-				return nil, err
-			}
-			item.DefaultExpression = new(literal)
 		}
 		result = append(result, item)
 	}

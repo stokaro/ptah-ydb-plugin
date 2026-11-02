@@ -62,8 +62,8 @@ func (f *rebuildFixture) observed(c *qt.C) *protocol.ObservedTable {
 	snapshot, err := f.client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: f.session.Id, Schemas: []string{f.directory}})
 	c.Assert(err, qt.IsNil)
 	for i, column := range snapshot.Tables[0].Columns {
-		table.Columns[i].DataType, table.Columns[i].PrimaryKey = column.Type, column.PrimaryKey
-		table.Columns[i].IsNullable = map[bool]string{true: "YES", false: "NO"}[column.Nullable]
+		table.Columns[i].DataType, table.Columns[i].PrimaryKey = column.Observed.ColumnType, column.Observed.PrimaryKey
+		table.Columns[i].IsNullable = column.Observed.IsNullable
 	}
 	return table
 }
@@ -102,7 +102,7 @@ func (f *rebuildFixture) held(c *qt.C) []any {
 	c.Assert(err, qt.IsNil)
 	var columns []string
 	for _, column := range snapshot.Tables[0].Columns {
-		columns = append(columns, column.Name+" "+column.Type+map[bool]string{true: "?", false: ""}[column.Nullable])
+		columns = append(columns, column.Name+" "+column.Observed.ColumnType+map[bool]string{true: "?", false: ""}[column.Observed.IsNullable == "YES"])
 	}
 	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT CAST(id AS Utf8) || ':' || CAST(n AS Utf8) || ':' || payload FROM `"+
 		path.Join(f.database, f.directory, "records")+"` ORDER BY id")
