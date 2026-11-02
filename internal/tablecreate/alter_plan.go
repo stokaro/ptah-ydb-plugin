@@ -191,6 +191,13 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 			indexNames = append(indexNames, index.GetSpecification().GetName())
 		}
 	}
+	// The table also holds the common indexes it declares, which the host
+	// keeps out of the native set.
+	for _, index := range table.Desired.GetIndexes() {
+		if !slices.Contains(indexNames, index.GetName()) {
+			indexNames = append(indexNames, index.GetName())
+		}
+	}
 	// YDB never changes a table's key, so the declaration's first key column
 	// is the one the table holds.
 	keyType := firstKeyType(table.Desired)

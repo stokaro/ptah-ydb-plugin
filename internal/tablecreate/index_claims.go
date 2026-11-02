@@ -63,11 +63,11 @@ func claimIndexSteps(owner *protocol.Reference, table *protocol.PlanningTable, s
 			}
 			changes = append(changes, indexChange{add: indexIntentOf(declared.GetIndexes()[at]), source: step})
 		case protocol.PlanningEffect_DROP:
-			at := slices.IndexFunc(held.GetIndexes(), func(index *native.ObservedIndex) bool { return index.GetDescription().GetName() == name })
-			if at < 0 {
+			description := heldIndex(table.Current, held, name)
+			if description == nil {
 				return nil, fmt.Sprintf("The host drops index %q, which the table's index read does not hold", name), nil
 			}
-			changes = append(changes, indexChange{drop: proto.CloneOf(held.GetIndexes()[at].GetDescription()), source: step})
+			changes = append(changes, indexChange{drop: description, source: step})
 		default:
 			return nil, fmt.Sprintf("The host changes index %q in a way this provider does not plan", name), nil
 		}
@@ -77,6 +77,30 @@ func claimIndexSteps(owner *protocol.Reference, table *protocol.PlanningTable, s
 		return boolOrder(a.add != nil) - boolOrder(b.add != nil)
 	})
 	return changes, "", nil
+}
+
+// heldIndex is the index named name the table holds: as the native index read
+// describes it, or, for an index the common model describes and the native
+// read leaves to the host, as the host's read of the table describes it.
+func heldIndex(current *protocol.ObservedTable, held *native.IndexObservations, name string) *native.TableIndexDescription {
+	if at := slices.IndexFunc(held.GetIndexes(), func(index *native.ObservedIndex) bool { return index.GetDescription().GetName() == name }); at >= 0 {
+		return proto.CloneOf(held.GetIndexes()[at].GetDescription())
+	}
+	at := slices.IndexFunc(current.GetIndexes(), func(index *protocol.ObservedIndex) bool { return index.GetName() == name })
+	if at < 0 {
+		return nil
+	}
+	index := current.GetIndexes()[at]
+	result := &native.TableIndexDescription{Name: index.GetName(), IndexColumns: slices.Clone(index.GetColumns()), DataColumns: slices.Clone(index.GetIncludeColumns())}
+	switch {
+	case index.GetUnique():
+		result.Type = &native.TableIndexDescription_GlobalUniqueIndex{GlobalUniqueIndex: &native.GlobalUniqueIndex{}}
+	case index.GetMethod() == "async":
+		result.Type = &native.TableIndexDescription_GlobalAsyncIndex{GlobalAsyncIndex: &native.GlobalAsyncIndex{}}
+	default:
+		result.Type = &native.TableIndexDescription_GlobalIndex{GlobalIndex: &native.GlobalIndex{}}
+	}
+	return result
 }
 
 func boolOrder(value bool) int {

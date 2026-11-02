@@ -158,14 +158,17 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				if err != nil {
 					return nil, err
 				}
+				if common.Indexes {
+					// The host holds what the common model describes; the
+					// native facet keeps only the rest.
+					table.Indexes = commonIndexes(table.Identity, indexes)
+					indexes = nativeIndexes(indexes)
+				}
 				facet, err := schema.CaptureIndexes(table.Identity, indexes)
 				if err != nil {
 					return nil, err
 				}
 				table.Facets = append(table.Facets, facet)
-				if common.Indexes {
-					table.Indexes = commonIndexes(table.Identity, indexes)
-				}
 				feeds, err := source.readChangefeeds(ctx, path.Join(database, selected, name), description)
 				if err != nil {
 					return nil, err
