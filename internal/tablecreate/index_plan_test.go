@@ -208,7 +208,7 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 		{"the key order changed", indexCase(declaredIndexes(indexJSON("globalIndex", "by_both", []string{"extra", "label"}, nil)), heldIndexes(indexJSON("globalIndex", "by_both", labelAndData, nil)), "label", "extra"),
 			`index "by_both" holds a global index on \(label, extra\), but the declaration states a global index on \(extra, label\).*`},
 		{"a declared index states settings", indexCase(declaredIndexes(settings), heldIndexes(), "label"),
-			`the declared index "by_label" is outside the global secondary indexes this provider alters: it states settings of its own`},
+			`the declared index "by_label" states its partitioning or read replicas, which this provider changes only on an index the table holds; add the index first, then declare them`},
 		{"a vector index is declared", indexCase(vectorIndexes(false), heldIndexes(), "label"),
 			`the declared index "by_embedding" is outside the global secondary indexes this provider alters: it is a vector index`},
 		{"a vector index is left out", indexCase(declaredIndexes(), vectorIndexes(true), "label"),

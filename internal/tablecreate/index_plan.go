@@ -45,14 +45,20 @@ type indexInput struct {
 	columns []string
 }
 
-// indexSignature is everything about an index a comparison reads.
+// indexSignature is everything about an index's definition a comparison
+// reads. The partitioning and read replicas of a global index are not part of
+// its definition: YDB changes them in place.
 type indexSignature struct {
 	kind    string
 	keys    []string
 	covered []string
-	// detail is the encoded kind-specific message, empty when the kind states
-	// no settings. A held global index carries none, whatever the server reports.
+	// detail is the encoded kind-specific message of a vector or fulltext
+	// index, empty when the kind states no settings. A global sync, async or
+	// unique index carries its settings in settings instead.
 	detail string
+	// settings are the partitioning and read replicas of a global sync, async
+	// or unique index, nil for another kind.
+	settings *native.GlobalIndexSettings
 }
 
 func (s indexSignature) equal(other indexSignature) bool {
@@ -62,13 +68,16 @@ func (s indexSignature) equal(other indexSignature) bool {
 // scope names what puts an index outside the global secondary indexes this
 // service adds and drops, or returns the empty string.
 func (s indexSignature) scope() string {
-	switch {
-	case s.kind != "global" && s.kind != "global async" && s.kind != "global unique":
+	if s.kind != "global" && s.kind != "global async" && s.kind != "global unique" {
 		return "is a " + s.kind + " index"
-	case s.detail != "":
-		return "states settings of its own"
 	}
 	return ""
+}
+
+// statesSettings reports a global index declared with a partitioning or read
+// replicas of its own.
+func (s indexSignature) statesSettings() bool {
+	return s.settings != nil && proto.Size(s.settings) != 0
 }
 
 func (s indexSignature) describe() string {
@@ -90,26 +99,20 @@ func detail(message proto.Message) string {
 	return string(encoded)
 }
 
-// signatureOf reads one specification. held is true for the specification of an
-// index the table holds. The server reports the partitioning of the table that
-// implements a global index, defaults included, so the settings of a held global
-// index say nothing about what was declared and are not compared; the settings a
-// declaration states are, and are refused.
-func signatureOf(spec *native.IndexIntent, held bool) indexSignature {
+// signatureOf reads one specification. The server describes a global index
+// with its partitioning and read replicas, defaults included, so the settings
+// of a held global index are what it holds rather than what was declared. They
+// are not part of its definition: the settings rule reads them as a table's
+// (see planIndexSettings).
+func signatureOf(spec *native.IndexIntent) indexSignature {
 	result := indexSignature{keys: spec.IndexColumns, covered: spec.DataColumns}
-	stated := func(settings *native.GlobalIndexSettings) string {
-		if held {
-			return ""
-		}
-		return detail(settings)
-	}
 	switch kind := spec.Type.(type) {
 	case *native.IndexIntent_GlobalIndex:
-		result.kind, result.detail = "global", stated(kind.GlobalIndex.GetSettings())
+		result.kind, result.settings = "global", kind.GlobalIndex.GetSettings()
 	case *native.IndexIntent_GlobalAsyncIndex:
-		result.kind, result.detail = "global async", stated(kind.GlobalAsyncIndex.GetSettings())
+		result.kind, result.settings = "global async", kind.GlobalAsyncIndex.GetSettings()
 	case *native.IndexIntent_GlobalUniqueIndex:
-		result.kind, result.detail = "global unique", stated(kind.GlobalUniqueIndex.GetSettings())
+		result.kind, result.settings = "global unique", kind.GlobalUniqueIndex.GetSettings()
 	case *native.IndexIntent_GlobalVectorKmeansTreeIndex:
 		result.kind, result.detail = "vector", detail(kind.GlobalVectorKmeansTreeIndex)
 	case *native.IndexIntent_GlobalFulltextPlainIndex:
@@ -123,11 +126,11 @@ func signatureOf(spec *native.IndexIntent, held bool) indexSignature {
 }
 
 // indexSignatures reads the indexes of one side by name, in name order.
-func indexSignatures(specs []*native.IndexIntent, held bool) (names []string, signatures map[string]indexSignature, specByName map[string]*native.IndexIntent) {
+func indexSignatures(specs []*native.IndexIntent) (names []string, signatures map[string]indexSignature, specByName map[string]*native.IndexIntent) {
 	signatures, specByName = map[string]indexSignature{}, map[string]*native.IndexIntent{}
 	for _, spec := range specs {
 		names = append(names, spec.Name)
-		signatures[spec.Name] = signatureOf(spec, held)
+		signatures[spec.Name] = signatureOf(spec)
 		specByName[spec.Name] = spec
 	}
 	slices.Sort(names)
@@ -152,48 +155,63 @@ func heldSpecs(observed *native.IndexObservations) (specs []*native.IndexIntent,
 }
 
 // planIndexes returns the additions and removals that give the table the index
-// set the declaration states, in name order, or the reason it cannot be made.
-// An empty result means the table already satisfies the declaration.
+// set the declaration states, in name order, with the changes of the
+// partitioning and read replicas of the indexes it keeps, or the reason it
+// cannot be made. An empty result means the table already satisfies the
+// declaration.
 //
 // Only global secondary indexes are added and dropped: sync, async and unique.
-// A vector or fulltext index, and an index that states settings of its own,
-// are refused by name rather than ignored. An index the table holds under a
-// declared name but with another definition is refused too, because YDB cannot
-// alter an index in place and a drop followed by an addition rebuilds it.
-func planIndexes(in indexInput) ([]indexChange, string) {
+// A vector or fulltext index is refused by name rather than ignored, and so is
+// an index to add that states its partitioning or read replicas. An index the
+// table holds under a declared name but with another definition is refused
+// too, because YDB cannot alter an index in place and a drop followed by an
+// addition rebuilds it. Its partitioning and read replicas YDB changes in
+// place (see planIndexSettings).
+func planIndexes(in indexInput) ([]indexChange, []indexSettingsChange, string) {
 	if !in.managed {
-		return nil, ""
+		return nil, nil, ""
 	}
 	wantedSpecs := declaredSpecs(in.desired)
 	heldSpecList, heldByName := heldSpecs(in.held)
-	wantedNames, wanted, wantedByName := indexSignatures(wantedSpecs, false)
-	heldNames, held, _ := indexSignatures(heldSpecList, true)
+	wantedNames, wanted, wantedByName := indexSignatures(wantedSpecs)
+	heldNames, held, _ := indexSignatures(heldSpecList)
 	var changes []indexChange
+	var settings []indexSettingsChange
 	for _, name := range slices.Compact(slices.Sorted(slices.Values(slices.Concat(wantedNames, heldNames)))) {
 		want, declared := wanted[name]
 		have, present := held[name]
 		switch {
 		case declared && present:
-			if want.equal(have) {
-				continue
-			}
-			for _, side := range []indexSignature{want, have} {
-				if scope := side.scope(); scope != "" {
-					return nil, fmt.Sprintf("index %q is outside the global secondary indexes this provider alters: it %s", name, scope)
+			if !want.equal(have) {
+				for _, side := range []indexSignature{want, have} {
+					if scope := side.scope(); scope != "" {
+						return nil, nil, fmt.Sprintf("index %q is outside the global secondary indexes this provider alters: it %s", name, scope)
+					}
 				}
+				return nil, nil, fmt.Sprintf("index %q holds a %s, but the declaration states a %s; YDB cannot alter an index in place, and dropping and adding it rebuilds the index", name, have.describe(), want.describe())
 			}
-			return nil, fmt.Sprintf("index %q holds a %s, but the declaration states a %s; YDB cannot alter an index in place, and dropping and adding it rebuilds the index", name, have.describe(), want.describe())
+			change, reason := planIndexSettings(name, want.settings, heldByName[name])
+			if reason != "" {
+				return nil, nil, reason
+			}
+			if change != nil {
+				settings = append(settings, *change)
+			}
 		case declared:
 			if scope := want.scope(); scope != "" {
-				return nil, fmt.Sprintf("the declared index %q is outside the global secondary indexes this provider alters: it %s", name, scope)
+				return nil, nil, fmt.Sprintf("the declared index %q is outside the global secondary indexes this provider alters: it %s", name, scope)
+			}
+			if want.statesSettings() {
+				return nil, nil, fmt.Sprintf("the declared index %q states its partitioning or read replicas, which this provider changes only on an index the table holds; "+
+					"add the index first, then declare them", name)
 			}
 			if reason := declaredColumns(name, want, in.columns); reason != "" {
-				return nil, reason
+				return nil, nil, reason
 			}
 			changes = append(changes, indexChange{add: proto.CloneOf(wantedByName[name])})
 		case present:
 			if scope := have.scope(); scope != "" {
-				return nil, fmt.Sprintf("the index %q the declaration leaves out is outside the global secondary indexes this provider alters: it %s", name, scope)
+				return nil, nil, fmt.Sprintf("the index %q the declaration leaves out is outside the global secondary indexes this provider alters: it %s", name, scope)
 			}
 			changes = append(changes, indexChange{drop: proto.CloneOf(heldByName[name])})
 		}
@@ -203,12 +221,12 @@ func planIndexes(in indexInput) ([]indexChange, string) {
 	for _, name := range heldNames {
 		if _, declared := wanted[name]; declared {
 			if reason := declaredColumns(name, held[name], in.columns); reason != "" {
-				return nil, reason
+				return nil, nil, reason
 			}
 		}
 	}
 	slices.SortFunc(changes, func(a, b indexChange) int { return strings.Compare(a.name(), b.name()) })
-	return changes, ""
+	return changes, settings, ""
 }
 
 // declaredColumns requires every column an index reads to be one the
@@ -226,13 +244,19 @@ func declaredColumns(name string, signature indexSignature, columns []string) st
 // already satisfy the declared index set. A difference the planner refuses
 // counts: the comparison reports it so that the refusal reaches the user.
 func indexDiffers(want *native.IndexSetIntent, held *native.IndexObservations) bool {
-	wantedNames, wanted, _ := indexSignatures(declaredSpecs(want), false)
-	heldList, _ := heldSpecs(held)
-	heldNames, have, _ := indexSignatures(heldList, true)
+	wantedNames, wanted, _ := indexSignatures(declaredSpecs(want))
+	heldList, heldByName := heldSpecs(held)
+	heldNames, have, _ := indexSignatures(heldList)
 	if !slices.Equal(wantedNames, heldNames) {
 		return true
 	}
-	return slices.ContainsFunc(wantedNames, func(name string) bool { return !wanted[name].equal(have[name]) })
+	return slices.ContainsFunc(wantedNames, func(name string) bool {
+		if !wanted[name].equal(have[name]) {
+			return true
+		}
+		change, reason := planIndexSettings(name, wanted[name].settings, heldByName[name])
+		return change != nil || reason != ""
+	})
 }
 
 // tableIndex converts a declared specification to the native request form.

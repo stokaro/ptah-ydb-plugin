@@ -136,7 +136,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			continue
 		}
 		if table.Action != protocol.PlanningTable_CREATE && table.Action != protocol.PlanningTable_ALTER {
-			return refused(i, "Only native row-table creation, alteration of column families, columns, the TTL, the partitioning settings and the indexes, column-table creation and table removal are implemented"), nil
+			return refused(i, "Only native row-table creation, alteration of column families, columns, the TTL, the table settings and the indexes, column-table creation and table removal are implemented"), nil
 		}
 		transactional, known := request.Capabilities["transactional_ddl"]
 		if !known || transactional {
@@ -199,6 +199,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 					return refused(i, err.Error()), nil
 				}
 				item.indexes = append(item.indexes, step)
+			}
+			for _, settingsChange := range changes.indexSettings {
+				step := &indexSettingsStep{change: settingsChange}
+				if step.operation, err = CaptureIndexSettings("pending", owner, settingsChange); err != nil {
+					return refused(i, err.Error()), nil
+				}
+				item.indexSettings = append(item.indexSettings, step)
 			}
 			if item.feeds, reason = captureChangefeedStep(owner, changes.changefeeds); reason != "" {
 				return refused(i, reason), nil
@@ -356,7 +363,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		receiptSteps[item.index] = ids
 	}
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, defaults, inventories int
+	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, indexSettings, defaults, inventories int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -462,6 +469,18 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 						{Subject: indexSubject(subject, index.change.name()), Action: action}}}})
 			contribution.Dependencies = append(contribution.Dependencies, indexStepDependencies(*item, index, request.CommonSteps)...)
 			ordered = append(ordered, index.id)
+		}
+		for _, settings := range item.indexSettings {
+			settings.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-index-settings/%06d", indexSettings)}
+			indexSettings++
+			settings.operation.Id = settings.id.Name
+			facts := settings.operation.OperationSemantics
+			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: settings.id,
+				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: settings.operation},
+				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
+					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
+						{Subject: indexSubject(subject, settings.change.held.GetName()), Action: protocol.PlanningEffect_ALTER}}}})
+			ordered = append(ordered, settings.id)
 		}
 		if item.feeds != nil {
 			step, dependencies := item.feeds.planningStep(feedNumber, subject, nil)
@@ -585,10 +604,10 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			steps = append(steps, proto.CloneOf(id))
 		}
 		if table.Action == protocol.PlanningTable_ALTER && !slices.Contains(columnAlterations, i) {
-			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, change the automatic partitioning settings, and add or drop global secondary indexes, through the native table service; " +
+			strategy = "Add and drop columns, alter the column families and their column placements, set or drop the TTL, change the automatic partitioning settings, the read replicas and the key bloom filter, and add or drop global secondary indexes, through the native table service; " +
 				"add, drop and change changefeeds with YQL's ALTER TABLE and ALTER TOPIC through the query service; other settings and column steps the native call cannot state stay with the host"
 			if steps == nil {
-				strategy = "The column families, column placements, TTL, partitioning settings, indexes and changefeeds already match the declaration, and the host has no column step this service can carry out"
+				strategy = "The column families, column placements, TTL, partitioning settings, read replicas, key bloom filter, indexes and changefeeds already match the declaration, and the host has no column step this service can carry out"
 			}
 		}
 		for _, kind := range request.ParentKinds {

@@ -14,8 +14,9 @@ import (
 )
 
 // alteration is one planned change of an existing table: its column families,
-// its TTL, its automatic partitioning settings, its secondary indexes, and the
-// host column steps this service replaces.
+// its TTL, its automatic partitioning settings with its read replicas and key
+// bloom filter, its secondary indexes, and the host column steps this service
+// replaces.
 type alteration struct {
 	index                 int
 	table                 *protocol.PlanningTable
@@ -29,6 +30,7 @@ type alteration struct {
 	partitioningOperation *protocol.NormalizedValue
 	partitioningID        *protocol.StepIdentity
 	indexes               []*indexStep
+	indexSettings         []*indexSettingsStep
 	feeds                 *changefeedStep
 	claims                []*columnClaim
 	defaults              []defaultStep
@@ -42,13 +44,21 @@ type indexStep struct {
 	id        *protocol.StepIdentity
 }
 
+// indexSettingsStep is the operation of one change of an index's settings.
+type indexSettingsStep struct {
+	change    indexSettingsChange
+	operation *protocol.NormalizedValue
+	id        *protocol.StepIdentity
+}
+
 // alterationChanges are the changes planned for one altered table.
 type alterationChanges struct {
-	family       familyChange
-	ttl          ttlChange
-	partitioning partitioningChange
-	indexes      []indexChange
-	changefeeds  []changefeeds.Change
+	family        familyChange
+	ttl           ttlChange
+	partitioning  partitioningChange
+	indexes       []indexChange
+	indexSettings []indexSettingsChange
+	changefeeds   []changefeeds.Change
 }
 
 func stepKey(id *protocol.StepIdentity) string { return id.GetOwner() + "\x00" + id.GetName() }
@@ -138,7 +148,8 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, ca
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
-	partitioning, reason := planPartitioning(partitioningInput{managed: managed, desired: intent.PartitioningSettings, held: held.PartitioningSettings, layout: layoutOf(&intent)})
+	partitioning, reason := planPartitioning(partitioningInput{managed: managed, desired: intent.PartitioningSettings, held: held.PartitioningSettings, layout: layoutOf(&intent),
+		desiredBloom: intent.KeyBloomFilter, heldBloom: held.KeyBloomFilter, desiredReplicas: intent.ReadReplicasSettings, heldReplicas: held.ReadReplicasSettings})
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
@@ -160,7 +171,7 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, ca
 	if desired.indexes != nil && observed.indexes == nil {
 		return alterationChanges{}, "The table's current indexes were not captured", nil
 	}
-	indexes, reason := planIndexes(indexInput{managed: desired.indexes != nil, desired: &wantedIndexes, held: &heldIndexes, columns: in.columns})
+	indexes, indexSettings, reason := planIndexes(indexInput{managed: desired.indexes != nil, desired: &wantedIndexes, held: &heldIndexes, columns: in.columns})
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
@@ -196,7 +207,7 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, ca
 	if err != nil || reason != "" {
 		return alterationChanges{}, reason, err
 	}
-	return alterationChanges{family: change, ttl: ttl, partitioning: partitioning, indexes: indexes, changefeeds: feeds}, "", nil
+	return alterationChanges{family: change, ttl: ttl, partitioning: partitioning, indexes: indexes, indexSettings: indexSettings, changefeeds: feeds}, "", nil
 }
 
 // heldIndexNames lists the indexes a table holds.

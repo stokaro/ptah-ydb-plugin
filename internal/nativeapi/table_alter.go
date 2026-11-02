@@ -29,7 +29,8 @@ type AlterationSession interface {
 // TableAlteration owns the precondition read, single dispatch, and confirmation
 // of a captured table alteration: column families and their placements, the
 // addition of nullable columns, the removal of columns, the TTL, the automatic
-// partitioning settings, or one global secondary index.
+// partitioning settings with the read replicas and the key bloom filter, or
+// one global secondary index.
 type TableAlteration struct {
 	Open func(context.Context) (AlterationSession, error)
 	// IndexPoll is how long Apply waits between reads while a new index is
@@ -275,18 +276,30 @@ func checkIndexPrecondition(alteration *tablecreate.Alteration, table *native.De
 }
 
 // checkPartitioningPrecondition requires the table to hold exactly the
-// partitioning settings the plan captured, so settings changed after planning
-// turn into a refusal.
+// partitioning settings, the key bloom filter and the read replicas the plan
+// captured for the settings the alteration changes, so settings changed after
+// planning turn into a refusal.
 func checkPartitioningPrecondition(alteration *tablecreate.Alteration, table *native.DescribeTableResult) error {
-	if alteration.Request.AlterPartitioningSettings == nil {
-		return nil
+	if alteration.Request.AlterPartitioningSettings != nil {
+		held := table.PartitioningSettings
+		if held == nil {
+			held = &Ydb_Table.PartitioningSettings{}
+		}
+		if !proto.Equal(held, alteration.HeldPartitioning) {
+			return fmt.Errorf("YDB table partitioning settings differ from the plan")
+		}
 	}
-	held := table.PartitioningSettings
-	if held == nil {
-		held = &Ydb_Table.PartitioningSettings{}
+	if held := alteration.HeldKeyBloomFilter; held != nil && table.KeyBloomFilter != *held {
+		return fmt.Errorf("YDB table key bloom filter differs from the plan")
 	}
-	if !proto.Equal(held, alteration.HeldPartitioning) {
-		return fmt.Errorf("YDB table partitioning settings differ from the plan")
+	if held := alteration.HeldReadReplicas; held != nil {
+		replicas := table.ReadReplicasSettings
+		if replicas == nil {
+			replicas = &Ydb_Table.ReadReplicasSettings{}
+		}
+		if !proto.Equal(replicas, held) {
+			return fmt.Errorf("YDB table read replicas differ from the plan")
+		}
 	}
 	return nil
 }
@@ -479,17 +492,40 @@ func sameIndexKind(actual *native.TableIndexDescription, requested *Ydb_Table.Ta
 	return false
 }
 
-// confirmPartitioning requires a partitioning alteration to leave the table
-// with every setting the request names and with the partition columns it held.
-// The server derives other settings from the ones named, so those are not
-// compared. Any other request leaves the partitioning unread.
+// confirmPartitioning requires a settings alteration to leave the table with
+// every partitioning setting the request names and with the partition columns
+// it held, and with the key bloom filter and the read replicas it sets. The
+// server derives other partitioning settings from the ones named, so those are
+// not compared; a request that names none leaves the partitioning as it was.
+// A filter or replicas the request does not set stay as they were too:
+// measured on 25.1.4.7 and 26.2.1.14 by the host's embedded engine, setting
+// one of the three groups resets nothing of the others. Any other request
+// leaves the settings unread.
 func confirmPartitioning(request *Ydb_Table.AlterTableRequest, before, observed *native.DescribeTableResult) error {
-	if request.AlterPartitioningSettings == nil {
+	if request.AlterPartitioningSettings == nil && request.SetKeyBloomFilter == 0 && request.SetReadReplicasSettings == nil {
 		return nil
 	}
-	if !tablecreate.PartitioningHolds(observed.PartitioningSettings, request.AlterPartitioningSettings) ||
-		!slices.Equal(observed.PartitioningSettings.GetPartitionBy(), before.PartitioningSettings.GetPartitionBy()) {
+	partitioning := proto.Equal(observed.PartitioningSettings, before.PartitioningSettings)
+	if set := request.AlterPartitioningSettings; set != nil {
+		partitioning = tablecreate.PartitioningHolds(observed.PartitioningSettings, set) &&
+			slices.Equal(observed.PartitioningSettings.GetPartitionBy(), before.PartitioningSettings.GetPartitionBy())
+	}
+	if !partitioning {
 		return fmt.Errorf("YDB altered table partitioning settings differ from the request")
+	}
+	bloom := before.KeyBloomFilter
+	if request.SetKeyBloomFilter != 0 {
+		bloom = request.SetKeyBloomFilter
+	}
+	if !tablecreate.SameKeyBloomFilter(observed.KeyBloomFilter, bloom) {
+		return fmt.Errorf("YDB altered table key bloom filter differs from the request")
+	}
+	replicas := before.ReadReplicasSettings
+	if request.SetReadReplicasSettings != nil {
+		replicas = request.SetReadReplicasSettings
+	}
+	if !tablecreate.SameReplicas(observed.ReadReplicasSettings, replicas) {
+		return fmt.Errorf("YDB altered table read replicas differ from the request")
 	}
 	return nil
 }
