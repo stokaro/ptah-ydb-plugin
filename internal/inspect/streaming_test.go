@@ -121,3 +121,61 @@ func TestStreamingInventoryStopsAfterCancellation(t *testing.T) {
 	c.Assert(result, qt.IsNil)
 	c.Assert(calls, qt.Equals, 1)
 }
+
+// scopedSnapshot is a read of one selected directory: its streaming query
+// coverage proves absence in that directory only.
+func scopedSnapshot() *protocol.Schema {
+	var model *protocol.ValueModel
+	for _, candidate := range schema.ObservedModels() {
+		if candidate.Kind == schema.StreamingQueryProperties {
+			model = candidate
+		}
+	}
+	return &protocol.Schema{Coverage: &protocol.ModelCoverage{Kinds: []*protocol.ModelKindCoverage{{
+		Model:     model,
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED},
+		Regions: []*protocol.ModelNamespaceKnowledge{{
+			Scope:     &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: "/local", Normalized: "/local"}, Schema: &protocol.NamespaceComponent{Source: "app", Normalized: "app"}},
+			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
+		}},
+	}}}}
+}
+
+func inventoryOf(c *qt.C, entries ...*Ydb_Scheme.Entry) *protocol.Schema {
+	inventory, err := inspect.ReadStreamingInventory(c.Context(), "/local", func(_ context.Context, absolute string) (*Ydb_Scheme.ListDirectoryResult, error) {
+		return directory(absolute, entries...), nil
+	}, func(context.Context, string) (*streaming.Spec, error) {
+		return &streaming.Spec{Text: "SELECT 1;"}, nil
+	})
+	c.Assert(err, qt.IsNil)
+	return inventory
+}
+
+// A scoped read of a database that holds no streaming query takes the whole
+// database's absence; one that holds a query elsewhere keeps its own coverage,
+// and an unscoped read takes the inventory either way.
+func TestScopeStreamingInventory(t *testing.T) {
+	query := &Ydb_Scheme.Entry{Name: "copy", Type: queryEntry}
+	for _, test := range []struct {
+		name       string
+		entries    []*Ydb_Scheme.Entry
+		scoped     bool
+		wantSchema string
+		wantValues int
+	}{
+		{"scoped, no query anywhere", nil, true, "", 0},
+		{"scoped, a query elsewhere", []*Ydb_Scheme.Entry{query}, true, "app", 0},
+		{"unscoped, a query", []*Ydb_Scheme.Entry{query}, false, "", 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			snapshot := scopedSnapshot()
+			inspect.ScopeStreamingInventory(snapshot, inventoryOf(c, test.entries...), test.scoped)
+			c.Assert(snapshot.Coverage.Kinds, qt.HasLen, 1)
+			c.Assert(snapshot.Coverage.Kinds[0].Regions, qt.HasLen, 1)
+			c.Assert(snapshot.Coverage.Kinds[0].Regions[0].Scope.GetSchema().GetNormalized(), qt.Equals, test.wantSchema)
+			c.Assert(snapshot.Coverage.Kinds[0].Regions[0].Knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
+			c.Assert(snapshot.NativeObjects, qt.HasLen, test.wantValues)
+		})
+	}
+}
