@@ -7,6 +7,7 @@ import (
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
 )
@@ -17,6 +18,9 @@ import (
 type indexChange struct {
 	add  *native.IndexIntent
 	drop *native.TableIndexDescription
+	// source is the host's step the change replaces, or nil for a change of
+	// the native index set.
+	source *protocol.CommonPlanningStep
 }
 
 func (c indexChange) name() string {

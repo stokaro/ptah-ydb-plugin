@@ -163,6 +163,9 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 					return nil, err
 				}
 				table.Facets = append(table.Facets, facet)
+				if common.Indexes {
+					table.Indexes = commonIndexes(table.Identity, indexes)
+				}
 				feeds, err := source.readChangefeeds(ctx, path.Join(database, selected, name), description)
 				if err != nil {
 					return nil, err

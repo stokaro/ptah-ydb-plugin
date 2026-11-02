@@ -20,6 +20,7 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestNativeIndexObservationsSubprocess(t *testing.T) {
@@ -30,10 +31,16 @@ func TestNativeIndexObservationsSubprocess(t *testing.T) {
 		name, clause, kind string
 		tables             int
 		only26             bool
+		// common is the index as the common model reads it, or nil for an
+		// index only the native facet describes.
+		common *protocol.ObservedIndex
 	}{
-		{name: "sync", clause: "GLOBAL SYNC ON (label) COVER (extra)", kind: "global_index", tables: 1},
-		{name: "async", clause: "GLOBAL ASYNC ON (label) COVER (extra)", kind: "global_async_index", tables: 1},
-		{name: "unique", clause: "GLOBAL UNIQUE SYNC ON (label)", kind: "global_unique_index", tables: 1},
+		{name: "sync", clause: "GLOBAL SYNC ON (label) COVER (extra)", kind: "global_index", tables: 1,
+			common: &protocol.ObservedIndex{Name: "idx", TableName: "records", Columns: []string{"label"}, IncludeColumns: []string{"extra"}}},
+		{name: "async", clause: "GLOBAL ASYNC ON (label) COVER (extra)", kind: "global_async_index", tables: 1,
+			common: &protocol.ObservedIndex{Name: "idx", TableName: "records", Columns: []string{"label"}, IncludeColumns: []string{"extra"}, Method: "async"}},
+		{name: "unique", clause: "GLOBAL UNIQUE SYNC ON (label)", kind: "global_unique_index", tables: 1,
+			common: &protocol.ObservedIndex{Name: "idx", TableName: "records", Columns: []string{"label"}, Unique: true}},
 		{name: "vector", clause: "GLOBAL USING vector_kmeans_tree ON (embedding) WITH (distance=cosine,vector_type=float,vector_dimension=3,levels=1,clusters=2)", kind: "global_vector_kmeans_tree_index", tables: 2},
 		{name: "vector_prefix", clause: "GLOBAL USING vector_kmeans_tree ON (prefix,embedding) COVER (extra) WITH (distance=cosine,vector_type=float,vector_dimension=3,levels=1,clusters=2)", kind: "global_vector_kmeans_tree_index", tables: 3},
 		{name: "fulltext_plain", clause: "GLOBAL USING fulltext_plain ON (label) WITH (tokenizer=standard,use_filter_lowercase=true)", kind: "global_fulltext_plain_index", tables: 1, only26: true},
@@ -76,6 +83,18 @@ func TestNativeIndexObservationsSubprocess(t *testing.T) {
 			snapshot, err := client.Inspect(ctx, request)
 			c.Assert(err, qt.IsNil)
 			table := snapshot.Tables[0]
+			// A global index is a common index too; a vector or full-text
+			// one is described by the native facet alone.
+			var common []*protocol.ObservedIndex
+			if test.common != nil {
+				expected := proto.CloneOf(test.common)
+				expected.Schema = directory
+				common = append(common, expected)
+			}
+			c.Assert(table.Indexes, qt.HasLen, len(common))
+			for i := range common {
+				c.Assert(proto.Equal(table.Indexes[i], common[i]), qt.IsTrue, qt.Commentf("%v", table.Indexes[i]))
+			}
 			c.Assert(table.Facets, qt.HasLen, 3)
 			c.Assert(table.Facets[1].Kind, qt.Equals, schema.IndexProperties)
 			var indexes native.IndexObservations
