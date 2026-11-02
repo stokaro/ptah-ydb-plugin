@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
 )
 
 // snapshot is what Read returns for a database holding nothing.
@@ -50,8 +51,41 @@ func TestWorkload_HappyPath(t *testing.T) {
 	}
 	c.Assert(names, qt.DeepEquals, []string{schema.ResourcePoolProperties + " batch", schema.ResourcePoolProperties + " default", schema.ResourcePoolClassifierProperties + " etl"})
 	c.Assert(read.Coverage.Subjects, qt.HasLen, 3)
-	for _, knowledge := range workloadKnowledge(read) {
-		c.Assert(knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
+	for _, record := range workloadRecords(read) {
+		c.Assert(record.Knowledge.State, qt.Equals, protocol.ModelKnowledge_UNINSPECTED)
+		c.Assert(record.Regions, qt.HasLen, 1)
+		c.Assert(record.Regions[0].Knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
+		c.Assert(proto.Equal(record.Regions[0].Scope, &protocol.ModelNamespace{
+			Database: &protocol.NamespaceComponent{Source: "/local", Normalized: "/local"}, Catalog: &protocol.NamespaceComponent{}, Schema: &protocol.NamespaceComponent{},
+		}), qt.IsTrue)
+	}
+}
+
+func TestWorkload_EmptyReadEstablishesOnlyDatabaseRootAbsence(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name      string
+		selectors []string
+	}{
+		{"unfiltered", nil},
+		{"explicit root", []string{"/"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			read := snapshot()
+			c.Assert(inspect.Workload(c.Context(), read, "/tenant", test.selectors, func(context.Context) (nativeapi.HeldWorkload, error) {
+				return nativeapi.HeldWorkload{}, nil
+			}, ""), qt.IsNil)
+			c.Assert(read.NativeObjects, qt.HasLen, 0)
+			for _, record := range workloadRecords(read) {
+				c.Assert(record.Knowledge.State, qt.Equals, protocol.ModelKnowledge_UNINSPECTED)
+				c.Assert(record.Regions, qt.HasLen, 1)
+				c.Assert(record.Regions[0].Knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
+				c.Assert(proto.Equal(record.Regions[0].Scope, &protocol.ModelNamespace{
+					Database: &protocol.NamespaceComponent{Source: "/tenant", Normalized: "/tenant"}, Catalog: &protocol.NamespaceComponent{}, Schema: &protocol.NamespaceComponent{},
+				}), qt.IsTrue)
+			}
+		})
 	}
 }
 
