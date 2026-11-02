@@ -148,7 +148,7 @@ func (h *externalHarness) plan(location string, columns ...string) []*protocol.U
 	rules := proto.CloneOf(client.Description().Engines[0].Identifiers)
 	snapshot, err := client.Inspect(ctx, &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{h.directory}})
 	c.Assert(err, qt.IsNil)
-	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), ComparisonId: externalcompare.ServiceID, Kinds: externalcompare.Kinds(), Capabilities: session.Capabilities,
+	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), DatabasePath: session.Database, ComparisonId: externalcompare.ServiceID, Kinds: externalcompare.Kinds(), Capabilities: session.Capabilities,
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}, Desired: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 		Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedCoverage(snapshot.Coverage, externalcompare.Kinds()...)}}
 	for _, kind := range externalcompare.Kinds() {

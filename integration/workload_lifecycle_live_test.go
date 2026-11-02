@@ -127,7 +127,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 			{schema.ResourcePoolProperties, workloadcompare.PoolServiceID, poolSettings(declaredPools)},
 			{schema.ResourcePoolClassifierProperties, workloadcompare.ClassifierServiceID, classifierSettings(declaredClassifiers)},
 		} {
-			request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), ComparisonId: family.service, Kinds: []string{family.kind}, Capabilities: session.Capabilities,
+			request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), DatabasePath: session.Database, ComparisonId: family.service, Kinds: []string{family.kind}, Capabilities: session.Capabilities,
 				Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}, Desired: testcomparison.State(schema.NativeDesiredModel(family.kind)),
 				Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedKindCoverage(snapshot.Coverage, family.kind)}}
 			for name, settings := range family.declared {

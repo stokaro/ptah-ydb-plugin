@@ -111,7 +111,7 @@ func (f *columnTableFixture) compare(c *qt.C, storage string) *protocol.Compared
 	c.Helper()
 	current := observedTable(c, f.client, f.session, f.directory).Features.Facets.Records
 	subject := testplanning.Subject(f.owner)
-	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
+	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), DatabasePath: f.session.Database, ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Desired:     facetState(protocol.ValueInput_DESIRED, []*protocol.ComparisonRecord{desiredFacet(c, f.client, f.owner, schema.ColumnStorageProperties, storage)}),
 		Current:     facetState(protocol.ValueInput_OBSERVED, current), Parents: []*protocol.ComparisonParent{{Subject: subject, Desired: true, Current: true}}}

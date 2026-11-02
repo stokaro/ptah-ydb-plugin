@@ -138,7 +138,7 @@ func (f *facetFixture) compareRecords(c *qt.C, desired ...*protocol.ComparisonRe
 		key := record.Subject.Kind + "/" + record.Subject.Name.Normalized
 		held[key] = sides{subject: record.Subject, desired: held[key].desired, current: true}
 	}
-	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
+	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), DatabasePath: f.session.Database, ComparisonId: tablecompare.ServiceID, Kinds: tablecompare.Kinds(),
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Desired:     f.desiredFacets(desired), Current: facetState(protocol.ValueInput_OBSERVED, current)}
 	// The table is declared whether or not its source states a facet for it.

@@ -54,7 +54,7 @@ func TestTopicLifecycleSubprocess(t *testing.T) {
 		snapshot, err := client.Inspect(ctx, &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
 		c.Assert(err, qt.IsNil)
 		desiredModel := schema.NativeDesiredModel(schema.TopicProperties)
-		request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), ComparisonId: topiccompare.ServiceID, Kinds: []string{schema.TopicProperties}, Capabilities: session.Capabilities,
+		request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), DatabasePath: session.Database, ComparisonId: topiccompare.ServiceID, Kinds: []string{schema.TopicProperties}, Capabilities: session.Capabilities,
 			Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}, Desired: testcomparison.State(desiredModel),
 			Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedTopicCoverage(snapshot.Coverage)}}
 		if declared != nil {
