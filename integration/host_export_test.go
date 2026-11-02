@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -110,5 +111,19 @@ func assertHostSchemaExport(t *testing.T, client *providerruntime.Client, binary
 		}
 	}
 	visit(tree)
+	// A host that carries views on the common wire exports a view in its own
+	// view section, named by its directory and name, and not as a native value.
+	var views []struct{ Name, Body string }
+	c.Assert(json.Unmarshal(document["Views"], &views), qt.IsNil)
+	for i, record := range expected.Values {
+		if record.Value.Kind != schema.ViewProperties {
+			continue
+		}
+		name := record.Value.Owner.Schema + "." + record.Value.Owner.Name
+		c.Assert(slices.ContainsFunc(views, func(view struct{ Name, Body string }) bool { return view.Name == name }), qt.IsTrue,
+			qt.Commentf("view %s is missing from the host's views: %v", name, views))
+		c.Assert(found[i], qt.IsFalse)
+		found[i] = true
+	}
 	c.Assert(found, qt.HasLen, len(expected.Values))
 }
