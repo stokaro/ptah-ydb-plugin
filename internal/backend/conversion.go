@@ -42,7 +42,7 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 		case schema.ColumnProperties:
 			converted, err = schema.ConvertColumn(value.Value, request.From, request.To)
 		case schema.TableProperties:
-			converted, err = schema.ConvertTable(value.Value, request.From, request.To, slices.Contains(request.TargetFeatures, provider.CommonAccessFeature))
+			converted, err = schema.ConvertTable(value.Value, request.From, request.To)
 		case schema.SecretProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.TopicProperties, schema.ViewProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties, schema.ColumnStorageProperties,
 			schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties, schema.StreamingQueryProperties:
 			converted, err = schema.ConvertNative(value.Value, request.From, request.To)
@@ -50,6 +50,11 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 			converted, err = schema.ConvertCoordination(value.Value, request.From, request.To)
 		default:
 			return nil, status.Error(codes.Unimplemented, "YDB model has no representation conversion")
+		}
+		if err == nil && request.From == protocol.ValueInput_OBSERVED && request.To == protocol.ValueInput_DESIRED &&
+			slices.Contains(request.TargetFeatures, provider.CommonAccessFeature) {
+			// The grants a read holds travel as common grants.
+			converted, err = schema.WithoutAccess(converted)
 		}
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
