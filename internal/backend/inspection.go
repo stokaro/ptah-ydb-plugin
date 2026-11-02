@@ -46,6 +46,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 			common.Realm = session.database
 		}
 	}
+	common.ContextInventory = slices.Contains(negotiatedFeatures(ctx), provider.PlanningContextInventoryFeature)
 	result, err := inspect.ReadObjects(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), common, session.streaming(), session.leftOut()...)
 	if err != nil {
 		if ctx.Err() != nil {

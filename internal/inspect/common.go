@@ -25,6 +25,9 @@ type Common struct {
 	// prefix YDB stores at the head of a view the session created, and empty
 	// on a database.
 	Realm string
+	// ContextInventory has a filtered read report the streaming queries
+	// outside its scope as its planning context; see OutsideStreamingInventory.
+	ContextInventory bool
 }
 
 // coverage is the common-object part of a reply before anything is read: one

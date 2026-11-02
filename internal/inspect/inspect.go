@@ -255,6 +255,14 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		case err == nil:
 			RealmStreamingInventory(result, inventory, leaveOut)
 		}
+	} else if common.ContextInventory {
+		inventory, err := ReadStreamingInventory(ctx, database, source.directory, queries)
+		if err != nil && ctx.Err() != nil {
+			return nil, err
+		}
+		if err == nil {
+			result.PlanningContext = OutsideStreamingInventory(inventory, selectors)
+		}
 	}
 	slices.SortFunc(result.Tables, func(a, b *protocol.Table) int {
 		if compared := strings.Compare(a.Identity.Schema, b.Identity.Schema); compared != 0 {

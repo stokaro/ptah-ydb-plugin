@@ -119,6 +119,29 @@ func RealmStreamingInventory(snapshot, inventory *protocol.Schema, realms []stri
 	replaceStreamingInventory(snapshot, inventory)
 }
 
+// OutsideStreamingInventory is the planning context of a read filtered to the
+// directories selected: the streaming queries inventory, a read of every
+// directory in the database, finds outside them, with the inventory's
+// database-wide coverage (ADR 0053). A query inside them is the snapshot's
+// own native object. A query whose settings could not be read stays an
+// unknown subject, which refuses a write of any input.
+func OutsideStreamingInventory(inventory *protocol.Schema, selected []string) *protocol.PlanningContextInventory {
+	outside := func(directory string) bool { return !slices.Contains(selected, directory) }
+	result := &protocol.PlanningContextInventory{Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED,
+		Kinds: slices.Clone(inventory.GetCoverage().GetKinds())}}
+	for _, value := range inventory.GetNativeObjects() {
+		if outside(value.GetOwner().GetSchema()) {
+			result.Objects = append(result.Objects, value)
+		}
+	}
+	for _, subject := range inventory.GetCoverage().GetSubjects() {
+		if outside(subject.GetSubject().GetSchema()) {
+			result.Coverage.Subjects = append(result.Coverage.Subjects, subject)
+		}
+	}
+	return result
+}
+
 func replaceStreamingInventory(snapshot, inventory *protocol.Schema) {
 	snapshot.NativeObjects = slices.DeleteFunc(snapshot.NativeObjects, func(value *protocol.Envelope) bool { return value.Kind == schema.StreamingQueryProperties })
 	snapshot.NativeObjects = append(snapshot.NativeObjects, inventory.NativeObjects...)
