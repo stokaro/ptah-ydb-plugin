@@ -18,19 +18,26 @@ import (
 
 // ColumnInventory checks captured state around one native column addition or drop.
 type ColumnInventory struct {
-	Open func(context.Context) (AlterationSession, error)
+	Open    func(context.Context) (AlterationSession, error)
+	Execute func(context.Context, string) error
 }
 
 // NewColumnInventory binds one-shot native table alteration and observation.
-func NewColumnInventory(driver *ydb.Driver) *ColumnInventory {
-	return &ColumnInventory{Open: func(ctx context.Context) (AlterationSession, error) { return OpenTable(ctx, driver) }}
+func NewColumnInventory(driver *ydb.Driver, execute func(context.Context, string) error) *ColumnInventory {
+	return &ColumnInventory{Open: func(ctx context.Context) (AlterationSession, error) { return OpenTable(ctx, driver) }, Execute: execute}
 }
 
 // Apply refuses stale or dependent columns before dispatch and confirms the full table.
-func (c *ColumnInventory) Apply(ctx context.Context, database string, value *protocol.Envelope, beforeWrite func(context.Context) error) (dispatched bool, err error) {
+func (c *ColumnInventory) Apply(ctx context.Context, database string, value *protocol.Envelope, caps map[string]bool, beforeWrite func(context.Context) error) (dispatched bool, err error) {
 	change, err := tablecreate.DecodeInventory(value)
 	if err != nil {
 		return false, err
+	}
+	if err := change.CheckCapabilities(caps); err != nil {
+		return false, err
+	}
+	if change.Add.GetFromLiteral() != nil && c.Execute == nil {
+		return false, fmt.Errorf("default-bearing additions require the pinned query executor")
 	}
 	owner := proto.CloneOf(value.Owner)
 	if owner.Database != "" && owner.Database != database {
@@ -71,10 +78,9 @@ func (c *ColumnInventory) Apply(ctx context.Context, database string, value *pro
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	request := change.Request()
-	request.Path = target
-	if err := session.Alter(ctx, request); err != nil {
-		return true, err
+	dispatched, err = c.dispatch(ctx, session, target, change)
+	if err != nil {
+		return dispatched, err
 	}
 	after, err := session.Describe(ctx, target)
 	if err != nil {
@@ -84,6 +90,27 @@ func (c *ColumnInventory) Apply(ctx context.Context, database string, value *pro
 		return true, err
 	}
 	return true, confirmInventoryState(owner, change, before, after)
+}
+
+func (c *ColumnInventory) dispatch(ctx context.Context, session AlterationSession, target string, change *tablecreate.ColumnInventory) (bool, error) {
+	if change.Add.GetFromLiteral() != nil {
+		statement, err := tablecreate.InventoryStatement(target, change)
+		if err != nil {
+			return false, err
+		}
+		// Native AlterTable records the default but leaves old rows NULL.
+		// YQL fills existing rows, including NOT NULL additions.
+		if err := c.Execute(ctx, statement); err != nil {
+			return true, err
+		}
+	} else {
+		request := change.Request()
+		request.Path = target
+		if err := session.Alter(ctx, request); err != nil {
+			return true, err
+		}
+	}
+	return true, nil
 }
 
 func confirmInventoryState(owner *protocol.Reference, change *tablecreate.ColumnInventory, before, after *native.DescribeTableResult) error {

@@ -38,7 +38,11 @@ func planInventory(owner *protocol.Reference, table *protocol.PlanningTable, cla
 		}
 		addition := proto.CloneOf(column)
 		addition.Family = ""
-		operation, err := CaptureInventory("pending", owner, &ColumnInventory{Add: addition})
+		change := &ColumnInventory{Add: addition}
+		if err := change.CheckCapabilities(caps); err != nil {
+			return nil, err.Error(), nil
+		}
+		operation, err := CaptureInventory("pending", owner, change)
 		if err != nil {
 			return nil, fmt.Sprintf("Column %q addition: %v", column.Name, err), nil
 		}

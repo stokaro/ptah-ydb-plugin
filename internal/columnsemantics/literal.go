@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -19,22 +20,13 @@ import (
 // type, as the host's embedded engine writes a default: `5`, `'a'u`,
 // `Date('2026-01-02')`. A value of a type it has no literal for is an error.
 func Literal(value *Ydb.TypedValue) (string, error) {
-	kind := value.GetType()
-	scalar := value.GetValue()
-	if kind.GetOptionalType() != nil {
-		kind = kind.GetOptionalType().GetItem()
-		if scalar.GetNestedValue() != nil {
-			scalar = scalar.GetNestedValue()
-		}
-	}
-	if _, isNull := scalar.GetValue().(*Ydb.Value_NullFlagValue); isNull {
-		return "", errors.New("a NULL default has no literal")
-	}
-	name, _, err := schema.ColumnType(kind)
+	canonical, err := CanonicalLiteral(value)
 	if err != nil {
 		return "", err
 	}
-	if err := validateLiteralScalar(kind, scalar); err != nil {
+	kind, scalar := canonical.Type, canonical.Value
+	name, _, err := schema.ColumnType(kind)
+	if err != nil {
 		return "", err
 	}
 	text, err := literalText(kind, scalar)
@@ -42,6 +34,38 @@ func Literal(value *Ydb.TypedValue) (string, error) {
 		return "", err
 	}
 	return ydbtype.ValueLiteral(name, text)
+}
+
+// CanonicalLiteral validates a scalar default and removes only its optional
+// wrapper. The same non-null default can be returned with or without that
+// wrapper by the table and query services.
+func CanonicalLiteral(value *Ydb.TypedValue) (*Ydb.TypedValue, error) {
+	if err := schema.Known(value); err != nil {
+		return nil, err
+	}
+	result := proto.CloneOf(value)
+	if result == nil {
+		return nil, errors.New("a native default requires its typed value")
+	}
+	if optional := result.Type.GetOptionalType(); optional != nil {
+		result.Type = optional.Item
+		if nested := result.Value.GetNestedValue(); nested != nil {
+			if !proto.Equal(result.Value, &Ydb.Value{Value: &Ydb.Value_NestedValue{NestedValue: nested}}) {
+				return nil, errors.New("an optional default contains fields outside its scalar value")
+			}
+			result.Value = nested
+		}
+	}
+	if _, isNull := result.Value.GetValue().(*Ydb.Value_NullFlagValue); isNull {
+		return nil, errors.New("a NULL default has no literal")
+	}
+	if _, _, err := schema.ColumnType(result.Type); err != nil {
+		return nil, err
+	}
+	if err := validateLiteralScalar(result.Type, result.Value); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // literalText is the text spelling of a value, which the column's type reads

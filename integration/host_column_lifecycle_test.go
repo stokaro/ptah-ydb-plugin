@@ -48,11 +48,23 @@ func TestHostColumnDefaultsAndInventory(t *testing.T) {
 		{name: "drop default", primaryClause: ", nullable: true"},
 		{name: "add column", primaryClause: ", nullable: true", extra: "      note: {type: INTEGER, nullable: true}\n"},
 		{name: "drop column", primaryClause: ", nullable: true"},
+		{name: "add default columns", primaryClause: ", nullable: true", extra: "      added_amount: {type: INTEGER, nullable: true, default: '5'}\n      added_label: {type: TEXT, nullable: false, default: \"\"}\n"},
 	} {
+		if step.name == "add default columns" && !session.Capabilities["add_column_with_default"] {
+			continue
+		}
 		text := source(step.defaultClause, step.primaryClause, step.extra)
 		output, err := hostApplySource(c, directory, "yaml", text)
 		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", step.name, output))
 		assertColumnFixedPoint(c, host, manifest, directory, text)
+		if step.name == "add default columns" {
+			var amount, added int64
+			var label string
+			c.Assert(opened.DB.QueryRowContext(c.Context(), "SELECT amount,added_amount,added_label FROM `"+table+"` WHERE id=1").Scan(&amount, &added, &label), qt.IsNil)
+			c.Assert(amount, qt.Equals, int64(6))
+			c.Assert(added, qt.Equals, int64(5))
+			c.Assert(label, qt.Equals, "")
+		}
 		if step.name == "set default" {
 			_, err = opened.DB.ExecContext(c.Context(), "INSERT INTO `"+table+"` (id) VALUES (1)") // #nosec G202 -- the fixture generates the directory and owns the fixed table name
 			c.Assert(err, qt.IsNil)

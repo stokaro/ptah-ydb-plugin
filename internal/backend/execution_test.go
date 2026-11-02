@@ -15,8 +15,11 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -381,7 +384,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"changefeeds": true, "changefeed_user_sids": true, "changefeed_schema_changes": true, "changefeed_topic_auto_partitioning": true,
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": true,
 		"resource_pools": false, "streaming_queries": false,
-		"wide_date_time_types": true, "parameterized_decimal": true, "alter_column_default": true, "small_integer_defaults": true, "document_type_defaults": true,
+		"wide_date_time_types": true, "parameterized_decimal": true, "alter_column_default": true, "add_column_with_default": true, "small_integer_defaults": true, "document_type_defaults": true,
 	})
 	// 25.1 takes none of the later changefeed options, and 25.1 to 25.3 take
 	// no availability period on a consumer and no secret path on a data
@@ -393,7 +396,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"changefeeds": true, "changefeed_user_sids": false, "changefeed_schema_changes": false, "changefeed_topic_auto_partitioning": false,
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": false,
 		"resource_pools": false, "streaming_queries": false,
-		"wide_date_time_types": false, "parameterized_decimal": false, "alter_column_default": false, "small_integer_defaults": false, "document_type_defaults": false,
+		"wide_date_time_types": false, "parameterized_decimal": false, "alter_column_default": false, "add_column_with_default": false, "small_integer_defaults": false, "document_type_defaults": false,
 	})
 	// Each option arrives on the line the host's presets name.
 	for _, test := range []struct {
@@ -402,6 +405,8 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		want    bool
 	}{
 		{"25.2.1", "changefeed_topic_auto_partitioning", true},
+		{"25.4.1", "add_column_with_default", false},
+		{"26.1.1", "add_column_with_default", true},
 		{"25.2.1", "changefeed_schema_changes", false},
 		{"25.3.1", "changefeed_schema_changes", true},
 		{"25.4.1", "changefeed_user_sids", false},
@@ -469,4 +474,28 @@ func TestCanceledCallIsNotATimeout(t *testing.T) {
 
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
 	c.Assert(result.StatementTimedOut, qt.IsFalse)
+}
+
+func TestDefaultAdditionRefusesTheWholeBatchBeforeDispatch(t *testing.T) {
+	for _, test := range []struct{ name, transaction, code string }{
+		{name: "capability absent", code: "ydb.column-addition-unsupported"},
+		{name: "transaction", transaction: "tx", code: "ydb.native-transaction-forbidden"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := qt.New(t)
+			probe := &driverProbe{}
+			service := probeProvider(c, probe)
+			kind := &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}
+			value, err := tablecreate.CaptureInventory("add", &protocol.Reference{Engine: "ydb", Kind: "table", Name: "records"}, &tablecreate.ColumnInventory{Add: &Ydb_Table.ColumnMeta{Name: "label", Type: kind, NotNull: new(true), DefaultValue: &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: kind, Value: &Ydb.Value{Value: &Ydb.Value_TextValue{TextValue: ""}}}}}})
+			c.Assert(err, qt.IsNil)
+			request := sqlRequest(test.transaction)
+			request.Units = append(request.Units, &protocol.Unit{ChangeId: "add", Body: &protocol.Unit_Native{Native: value.Value}})
+			result, err := service.Execute(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
+			c.Assert(result.DiagnosticCode, qt.Equals, test.code)
+			c.Assert(result.AppliedCount, qt.Equals, uint32(0))
+			c.Assert(probe.execCalls.Load(), qt.Equals, int32(0))
+		})
+	}
 }
