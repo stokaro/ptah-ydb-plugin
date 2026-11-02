@@ -50,7 +50,7 @@ func TestCoordinationComparisonOfflineSubprocess(t *testing.T) {
 	unnegotiated, err := withoutLifecycle.PlanFeatures(t.Context(), planning)
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(unnegotiated, qt.IsNil)
-	rendered, err := client.Render(t.Context(), testplanning.RenderRequest(plan, planning.Capabilities))
+	rendered, err := client.Render(t.Context(), testplanning.RenderRequest(client.Description(), plan, planning.Capabilities))
 	c.Assert(err, qt.IsNil)
 	c.Assert(rendered.Units, qt.HasLen, 1)
 	c.Assert(rendered.Units[0].GetNative().Kind, qt.Equals, schema.CoordinationOperation)

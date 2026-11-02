@@ -54,7 +54,7 @@ func layoutFixture(c *qt.C, columns []*protocol.DeclaredColumn, key []string, fi
 	plan, err := client.PlanFeatures(ctx, planning)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
-	rendered, err := client.Render(ctx, testplanning.RenderRequest(plan, session.Capabilities))
+	rendered, err := client.Render(ctx, testplanning.RenderRequest(client.Description(), plan, session.Capabilities))
 	c.Assert(err, qt.IsNil)
 	result, err := client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "create-with-layout", Units: rendered.Units})
 	c.Assert(err, qt.IsNil)

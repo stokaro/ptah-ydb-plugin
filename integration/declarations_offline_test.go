@@ -29,7 +29,7 @@ func TestDeclarationsOfflineSubprocess(t *testing.T) {
 	result, err := client.PlanDeclarations(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Declarations, qt.HasLen, 1)
-	rendering := testplanning.RenderRequest(&protocol.PlannedFeatures{Contributions: result.Contributions}, request.Capabilities)
+	rendering := testplanning.RenderRequest(client.Description(), &protocol.PlannedFeatures{Contributions: result.Contributions}, request.Capabilities)
 	rendering.TargetFeatures = engine.Features
 	rendering.Form = protocol.RenderRequest_TEXT
 	rendered, err := client.Render(c.Context(), rendering)

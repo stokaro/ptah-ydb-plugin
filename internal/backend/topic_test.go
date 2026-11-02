@@ -179,7 +179,7 @@ func TestTopicPlanning_HappyPath(t *testing.T) {
 			c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
 			c.Assert(step.Metadata.Effects[0].Action, qt.Equals, test.action)
 			c.Assert(step.Operation.Value.Value.Kind, qt.Equals, schema.TopicOperation)
-			rendering := testplanning.RenderRequest(plan, capabilities)
+			rendering := testplanning.RenderRequest(backend.Description(), plan, capabilities)
 			rendered, err := backend.New().Render(t.Context(), rendering)
 			c.Assert(err, qt.IsNil)
 			c.Assert(rendered.Units, qt.HasLen, 1)

@@ -126,7 +126,7 @@ func TestCreationPlanCreatesTheIndexes(t *testing.T) {
 	effects := plan.Contributions[0].Steps[0].Metadata.Effects
 	c.Assert(effects, qt.HasLen, 3)
 	c.Assert(proto.Equal(effects[2].Subject, index), qt.IsTrue)
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	rendering.Form = protocol.RenderRequest_TEXT
 	rendered, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)
