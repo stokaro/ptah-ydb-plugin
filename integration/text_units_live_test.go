@@ -192,7 +192,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 		plan, err := client.PlanFeatures(ctx, planning)
 		c.Assert(err, qt.IsNil)
 		c.Assert(plan.Diagnostics, qt.HasLen, 0)
-		rendering := testplanning.RenderRequest(plan, session.Capabilities)
+		rendering := testplanning.RenderRequest(client.Description(), plan, session.Capabilities)
 		rendering.Form = form
 		rendered, err := client.Render(ctx, rendering)
 		c.Assert(err, qt.IsNil)
@@ -218,7 +218,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 	for _, table := range snapshot.Tables {
 		var columns []any
 		for _, column := range table.Columns {
-			columns = append(columns, []any{column.Name, column.Type, column.Nullable, column.PrimaryKey, column.GetDefaultExpression()})
+			columns = append(columns, []any{column.Name, column.Observed.ColumnType, column.Observed.IsNullable == "YES", column.Observed.PrimaryKey, column.Observed.GetDefaultExpression()})
 		}
 		held[table.Identity.Name] = append(held[table.Identity.Name], columns)
 	}
@@ -318,7 +318,7 @@ func (f *coordinationText) text(c *qt.C, compared *protocol.ComparedModels) *pro
 		Changes:     []*protocol.PlanningChange{{Subject: change.Subject, Value: change.Value}}}
 	plan, err := f.client.PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
-	rendering := testplanning.RenderRequest(plan, f.session.Capabilities)
+	rendering := testplanning.RenderRequest(f.client.Description(), plan, f.session.Capabilities)
 	rendering.Form = protocol.RenderRequest_TEXT
 	rendered, err := f.client.Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)

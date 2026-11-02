@@ -64,7 +64,7 @@ func TestAuthoredDeclarationsCreateEveryNativeFamily(t *testing.T) {
 	c.Assert(result.Diagnostics, qt.HasLen, 0)
 	c.Assert(result.Declarations, qt.HasLen, 6)
 	c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
-	rendering := testplanning.RenderRequest(&protocol.PlannedFeatures{Contributions: result.Contributions}, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), &protocol.PlannedFeatures{Contributions: result.Contributions}, request.Capabilities)
 	rendering.TargetFeatures = request.TargetFeatures
 	rendering.Form = protocol.RenderRequest_TEXT
 	text, err := backend.New().Render(c.Context(), rendering)

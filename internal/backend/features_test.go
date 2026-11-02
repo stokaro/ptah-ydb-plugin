@@ -5,10 +5,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
-
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 )
 
 // TestDescriptionListsOneFeatureSet pins that the engine offers every
@@ -72,4 +71,17 @@ func TestDescriptionRefusesHostsWithoutDatabaseContextContract(t *testing.T) {
 			c.Assert(provider.CheckContract(host, provider.MinimumContract(backend.Description())), qt.ErrorIs, provider.ErrProtocol)
 		})
 	}
+}
+
+// Negotiating a recent contract alone does not opt a host into complete
+// column observations. Refuse before opening a database or returning a prefix.
+func TestInspectionRequiresObservedColumnsFeature(t *testing.T) {
+	c := qt.New(t)
+	result, err := backend.New().Inspect(c.Context(), &protocol.InspectRequest{})
+	c.Assert(result, qt.IsNil)
+	c.Assert(err, qt.ErrorMatches, "rpc error: code = FailedPrecondition desc = YDB inspection requires schema.observed-columns")
+	ctx := provider.ContextWithHostFeatures(c.Context(), []string{provider.ObservedColumnsFeature})
+	result, err = backend.New().Inspect(ctx, &protocol.InspectRequest{})
+	c.Assert(result, qt.IsNil)
+	c.Assert(err, qt.ErrorMatches, "rpc error: code = NotFound desc = unknown YDB session")
 }

@@ -60,8 +60,8 @@ func buildOperationModel() *protocol.ValueModel {
 }
 
 // Capture compiles a declaration after its caller established the CREATE lifecycle.
-func Capture(id string, owner *protocol.Reference, table *protocol.DeclaredTable) (*protocol.NormalizedValue, error) {
-	request, err := Compile(owner, table)
+func Capture(id string, owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) (*protocol.NormalizedValue, error) {
+	request, err := Compile(owner, table, caps)
 	if err != nil {
 		return nil, err
 	}

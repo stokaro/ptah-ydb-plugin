@@ -8,6 +8,7 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+	"google.golang.org/protobuf/proto"
 )
 
 // ConvertCoordination preserves timing, modes, and access constraints offline.
@@ -21,7 +22,14 @@ func ConvertCoordination(value *protocol.Envelope, from, to protocol.ValueInput_
 		if err != nil {
 			return nil, err
 		}
-		return CaptureCoordinationIntent(value.Owner, intent)
+		converted, err := CaptureCoordinationIntent(value.Owner, intent)
+		if err != nil {
+			return nil, err
+		}
+		// The captured envelope is new, so it takes the source's database
+		// context: a conversion changes the representation, not the identity.
+		converted.Context = proto.CloneOf(value.Context)
+		return converted, nil
 	}
 	if from == protocol.ValueInput_DESIRED && to == protocol.ValueInput_OBSERVED {
 		intent, err := CoordinationConfiguration(value, from)

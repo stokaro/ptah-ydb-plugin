@@ -39,7 +39,7 @@ func observedTable(c *qt.C, client *providerruntime.Client, session *protocol.Se
 		Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}},
 		Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}}}}
 	for _, column := range snapshot.Tables[0].Columns {
-		result.Columns = append(result.Columns, &protocol.ObservedColumn{Name: column.Name})
+		result.Columns = append(result.Columns, proto.CloneOf(column.Observed))
 	}
 	for _, value := range normalized.Values {
 		owner := value.Value.Owner
@@ -155,7 +155,7 @@ func TestRowTableFamilyAlterationSubprocess(t *testing.T) {
 			c.Assert(alteration.Request.AddColumnFamilies, qt.HasLen, step.wantAdd)
 			c.Assert(alteration.Request.AlterColumnFamilies, qt.HasLen, step.wantAlter)
 			c.Assert(alteration.Request.AlterColumns, qt.HasLen, step.wantMoves)
-			applied, err = client.Render(ctx, testplanning.RenderRequest(result, session.Capabilities))
+			applied, err = client.Render(ctx, testplanning.RenderRequest(client.Description(), result, session.Capabilities))
 			c.Assert(err, qt.IsNil)
 			c.Assert(applied.Units, qt.HasLen, 1)
 			execution, err := client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "alter-" + step.name, Units: applied.Units})

@@ -131,7 +131,7 @@ func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTab
 	// The declaration is held to the rules of a creation, which a TTL the
 	// table takes in place obeys too: its column is declared, first in the
 	// key and of a type the mode reads.
-	if _, err := CompileColumnTable(owner, table.Desired); err != nil {
+	if _, err := CompileColumnTable(owner, table.Desired, capabilities); err != nil {
 		return true, err.Error(), nil, nil
 	}
 	change := &columnTTLChange{held: enabledTTL(sides.held.Ttl), set: enabledTTL(sides.desired.Ttl)}

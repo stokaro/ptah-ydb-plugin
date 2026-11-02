@@ -52,7 +52,7 @@ func TestNativeTableCreationPlanRenderNormalize(t *testing.T) {
 		{Id: step.Operation.Value.Id, Representation: protocol.ValueInput_OPERATION, Value: step.Operation.Value.Value}}})
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(normalized.Values[0], step.Operation.Value), qt.IsTrue)
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	rendered, err := service.Render(t.Context(), rendering)
 	c.Assert(err, qt.IsNil)
 	c.Assert(rendered.Units, qt.HasLen, 1)
@@ -142,7 +142,7 @@ func TestCreationOperationRefusesSessionAndPathInjection(t *testing.T) {
 	} {
 		t.Run(payload, func(t *testing.T) {
 			c := qt.New(t)
-			value, err := tablecreate.Capture("operation", owner(), declaration())
+			value, err := tablecreate.Capture("operation", owner(), declaration(), nil)
 			c.Assert(err, qt.IsNil)
 			value.Value.Payload = []byte(payload)
 			normalized, err := tablecreate.Normalize(&protocol.ValueInput{Id: "operation", Representation: protocol.ValueInput_OPERATION, Value: value.Value})

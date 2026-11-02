@@ -81,7 +81,7 @@ func TestUnchangedStreamingQueryRestartsAroundChangedInput(t *testing.T) {
 	c.Assert(steps, qt.HasLen, 2)
 	c.Assert(steps[0].Metadata.Placement, qt.Equals, protocol.PlanningMetadata_EARLY)
 	c.Assert(steps[1].Metadata.Placement, qt.Equals, protocol.PlanningMetadata_DEFAULT)
-	rendered := testplanning.RenderRequest(result, request.Capabilities)
+	rendered := testplanning.RenderRequest(backend.Description(), result, request.Capabilities)
 	rendered.Form = protocol.RenderRequest_TEXT
 	rendered.TargetFeatures = []string{provider.TextUnitsFeature}
 	reply, err := backend.New().Render(c.Context(), rendered)

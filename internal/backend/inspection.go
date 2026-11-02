@@ -22,6 +22,9 @@ import (
 // Inspect serializes inspection with close on this session only. A closed
 // handle cannot reopen a connection or fall back to an embedded engine.
 func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest) (*protocol.Schema, error) {
+	if !slices.Contains(provider.HostFeatures(ctx), provider.ObservedColumnsFeature) {
+		return nil, status.Error(codes.FailedPrecondition, "YDB inspection requires schema.observed-columns")
+	}
 	p.mu.Lock()
 	session := p.sessions[request.GetSessionId()]
 	p.mu.Unlock()

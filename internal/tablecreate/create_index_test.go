@@ -31,7 +31,7 @@ func TestCompileDeclaredIndexes_HappyPath(t *testing.T) {
 		&protocol.DeclaredIndex{Name: "by_mail", Fields: []string{"mail"}, Unique: true},
 		&protocol.DeclaredIndex{Name: "by_note", Parts: []*protocol.CapturedIndexPart{{Column: "note"}, {Column: "id"}}, Type: "GLOBAL ASYNC"},
 		&protocol.DeclaredIndex{Name: "by_mail_note", Fields: []string{"mail"}, IncludeColumns: []string{"note", "score"}, Type: "btree", TableName: "app.records"},
-	))
+	), nil)
 	c.Assert(err, qt.IsNil)
 	want := []*Ydb_Table.TableIndex{
 		{Name: "by_mail", IndexColumns: []string{"mail"}, Type: &Ydb_Table.TableIndex_GlobalUniqueIndex{GlobalUniqueIndex: &Ydb_Table.GlobalUniqueIndex{}}},
@@ -91,14 +91,14 @@ func TestCompileDeclaredIndexes_FailurePath(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := qt.New(t)
-			request, err := tablecreate.Compile(owner(), indexedTable(tc.index))
+			request, err := tablecreate.Compile(owner(), indexedTable(tc.index), nil)
 			c.Assert(err, qt.ErrorMatches, ".*"+regexp.QuoteMeta(tc.want)+".*")
 			c.Assert(request, qt.IsNil)
 		})
 	}
 	c := qt.New(t)
 	request, err := tablecreate.Compile(owner(), indexedTable(&protocol.DeclaredIndex{Name: "i", Fields: []string{"mail"}},
-		&protocol.DeclaredIndex{Name: "i", Fields: []string{"note"}}))
+		&protocol.DeclaredIndex{Name: "i", Fields: []string{"note"}}), nil)
 	c.Assert(err, qt.ErrorMatches, `.*two of its indexes are named "i".*`)
 	c.Assert(request, qt.IsNil)
 }
@@ -126,7 +126,7 @@ func TestCreationPlanCreatesTheIndexes(t *testing.T) {
 	effects := plan.Contributions[0].Steps[0].Metadata.Effects
 	c.Assert(effects, qt.HasLen, 3)
 	c.Assert(proto.Equal(effects[2].Subject, index), qt.IsTrue)
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	rendering.Form = protocol.RenderRequest_TEXT
 	rendered, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)

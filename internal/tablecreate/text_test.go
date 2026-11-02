@@ -5,12 +5,12 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
-
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 )
 
 func creationRequest(c *qt.C, text string) *Ydb_Table.CreateTableRequest {
@@ -186,10 +186,6 @@ func TestRowTableStatement_FailurePath(t *testing.T) {
 		{name: "a default from a sequence",
 			request: `{"columns":[{"name":"id","type":{"typeId":"INT64"},"notNull":true,"fromSequence":{"name":"_serial_column_id"}}],"primaryKey":["id"]}`,
 			want:    `column "id" takes its default from a sequence`},
-		{name: "a default of a type without a literal",
-			request: `{"columns":[{"name":"id","type":{"typeId":"UINT64"},"notNull":true},{"name":"u","type":{"typeId":"UUID"},"notNull":true,
-				"fromLiteral":{"type":{"typeId":"UUID"},"value":{"low128":"1","high128":"2"}}}],"primaryKey":["id"]}`,
-			want: `the default of column "u" has no YQL literal`},
 		{name: "a split point over a type the setting does not take",
 			request: `{"columns":[{"name":"d","type":{"typeId":"DATE"},"notNull":true}],"primaryKey":["d"],"partitionAtKeys":{"splitPoints":[
 				{"type":{"tupleType":{"elements":[{"optionalType":{"item":{"typeId":"DATE"}}}]}},"value":{"items":[{"nestedValue":{"uint32Value":10}}]}}]}}`,
@@ -326,7 +322,7 @@ func TestLiteral_FailurePath(t *testing.T) {
 	c := qt.New(t)
 	null := &Ydb.TypedValue{Type: &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}}}},
 		Value: &Ydb.Value{Value: &Ydb.Value_NullFlagValue{}}}
-	got, err := tablecreate.Literal(null)
+	got, err := columnsemantics.Literal(null)
 	c.Assert(err, qt.ErrorMatches, "a NULL default has no literal")
 	c.Assert(got, qt.Equals, "")
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -319,19 +320,16 @@ func readTable(database, directory, name string, described *nativeprotocol.Descr
 	}
 	table.Facets = []*protocol.Envelope{facet}
 	names := map[string]bool{}
-	for _, column := range described.GetColumns() {
+	for position, column := range described.GetColumns() {
 		if column.GetName() == "" || names[column.GetName()] {
 			return nil, fmt.Errorf("invalid YDB column identity")
 		}
 		names[column.GetName()] = true
-		spelling, nullable, err := schema.ColumnType(column.GetType())
+		observed, err := columnsemantics.Observed(column, position+1, slices.Contains(described.GetPrimaryKey(), column.GetName()))
 		if err != nil {
 			return nil, err
 		}
-		if column.GetNotNull() {
-			nullable = false
-		}
-		projected := &protocol.Column{Name: column.GetName(), Type: spelling, Nullable: nullable, PrimaryKey: slices.Contains(described.GetPrimaryKey(), column.GetName())}
+		projected := &protocol.Column{Name: column.GetName(), Observed: observed}
 		facet, err := schema.CaptureColumn(provider.ColumnReference(ref, column.GetName()), column)
 		if err != nil {
 			return nil, err

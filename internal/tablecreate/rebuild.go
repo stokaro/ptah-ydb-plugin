@@ -68,8 +68,8 @@ type rebuildNeed struct {
 // rebuild: its key, a column's type, a column becoming NOT NULL. The
 // declaration is compiled with the creation rules; one that does not compile
 // needs no rebuild here, and the alteration refuses it in its own words.
-func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable) ([]rebuildNeed, *Ydb_Table.CreateTableRequest) {
-	desired, err := Compile(owner, table.GetDesired())
+func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps map[string]bool) ([]rebuildNeed, *Ydb_Table.CreateTableRequest) {
+	desired, err := Compile(owner, table.GetDesired(), caps)
 	if err != nil {
 		return nil, nil
 	}

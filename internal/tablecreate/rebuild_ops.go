@@ -169,7 +169,7 @@ func DecodeRename(value *protocol.Envelope) (*Rename, error) {
 }
 
 type statementPayload interface {
-	Copy | Rename
+	Copy | Rename | defaultPayload | inventoryPayload
 	validate() error
 }
 
@@ -182,7 +182,11 @@ func decodeStatement[T statementPayload](input *protocol.ValueInput, definition 
 	if err := validateOwner(value.Owner); err != nil {
 		return nil, err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(value.Payload))
+	canonical, err := modeljson.Canonical(value.Payload)
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(canonical))
 	decoder.DisallowUnknownFields()
 	var payload T
 	if err := decoder.Decode(&payload); err != nil || decoder.More() {

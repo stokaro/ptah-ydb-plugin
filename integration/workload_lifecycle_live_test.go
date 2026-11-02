@@ -159,7 +159,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 		planned, err := client.PlanFeatures(ctx, planning)
 		c.Assert(err, qt.IsNil)
 		c.Assert(planned.Diagnostics, qt.HasLen, 0)
-		rendering := testplanning.RenderRequest(planned, session.Capabilities)
+		rendering := testplanning.RenderRequest(client.Description(), planned, session.Capabilities)
 		rendering.Form = form
 		rendered, err := client.Render(ctx, rendering)
 		c.Assert(err, qt.IsNil)

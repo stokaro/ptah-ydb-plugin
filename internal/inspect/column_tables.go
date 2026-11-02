@@ -6,6 +6,7 @@ import (
 	"path"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -45,15 +46,12 @@ func (s *source) readColumnTable(ctx context.Context, columns ColumnTables, data
 		return nil, err
 	}
 	table.Facets = []*protocol.Envelope{facet}
-	for _, column := range described.GetColumns() {
-		spelling, nullable, err := schema.ColumnType(column.GetType())
+	for position, column := range described.GetColumns() {
+		observed, err := columnsemantics.Observed(column, position+1, slices.Contains(described.GetPrimaryKey(), column.GetName()))
 		if err != nil {
 			return nil, err
 		}
-		if column.GetNotNull() {
-			nullable = false
-		}
-		projected := &protocol.Column{Name: column.GetName(), Type: spelling, Nullable: nullable, PrimaryKey: slices.Contains(described.GetPrimaryKey(), column.GetName())}
+		projected := &protocol.Column{Name: column.GetName(), Observed: observed}
 		facet, err := schema.CaptureColumn(provider.ColumnReference(ref, column.GetName()), column)
 		if err != nil {
 			return nil, err

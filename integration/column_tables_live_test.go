@@ -94,7 +94,7 @@ func TestColumnTableInspectionSubprocess(t *testing.T) {
 	c.Assert(records.Identity.Name, qt.Equals, "records")
 	var columns []string
 	for _, column := range events.Columns {
-		columns = append(columns, fmt.Sprintf("%s:%s:%t:%t", column.Name, column.Type, column.Nullable, column.PrimaryKey))
+		columns = append(columns, fmt.Sprintf("%s:%s:%t:%t", column.Name, column.Observed.ColumnType, column.Observed.IsNullable == "YES", column.Observed.PrimaryKey))
 		c.Assert(column.Facets, qt.HasLen, 1)
 		c.Assert(column.Facets[0].Kind, qt.Equals, schema.ColumnProperties)
 	}
@@ -147,7 +147,7 @@ func TestColumnTableInspectionWithoutMonitoringSubprocess(t *testing.T) {
 	c.Cleanup(func() {
 		c.Check(direct.Close(context.Background(), &protocol.CloseRequest{SessionId: providerSession.Id}), qt.IsNil)
 	})
-	snapshot, err = direct.Inspect(ctx, &protocol.InspectRequest{SessionId: providerSession.Id, Schemas: []string{directory}})
+	snapshot, err = direct.Inspect(provider.ContextWithHostFeatures(ctx, []string{provider.ObservedColumnsFeature}), &protocol.InspectRequest{SessionId: providerSession.Id, Schemas: []string{directory}})
 	c.Assert(snapshot, qt.IsNil)
 	c.Assert(err, qt.ErrorMatches, `rpc error: code = FailedPrecondition desc = column table `+path.Join(database, directory, "events")+
 		` requires monitoring=http\(s\)://host:port in the YDB address: the table service leaves out a column table's shard count and local indexes`)

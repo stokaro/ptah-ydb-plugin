@@ -129,7 +129,7 @@ func TestRebuildPlan_HappyPath(t *testing.T) {
 	check.Assert(plan.Rewrites[0].Replacement.Name, qt.Equals, "table-rebuild/000000/rename-new")
 	check.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, 5)
 
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	rendering.Form = protocol.RenderRequest_TEXT
 	rendered, err := backend.New().Render(check.Context(), rendering)
 	check.Assert(err, qt.IsNil)
@@ -185,7 +185,7 @@ func TestRebuildPlanKeepsTheComments(t *testing.T) {
 	plan, err := backend.New().PlanFeatures(check.Context(), request)
 	check.Assert(err, qt.IsNil)
 	check.Assert(plan.Diagnostics, qt.HasLen, 0)
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	rendering.Form = protocol.RenderRequest_TEXT
 	rendered, err := backend.New().Render(check.Context(), rendering)
 	check.Assert(err, qt.IsNil)
