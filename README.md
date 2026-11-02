@@ -1423,7 +1423,19 @@ A changed body requires explicit state-reset permission because it discards
 checkpoints. Stopping or changing the resource pool keeps topic offsets. The
 planner stops a running query before changing its inputs and restarts it after
 its new inputs exist; a change that only stops the query emits one statement.
-Native and text rendering carry the same operations and preconditions.
+This assessment also runs when the query declaration is unchanged. Captured
+query values require `planning.object-context` (contract 25.7), and each query
+receives an assessment receipt. A changed input restarts a running query only
+when the desired capture establishes every surviving input and resource pool.
+Missing definitions, conflicting occupants, and foreign database inputs refuse
+the complete plan. An unscoped inspection walks every directory for streaming
+queries, including dot-prefixed user directories. A failed directory listing
+refuses the read; an unread query keeps explicit unknown coverage. Scoped
+inspection and reads that exclude other dev realms cannot establish the full
+dependent set, so input mutations refuse when that inventory is incomplete.
+A disabled query reader does not prove absence: directory listings do, and a
+listed unread query remains unknown. Stopped queries retain their stopped
+state. Native and text rendering carry the same operations and preconditions.
 
 Input dependencies use physical scheme paths, including absolute paths inside
 the selected database or dev realm. A constant `PRAGMA TablePathPrefix` applies
@@ -1519,6 +1531,11 @@ the views on a target with resource pools, for a read of the whole database or
 one that selects the root, `/`: a read filtered to other directories cannot
 report what belongs to the database, so it leaves both kinds uninspected. A dev
 realm holds none of its own.
+
+A complete workload read records absence inside the opened database's root
+namespace, including when no pools or classifiers were returned. It establishes
+no absence in another database or a directory namespace. The host preserves
+that boundary when it compares a new declaration against the inspection.
 
 `TestWorkloadLifecycleSubprocess` creates a pool and two classifiers, swaps
 their ranks from the text of a migration file, refuses a change planned before

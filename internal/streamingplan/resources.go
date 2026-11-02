@@ -37,7 +37,7 @@ func queryResources(request *protocol.PlanFeaturesRequest, subject *protocol.Com
 		dependencies = append(dependencies, edge)
 	}
 	for _, name := range names {
-		resource, err := queryPath(request.DatabasePath, subject, name)
+		resource, err := queryPath(request.DatabasePath, name)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -77,10 +77,7 @@ func queryResources(request *protocol.PlanFeaturesRequest, subject *protocol.Com
 	return effects, dependencies, nil
 }
 
-func queryPath(database string, owner *protocol.ComparisonIdentity, name string) (*protocol.ComparisonIdentity, error) {
-	if database == "" {
-		database = owner.GetDatabase().GetNormalized()
-	}
+func queryPath(database, name string) (*protocol.ComparisonIdentity, error) {
 	if path.IsAbs(name) {
 		if database == "" || !path.IsAbs(database) || path.Clean(database) != database || !strings.HasPrefix(name, strings.TrimSuffix(database, "/")+"/") {
 			return nil, fmt.Errorf("streaming query path is outside the captured database or dev realm")
