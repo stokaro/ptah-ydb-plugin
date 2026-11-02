@@ -138,7 +138,7 @@ func TestCoordinationPlanningExecutionSubprocess(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 		c.Assert(plan.Diagnostics, qt.HasLen, 0)
 		c.Assert(plan.Contributions[0].Steps[0].Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
-		rendered, err := client.Render(ctx, testplanning.RenderRequest(plan, session.Capabilities))
+		rendered, err := client.Render(ctx, testplanning.RenderRequest(client.Description(), plan, session.Capabilities))
 		c.Assert(err, qt.IsNil)
 		c.Assert(rendered.Units, qt.HasLen, 1)
 		c.Assert(rendered.Units[0].GetNative(), qt.IsNotNil)

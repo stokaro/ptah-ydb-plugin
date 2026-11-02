@@ -50,7 +50,7 @@ func TestCoordinationPlanningAndNativeRendering(t *testing.T) {
 			c.Assert(step.Metadata.Effects, qt.HasLen, 2)
 			c.Assert(step.Metadata.Effects[1].Subject.Kind, qt.Equals, coordinationplan.PathKind)
 			c.Assert(step.Operation.Value.Value.Kind, qt.Equals, schema.CoordinationOperation)
-			rendering := testplanning.RenderRequest(plan, request.Capabilities)
+			rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 			rendered, err := backend.New().Render(t.Context(), rendering)
 			c.Assert(err, qt.IsNil)
 			c.Assert(rendered.Units, qt.HasLen, 1)
@@ -201,7 +201,7 @@ func TestCoordinationRenderRefusesWholeBatch(t *testing.T) {
 	request := nativePlan(c, "create")
 	plan, err := backend.New().PlanFeatures(t.Context(), request)
 	c.Assert(err, qt.IsNil)
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	second := proto.CloneOf(rendering.Changes[0])
 	second.Id = "second"
 	second.GetNative().Value.Id = "second"

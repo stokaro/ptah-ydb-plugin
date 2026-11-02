@@ -68,7 +68,7 @@ func TestStreamingPlanningSplitsRunningChanges(t *testing.T) {
 			}
 			c.Assert(result.Contributions[0].Dependencies, qt.HasLen, test.count-1)
 			c.Assert(steps[0].Metadata.Placement == protocol.PlanningMetadata_EARLY, qt.Equals, test.early)
-			rendering := testplanning.RenderRequest(result, request.Capabilities)
+			rendering := testplanning.RenderRequest(backend.Description(), result, request.Capabilities)
 			rendering.Form, rendering.TargetFeatures = protocol.RenderRequest_TEXT, []string{provider.TextUnitsFeature}
 			rendered, err := backend.New().Render(c.Context(), rendering)
 			c.Assert(err, qt.IsNil)

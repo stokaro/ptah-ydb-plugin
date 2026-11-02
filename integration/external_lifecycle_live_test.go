@@ -195,7 +195,7 @@ func (h *externalHarness) plan(location string, columns ...string) []*protocol.U
 	planned, err := client.PlanFeatures(ctx, planning)
 	c.Assert(err, qt.IsNil)
 	c.Assert(planned.Diagnostics, qt.HasLen, 0)
-	rendered, err := client.Render(ctx, testplanning.RenderRequest(planned, session.Capabilities))
+	rendered, err := client.Render(ctx, testplanning.RenderRequest(client.Description(), planned, session.Capabilities))
 	c.Assert(err, qt.IsNil)
 	return rendered.Units
 }

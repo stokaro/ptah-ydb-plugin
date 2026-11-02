@@ -29,7 +29,7 @@ func TestCoordinationRendersText(t *testing.T) {
 			request := nativePlan(c, tc.action)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
-			rendering := testplanning.RenderRequest(plan, request.Capabilities)
+			rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 			rendering.Form = protocol.RenderRequest_TEXT
 			rendered, err := backend.New().Render(c.Context(), rendering)
 			c.Assert(err, qt.IsNil)
@@ -47,7 +47,7 @@ func TestTextRenderRefusesAForgedOperation(t *testing.T) {
 	request := nativePlan(c, "create")
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
 	rendering.Form = protocol.RenderRequest_TEXT
 	rendering.Changes[0].GetNative().Value.OperationSemantics.Access = protocol.ChangeSemantics_WIDENS
 	rendered, err := backend.New().Render(c.Context(), rendering)

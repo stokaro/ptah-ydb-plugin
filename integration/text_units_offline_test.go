@@ -36,7 +36,7 @@ func offlineCreation(c *qt.C, client *providerruntime.Client, payload string) *p
 	plan, err := client.PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
-	rendering := testplanning.RenderRequest(plan, request.Capabilities)
+	rendering := testplanning.RenderRequest(client.Description(), plan, request.Capabilities)
 	rendering.Form = protocol.RenderRequest_TEXT
 	return rendering
 }

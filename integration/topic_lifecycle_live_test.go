@@ -86,7 +86,7 @@ func TestTopicLifecycleSubprocess(t *testing.T) {
 			Identifiers: &protocol.ComparisonIdentifiers{Rules: rules}, Changes: []*protocol.PlanningChange{{Subject: compared.Changes[0].Subject, Value: compared.Changes[0].Value}}})
 		c.Assert(err, qt.IsNil)
 		c.Assert(planned.Diagnostics, qt.HasLen, 0)
-		rendered, err := client.Render(ctx, testplanning.RenderRequest(planned, session.Capabilities))
+		rendered, err := client.Render(ctx, testplanning.RenderRequest(client.Description(), planned, session.Capabilities))
 		c.Assert(err, qt.IsNil)
 		return rendered.Units
 	}

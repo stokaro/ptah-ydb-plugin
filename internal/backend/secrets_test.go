@@ -129,7 +129,7 @@ func TestSecretsPresenceAndExplicitRotation(t *testing.T) {
 				plan, err := backend.New().PlanFeatures(c.Context(), planRequest)
 				c.Assert(err, qt.IsNil)
 				c.Assert(plan.Diagnostics, qt.HasLen, 0)
-				rendered, err := backend.New().Render(c.Context(), testplanning.RenderRequest(plan, request.Capabilities))
+				rendered, err := backend.New().Render(c.Context(), testplanning.RenderRequest(backend.Description(), plan, request.Capabilities))
 				c.Assert(err, qt.IsNil)
 				inputs, err := backend.New().DescribeExecutionInputs(c.Context(), &protocol.DescribeExecutionInputsRequest{Engine: "ydb", Units: rendered.Units})
 				c.Assert(err, qt.IsNil)

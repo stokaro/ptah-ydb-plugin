@@ -254,7 +254,7 @@ func TestWorkloadPlanning_HappyPath(t *testing.T) {
 				c.Assert(receipt.Steps, qt.HasLen, 1)
 				c.Assert(proto.Equal(receipt.Steps[0], step.Id), qt.IsTrue)
 			}
-			rendering := testplanning.RenderRequest(plan, workloadCapabilities())
+			rendering := testplanning.RenderRequest(backend.Description(), plan, workloadCapabilities())
 			rendered, err := backend.New().Render(t.Context(), rendering)
 			c.Assert(err, qt.IsNil)
 			c.Assert(rendered.Units, qt.HasLen, 1)
