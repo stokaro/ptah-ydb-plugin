@@ -40,13 +40,18 @@ func providerBinary(c *qt.C) (string, string) {
 	return binary, hex.EncodeToString(digest[:])
 }
 
-// hostFeatures are the features the test host negotiates. A host names them
-// on every request too, and a request that carries a value a session read has
-// to: once value context is negotiated, inspection binds each value to the
-// database it was read in, and the SDK refuses a value whose context the
-// request's target features do not name.
+// hostFeatures are the features startProvider's host negotiates.
 func hostFeatures() []string {
 	return []string{provider.ObservedColumnsFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature}
+}
+
+// negotiated are the engine features client negotiated with the provider,
+// which a host names on every request. A request that carries what a session
+// read has to name them: once value context is negotiated, inspection binds
+// each value to the database it was read in, and the SDK refuses a value whose
+// context the request's target features do not name.
+func negotiated(client *providerruntime.Client) []string {
+	return client.Description().GetEngines()[0].GetFeatures()
 }
 
 func startProvider(c *qt.C, binary, digest string) *providerruntime.Client {

@@ -105,7 +105,7 @@ func TestCoordinationPlanningExecutionSubprocess(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 		snapshot, err := client.Inspect(ctx, &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
 		c.Assert(err, qt.IsNil)
-		request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), ComparisonId: coordinationcompare.ServiceID, Kinds: []string{schema.CoordinationProperties}, DatabasePath: database, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)}, Desired: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: capturedCoordinationCoverage(decoded.Documents[0].Coverage, database)}, Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedCoordinationCoverage(snapshot.Coverage, database)}}
+		request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: negotiated(client), ComparisonId: coordinationcompare.ServiceID, Kinds: []string{schema.CoordinationProperties}, DatabasePath: database, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)}, Desired: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: capturedCoordinationCoverage(decoded.Documents[0].Coverage, database)}, Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedCoordinationCoverage(snapshot.Coverage, database)}}
 		for _, value := range decoded.Documents[0].Fragments[0].Values {
 			owner := proto.CloneOf(value.Value.NormalizedOwner)
 			owner.Database = database
@@ -117,7 +117,7 @@ func TestCoordinationPlanningExecutionSubprocess(t *testing.T) {
 			if value.Kind != schema.CoordinationProperties {
 				continue
 			}
-			normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: hostFeatures(), Values: []*protocol.ValueInput{{Id: "observed", Representation: protocol.ValueInput_OBSERVED, Value: value}}})
+			normalized, err := client.NormalizeValues(ctx, &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: negotiated(client), Values: []*protocol.ValueInput{{Id: "observed", Representation: protocol.ValueInput_OBSERVED, Value: value}}})
 			c.Assert(err, qt.IsNil)
 			request.Current.Records = append(request.Current.Records, &protocol.ComparisonRecord{Kind: schema.CoordinationProperties, Subject: testplanning.Subject(value.Owner), Value: normalized.Values[0]})
 		}
@@ -133,7 +133,7 @@ func TestCoordinationPlanningExecutionSubprocess(t *testing.T) {
 		c.Helper()
 		c.Assert(compared.Changes, qt.HasLen, 1)
 		change := compared.Changes[0]
-		request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: hostFeatures(), PlanningId: coordinationplan.ServiceID, DatabasePath: database, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)}, Changes: []*protocol.PlanningChange{{Subject: change.Subject, Value: change.Value}}}
+		request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(client), PlanningId: coordinationplan.ServiceID, DatabasePath: database, Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)}, Changes: []*protocol.PlanningChange{{Subject: change.Subject, Value: change.Value}}}
 		plan, err := client.PlanFeatures(ctx, request)
 		c.Assert(err, qt.IsNil)
 		c.Assert(plan.Diagnostics, qt.HasLen, 0)

@@ -45,7 +45,7 @@ func layoutFixture(c *qt.C, columns []*protocol.DeclaredColumn, key []string, fi
 		Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 		Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{},
 			Records: []*protocol.ComparisonRecord{desiredFacet(c, client, owner, schema.TableProperties, `{"primaryKey":`+string(encodedKey)+`,`+fields+`}`)}}}}
-	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: hostFeatures(), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+	planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 		Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE, Desired: source}}}
 	prepareCapturedCreation(c, client, planning)

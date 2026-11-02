@@ -184,7 +184,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 		for _, column := range declared.Features.Facets.Records[1:] {
 			column.Subject.Parent = &protocol.ComparisonPart{Source: name, Normalized: name}
 		}
-		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: hostFeatures(), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
+		planning := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)},
 			Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE, Desired: declared}}}
 		prepareCapturedCreation(c, client, planning)
@@ -282,7 +282,7 @@ func (f *coordinationText) plan(c *qt.C, mode string, drop bool) *protocol.Compa
 	c.Assert(err, qt.IsNil)
 	snapshot, err := f.client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: f.session.Id, Schemas: []string{f.directory}})
 	c.Assert(err, qt.IsNil)
-	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: hostFeatures(), ComparisonId: coordinationcompare.ServiceID, Kinds: []string{schema.CoordinationProperties},
+	request := &protocol.CompareModelsRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), ComparisonId: coordinationcompare.ServiceID, Kinds: []string{schema.CoordinationProperties},
 		DatabasePath: f.database, Capabilities: f.session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Desired: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: capturedCoordinationCoverage(decoded.Documents[0].Coverage, f.database)},
 		Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: capturedCoordinationCoverage(snapshot.Coverage, f.database)}}
@@ -297,7 +297,7 @@ func (f *coordinationText) plan(c *qt.C, mode string, drop bool) *protocol.Compa
 		if value.Kind != schema.CoordinationProperties {
 			continue
 		}
-		normalized, err := f.client.NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: hostFeatures(), Values: []*protocol.ValueInput{{Id: "observed",
+		normalized, err := f.client.NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), Values: []*protocol.ValueInput{{Id: "observed",
 			Representation: protocol.ValueInput_OBSERVED, Value: value}}})
 		c.Assert(err, qt.IsNil)
 		request.Current.Records = append(request.Current.Records, &protocol.ComparisonRecord{Kind: schema.CoordinationProperties, Subject: testplanning.Subject(value.Owner),
@@ -313,7 +313,7 @@ func (f *coordinationText) text(c *qt.C, compared *protocol.ComparedModels) *pro
 	c.Helper()
 	c.Assert(compared.Changes, qt.HasLen, 1)
 	change := compared.Changes[0]
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: hostFeatures(), PlanningId: coordinationplan.ServiceID, DatabasePath: f.database, Capabilities: f.session.Capabilities,
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(f.client), PlanningId: coordinationplan.ServiceID, DatabasePath: f.database, Capabilities: f.session.Capabilities,
 		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(f.session.Identifiers)},
 		Changes:     []*protocol.PlanningChange{{Subject: change.Subject, Value: change.Value}}}
 	plan, err := f.client.PlanFeatures(c.Context(), request)
