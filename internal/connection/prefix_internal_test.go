@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // recordedQueries is what a stand-in SDK connection received.
@@ -54,7 +55,7 @@ func (c fakeConnector) Connect(context.Context) (driver.Conn, error) {
 func (fakeConnector) Driver() driver.Driver { return nil }
 
 func TestPrefixConnector_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	seen := &recordedQueries{}
 	db := sql.OpenDB(prefixConnector{inner: fakeConnector{seen: seen}, prefix: pathPrefix("/local/ptah_dev/r1")})
 	c.Cleanup(func() { c.Check(db.Close(), qt.IsNil) })
@@ -75,7 +76,7 @@ func TestPathPrefix(t *testing.T) {
 		{"backslash", "/lo\\cal", "PRAGMA TablePathPrefix(\"/lo\\\\cal\");\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(pathPrefix(test.root), qt.Equals, test.want)
 		})
 	}

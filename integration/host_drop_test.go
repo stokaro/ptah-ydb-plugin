@@ -10,12 +10,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The host creates a table through the provider and drops it once the source
 // no longer declares it, and a later run finds nothing to do.
 func TestHostDropsATableTheSourceLeavesOut_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	c.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)

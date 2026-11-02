@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -50,7 +51,7 @@ func TestStreamingApplyHappyPath(t *testing.T) {
 		{"start", streaming.Change{Before: stopped, After: running}, []string{"ALTER STREAMING QUERY `app/copy` SET (RUN = TRUE, RESOURCE_POOL = `default`);"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			reads, checks := 0, 0
 			var executed []string
 			api := &nativeapi.StreamingQuery{
@@ -80,7 +81,7 @@ func TestStreamingApplyHappyPath(t *testing.T) {
 func TestStreamingApplyRefusesBeforeDispatch(t *testing.T) {
 	for _, name := range []string{"changed precondition", "read failure", "lock failure", "canceled", "foreign database", "invalid operation"} {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			change := streaming.Change{After: &streaming.Spec{Text: "SELECT 1;", Run: new(false)}}
 			database := "/local"
 			if name == "foreign database" {
@@ -131,7 +132,7 @@ func TestStreamingApplyRefusesBeforeDispatch(t *testing.T) {
 func TestStreamingApplyReportsUncertainDispatch(t *testing.T) {
 	for _, name := range []string{"execute failure", "confirmation failure", "confirmation differs"} {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			change := streaming.Change{After: &streaming.Spec{Text: "SELECT 1;", Run: new(false)}}
 			reads, executions := 0, 0
 			failure := errors.New(name)
@@ -168,7 +169,7 @@ func TestStreamingApplyReportsUncertainDispatch(t *testing.T) {
 }
 
 func TestStreamingApplySplitStepChecksStoppedPrecondition(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	running := &streaming.Spec{Text: "SELECT 1;"}
 	change := streaming.Change{Before: &streaming.Spec{Text: "SELECT 1;", Run: new(false)}, After: running}
 	executions := 0
@@ -183,7 +184,7 @@ func TestStreamingApplySplitStepChecksStoppedPrecondition(t *testing.T) {
 }
 
 func TestStreamingApplyDoesNotDispatchAfterCancellation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	change := streaming.Change{Before: &streaming.Spec{Text: "SELECT 1;"}, After: &streaming.Spec{Text: "SELECT 2;"}, AllowStateReset: true}
 	ctx, cancel := context.WithCancel(c.Context())
 	c.Cleanup(cancel)
@@ -220,7 +221,7 @@ func TestReadStreamingQueryChecksCompleteObservations(t *testing.T) {
 		{"late read failure", [][]driver.Value{valid}, errors.New("stream ended"), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			connector := &streamingReadConnector{rows: tc.rows, closeErr: tc.closeErr}
 			db := sql.OpenDB(connector)
 			c.Cleanup(func() { c.Check(db.Close(), qt.IsNil) })

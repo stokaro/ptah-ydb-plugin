@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
@@ -32,7 +33,7 @@ func TestRenderAccess_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := commonobject.Render(test.change, accessCapabilities())
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, test.want)
@@ -41,7 +42,7 @@ func TestRenderAccess_HappyPath(t *testing.T) {
 }
 
 func TestRenderPasswordEscapesTheValue(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	secret := "quote'\\newline\n"
 	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{
 		Role: &protocol.SQLRole{Name: "app", Login: true, PasswordDeclared: true}, Password: secret,
@@ -65,7 +66,7 @@ func TestRenderAccess_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := commonobject.Render(test.change, accessCapabilities())
 			c.Assert(err, qt.ErrorIs, commonobject.ErrUnsupported)
 			c.Assert(err.Error(), qt.Contains, test.want)
@@ -76,7 +77,7 @@ func TestRenderAccess_FailurePath(t *testing.T) {
 }
 
 func TestRenderAccessRequiresAnEstablishedCapability(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{Role: &protocol.SQLRole{Name: "app"}}}}
 	got, err := commonobject.Render(change, nil)
 	c.Assert(err, qt.ErrorIs, commonobject.ErrUnsupported)
@@ -98,7 +99,7 @@ func TestRenderGrant_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_Grant{Grant: &protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT", "GRANT"}, Target: test.target}}}
 			got, err := commonobject.Render(change, accessCapabilities())
 			c.Assert(err, qt.IsNil)
@@ -108,7 +109,7 @@ func TestRenderGrant_HappyPath(t *testing.T) {
 }
 
 func TestRenderGrantUsesTheDatabaseOnOlderLines(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	caps := accessCapabilities()
 	caps["relative_grant_paths"] = false
 	target := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Name: "items"}
@@ -119,7 +120,7 @@ func TestRenderGrantUsesTheDatabaseOnOlderLines(t *testing.T) {
 }
 
 func TestRenderGrantRefusesAnUnboundDatabaseOnOlderLines(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	caps := accessCapabilities()
 	caps["relative_grant_paths"] = false
 	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_Revoke{Revoke: &protocol.SQLGrant{
@@ -142,14 +143,14 @@ func TestDeclaredAccessRefusesUnsupportedIntent(t *testing.T) {
 		{"qualified pool", &protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"}, Target: &protocol.Reference{Engine: "ydb", Kind: "resource pool", Name: "/other/pool"}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(commonobject.GrantRefusal(test.grant), qt.ErrorIs, commonobject.ErrUnsupported)
 		})
 	}
 }
 
 func TestDeclaredMembershipTargetsAGroup(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	user := &protocol.SQLRole{Name: "app", MemberOf: []string{"team"}}
 	c.Assert(commonobject.DeclaredRoleRefusal(user, []*protocol.SQLRole{user}), qt.IsNil)
 	c.Assert(commonobject.DeclaredRoleRefusal(user, []*protocol.SQLRole{user, {Name: "team", Group: true}}), qt.IsNil)
@@ -159,7 +160,7 @@ func TestDeclaredMembershipTargetsAGroup(t *testing.T) {
 }
 
 func TestPrepareCanonicalizesPermissionAliasesWithoutChangingSource(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	declared := &protocol.DeclaredCommonObjects{Grants: []*protocol.SQLGrant{{Role: "app", Privileges: []string{"select row", "GRANT"},
 		Target: &protocol.Reference{Engine: "ydb", Kind: "table", Name: "items"}}}}
 	prepared := commonobject.Prepare(declared)

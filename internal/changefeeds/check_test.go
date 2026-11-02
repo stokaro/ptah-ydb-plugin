@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
@@ -38,7 +39,7 @@ func TestCheck_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(changefeeds.Check("app/items", test.spec, test.caps), qt.IsNil)
 		})
 	}
@@ -79,7 +80,7 @@ func TestCheck_RefusesWhatTheTargetLacks(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got := changefeeds.Check("app/items", test.spec, test.caps)
 			c.Assert(got, qt.IsNotNil)
 			c.Assert(*got, qt.DeepEquals, test.want)
@@ -120,7 +121,7 @@ func TestCheck_RefusesWhatYDBRefusesEverywhere(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got := changefeeds.Check("t", test.spec, line(26, 2))
 			c.Assert(got, qt.IsNotNil)
 			c.Assert(got.Key, qt.Equals, "")
@@ -144,7 +145,7 @@ func TestNameRefusal_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(changefeeds.NameRefusal(test.feeds, test.indexes), qt.Equals, test.want)
 		})
 	}
@@ -168,7 +169,7 @@ func TestKeyRefusal_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(changefeeds.KeyRefusal(test.spec, test.keyType), qt.Equals, test.want)
 		})
 	}

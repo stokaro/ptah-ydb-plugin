@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // yqlToken is the part of a token a YQL row pins: its type and its text. The
@@ -250,7 +251,7 @@ func TestScanner_HappyPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(yqlTokens(test.input), qt.DeepEquals, test.want)
 		})
 	}
@@ -313,7 +314,7 @@ func TestScanner_TranslationSettings(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(yqlTokens(test.input), qt.DeepEquals, test.want)
 		})
 	}
@@ -330,7 +331,7 @@ func TestScanner_TokensCoverTheInput(t *testing.T) {
 		"/* unterminated",
 	}
 	for _, input := range inputs {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		tokens := everyToken(input)
 		var rebuilt strings.Builder
 		position := 0
@@ -371,7 +372,7 @@ func TestStringValue_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			got, ok := StringValue(test.literal)
 
@@ -402,7 +403,7 @@ func TestStringValue_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			got, ok := StringValue(test.literal)
 
@@ -432,7 +433,7 @@ func TestIdentifierValue_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, ok := IdentifierValue(test.input)
 			c.Assert(ok, qt.IsTrue)
 			c.Assert(got, qt.Equals, test.want)
@@ -455,7 +456,7 @@ func TestIdentifierValue_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, ok := IdentifierValue(test.input)
 			c.Assert(ok, qt.IsFalse)
 			c.Assert(got, qt.Equals, "")

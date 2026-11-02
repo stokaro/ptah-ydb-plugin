@@ -13,6 +13,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 )
 
@@ -83,7 +84,7 @@ func TestHostAppliesASQLSchema_HappyPath(t *testing.T) {
 			"02_orders.sql": "--!syntax_v1\nCREATE TABLE `{dir}/orders` (region Utf8 NOT NULL, id Int64 NOT NULL, total Decimal(22,9), PRIMARY KEY (region, id));"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			opened, directory, database := lockFixture(c)
 			c.Cleanup(func() {
 				cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -127,7 +128,7 @@ func TestHostRefusesASQLSchema_FailurePath(t *testing.T) {
 			want: "(?s).*table `[^`]+/items` declares a TTL, which a SQL schema reading has no home for.* at position 0 \\(line 1, column 1\\).*"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			opened, directory, database := lockFixture(c)
 			root := writeSchema(c, map[string]string{"schema.sql": replaceDirectory(test.text, directory)})
 			output, err := hostApplySQL(c, directory, filepath.Join(root, "schema.sql"))

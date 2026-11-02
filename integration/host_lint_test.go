@@ -17,6 +17,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // statementFactsCorpus is the provider's corpus of YQL files, with what the
@@ -87,17 +88,17 @@ func about(findings []string) []string {
 // positions, about the same tables and capabilities.
 func TestHostLintsYQLByTheStatementFacts_HappyPath(t *testing.T) {
 	files, err := filepath.Glob(filepath.Join(statementFactsCorpus, "*.yql"))
-	qt.New(t).Assert(err, qt.IsNil)
+	testcheck.New(t).Assert(err, qt.IsNil)
 	slices.Sort(files)
-	qt.New(t).Assert(len(files) >= 12, qt.IsTrue)
+	testcheck.New(t).Assert(len(files) >= 12, qt.IsTrue)
 	for _, file := range files {
 		data, err := os.ReadFile(strings.TrimSuffix(file, ".yql") + ".golden.json")
-		qt.New(t).Assert(err, qt.IsNil)
+		testcheck.New(t).Assert(err, qt.IsNil)
 		var golden builtinLint
-		qt.New(t).Assert(json.Unmarshal(data, &golden), qt.IsNil)
+		testcheck.New(t).Assert(json.Unmarshal(data, &golden), qt.IsNil)
 		for version, line := range golden.Versions {
 			t.Run(filepath.Base(file)+"/"+version, func(t *testing.T) {
-				c := qt.New(t)
+				c := testcheck.New(t)
 				want := []string{}
 				for _, finding := range line.Findings {
 					want = append(want, fmt.Sprintf("%d:%d %s %s", finding.Line, finding.Column, finding.Rule, finding.Message))
@@ -147,7 +148,7 @@ func TestHostWordsTheStatementFacts_HappyPath(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			got, code := hostSQLLint(c, filepath.Join(statementFactsCorpus, test.file), test.version)
 

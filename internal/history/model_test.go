@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/history"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -27,7 +28,7 @@ func nativeRow() *protocol.HistoryRevision {
 		Checksum: "checksum", AppliedAtSeconds: -62135596800, AppliedAtNanos: 999999999, OperatorVersion: "operator"}
 }
 func TestHistoryCodecPreservesAllFacts(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	for _, format := range []protocol.HistoryScope_Format{protocol.HistoryScope_NATIVE, protocol.HistoryScope_ATLAS} {
 		s := store(c, format)
 		row := nativeRow()
@@ -49,7 +50,7 @@ func TestHistoryCodecPreservesAllFacts(t *testing.T) {
 	}
 }
 func TestHistoryCodecRefusesWrongIdentityUnknownAndNoncanonicalData(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	s := store(c, protocol.HistoryScope_NATIVE)
 	row := nativeRow()
 	payload, err := s.Encode(row)
@@ -65,7 +66,7 @@ func TestHistoryCodecRefusesWrongIdentityUnknownAndNoncanonicalData(t *testing.T
 		{"oversized", row.Version, make([]byte, history.MaxSnapshotBytes+1)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, err := s.Decode(test.key, test.payload)
 			c.Assert(value, qt.IsNil)
 			c.Assert(err, qt.IsNotNil)
@@ -90,7 +91,7 @@ func TestHistoryCodecRefusesWrongIdentityUnknownAndNoncanonicalData(t *testing.T
 	}
 }
 func TestHistoryScopeCannotEscapeDatabase(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	for _, test := range []struct{ schema, table string }{
 		{"../other", "revisions"}, {"app//nested", "revisions"}, {"app/../other", "revisions"}, {"/local", "revisions"}, {"app/", "revisions"}, {"app", "other/revisions"}, {"app", ".."}, {"app", "bad\\path"},
 	} {
@@ -113,7 +114,7 @@ func layout() *native.DescribeTableResult {
 		Attributes: map[string]string{"ptah.history": "stokaro/ptah-ydb-plugin/history-v1/native"}}
 }
 func TestHistoryOwnershipAndBehaviorAreValidated(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	s := store(c, protocol.HistoryScope_NATIVE)
 	c.Assert(s.ValidateLayout(layout()), qt.IsNil)
 	for _, test := range []struct {
@@ -141,7 +142,7 @@ func TestHistoryOwnershipAndBehaviorAreValidated(t *testing.T) {
 		{"extra column", func(v *native.DescribeTableResult) { v.Columns = append(v.Columns, proto.CloneOf(v.Columns[0])) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value := layout()
 			test.change(value)
 			c.Assert(s.ValidateLayout(value), qt.IsNotNil)
@@ -169,7 +170,7 @@ func TestHistoryClassificationRequiresMarkerAndCompleteLayout(t *testing.T) {
 		{"changefeed must not be projected away", func(v *native.DescribeTableResult) { v.Changefeeds = []*native.ChangefeedDescription{{Name: "extra"}} }, false, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value := layout()
 			test.change(value)
 			owned, err := history.Owned("revisions", value)

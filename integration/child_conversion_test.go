@@ -9,6 +9,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -80,7 +81,7 @@ func convertNativeProperties(c *qt.C, client *providerruntime.Client, inputs *pr
 }
 
 func TestChildConversionOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	owner := &protocol.Reference{Engine: "ydb", Database: "/local", Schema: "App", Kind: "table", Name: "Records"}
 	indexes, err := schema.CaptureIndexes(owner, &native.IndexObservations{Indexes: []*native.ObservedIndex{{
 		Description: &native.TableIndexDescription{Name: "by_label", IndexColumns: []string{"label"}, Status: native.TableIndexDescription_STATUS_READY, Type: &native.TableIndexDescription_GlobalAsyncIndex{GlobalAsyncIndex: &native.GlobalAsyncIndex{}}},

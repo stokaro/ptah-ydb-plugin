@@ -10,6 +10,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
@@ -116,12 +117,12 @@ func complete(c *qt.C, r row) bool {
 // the model its own reader makes: the common objects field for field, the
 // coordination nodes, and the declarations of each document.
 func TestReply_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return !complete(c, r) })
 	c.Assert(len(rows) >= 180, qt.IsTrue, qt.Commentf("%d rows reach a complete reply", len(rows)))
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := readRequest(r)
 			reply := yqlschema.Reply(request)
 			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
@@ -135,12 +136,12 @@ func TestReply_HappyPath(t *testing.T) {
 // SQL schema reading has no home for, and requires a refusal the SDK accepts
 // that names each of them and exposes no schema.
 func TestReply_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return complete(c, r) })
 	c.Assert(len(rows) >= 30, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := readRequest(r)
 			reply := yqlschema.Reply(request)
 			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
@@ -154,11 +155,11 @@ func TestReply_FailurePath(t *testing.T) {
 // TestReply_RefusedLoad answers every row the host's grammar refuses with a
 // reply the SDK accepts, whose first error is the refusal the host makes.
 func TestReply_RefusedLoad(t *testing.T) {
-	listed := unsupportedRows(qt.New(t))
-	rows := corpus(qt.New(t), func(r row) bool { return refused(r) && listed[r.name] == "" })
+	listed := unsupportedRows(testcheck.New(t))
+	rows := corpus(testcheck.New(t), func(r row) bool { return refused(r) && listed[r.name] == "" })
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := readRequest(r)
 			reply := yqlschema.Reply(request)
 			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
@@ -442,11 +443,11 @@ func normalExternals(c *qt.C, m meaning) meaning {
 // leave unmanaged, and a table's settings, its columns' and its storage
 // complete.
 func TestReply_Coverage(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return !complete(c, r) })
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			reply := yqlschema.Reply(readRequest(r))
 			c.Assert(pluginCoverage(reply.GetCoverage()), qt.DeepEquals, hostCoverage(c, r.golden.Load.Coverage))
 		})
@@ -531,14 +532,14 @@ func hostCoverage(c *qt.C, coverage *goldenCoverage) coverageMeaning {
 // that wrote it, with the host's words and this provider's identity in place
 // of the host owner's.
 func TestReply_HeaderLimits(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := corpus(c, func(r row) bool {
 		return accepted(r) && r.golden.Load.Outcome == "refused" && strings.Contains(r.golden.Load.Error, "coverage of ptah.run/ydb")
 	})
 	c.Assert(len(rows) >= 1, qt.IsTrue)
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := readRequest(r)
 			reply := yqlschema.Reply(request)
 			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)

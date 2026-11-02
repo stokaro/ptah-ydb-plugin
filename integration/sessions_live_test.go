@@ -17,6 +17,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -68,7 +69,7 @@ func startProvider(c *qt.C, binary, digest string) *providerruntime.Client {
 }
 
 func TestNativeSessionsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address := os.Getenv("PTAH_YDB_TEST_URL")
 	c.Assert(address, qt.Not(qt.Equals), "", qt.Commentf("PTAH_YDB_TEST_URL must select a live YDB test database"))
 	binary, digest := providerBinary(c)
@@ -109,7 +110,7 @@ func TestNativeSessionsSubprocess(t *testing.T) {
 }
 
 func TestNativeSessionConcurrentClose(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address := os.Getenv("PTAH_YDB_TEST_URL")
 	c.Assert(address, qt.Not(qt.Equals), "")
 	service := backend.New()
@@ -133,7 +134,7 @@ func TestNativeSessionConcurrentClose(t *testing.T) {
 }
 
 func TestNativeConnectionReleasesBothOwners(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

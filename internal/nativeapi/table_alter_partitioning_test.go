@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -45,7 +46,7 @@ func TestNativeTableAlteration_PartitioningHappyPath(t *testing.T) {
 			alterPartitioning(`{"partitioningBySize":"ENABLED"}`, offWithMinimum), `{"partitioningBySize":"ENABLED"}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := &alterFixture{before: test.before, after: test.after}
 			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
 			c.Assert(err, qt.IsNil)
@@ -89,7 +90,7 @@ func TestNativeTableAlteration_PartitioningFailurePath(t *testing.T) {
 			alterPartitioning(`{"maxPartitionsCount":"8"}`, heldDefaults), true, []string{"open", "describe", "guard", "alter", "close"}, "lost native reply"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := test.fixture
 			dispatched, err := applyAlteration(c, &fixture, "", test.payload, false)
 			c.Assert(err, qt.ErrorMatches, test.message)

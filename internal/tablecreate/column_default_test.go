@@ -8,6 +8,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -29,7 +30,7 @@ func TestDefaultOperationPreservesEmptyLiteralAndDrop(t *testing.T) {
 		sql  string
 	}{{"empty", typedText(""), "SET DEFAULT ''u;"}, {"drop", nil, "DROP DEFAULT;"}} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			change := defaultChange()
 			change.Set = test.set
 			operation, err := tablecreate.CaptureDefault("default", owner(), change)
@@ -61,7 +62,7 @@ func TestDefaultOperationRefusesInvalidCaptures(t *testing.T) {
 		{"wrong scalar", func(c *tablecreate.DefaultAlteration) { c.Set.Value.Value = &Ydb.Value_Int32Value{Int32Value: 1} }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			change := defaultChange()
 			test.mutate(change)
 			operation, err := tablecreate.CaptureDefault("default", owner(), change)
@@ -72,7 +73,7 @@ func TestDefaultOperationRefusesInvalidCaptures(t *testing.T) {
 }
 
 func TestDefaultChangeHasAnOwnedOperationAndCompleteEffects(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	held := defaultChange().Held
 	held.Name, held.Type, held.NotNull = "", nil, nil
 	payload, err := protojson.Marshal(held)
@@ -125,7 +126,7 @@ func TestDefaultOperationRefusesPayloadAmbiguity(t *testing.T) {
 		{"unknown field", func(data []byte) []byte { return append([]byte(`{"extra":true,`), data[1:]...) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			operation, err := tablecreate.CaptureDefault("default", owner(), defaultChange())
 			c.Assert(err, qt.IsNil)
 			operation.Value.Payload = test.mutate(operation.Value.Payload)

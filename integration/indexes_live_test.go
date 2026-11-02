@@ -14,6 +14,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -22,7 +23,7 @@ import (
 )
 
 func TestNativeIndexObservationsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	for _, test := range []struct {
@@ -39,7 +40,7 @@ func TestNativeIndexObservationsSubprocess(t *testing.T) {
 		{name: "fulltext_relevance", clause: "GLOBAL USING fulltext_relevance ON (label) WITH (tokenizer=standard,use_filter_lowercase=true)", kind: "global_fulltext_relevance_index", tables: 4, only26: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			opened, directory, database := inspectionFixture(c)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()

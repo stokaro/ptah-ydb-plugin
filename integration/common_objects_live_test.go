@@ -10,6 +10,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -83,7 +84,7 @@ func prepared(c *qt.C, client *providerruntime.Client, directory, body string) s
 // as the server stores its query, which is what the preparation of its
 // declaration gives, so a second plan finds nothing to change.
 func TestCommonObjectsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newFacetFixtureListing(c, ", INDEX by_ts GLOBAL ON (ts)", "", provider.CommonObjectsFeature, provider.TextUnitsFeature)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
@@ -149,7 +150,7 @@ func TestCommonObjectsSubprocess(t *testing.T) {
 // the session's path prefix heads every query and YDB stores it in the view:
 // the read leaves that prefix out, so the view reads as its declaration.
 func TestCommonObjectsInARealmSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	client := startProviderFor(c, provider.CommonObjectsFeature, provider.TextUnitsFeature)
 	id, _, _ := realmSession(c, client)
 	session := &protocol.Session{Id: id}

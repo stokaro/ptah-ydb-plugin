@@ -8,6 +8,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -69,7 +70,7 @@ func workloadOperation(c *qt.C, changes schema.WorkloadChanges) *protocol.Envelo
 // The operation checks that the database holds what the plan read, runs the
 // statements in the host's order, one query each, and reads the result back.
 func TestWorkloadApply_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fake := &fakeWorkload{held: heldBefore(), after: heldAfter()}
 	checked := false
 	dispatched, err := fake.bind().Apply(c.Context(), "/local", workloadOperation(c, rankSwap()), func(context.Context) error { checked = true; return nil })
@@ -110,7 +111,7 @@ func TestWorkloadApply_FailurePath(t *testing.T) {
 			wantErr: `resource pool "batch" was not confirmed: the database holds it otherwise`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			dispatched, err := test.fake.bind().Apply(c.Context(), test.database, workloadOperation(c, rankSwap()), func(context.Context) error { return nil })
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(dispatched, qt.Equals, test.wantDispatched)
@@ -122,7 +123,7 @@ func TestWorkloadApply_FailurePath(t *testing.T) {
 // An operation of another database, or a lock lost before the first
 // statement, writes nothing.
 func TestWorkloadApply_RefusesBeforeWriting(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	foreign, err := schema.CaptureWorkloadOperation("workload/000000", "/other", rankSwap())
 	c.Assert(err, qt.IsNil)
 	fake := &fakeWorkload{held: heldBefore(), after: heldAfter()}

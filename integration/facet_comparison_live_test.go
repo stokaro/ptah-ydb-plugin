@@ -15,6 +15,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -255,7 +256,7 @@ func ttlDeclaration(ttl string) string {
 const noTTLDeclaration = `{"primaryKey":["id"]}`
 
 func TestFacetComparisonTTLSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, "", "")
 	// Each step starts from what the previous one left in the table.
 	for _, step := range []struct {
@@ -268,7 +269,7 @@ func TestFacetComparisonTTLSubprocess(t *testing.T) {
 		{"removes the TTL a declaration leaves out", noTTLDeclaration, "null"},
 	} {
 		t.Run(step.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			found := fixture.compare(c, step.declared)
 			c.Assert(found.Changes, qt.HasLen, 1)
 			c.Assert(found.Changes[0].Kind, qt.Equals, schema.TableProperties)
@@ -282,7 +283,7 @@ func TestFacetComparisonTTLSubprocess(t *testing.T) {
 }
 
 func TestFacetComparisonColumnFamilySubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, ", FAMILY archive (COMPRESSION = 'off')", "")
 	declared := `{"primaryKey":["id"],"columnFamilies":[{"name":"archive","compression":"COMPRESSION_LZ4"}]}`
 	found := fixture.compare(c, declared)
@@ -303,7 +304,7 @@ func TestFacetComparisonIdenticalTableSubprocess(t *testing.T) {
 		{"with the same TTL", ` WITH (TTL = Interval("PT1H") ON ts)`, ttlDeclaration(hourlyTTL)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newFacetFixture(c, "", test.options)
 			c.Assert(fixture.compare(c, test.declared).Changes, qt.HasLen, 0)
 		})

@@ -8,6 +8,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -37,7 +38,7 @@ func workloadKnowledge(read *protocol.Schema) map[string]*protocol.ModelKnowledg
 // A read of the system views returns every pool and classifier under the
 // database and establishes the absence of every other one.
 func TestWorkload_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	read := snapshot()
 	err := inspect.Workload(c.Context(), read, "/local", nil, func(context.Context) (nativeapi.HeldWorkload, error) {
 		return nativeapi.HeldWorkload{Pools: map[string]workload.PoolSpec{"default": {}, "batch": {ConcurrentQueryLimit: new(int32(2))}},
@@ -71,7 +72,7 @@ func TestWorkload_EmptyReadEstablishesOnlyDatabaseRootAbsence(t *testing.T) {
 		{"explicit root", []string{"/"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			read := snapshot()
 			c.Assert(inspect.Workload(c.Context(), read, "/tenant", test.selectors, func(context.Context) (nativeapi.HeldWorkload, error) {
 				return nativeapi.HeldWorkload{}, nil
@@ -92,7 +93,7 @@ func TestWorkload_EmptyReadEstablishesOnlyDatabaseRootAbsence(t *testing.T) {
 // A target that keeps no resource pools lists nothing in its views, which
 // proves no absence, so both kinds stay uninspected for the reason given.
 func TestWorkload_Unread(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	read := snapshot()
 	c.Assert(inspect.Workload(c.Context(), read, "/local", nil, nil, "the flag is off"), qt.IsNil)
 	c.Assert(read.NativeObjects, qt.HasLen, 0)
@@ -105,7 +106,7 @@ func TestWorkload_Unread(t *testing.T) {
 }
 
 func TestWorkload_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	read := snapshot()
 	err := inspect.Workload(c.Context(), read, "/local", nil, func(context.Context) (nativeapi.HeldWorkload, error) {
 		return nativeapi.HeldWorkload{}, errors.New("read YDB resource pools: refused")
@@ -118,7 +119,7 @@ func TestWorkload_FailurePath(t *testing.T) {
 // database, so it does not read the views; a read that selects the root
 // reports them for the root namespace alone.
 func TestWorkload_Selectors(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	read := func(context.Context) (nativeapi.HeldWorkload, error) {
 		return nativeapi.HeldWorkload{Pools: map[string]workload.PoolSpec{"default": {}}}, nil
 	}

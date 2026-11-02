@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/protobuf/proto"
@@ -50,7 +51,7 @@ func TestRunCoordinationStatement_HappyPath(t *testing.T) {
 		{name: "a removal", held: heldNode(), text: "DROP COORDINATION NODE `/local/app/node`"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			transport := &coordinationTransport{state: tc.held}
 			dispatched, err := executor(transport).RunStatement(c.Context(), "/local", "/local", recognized(c, tc.text), allow)
 			c.Assert(err, qt.IsNil)
@@ -63,7 +64,7 @@ func TestRunCoordinationStatement_HappyPath(t *testing.T) {
 
 // A realm session reads a relative path inside its realm's directory.
 func TestRunCoordinationStatementInARealm(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	transport := &coordinationTransport{}
 	dispatched, err := executor(transport).RunStatement(c.Context(), "/local", "/local/ptah_dev/r1",
 		recognized(c, "CREATE COORDINATION NODE `node`"), allow)
@@ -105,7 +106,7 @@ func TestRunCoordinationStatement_FailurePath(t *testing.T) {
 			want: `invalid coordination node statement: path relp/n is not in database /local.*`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			transport := &coordinationTransport{state: tc.held, foreign: tc.foreign}
 			dispatched, err := executor(transport).RunStatement(c.Context(), "/local", tc.root, recognized(c, tc.text), allow)
 			c.Assert(err, qt.ErrorMatches, tc.want)
@@ -120,7 +121,7 @@ func TestRunCoordinationStatement_FailurePath(t *testing.T) {
 // A lost lock stops the statement before the write, and a write whose reply
 // is lost is dispatched: its outcome is unknown.
 func TestRunCoordinationStatementDispatch(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	lost := errors.New("lock lost")
 	transport := &coordinationTransport{}
 	dispatched, err := executor(transport).RunStatement(c.Context(), "/local", "/local", recognized(c, "CREATE COORDINATION NODE `app/node`"),

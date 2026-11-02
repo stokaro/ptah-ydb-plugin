@@ -13,6 +13,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -108,7 +109,7 @@ func TestStartingLayoutIsCreatedAndRefusedOnAnExistingTableSubprocess(t *testing
 			[]string{"id"}, `"partitionAtKeys":[{"values":["m"]}]`, "2", `"uniformPartitions":"3"`, "it declares UNIFORM_PARTITIONS = 3, which YDB takes only when it creates a table"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := layoutFixture(c, test.columns, test.key, test.fields)
 			c.Assert(fixture.heldMinimum(c), qt.Equals, test.minimum)
 			table := `{"primaryKey":` + mustJSON(c, test.key) + `,`

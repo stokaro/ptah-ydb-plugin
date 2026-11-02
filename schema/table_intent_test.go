@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestTableConversionPreservesConfigurationAndAccessRequirements(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	original := &native.DescribeTableResult{
 		PrimaryKey: []string{"tenant", "id"},
 		Self: &Ydb_Scheme.Entry{Owner: "alice", Permissions: []*Ydb_Scheme.Permissions{{Subject: "writer", PermissionNames: []string{"ydb.generic.write"}}},
@@ -61,7 +62,7 @@ func TestTableConversionKeepsNativeDefaultsAndEpochTTL(t *testing.T) {
 		{"epoch TTL", &native.DescribeTableResult{PrimaryKey: []string{"id"}, TtlSettings: &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_ValueSinceUnixEpoch{ValueSinceUnixEpoch: &Ydb_Table.ValueSinceUnixEpochModeSettings{ColumnName: "expiry", ColumnUnit: Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_MILLISECONDS, ExpireAfterSeconds: 42}}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			observed, err := schema.CaptureTable(tableOwner(), test.table)
 			c.Assert(err, qt.IsNil)
 			desired, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
@@ -74,7 +75,7 @@ func TestTableConversionKeepsNativeDefaultsAndEpochTTL(t *testing.T) {
 }
 
 func TestTableConversionRefusesPhysicalTopology(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	observed, err := schema.CaptureTable(tableOwner(), &native.DescribeTableResult{PrimaryKey: []string{"id"}, ShardKeyBounds: []*Ydb.TypedValue{{Type: primitive(Ydb.Type_UINT64), Value: &Ydb.Value{Value: &Ydb.Value_Uint64Value{Uint64Value: 100}}}}})
 	c.Assert(err, qt.IsNil)
 	result, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
@@ -105,7 +106,7 @@ func TestDesiredTableRefusesIncompleteOrAmbiguousSettings(t *testing.T) {
 		{"invented inheritance", `{"primaryKey":["id"],"access":{"inheritance":false}}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := schema.TableDesiredModel()
 			input := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: definition.Kind, Owner: tableOwner(), SchemaVersion: definition.SchemaVersion, Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: []byte(test.payload)}
 			result, err := schema.NormalizeDesired(input)
@@ -118,7 +119,7 @@ func TestDesiredTableRefusesIncompleteOrAmbiguousSettings(t *testing.T) {
 // A source that states settings knows no columns, so it states no key: the
 // effective key comes from the common columns.
 func TestDesiredTableAcceptsSettingsWithoutAKey(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	definition := schema.TableDesiredModel()
 	input := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: definition.Kind, Owner: tableOwner(), SchemaVersion: definition.SchemaVersion, Encoding: definition.Encoding,
 		DefinitionSha256: definition.DefinitionSha256, Payload: []byte(`{"keyBloomFilter":"ENABLED"}`)}
@@ -129,7 +130,7 @@ func TestDesiredTableAcceptsSettingsWithoutAKey(t *testing.T) {
 
 // Without a key there is no observation to predict, so the conversion says so.
 func TestDesiredTableWithoutAKeyIsNotAnObservation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	definition := schema.TableDesiredModel()
 	input := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: definition.Kind, Owner: tableOwner(), SchemaVersion: definition.SchemaVersion, Encoding: definition.Encoding,
 		DefinitionSha256: definition.DefinitionSha256, Payload: []byte(`{"keyBloomFilter":"ENABLED"}`)}

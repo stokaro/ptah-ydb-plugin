@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -79,7 +80,7 @@ func TestChangefeedOperation_HappyPath(t *testing.T) {
 			[]changefeeds.Action{changefeeds.Add, changefeeds.Drop}, protocol.ChangeSemantics_DESTRUCTIVE, protocol.ChangeSemantics_UNCHANGED, `DROP CHANGEFEED removes .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			operation, err := schema.CaptureChangefeedOperation("op", tableOwner(), test.changes)
 			c.Assert(err, qt.IsNil)
 			c.Assert(operation.Value.Kind, qt.Equals, schema.ChangefeedOperation)
@@ -127,7 +128,7 @@ func TestChangefeedOperation_FailurePath(t *testing.T) {
 			[]changefeeds.Change{{Name: "f", After: declaredFeed(updates)}}, `changefeed operation requires a table owner`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			operation, err := schema.CaptureChangefeedOperation("op", test.owner, test.changes)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(operation, qt.IsNil)
@@ -156,7 +157,7 @@ func TestChangefeedOperation_RefusesAForgedPayload(t *testing.T) {
 		{"not an object", `[]`, `invalid changefeed operation payload`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value := proto.CloneOf(operation.Value)
 			value.Payload = []byte(test.payload)
 			_, err := schema.NormalizeChangefeedOperation(&protocol.ValueInput{Id: "forged", Representation: protocol.ValueInput_OPERATION, Value: value})
@@ -200,7 +201,7 @@ func TestTablePropertiesChange_ChangefeedSets(t *testing.T) {
 		{"a recreation", held, keys, protocol.ChangeSemantics_DESTRUCTIVE, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			change, err := schema.CaptureTablePropertiesChange("change", tableOwner(), changefeedSet(c, protocol.ValueInput_OBSERVED, test.before),
 				changefeedSet(c, protocol.ValueInput_DESIRED, test.after))
 			c.Assert(err, qt.IsNil)
@@ -218,7 +219,7 @@ func TestTablePropertiesChange_ChangefeedSets(t *testing.T) {
 // TestTablePropertiesChange_ChangefeedSetsOnAColumn refuses the changefeed set
 // selector on a column owner.
 func TestTablePropertiesChange_ChangefeedSetsOnAColumn(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	change, err := schema.CaptureTablePropertiesChange("change", tableOwner(), changefeedSet(c, protocol.ValueInput_OBSERVED, `{"changefeeds":[]}`),
 		changefeedSet(c, protocol.ValueInput_DESIRED, `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","topic":{"partitioningSettings":{}}}]}`))
 	c.Assert(err, qt.IsNil)

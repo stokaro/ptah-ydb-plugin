@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
@@ -27,7 +28,7 @@ func objectSelf() *Ydb_Scheme.Entry {
 }
 
 func TestViewCaptureRetainsBothNativeSources(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	input := &native.ViewObservation{View: &Ydb_View.DescribeViewResult{Self: objectSelf(), QueryText: "SELECT * FROM app.records"}, Properties: &native.DescribeTableResult{Self: objectSelf(), Attributes: map[string]string{"ptah.comment": "Query caption", "custom": "preserved"}, TableStats: &Ydb_Table.TableStats{}}}
 	result, err := schema.CaptureObject(objectOwner(schema.ViewProperties), input)
 	c.Assert(err, qt.IsNil)
@@ -47,7 +48,7 @@ func TestViewCaptureRetainsBothNativeSources(t *testing.T) {
 }
 
 func TestCoordinationCapturePreservesConfigurationWithoutDuplicatePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	config := &Ydb_Coordination.Config{Path: "/local/app/records", SelfCheckPeriodMillis: 2000, SessionGracePeriodMillis: 9000, ReadConsistencyMode: Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT, AttachConsistencyMode: Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_RELAXED, RateLimiterCountersMode: Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_DETAILED}
 	input := &Ydb_Coordination.DescribeNodeResult{Self: objectSelf(), Config: config}
 	result, err := schema.CaptureObject(objectOwner(schema.CoordinationProperties), input)
@@ -65,7 +66,7 @@ func TestCoordinationCapturePreservesConfigurationWithoutDuplicatePath(t *testin
 }
 
 func TestExternalCapturePreservesNativeOptionsAndOrderedColumns(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	source := &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: proto.String("PostgreSQL"), Location: proto.String("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "BASIC", "PASSWORD_SECRET_PATH": "/local/auth/credential", "LOGIN": "reader"}}
 	sourceEnvelope, err := schema.CaptureObject(objectOwner(schema.ExternalSourceProperties), source)
 	c.Assert(err, qt.IsNil)
@@ -106,13 +107,13 @@ func TestNativeObjectCaptureRefusesLossyOrMismatchedDescriptions(t *testing.T) {
 		{"external table without columns", schema.ExternalTableProperties, &native.DescribeExternalTableResult{SourceType: proto.String("ObjectStorage"), DataSourcePath: proto.String("/local/s"), Location: proto.String("f/")}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, err := schema.CaptureObject(objectOwner(test.kind), test.value)
 			c.Assert(value, qt.IsNil)
 			c.Assert(err, qt.IsNotNil)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	node, err := schema.CaptureObject(objectOwner(schema.CoordinationProperties), &Ydb_Coordination.DescribeNodeResult{Config: &Ydb_Coordination.Config{}})
 	c.Assert(err, qt.IsNil)
 	node.Payload = []byte(`{"config":{"path":"/local/wrong"}}`)

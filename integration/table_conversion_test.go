@@ -9,6 +9,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -17,7 +18,7 @@ import (
 )
 
 func TestTableConversionOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	owner := &protocol.Reference{Engine: "ydb", Database: "/local", Schema: "App", Kind: "table", Name: "Orders"}
 	table, err := schema.CaptureTable(owner, &native.DescribeTableResult{PrimaryKey: []string{"id"}, Attributes: map[string]string{"comment": "offline export"}, Self: &Ydb_Scheme.Entry{Owner: "alice",
 		Permissions:          []*Ydb_Scheme.Permissions{{Subject: "writer", PermissionNames: []string{"write"}}},
@@ -38,7 +39,7 @@ func TestTableConversionOfflineSubprocess(t *testing.T) {
 }
 
 func TestTableConversionLiveSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	createFixtureTable(c, opened, database, directory)
 	binary, digest := providerBinary(c)

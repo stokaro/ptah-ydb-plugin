@@ -14,6 +14,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
@@ -40,7 +41,7 @@ func realmFixture(c *qt.C, opened *connection.Connection, base connection.Addres
 }
 
 func TestDevRealmSessionSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)

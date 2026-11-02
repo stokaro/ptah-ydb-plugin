@@ -9,6 +9,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -74,7 +75,7 @@ func TestColumnDefaultChecksBeforeAndAfterSingleDispatch(t *testing.T) {
 		{name: "dispatch failed", executeErr: sentinel, wantDispatch: true, wantError: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			held := &native.ColumnMeta{Name: "value", Type: defaultTextValue("").Type, DefaultValue: &native.ColumnMeta_FromLiteral{FromLiteral: defaultTextValue("old")}}
 			before := &native.DescribeTableResult{Self: &Ydb_Scheme.Entry{Name: "records", Type: Ydb_Scheme.Entry_TABLE}, StoreType: Ydb_Table.StoreType_STORE_TYPE_ROW, PrimaryKey: []string{"id"}, Columns: []*native.ColumnMeta{{Name: "id", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UINT64}}}, held}}
 			session := &defaultSession{before: proto.CloneOf(before), after: proto.CloneOf(before)}

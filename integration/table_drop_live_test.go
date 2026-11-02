@@ -13,6 +13,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -105,7 +106,7 @@ func TestTableDropSubprocess(t *testing.T) {
 			form: protocol.RenderRequest_TEXT},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			f := newDropFixture(c, monitoredAddress(c), tc.definition)
 			rendered := f.plan(c, tc.form)
 			c.Assert(rendered.Units, qt.HasLen, 1)
@@ -121,7 +122,7 @@ func TestTableDropSubprocess(t *testing.T) {
 // read it: the native removal refuses before it drops anything, and the
 // table keeps its rows.
 func TestTableDropRefusesAChangedTableSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newDropFixture(c, os.Getenv("PTAH_YDB_TEST_URL"), "(id Uint64, payload Utf8, PRIMARY KEY (id))")
 	rendered := f.plan(c, protocol.RenderRequest_ANY)
 	absolute := path.Join(f.database, f.directory, "records")

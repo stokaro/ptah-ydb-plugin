@@ -3,6 +3,7 @@ package locking
 import (
 	"context"
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	wire "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
@@ -28,7 +29,7 @@ func testSession(c *qt.C, reply func(*wire.SessionRequest) *wire.SessionResponse
 func TestAcquisitionStatusCannotBecomeBusyOrSuccess(t *testing.T) {
 	for _, code := range []Ydb.StatusIds_StatusCode{Ydb.StatusIds_UNAUTHORIZED, Ydb.StatusIds_BAD_REQUEST, Ydb.StatusIds_UNAVAILABLE} {
 		for _, acquired := range []bool{true, false} {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			s := testSession(c, func(request *wire.SessionRequest) *wire.SessionResponse {
 				return &wire.SessionResponse{Response: &wire.SessionResponse_AcquireSemaphoreResult_{AcquireSemaphoreResult: &wire.SessionResponse_AcquireSemaphoreResult{ReqId: request.GetAcquireSemaphore().ReqId, Status: code, Acquired: acquired}}}
 			})
@@ -37,7 +38,7 @@ func TestAcquisitionStatusCannotBecomeBusyOrSuccess(t *testing.T) {
 			c.Assert(held, qt.IsFalse)
 		}
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	s := testSession(c, func(request *wire.SessionRequest) *wire.SessionResponse {
 		return &wire.SessionResponse{Response: &wire.SessionResponse_AcquireSemaphoreResult_{AcquireSemaphoreResult: &wire.SessionResponse_AcquireSemaphoreResult{ReqId: request.GetAcquireSemaphore().ReqId, Status: Ydb.StatusIds_SUCCESS}}}
 	})
@@ -59,7 +60,7 @@ func TestNativeReleaseRequiresBothAcknowledgments(t *testing.T) {
 		{"wrong stopped session", Ydb.StatusIds_SUCCESS, true, 8, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			sends := 0
 			s := testSession(c, func(request *wire.SessionRequest) *wire.SessionResponse {
 				sends++
@@ -81,7 +82,7 @@ func TestNativeReleaseRequiresBothAcknowledgments(t *testing.T) {
 func TestOwnershipRequiresSuccessfulExactResponse(t *testing.T) {
 	for _, name := range []string{"status", "identity", "missing"} {
 		t.Run(name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			s := testSession(c, func(request *wire.SessionRequest) *wire.SessionResponse {
 				result := &wire.SessionResponse_DescribeSemaphoreResult{ReqId: request.GetDescribeSemaphore().ReqId, Status: Ydb.StatusIds_SUCCESS, SemaphoreDescription: &wire.SemaphoreDescription{Name: "lock"}}
 				switch name {

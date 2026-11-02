@@ -7,6 +7,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -16,7 +17,7 @@ import (
 )
 
 func TestStreamingSourcePreservesPoolThroughConversion(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.Request(`{"coordination_nodes":{"copy":{"schema":"app","text":"SELECT 1;","resource_pool":"team.batch"}}}`)
 	c.Assert(err, qt.IsNil)
 	request.TargetFeatures = []string{provider.PlanningObjectContextFeature}
@@ -35,7 +36,7 @@ func TestStreamingSourcePreservesPoolThroughConversion(t *testing.T) {
 }
 
 func TestStreamingResourcesBindPathsAndPool(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	// Absolute and relative aliases of the same path contribute one read.
 	request := streamingPlanRequest(c, nil, &streaming.Spec{Text: "PRAGMA TablePathPrefix = '/local/app'; INSERT INTO sink SELECT * FROM source JOIN `/local/app/source` ON true;", ResourcePool: "team.batch"}, false)
 	result, err := backend.New().PlanFeatures(c.Context(), request)
@@ -73,13 +74,13 @@ func TestStreamingResourcesRefuseForeignAndUnresolvedPaths(t *testing.T) {
 		"$source = BuildPath('app/source'); SELECT * FROM $source;",
 		"SELECT * FROM RANGE(`app`);",
 	} {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := streamingPlanRequest(c, nil, &streaming.Spec{Text: text}, false)
 		result, err := backend.New().PlanFeatures(c.Context(), request)
 		c.Assert(err, qt.IsNotNil)
 		c.Assert(result, qt.IsNil)
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := streamingPlanRequest(c, nil, &streaming.Spec{Text: "SELECT * FROM `/local/outside/source`;"}, false)
 	request.DatabasePath = "/local/dev"
 	result, err := backend.New().PlanFeatures(c.Context(), request)
@@ -88,7 +89,7 @@ func TestStreamingResourcesRefuseForeignAndUnresolvedPaths(t *testing.T) {
 }
 
 func TestStreamingResourcesOrderStopsAndRestartsAroundCommonInputs(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	before := &streaming.Spec{Text: "INSERT INTO `app/sink` SELECT * FROM `/local/app/input`;"}
 	after := &streaming.Spec{Text: "INSERT INTO `app/sink` SELECT * FROM `app/input` WHERE true;"}
 	request := streamingPlanRequest(c, before, after, true)
@@ -111,7 +112,7 @@ func TestStreamingResourcesOrderStopsAndRestartsAroundCommonInputs(t *testing.T)
 func TestStreamingSplitPreservesAccessOrderingAndDropRewrite(t *testing.T) {
 	for _, action := range []string{"alter", "drop"} {
 		t.Run(action, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			before := &streaming.Spec{Text: "SELECT * FROM `app/source`;"}
 			after := &streaming.Spec{Text: "SELECT * FROM `app/next`;"}
 			if action == "drop" {
@@ -152,7 +153,7 @@ func TestStreamingSplitPreservesAccessOrderingAndDropRewrite(t *testing.T) {
 func TestStreamingResourcePoolSurvivesNormalization(t *testing.T) {
 	for _, pool := range []string{"", "default", "team.batch"} {
 		t.Run(pool, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: "/local", Schema: "app", Name: "copy"}
 			value, err := schema.CaptureStreamingQueryIntent(owner, streaming.Spec{Text: "SELECT 1;", ResourcePool: pool}, true)
 			c.Assert(err, qt.IsNil)
@@ -171,7 +172,7 @@ func TestStreamingResourcePoolSurvivesNormalization(t *testing.T) {
 // The streaming observation contains query settings only, so a principal
 // mutation cannot invalidate its captured native precondition.
 func TestStreamingSettingsDoNotFencePrincipalChanges(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := streamingPlanRequest(c, &streaming.Spec{Text: "SELECT 1;"}, &streaming.Spec{Text: "SELECT 2;"}, true)
 	request.TargetFeatures = backend.Description().Engines[0].Features
 	principal := &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: "principal"},
@@ -189,7 +190,7 @@ func TestStreamingSettingsDoNotFencePrincipalChanges(t *testing.T) {
 }
 
 func TestStreamingResourcesResolveNamedAndExternalInputs(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := streamingPlanRequest(c, nil, &streaming.Spec{Text: "$input = '/local/app/input'; $rows = SELECT * FROM $input; INSERT INTO `app/sink` SELECT * FROM $rows JOIN `app/external`.`remote/topic` ON true;"}, false)
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)

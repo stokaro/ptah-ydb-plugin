@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 
@@ -25,7 +26,7 @@ func TestCoordinationRendersText(t *testing.T) {
 		{action: "drop", want: "DROP COORDINATION NODE `app/node`;"},
 	} {
 		t.Run(tc.action, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := nativePlan(c, tc.action)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
@@ -43,7 +44,7 @@ func TestCoordinationRendersText(t *testing.T) {
 // The TEXT form checks the batch as the native form does: a forged
 // operation fails the call, and no unit is written.
 func TestTextRenderRefusesAForgedOperation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := nativePlan(c, "create")
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -58,7 +59,7 @@ func TestTextRenderRefusesAForgedOperation(t *testing.T) {
 // The provider and its engine both list render.text-units, so a host that
 // lists it negotiates the TEXT form.
 func TestDescriptionOffersTextUnits(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	description := backend.Description()
 	c.Assert(description.Features, qt.Contains, provider.TextUnitsFeature)
 	c.Assert(description.Engines[0].Features, qt.Contains, provider.TextUnitsFeature)

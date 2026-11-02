@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
@@ -171,11 +172,11 @@ func builtinFindings(findings []hostFinding) []string {
 }
 
 func TestStatementFactsLintAsTheHostsYQLReading(t *testing.T) {
-	cases := lintCorpus(qt.New(t))
+	cases := lintCorpus(testcheck.New(t))
 	for _, test := range cases {
 		for version, line := range test.golden.Versions {
 			t.Run(test.name+"/"+version, func(t *testing.T) {
-				c := qt.New(t)
+				c := testcheck.New(t)
 
 				got := ownedFindings(c, test.sql, line.Capabilities)
 
@@ -189,7 +190,7 @@ func TestStatementFactsLintAsTheHostsYQLReading(t *testing.T) {
 // finding the host's reading reports from the facts, on more than one line,
 // and that the goldens come from one host commit.
 func TestStatementFactsCorpusReachesEveryRule(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rules := map[string]int{}
 	commits := map[string]bool{}
 	for _, test := range lintCorpus(c) {
@@ -228,7 +229,7 @@ func TestStatementFactsAreStricterOnPurpose(t *testing.T) {
 			owned:   []string{"1:1 SQL002 ptah sql lint does not lint named expression statements yet", "2:1 DDL001 $t", "3:1 CAP001 add_column_with_default"}},
 	} {
 		t.Run(test.file, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			sql, err := os.ReadFile("testdata/statementfacts/stricter/" + test.file + ".yql")
 			c.Assert(err, qt.IsNil)
 			data, err := os.ReadFile("testdata/statementfacts/stricter/" + test.file + ".golden.json")
@@ -260,7 +261,7 @@ func statementFacts(annotations []*protocol.LintAnnotation) []string {
 // facts, and declines one YQL splits otherwise: every statement has a kind,
 // so the two splits cannot agree about it.
 func TestAnnotateDescribesWhatYQLSplitsTheSameWay(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	sql := "CREATE TABLE t (id Uint64);\nUPSERT INTO t (id) VALUES ('a;b');\n"
 	facts := migrationlint.StatementFacts()
 	request := &protocol.AnnotateLintRequest{Engine: "ydb", Facts: facts, Sources: []*protocol.LintSource{{Name: "x.sql", Sql: sql}},

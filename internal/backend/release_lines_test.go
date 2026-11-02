@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 )
 
 func TestDescriptionDeclaresReleaseLines_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	lines := backend.Description().GetEngines()[0].GetReleaseLines()
 	got := make([]string, len(lines))
 	for i, line := range lines {
@@ -27,7 +28,7 @@ func TestDescriptionDeclaresReleaseLines_HappyPath(t *testing.T) {
 }
 
 func TestDescriptionReleaseLinesStateWhyTheyRunNoJob_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	for _, line := range backend.Description().GetEngines()[0].GetReleaseLines() {
 		c.Assert(line.GetUnprobed() != "", qt.Equals, line.GetSupport() == protocol.ReleaseLine_BEST_EFFORT, qt.Commentf("line %s", line.GetLine()))
 	}

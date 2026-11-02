@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/readproof"
 )
@@ -30,7 +31,7 @@ func TestReadOnly_HappyPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(readproof.ReadOnly(test.statement), qt.IsNil)
 		})
 	}
@@ -90,7 +91,7 @@ func TestReadOnly_FailurePath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(readproof.ReadOnly(test.statement), qt.ErrorMatches, test.wantErr)
 		})
 	}

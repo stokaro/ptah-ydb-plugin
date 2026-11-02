@@ -9,6 +9,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -22,7 +23,7 @@ func directory(absolute string, entries ...*Ydb_Scheme.Entry) *Ydb_Scheme.ListDi
 }
 
 func TestStreamingInventoryReadsDotDirectoriesAndCrossDirectoryQueries(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	tree := map[string]*Ydb_Scheme.ListDirectoryResult{
 		"/local/realm":          directory("/local/realm", &Ydb_Scheme.Entry{Name: ".queries", Type: Ydb_Scheme.Entry_DIRECTORY}, &Ydb_Scheme.Entry{Name: "inputs", Type: Ydb_Scheme.Entry_DIRECTORY}),
 		"/local/realm/.queries": directory("/local/realm/.queries", &Ydb_Scheme.Entry{Name: "copy", Type: queryEntry}),
@@ -50,7 +51,7 @@ func TestStreamingInventoryReadsDotDirectoriesAndCrossDirectoryQueries(t *testin
 }
 
 func TestStreamingInventoryProvesAbsenceWithoutEnabledReader(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	result, err := inspect.ReadStreamingInventory(c.Context(), "/local", func(_ context.Context, absolute string) (*Ydb_Scheme.ListDirectoryResult, error) {
 		return directory(absolute, &Ydb_Scheme.Entry{Name: "history", Type: Ydb_Scheme.Entry_TABLE}), nil
 	}, nil)
@@ -66,7 +67,7 @@ func TestStreamingInventoryPreservesUnreadQueries(t *testing.T) {
 		read inspect.StreamingQuery
 	}{{"disabled reader", nil}, {"read error", func(context.Context, string) (*streaming.Spec, error) { return nil, errors.New("catalog unavailable") }}, {"missing settings", func(context.Context, string) (*streaming.Spec, error) { return nil, nil }}} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := inspect.ReadStreamingInventory(c.Context(), "/local", func(_ context.Context, absolute string) (*Ydb_Scheme.ListDirectoryResult, error) {
 				return directory(absolute, &Ydb_Scheme.Entry{Name: "copy", Type: queryEntry}), nil
 			}, test.read)
@@ -99,7 +100,7 @@ func TestStreamingInventoryRefusesIncompleteDirectoryTraversal(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := inspect.ReadStreamingInventory(c.Context(), test.root, test.list, nil)
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(result, qt.IsNil)
@@ -108,7 +109,7 @@ func TestStreamingInventoryRefusesIncompleteDirectoryTraversal(t *testing.T) {
 }
 
 func TestStreamingInventoryStopsAfterCancellation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	ctx, cancel := context.WithCancel(c.Context())
 	calls := 0
 	result, err := inspect.ReadStreamingInventory(ctx, "/local", func(_ context.Context, p string) (*Ydb_Scheme.ListDirectoryResult, error) {

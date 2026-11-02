@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -25,7 +26,7 @@ func columnTable(c *qt.C, storage string, columns ...*protocol.DeclaredColumn) *
 // TestValidateSchema_ColumnTable holds a column table to the rules its CREATE
 // TABLE compiles with.
 func TestValidateSchema_ColumnTable(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(diagnostics(c, newRequest(columnTable(c, `{"hashColumns":["id"],"partitions":"2"}`, column("id", "Uint64", true), column("body", "Utf8", false)))), qt.HasLen, 0)
 	refused := diagnostics(c, newRequest(columnTable(c, `{"hashColumns":["body"]}`, column("id", "Uint64", true), column("body", "Utf8", false))))
 	c.Assert(refused, qt.HasLen, 1)

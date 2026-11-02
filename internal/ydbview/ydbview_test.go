@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 )
 
@@ -47,11 +48,11 @@ var storedQueries = []struct{ name, body, stored string }{
 func TestQueryText_HappyPath(t *testing.T) {
 	for _, tc := range storedQueries {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(ydbview.QueryText(tc.body), qt.Equals, tc.stored)
 		})
 		t.Run(tc.name+" read back", func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(ydbview.QueryText(tc.stored), qt.Equals, tc.stored)
 		})
 	}
@@ -69,7 +70,7 @@ func TestQueryText_Edges(t *testing.T) {
 		{"inner semicolon kept", "SELECT ($x) -> { RETURN $x; };", "SELECT ( $ x ) -> { RETURN $ x ; }"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(ydbview.QueryText(tc.body), qt.Equals, tc.want)
 		})
 	}
@@ -84,13 +85,13 @@ func TestRealmQueryText(t *testing.T) {
 		{"no pragma", "SELECT id FROM t", "/local/ptah_dev/r1", "SELECT id FROM t"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(ydbview.RealmQueryText(tc.body, tc.root), qt.Equals, tc.want)
 		})
 	}
 }
 
 func TestRealmPrefix(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(ydbview.RealmPrefix("/lo\"c\\al"), qt.Equals, "PRAGMA TablePathPrefix(\"/lo\\\"c\\\\al\");\n")
 }

@@ -13,6 +13,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
@@ -293,9 +294,9 @@ func pluginSplit(c *qt.C, call splitCall) splitCall {
 // TestCorpus_SplitsAsTheHost requires every split the host's owner made to be
 // the provider's split of the same sources.
 func TestCorpus_SplitsAsTheHost(t *testing.T) {
-	for _, row := range directoryCases(qt.New(t)) {
+	for _, row := range directoryCases(testcheck.New(t)) {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			for _, call := range row.golden.Splits {
 				c.Assert(pluginSplit(c, call), sameAnswer, call)
 			}
@@ -386,11 +387,11 @@ func checkedRuns(golden directoryGolden) []run {
 // TestCorpus_ChecksAsTheHost requires every check the host's owner answered
 // to be answered by the provider with the same findings.
 func TestCorpus_ChecksAsTheHost(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	resolved := targets(c)
 	for _, row := range directoryCases(c) {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			for _, r := range checkedRuns(row.golden) {
 				request := checkRequest(c, row.golden, r, resolved)
 				c.Assert(pluginFindings(c, request), sameAnswer, servedFindings(r.Check.Findings),
@@ -444,9 +445,9 @@ func pluginAnnotations(c *qt.C, request *protocol.AnnotateLintRequest) [][]annot
 // TestCorpus_AnnotatesAsTheHost requires every annotation of a run that names
 // no dialect to be the provider's annotation of the same statements.
 func TestCorpus_AnnotatesAsTheHost(t *testing.T) {
-	for _, row := range directoryCases(qt.New(t)) {
+	for _, row := range directoryCases(testcheck.New(t)) {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			for _, r := range annotatedRuns(row.golden) {
 				c.Assert(pluginAnnotations(c, annotateRequest(row.golden, r.Annotate)), sameAnswer, r.Annotate.Answer)
 			}

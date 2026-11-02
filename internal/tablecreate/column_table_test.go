@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -73,7 +74,7 @@ func TestCompileColumnTable_HappyPath(t *testing.T) {
 				`"primaryKey":["ts","id"]}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			created, err := tablecreate.CompileColumnTable(owner(), columnDeclaration(c, test.storage), nil)
 			c.Assert(err, qt.IsNil)
 			encoded, err := protojson.Marshal(created)
@@ -88,7 +89,7 @@ func TestCompileColumnTable_HappyPath(t *testing.T) {
 // into NOT NULL columns, as the host's embedded engine writes them, and leaves
 // the declaration as it was.
 func TestCompileColumnTableWritesTheKeyNotNull(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	table := columnDeclaration(c, `{}`)
 	table.Columns[0].Nullable, table.Columns[1].Nullable = true, true
 	declared := proto.CloneOf(table)
@@ -137,7 +138,7 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 			wantErr: `YDB table creation requires an ordered primary key`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			table := columnDeclaration(c, test.storage)
 			test.modify(c, table)
 			created, err := tablecreate.CompileColumnTable(owner(), table, nil)
@@ -157,7 +158,7 @@ func TestColumnTableStatement(t *testing.T) {
 				"TTL = Interval(\"PT86400S\") TO EXTERNAL DATA SOURCE `/local/ext`, Interval(\"PT604800S\") DELETE ON `ts`);"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			created, err := tablecreate.CompileColumnTable(owner(), columnDeclaration(c, test.storage), nil)
 			c.Assert(err, qt.IsNil)
 			c.Assert(tablecreate.ColumnTableStatement("/local/app/records", created), qt.Equals, test.want)
@@ -168,7 +169,7 @@ func TestColumnTableStatement(t *testing.T) {
 // TestColumnTableStatement_EpochTTLAndQuoting writes an epoch unit after AS and
 // escapes a backtick and a backslash in a name.
 func TestColumnTableStatement_EpochTTLAndQuoting(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	table := columnDeclaration(c, `{"ttl":{"enabled":{"column":"n`+"`"+`s","columnUnit":"2","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`)
 	table.PrimaryKey = []string{"n`s", "id"}
 	table.Columns[0] = &protocol.DeclaredColumn{Name: "n`s", Type: "Uint64", Primary: true}
@@ -191,7 +192,7 @@ func columnCreationRequest(c *qt.C, storage string, capabilities map[string]bool
 }
 
 func TestColumnTablePlan_Create(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	service := backend.New()
 	request := columnCreationRequest(c, `{"hashColumns":["id"],"partitions":"3","ttl":`+deleteDaily+`}`, map[string]bool{"transactional_ddl": false})
 	plan, err := service.PlanFeatures(t.Context(), request)
@@ -234,14 +235,14 @@ func TestColumnTablePlan_TieredTTLNeedsTheCapability(t *testing.T) {
 		{name: "not established", capabilities: map[string]bool{"transactional_ddl": false}, refused: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(t.Context(), columnCreationRequest(c, `{"ttl":`+tiered+`}`, test.capabilities))
 			c.Assert(err, qt.IsNil)
 			c.Assert(len(plan.Diagnostics) == 1, qt.Equals, test.refused)
 			c.Assert(len(plan.Contributions) == 0, qt.Equals, test.refused)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	plan, err := backend.New().PlanFeatures(t.Context(), columnCreationRequest(c, `{"ttl":`+tiered+`}`, map[string]bool{"transactional_ddl": false}))
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics[0].Message, qt.Matches, `column table "app/records" declares a TTL tier that moves rows to an external data source, `+
@@ -274,7 +275,7 @@ func TestColumnTablePlan_AlterWithNoChange(t *testing.T) {
 		{"the server's choices", `{"ttl":` + deleteDaily + `}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := columnAlterRequest(c, []*protocol.ComparisonRecord{storageFacet(c, protocol.ValueInput_DESIRED, test.desired)},
 				[]*protocol.ComparisonRecord{storageFacet(c, protocol.ValueInput_OBSERVED, heldStorage)})
 			plan, err := backend.New().PlanFeatures(t.Context(), request)
@@ -337,7 +338,7 @@ func TestColumnTablePlan_AlterRefusals(t *testing.T) {
 		}, `table "app/records": column-table rebuilds require an explicit data migration`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(t.Context(), test.request(c))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -350,7 +351,7 @@ func TestColumnTablePlan_AlterRefusals(t *testing.T) {
 // TestColumnTablePlan_AlterKeepsAStorageTheSourceCannotDescribe leaves a column
 // table alone when the source neither declares its storage nor describes it.
 func TestColumnTablePlan_AlterKeepsAStorageTheSourceCannotDescribe(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	plan, err := backend.New().PlanFeatures(t.Context(), columnAlterRequest(c, nil, []*protocol.ComparisonRecord{storageFacet(c, protocol.ValueInput_OBSERVED, heldStorage)}))
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -371,7 +372,7 @@ func TestColumnTableOperation_FailurePath(t *testing.T) {
 		{"no columns", `{"primaryKey":["id"]}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			normalized, err := tablecreate.NormalizeColumnTable(&protocol.ValueInput{Id: "forged", Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
 				ProviderId: schema.ProviderID, Kind: tablecreate.ColumnOperationKind, Owner: owner(), SchemaVersion: 1, Encoding: model.Encoding,
 				DefinitionSha256: model.DefinitionSha256, Payload: []byte(test.payload)}})
@@ -384,7 +385,7 @@ func TestColumnTableOperation_FailurePath(t *testing.T) {
 // TestColumnTablePreparationAndProjection derives a column table's key and
 // projects no value beyond its declared storage.
 func TestColumnTablePreparationAndProjection(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	identifiers := &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}
 	prepared, err := backend.New().PrepareTables(t.Context(), &protocol.PrepareTablesRequest{Engine: "ydb", Identifiers: identifiers,
 		Capabilities: map[string]bool{"transactional_ddl": false}, Tables: []*protocol.TablePreparationInput{{Subject: tableSubject(), Desired: columnDeclaration(c, `{}`),

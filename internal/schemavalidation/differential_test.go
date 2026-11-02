@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -151,12 +152,12 @@ func isDeferred(name string) bool { return strings.HasPrefix(name, "deferred-") 
 func isAgreed(name string) bool   { return !isRefused(name) && !isDeferred(name) }
 
 func TestCorpus_AgreesWithTheHostWhereItAccepts(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := readCorpus(c, isAgreed)
 	c.Assert(len(rows) > 0, qt.IsTrue, qt.Commentf("the corpus holds no agreement rows"))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(codes(diagnostics(c, row.request(false))), qt.DeepEquals, hostCodes(row.golden.Default))
 			c.Assert(codes(diagnostics(c, row.request(true))), qt.DeepEquals, hostCodes(row.golden.NoSkipped))
 		})
@@ -164,12 +165,12 @@ func TestCorpus_AgreesWithTheHostWhereItAccepts(t *testing.T) {
 }
 
 func TestCorpus_RefusesWhatTheHostRefuses(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := readCorpus(c, isRefused)
 	c.Assert(len(rows) > 0, qt.IsTrue, qt.Commentf("the corpus holds no refusal rows"))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(hostCodes(row.golden.Default), qt.Not(qt.HasLen), 0)
 			c.Assert(codes(diagnostics(c, row.request(false))), qt.DeepEquals, hostCodes(row.golden.Default))
 			c.Assert(codes(diagnostics(c, row.request(true))), qt.DeepEquals, hostCodes(row.golden.NoSkipped))
@@ -180,12 +181,12 @@ func TestCorpus_RefusesWhatTheHostRefuses(t *testing.T) {
 // A deferred row pins a stricter answer: the host's validation would accept the
 // declaration and a later stage would refuse it, so the provider says so now.
 func TestCorpus_RefusesWhatOnlyALaterHostStageRefuses(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := readCorpus(c, isDeferred)
 	c.Assert(len(rows) > 0, qt.IsTrue, qt.Commentf("the corpus holds no deferred rows"))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(hostCodes(row.golden.Default), qt.HasLen, 0)
 			c.Assert(hostCodes(row.golden.NoSkipped), qt.HasLen, 0)
 			refused := append(codes(diagnostics(c, row.request(false))), codes(diagnostics(c, row.request(true)))...)
@@ -195,7 +196,7 @@ func TestCorpus_RefusesWhatOnlyALaterHostStageRefuses(t *testing.T) {
 }
 
 func TestCorpus_CoversTheHostCommit(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	hosts := map[string]bool{}
 	for _, row := range readCorpus(c, func(string) bool { return true }) {
 		hosts[row.golden.Host] = true

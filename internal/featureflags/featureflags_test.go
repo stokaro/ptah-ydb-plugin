@@ -7,6 +7,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // page reads one feature-flags page the monitoring endpoint of a local-ydb
@@ -62,7 +63,7 @@ func TestRefine_EveryLineDefaultIsThePreset(t *testing.T) {
 		{page: "local-ydb-26.2.1.14.json", preset: linePreset(true, true)},
 	} {
 		t.Run(test.page, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			flags, err := featureflags.Decode(page(c, test.page), "/local")
 			c.Assert(err, qt.IsNil)
 			c.Assert(flags.Refine(test.preset), qt.DeepEquals, test.preset)
@@ -73,7 +74,7 @@ func TestRefine_EveryLineDefaultIsThePreset(t *testing.T) {
 // TestRefine_ClusterThatTurnedTieringOn reads a page from 26.2.1.14 whose
 // dynamic configuration turned EnableTieringInColumnShard on.
 func TestRefine_ClusterThatTurnedTieringOn(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	flags, err := featureflags.Decode(page(c, "local-ydb-26.2.1.14-tiering-on.json"), "/local")
 	c.Assert(err, qt.IsNil)
 	c.Assert(flags["EnableTieringInColumnShard"], qt.IsTrue)
@@ -110,7 +111,7 @@ func TestRefine_HappyPath(t *testing.T) {
 			want: with(map[string]bool{"resource_pools": true})},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(test.flags.Refine(preset()), qt.DeepEquals, test.want)
 		})
 	}
@@ -118,7 +119,7 @@ func TestRefine_HappyPath(t *testing.T) {
 
 // TestRefine_LeavesItsInputAlone returns a new set.
 func TestRefine_LeavesItsInputAlone(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	caps := preset()
 	refined := featureflags.Flags{"EnableTieringInColumnShard": true}.Refine(caps)
 	c.Assert(refined["tiered_ttl"], qt.IsTrue)
@@ -127,14 +128,14 @@ func TestRefine_LeavesItsInputAlone(t *testing.T) {
 
 // TestRefine_EmptySet starts from no preset.
 func TestRefine_EmptySet(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(featureflags.Flags{"EnableTieringInColumnShard": true}.Refine(nil), qt.DeepEquals, map[string]bool{"tiered_ttl": true})
 }
 
 // TestGates_NameEveryFlagOnce keeps one flag per capability and one capability
 // per flag.
 func TestGates_NameEveryFlagOnce(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	keys, flags := map[string]bool{}, map[string]bool{}
 	for _, gate := range featureflags.Gates() {
 		c.Assert(keys[gate.Key], qt.IsFalse, qt.Commentf(gate.Key))
@@ -160,7 +161,7 @@ func TestDecode_HappyPath(t *testing.T) {
 			want: featureflags.Flags{"B": true}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			flags, err := featureflags.Decode([]byte(test.body), test.database)
 			c.Assert(err, qt.IsNil)
 			c.Assert(flags, qt.DeepEquals, test.want)
@@ -182,7 +183,7 @@ func TestDecode_FailurePath(t *testing.T) {
 			wantErr: `the feature-flags page lists A twice`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			flags, err := featureflags.Decode([]byte(test.body), "/local")
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(flags, qt.IsNil)

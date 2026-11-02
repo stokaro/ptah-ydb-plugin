@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 )
 
@@ -78,7 +79,7 @@ func TestStatements_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			statements, err := workload.Statements(test.pools, test.classifiers)
 			c.Assert(err, qt.IsNil)
 			c.Assert(statements, qt.DeepEquals, test.want)
@@ -137,7 +138,7 @@ func TestStatements_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			statements, err := workload.Statements(test.pools, test.classifiers)
 			var refused *workload.ChangeError
 			c.Assert(err, qt.ErrorAs, &refused)
@@ -148,7 +149,7 @@ func TestStatements_FailurePath(t *testing.T) {
 }
 
 func TestChangeError_NamesTheObject(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert((&workload.ChangeError{Name: "p", Reason: "r"}).Error(), qt.Equals, `resource pool "p": r`)
 	c.Assert((&workload.ChangeError{Classifier: true, Name: "c", Reason: "r"}).Error(), qt.Equals, `resource pool classifier "c": r`)
 }

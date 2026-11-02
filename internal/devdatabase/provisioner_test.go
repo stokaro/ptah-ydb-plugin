@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/devdatabase"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 )
@@ -62,7 +63,7 @@ func request(spec string) *protocol.ProvisionDevRequest {
 }
 
 func TestProvisionDevDatabase_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	runtime := &fakeRuntime{}
 	provisioner := devdatabase.New(runtime, ready, nil)
 
@@ -78,7 +79,7 @@ func TestProvisionDevDatabase_HappyPath(t *testing.T) {
 }
 
 func TestProvisionDevDatabase_ReleaseRemovesTheContainerOnce(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	runtime := &fakeRuntime{}
 	provisioner := devdatabase.New(runtime, ready, nil)
 	reply, err := provisioner.ProvisionDevDatabase(c.Context(), request("docker://ydb"))
@@ -94,7 +95,7 @@ func TestProvisionDevDatabase_ReleaseRemovesTheContainerOnce(t *testing.T) {
 }
 
 func TestProvisionDevDatabase_ReleaseOfAnUnknownLeaseSucceeds(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	runtime := &fakeRuntime{}
 	provisioner := devdatabase.New(runtime, ready, nil)
 
@@ -106,7 +107,7 @@ func TestProvisionDevDatabase_ReleaseOfAnUnknownLeaseSucceeds(t *testing.T) {
 }
 
 func TestProvisionDevDatabase_FailedReleaseKeepsTheLease(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	runtime := &fakeRuntime{removeErr: errors.New("docker rm failed")}
 	provisioner := devdatabase.New(runtime, ready, nil)
 	reply, err := provisioner.ProvisionDevDatabase(c.Context(), request("docker://ydb"))
@@ -121,7 +122,7 @@ func TestProvisionDevDatabase_FailedReleaseKeepsTheLease(t *testing.T) {
 }
 
 func TestProvisionDevDatabase_CloseRemovesEveryLease(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	runtime := &fakeRuntime{}
 	provisioner := devdatabase.New(runtime, ready, nil)
 	for range 3 {
@@ -149,7 +150,7 @@ func TestProvisionDevDatabase_RefusalIsTyped(t *testing.T) {
 		{"runtime elsewhere", "docker://ydb", &devdatabase.Refusal{Reason: "runs on remote-dev"}, protocol.DevDatabaseRefusal_UNSUPPORTED, "runs on remote-dev"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			runtime := &fakeRuntime{available: test.available}
 			provisioner := devdatabase.New(runtime, ready, nil)
 
@@ -167,7 +168,7 @@ func TestProvisionDevDatabase_RefusalIsTyped(t *testing.T) {
 
 func TestProvisionDevDatabase_FailurePath(t *testing.T) {
 	t.Run("start fails", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		runtime := &fakeRuntime{startErr: errors.New("docker run failed")}
 		provisioner := devdatabase.New(runtime, ready, nil)
 
@@ -178,7 +179,7 @@ func TestProvisionDevDatabase_FailurePath(t *testing.T) {
 		c.Assert(runtime.removed, qt.DeepEquals, runtime.started)
 	})
 	t.Run("the container stops before it is ready", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		runtime := &fakeRuntime{running: false}
 		provisioner := devdatabase.New(runtime, func(context.Context, string) error { return errors.New("connection refused") }, nil)
 
@@ -189,7 +190,7 @@ func TestProvisionDevDatabase_FailurePath(t *testing.T) {
 		c.Assert(runtime.removed, qt.DeepEquals, runtime.started)
 	})
 	t.Run("the call is canceled while the container starts", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		ctx, cancel := context.WithCancel(c.Context())
 		defer cancel()
 		runtime := &fakeRuntime{startCancel: cancel}
@@ -202,7 +203,7 @@ func TestProvisionDevDatabase_FailurePath(t *testing.T) {
 		c.Assert(runtime.removed, qt.DeepEquals, runtime.started)
 	})
 	t.Run("the call is canceled while the server starts", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		ctx, cancel := context.WithTimeout(c.Context(), 50*time.Millisecond)
 		defer cancel()
 		runtime := &fakeRuntime{running: true}
@@ -217,7 +218,7 @@ func TestProvisionDevDatabase_FailurePath(t *testing.T) {
 }
 
 func TestDockerCLIAvailable_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Setenv("PATH", c.TempDir())
 
 	err := devdatabase.DockerCLI{RunLabel: "test"}.Available(c.Context(), "ydbplatform/local-ydb:26.2.1.14")
@@ -250,7 +251,7 @@ func realmRequest(address string) *protocol.ProvisionDevRequest {
 }
 
 func TestProvisionDevRealm_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	realms := &fakeRealms{}
 	provisioner := devdatabase.New(&fakeRuntime{}, ready, realms)
 	request := realmRequest("ydbs://reader:secret@db.example:2135/Root/app?dev_realm=earlier&go_balancer=disable")
@@ -278,7 +279,7 @@ func TestProvisionDevRealm_HappyPath(t *testing.T) {
 // TestCloseRemovesTheRealmsItHolds pins that a provider that ends removes
 // the realms a host did not release.
 func TestCloseRemovesTheRealmsItHolds(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	realms := &fakeRealms{}
 	provisioner := devdatabase.New(&fakeRuntime{}, ready, realms)
 	reply, err := provisioner.ProvisionDevDatabase(t.Context(), realmRequest("ydb://db.example:2136/local"))
@@ -307,7 +308,7 @@ func TestProvisionDevRealm_FailurePath(t *testing.T) {
 			protocol.DevDatabaseRefusal_UNAVAILABLE, "the database the dev realm address names could not take a realm: the database could not be reached"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			provisioner := devdatabase.New(&fakeRuntime{}, ready, test.realms)
 
 			reply, err := provisioner.ProvisionDevDatabase(t.Context(), realmRequest(test.address))

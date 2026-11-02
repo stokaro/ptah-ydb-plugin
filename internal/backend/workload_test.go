@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
@@ -108,7 +109,7 @@ func TestWorkloadComparison_HappyPath(t *testing.T) {
 			changes: 1, impact: protocol.ChangeSemantics_BEHAVIORAL},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result := compareWorkload(c, workloadRequest(c, test.kind, test.declared, test.read))
 			c.Assert(result.Undecided, qt.HasLen, 0)
 			c.Assert(result.Changes, qt.HasLen, test.changes)
@@ -125,7 +126,7 @@ func TestWorkloadComparison_HappyPath(t *testing.T) {
 func TestWorkloadComparisonKeepsAnOmittedObject_HappyPath(t *testing.T) {
 	for _, kind := range []string{schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties} {
 		t.Run(kind, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			read := map[string]proto.Message{"default": pool(workload.PoolSpec{})}
 			if kind == schema.ResourcePoolClassifierProperties {
 				read = map[string]proto.Message{"etl": routing("batch", 10)}
@@ -141,7 +142,7 @@ func TestWorkloadComparisonKeepsAnOmittedObject_HappyPath(t *testing.T) {
 
 // What the comparison cannot decide it says, with the host's words.
 func TestWorkloadComparison_Undecided(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	absent := workloadRequest(c, schema.ResourcePoolProperties, nil, map[string]proto.Message{"batch": pool(workload.PoolSpec{})})
 	absent.Desired.Coverage.Subjects = []*protocol.ComparisonSubjectCoverage{{Kind: schema.ResourcePoolProperties, Subject: workloadSubject(schema.ResourcePoolProperties, "batch", ""),
 		Knowledge: testcomparison.Knowledge(protocol.ModelKnowledge_ABSENT)}}
@@ -158,7 +159,7 @@ func TestWorkloadComparison_Undecided(t *testing.T) {
 		{"a target that was not read", uninspected, "The current resource pool or its absence was not established"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result := compareWorkload(c, test.request)
 			c.Assert(result.Changes, qt.HasLen, 0)
 			c.Assert(result.Undecided, qt.HasLen, 1)
@@ -170,7 +171,7 @@ func TestWorkloadComparison_Undecided(t *testing.T) {
 // A change a target without resource pools would need is refused; a
 // comparison that changes nothing needs no capability.
 func TestWorkloadComparison_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := workloadRequest(c, schema.ResourcePoolProperties, map[string]proto.Message{"batch": pool(workload.PoolSpec{})}, nil)
 	request.Capabilities = map[string]bool{}
 	result, err := backend.New().CompareModels(c.Context(), request)
@@ -233,7 +234,7 @@ func TestWorkloadPlanning_HappyPath(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			planning, plan := workloadPlan(c, workloadCapabilities(), nil, workloadRequest(c, schema.ResourcePoolProperties, test.pools, nil),
 				workloadRequest(c, schema.ResourcePoolClassifierProperties, test.classifiers, test.readClassifiers))
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -274,7 +275,7 @@ func TestWorkloadPlanning_HappyPath(t *testing.T) {
 // A classifier names a user or a group, so the workload step runs after the
 // common steps that create or change a role and before those that drop one.
 func TestWorkloadPlanningOrdersRoles_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	role := func(name string, action protocol.PlanningEffect_Action) *protocol.CommonPlanningStep {
 		return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "ptah.run", Name: "common/" + name},
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "role",
@@ -304,7 +305,7 @@ func TestWorkloadPlanning_FailurePath(t *testing.T) {
 		{"DDL in transactions", map[string]bool{workload.CapabilityResourcePools: true, "transactional_ddl": true}, "Workload DDL cannot run in a SQL transaction.*"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := workloadRequest(c, schema.ResourcePoolProperties, map[string]proto.Message{"batch": pool(workload.PoolSpec{})}, nil)
 			_, plan := workloadPlan(c, test.capabilities, nil, request)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
@@ -318,7 +319,7 @@ func TestWorkloadPlanning_FailurePath(t *testing.T) {
 // keeping every setting: the host converts a read object it keeps into the
 // desired representation.
 func TestWorkloadConversion_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p := backend.New()
 	read := &protocol.NormalizeValuesRequest{Engine: "ydb"}
 	for _, value := range []struct {
@@ -349,7 +350,7 @@ func TestWorkloadConversion_HappyPath(t *testing.T) {
 // A pool occupies no scheme path, so a table at the root of the same name is
 // another object.
 func TestWorkloadComparisonIgnoresRelations_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := workloadRequest(c, schema.ResourcePoolProperties, map[string]proto.Message{"items": pool(workload.PoolSpec{})}, nil)
 	request.DeclaredRelations = []*protocol.ComparisonIdentity{{Kind: "table", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: &protocol.ComparisonPart{},
 		Parent: &protocol.ComparisonPart{}, Name: testcomparison.Part("items")}}

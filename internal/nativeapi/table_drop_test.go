@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/grpc"
@@ -95,7 +96,7 @@ func TestTableDropDispatchAndConfirmation(t *testing.T) {
 		{store: tablecreate.ColumnStore, kind: Ydb_Scheme.Entry_COLUMN_TABLE, read: "describe column table /local/app/records"},
 	} {
 		t.Run(tc.store, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newDropFixture()
 			fixture.entry.Type = tc.kind
 			dispatched, err := fixture.api().Apply(c.Context(), "/local", removal(c, tc.store), allow)
@@ -125,7 +126,7 @@ func TestTableDropRefusesAnotherTable(t *testing.T) {
 			want: "YDB table /local/app/records holds other columns or another key than the plan captured"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newDropFixture()
 			tc.change(fixture)
 			dispatched, err := fixture.api().Apply(c.Context(), "/local", removal(c, tablecreate.RowStore), allow)
@@ -137,7 +138,7 @@ func TestTableDropRefusesAnotherTable(t *testing.T) {
 }
 
 func TestTableDropOutcomes(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newDropFixture()
 	fixture.keepTable = true
 	dispatched, err := fixture.api().Apply(c.Context(), "/local", removal(c, tablecreate.RowStore), allow)

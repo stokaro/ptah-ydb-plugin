@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
@@ -51,7 +52,7 @@ func commonCreation(c *qt.C, steps ...*protocol.CommonPlanningStep) *protocol.Pl
 // one of its columns comes after the table exists; a comment on another table
 // is not ordered against it.
 func TestPlanOrdersCommonObjectSteps(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	view := &protocol.Reference{Engine: "ydb", Kind: "view", Schema: "app", Name: "v"}
 	request := commonCreation(c,
 		commonObjectStep("drop-view", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_DropView{DropView: view}}),
@@ -87,7 +88,7 @@ func TestPlanOrdersCommonObjectSteps(t *testing.T) {
 // On a host that did not negotiate the wire a declared comment is a table
 // setting no creation states, and the creation is refused.
 func TestPlanRefusesCommentsOffTheCommonWire(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := commonCreation(c)
 	request.TargetFeatures = nil
 	request.Tables[0].Desired.Comment = "rows"
@@ -99,7 +100,7 @@ func TestPlanRefusesCommentsOffTheCommonWire(t *testing.T) {
 
 // A comment YDB cannot keep refuses the plan before anything is planned.
 func TestPlanRefusesACommentYDBCannotHold(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := commonCreation(c)
 	request.Tables[0].Desired.Columns[0].Comment = string([]byte{0xff})
 	plan, err := backend.New().PlanFeatures(c.Context(), request)

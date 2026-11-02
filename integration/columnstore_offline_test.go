@@ -11,6 +11,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -21,7 +22,7 @@ import (
 )
 
 func TestColumnStorageOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	body, err := os.ReadFile("../internal/columnstore/testdata/26-2-indexes.json")
 	c.Assert(err, qt.IsNil)
 	observed, err := columnstore.Decode(body, "/local/col_index_probe", &native.ColumnTableDescribeResult{

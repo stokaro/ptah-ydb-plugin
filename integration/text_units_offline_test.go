@@ -7,6 +7,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -45,7 +46,7 @@ func offlineCreation(c *qt.C, client *providerruntime.Client, payload string) *p
 // render.text-units gets text units, and one that does not cannot ask for
 // them. No database session is opened.
 func TestTextUnitsOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	listing := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	c.Assert(listing.Description().Engines[0].Features, qt.Contains, provider.TextUnitsFeature)
 	rendering := offlineCreation(c, listing, `{"primaryKey":["id"],"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600}}}`)

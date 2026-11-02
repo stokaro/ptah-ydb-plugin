@@ -15,13 +15,14 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // The public CLI must reach a structural fixed point, not only render no units.
 // The primary declaration retains its authored nullable value throughout.
 func TestHostColumnDefaultsAndInventory(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	host, manifest := hostManifest(c)
 	client := startProviderFor(c)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})

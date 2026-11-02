@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // monitored returns a connection whose monitoring endpoint answers every page
@@ -34,7 +35,7 @@ func monitored(c *qt.C, secure bool, ticket string, received *atomic.Pointer[str
 // TestReadMonitoring_SendsTheConnectionCredential reads a page with the
 // credential the connection presents to the database.
 func TestReadMonitoring_SendsTheConnectionCredential(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var received atomic.Pointer[string]
 	opened := monitored(c, false, "ticket-value", &received)
 	body, err := opened.ReadMonitoring(c.Context(), "feature flags", "/viewer/json/feature_flags", url.Values{"database": {"/local"}})
@@ -46,7 +47,7 @@ func TestReadMonitoring_SendsTheConnectionCredential(t *testing.T) {
 // TestReadMonitoring_RefusesAPlainEndpointForATLSCredential keeps a credential
 // that travels over TLS off a plain http:// endpoint, before any request.
 func TestReadMonitoring_RefusesAPlainEndpointForATLSCredential(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var received atomic.Pointer[string]
 	opened := monitored(c, true, "ticket-value", &received)
 	body, err := opened.ReadMonitoring(c.Context(), "feature flags", "/viewer/json/feature_flags", nil)
@@ -58,7 +59,7 @@ func TestReadMonitoring_RefusesAPlainEndpointForATLSCredential(t *testing.T) {
 // TestReadMonitoring_AnonymousTLSConnectionReadsAPlainEndpoint has no
 // credential to protect, as the host's embedded engine reads it.
 func TestReadMonitoring_AnonymousTLSConnectionReadsAPlainEndpoint(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	var received atomic.Pointer[string]
 	opened := monitored(c, true, "", &received)
 	_, err := opened.ReadMonitoring(c.Context(), "feature flags", "/viewer/json/feature_flags", nil)
@@ -69,7 +70,7 @@ func TestReadMonitoring_AnonymousTLSConnectionReadsAPlainEndpoint(t *testing.T) 
 // TestReadMonitoring_RefusesWithoutAnEndpoint returns the sentinel callers
 // turn into a refusal that names the parameter.
 func TestReadMonitoring_RefusesWithoutAnEndpoint(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	body, err := (&Connection{database: "/local"}).ReadMonitoring(c.Context(), "column table", "/viewer/json/describe", nil)
 	c.Assert(err, qt.ErrorIs, ErrNoMonitoring)
 	c.Assert(body, qt.IsNil)
@@ -77,9 +78,9 @@ func TestReadMonitoring_RefusesWithoutAnEndpoint(t *testing.T) {
 
 func TestSendable(t *testing.T) {
 	https, err := url.Parse("https://host:8765")
-	qt.New(t).Assert(err, qt.IsNil)
+	testcheck.New(t).Assert(err, qt.IsNil)
 	plain, err := url.Parse("http://host:8765")
-	qt.New(t).Assert(err, qt.IsNil)
+	testcheck.New(t).Assert(err, qt.IsNil)
 	for _, test := range []struct {
 		name     string
 		ticket   string
@@ -93,7 +94,7 @@ func TestSendable(t *testing.T) {
 		{name: "anonymous TLS to http", secure: true, endpoint: plain},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(sendable(test.ticket, test.secure, test.endpoint) != nil, qt.Equals, test.refused)
 		})
 	}

@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
@@ -95,7 +96,7 @@ func TestTopicComparison_HappyPath(t *testing.T) {
 		{name: "a removal", read: readTopic(), changes: 1, impact: protocol.ChangeSemantics_DESTRUCTIVE, removes: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := topicRequest(c, test.declared, test.read)
 			result, err := backend.New().CompareModels(t.Context(), request)
 			c.Assert(err, qt.IsNil)
@@ -115,7 +116,7 @@ func TestTopicComparison_HappyPath(t *testing.T) {
 
 // A topic the desired source does not describe is kept as YDB holds it.
 func TestTopicComparisonKeepsAnUndescribedTopic_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := topicRequest(c, nil, readTopic())
 	request.Desired.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
 	result, err := backend.New().CompareModels(t.Context(), request)
@@ -132,7 +133,7 @@ func TestTopicComparisonKeepsAnUndescribedTopic_HappyPath(t *testing.T) {
 // A read topic holding a setting no declaration states refuses the
 // comparison with the host's words, whatever the declaration says.
 func TestTopicComparison_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	read := readTopic()
 	read.RetentionStorageMb = 64
 	for _, declared := range []*ydbdecl.Topic{nil, {}} {
@@ -170,7 +171,7 @@ func TestTopicPlanning_HappyPath(t *testing.T) {
 		{"drop", nil, readTopic(), protocol.PlanningEffect_DROP},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			capabilities := map[string]bool{"topics": true, "topic_consumer_availability_period": true, "transactional_ddl": false}
 			planning, plan := topicPlan(c, test.declared, test.read, capabilities)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -210,7 +211,7 @@ func TestTopicPlanning_FailurePath(t *testing.T) {
 		{"no topics", &ydbdecl.Topic{}, nil, map[string]bool{"transactional_ddl": false}, "Planning a topic requires the topics capability and nontransactional DDL"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			_, plan := topicPlan(c, test.declared, test.read, test.capabilities)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
@@ -58,7 +59,7 @@ func TestRebuildPlan_FailurePath(t *testing.T) {
 			`in the host's planning policy (contract 25.3)`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), rebuildRequest(c, tc.policy))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -88,7 +89,7 @@ func TestRebuildPlanNamesEachChange(t *testing.T) {
 			`YDB makes it by rebuilding the table, which Ptah plans when asked with --allow-table-rebuild`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			check := qt.New(t)
+			check := testcheck.New(t)
 			request := rebuildRequest(check, &protocol.PlanningPolicy{TableRebuildRequest: "--allow-table-rebuild"})
 			tc.modify(check, request)
 			plan, err := backend.New().PlanFeatures(check.Context(), request)
@@ -104,7 +105,7 @@ func TestRebuildPlanNamesEachChange(t *testing.T) {
 // The host's step for the column becomes the step that puts the new table in
 // place, and every step writes as the statement a migration file holds.
 func TestRebuildPlan_HappyPath(t *testing.T) {
-	check := qt.New(t)
+	check := testcheck.New(t)
 	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
 	request.Tables[0].Desired.Columns[1].Nullable = false
 	plan, err := backend.New().PlanFeatures(check.Context(), request)
@@ -153,7 +154,7 @@ func TestRebuildPlan_HappyPath(t *testing.T) {
 
 // A table holding changefeeds is not rebuilt: YDB moves no table with one.
 func TestRebuildPlanRefusesChangefeeds(t *testing.T) {
-	check := qt.New(t)
+	check := testcheck.New(t)
 	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
 	request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records,
 		observedFacet(check, schema.ChangefeedProperties, "",
@@ -168,7 +169,7 @@ func TestRebuildPlanRefusesChangefeeds(t *testing.T) {
 // properties. The new table of a rebuild keeps them, the comments of the
 // columns it has, and a migration file writes them after its CREATE TABLE.
 func TestRebuildPlanKeepsTheComments(t *testing.T) {
-	check := qt.New(t)
+	check := testcheck.New(t)
 	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
 	request.TargetFeatures = append(request.TargetFeatures, provider.CommonObjectsFeature)
 	comment := func(kind, name, text string, path ...string) *protocol.ObjectComment {

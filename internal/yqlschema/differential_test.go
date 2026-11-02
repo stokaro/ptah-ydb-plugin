@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 )
 
 // The corpus is the measurement, so it must not shrink without notice and
 // every golden file must come from one run of one host commit.
 func TestCorpusShape(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := corpus(c, func(row) bool { return true })
 	c.Assert(len(rows) >= 800, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
 	hosts := map[string]bool{}
@@ -36,11 +37,11 @@ func TestCorpusShape(t *testing.T) {
 // host refuses, at the document and the position the host names, with the
 // host's words.
 func TestDifferential_FailurePath(t *testing.T) {
-	listed := unsupportedRows(qt.New(t))
-	rows := corpus(qt.New(t), func(r row) bool { return refused(r) && listed[r.name] == "" })
+	listed := unsupportedRows(testcheck.New(t))
+	rows := corpus(testcheck.New(t), func(r row) bool { return refused(r) && listed[r.name] == "" })
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			reading, refusal := yqlschema.Read(r.documents, r.golden.DatabasePath)
 			c.Assert(reading, qt.IsNil)
 			c.Assert(refusal, qt.IsNotNil, qt.Commentf("the host refuses it with: %s", r.golden.Grammar.Error))
@@ -56,11 +57,11 @@ func TestDifferential_FailurePath(t *testing.T) {
 // views, principals, grants and YDB objects, with the same settings, and the
 // same declarations for each document.
 func TestDifferential_HappyPath(t *testing.T) {
-	listed := unsupportedRows(qt.New(t))
-	rows := corpus(qt.New(t), func(r row) bool { return accepted(r) && listed[r.name] == "" })
+	listed := unsupportedRows(testcheck.New(t))
+	rows := corpus(testcheck.New(t), func(r row) bool { return accepted(r) && listed[r.name] == "" })
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			reading, refusal := yqlschema.Read(r.documents, r.golden.DatabasePath)
 			c.Assert(refusal, qt.IsNil)
 			c.Assert(pluginMeaning(c, reading), qt.DeepEquals, hostMeaning(c, r.golden.Grammar))
@@ -72,11 +73,11 @@ func TestDifferential_HappyPath(t *testing.T) {
 // the construct, every load testdata/unsupported.txt lists: a load holding a
 // statement the host reads into an object this provider has no model for.
 func TestDifferential_Unsupported(t *testing.T) {
-	listed := unsupportedRows(qt.New(t))
-	rows := corpus(qt.New(t), func(r row) bool { return listed[r.name] != "" })
+	listed := unsupportedRows(testcheck.New(t))
+	rows := corpus(testcheck.New(t), func(r row) bool { return listed[r.name] != "" })
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			reading, refusal := yqlschema.Read(r.documents, r.golden.DatabasePath)
 			c.Assert(reading, qt.IsNil)
 			c.Assert(refusal, qt.IsNotNil)

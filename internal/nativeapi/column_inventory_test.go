@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -39,7 +40,7 @@ func TestColumnInventoryChecksNativeStateAndDispatch(t *testing.T) {
 		{name: "table attributes changed", before: beforeTable, after: strings.Replace(removed, `"columns":`, `"attributes":{"custom":"changed"},"columns":`, 1), dispatch: true, wantErr: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			change := &tablecreate.ColumnInventory{Drop: &native.ColumnMeta{Name: "payload", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}}}
 			if test.add {
 				change.Drop = nil
@@ -85,7 +86,7 @@ func TestDefaultAdditionUsesOneQueryAndConfirmsEveryColumn(t *testing.T) {
 		{name: "neighbor changed", before: beforeTable, after: strings.Replace(added, `"name":"payload"`, `"name":"payload","family":"cold"`, 1), caps: true, dispatch: true, wantErr: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			kind := &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}
 			change := &tablecreate.ColumnInventory{Add: &Ydb_Table.ColumnMeta{Name: "new", Type: kind, NotNull: new(true), DefaultValue: &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: kind, Value: &Ydb.Value{Value: &Ydb.Value_TextValue{TextValue: ""}}}}}}
 			operation, err := tablecreate.CaptureInventory("add", &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}, change)

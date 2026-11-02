@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
@@ -48,7 +49,7 @@ func TestParseChangefeed_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := ydbdecl.ParseChangefeed(test.values)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.DeepEquals, test.want)
@@ -81,7 +82,7 @@ func TestParseChangefeed_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := ydbdecl.ParseChangefeed(test.values)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(got, qt.DeepEquals, ydbdecl.Changefeed{})
@@ -103,7 +104,7 @@ func TestFeedSeconds_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.text, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := ydbdecl.FeedSeconds(test.text)
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, test.want)
@@ -124,7 +125,7 @@ func TestFeedSeconds_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.text, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, err := ydbdecl.FeedSeconds(test.text)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(got, qt.Equals, uint64(0))
@@ -138,7 +139,7 @@ func TestFormatInterval_HappyPath(t *testing.T) {
 		want    string
 	}{{0, "PT0S"}, {1, "PT1S"}, {90, "PT1M30S"}, {43200, "PT12H"}, {86400, "P1D"}, {129600, "P1DT12H"}} {
 		t.Run(test.want, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(ydbdecl.FormatInterval(test.seconds), qt.Equals, test.want)
 		})
 	}

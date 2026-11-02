@@ -14,6 +14,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -88,7 +89,7 @@ type familyCase struct {
 }
 
 func TestRowTableFamilyAlterationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()
@@ -146,7 +147,7 @@ func TestRowTableFamilyAlterationSubprocess(t *testing.T) {
 			wantAlter: 1, wantMoves: 1, wantFamilies: map[string]string{"payload": "", "extra": "cold", "keep": ""}},
 	} {
 		t.Run(step.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result := plan(c, step)
 			c.Assert(result.Contributions, qt.HasLen, 1)
 			c.Assert(result.Contributions[0].Steps, qt.HasLen, 1)
@@ -235,7 +236,7 @@ func renderSteps(steps []*protocol.PlanningStep, capabilities map[string]bool) *
 }
 
 func TestRowTableColumnAlterationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()
@@ -315,7 +316,7 @@ func TestRowTableColumnAlterationSubprocess(t *testing.T) {
 	family := `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`
 	var applied *protocol.RenderResult
 	t.Run("adds a column, places it in a family, and drops columns", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		// The host lists the removals first; the family step still follows the
 		// addition it moves a column into and precedes every removal.
 		result := plan(c, []string{"keep", "marker", "fresh", "plain"}, family, map[string]string{"fresh": `{"family":"archive"}`},
@@ -357,7 +358,7 @@ func TestRowTableColumnAlterationSubprocess(t *testing.T) {
 		c.Assert(count, qt.Equals, uint64(1))
 	})
 	t.Run("refuses a column that an index uses before the call", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		result := plan(c, []string{"keep", "fresh", "plain"}, family, map[string]string{"fresh": `{"family":"archive"}`}, removal("drop-marker", "marker"))
 		c.Assert(result.Rewrites, qt.HasLen, 1)
 		rendered, err := client.Render(ctx, renderSteps(scheduled(c, result), session.Capabilities))
@@ -368,7 +369,7 @@ func TestRowTableColumnAlterationSubprocess(t *testing.T) {
 		c.Assert(columnNames(c), qt.DeepEquals, []string{"fresh", "id", "keep", "marker", "plain"})
 	})
 	t.Run("refuses a stale alteration before the call", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		execution, err := client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "stale-columns", Units: applied.Units})
 		c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 		c.Assert(execution.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
@@ -376,7 +377,7 @@ func TestRowTableColumnAlterationSubprocess(t *testing.T) {
 }
 
 func TestRowTableTTLAlterationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Minute)
 	defer cancel()
@@ -504,7 +505,7 @@ func TestRowTableTTLAlterationSubprocess(t *testing.T) {
 			`{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":7200},"runIntervalSeconds":900}`},
 	} {
 		t.Run(step.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result := plan(c, declared, step.ttl)
 			c.Assert(result.Contributions, qt.HasLen, 1)
 			c.Assert(result.Contributions[0].Steps, qt.HasLen, 1)
@@ -516,14 +517,14 @@ func TestRowTableTTLAlterationSubprocess(t *testing.T) {
 		})
 	}
 	t.Run("refuses a stale alteration before the call", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		// The table now holds a TTL the captured alteration did not expect.
 		execution, err := client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "stale-ttl", Units: applied.Units})
 		c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 		c.Assert(execution.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
 	})
 	t.Run("moves the TTL to an added column and drops the column it read", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		// The host lists the removal first. The server refuses a TTL on a column that
 		// does not exist yet, and refuses to drop the column a TTL reads, so only the
 		// order add, set TTL, drop can succeed.
@@ -542,7 +543,7 @@ func TestRowTableTTLAlterationSubprocess(t *testing.T) {
 		c.Assert(count, qt.Equals, uint64(1))
 	})
 	t.Run("refuses a column the server would refuse before the call", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: negotiated(client), PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(), DatabasePath: database,
 			Capabilities: session.Capabilities, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(session.Identifiers)}}
 		desired := &protocol.DeclaredTable{Name: "records", Schema: directory, PrimaryKey: []string{"id"},
@@ -559,7 +560,7 @@ func TestRowTableTTLAlterationSubprocess(t *testing.T) {
 		c.Assert(result.Contributions, qt.HasLen, 0)
 	})
 	t.Run("removes the TTL a declaration leaves out", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		moved := map[string]string{"fresh": "Timestamp", "stamp": "Uint64", "keep": "Utf8", "label": "Utf8"}
 		result := plan(c, moved, "")
 		c.Assert(result.Contributions, qt.HasLen, 1)

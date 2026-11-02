@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 )
@@ -25,18 +26,18 @@ func commented(carried bool, comment string) *protocol.ValidateSchemaRequest {
 
 func TestValidateSchema_CommentsOnTheCommonWire(t *testing.T) {
 	t.Run("held", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		c.Assert(diagnostics(c, commented(true, "rows")), qt.HasLen, 0)
 	})
 	t.Run("more than an attribute holds", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		found := diagnostics(c, commented(true, strings.Repeat("x", 4097)))
 		c.Assert(found, qt.HasLen, 1)
 		c.Assert(found[0].Code, qt.Equals, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE)
 		c.Assert(found[0].Message, qt.Equals, "unsupported feature: the comment on table app/records: the comment is 4097 bytes long, and YDB keeps at most 4096 bytes in an attribute value")
 	})
 	t.Run("off the wire", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		found := diagnostics(c, commented(false, "rows"))
 		c.Assert(found, qt.HasLen, 1)
 		c.Assert(found[0].Message, qt.Matches, `.*YDB table creation does not support .*comment`)
@@ -44,7 +45,7 @@ func TestValidateSchema_CommentsOnTheCommonWire(t *testing.T) {
 }
 
 func TestValidateSchema_Views(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := newRequest()
 	request.TargetFeatures = []string{provider.CommonObjectsFeature}
 	request.CommonObjects = &protocol.DeclaredCommonObjects{Views: []*protocol.SQLView{

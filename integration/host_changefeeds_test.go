@@ -12,6 +12,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
 )
@@ -91,7 +92,7 @@ func TestHostAppliesChangefeeds_HappyPath(t *testing.T) {
 			gone: "package entities\n\n" + goItems},
 	} {
 		t.Run(test.format, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			opened, directory, database := lockFixture(c)
 			absolute := path.Join(database, directory, "items")
 			c.Cleanup(func() {

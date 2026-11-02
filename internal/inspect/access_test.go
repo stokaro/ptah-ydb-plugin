@@ -8,6 +8,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestAccessReadsStreamingQueryIdentity(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	snapshot := accessSnapshot()
 	snapshot.NativeObjects = []*protocol.Envelope{{Kind: schema.StreamingQueryProperties,
 		Owner: &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: "/local", Schema: "app", Name: "copy"}}}
@@ -35,7 +36,7 @@ func TestAccessReadsStreamingQueryIdentity(t *testing.T) {
 }
 
 func TestAccessPreservesIndependentMembershipsAndOwnerKnowledge(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	snapshot := accessSnapshot()
 	held := nativeapi.Principals{
 		Users:       []nativeapi.User{{Name: "root", Enabled: true}, {Name: "app", Enabled: false}},
@@ -71,7 +72,7 @@ func TestAccessPreservesIndependentMembershipsAndOwnerKnowledge(t *testing.T) {
 }
 
 func TestAccessRefusalDoesNotBecomeAnEmptyPrincipalSet(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	snapshot := accessSnapshot()
 	err := inspect.Access(c.Context(), snapshot, "/local", false, func(context.Context, string) (*Ydb_Scheme.Entry, error) { return accessRoot("root"), nil },
 		func(context.Context) (nativeapi.Principals, error) {
@@ -95,7 +96,7 @@ func TestAccessRefusalDoesNotBecomeAnEmptyPrincipalSet(t *testing.T) {
 }
 
 func TestAccessDoesNotInventLoginKnowledge(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	snapshot := accessSnapshot()
 	err := inspect.Access(c.Context(), snapshot, "/local", false, func(context.Context, string) (*Ydb_Scheme.Entry, error) { return accessRoot("external@directory"), nil },
 		func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
@@ -105,7 +106,7 @@ func TestAccessDoesNotInventLoginKnowledge(t *testing.T) {
 }
 
 func TestAccessRealmKeepsDatabasePrincipalsOutOfScope(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	snapshot := accessSnapshot()
 	err := inspect.Access(c.Context(), snapshot, "/local/realm", true, func(context.Context, string) (*Ydb_Scheme.Entry, error) {
 		entry := accessRoot("root")
@@ -134,7 +135,7 @@ func TestAccessFailureReturnsNoPartialProjection(t *testing.T) {
 		{name: "invalid permission", entry: &Ydb_Scheme.Entry{Name: "local", Type: Ydb_Scheme.Entry_DATABASE, Permissions: []*Ydb_Scheme.Permissions{{PermissionNames: []string{"ydb.generic.read"}}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			snapshot := accessSnapshot()
 			before := proto.CloneOf(snapshot)
 			err := inspect.Access(c.Context(), snapshot, "/local", false,

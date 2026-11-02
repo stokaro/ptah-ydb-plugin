@@ -16,6 +16,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -241,7 +242,7 @@ func (h *externalHarness) grant(target, permission string) {
 // removal. The target has EnableExternalDataSources and not
 // EnableReplaceIfExistsForExternalEntities.
 func TestExternalLifecycleSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Minute)
 	defer cancel()
 	h := newExternalHarness(c, ctx)
@@ -295,7 +296,7 @@ func TestExternalLifecycleSubprocess(t *testing.T) {
 // table stays through the data source's replacement, and both keep their
 // owner and access entries.
 func TestExternalReplacementSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Minute)
 	defer cancel()
 	address, err := connection.Parse(monitoredAddress(c))

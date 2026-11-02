@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
@@ -148,7 +149,7 @@ func TestColumnTableCreationDispatchAndConfirmation(t *testing.T) {
 		{"unconfirmed cleanup", `{"hashColumns":["id"],"partitions":"3"}`, func(f *columnFixture) { f.closeFailure = true }, false, true, true, confirmed},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newColumnFixture(c)
 			test.modify(fixture)
 			operation := columnOperation(c, test.storage)
@@ -168,7 +169,7 @@ func TestColumnTableCreationDispatchAndConfirmation(t *testing.T) {
 // TestColumnTableCreationWritesTheHostsStatement dispatches YQL's CREATE TABLE,
 // which writes the hash function the host reads, at the bound path.
 func TestColumnTableCreationWritesTheHostsStatement(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnFixture(c)
 	_, err := fixture.api().Apply(t.Context(), "/local", columnOperation(c, `{"hashColumns":["id"],"partitions":"3"}`).Value, func(context.Context) error { return nil })
 	c.Assert(err, qt.IsNil)
@@ -179,7 +180,7 @@ func TestColumnTableCreationWritesTheHostsStatement(t *testing.T) {
 // TestColumnTableCreationNeedsTheMonitoringEndpoint refuses before anything is
 // read or written when the session names no monitoring endpoint.
 func TestColumnTableCreationNeedsTheMonitoringEndpoint(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnFixture(c)
 	api := fixture.api()
 	api.Monitoring = nil
@@ -191,7 +192,7 @@ func TestColumnTableCreationNeedsTheMonitoringEndpoint(t *testing.T) {
 
 // TestColumnTableCreationRefusesAnotherDatabase binds the owner to the session.
 func TestColumnTableCreationRefusesAnotherDatabase(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnFixture(c)
 	dispatched, err := fixture.api().Apply(t.Context(), "/other", columnOperation(c, `{"hashColumns":["id"],"partitions":"3"}`).Value, func(context.Context) error { return nil })
 	c.Assert(dispatched, qt.IsFalse)
@@ -203,7 +204,7 @@ func TestColumnTableCreationRefusesAnotherDatabase(t *testing.T) {
 // that states no hash key against a table YDB hashes by its whole key, read
 // from local-ydb 25.1.4.7 (internal/columnstore/testdata/25-1-delete-ttl-inline).
 func TestColumnTableCreationConfirmsTheWholeKeyAsTheHashKey(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnFixture(c)
 	page, err := os.ReadFile("../columnstore/testdata/25-1-delete-ttl-inline.json")
 	c.Assert(err, qt.IsNil)
@@ -224,7 +225,7 @@ func TestColumnTableCreationConfirmsTheWholeKeyAsTheHashKey(t *testing.T) {
 // as a page from local-ydb 26.2.1.14 holds them
 // (internal/columnstore/testdata/26-2-indexes).
 func TestColumnTableCreationRefusesUnexpectedLocalIndexes(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnFixture(c)
 	page, err := os.ReadFile("../columnstore/testdata/26-2-indexes.json")
 	c.Assert(err, qt.IsNil)
@@ -252,7 +253,7 @@ func TestColumnTableCreationRefusesOtherColumns(t *testing.T) {
 		{"another nullability", &protocol.DeclaredColumn{Name: "body", Type: "Utf8"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newColumnFixture(c)
 			operation := tableOperation(c, &protocol.DeclaredTable{Name: "c1", Schema: "probe", PrimaryKey: []string{"id", "ts"},
 				Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Primary: true}, test.body}}, `{"hashColumns":["id"],"partitions":"3"}`)

@@ -3,6 +3,7 @@ package yql_test
 import (
 	"context"
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -19,7 +20,7 @@ func TestAnalysisRefusesWholeBatch(t *testing.T) {
 		"--!ansi_lexer\nSELECT \"x\"", "SELECT 1; --!ansi_lexer\nSELECT \"x\"", "--!syntax_v0\nSELECT 1", "-- comment only", "; ;",
 	} {
 		t.Run(source, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := yql.Analyze(c.Context(), &protocol.AnalyzeSQLRequest{Engine: "ydb", Sources: []string{"CREATE TABLE t (id Int64, PRIMARY KEY(id));", source}})
 			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
 			c.Assert(result, qt.IsNil)
@@ -28,7 +29,7 @@ func TestAnalysisRefusesWholeBatch(t *testing.T) {
 }
 
 func TestAnalysisRetainsTriviaOffsetsAndTokens(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	source := "  -- heading\nCREATE/* gap */TABLE `Case` (id Int64, PRIMARY KEY(id));\n-- ending\n; "
 	request := &protocol.AnalyzeSQLRequest{Engine: "ydb", Sources: []string{source, " \t\n"}}
 	result, err := yql.Analyze(c.Context(), request)
@@ -80,7 +81,7 @@ func TestAnalysisNativeSafety(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.sql, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := yql.Analyze(c.Context(), &protocol.AnalyzeSQLRequest{Engine: "ydb", Sources: []string{test.sql}})
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Files[0].Statements, qt.HasLen, 1)
@@ -94,7 +95,7 @@ func TestAnalysisNativeSafety(t *testing.T) {
 }
 
 func TestAnalysisLimitsAndCancellation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	canceled, cancel := context.WithCancel(c.Context())
 	cancel()
 	result, err := yql.Analyze(canceled, &protocol.AnalyzeSQLRequest{Engine: "ydb", Sources: []string{"SELECT 1"}})
@@ -115,7 +116,7 @@ func FuzzAnalysisFraming(f *testing.F) {
 		if len(source) > 65536 {
 			t.Skip()
 		}
-		c := qt.New(t)
+		c := testcheck.New(t)
 		request := &protocol.AnalyzeSQLRequest{Engine: "ydb", Sources: []string{source}}
 		result, err := yql.Analyze(c.Context(), request)
 		if err != nil {

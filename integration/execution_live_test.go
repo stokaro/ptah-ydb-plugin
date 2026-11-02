@@ -13,6 +13,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -45,7 +46,7 @@ func assertRowCount(c *qt.C, opened *connection.Connection, table string, expect
 }
 
 func TestNativeExecutionTransactionsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	table := path.Join(database, directory, "execution")
 	binary, digest := providerBinary(c)
@@ -128,7 +129,7 @@ func TestNativeExecutionTransactionsSubprocess(t *testing.T) {
 }
 
 func TestNativeExecutionFailureAndBatchPreflight(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	table := path.Join(database, directory, "batch")
 	binary, digest := providerBinary(c)
@@ -166,7 +167,7 @@ func TestNativeExecutionFailureAndBatchPreflight(t *testing.T) {
 }
 
 func TestNativeTransactionRefusesDDLAndControlEscape(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
@@ -203,7 +204,7 @@ func TestNativeTransactionRefusesDDLAndControlEscape(t *testing.T) {
 }
 
 func TestNativeCanceledCloseRollsBackTransaction(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	table := path.Join(database, directory, "canceled_close")
 	_, err := opened.DB.ExecContext(c.Context(), "CREATE TABLE `"+table+"` (id Uint64 NOT NULL, PRIMARY KEY (id))")
@@ -230,7 +231,7 @@ func TestNativeCanceledCloseRollsBackTransaction(t *testing.T) {
 }
 
 func TestNativeSerializableTransactionRejectsRangeConflict(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	table := path.Join(database, directory, "range_conflict")
 	_, err := opened.DB.ExecContext(c.Context(), "CREATE TABLE `"+table+"` (id Uint64 NOT NULL, PRIMARY KEY (id))")

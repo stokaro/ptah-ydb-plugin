@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -29,7 +30,7 @@ func inventoryRequest(c *qt.C) *protocol.PlanFeaturesRequest {
 }
 
 func TestColumnInventoryPlansFromTheCapturedParent(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := inventoryRequest(c)
 	original := proto.CloneOf(request)
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -74,7 +75,7 @@ func TestColumnInventoryRefusesMissingStateAndUnsupportedAddition(t *testing.T) 
 		{"default addition", func(r *protocol.PlanFeaturesRequest) { r.Tables[0].Desired.Columns[1].DefaultSet = true }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := inventoryRequest(c)
 			test.mutate(request)
 			plan, err := tablecreate.Plan(c.Context(), request)
@@ -86,7 +87,7 @@ func TestColumnInventoryRefusesMissingStateAndUnsupportedAddition(t *testing.T) 
 }
 
 func TestColumnInventoryRewritesTheRealAliasStep(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := inventoryRequest(c)
 	request.Tables[0].Desired.Columns[1].Type = "INTEGER"
 	request.CommonSteps = []*protocol.CommonPlanningStep{additionStep("add-new", "new", func(column *protocol.PlanningColumn) { column.Type = "INTEGER" })}
@@ -109,7 +110,7 @@ func TestColumnInventoryAddsTypedDefaults(t *testing.T) {
 		{name: "not null empty text", kind: "Utf8", value: "", statement: "ALTER TABLE `app.records` ADD COLUMN `new` Utf8 NOT NULL DEFAULT ''u;"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := inventoryRequest(c)
 			request.Capabilities["add_column_with_default"] = true
 			column := request.Tables[0].Desired.Columns[1]

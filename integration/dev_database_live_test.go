@@ -10,6 +10,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -48,7 +49,7 @@ func TestDevDatabaseSubprocess(t *testing.T) {
 		"docker://ydb/" + devImageTag,
 		"docker+ydb://_/ydbplatform/local-ydb:" + devImageTag + "/local",
 	} {
-		t.Run(spec, func(t *testing.T) { provisionDevDatabase(qt.New(t), spec) })
+		t.Run(spec, func(t *testing.T) { provisionDevDatabase(testcheck.New(t), spec) })
 	}
 }
 
@@ -102,7 +103,7 @@ func TestDevDatabaseRefusalsSubprocess(t *testing.T) {
 		{"a parameter YDB does not read", "docker://ydb/" + devImageTag + "?unknown=1"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			binary, digest := providerBinary(c)
 			client := startProvider(c, binary, digest)
 

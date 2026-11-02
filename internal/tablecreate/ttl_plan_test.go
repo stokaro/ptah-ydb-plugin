@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -90,7 +91,7 @@ func TestTTLPlan_HappyPath(t *testing.T) {
 			`{"setTtlSettings":{"valueSinceUnixEpoch":{"columnName":"id","columnUnit":"UNIT_SECONDS","expireAfterSeconds":60}}}`, `{}`, protocol.PlanningEffect_CREATE},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			in := test.in
 			in.types = map[string]string{"id": "Uint64", "ts": "Timestamp", "day": "Date", "stamp": "Uint64"}
 			request := alterRequest(c, in)
@@ -148,7 +149,7 @@ func TestTTLPlan_NoChange(t *testing.T) {
 			knownCase(alterCase{declared: []string{"ts"}, types: ttlTypes}, protocol.ModelKnowledge_COMPLETE)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, test.in))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -179,7 +180,7 @@ func TestTTLPlan_FailurePath(t *testing.T) {
 		{"current TTL not captured", alterCase{desiredTable: `{"primaryKey":["id"],"ttlSettings":` + hourly + `}`, declared: []string{"ts"}, types: ttlTypes}, `The table's current TTL was not captured`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, test.in))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -219,7 +220,7 @@ func TestTTLPlan_OrdersAgainstColumnSteps(t *testing.T) {
 			[]*protocol.CommonPlanningStep{removalStep("drop-unrelated", "unrelated"), additionStep("add-extra", "extra", nil)}, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), ttlStepRequest(c, test.steps...))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -229,7 +230,7 @@ func TestTTLPlan_OrdersAgainstColumnSteps(t *testing.T) {
 }
 
 func TestTTLPlan_OrdersAgainstAColumnStepWithoutAFootprint(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	// A removal the footprint does not name can remove the TTL column, so the TTL goes first.
 	opaque := commonStep("drop-something", tableSubject(), "", &protocol.PlanningEffect{Subject: tableSubject(), Action: protocol.PlanningEffect_READ},
 		&protocol.PlanningEffect{Subject: columnSubject("old"), Action: protocol.PlanningEffect_DROP}, &protocol.PlanningEffect{Subject: columnSubject("keep"), Action: protocol.PlanningEffect_DROP})
@@ -239,7 +240,7 @@ func TestTTLPlan_OrdersAgainstAColumnStepWithoutAFootprint(t *testing.T) {
 }
 
 func TestTTLPlan_RemovalPrecedesTheRemovalOfItsColumn(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := columnRequest(c, alterCase{desiredTable: plainTable, declared: []string{"keep"}, heldTable: ttlTable(`{"dateTypeColumn":{"columnName":"old","expireAfterSeconds":3600}}`), held: []string{"old", "keep"}},
 		removalStep("drop-old", "old"), removalStep("drop-other", "other"))
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -284,7 +285,7 @@ func accountsTable(c *qt.C) *protocol.PlanningTable {
 }
 
 func TestTTLPlan_NumbersStepsAcrossTables(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, ttlCase(ttlTable(hourly), plainTable, "ts"))
 	request.Tables = append(request.Tables, accountsTable(c))
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -299,7 +300,7 @@ func TestTTLPlan_NumbersStepsAcrossTables(t *testing.T) {
 }
 
 func TestTTLPlan_OrdersOnlyAgainstStepsOfItsOwnTable(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := ttlStepRequest(c)
 	request.Tables = append(request.Tables, accountsTable(c))
 	accounts := request.Tables[1].Subject
@@ -321,7 +322,7 @@ func TestTTLPlan_OrdersOnlyAgainstStepsOfItsOwnTable(t *testing.T) {
 }
 
 func TestTTLPlan_FamilyAndTTLAreSeparateSteps(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, alterCase{
 		desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}],"ttlSettings":` + hourly + `}`, declared: []string{"ts"}, types: ttlTypes,
 		heldTable: plainTable, held: []string{"ts"}})
@@ -337,7 +338,7 @@ func TestTTLPlan_FamilyAndTTLAreSeparateSteps(t *testing.T) {
 }
 
 func TestTTLPlan_RoundTrip(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	service := backend.New()
 	request := alterRequest(c, ttlCase(plainTable, ttlTable(hourly), "ts"))
 	plan, err := service.PlanFeatures(c.Context(), request)
@@ -385,7 +386,7 @@ func TestTTLOperation_FailurePath(t *testing.T) {
 		{"tiering smuggled in", `{"request":{` + set + `,"dropTiering":{}}}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := tablecreate.AlterModel()
 			normalized, err := tablecreate.NormalizeAlteration(&protocol.ValueInput{Id: "operation", Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
 				ProviderId: "github.com/stokaro/ptah-ydb-plugin", Kind: tablecreate.AlterOperationKind, Owner: owner(), SchemaVersion: 1, Encoding: definition.Encoding,
@@ -412,7 +413,7 @@ func TestTTLPlan_ColumnTypes(t *testing.T) {
 		{"DyNumber", `{"valueSinceUnixEpoch":{"columnName":"c","columnUnit":"UNIT_SECONDS","expireAfterSeconds":60}}`},
 	} {
 		t.Run(test.kind, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, alterCase{desiredTable: ttlTable(test.ttl), heldTable: plainTable,
 				declared: []string{"c"}, types: map[string]string{"c": test.kind}, held: []string{"c"}}))
 			c.Assert(err, qt.IsNil)
@@ -425,7 +426,7 @@ func TestTTLPlan_ColumnTypes(t *testing.T) {
 func TestTTLPlan_RefusedColumnTypes(t *testing.T) {
 	for _, kind := range []string{"Bool", "Int32", "Int64", "Uint8", "Uint16", "Utf8", "String", "Interval", "Double", "Json"} {
 		t.Run(kind, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			for _, ttl := range []string{`{"dateTypeColumn":{"columnName":"c","expireAfterSeconds":60}}`,
 				`{"valueSinceUnixEpoch":{"columnName":"c","columnUnit":"UNIT_SECONDS","expireAfterSeconds":60}}`} {
 				plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, alterCase{desiredTable: ttlTable(ttl), heldTable: plainTable,

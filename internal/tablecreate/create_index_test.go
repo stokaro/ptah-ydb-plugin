@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -26,7 +27,7 @@ func indexedTable(indexes ...*protocol.DeclaredIndex) *protocol.DeclaredTable {
 }
 
 func TestCompileDeclaredIndexes_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := tablecreate.Compile(owner(), indexedTable(
 		&protocol.DeclaredIndex{Name: "by_mail", Fields: []string{"mail"}, Unique: true},
 		&protocol.DeclaredIndex{Name: "by_note", Parts: []*protocol.CapturedIndexPart{{Column: "note"}, {Column: "id"}}, Type: "GLOBAL ASYNC"},
@@ -90,13 +91,13 @@ func TestCompileDeclaredIndexes_FailurePath(t *testing.T) {
 			want: `it names table "other", and the table declaring it is "records"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request, err := tablecreate.Compile(owner(), indexedTable(tc.index), nil)
 			c.Assert(err, qt.ErrorMatches, ".*"+regexp.QuoteMeta(tc.want)+".*")
 			c.Assert(request, qt.IsNil)
 		})
 	}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := tablecreate.Compile(owner(), indexedTable(&protocol.DeclaredIndex{Name: "i", Fields: []string{"mail"}},
 		&protocol.DeclaredIndex{Name: "i", Fields: []string{"note"}}), nil)
 	c.Assert(err, qt.ErrorMatches, `.*two of its indexes are named "i".*`)
@@ -106,7 +107,7 @@ func TestCompileDeclaredIndexes_FailurePath(t *testing.T) {
 // A creation with indexes is one step whose effects create the table and each
 // index, and it takes the host's step that creates both.
 func TestCreationPlanCreatesTheIndexes(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := creationPlan(c)
 	table := request.Tables[0]
 	table.Desired.Features.Facets.Records = []*protocol.ComparisonRecord{

@@ -8,6 +8,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -110,7 +111,7 @@ func TestIndexPlan_HappyPath(t *testing.T) {
 			"row-table-drop-index/000000", protocol.ChangeSemantics_DESTRUCTIVE, protocol.PlanningEffect_DROP, indexJSON("globalIndex", "by_label", byLabel, extra), "by_label"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := alterRequest(c, test.in)
 			original := proto.CloneOf(request)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -150,7 +151,7 @@ func TestIndexPlan_HappyPath(t *testing.T) {
 }
 
 func TestIndexPlan_TwoChangesAreTwoSteps(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, indexCase(
 		declaredIndexes(indexJSON("globalIndex", "by_extra", extra, nil)),
 		heldIndexes(indexJSON("globalIndex", "by_label", byLabel, nil)), "label", "extra")))
@@ -181,7 +182,7 @@ func TestIndexPlan_NoChange(t *testing.T) {
 		{"a declaration without an index set leaves the indexes alone", indexCase("", heldIndexes(indexJSON("globalIndex", "by_label", byLabel, nil)), "label")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, test.in))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -222,7 +223,7 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 			`The table's current indexes were not captured`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, test.in))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -233,7 +234,7 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 }
 
 func TestIndexPlan_NoChangeForAnUnchangedVectorIndex(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, indexCase(vectorIndexes(false), vectorIndexes(true), "label")))
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -269,7 +270,7 @@ func TestIndexPlan_OrdersAgainstColumnSteps(t *testing.T) {
 			nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), columnRequest(c, test.in, test.steps...))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)

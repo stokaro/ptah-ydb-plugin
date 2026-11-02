@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 )
@@ -47,7 +48,7 @@ func TestParsePool_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			name, spec, err := workload.ParsePool(test.values)
 			c.Assert(err, qt.IsNil)
 			c.Assert(name, qt.Equals, test.values["name"])
@@ -132,7 +133,7 @@ func TestParsePool_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			name, spec, err := workload.ParsePool(test.values)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			var declared *workload.DeclarationError
@@ -163,7 +164,7 @@ func TestParseClassifier_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			name, spec, err := workload.ParseClassifier(test.values)
 			c.Assert(err, qt.IsNil)
 			c.Assert(name, qt.Equals, "c")
@@ -206,7 +207,7 @@ func TestParseClassifier_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			name, spec, err := workload.ParseClassifier(test.values)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			var declared *workload.DeclarationError

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestCoordinationChangeRefusesIncompleteAndForgedPayloads(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Database: "/local", Schema: "app", Name: "node"}
 	desired, err := schema.CaptureCoordinationIntent(owner, schema.CoordinationIntent{})
 	c.Assert(err, qt.IsNil)
@@ -46,7 +47,7 @@ func TestCoordinationChangeRefusesIncompleteAndForgedPayloads(t *testing.T) {
 }
 
 func TestCoordinationSettingsRefuseNativeClamping(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Database: "/local", Schema: "app", Name: "node"}
 	raw, err := schema.CaptureObject(owner, &Ydb_Coordination.DescribeNodeResult{Config: &Ydb_Coordination.Config{SelfCheckPeriodMillis: 1}})
 	c.Assert(err, qt.IsNil)

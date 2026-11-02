@@ -12,6 +12,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -68,7 +69,7 @@ func listedObjects(c *qt.C, client *providerruntime.Client, session string, sche
 // a view, a topic, a coordination node and nested directories, and leaves
 // alone the lock the session holds.
 func TestDevCleanupSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	client := startProviderFor(c)
 	session, root, opened := realmSession(c, client)
 	for _, statement := range []string{
@@ -115,7 +116,7 @@ func TestDevCleanupSubprocess(t *testing.T) {
 // test database for a host that lists database.dev-realms, opens it as a
 // database of its own, and removes it with everything in it on release.
 func TestDevRealmProvisionSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	client := startProviderFor(c, provider.DevRealmsFeature)
 	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
@@ -148,7 +149,7 @@ func TestDevRealmProvisionSubprocess(t *testing.T) {
 // not list database.dev-realms is not offered realms: the address does not
 // travel, and the engine does not declare the feature.
 func TestDevRealmAddressWaitsForTheFeatureSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	client := startProviderFor(c)
 
 	_, err := client.ProvisionDevDatabase(c.Context(), &protocol.ProvisionDevRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
@@ -161,7 +162,7 @@ func TestDevRealmAddressWaitsForTheFeatureSubprocess(t *testing.T) {
 // about statements under the scope of a dev database and of a server the run
 // owns.
 func TestGuardReplayOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	client := startProviderFor(c)
 	statements := []string{"CREATE TABLE t (id Int64, PRIMARY KEY (id))", "CREATE USER u PASSWORD 'p'", "CREATE TRANSFER x FROM a TO b USING ($m) -> { RETURN $m; }"}
 
@@ -183,7 +184,7 @@ func TestGuardReplayOfflineSubprocess(t *testing.T) {
 // transaction, of which nothing is applied, and an index build, which the
 // provider cancels through the operation service or finds completed.
 func TestStatementTimeoutSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	client := startProviderFor(c, provider.StatementTimeoutFeature)
 	session, root, opened := realmSession(c, client)
 	c.Assert(executeSQL(c, client, session, "", "CREATE TABLE `rows` (id Uint64 NOT NULL, v Uint64, PRIMARY KEY (id))").Outcome, qt.Equals, protocol.Execution_APPLIED)

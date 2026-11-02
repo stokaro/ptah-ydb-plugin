@@ -13,6 +13,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -24,7 +25,7 @@ import (
 )
 
 func TestOwnedHistoryInspectionPreservesForeignTables(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	binary, digest := providerBinary(c)
 	client, id, _ := historySession(c, binary, digest)
@@ -88,7 +89,7 @@ func assertReservedCoverage(c *qt.C, snapshot *protocol.Schema, reserved *protoc
 }
 
 func TestAlteredHistoryRefusesInspectionBeforeChildProjection(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	owner, err := nativeapi.OpenTable(c.Context(), opened.Driver)
 	c.Assert(err, qt.IsNil)
@@ -126,7 +127,7 @@ func TestAlteredHistoryRefusesInspectionBeforeChildProjection(t *testing.T) {
 // A repeated create returns SUCCESS, so a creation receipt cannot authorize
 // claiming an entire coordination node as provider-owned operational storage.
 func TestLockNodeCreateSuccessDoesNotProveOwnership(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, _, database := lockFixture(c)
 	service := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(opened.Driver))
 	request := &wire.CreateNodeRequest{Path: path.Join(database, locking.NodeName), Config: &wire.Config{
@@ -143,7 +144,7 @@ func TestLockNodeCreateSuccessDoesNotProveOwnership(t *testing.T) {
 }
 
 func TestLockNodeRemainsInManagedObservations(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	_, _, database := lockFixture(c)
 	binary, digest := providerBinary(c)
 	client, id, _ := historySession(c, binary, digest)

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -26,7 +27,7 @@ func partitioningDeclaration(settings string) string {
 }
 
 func TestFacetComparisonPartitioningSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, "", "")
 	// Each step starts from what the previous one left in the table, and
 	// declares one setting. unchanged lists the settings the step must leave
@@ -53,7 +54,7 @@ func TestFacetComparisonPartitioningSubprocess(t *testing.T) {
 			[]string{"partitioningByLoad", "minPartitionsCount", "maxPartitionsCount"}},
 	} {
 		t.Run(step.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			before := fixture.heldPartitioning(c)
 			found := fixture.compare(c, step.declared)
 			c.Assert(found.Changes, qt.HasLen, 1)
@@ -73,7 +74,7 @@ func TestFacetComparisonPartitioningSubprocess(t *testing.T) {
 }
 
 func TestFacetComparisonPartitioningSettingsTogetherSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, "", "")
 	declared := partitioningDeclaration(`{"partitioningByLoad":"ENABLED","partitionSizeMb":"512","minPartitionsCount":"2","maxPartitionsCount":"8"}`)
 	found := fixture.compare(c, declared)
@@ -101,7 +102,7 @@ func TestFacetComparisonPartitioningDefaultsSubprocess(t *testing.T) {
 		{"the partition columns the table was created with", "", partitioningDeclaration(`{"partitionBy":["id"]}`)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newFacetFixture(c, "", test.options)
 			c.Assert(fixture.compare(c, test.declared).Changes, qt.HasLen, 0)
 		})

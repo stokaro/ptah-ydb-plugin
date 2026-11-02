@@ -8,6 +8,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -54,7 +55,7 @@ func TestStreamingPlanningSplitsRunningChanges(t *testing.T) {
 		{"change stopped body", &streaming.Spec{Text: body, Run: new(false)}, &streaming.Spec{Text: "INSERT INTO `app/sink` SELECT * FROM `app/next`;"}, 1, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := streamingPlanRequest(c, test.before, test.after, true)
 			request.CommonSteps = []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "common/dependent-operations"}, Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN, Reason: "Ordering marker"}}}
 			result, err := backend.New().PlanFeatures(c.Context(), request)
@@ -86,7 +87,7 @@ func TestStreamingPlanningSplitsRunningChanges(t *testing.T) {
 }
 
 func TestStreamingPlanningRequiresCapability(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := streamingPlanRequest(c, nil, &streaming.Spec{Text: "SELECT 1;"}, false)
 	request.Capabilities[streaming.Capability] = false
 	result, err := backend.New().PlanFeatures(c.Context(), request)

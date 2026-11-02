@@ -14,6 +14,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -170,7 +171,7 @@ const columnStorage = `{"hashColumns":["id"],"partitions":"3","ttl":{"enabled":{
 // back, finds nothing to change on a second run, and refuses a change of the
 // shard count with the reason.
 func TestColumnTableCreationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
 	execution, err := fixture.create(c, fixture.session, "create-column-table", columnStorage)
 	c.Assert(err, qt.IsNil)
@@ -207,7 +208,7 @@ func TestColumnTableCreationSubprocess(t *testing.T) {
 // before anything is written in a session whose address names no monitoring
 // endpoint, since the creation is confirmed by the shard count read there.
 func TestColumnTableCreationWithoutMonitoringSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
 	plain, err := fixture.client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: withoutMonitoring(c, monitoredAddress(c))})
 	c.Assert(err, qt.IsNil)
@@ -224,7 +225,7 @@ func TestColumnTableCreationWithoutMonitoringSubprocess(t *testing.T) {
 // server's dynamic configuration, creates a column table whose TTL moves rows
 // to an external data source before it deletes them, and reads the tiers back.
 func TestColumnTableTieredTTLCreationSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	address := monitoredAddress(c)
 	parsed, err := connection.Parse(address)
 	c.Assert(err, qt.IsNil)
@@ -288,7 +289,7 @@ func TestColumnTableTieredTTLCreationSubprocess(t *testing.T) {
 // sets one on the table without it, and refuses a step planned against a TTL
 // the table no longer holds before anything is written.
 func TestColumnTableTTLChangeSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
 	execution, err := fixture.create(c, fixture.session, "create-column-table", columnStorage)
 	c.Assert(err, qt.IsNil)

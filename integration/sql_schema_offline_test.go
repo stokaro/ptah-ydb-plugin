@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
@@ -29,7 +30,7 @@ func sqlSchemaRequest(description *protocol.Description, documents ...string) *p
 // second alters what the first declared, each document answers what it
 // declares, and the coordination node arrives as the provider's own model.
 func TestSQLSchemaOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	engine := client.Description().GetEngines()[0]
@@ -55,7 +56,7 @@ func TestSQLSchemaOfflineSubprocess(t *testing.T) {
 // host's own reader names, and with nothing else: a syntax error, and a table
 // setting a SQL schema reading has no home for.
 func TestSQLSchemaOfflineSubprocess_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	for _, test := range []struct {
@@ -70,7 +71,7 @@ func TestSQLSchemaOfflineSubprocess_FailurePath(t *testing.T) {
 			message: "table `t` declares a TTL, which a SQL schema reading has no home for: the host refuses the settings of a table in a SQL schema reading"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			reply, err := client.ReadSQLSchema(c.Context(), sqlSchemaRequest(client.Description(), test.text))
 			c.Assert(err, qt.IsNil)
 			c.Assert(reply.GetComplete(), qt.IsFalse)

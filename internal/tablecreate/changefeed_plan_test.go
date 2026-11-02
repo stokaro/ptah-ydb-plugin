@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
@@ -108,7 +109,7 @@ func TestChangefeedPlan_HappyPath(t *testing.T) {
 			plannedStep{Name: step, Actions: []changefeeds.Action{changefeeds.Add, changefeeds.Drop}, Effects: []string{"a:CREATE", "f:DROP"}, Impact: protocol.ChangeSemantics_DESTRUCTIVE}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			steps, plan := planned(c, alterRequest(c, test.in))
 			c.Assert(steps, qt.DeepEquals, []plannedStep{test.want})
 			c.Assert(dependencies(plan), qt.HasLen, 0)
@@ -136,7 +137,7 @@ func TestChangefeedPlan_LeavesThemAlone(t *testing.T) {
 		{"a changefeed the read cannot represent", feedCase(declaredFeed, heldRegion)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			steps, plan := planned(c, alterRequest(c, test.in))
 			c.Assert(steps, qt.HasLen, 0)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
@@ -176,7 +177,7 @@ func TestChangefeedPlan_FailurePath(t *testing.T) {
 		{"changefeeds the read did not capture", notCaptured, "Uint64", `The table's current changefeeds were not captured`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := alterRequest(c, test.in)
 			request.Tables[0].Desired.Columns[0].Type = test.keyType
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -210,7 +211,7 @@ func TestChangefeedPlan_RefusesANameAnIndexFrees(t *testing.T) {
 			`changefeed "by_label" of table "app/records" has the name of an index the plan adds, .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, test.in))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
@@ -223,7 +224,7 @@ func TestChangefeedPlan_RefusesANameAnIndexFrees(t *testing.T) {
 // TestChangefeedPlan_NewTable adds the changefeeds of a new table once the
 // table exists: CREATE TABLE takes no changefeed.
 func TestChangefeedPlan_NewTable(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := creationPlan(c)
 	request.Capabilities = newest()
 	request.Capabilities["transactional_ddl"] = false
@@ -245,7 +246,7 @@ func TestChangefeedPlan_NewTable(t *testing.T) {
 
 // A column table takes no changefeed.
 func TestChangefeedPlan_ColumnTable(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	capabilities := newest()
 	capabilities["transactional_ddl"] = false
 	request := columnCreationRequest(c, `{"hashColumns":["id"]}`, capabilities)

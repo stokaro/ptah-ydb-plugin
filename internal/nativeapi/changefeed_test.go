@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -193,7 +194,7 @@ func TestChangefeedApply_HappyPath(t *testing.T) {
 			[]string{"ALTER TOPIC `/local/app/records/f` SET (retention_period = Interval('P2D'));"}, []string{"f"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			dispatched, err := changefeedApplier(test.server).Apply(c.Context(), "/local", feedOperation(c, test.changes(c, test.server)...), allowed)
 			c.Assert(err, qt.IsNil)
 			c.Assert(dispatched, qt.IsTrue)
@@ -257,7 +258,7 @@ func TestChangefeedApply_FailurePath(t *testing.T) {
 			}, allowed, false, `no such table`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			dispatched, err := changefeedApplier(test.server).Apply(c.Context(), test.database, feedOperation(c, test.step(c)), test.before)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(dispatched, qt.Equals, test.dispatched)
@@ -269,7 +270,7 @@ func TestChangefeedApply_FailurePath(t *testing.T) {
 // TestChangefeedApply_RefusesAnOwnerOfAnotherDatabase refuses an operation
 // whose owner names a database other than the session's before it reads.
 func TestChangefeedApply_RefusesAnOwnerOfAnotherDatabase(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	server := &feedServer{topics: map[string]*native.DescribeTopicResult{}}
 	captured, err := schema.CaptureChangefeedOperation("op", &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/other", Schema: "app", Name: "records"},
 		[]changefeeds.Change{{Name: "f", After: declaredFeed(c, ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON"})}})

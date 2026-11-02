@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
@@ -30,7 +31,7 @@ const (
 )
 
 func TestTablePropertiesChange_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	before := tableOperand(c, protocol.ValueInput_OBSERVED, plainObserved)
 	after := tableOperand(c, protocol.ValueInput_DESIRED, ttlDesired)
 
@@ -48,7 +49,7 @@ func TestTablePropertiesChange_HappyPath(t *testing.T) {
 }
 
 func TestTablePropertiesChange_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	before := tableOperand(c, protocol.ValueInput_OBSERVED, plainObserved)
 	after := tableOperand(c, protocol.ValueInput_DESIRED, ttlDesired)
 	change, err := schema.CaptureTablePropertiesChange("change", tableOwner(), before, after)
@@ -60,7 +61,7 @@ func TestTablePropertiesChange_FailurePath(t *testing.T) {
 		`{"before":{"unknown":1},"after":{}}`,
 	} {
 		t.Run(payload, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value := proto.CloneOf(change.Value)
 			value.Payload = []byte(payload)
 
@@ -70,14 +71,14 @@ func TestTablePropertiesChange_FailurePath(t *testing.T) {
 		})
 	}
 	t.Run("a missing operand", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 
 		_, err := schema.CaptureTablePropertiesChange("change", tableOwner(), nil, after)
 
 		c.Assert(err, qt.ErrorMatches, "table properties change requires both operands")
 	})
 	t.Run("operands of another owner", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		other := tableOwner()
 		other.Name = "other"
 
@@ -86,7 +87,7 @@ func TestTablePropertiesChange_FailurePath(t *testing.T) {
 		c.Assert(err, qt.ErrorMatches, "table properties change operands have different owners")
 	})
 	t.Run("an owner that is neither a table nor a column", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		value := proto.CloneOf(change.Value)
 		value.Owner.Kind = "index"
 
@@ -95,7 +96,7 @@ func TestTablePropertiesChange_FailurePath(t *testing.T) {
 		c.Assert(err, qt.ErrorMatches, "table properties change requires a table or column owner")
 	})
 	t.Run("a foreign definition", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		value := proto.CloneOf(change.Value)
 		value.DefinitionSha256 = "foreign"
 
@@ -127,7 +128,7 @@ func indexOperand(c *qt.C, representation protocol.ValueInput_Representation, pa
 }
 
 func TestTablePropertiesChange_IndexSetsHappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	before := indexOperand(c, protocol.ValueInput_OBSERVED, noIndexesObserved)
 	after := indexOperand(c, protocol.ValueInput_DESIRED, oneIndexDesired)
 
@@ -151,7 +152,7 @@ func indexChangePayload(extra string) string {
 }
 
 func TestTablePropertiesChange_IndexSetsFailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	before := indexOperand(c, protocol.ValueInput_OBSERVED, noIndexesObserved)
 	after := indexOperand(c, protocol.ValueInput_DESIRED, oneIndexDesired)
 	change, err := schema.CaptureTablePropertiesChange("change", tableOwner(), before, after)
@@ -160,7 +161,7 @@ func TestTablePropertiesChange_IndexSetsFailurePath(t *testing.T) {
 	facet := `,"facet":"` + schema.IndexProperties + `"`
 
 	t.Run("operands of different models", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 
 		_, err := schema.CaptureTablePropertiesChange("change", tableOwner(), before, table)
 
@@ -180,7 +181,7 @@ func TestTablePropertiesChange_IndexSetsFailurePath(t *testing.T) {
 		{"a before operand of another model", `{"before":{"primaryKey":["id"]},"after":` + oneIndexDesired + facet + `}`, tableOwner(), ".*"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value := proto.CloneOf(change.Value)
 			value.Payload, value.Owner = []byte(test.payload), test.owner
 
@@ -191,7 +192,7 @@ func TestTablePropertiesChange_IndexSetsFailurePath(t *testing.T) {
 	}
 	// The control: the same hand-written payload with the facet and the table owner is accepted.
 	t.Run("the control is accepted", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		value := proto.CloneOf(change.Value)
 		value.Payload = []byte(indexChangePayload(facet))
 

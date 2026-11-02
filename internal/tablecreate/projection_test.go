@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/grpc/codes"
@@ -29,7 +30,7 @@ func TestCreationProjectionPreservesIntentAndUnknownDefaults(t *testing.T) {
 		{"common key creates native intent", false}, {"native key and settings", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := projectionRequest(c)
 			table := request.Tables[0].Declaration
 			if test.native {
@@ -71,7 +72,7 @@ func TestCreationProjectionPreservesIntentAndUnknownDefaults(t *testing.T) {
 }
 
 func TestCreationProjectionRetainsExclusion(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := projectionRequest(c)
 	table := request.Tables[0].Declaration
 	excluded := table.Features.Facets.Records[0]
@@ -86,7 +87,7 @@ func TestCreationProjectionRetainsExclusion(t *testing.T) {
 }
 
 func TestCreationProjectionDiscardsValidPrefix(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := projectionRequest(c)
 	invalid := proto.CloneOf(request.Tables[0])
 	invalid.Subject.Name = part("invalid")
@@ -106,7 +107,7 @@ func TestCreationProjectionDiscardsValidPrefix(t *testing.T) {
 }
 
 func TestCreationProjectionConvertsBeforeDatabaseBinding(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := projectionRequest(c)
 	input := request.Tables[0]
 	input.Subject.Database, input.Subject.Schema = nil, nil

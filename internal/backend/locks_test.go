@@ -6,6 +6,7 @@ import (
 	"context"
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 	"sync/atomic"
@@ -41,7 +42,7 @@ func lockRequest() *protocol.LockRequest {
 	return &protocol.LockRequest{Scope: &protocol.LockScope{SessionId: "session", LockId: "lock", Name: "migration"}, RequestId: "request"}
 }
 func TestLostLockFencesExecutionHistoryAndCommit(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	driver := &driverProbe{}
 	p := probeProvider(c, driver)
 	_, err := p.BeginTransaction(c.Context(), beginRequest())
@@ -72,7 +73,7 @@ func TestLostLockFencesExecutionHistoryAndCommit(t *testing.T) {
 	c.Assert(err, qt.IsNotNil)
 }
 func TestLockReleaseIsBoundAndFencesLateAcquisition(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p := probeProvider(c, &driverProbe{})
 	hold := attachLock(p.sessions["session"])
 	wrong := proto.CloneOf(lockRequest())
@@ -95,7 +96,7 @@ func TestLockReleaseIsBoundAndFencesLateAcquisition(t *testing.T) {
 	c.Assert(err, qt.IsNotNil)
 }
 func TestLockLossDuringCommitRetainsUnknown(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	driver := &driverProbe{}
 	p := probeProvider(c, driver)
 	_, err := p.BeginTransaction(c.Context(), beginRequest())
@@ -112,7 +113,7 @@ func TestLockLossDuringCommitRetainsUnknown(t *testing.T) {
 }
 
 func TestLockLossCancelsDispatchedSQLAndRetainsUncertainty(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	driver := &driverProbe{}
 	p := probeProvider(c, driver)
 	hold := attachLock(p.sessions["session"])
@@ -136,7 +137,7 @@ func TestLockLossCancelsDispatchedSQLAndRetainsUncertainty(t *testing.T) {
 }
 
 func TestCanceledReleaseStillClosesOwnedNativeSession(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p := probeProvider(c, &driverProbe{})
 	hold := attachLock(p.sessions["session"])
 	ctx, cancel := context.WithCancel(c.Context())

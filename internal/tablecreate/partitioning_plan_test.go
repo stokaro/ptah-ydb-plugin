@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -72,7 +73,7 @@ func TestPartitioningPlan_HappyPath(t *testing.T) {
 			`{"alterPartitioningSettings":{"maxPartitionsCount":"8"}}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := alterRequest(c, test.in)
 			original := proto.CloneOf(request)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
@@ -105,7 +106,7 @@ func TestPartitioningPlan_HappyPath(t *testing.T) {
 }
 
 func TestPartitioningPlan_CarriesTheHeldSettings(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c,
 		partitioningCase(partitionedTable(`{"maxPartitionsCount":"8"}`), partitionedTable(defaultPartitioning))))
 	c.Assert(err, qt.IsNil)
@@ -139,7 +140,7 @@ func TestPartitioningPlan_NoChange(t *testing.T) {
 			partitioningCase(layoutTable(`"uniformPartitions":"4","partitioningSettings":{"minPartitionsCount":"1"}`), partitionedTable(defaultPartitioning))},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, test.in))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -190,7 +191,7 @@ func TestPartitioningPlan_FailurePath(t *testing.T) {
 			`the partition columns \["ts"\] differ from the \["id"\] the table holds.*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, test.in))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -202,7 +203,7 @@ func TestPartitioningPlan_FailurePath(t *testing.T) {
 }
 
 func TestPartitioningPlan_FamilyTTLAndPartitioningAreSeparateSteps(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, alterCase{
 		desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}],"ttlSettings":` + hourly + `,"partitioningSettings":{"maxPartitionsCount":"8"}}`,
 		declared:     []string{"ts"}, types: ttlTypes, heldTable: partitionedTable(defaultPartitioning), held: []string{"ts"}})
@@ -218,7 +219,7 @@ func TestPartitioningPlan_FamilyTTLAndPartitioningAreSeparateSteps(t *testing.T)
 }
 
 func TestPartitioningPlan_NumbersStepsAcrossTables(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := alterRequest(c, partitioningCase(partitionedTable(`{"maxPartitionsCount":"8"}`), partitionedTable(defaultPartitioning)))
 	accounts := accountsTable(c)
 	request.Tables = append(request.Tables, accounts)
@@ -234,7 +235,7 @@ func TestPartitioningPlan_NumbersStepsAcrossTables(t *testing.T) {
 }
 
 func TestPartitioningPlan_RoundTrip(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	service := backend.New()
 	request := alterRequest(c, partitioningCase(partitionedTable(`{"maxPartitionsCount":"8"}`), partitionedTable(defaultPartitioning)))
 	plan, err := service.PlanFeatures(c.Context(), request)
@@ -280,7 +281,7 @@ func TestPartitioningOperation_FailurePath(t *testing.T) {
 		{"storage settings smuggled in", `{"request":{"alterPartitioningSettings":{"maxPartitionsCount":"8"},"alterStorageSettings":{}},` + held + `}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			definition := tablecreate.AlterModel()
 			normalized, err := tablecreate.NormalizeAlteration(&protocol.ValueInput{Id: "operation", Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
 				ProviderId: "github.com/stokaro/ptah-ydb-plugin", Kind: tablecreate.AlterOperationKind, Owner: owner(), SchemaVersion: 1, Encoding: definition.Encoding,

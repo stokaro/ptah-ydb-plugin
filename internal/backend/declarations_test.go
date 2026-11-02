@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
@@ -40,7 +41,7 @@ func declaredNode(c *qt.C, name string, access *native.AccessIntent) *protocol.E
 }
 
 func TestAuthoredDeclarationsCreateEveryNativeFamily(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	node := declaredNode(c, "node", nil)
 	topicIntent, err := topics.Intent(ydbdecl.Topic{Consumers: []ydbdecl.Consumer{{Name: "worker"}}, RetentionPeriod: "P1D"})
 	c.Assert(err, qt.IsNil)
@@ -112,7 +113,7 @@ func TestAuthoredDeclarationRefusalDiscardsEveryPrefix(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := declarationRequest(c, declaredNode(c, "node", nil))
 			test.edit(c, request)
 			for i, object := range request.Objects {
@@ -128,7 +129,7 @@ func TestAuthoredDeclarationRefusalDiscardsEveryPrefix(t *testing.T) {
 }
 
 func TestAuthoredDeclarationRejectsForgedReceiptAndCancellation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := declarationRequest(c, declaredNode(c, "node", nil))
 	request.Objects[0].Value.CanonicalProjection = []byte(`{}`)
 	result, err := backend.New().PlanDeclarations(c.Context(), request)

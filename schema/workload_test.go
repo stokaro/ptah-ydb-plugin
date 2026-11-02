@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -55,7 +56,7 @@ func declaredClassifier(c *qt.C, name string, spec workload.ClassifierSpec) *pro
 }
 
 func TestWorkloadModels_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	spec := workload.PoolSpec{ConcurrentQueryLimit: new(int32(0)), QueryMemoryLimitPercentPerNode: new(12.5)}
 	declared := declaredPool(c, "batch", spec)
 	read, err := schema.WorkloadPool(declared)
@@ -102,7 +103,7 @@ func TestWorkloadModels_FailurePath(t *testing.T) {
 			wantErr: `resource pool classifier "c" requires a pool and a nonnegative rank`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, err := schema.CaptureWorkloadIntent(test.owner, test.settings)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(value, qt.IsNil)
@@ -111,7 +112,7 @@ func TestWorkloadModels_FailurePath(t *testing.T) {
 }
 
 func TestWorkloadChange_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	limited := workload.PoolSpec{ConcurrentQueryLimit: new(int32(2))}
 	for _, test := range []struct {
 		name          string
@@ -132,7 +133,7 @@ func TestWorkloadChange_HappyPath(t *testing.T) {
 			impact: protocol.ChangeSemantics_BEHAVIORAL, reason: "DROP RESOURCE POOL CLASSIFIER sends its member's queries to another classifier's pool or to the pool default"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			capture, owner := schema.CaptureResourcePoolChange, poolOwner("batch")
 			if test.classifier {
 				capture, owner = schema.CaptureResourcePoolClassifierChange, classifierOwner("c")
@@ -152,7 +153,7 @@ func TestWorkloadChange_HappyPath(t *testing.T) {
 }
 
 func TestWorkloadChange_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	same := workload.PoolSpec{ConcurrentQueryLimit: new(int32(2))}
 	for _, test := range []struct {
 		name          string
@@ -169,7 +170,7 @@ func TestWorkloadChange_FailurePath(t *testing.T) {
 		{name: "no operand", owner: "batch", wantErr: "resource pool change has no operands"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			change, err := schema.CaptureResourcePoolChange("change-1", poolOwner(test.owner), test.before, test.after)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(change, qt.IsNil)
@@ -178,7 +179,7 @@ func TestWorkloadChange_FailurePath(t *testing.T) {
 }
 
 func TestWorkloadOperation_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	changes := schema.WorkloadChanges{
 		Pools: []workload.PoolChange{{Name: "batch", After: &workload.PoolSpec{ConcurrentQueryLimit: new(int32(2))}}},
 		Classifiers: []workload.ClassifierChange{
@@ -203,7 +204,7 @@ func TestWorkloadOperation_HappyPath(t *testing.T) {
 }
 
 func TestWorkloadOperation_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	valid, err := schema.CaptureWorkloadOperation("workload/000000", "", schema.WorkloadChanges{Pools: []workload.PoolChange{{Name: "batch", After: &workload.PoolSpec{}}}})
 	c.Assert(err, qt.IsNil)
 	foreignOwner := proto.CloneOf(valid.Value)
@@ -227,7 +228,7 @@ func TestWorkloadOperation_FailurePath(t *testing.T) {
 		{name: "another owner", value: foreignOwner, wantErr: "workload operation requires the database's workload owner"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			normalized, err := schema.NormalizeWorkloadOperation(&protocol.ValueInput{Id: "x", Representation: protocol.ValueInput_OPERATION, Value: test.value})
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(normalized, qt.IsNil)

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/protobuf/proto"
@@ -15,7 +16,7 @@ func TestStorageTypeRoundTrip(t *testing.T) {
 		"String", "Utf8", "Yson", "Json", "Uuid", "JsonDocument", "DyNumber", "Decimal(35,0)", "Decimal(22,9)"} {
 		for _, nullable := range []bool{false, true} {
 			t.Run(spelling+map[bool]string{false: "", true: " nullable"}[nullable], func(t *testing.T) {
-				c := qt.New(t)
+				c := testcheck.New(t)
 				native, err := schema.StorageType(spelling, nullable)
 				c.Assert(err, qt.IsNil)
 				actual, optional, err := schema.ColumnType(native)
@@ -28,7 +29,7 @@ func TestStorageTypeRoundTrip(t *testing.T) {
 }
 
 func TestStorageTypeGrammar(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	result, err := schema.StorageType("uInT64", false)
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(result, primitive(Ydb.Type_UINT64)), qt.IsTrue)
@@ -42,7 +43,7 @@ func TestStorageTypeGrammar(t *testing.T) {
 		"List<Uint64>", "Decimal", "Decimal(0,0)", "Decimal(36,0)", "Decimal(2,3)", "Decimal(2)", "Decimal(2,1,0)",
 		"Decimal(+2,1)", "Decimal(2,-1)", "Decimal(4294967296,0)", "Decimal(2,1e0)", "Decimal(2,1) trailing"} {
 		t.Run(spelling, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, err := schema.StorageType(spelling, false)
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(value, qt.IsNil)

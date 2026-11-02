@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -24,7 +25,7 @@ func TestYAMLFamilyFields(t *testing.T) {
 		{"empty scalar", `""`, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := yamlRequest(c, fmt.Sprintf(`{"tables":{"items":{"key_bloom_filter":"ENABLED","column_families":{"cold":{"fields":%s}}}}}`, test.fields))
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(err, qt.IsNil)
@@ -50,7 +51,7 @@ func TestYAMLFamilyFields(t *testing.T) {
 func TestFamilyColumnsFollowTheirClaim(t *testing.T) {
 	for _, tableFirst := range []bool{true, false} {
 		t.Run(fmt.Sprint(tableFirst), func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			table := declaration(1, "Item", map[string]string{"key_bloom_filter": "ENABLED"})
 			table.Directive = tablesource.DirectiveTable
 			family := declaration(2, "Item", map[string]string{"name": "cold", "fields": "body"})

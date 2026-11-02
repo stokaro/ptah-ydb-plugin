@@ -16,6 +16,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -131,7 +132,7 @@ func alterationScenarios() []alterationScenario {
 func TestTextUnitsAlterAsTheNativeCallSubprocess(t *testing.T) {
 	for _, scenario := range alterationScenarios() {
 		t.Run(scenario.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			native := newFacetFixture(c, scenario.clauses, "")
 			text := newFacetFixtureListing(c, scenario.clauses, "", provider.TextUnitsFeature)
 			text.form = protocol.RenderRequest_TEXT
@@ -149,7 +150,7 @@ func TestTextUnitsAlterAsTheNativeCallSubprocess(t *testing.T) {
 // through the native call, and through the CREATE TABLE the TEXT form writes.
 // The two tables read back the same.
 func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()
@@ -347,7 +348,7 @@ func (f *coordinationText) execute(c *qt.C, transaction string, units ...*protoc
 // provider runs through the coordination service, and reads each result
 // back from the server.
 func TestCoordinationTextUnitsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	nodes := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(opened.Driver))
 	c.Cleanup(func() {
@@ -416,7 +417,7 @@ func TestCoordinationTextUnitsSubprocess(t *testing.T) {
 // migration file the host's embedded engine wrote holds, read with the path
 // prefix the file sets and in a dev realm, and reads the nodes back.
 func TestCoordinationStatementsOfAMigrationFileSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	nodes := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(opened.Driver))
 	client := startProviderFor(c, provider.PlanningLifecycleFeature)

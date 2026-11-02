@@ -10,6 +10,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The host plans resource pools and classifiers through this provider from
@@ -47,7 +48,7 @@ func TestHostAppliesResourcePools_HappyPath(t *testing.T) {
 			empty: sqlItems},
 	} {
 		t.Run(test.format, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			opened, directory, database := lockFixture(c)
 			enableResourcePools(c, opened)
 			poolName, first, second := directory+"_pool", directory+"_a", directory+"_b"

@@ -10,13 +10,14 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The database is an identifier even when its name contains a quote or a
 // backslash. Neither can terminate a system-view path and become YQL syntax.
 func TestReadWorkloadQuotesDatabase(t *testing.T) {
 	t.Parallel()
-	c := qt.New(t)
+	c := testcheck.New(t)
 	connector := &workloadReadConnector{}
 	db := sql.OpenDB(connector)
 	c.Cleanup(func() { c.Check(db.Close(), qt.IsNil) })

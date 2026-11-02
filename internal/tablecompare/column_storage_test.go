@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -77,7 +78,7 @@ func TestCompareStorage_NoChange(t *testing.T) {
 		{"a disabled TTL is none", storageSide{storage: `{"ttl":{"disabled":{}}}`}, storageSide{storage: `{"hashColumns":["id"],"partitions":"3","dataChannelCount":"64"}`}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result := compare(c, storageRequest(c, test.desired, test.current))
 			c.Assert(result.Changes, qt.HasLen, 0)
 		})
@@ -105,7 +106,7 @@ func TestCompareStorage_ReportsAChange(t *testing.T) {
 			storageSide{storage: heldColumnStorage}, true, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result := compare(c, storageRequest(c, test.desired, test.current))
 			c.Assert(result.Changes, qt.HasLen, 1)
 			change := result.Changes[0]

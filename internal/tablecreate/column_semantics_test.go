@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
@@ -34,7 +35,7 @@ func columnSemanticsRequest(c *qt.C) *protocol.CompareColumnsRequest {
 }
 
 func TestColumnServicePreservesExactCaptures(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := columnSemanticsRequest(c)
 	request.Tables[0].Desired.Columns[0].Nullable = true
 	before := proto.CloneOf(request)
@@ -64,7 +65,7 @@ func TestColumnServiceRefusesPartialOrUnboundInput(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := columnSemanticsRequest(c)
 			test.mutate(request)
 			result, err := backend.New().CompareColumns(c.Context(), request)
@@ -75,7 +76,7 @@ func TestColumnServiceRefusesPartialOrUnboundInput(t *testing.T) {
 }
 
 func TestColumnServiceReadbackAndCancellation(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	compared := columnSemanticsRequest(c)
 	pair := compared.Tables[0].Pairs[0]
 	request := &protocol.ReadColumnDefaultsRequest{Engine: compared.Engine, Identifiers: compared.Identifiers, Capabilities: compared.Capabilities, TargetFeatures: compared.TargetFeatures,
@@ -97,7 +98,7 @@ func TestColumnServiceReadbackAndCancellation(t *testing.T) {
 func TestCreationColumnsMatchCompiledPrimaryKey(t *testing.T) {
 	for _, nullable := range []bool{false, true} {
 		t.Run(map[bool]string{false: "not null", true: "explicit nullable"}[nullable], func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := projectionRequest(c)
 			request.TargetFeatures = []string{provider.ColumnsFeature, provider.CommonObjectsFeature}
 			table := request.Tables[0].Declaration
@@ -124,7 +125,7 @@ func TestCreationColumnsMatchCompiledPrimaryKey(t *testing.T) {
 func TestColumnParentRefusesUnplannedDefaultChange(t *testing.T) {
 	for _, changed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "same", true: "changed"}[changed], func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := alterRequest(c, alterCase{declared: []string{"value"}, held: []string{"value"}, heldTable: plainTable})
 			request.TargetFeatures = append(request.TargetFeatures, provider.ColumnsFeature)
 			table := request.Tables[0]

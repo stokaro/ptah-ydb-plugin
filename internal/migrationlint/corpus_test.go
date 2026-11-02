@@ -8,6 +8,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // corpusHosts are the host commits the golden files name.
@@ -90,7 +91,7 @@ func corpusDeclines(c *qt.C) int {
 // the provider reports must be answered by the host somewhere in it: a case
 // list that stopped matching would otherwise compare nothing and pass.
 func TestCorpus_Shape(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(len(directoryCases(c)) >= 220, qt.IsTrue, qt.Commentf("the corpus holds %d directories", len(directoryCases(c))))
 	c.Assert(len(requestCases(c, "split"))+len(requestCases(c, "annotate"))+len(requestCases(c, "check")) >= 25, qt.IsTrue)
 	hosts := corpusHosts(c)

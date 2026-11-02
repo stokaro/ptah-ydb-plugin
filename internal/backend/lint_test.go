@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
@@ -15,7 +16,7 @@ import (
 // The description advertises lint on the provider and on the ydb engine, with
 // a rule catalog the SDK accepts.
 func TestDescriptionAdvertisesMigrationLint(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	description := backend.Description()
 	c.Assert(description.Features, qt.Contains, provider.LintFeature)
 	c.Assert(description.Engines[0].Features, qt.Contains, provider.LintFeature)
@@ -37,7 +38,7 @@ func lintFile(c *qt.C, sql string) *protocol.LintFile {
 // A check reports each enabled rule's findings over the provider's own split,
 // in a reply the SDK accepts.
 func TestCheckLintMigrations_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := &protocol.CheckLintRequest{Engine: "ydb", Codes: []string{"YD110", "YD111"},
 		Files: []*protocol.LintFile{lintFile(c, "REVOKE GRANT OPTION FOR SELECT ON `t` FROM u;\nDROP USER u;\n")}}
 	result, err := backend.New().CheckLintMigrations(c.Context(), request)
@@ -69,7 +70,7 @@ func TestCheckLintMigrations_FailurePath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := backend.New().CheckLintMigrations(test.ctx, test.request)
 			c.Assert(status.Code(err), qt.Equals, test.code)
 			c.Assert(result, qt.IsNil)
@@ -80,7 +81,7 @@ func TestCheckLintMigrations_FailurePath(t *testing.T) {
 // An annotation answers every statement a host split, and a split judges
 // every fact it reports, in replies the SDK accepts.
 func TestAnnotateLintStatements_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	file := lintFile(c, "DROP TOPIC t;\nSELECT 1;\n")
 	request := &protocol.AnnotateLintRequest{Engine: "ydb", Facts: []protocol.LintFact{protocol.LintFact_LINT_FACT_STATEFUL_DROP},
 		Sources: []*protocol.LintSource{{Name: "0001_t.up.sql", Sql: "DROP TOPIC t;\nSELECT 1;\n"}}, Files: []*protocol.LintFile{file}}
@@ -94,7 +95,7 @@ func TestAnnotateLintStatements_HappyPath(t *testing.T) {
 
 // A request that does not pair its sources with statement lists is refused.
 func TestAnnotateLintStatements_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := &protocol.AnnotateLintRequest{Engine: "ydb", Facts: []protocol.LintFact{protocol.LintFact_LINT_FACT_STATEFUL_DROP},
 		Files: []*protocol.LintFile{{Name: "0001_t.up.sql"}}}
 	result, err := backend.New().AnnotateLintStatements(c.Context(), request)
@@ -118,7 +119,7 @@ func TestSplitLintStatementsDescribesStatementsForAListingHost(t *testing.T) {
 		{name: "not listing", judged: []protocol.LintFact{}, effects: 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			ctx := provider.ContextWithHostFeatures(c.Context(), test.features)
 			request := &protocol.SplitLintRequest{Engine: "ydb", Sources: []*protocol.LintSource{{Name: "x.sql", Sql: "CREATE TABLE t (id Uint64);"}}}
 
@@ -135,7 +136,7 @@ func TestSplitLintStatementsDescribesStatementsForAListingHost(t *testing.T) {
 // An annotation request that asks for the statement facts is refused unless
 // the host lists lint.statement-facts.
 func TestAnnotateLintStatementsRefusesUnnegotiatedFacts_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := &protocol.AnnotateLintRequest{Engine: "ydb", Facts: []protocol.LintFact{protocol.LintFact_LINT_FACT_STATEMENT_KIND},
 		Sources: []*protocol.LintSource{{Name: "x.sql", Sql: "DROP TABLE t;"}},
 		Files:   []*protocol.LintFile{{Name: "x.sql", Statements: []*protocol.LintStatement{{Start: 0, End: 12, Line: 1, Sql: "DROP TABLE t"}}}}}

@@ -13,6 +13,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -54,7 +55,7 @@ func acquireNativeLock(c *qt.C, client *providerruntime.Client, request *protoco
 	c.Assert(result.Outcome, qt.Equals, protocol.LockResult_ACQUIRED)
 }
 func TestNativeLocksExcludeOtherProcessesAndReleaseOnClose(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	_, _, _ = lockFixture(c)
 	binary, digest := providerBinary(c)
 	first, id, closeFirst := historySession(c, binary, digest)
@@ -102,7 +103,7 @@ func TestNativeLocksExcludeOtherProcessesAndReleaseOnClose(t *testing.T) {
 	c.Assert(checked.Outcome, qt.Equals, protocol.LockResult_ACQUIRED)
 }
 func TestNativeLockLossFencesExecutionHistoryAndCommit(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
@@ -190,7 +191,7 @@ func TestNativeLockLossFencesExecutionHistoryAndCommit(t *testing.T) {
 	c.Assert(executeSQL(c, client, id, "", "UPSERT INTO `"+table+"` (id) VALUES (3u)").Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
 }
 func TestNativeLocksRefuseRelaxedNodeWithoutChangingIt(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, _, database := lockFixture(c)
 	node := path.Join(database, locking.NodeName)
 	c.Assert(opened.Driver.Coordination().CreateNode(c.Context(), node, coordination.NodeConfig{ReadConsistencyMode: coordination.ConsistencyModeRelaxed}), qt.IsNil)
@@ -203,7 +204,7 @@ func TestNativeLocksRefuseRelaxedNodeWithoutChangingIt(t *testing.T) {
 	c.Assert(config.ReadConsistencyMode, qt.Equals, coordination.ConsistencyModeRelaxed)
 }
 func TestNativeLocksReleaseAfterProviderExit(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	_, _, _ = lockFixture(c)
 	binary, digest := providerBinary(c)
 	owner := startProvider(c, binary, digest)

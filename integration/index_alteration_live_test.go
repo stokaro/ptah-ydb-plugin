@@ -8,6 +8,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -70,7 +71,7 @@ func TestIndexAlterationAddSubprocess(t *testing.T) {
 		{"an async index on two columns", "globalAsyncIndex", "global_async_index", `["payload","ts"]`, "", []string{"payload", "ts"}, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newFacetFixture(c, "", "")
 			declared := declaredIndexes(indexSpec("by_payload", test.kind, test.keys, test.cover))
 			found := fixture.compareIndexes(c, declared)
@@ -103,7 +104,7 @@ func TestIndexAlterationDropSubprocess(t *testing.T) {
 			declaredIndexes(indexSpec("by_ts", "globalAsyncIndex", `["ts"]`, `["payload"]`)), []string{"by_ts"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newFacetFixture(c, test.clauses, "")
 			found := fixture.compareIndexes(c, test.declared)
 			c.Assert(len(found.Changes), qt.Equals, 1)
@@ -130,7 +131,7 @@ func TestIndexComparisonUnchangedSubprocess(t *testing.T) {
 			declaredIndexes(indexSpec("by_payload", "globalAsyncIndex", `["payload"]`, `["ts"]`))},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newFacetFixture(c, test.clauses, "")
 			c.Assert(len(fixture.compareIndexes(c, test.declared).Changes), qt.Equals, 0)
 		})
@@ -151,7 +152,7 @@ func TestIndexAlterationRefusesAChangedIndexSubprocess(t *testing.T) {
 			`but the declaration states a global index on \(payload\) covering \(ts\)`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := newFacetFixture(c, ", INDEX by_payload GLOBAL SYNC ON (payload)", "")
 			found := fixture.compareIndexes(c, test.declared)
 			c.Assert(len(found.Changes), qt.Equals, 1)

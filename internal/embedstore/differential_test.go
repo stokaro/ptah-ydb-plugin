@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/embedstore"
@@ -102,20 +103,20 @@ func orDefault(value, fallback string) string {
 }
 
 func TestSchemaStatementsAreTheHosts(t *testing.T) {
-	answers := hostAnswers(qt.New(t))
+	answers := hostAnswers(testcheck.New(t))
 	for _, test := range []struct {
 		line string
 		wide bool
 	}{{"25.1", false}, {"26.2", true}} {
 		t.Run(test.line, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(embedstore.SchemaStatements(test.wide), qt.DeepEquals, answers.Schema[test.line])
 		})
 	}
 }
 
 func TestDescribeTargetAnswersAsTheHost(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	answers := hostAnswers(c)
 	var cases []targetCase
 	readJSON(c, "testdata/targets.json", &cases)
@@ -123,7 +124,7 @@ func TestDescribeTargetAnswersAsTheHost(t *testing.T) {
 	c.Assert(len(cases) >= 20, qt.IsTrue)
 	for i, test := range cases {
 		t.Run(test.Name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			want := answers.Targets[i]
 
 			got := embedstore.DescribeTarget(spec(test))
@@ -138,7 +139,7 @@ func TestDescribeTargetAnswersAsTheHost(t *testing.T) {
 }
 
 func TestEncodeVectorStoresTheHostsBytes(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	answers := hostAnswers(c)
 	var vectors [][]float32
 	readJSON(c, "testdata/vectors.json", &vectors)
@@ -151,7 +152,7 @@ func TestEncodeVectorStoresTheHostsBytes(t *testing.T) {
 // The corpus reaches both kinds of answer and every reason a target is
 // refused for.
 func TestEmbeddingCorpusReachesEveryAnswer(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	refused, accepted := 0, 0
 	for _, answer := range hostAnswers(c).Targets {
 		refused += map[bool]int{true: 1}[answer.Refused]

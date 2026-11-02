@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
@@ -49,14 +50,14 @@ func TestAddStatements_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(changefeeds.AddStatements(test.table, test.spec), qt.DeepEquals, test.want)
 		})
 	}
 }
 
 func TestDropStatement_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(changefeeds.DropStatement("/local/app/items", "feed"), qt.Equals, "ALTER TABLE `/local/app/items` DROP CHANGEFEED `feed`;")
 }
 
@@ -120,7 +121,7 @@ func TestTopicStatements_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			got, restarted := changefeeds.TopicStatements("items", test.desired, test.previous)
 			c.Assert(got, qt.DeepEquals, test.want)
 			c.Assert(restarted, qt.DeepEquals, test.wantRestarted)
@@ -129,7 +130,7 @@ func TestTopicStatements_HappyPath(t *testing.T) {
 }
 
 func TestTopicPath_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(changefeeds.TopicPath("items", "feed"), qt.Equals, "`items/feed`")
 	c.Assert(changefeeds.TopicPath("/local/app/items", "feed"), qt.Equals, "`/local/app/items/feed`")
 }

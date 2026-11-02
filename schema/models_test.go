@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -21,7 +22,7 @@ func tableOwner() *protocol.Reference {
 }
 
 func TestTablePropertiesSeparateSharedAndTransientFields(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	original := &nativeprotocol.DescribeTableResult{
 		Self:    &Ydb_Scheme.Entry{Name: "records", Type: Ydb_Scheme.Entry_TABLE, Owner: "alice", SizeBytes: 100, CreatedAt: &Ydb.VirtualTimestamp{PlanStep: 3}},
 		Columns: []*nativeprotocol.ColumnMeta{{Name: "a", Type: primitive(Ydb.Type_UINT64)}}, PrimaryKey: []string{"b", "a"},
@@ -46,7 +47,7 @@ func TestTablePropertiesSeparateSharedAndTransientFields(t *testing.T) {
 }
 
 func TestColumnPropertiesRetainFamilyAndLiteral(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	original := &nativeprotocol.ColumnMeta{Name: "label", Type: optional(primitive(Ydb.Type_UTF8)), Family: "cold",
 		DefaultValue: &nativeprotocol.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: primitive(Ydb.Type_UTF8), Value: &Ydb.Value{Value: &Ydb.Value_TextValue{TextValue: "hello"}}}},
 	}
@@ -66,7 +67,7 @@ func TestColumnPropertiesRetainFamilyAndLiteral(t *testing.T) {
 }
 
 func TestObservationRefusesUnknownAndDuplicatedState(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	base, err := schema.CaptureTable(tableOwner(), &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"id"}})
 	c.Assert(err, qt.IsNil)
 	for _, test := range []struct{ name, payload string }{
@@ -82,7 +83,7 @@ func TestObservationRefusesUnknownAndDuplicatedState(t *testing.T) {
 		{"incomplete index", `{"primaryKey":["id"],"indexes":[{"name":"idx"}]}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			input := proto.CloneOf(base)
 			input.Payload = []byte(test.payload)
 			result, err := schema.Normalize(input)
@@ -101,7 +102,7 @@ func TestObservationRefusesUnknownAndDuplicatedState(t *testing.T) {
 }
 
 func TestUnknownNativeFieldsCannotDisappearDuringProjection(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	value := &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"id"}, Columns: []*nativeprotocol.ColumnMeta{{Name: "id", Type: primitive(Ydb.Type_UINT64)}}}
 	value.Columns[0].ProtoReflect().SetUnknown(protowire.AppendVarint(protowire.AppendTag(nil, 400, protowire.VarintType), 1))
 	result, err := schema.CaptureTable(tableOwner(), value)
@@ -110,7 +111,7 @@ func TestUnknownNativeFieldsCannotDisappearDuringProjection(t *testing.T) {
 }
 
 func TestModelKindsUseProviderNamespace(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	for _, model := range schema.Models() {
 		c.Assert(strings.HasPrefix(model.GetKind(), "github.com/stokaro/ptah-ydb-plugin/"), qt.IsTrue, qt.Commentf("%s", model.GetKind()))
 	}
@@ -123,7 +124,7 @@ func TestModelKindsUseProviderNamespace(t *testing.T) {
 }
 
 func TestLiveCaptureRequiresDatabaseBinding(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	owner := tableOwner()
 	owner.Database = ""
 	value, err := schema.CaptureTable(owner, &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"id"}})
@@ -143,7 +144,7 @@ func TestTablePropertiesLeaveCommentsOut(t *testing.T) {
 		{"comments alone", map[string]string{"ptah.comment": "rows"}, `{"primaryKey":["a"],"storeType":"STORE_TYPE_ROW"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			captured, err := schema.CaptureTable(tableOwner(), &nativeprotocol.DescribeTableResult{PrimaryKey: []string{"a"}, Attributes: tc.attributes})
 			c.Assert(err, qt.IsNil)
 			c.Assert(string(captured.Payload), qt.Contains, tc.want)

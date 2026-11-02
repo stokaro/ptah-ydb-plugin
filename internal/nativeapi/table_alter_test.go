@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -130,7 +131,7 @@ func TestNativeTableAlteration_HappyPath(t *testing.T) {
 		{"changes a storage pool", pooled("hdd"), pooled("ssd"), `{"request":{"alterColumnFamilies":[{"name":"archive","data":{"media":"ssd"}}]},"held_families":[{"name":"archive","data":{"media":"hdd"}}]}`, 0, 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := &alterFixture{before: test.before, after: test.after}
 			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
 			c.Assert(err, qt.IsNil)
@@ -194,7 +195,7 @@ func TestNativeTableAlteration_FailurePath(t *testing.T) {
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "unconfirmed session release"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := test.fixture
 			dispatched, err := applyAlteration(c, &fixture, test.database, test.payload, test.guard)
 			c.Assert(err, qt.ErrorMatches, test.message)
@@ -207,7 +208,7 @@ func TestNativeTableAlteration_FailurePath(t *testing.T) {
 func TestNativeTableAlteration_RefusesUnsafeSessionDatabase(t *testing.T) {
 	for _, database := range []string{"/local/../other", "local", "/"} {
 		t.Run(database, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := &alterFixture{before: beforeTable}
 			api := &nativeapi.TableAlteration{Open: func(context.Context) (nativeapi.AlterationSession, error) {
 				fixture.events = append(fixture.events, "open")
@@ -254,7 +255,7 @@ func TestNativeTableAlteration_ColumnsHappyPath(t *testing.T) {
 			withColumns(`,"indexes":[{"name":"by_payload","indexColumns":["payload"],"dataColumns":["id"]}],"ttlSettings":{"dateTypeColumn":{"columnName":"payload","expireAfterSeconds":60}}`, payloadCol), dropOld, 0, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := &alterFixture{before: test.before, after: test.after}
 			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
 			c.Assert(err, qt.IsNil)
@@ -298,7 +299,7 @@ func TestNativeTableAlteration_ColumnsFailurePath(t *testing.T) {
 		{"lost reply", alterFixture{before: withColumns("", payloadCol, oldCol), alterFailure: true}, dropOld, true, []string{"open", "describe", "guard", "alter", "close"}, "lost native reply"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := test.fixture
 			dispatched, err := applyAlteration(c, &fixture, "", test.payload, false)
 			c.Assert(err, qt.ErrorMatches, test.message)

@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
@@ -40,7 +41,7 @@ func TestEqual_ReadsAsYDBKeeps(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(changefeeds.Equal(test.desired, test.current), qt.IsTrue)
 			c.Assert(changefeeds.Equal(test.current, test.desired), qt.IsTrue)
 		})
@@ -71,7 +72,7 @@ func TestRecreated_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(changefeeds.Recreated(base(), test.current), qt.IsTrue)
 			c.Assert(changefeeds.Equal(base(), test.current), qt.IsFalse)
 		})
@@ -81,7 +82,7 @@ func TestRecreated_HappyPath(t *testing.T) {
 // TestRecreated_PartitionCountBothSidesName holds a partition count both sides
 // name as an option like the others.
 func TestRecreated_PartitionCountBothSidesName(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	desired, current := base(), base()
 	desired.TopicMinActivePartitions, current.TopicMinActivePartitions = 2, 3
 	c.Assert(changefeeds.Recreated(desired, current), qt.IsTrue)
@@ -116,7 +117,7 @@ func TestTopicChanged_HappyPath(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(changefeeds.TopicChanged(base(), test.current), qt.IsTrue)
 			c.Assert(changefeeds.Recreated(base(), test.current), qt.IsFalse)
 		})
@@ -131,7 +132,7 @@ func TestConsumerPositionsLost_HappyPath(t *testing.T) {
 	current.Consumers = []ydbdecl.Consumer{{Name: "audit", SupportedCodecs: []string{"raw"}}, {Name: "billing"}, {Name: "kept", Important: true}}
 	desired := base()
 	desired.Consumers = []ydbdecl.Consumer{{Name: "audit"}, {Name: "kept"}, {Name: "fresh"}}
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(changefeeds.ConsumerPositionsLost(desired, current), qt.DeepEquals, []string{"audit", "billing"})
 	c.Assert(changefeeds.ConsumersChanged(desired, current), qt.IsTrue)
 	c.Assert(changefeeds.RetentionChanged(desired, current), qt.IsFalse)

@@ -19,6 +19,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -96,7 +97,7 @@ func execFixtureSchema(ctx context.Context, db *sql.DB, statement string) error 
 }
 
 func TestRowTableInspectionSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	createFixtureTable(c, opened, database, directory)
 	child := path.Join(directory, "child")
@@ -169,7 +170,7 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 }
 
 func TestInspectionRefusesEscapingAndMissingScopes(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -190,7 +191,7 @@ func TestInspectionRefusesEscapingAndMissingScopes(t *testing.T) {
 // endpoint. The column table cannot be read without the endpoint, and the
 // refusal names the parameter and returns no snapshot.
 func TestInspectionRefusesAColumnTableWithoutMonitoring(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	createFixtureTable(c, opened, database, directory)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

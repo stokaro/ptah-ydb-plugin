@@ -7,6 +7,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -32,7 +33,7 @@ func columnConversion(c *qt.C, columns ...*native.ColumnMeta) (*backend.Provider
 }
 
 func TestColumnConversionBatchRetainsOrderAndIdentity(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p, request := columnConversion(c, &native.ColumnMeta{Family: "hot"}, &native.ColumnMeta{Family: "cold"})
 	before := proto.CloneOf(request)
 	result, err := p.ConvertValues(context.Background(), request)
@@ -48,7 +49,7 @@ func TestColumnConversionBatchRetainsOrderAndIdentity(t *testing.T) {
 }
 
 func TestColumnConversionRefusesForgedProjection(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p, request := columnConversion(c, &native.ColumnMeta{Family: "cold"})
 	request.Values[0].CanonicalProjection = []byte(`{"family":"forged"}`)
 	result, err := p.ConvertValues(context.Background(), request)
@@ -57,7 +58,7 @@ func TestColumnConversionRefusesForgedProjection(t *testing.T) {
 }
 
 func TestColumnConversionDiscardsPrefixOnFailure(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p, request := columnConversion(c, &native.ColumnMeta{Family: "cold"}, &native.ColumnMeta{DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: &native.SequenceDescription{SetVal: &native.SequenceDescription_SetVal{NextValue: proto.Int64(11)}}}})
 	result, err := p.ConvertValues(context.Background(), request)
 	c.Assert(result, qt.IsNil)
@@ -65,7 +66,7 @@ func TestColumnConversionDiscardsPrefixOnFailure(t *testing.T) {
 }
 
 func TestColumnConversionCancellationDiscardsBatch(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p, request := columnConversion(c, &native.ColumnMeta{Family: "cold"})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -75,7 +76,7 @@ func TestColumnConversionCancellationDiscardsBatch(t *testing.T) {
 }
 
 func TestMixedConversionDiscardsColumnsWhenTableRefusesTopology(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p, request := columnConversion(c, &native.ColumnMeta{Family: "default"})
 	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Name: "Orders"}
 	table, err := schema.CaptureTable(owner, &native.DescribeTableResult{PrimaryKey: []string{"a"}, ShardKeyBounds: []*Ydb.TypedValue{{Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UINT64}}, Value: &Ydb.Value{Value: &Ydb.Value_Uint64Value{Uint64Value: 100}}}}})
@@ -89,7 +90,7 @@ func TestMixedConversionDiscardsColumnsWhenTableRefusesTopology(t *testing.T) {
 }
 
 func TestMixedConversionDiscardsChildPrefixOnSequenceFailure(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	p, request := columnConversion(c, &native.ColumnMeta{DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: &native.SequenceDescription{SetVal: &native.SequenceDescription_SetVal{NextValue: proto.Int64(11)}}}})
 	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Name: "Orders"}
 	child, err := schema.CaptureIndexes(owner, &native.IndexObservations{})

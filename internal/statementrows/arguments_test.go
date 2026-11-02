@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/statementrows"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-sdk/v3/types"
 )
@@ -22,7 +23,7 @@ func TestArgumentRetainsType(t *testing.T) {
 		{name: "interval", value: &protocol.DataValue{Value: &protocol.DataValue_IntervalValue{IntervalValue: &protocol.IntervalValue{Days: 1, Nanoseconds: 1000}}}, kind: "Interval"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			value, err := statementrows.Argument(tc.value)
 			c.Assert(err, qt.IsNil)
 			typed, ok := value.(types.Value)
@@ -33,7 +34,7 @@ func TestArgumentRetainsType(t *testing.T) {
 }
 
 func TestArgumentRefusesLossOfPrecision(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	for _, argument := range []*protocol.DataValue{
 		{Value: &protocol.DataValue_TimestampValue{TimestampValue: &protocol.TimestampValue{Nanos: 1}}},
 		{Value: &protocol.DataValue_IntervalValue{IntervalValue: &protocol.IntervalValue{Months: 1}}},

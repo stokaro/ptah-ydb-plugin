@@ -2,6 +2,7 @@ package yql_test
 
 import (
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -168,7 +169,7 @@ func TestSplitSQLStatementsForDialect_YDBCompoundBodies(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(analyzedText(c, test.sql), qt.DeepEquals, test.want)
 		})
 	}
@@ -244,7 +245,7 @@ func TestSplitSQLStatementsForDialect_YDBLiteralsAndComments(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(analyzedText(c, test.sql), qt.DeepEquals, test.want)
 		})
 	}

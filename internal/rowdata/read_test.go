@@ -6,6 +6,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/testing/protocmp"
 
@@ -21,7 +22,7 @@ func stringValue(v string) *protocol.DataValue {
 }
 
 func TestOrderAddsThePrimaryKeyTheRequestLeavesOut(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	c.Assert(rowdata.Order([]string{"code"}, []string{"region", "code"}), qt.DeepEquals, []string{"code", "region"})
 	c.Assert(rowdata.Order([]string{"id"}, []string{"id"}), qt.DeepEquals, []string{"id"})
@@ -52,7 +53,7 @@ func TestPageQueryText_HappyPath(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			text, err := test.query.Text()
 
@@ -63,7 +64,7 @@ func TestPageQueryText_HappyPath(t *testing.T) {
 }
 
 func TestPageQueryText_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	query := rowdata.PageQuery{Table: "`t`", Columns: []string{"id"}, Order: []string{"id"}, OrderTypes: []string{"Int8"},
 		After: []*protocol.DataValue{int64Value(1000)}, Limit: 2}
 
@@ -74,7 +75,7 @@ func TestPageQueryText_FailurePath(t *testing.T) {
 }
 
 func TestPageToken_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	values := []*protocol.DataValue{stringValue("north"), rowdata.Null(), int64Value(-4)}
 
 	token, err := rowdata.EncodeToken([]string{"name", "region", "id"}, values)
@@ -86,7 +87,7 @@ func TestPageToken_HappyPath(t *testing.T) {
 }
 
 func TestPageToken_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	token, err := rowdata.EncodeToken([]string{"id"}, []*protocol.DataValue{int64Value(1)})
 	c.Assert(err, qt.IsNil)
 
@@ -96,7 +97,7 @@ func TestPageToken_FailurePath(t *testing.T) {
 		{"not a token", "e30", "the page token is not one this provider wrote for this read"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			decoded, err := rowdata.DecodeToken(test.token, []string{"code"})
 
@@ -107,7 +108,7 @@ func TestPageToken_FailurePath(t *testing.T) {
 }
 
 func TestPageTokenRefusesAKeyTooLong_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	long := make([]byte, 4096)
 
 	token, err := rowdata.EncodeToken([]string{"id"}, []*protocol.DataValue{stringValue(string(long))})
@@ -167,7 +168,7 @@ func TestScanned_HappyPath(t *testing.T) {
 		{"interval", "Interval", -time.Second, &protocol.DataValue{Value: &protocol.DataValue_IntervalValue{IntervalValue: &protocol.IntervalValue{Nanoseconds: -1e9}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			value, err := rowdata.Scanned(test.ydbType, test.scanned)
 
@@ -188,7 +189,7 @@ func TestScanned_FailurePath(t *testing.T) {
 		{"an unknown type", "Optional<Utf8>", "x", `the driver returned a Go string for a Optional<Utf8> column`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			value, err := rowdata.Scanned(test.ydbType, test.scanned)
 
@@ -199,7 +200,7 @@ func TestScanned_FailurePath(t *testing.T) {
 }
 
 func TestColumnType(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	c.Assert(rowdata.ColumnType("Optional<Decimal(22, 9)>"), qt.Equals, "Decimal(22,9)")
 	c.Assert(rowdata.ColumnType("Utf8"), qt.Equals, "Utf8")
@@ -219,7 +220,7 @@ func TestGoValue_FailurePath(t *testing.T) {
 			"the interval is out of range"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			value, carried, err := rowdata.GoValue(test.value)
 
@@ -231,7 +232,7 @@ func TestGoValue_FailurePath(t *testing.T) {
 }
 
 func TestDecimalString(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	c.Assert(rowdata.DecimalString("1250", 2), qt.Equals, "12.50")
 	c.Assert(rowdata.DecimalString("-5", 3), qt.Equals, "-0.005")

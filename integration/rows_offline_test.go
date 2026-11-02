@@ -8,6 +8,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -29,7 +30,7 @@ func startProviderListing(c *qt.C, binary, digest string, hostFeatures []string)
 // through the SDK client without a database, and declares the query-builder
 // spelling to a host that lists query.dialect and to no other.
 func TestRowServicesOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	listing := startProviderListing(c, binary, digest, []string{provider.QueryDialectFeature})
 	silent := startProviderListing(c, binary, digest, nil)

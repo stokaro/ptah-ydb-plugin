@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 )
@@ -29,7 +30,7 @@ func TestCapturedColumnAspects(t *testing.T) {
 		{"expression", &protocol.DeclaredColumn{Type: "Timestamp", DefaultExpression: "CurrentUtcTimestamp()"}, &protocol.ObservedColumn{DataType: "Timestamp", DefaultExpression: new("CurrentUtcTimestamp()")}, protocol.ColumnAspect_COLUMN_DEFAULT, diff(protocol.ColumnAspect_COLUMN_DEFAULT, protocol.ColumnDifference_SAME, "CurrentUtcTimestamp()", "CurrentUtcTimestamp()")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			test.desired.Name = "desired"
 			test.current.Name = "held"
 			request := requestFor(test.desired, test.current, test.aspect)
@@ -63,7 +64,7 @@ func TestPrimaryAndSerialNullabilityDoesNotRewriteSource(t *testing.T) {
 		{"serial nullable", &protocol.DeclaredColumn{Name: "id", Type: "BigSerial", Nullable: true}, nil, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := requestFor(test.column, &protocol.ObservedColumn{Name: "id", DataType: "Int64"}, protocol.ColumnAspect_COLUMN_NULLABILITY)
 			request.Tables[0].Desired.PrimaryKey = test.keys
 			before := proto.CloneOf(request)
@@ -76,7 +77,7 @@ func TestPrimaryAndSerialNullabilityDoesNotRewriteSource(t *testing.T) {
 }
 
 func TestSequenceComparisonIgnoresRuntimeRestart(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := requestFor(&protocol.DeclaredColumn{Name: "id", Type: "BIGINT", AutoIncrement: true, IdentityStart: "010", IdentityIncrement: "+2"}, &protocol.ObservedColumn{Name: "id", DataType: "Int64", AutoIncrement: true, IdentityStart: "10", IdentityIncrement: "1", SequenceRestart: "999"}, protocol.ColumnAspect_COLUMN_SEQUENCE)
 	result, err := columnsemantics.Compare(c.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -100,7 +101,7 @@ func TestDefaultReadbackPreservesLiteralPresence(t *testing.T) {
 		{"expression", new("CurrentUtcTimestamp()"), protocol.ColumnDefaultReceipt_EXPRESSION, "CurrentUtcTimestamp()"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			result, err := columnsemantics.ReadDefaults(c.Context(), &protocol.ReadColumnDefaultsRequest{Columns: []*protocol.ObservedColumnDefaultInput{{Column: &protocol.ObservedColumn{DefaultExpression: test.text}}}})
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Columns, qt.HasLen, 1)
@@ -111,7 +112,7 @@ func TestDefaultReadbackPreservesLiteralPresence(t *testing.T) {
 }
 
 func TestColumnSemanticsCancellationHasNoPrefix(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	ctx, cancel := context.WithCancel(c.Context())
 	cancel()
 	request := requestFor(&protocol.DeclaredColumn{Name: "id", Type: "Int64"}, &protocol.ObservedColumn{Name: "id", DataType: "Int64"}, protocol.ColumnAspect_COLUMN_TYPE)

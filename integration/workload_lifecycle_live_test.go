@@ -14,6 +14,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
@@ -90,7 +91,7 @@ func workloadRanks(directory string) (int64, int64) {
 // a migration file's text, a change another writer made after the plan read
 // the pool, and a removal.
 func TestWorkloadLifecycleSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	enableResourcePools(c, opened)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)

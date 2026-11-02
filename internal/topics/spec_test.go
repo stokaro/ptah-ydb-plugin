@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
@@ -40,7 +41,7 @@ func observed(c *qt.C, text string) *native.DescribeTopicResult {
 // thresholds left out while auto-partitioning is off, intervals as ISO 8601,
 // the epoch read_from as none, and no attribute.
 func TestFromObserved_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	plain, err := topics.FromObserved(observed(c, plainTopic))
 	c.Assert(err, qt.IsNil)
 	c.Assert(plain, qt.DeepEquals, ydbdecl.Topic{MinActivePartitions: 1, AutoPartitioningStrategy: "disabled", RetentionPeriod: "P1D",
@@ -71,7 +72,7 @@ func TestFromObserved_FailurePath(t *testing.T) {
 		{"a fraction of a second", func(d *native.DescribeTopicResult) { d.RetentionPeriod = &durationpb.Duration{Seconds: 1, Nanos: 5} }, `its retention period is 1.000000005s, .*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			description := observed(c, plainTopic)
 			test.modify(description)
 			spec, err := topics.FromObserved(description)
@@ -84,7 +85,7 @@ func TestFromObserved_FailurePath(t *testing.T) {
 // A declaration written as the provider's intent reads back as itself, and a
 // read topic kept as it is reads as the same topic.
 func TestIntent_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	declared := ydbdecl.Topic{MinActivePartitions: 2, MaxActivePartitions: 6, AutoPartitioningStrategy: "scale_up",
 		AutoPartitioningUpUtilizationPercent: 70, AutoPartitioningStabilizationWindow: "PT2M", RetentionPeriod: "P1DT12H",
 		PartitionWriteSpeedBytesPerSecond: 2097152, SupportedCodecs: []string{"raw", "gzip"},
@@ -109,7 +110,7 @@ func TestIntent_HappyPath(t *testing.T) {
 // topic keeps YDB's attributes, which are left out, and a setting no
 // statement sets is refused.
 func TestFromIntent_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	spec, err := topics.FromIntent(&native.TopicIntent{PartitioningSettings: &Ydb_Topic.PartitioningSettings{}, RetentionStorageMb: 5})
 	c.Assert(err, qt.ErrorMatches, `the declaration states retention_storage_mb, which no YQL statement sets`)
 	c.Assert(spec, qt.DeepEquals, ydbdecl.Topic{})
@@ -121,7 +122,7 @@ func TestFromIntent_FailurePath(t *testing.T) {
 // A declaration that names a setting at the value YDB gives a new topic, and
 // one that leaves it out, are the topic a plain CREATE TOPIC makes.
 func TestEqual_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	plain, err := topics.FromObserved(observed(c, plainTopic))
 	c.Assert(err, qt.IsNil)
 	for _, declared := range []ydbdecl.Topic{{}, {MinActivePartitions: 1, RetentionPeriod: "PT24H", PartitionWriteSpeedBytesPerSecond: 1048576}, {AutoPartitioningStrategy: "disabled"}} {

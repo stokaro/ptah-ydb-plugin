@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/devclean"
@@ -147,9 +148,9 @@ func treeRoot(input corpusCase) string {
 }
 
 func TestWalkListsWhatTheHostLists(t *testing.T) {
-	for _, row := range corpus(qt.New(t)) {
+	for _, row := range corpus(testcheck.New(t)) {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			root := treeRoot(row.input)
 			fake := newFakeTree(c, row.input, root)
 
@@ -181,9 +182,9 @@ func cleaned(fake *fakeTree, err error) corpusRun {
 }
 
 func TestRunDropsWhatTheHostDrops(t *testing.T) {
-	for _, row := range corpus(qt.New(t)) {
+	for _, row := range corpus(testcheck.New(t)) {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			root := treeRoot(row.input)
 			fake := newFakeTree(c, row.input, root)
 			entries, err := devclean.Walk(context.Background(), fake, devclean.Tree{Root: root, Database: row.input.Database}, "")
@@ -202,7 +203,7 @@ func TestRunDropsWhatTheHostDrops(t *testing.T) {
 // TestRunNamesWhatStopsIt pins the refusal of a tree that holds an object
 // there is no statement for to the object the host names.
 func TestRunNamesWhatStopsIt(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	refused := 0
 	for _, row := range corpus(c) {
 		root := treeRoot(row.input)
@@ -219,12 +220,12 @@ func TestRunNamesWhatStopsIt(t *testing.T) {
 }
 
 func TestRemoveRealmRemovesWhatTheHostRemoves(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	rows := slices.DeleteFunc(corpus(c), func(row corpusRow) bool { return row.input.RemoveRealm == "" })
 	c.Assert(len(rows) >= 4, qt.IsTrue)
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fake := newFakeTree(c, row.input, row.input.Database)
 
 			err := devclean.RemoveRealm(context.Background(), fake, fake, row.input.Database, row.input.RemoveRealm)
@@ -239,7 +240,7 @@ func TestRemoveRealmRemovesWhatTheHostRemoves(t *testing.T) {
 // node alone and walks a node of the same name anywhere else.
 func TestWalkKeepsTheSessionsLockNode(t *testing.T) {
 	realm := path.Join("/local", devclean.RealmDirectory, "r1")
-	fake := newFakeTree(qt.New(t), corpusCase{Tree: map[string][]corpusEntry{
+	fake := newFakeTree(testcheck.New(t), corpusCase{Tree: map[string][]corpusEntry{
 		realm:             {{Name: devclean.LockNode, Type: "COORDINATION_NODE"}, {Name: "nested", Type: "DIRECTORY"}},
 		realm + "/nested": {{Name: devclean.LockNode, Type: "COORDINATION_NODE"}},
 	}}, realm)
@@ -252,7 +253,7 @@ func TestWalkKeepsTheSessionsLockNode(t *testing.T) {
 		{name: "not keeping them", keep: false, want: []string{"nested/" + devclean.LockNode, "/nested", "/" + devclean.LockNode}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 
 			entries, err := devclean.Walk(context.Background(), fake, devclean.Tree{Root: realm, Database: "/local", KeepLocks: test.keep}, "")
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -20,7 +21,7 @@ import (
 // split of a migration directory, a check of its files under the YD rules, and
 // an annotation of a split the host made without a dialect.
 func TestMigrationLintOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
 	c.Assert(client.Description().Features, qt.Contains, provider.LintFeature)
@@ -136,7 +137,7 @@ func TestStatementFactsOfflineSubprocess(t *testing.T) {
 		{name: "a host that does not", judged: []protocol.LintFact{}, kinds: []string{"", "", "", ""}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			client := startLintProvider(c, test.features...)
 
 			split, err := client.SplitLintStatements(c.Context(), &protocol.SplitLintRequest{Engine: "ydb", Sources: []*protocol.LintSource{{Name: "x.sql", Sql: factsSQL}}})
@@ -152,7 +153,7 @@ func TestStatementFactsOfflineSubprocess(t *testing.T) {
 // An annotation answers the statement facts it is asked for, and a request
 // for them from a host that did not list the feature is refused.
 func TestStatementFactsAnnotationOfflineSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	facts := []protocol.LintFact{protocol.LintFact_LINT_FACT_STATEMENT_KIND, protocol.LintFact_LINT_FACT_MISSING_PRIMARY_KEY, protocol.LintFact_LINT_FACT_REQUIRED_CAPABILITY}
 	listing := startLintProvider(c, provider.LintStatementFactsFeature)
 	split, err := listing.SplitLintStatements(c.Context(), &protocol.SplitLintRequest{Engine: "ydb", Sources: []*protocol.LintSource{{Name: "x.sql", Sql: factsSQL}}})

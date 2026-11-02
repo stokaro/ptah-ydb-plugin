@@ -15,6 +15,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -210,7 +211,7 @@ func (f *embeddingFixture) registered(c *qt.C, runID string) {
 // later read does, to the microsecond YDB keeps, and a mutation on an old
 // token writes nothing.
 func TestEmbeddingRunStateSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 
 	before := f.read(c, everything())
@@ -251,7 +252,7 @@ func TestEmbeddingRunStateSubprocess(t *testing.T) {
 		{name: "a pointer", scope: &protocol.EmbeddingStateScope{Scope: &protocol.EmbeddingStateScope_Pointer{Pointer: &protocol.EmbeddingPointerKey{TargetTable: "articles"}}}, count: 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			state := f.read(c, test.scope)
 			c.Assert(len(state.Records.Generations)+len(state.Records.Runs)+len(state.Records.Pointers), qt.Equals, test.count)
 		})
@@ -262,7 +263,7 @@ func TestEmbeddingRunStateSubprocess(t *testing.T) {
 // exactly one of them wins: YDB's serializable transactions decide, and every
 // other one is told the state changed.
 func TestEmbeddingRunStateRacesSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.registered(c, "r1")
 	token := f.read(c, runScope("r1")).Token
@@ -288,7 +289,7 @@ func TestEmbeddingRunStateRacesSubprocess(t *testing.T) {
 // Two cutovers that expect no pointer move it at once: the pointer scope's
 // token decides, one move lands and the other is told the state changed.
 func TestEmbeddingFirstCutoverRaceSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.registered(c, "r1")
 	scope := &protocol.EmbeddingStateScope{Scope: &protocol.EmbeddingStateScope_Pointer{Pointer: &protocol.EmbeddingPointerKey{TargetTable: "articles"}}}
@@ -313,7 +314,7 @@ func TestEmbeddingFirstCutoverRaceSubprocess(t *testing.T) {
 // read before the takeover: the commit is refused whole, and no vector of it
 // is stored.
 func TestEmbeddingFencedWorkerCannotCommitSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.seedArticles(c)
 	spec := articlesSpec(protocol.EmbeddingTarget_SOURCE_COLUMNS, false)
@@ -344,7 +345,7 @@ func TestEmbeddingFencedWorkerCannotCommitSubprocess(t *testing.T) {
 // An event takes its run's next sequence, a page of events ends where its
 // bound does, and a run that is not there has no events and takes none.
 func TestEmbeddingEventsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.registered(c, "r1")
 	var sequences []int64
@@ -374,7 +375,7 @@ func TestEmbeddingEventsSubprocess(t *testing.T) {
 		{name: "a run that is not there", run: "r9", max: 5, kinds: []string{}, complete: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			page, err := f.client.ReadEmbeddingEvents(c.Context(), &protocol.ReadEmbeddingEventsRequest{SessionId: f.session, RunId: test.run,
 				AfterSequence: test.after, MaxEvents: test.max})
 			c.Assert(err, qt.IsNil)
@@ -440,7 +441,7 @@ func (f *embeddingFixture) verification(c *qt.C, spec *protocol.EmbeddingSpec, m
 // and by scan, and the retirement drops what the generation added once it is
 // proven the generation's.
 func TestEmbeddingGenerationInSourceColumnsSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.seedArticles(c)
 	spec := articlesSpec(protocol.EmbeddingTarget_SOURCE_COLUMNS, true)
@@ -551,7 +552,7 @@ func TestEmbeddingGenerationInSourceColumnsSubprocess(t *testing.T) {
 // whatever they were, a tombstone removes them, a write for a source row that
 // is gone stores nothing, and the table is dropped only on its mark.
 func TestEmbeddingGenerationInATableOfItsOwnSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.seedArticles(c)
 	spec := articlesSpec(protocol.EmbeddingTarget_OWN_TABLE, false)
@@ -604,7 +605,7 @@ func TestEmbeddingGenerationInATableOfItsOwnSubprocess(t *testing.T) {
 // A run-state table of another shape is not the store's: preparing the store
 // refuses it whole, and leaves the table as it was.
 func TestEmbeddingStoreRefusesAForeignLayoutSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.exec(c, "CREATE TABLE ptah_embedding_run (id Utf8 NOT NULL, phase Utf8, PRIMARY KEY (id))")
 
@@ -619,7 +620,7 @@ func TestEmbeddingStoreRefusesAForeignLayoutSubprocess(t *testing.T) {
 // A host that does not list embeddings.store is offered no store: the engine
 // does not declare one and the client refuses every call before sending it.
 func TestEmbeddingStoreNeedsTheHostsFeatureSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	client := startEmbeddingProvider(c)
 
 	c.Assert(client.Description().Engines[0].Features, qt.Not(qt.Contains), provider.EmbeddingStoreFeature)

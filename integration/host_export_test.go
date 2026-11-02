@@ -14,6 +14,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -24,7 +25,7 @@ import (
 // host packages; CI builds the pinned host in a separate checkout.
 func assertHostSchemaExport(t *testing.T, client *providerruntime.Client, binary, digest string, schemas []string, inputs *protocol.NormalizeValuesRequest) {
 	t.Helper()
-	c := qt.New(t)
+	c := testcheck.New(t)
 	host := os.Getenv("PTAH_HOST_TEST_BIN")
 	if host == "" {
 		t.Skip("PTAH_HOST_TEST_BIN is required for the external host contract")

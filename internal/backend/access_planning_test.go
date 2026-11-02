@@ -5,6 +5,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -35,7 +36,7 @@ func commonAccessFor(subject *protocol.ComparisonIdentity, kind string, revoke b
 func TestNativeAccessOrderingPreservesCapturedACLChecks(t *testing.T) {
 	for _, action := range []string{"create", "alter", "drop"} {
 		t.Run(action, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := nativePlan(c, action)
 			request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
 			request.CommonSteps = []*protocol.CommonPlanningStep{commonNativeAccess(request, action == "drop")}
@@ -76,7 +77,7 @@ func TestNativeAccessOrderingRefusesContradictoryOrForgedContext(t *testing.T) {
 		{name: "different operand", action: "alter", change: func(r *protocol.PlanFeaturesRequest) { r.CommonSteps[0].CommonObject.GetGrant().Target.Name = "other" }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := nativePlan(c, test.action)
 			request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
 			request.CommonSteps = []*protocol.CommonPlanningStep{commonNativeAccess(request, test.revoke)}
@@ -93,7 +94,7 @@ func TestNativeAccessOrderingRefusesContradictoryOrForgedContext(t *testing.T) {
 }
 
 func TestExternalRecreationKeepsRevokesAfterRestoration(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	bucket := external{name: "bucket", source: bucketAt("https://a/")}
 	moved := external{name: "bucket", source: bucketAt("https://b/")}
 	events := external{name: "events", table: eventsOver("app/bucket")}
@@ -132,7 +133,7 @@ func TestExternalRecreationKeepsRevokesAfterRestoration(t *testing.T) {
 }
 
 func TestWorkloadDropRewritesRevokesAsOneCompleteReplacement(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, _ := workloadPlan(c, workloadCapabilities(), nil, workloadRequest(c, schema.ResourcePoolProperties, nil, nil))
 	for _, name := range []string{"batch", "online"} {
 		owner := &protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Database: "/local", Name: name}
@@ -172,7 +173,7 @@ func TestWorkloadDropRewritesRevokesAsOneCompleteReplacement(t *testing.T) {
 func TestNativeAccessOrderingWithPrincipalEdits(t *testing.T) {
 	for _, action := range []string{"create", "alter"} {
 		t.Run(action, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			request := nativePlan(c, action)
 			request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
 			common := &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: "principal"}, Metadata: &protocol.PlanningMetadata{

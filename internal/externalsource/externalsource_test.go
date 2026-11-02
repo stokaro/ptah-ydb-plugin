@@ -8,6 +8,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -113,7 +114,7 @@ var (
 // The host's fixture 053 declares two data sources and a table over one of
 // them with Go directives; the provider reads them as the host does.
 func TestDecodeGo_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	document := goDocument(
 		[]string{externalsource.DirectiveDataSource, "name", "warehouse", "schema", "ext", "source_type", "PostgreSQL", "location", "pg.example.test:5432", "auth_method", "BASIC",
 			"options", "DATABASE_NAME=app;LOGIN=reader;PASSWORD_SECRET_PATH=ext/pg_password"},
@@ -127,7 +128,7 @@ func TestDecodeGo_HappyPath(t *testing.T) {
 // A YAML document declares the same objects under its two keys, each entry
 // named by its key unless a name field names it.
 func TestDecodeYAML_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	sources := mapping(
 		entry("pg", mapping(entry("name", text("warehouse")), entry("schema", text("ext")), entry("source_type", text("PostgreSQL")), entry("location", text("pg.example.test:5432")),
 			entry("auth_method", text("BASIC")), entry("options", mapping(entry("database_name", text("app")), entry("LOGIN", text(" reader ")), entry("PASSWORD_SECRET_PATH", text("ext/pg_password")))))),
@@ -146,7 +147,7 @@ func TestDecodeYAML_HappyPath(t *testing.T) {
 // The provider decodes a document through its source service, which the SDK
 // holds to the claims the description makes, and claims the kinds whole.
 func TestDecodeSourceService_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request, err := testsource.GoDirectives(nil, []testsource.GoDeclaration{{Directive: externalsource.DirectiveDataSource,
 		Attributes: map[string]string{"name": "bucket", "source_type": "ObjectStorage", "location": "https://a/", "auth_method": "NONE"}, Struct: "Externals", File: "entities.go", FileSize: 120,
 		Start: testsource.GoPosition{Offset: 10, Line: 2, Column: 1}, End: testsource.GoPosition{Offset: 90, Line: 2, Column: 81}}})
@@ -192,7 +193,7 @@ func TestDecode_FailurePath(t *testing.T) {
 			entry("columns", sequence(text("id Int64"))))))), want: `external table "t": columns\[0\] requires a mapping`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			values, err := externalsource.Decode(c.Context(), test.document)
 			c.Assert(err, qt.ErrorMatches, ".*"+test.want)
 			c.Assert(values, qt.IsNil)

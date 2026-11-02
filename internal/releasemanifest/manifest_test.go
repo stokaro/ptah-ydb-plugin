@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
@@ -12,7 +13,7 @@ import (
 )
 
 func TestBuildDeclaredLines_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	out, err := releasemanifest.Build(backend.Description())
 	c.Assert(err, qt.IsNil)
@@ -36,7 +37,7 @@ func TestBuildDeclaredLines_HappyPath(t *testing.T) {
 }
 
 func TestBuildIsDeterministic_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	first, err := releasemanifest.Build(backend.Description())
 	c.Assert(err, qt.IsNil)
@@ -46,7 +47,7 @@ func TestBuildIsDeterministic_HappyPath(t *testing.T) {
 }
 
 func TestBuildLeavesOutEnginesWithoutLines_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 
 	out, err := releasemanifest.Build(&protocol.Description{ProviderId: "example.org/p", Engines: []*protocol.Engine{{Id: "bare"}}})
 	c.Assert(err, qt.IsNil)

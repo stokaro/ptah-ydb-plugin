@@ -9,6 +9,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -95,7 +96,7 @@ func TestNativeTableCreationDispatchAndConfirmation(t *testing.T) {
 		{"unconfirmed cleanup", creationFixture{closeFailure: true}, false, true, true, []string{"list", "open", "guard", "create", "describe", "close"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := test.fixture
 			api := &nativeapi.TableCreation{Scheme: &fixture, Open: func(context.Context) (nativeapi.CreationSession, error) {
 				fixture.events = append(fixture.events, "open")
@@ -140,7 +141,7 @@ func TestNativeTableCreationConfirmsAStartingLayout(t *testing.T) {
 		{"the table reports no minimum", 0, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			fixture := creationFixture{minimum: test.minimum}
 			api := &nativeapi.TableCreation{Scheme: &fixture, Open: func(context.Context) (nativeapi.CreationSession, error) { return &fixture, nil }}
 			owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
@@ -159,7 +160,7 @@ func TestNativeTableCreationConfirmsAStartingLayout(t *testing.T) {
 		})
 	}
 	t.Run("a minimum the declaration states is not the layout's", func(t *testing.T) {
-		c := qt.New(t)
+		c := testcheck.New(t)
 		fixture := creationFixture{minimum: 2}
 		api := &nativeapi.TableCreation{Scheme: &fixture, Open: func(context.Context) (nativeapi.CreationSession, error) { return &fixture, nil }}
 		owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
@@ -212,7 +213,7 @@ func indexedCreation(c *qt.C, held []*native.TableIndexDescription) (bool, error
 // A creation with indexes is confirmed by the indexes the table reads back
 // with: each ready, of its kind, on its columns, and no other.
 func TestNativeTableCreationConfirmsItsIndexes_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	dispatched, err := indexedCreation(c, []*native.TableIndexDescription{readyIndex("by_mail", "unique", "mail"), readyIndex("by_note", "async", "note")})
 	c.Assert(err, qt.IsNil)
 	c.Assert(dispatched, qt.IsTrue)
@@ -237,7 +238,7 @@ func TestNativeTableCreationConfirmsItsIndexes_FailurePath(t *testing.T) {
 			want: `YDB created index "by_mail" differs from the request`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			dispatched, err := indexedCreation(c, test.held)
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(dispatched, qt.IsTrue)

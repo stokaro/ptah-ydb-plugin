@@ -6,6 +6,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -21,7 +22,7 @@ func preparationRequest(c *qt.C) *protocol.PrepareTablesRequest {
 }
 
 func TestPrepareNativeTablePreservesSource(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := preparationRequest(c)
 	request.Tables[0].Desired.PrimaryKey = nil
 	for _, column := range request.Tables[0].Desired.Columns {
@@ -43,7 +44,7 @@ func TestPrepareNativeTablePreservesSource(t *testing.T) {
 }
 
 func TestPrepareNativeTableRefusesWholeBatch(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	request := preparationRequest(c)
 	invalid := proto.CloneOf(request.Tables[0])
 	invalid.Subject.Name = part("invalid")

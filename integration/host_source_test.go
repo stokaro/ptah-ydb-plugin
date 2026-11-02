@@ -14,6 +14,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -114,7 +115,7 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 			"tables:\n  host_source_items:\n    column_store: {hash_columns: [id], partitions: 2}\n    columns:\n      id: {type: Uint64, primary: true}\n      body: {type: Utf8}\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			output := hostSource(c, test.flag, test.file, test.content)
 			c.Assert(output, qt.Not(qt.Matches), `(?s).*(decode source failed|unknown key|unknown annotation|project table creations failed).*`)
 		})
@@ -122,7 +123,7 @@ func TestHostSendsTableDeclarationsToTheProvider_HappyPath(t *testing.T) {
 }
 
 func TestHostPlansYAMLFamilyPlacement(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	output := hostSource(c, "--schema-file", "schema.yaml",
 		"tables:\n  host_source_items:\n    key_bloom_filter: ENABLED\n    column_families:\n      cold: {fields: [body]}\n    columns:\n      id: {type: Uint64, primary: true}\n      body: {type: Utf8}\n")
 	var plan struct {
@@ -194,7 +195,7 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 				"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\"\n\tID uint64\n}\n", `decode Go directives of engine "ydb"`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(hostSource(c, test.flag, test.file, test.content), qt.Matches, `(?s).*`+test.want+`.*`)
 		})
 	}
@@ -213,7 +214,7 @@ const (
 // because the provider advertises schema.validate. Whatever the plan reports
 // next, it does not stop for want of a validation service.
 func TestHostValidatesTheDesiredSchemaWithTheProvider_HappyPath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	output := hostSource(c, "--schema-file", "schema.yaml", hostValidTable)
 	c.Assert(output, qt.Not(qt.Matches), `(?s).*(no schema validation service|lies inside table).*`)
 }
@@ -221,7 +222,7 @@ func TestHostValidatesTheDesiredSchemaWithTheProvider_HappyPath(t *testing.T) {
 // A refusal by the provider's validation reaches the user with the provider's
 // message.
 func TestHostReportsTheProvidersValidationRefusal_FailurePath(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	output := hostSource(c, "--schema-file", "schema.yaml", hostNestedTables)
 	c.Assert(output, qt.Matches, `(?s).*YDB table a/b lies inside table a; a table holds no children.*`)
 	c.Assert(output, qt.Not(qt.Matches), `(?s).*no schema validation service.*`)

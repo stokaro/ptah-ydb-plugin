@@ -15,6 +15,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 )
 
@@ -106,7 +107,7 @@ func TestHostAppliesACoordinationNode_HappyPath(t *testing.T) {
 			removed: sqlItems},
 	} {
 		t.Run(test.format, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			opened, directory, database := lockFixture(c)
 			c.Cleanup(func() {
 				cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)

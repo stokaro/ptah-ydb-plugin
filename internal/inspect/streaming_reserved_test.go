@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestStreamingInventoryKeepsIndependentReservationConflicts(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	snapshot := &protocol.Schema{Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}}
 	reserve(snapshot, &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Name: "history"}, protocol.ReservedObject_HISTORY)
 	reservations := proto.CloneOf(snapshot).ReservedObjects

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -42,7 +43,7 @@ func (f *facetFixture) heldColumns(c *qt.C) []string {
 // the index that reads it in one plan. The server refuses the column removal
 // while the index exists, so the index step has to come first.
 func TestIndexAlterationDropsTheIndexBeforeTheColumnItReads(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, ", INDEX by_payload GLOBAL SYNC ON (payload)", "")
 	fixture.columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true}}
 	fixture.steps = []*protocol.CommonPlanningStep{fixture.columnStep("drop-payload", "payload", false)}
@@ -66,7 +67,7 @@ func TestIndexAlterationDropsTheIndexBeforeTheColumnItReads(t *testing.T) {
 // TestIndexAlterationAddsTheIndexAfterTheColumnItReads adds a column and an
 // index on it in one plan.
 func TestIndexAlterationAddsTheIndexAfterTheColumnItReads(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, "", "")
 	fixture.columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true},
 		{Name: "payload", Type: "Utf8", Nullable: true}, {Name: "label", Type: "Utf8", Nullable: true}}
@@ -90,7 +91,7 @@ func TestIndexAlterationAddsTheIndexAfterTheColumnItReads(t *testing.T) {
 // TestIndexAlterationRefusesTheColumnOfAKeptIndex drops a column an index that
 // stays still reads; the plan is refused before any step runs.
 func TestIndexAlterationRefusesTheColumnOfAKeptIndex(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, ", INDEX by_payload GLOBAL SYNC ON (payload)", "")
 	fixture.columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true}}
 	fixture.steps = []*protocol.CommonPlanningStep{fixture.columnStep("drop-payload", "payload", false)}
@@ -105,7 +106,7 @@ func TestIndexAlterationRefusesTheColumnOfAKeptIndex(t *testing.T) {
 // TestIndexAlterationUniqueSubprocess adds a unique index. YDB 25.1 accepts it
 // only with the enable_add_unique_index flag, which its test server leaves off.
 func TestIndexAlterationUniqueSubprocess(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	fixture := newFacetFixture(c, "", "")
 	declared := declaredIndexes(indexSpec("by_payload", "globalUniqueIndex", `["payload"]`, ""))
 	found := fixture.compareIndexes(c, declared)
