@@ -40,3 +40,30 @@ func TestUnavailableSecretRetainsUnknownIdentity(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 	}
 }
+
+// A name the revision table occupies is reserved on a target without
+// secrets too: its secret coverage stays unrepresentable, and the snapshot
+// passes the contract's reservation check.
+func TestUnavailableSecretKeepsAReservedName(t *testing.T) {
+	c := testcheck.New(t)
+	read := snapshot()
+	description := backend.Description()
+	read.TargetFeatures = description.Features
+	read.CommonObjects = &protocol.ObservedCommonObjects{}
+	for _, kind := range description.Engines[0].CommonObjects.Kinds {
+		read.CommonObjects.Coverage = append(read.CommonObjects.Coverage, &protocol.CommonObjectCoverage{Kind: kind,
+			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Not read by this fixture"}})
+	}
+	table := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "revisions"}
+	read.ReservedObjects = []*protocol.ReservedObject{{Object: table, NormalizedObject: proto.CloneOf(table), Purpose: protocol.ReservedObject_HISTORY,
+		ConflictKinds: []string{"table", schema.SecretProperties}}}
+	occupied := proto.CloneOf(table)
+	occupied.Kind = schema.SecretProperties
+	read.Coverage.Subjects = []*protocol.ModelSubjectCoverage{{Kind: schema.SecretProperties, Subject: occupied, NormalizedSubject: proto.CloneOf(occupied),
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE, Reason: "Name is occupied by provider-owned operational storage"}}}
+	inspect.UnavailableSecrets(read)
+	c.Assert(read.Coverage.Subjects, qt.HasLen, 1)
+	c.Assert(read.Coverage.Subjects[0].Knowledge.State, qt.Equals, protocol.ModelKnowledge_UNREPRESENTABLE)
+	_, err := provider.InspectionValues(description, &protocol.InspectRequest{SessionId: "test-session"}, read)
+	c.Assert(err, qt.IsNil)
+}
