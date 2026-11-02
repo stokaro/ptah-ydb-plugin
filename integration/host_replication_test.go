@@ -83,6 +83,12 @@ func TestHostAppliesAnAsyncReplication_HappyPath(t *testing.T) {
 	awaitNames(c, opened, path.Join(database, directory), []string{"src"})
 }
 
+// offsetLambda is a transfer lambda that writes each message's offset in the
+// changefeed's one partition and the text it carries, with prefix in front.
+func offsetLambda(prefix string) string {
+	return fmt.Sprintf("($msg) -> { return [<| offset: $msg._offset, message: '%s'u || CAST($msg._data AS Utf8) |>]; }", prefix)
+}
+
 // The host plans a transfer from a changefeed into a table through this
 // provider from YAML: it creates the transfer reading through a consumer the
 // changefeed declares, finds nothing to change, changes the lambda in place
@@ -107,11 +113,10 @@ func TestHostAppliesATransfer_HappyPath(t *testing.T) {
 	})
 	tables := "tables:\n  orders:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n" +
 		"    changefeeds:\n      feed:\n        mode: NEW_IMAGE\n        format: JSON\n        consumers:\n          reader: {}\n" +
-		"  order_log:\n    schema: " + directory + "\n    columns:\n      partition: {type: Uint32, primary: true, not_null: true}\n" +
-		"      offset: {type: Uint64, primary: true, not_null: true}\n      message: {type: Utf8}\n"
+		"  order_log:\n    schema: " + directory + "\n    columns:\n      offset: {type: Uint64, primary: true, not_null: true}\n      message: {type: Utf8}\n"
 	transfer := func(prefix string) string {
 		return tables + "transfers:\n  ingest:\n    schema: " + directory + "\n    source: " + path.Join(directory, "orders/feed") + "\n    target: " + path.Join(directory, "order_log") +
-			"\n    consumer: reader\n    flush_interval: PT1S\n    using: " + strconv.Quote(lambdaWriting(prefix)) + "\n"
+			"\n    consumer: reader\n    flush_interval: PT1S\n    using: " + strconv.Quote(offsetLambda(prefix)) + "\n"
 	}
 	rows := func(prefix string) {
 		c.Helper()
