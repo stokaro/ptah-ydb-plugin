@@ -91,6 +91,11 @@ func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps
 			continue
 		}
 		have := heldType(held)
+		if serial := SerialTypeOf(column); serial != "" || held.GetAutoIncrement() {
+			// A column that becomes or stops being a Serial changes type, as
+			// the host's comparison reads it.
+			want, have = serialSpelling(want, serial != ""), serialSpelling(have, held.GetAutoIncrement())
+		}
 		switch {
 		case have != "" && have != want:
 			needs = append(needs, rebuildNeed{capability: "alter_column_type",
@@ -232,6 +237,9 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	label := tableLabel(owner)
 	subject := fmt.Sprintf("rebuilding table %q", label)
 	current := table.GetCurrent()
+	if reason := serialRebuildRefusal(desired); reason != "" {
+		return nil, subject + ": " + reason, nil
+	}
 	for _, record := range current.GetFeatures().GetFacets().GetRecords() {
 		if record.GetKind() != schema.ChangefeedProperties {
 			continue

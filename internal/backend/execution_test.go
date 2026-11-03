@@ -403,6 +403,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": true,
 		"resource_pools": false, "streaming_queries": false,
 		"wide_date_time_types": true, "parameterized_decimal": true, "alter_column_default": true, "add_column_with_default": true, "small_integer_defaults": true, "document_type_defaults": true,
+		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false,
 	})
 	// 25.1 takes none of the later changefeed options, and 25.1 to 25.3 take
 	// no availability period on a consumer and no secret path on a data
@@ -415,6 +416,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": false,
 		"resource_pools": false, "streaming_queries": false,
 		"wide_date_time_types": false, "parameterized_decimal": false, "alter_column_default": false, "add_column_with_default": false, "small_integer_defaults": false, "document_type_defaults": false,
+		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false,
 	})
 	// Each option arrives on the line the host's presets name.
 	for _, test := range []struct {

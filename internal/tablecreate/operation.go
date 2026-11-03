@@ -37,7 +37,8 @@ func buildOperationModel() *protocol.ValueModel {
 		"request": json.RawMessage(descriptor), "allowed_request_fields": nativeFields,
 		"column_model": json.RawMessage(schema.ColumnDesiredModel().DefinitionJson),
 		"table_model":  json.RawMessage(schema.TableDesiredModel().DefinitionJson),
-		"columns":      "distinct names, exact native storage types, explicit matching notNull, optional typed literal; sequences, compression, and encoding refused",
+		"columns":      "distinct names, exact native storage types, explicit matching notNull, optional typed literal or Serial sequence; compression and encoding refused",
+		"sequences":    "a Serial column is a NOT NULL Int16, Int32 or Int64 whose sequence is named _serial_column_<column> and states min 1, the maximum of the column's type, a start from 1 to that maximum, cache 1, an increment of at least 1 and no cycle; confirmation reads the same sequence back with no restart",
 		"keys":         "ordered nonempty distinct existing columns",
 		"settings":     "row storage only; no access changes, temporary lifetime, changefeeds, profiles or compaction policy; a starting layout is either a count of uniform partitions over a Uint32 or Uint64 first key column, or split points of optional tuples over the leading key columns",
 		"indexes":      "global indexes, sync, async or unique, each with its ordered key columns and covered columns over declared columns and no settings of its own, built with the table",
@@ -147,7 +148,10 @@ func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {
 		return nil, fmt.Errorf("YDB creation requires columns and an ordered primary key")
 	}
 	for _, column := range request.Columns {
-		if err := only(column, "name", "type", "not_null", "family", "from_literal"); err != nil {
+		if err := only(column, "name", "type", "not_null", "family", "from_literal", "from_sequence"); err != nil {
+			return nil, err
+		}
+		if err := validateSerial(column); err != nil {
 			return nil, err
 		}
 		if !validName(column.Name) || names[column.Name] {

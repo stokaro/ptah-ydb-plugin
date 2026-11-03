@@ -141,9 +141,12 @@ func compileColumnTableColumns(result *native.ColumnTableCreation, table *protoc
 			declared = proto.CloneOf(column)
 			declared.Nullable = false
 		}
-		compiled, err := compileColumn(declared, nil, caps)
+		compiled, err := compileColumn(TextPath(table.Schema, table.Name), declared, nil, caps)
 		if err != nil {
 			return err
+		}
+		if compiled.GetFromSequence() != nil {
+			return unsupported("column tables do not support defaults or Serial columns")
 		}
 		if names[column.Name] {
 			return fmt.Errorf("duplicate YDB column")
