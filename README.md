@@ -574,8 +574,7 @@ it, which no GRANT made, as the host's embedded engine marks them: the entries
 of the default resource pool that name `ydb.granular.select_row` and
 `ydb.granular.describe_schema` together, and the `ydb.granular.describe_schema`
 entry a new secret gets for every subject whose effective permissions on the
-secret's directory carry that permission. A declaration that leaves them out
-plans no revocation.
+secret's directory carry that permission.
 
 Mixed plans check captured native state before changing its access. A native
 alteration precedes grants, revocations, and principal changes. A final native

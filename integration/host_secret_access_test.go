@@ -57,12 +57,17 @@ func secretEntries(c *qt.C, client *providerruntime.Client, session *protocol.Se
 }
 
 // Ported from the host's TestYDBObjectAccess_ASecretKeepsTheEntriesYDBGaveIt:
-// a secret created in a directory a group may list gets an entry for that
-// group from YDB, and one for the cluster's METADATA-READERS, which may list
-// the database. No GRANT made either and the declaration names neither; the
-// read reports both as implicit, so the declaration that created the secret
-// plans nothing after. The group is the run's own and its LIST is granted
-// outside the declaration, which declares grants without declaring roles.
+// a secret created in a directory a group may list gets a describe_schema
+// entry for that group from YDB, and one for the cluster's METADATA-READERS,
+// which may list the database. No GRANT made either and the declaration names
+// neither; the read reports both as implicit, beside the SELECT ROW the
+// declaration grants, and the declaration plans nothing after. The group is
+// the run's own and its LIST is granted outside the declaration, which
+// declares grants without declaring roles.
+//
+// The plan holds without the implicit marking too: measured on 26.2.1.14
+// with the marking disabled, the host plans no revocation of an entry the
+// declaration does not name, and only the read assertion fails.
 func TestHostKeepsTheEntriesYDBGivesASecret_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -82,7 +87,8 @@ func TestHostKeepsTheEntriesYDBGivesASecret_HappyPath(t *testing.T) {
 	})
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "GRANT LIST ON `"+path.Join(database, directory)+"` TO `"+group+"`"), qt.IsNil)
 	source := "secrets:\n  pw:\n    schema: " + directory + "\n    value_env: " + variable + "\n" +
-		"grants:\n  lister:\n    role: " + group + "\n    privileges: [LIST]\n    on_schema: " + directory + "\n"
+		"grants:\n  lister:\n    role: " + group + "\n    privileges: [LIST]\n    on_schema: " + directory + "\n" +
+		"  reader:\n    role: " + group + "\n    privileges: [SELECT ROW]\n    on_secret: " + directory + ".pw\n"
 
 	created, createdErr := hostApplySource(c, directory, "yaml", source)
 	settled, settledErr := hostApplySource(c, directory, "yaml", source)
@@ -94,5 +100,6 @@ func TestHostKeepsTheEntriesYDBGivesASecret_HappyPath(t *testing.T) {
 	c.Assert(secretEntries(c, client, session, directory, "pw", group, "METADATA-READERS"), qt.DeepEquals, []secretEntry{
 		{Role: "METADATA-READERS", Privilege: "ydb.granular.describe_schema", Implicit: true},
 		{Role: group, Privilege: "ydb.granular.describe_schema", Implicit: true},
+		{Role: group, Privilege: "ydb.granular.select_row"},
 	})
 }
