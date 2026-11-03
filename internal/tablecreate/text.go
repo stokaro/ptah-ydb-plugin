@@ -56,8 +56,24 @@ func TextPath(schemaPath, name string) string {
 // A request that sets something YQL has no spelling for is refused with
 // [ErrNoTextForm]: storage settings, user attributes other than comments,
 // tiering, a TTL run interval other than YDB's own, the partition columns, a
-// family kept in memory, and a default YQL cannot write.
+// family kept in memory, and a default YQL cannot write. A Serial whose
+// sequence states a start or an increment other than 1 needs the database
+// [RowTableStatementIn] takes.
 func RowTableStatement(path string, request *Ydb_Table.CreateTableRequest) (string, error) {
+	return RowTableStatementIn("", path, request)
+}
+
+// RowTableStatementIn is [RowTableStatement] for a table of the database at
+// database, which names the sequence of a Serial column by its absolute path:
+// a Serial is written as its Serial type, and the ALTER SEQUENCE that gives
+// its sequence the start and the increment the request states follows the
+// CREATE TABLE, as the host's embedded engine writes it (see
+// [SequenceStatement]).
+func RowTableStatementIn(database, path string, request *Ydb_Table.CreateTableRequest) (string, error) {
+	sequences, err := createdSequenceStatements(database, path, request)
+	if err != nil {
+		return "", err
+	}
 	comments, err := attributeComments(path, request)
 	switch {
 	case err != nil:
@@ -98,7 +114,7 @@ func RowTableStatement(path string, request *Ydb_Table.CreateTableRequest) (stri
 	if len(settings) != 0 {
 		statement += " WITH (" + strings.Join(settings, ", ") + ")"
 	}
-	return strings.Join(append([]string{statement + ";"}, comments...), "\n"), nil
+	return strings.Join(slices.Concat([]string{statement + ";"}, sequences, comments), "\n"), nil
 }
 
 // attributeComments writes the comments a creation's attributes hold as
@@ -147,6 +163,9 @@ func columnDefinition(column *Ydb_Table.ColumnMeta) (string, error) {
 	if err != nil {
 		return "", noTextForm("column %q has a type YQL cannot spell", column.GetName())
 	}
+	if serial := SerialTypeOf(column); serial != "" {
+		spelling = serial
+	}
 	line := QuoteIdentifier(column.GetName()) + " " + spelling
 	if family := column.GetFamily(); family != "" && family != DefaultFamily {
 		line += " FAMILY " + QuoteIdentifier(family)
@@ -162,8 +181,13 @@ func columnDefinition(column *Ydb_Table.ColumnMeta) (string, error) {
 			return "", noTextForm("the default of column %q has no YQL literal", column.GetName())
 		}
 		line += " DEFAULT " + literal
+	case *Ydb_Table.ColumnMeta_FromSequence:
+		// The Serial type is the sequence; its settings follow the CREATE TABLE.
+		if SerialTypeOf(column) == "" {
+			return "", noTextForm("column %q takes its default from a sequence, and only a Serial column of an integer type has one in YQL", column.GetName())
+		}
 	default:
-		return "", noTextForm("column %q takes its default from a sequence, which YQL's CREATE TABLE does not name", column.GetName())
+		return "", noTextForm("column %q takes a default YQL's CREATE TABLE does not name", column.GetName())
 	}
 	return line, nil
 }

@@ -184,8 +184,8 @@ func TestRowTableStatement_FailurePath(t *testing.T) {
 			want:    "runs on an interval of its own"},
 		{name: "a family kept in memory", request: `{` + creationColumns + `,"columnFamilies":[{"name":"hot","keepInMemory":"ENABLED"}]}`,
 			want: `column family "hot" keeps its columns in memory`},
-		{name: "a default from a sequence",
-			request: `{"columns":[{"name":"id","type":{"typeId":"INT64"},"notNull":true,"fromSequence":{"name":"_serial_column_id"}}],"primaryKey":["id"]}`,
+		{name: "a sequence on a column YQL has no Serial for",
+			request: `{"columns":[{"name":"id","type":{"typeId":"UINT64"},"notNull":true,"fromSequence":{"name":"_serial_column_id"}}],"primaryKey":["id"]}`,
 			want:    `column "id" takes its default from a sequence`},
 		{name: "a split point over a type the setting does not take",
 			request: `{"columns":[{"name":"d","type":{"typeId":"DATE"},"notNull":true}],"primaryKey":["d"],"partitionAtKeys":{"splitPoints":[

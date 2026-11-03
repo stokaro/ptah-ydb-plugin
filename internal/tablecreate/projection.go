@@ -58,7 +58,7 @@ func projectCreation(input *protocol.TableCreationInput, index int, targetFeatur
 		}
 		return result, err
 	}
-	compiled, err := Compile(owner, input.Declaration, caps)
+	compiled, err := predictedCreation(owner, input.Declaration, caps)
 	if err != nil {
 		return nil, err
 	}

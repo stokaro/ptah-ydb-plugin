@@ -48,12 +48,13 @@ func (s *Secret) Apply(ctx context.Context, database string, value *protocol.Env
 	if err != nil {
 		return false, err
 	}
+	display := secrets.Display(owner.Schema, owner.Name)
 	held, err := s.read(ctx, owner)
 	if err != nil {
-		return false, err
+		return false, refused("read secret "+display, err)
 	}
 	if (before == nil) != (held == nil) {
-		return false, fmt.Errorf("secret presence changed since planning")
+		return false, &Refusal{Err: fmt.Errorf("secret %s changed since the plan read it", display)}
 	}
 	absolute := path.Join(database, owner.Schema, owner.Name)
 	statement := secrets.DropStatement("", absolute)
@@ -89,54 +90,36 @@ func (s *Secret) Apply(ctx context.Context, database string, value *protocol.Env
 	return true, nil
 }
 
+// read lists the secret's directory and describes the secret's access, or
+// returns nil where the directory holds no entry of its name, or does not
+// exist; see [ListDirectory]. CREATE SECRET creates the directories it needs.
 func (s *Secret) read(ctx context.Context, owner *protocol.Reference) (*Ydb_Scheme.Entry, error) {
-	directory := owner.Database
-	segments := []string{owner.Name}
-	if owner.Schema != "" {
-		segments = append(strings.Split(owner.Schema, "/"), owner.Name)
+	directory := path.Join(owner.Database, owner.Schema)
+	listing, err := ListDirectory(ctx, SchemeLister(s.Scheme), owner.Database, owner.Schema)
+	if err != nil {
+		return nil, err
 	}
-	for index, name := range segments {
-		response, err := s.Scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: directory})
-		if err != nil {
-			return nil, fmt.Errorf("read secret namespace: transport failed")
+	kind := listing.GetSelf().GetType()
+	if listing.GetSelf().GetName() != path.Base(directory) || (kind != Ydb_Scheme.Entry_DIRECTORY && (owner.Schema != "" || kind != Ydb_Scheme.Entry_DATABASE)) ||
+		len(listing.Children) > 4096 {
+		return nil, fmt.Errorf("invalid secret namespace")
+	}
+	names := make(map[string]bool)
+	var found *Ydb_Scheme.Entry
+	for _, entry := range listing.Children {
+		if entry.GetName() == "" || names[entry.GetName()] || strings.ContainsAny(entry.GetName(), "/\\\x00") || entry.Name == "." || entry.Name == ".." {
+			return nil, fmt.Errorf("invalid secret namespace entry")
 		}
-		var listing Ydb_Scheme.ListDirectoryResult
-		if err := Operation(response.GetOperation(), &listing); err != nil {
-			return nil, err
+		names[entry.Name] = true
+		if entry.Name == owner.Name {
+			found = entry
 		}
-		expectedType := Ydb_Scheme.Entry_DIRECTORY
-		if index == 0 && listing.GetSelf().GetType() == Ydb_Scheme.Entry_DATABASE {
-			expectedType = Ydb_Scheme.Entry_DATABASE
-		}
-		if listing.GetSelf().GetName() != path.Base(directory) || listing.GetSelf().GetType() != expectedType || len(listing.Children) > 4096 {
-			return nil, fmt.Errorf("invalid secret namespace")
-		}
-		names := make(map[string]bool)
-		var found *Ydb_Scheme.Entry
-		for _, entry := range listing.Children {
-			if entry.GetName() == "" || names[entry.GetName()] || strings.ContainsAny(entry.GetName(), "/\\\x00") || entry.Name == "." || entry.Name == ".." {
-				return nil, fmt.Errorf("invalid secret namespace entry")
-			}
-			names[entry.Name] = true
-			if entry.Name == name {
-				found = entry
-			}
-		}
-		// A complete ancestor listing proves absence even if a nested directory
-		// has not been created. CREATE SECRET creates its parent directories.
-		if found == nil {
-			return nil, nil
-		}
-		wanted := Ydb_Scheme.Entry_DIRECTORY
-		if index == len(segments)-1 {
-			wanted = Ydb_Scheme.Entry_SECRET
-		}
-		if found.Type != wanted {
-			return nil, fmt.Errorf("secret path has a different occupant")
-		}
-		if index != len(segments)-1 {
-			directory = path.Join(directory, name)
-		}
+	}
+	if found == nil {
+		return nil, nil
+	}
+	if found.Type != Ydb_Scheme.Entry_SECRET {
+		return nil, fmt.Errorf("secret path has a different occupant")
 	}
 	described, err := s.Scheme.DescribePath(ctx, &Ydb_Scheme.DescribePathRequest{Path: path.Join(directory, owner.Name)})
 	if err != nil {

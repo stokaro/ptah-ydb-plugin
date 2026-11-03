@@ -43,7 +43,7 @@ func buildColumnOperationModel() *protocol.ValueModel {
 		"ttl":          "absent for none, or tiers that grow strictly, of which only the last may delete and every other moves rows to an external data source named by its absolute path; the column is declared, first in the key, and of a type the mode reads: a date type without a unit, Uint32, Uint64 or DyNumber with one",
 		"render":       "YQL CREATE TABLE ... PARTITION BY HASH (...) WITH (STORE = COLUMN, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = n, TTL = ...), as the host's embedded engine writes it; the native CreateTable call writes another hash function (HASH_FUNCTION_MODULO_N), which the host does not read",
 		"execution":    "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
-		"precondition": "the complete exact parent directory listing must establish absence; the parent must exist; root ptah_locks is reserved; the session must name the monitoring endpoint, which the confirmation reads",
+		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root ptah_locks is reserved; the session must name the monitoring endpoint, which the confirmation reads",
 		"confirmation": "read the table service's and the monitoring endpoint's descriptions back: the columns in order with their types and nullability, the key, the hash key the request states or the whole key, the shard count the request states, the TTL and no local index",
 		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
@@ -141,9 +141,12 @@ func compileColumnTableColumns(result *native.ColumnTableCreation, table *protoc
 			declared = proto.CloneOf(column)
 			declared.Nullable = false
 		}
-		compiled, err := compileColumn(declared, nil, caps)
+		compiled, err := compileColumn(TextPath(table.Schema, table.Name), declared, nil, caps)
 		if err != nil {
 			return err
+		}
+		if compiled.GetFromSequence() != nil {
+			return unsupported("column tables do not support defaults or Serial columns")
 		}
 		if names[column.Name] {
 			return fmt.Errorf("duplicate YDB column")

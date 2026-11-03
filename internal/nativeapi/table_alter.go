@@ -246,6 +246,27 @@ func sameIndex(a, b *native.TableIndexDescription) bool {
 	return proto.Equal(schema.IndexSpecification(a), schema.IndexSpecification(b))
 }
 
+// plannedIndex reports whether actual is the index a removal planned to drop.
+// The server reports the partitioning of the table that implements a global
+// index, defaults included, and a plan made from the host's read of a common
+// index carries none, so a global index's settings are not compared: a drop
+// does not depend on them. The name, the columns and the kind are.
+func plannedIndex(planned, actual *native.TableIndexDescription) bool {
+	definition := func(index *native.TableIndexDescription) *native.IndexIntent {
+		spec := schema.IndexSpecification(index)
+		switch kind := spec.Type.(type) {
+		case *native.IndexIntent_GlobalIndex:
+			kind.GlobalIndex = &native.GlobalIndex{}
+		case *native.IndexIntent_GlobalAsyncIndex:
+			kind.GlobalAsyncIndex = &native.GlobalAsyncIndex{}
+		case *native.IndexIntent_GlobalUniqueIndex:
+			kind.GlobalUniqueIndex = &native.GlobalUniqueIndex{}
+		}
+		return spec
+	}
+	return proto.Equal(definition(planned), definition(actual))
+}
+
 // checkIndexPrecondition requires an index to add to be absent and to read
 // columns the table holds, and an index to drop to exist as the plan captured
 // it, so an index changed after planning turns into a refusal. The server
@@ -268,7 +289,7 @@ func checkIndexPrecondition(alteration *tablecreate.Alteration, table *native.De
 		if actual == nil {
 			return fmt.Errorf("YDB index to drop is absent")
 		}
-		if !sameIndex(alteration.HeldIndexes[0], actual) {
+		if !plannedIndex(alteration.HeldIndexes[0], actual) {
 			return fmt.Errorf("YDB index differs from the plan")
 		}
 	}
