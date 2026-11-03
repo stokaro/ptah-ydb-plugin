@@ -7,7 +7,8 @@
       "statements": [
         "SELECT * FROM t",
         "SELECT 1"
-      ]
+      ],
+      "source": "SELECT * FROM t;\nSELECT 1;"
     }
   ]
 }

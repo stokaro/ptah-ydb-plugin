@@ -71,8 +71,11 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.9.0, which speaks provider contract 25.7.
-Builds require neither the Ptah application source nor a local SDK checkout.
+The module pins `provider-sdk` v0.11.1-0.20261102235223-72d2bd2e6503, a
+pseudo-version of the SDK that speaks provider contract 25.12. The provider
+still requires 25.7 of its host and offers each later feature to a host that
+lists it. Builds require neither the Ptah application source nor a local SDK
+checkout.
 
 Database context is resolved without connecting or reading credentials. A dev
 realm carries both its selected root and the authored database root. Context
@@ -341,11 +344,25 @@ SQL units use a pinned connection; native coordination, table creation and table
 use their native services. Dispatched writes are not retried.
 Request IDs correlate calls and do not provide exactly-once execution.
 
-Results distinguish a confirmed prefix from an uncertain remainder. A failed
-dispatched unit reports UNKNOWN, even when earlier units succeeded. A unit may
-contain several SQL statements, so its error cannot prove that none ran.
-Cancellation between units reports the confirmed prefix. Diagnostics omit raw
-driver errors and SQL text.
+Results distinguish a confirmed prefix from an uncertain remainder. A
+dispatched unit YDB refused is `NOT_APPLIED`, or `PARTIAL` after a confirmed
+prefix, when nothing of it can have been applied. That takes a status that
+establishes the refusal (`BAD_REQUEST`, `SCHEME_ERROR`, `PRECONDITION_FAILED`,
+`ALREADY_EXISTS`, `NOT_FOUND`, `UNSUPPORTED`, `ABORTED`, or `GENERIC_ERROR` for
+a plain data statement) and a unit that ran in a caller transaction, which YDB
+applies only by its commit, or that is one query YDB applies whole: a data
+query or one scheme statement. Its message is YDB's own issue text on one line.
+Every other failed dispatched unit reports `UNKNOWN`, even when earlier units
+succeeded: a block or action call that runs scheme statements, a `BATCH`
+statement, a unit of several scheme statements, a native unit, a unit that
+holds a comment or coordination node statement, a unit that expands secret
+inputs, and a failure that carries no server status. Cancellation between
+units reports the confirmed prefix. Diagnostics omit raw driver errors.
+
+A unit YDB refused in a caller transaction ends the transaction: measured on
+26.2.1.14, YDB has dropped it, and a rollback answers `Transaction not found`.
+The provider rolls it back and retains `ROLLED_BACK` for the caller's finish.
+A commit YDB answered `ABORTED` applied nothing and is `ROLLED_BACK`.
 
 The provider offers `units.statement-timeout`. A host that lists it sends a
 migration's statement timeout with each Execute call, and the provider bounds
@@ -372,7 +389,7 @@ RPC therefore does not roll back later work.
 
 A session permits one active transaction. Execution must name its handle while
 it is active. Commit and rollback retain their terminal result, including
-UNKNOWN, without issuing a second database operation. Rollback of an unused
+UNKNOWN and an aborted commit, without issuing a second database operation. Rollback of an unused
 handle fences a late begin. The SDK client sends rollback after a failed begin,
 including a duplicate begin; callers must not reuse handles.
 Each session retains at most 1,024 transaction handles.
@@ -390,6 +407,48 @@ changefeed operations have native envelopes only. Other operation
 models remain to be extracted. A SQL unit that runs one of the host's
 coordination node statements is run through the coordination service; the
 host's extended comment statements are not implemented here.
+
+## Migration splits
+
+The provider and the ydb engine list `units.migration-split` (contract 25.12,
+ADR 0054 in Ptah) beside the `sessions.transactions` and `sessions.history`
+services it requires. `SplitMigration` reads one migration body offline and
+returns the queries YDB runs it as, cut by `internal/yqlquery` as the host's
+embedded YDB engine cuts them: each scheme statement and each `BATCH`
+statement a query of its own, each run of data statements one query, and
+every `PRAGMA`, `DECLARE`, named expression and action carried into each later
+query. A unit's `sql` is that query's text, and its `source` is the query's own
+statements as written, which the host hashes and records. The corpus under
+`internal/yqlquery/testdata/corpus` holds the host's text and source for each
+case, recorded by `internal/rowdata/testdata/oracle`.
+
+A data query is `WITH_CHECKPOINT`: the host runs it in a serializable
+transaction together with the history write that records it. A scheme query,
+a `BATCH` query, and a block or action call that runs a scheme statement are
+`OUTSIDE`, and the host runs each with no transaction. A block or an
+`EVALUATE FOR` that runs only data statements is a data query: measured on
+26.2.1.14, YDB runs and commits `DO BEGIN UPSERT ...; END DO`, `DO $a(1)` over a
+data action and `EVALUATE FOR ... DO BEGIN UPSERT ...; END DO` in an
+interactive serializable transaction, and refuses one that runs a scheme
+statement there.
+
+The split refuses the whole body, with the byte range of the refused text and
+a reason that quotes nothing from the body, where the host's embedded engine
+refuses it before a run: a translation setting other than `--!syntax_v1` (such
+as `--!ansi_lexer`), a client delimiter directive (`DELIMITER` or
+`-- atlas:delimiter`), a statement that controls a transaction (such as
+`COMMIT`), and a block or action call that runs a scheme statement and a
+statement that reads or writes a table, which YDB refuses whole. Each check
+assertion gets the verdict `RunStatement` gives the same text under
+`READ_ONLY` before it opens anything, so a dry run refuses what the run
+refuses. The run still proves the reads local against the catalog.
+
+For a host that lists the feature, a unit YDB aborted for a conflict in a
+caller transaction (`ABORTED`, `Transaction locks invalidated`) is
+`NOT_APPLIED` with `Execution.transaction_aborted`, and a commit YDB aborted is
+`ROLLED_BACK` with `TransactionResult.aborted`. Neither applied anything, and
+the host may run the transaction again. A host that does not list the feature
+gets the same outcomes without the flags.
 
 ## Text units
 
@@ -2627,7 +2686,7 @@ settings other than column families, planning, rendering and operation models fo
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
 rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object, resource pool, streaming query and secret lifecycles, approved execution inputs, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
+lock, offline SQL analysis, SQL schema reading, migration lint, migration splits, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

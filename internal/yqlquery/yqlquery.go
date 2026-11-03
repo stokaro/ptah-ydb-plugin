@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
@@ -74,6 +75,15 @@ type Query struct {
 	// definitions carried in from above it, comments removed and with no
 	// terminator.
 	Statements []string
+	// Spans are where each of Statements is written in the text, in the same
+	// order.
+	Spans []Span
+	// Source is the source text of the query's own statements, as written
+	// from each one's first token through its semicolon, one per line,
+	// opened by the definitions written between the query before it and
+	// this one. It is what a digest of the query covers, as the host's split
+	// gives it.
+	Source string
 	// Start is the byte offset in the text of the first statement of the
 	// query that is its own or a definition it opens with.
 	Start int
@@ -81,6 +91,14 @@ type Query struct {
 	// action call that runs a scheme statement and a statement that reads or
 	// writes a table. Only a [Scheme] query can be one.
 	Mixed bool
+}
+
+// Span is where one statement is written in a text: from its first
+// significant token through the semicolon that ends it, or, for a last
+// statement no semicolon ends, through its last token that is not
+// whitespace.
+type Span struct {
+	Start, End int
 }
 
 // ErrTranslationSetting is returned for a translation setting other than
@@ -97,11 +115,15 @@ var ErrClientDelimiter = errors.New("client delimiter directive in YQL")
 const supportedSetting = "--!syntax_v1"
 
 // Refusal is a text Split cannot split the way YDB reads it, with where the
-// part it refuses starts.
+// part it refuses is written.
 type Refusal struct {
 	// Offset is the byte offset of the refused setting or directive.
 	Offset int
-	err    error
+	// End is the byte offset just past the refused setting or directive: the
+	// end of its comment, or the end of the line that holds a DELIMITER
+	// statement.
+	End int
+	err error
 }
 
 func (r *Refusal) Error() string { return r.err.Error() }
@@ -123,7 +145,7 @@ func Split(text string) ([]Query, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := refuseClientDelimiters(tokens); err != nil {
+	if err := refuseClientDelimiters(text, tokens); err != nil {
 		return nil, err
 	}
 	header := ""
@@ -136,16 +158,16 @@ func Split(text string) ([]Query, error) {
 		if statement == "" {
 			continue
 		}
-		builder.add(statement, source.start)
+		builder.add(statement, source.span, text[source.span.Start:source.span.End])
 	}
 	return builder.finish(), nil
 }
 
 // source is the tokens of one statement of a text, through its semicolon, and
-// where its first significant token starts.
+// where it is written.
 type source struct {
 	tokens []yql.Token
-	start  int
+	span   Span
 }
 
 // statements cuts a text at the semicolons that end a statement. A semicolon
@@ -175,13 +197,23 @@ func statements(text string, tokens []yql.Token) []source {
 			continue
 		}
 		bodies = yql.Bodies{}
-		out = append(out, source{tokens: current, start: max(start, 0)})
+		out = append(out, source{tokens: current, span: written(text, max(start, 0), token.End)})
 		current, start = nil, -1
 	}
 	if len(current) > 0 {
-		out = append(out, source{tokens: current, start: max(start, len(text))})
+		if start < 0 {
+			start = len(text)
+		}
+		out = append(out, source{tokens: current, span: written(text, start, len(text))})
 	}
 	return out
+}
+
+// written is the span of a statement whose first significant token starts at
+// start and whose tokens end at end, without the whitespace after its last
+// token.
+func written(text string, start, end int) Span {
+	return Span{Start: start, End: start + len(strings.TrimRightFunc(text[start:end], unicode.IsSpace))}
 }
 
 // significant reports a token that is not whitespace, a comment or a
@@ -220,6 +252,11 @@ type splitter struct {
 	// closed starts, or -1.
 	pendingStart int
 	pendingCount int
+	// pendingSources are the sources of the definitions made since the last
+	// query closed, and pendingSpans where they are written. They open the
+	// source of the next query, which the definitions head through carried.
+	pendingSources []string
+	pendingSpans   []Span
 	// open is the run of data statements being collected, if any.
 	open   *draft
 	drafts []draft
@@ -228,16 +265,26 @@ type splitter struct {
 	reader Reader
 }
 
-// draft is a query being assembled.
+// draft is a query being assembled: the definitions that head it, its own
+// statements, where they are written and their source.
 type draft struct {
 	kind       Kind
 	mixed      bool
 	prefix     []string
 	statements []string
+	spans      []Span
+	source     string
 	start      int
 }
 
-func (s *splitter) add(statement string, start int) {
+// own adds a statement of the query's own.
+func (d *draft) own(statement string, span Span, source string) {
+	d.statements = append(d.statements, statement)
+	d.spans = append(d.spans, span)
+	d.source = joinSource(d.source, source)
+}
+
+func (s *splitter) add(statement string, span Span, source string) {
 	if s.pendingCount == 0 {
 		s.pendingStart = -1
 	}
@@ -246,37 +293,48 @@ func (s *splitter) add(statement string, start int) {
 	case definition:
 		s.carried = append(s.carried, statement)
 		if s.open != nil {
-			s.open.statements = append(s.open.statements, statement)
+			s.open.own(statement, span, source)
 			return
 		}
 		if s.pendingCount == 0 {
-			s.pendingStart = start
+			s.pendingStart = span.Start
 		}
 		s.pendingCount++
+		s.pendingSources = append(s.pendingSources, source)
+		s.pendingSpans = append(s.pendingSpans, span)
 	case Scheme, Batch:
 		s.close()
-		query := s.start(kind, start)
+		query := s.start(kind, span.Start)
 		query.mixed = read.mixed
-		query.statements = append(query.statements, statement)
+		query.own(statement, span, source)
 		s.drafts = append(s.drafts, query)
 	case Data:
 		if s.open == nil {
-			query := s.start(Data, start)
+			query := s.start(Data, span.Start)
 			s.open = &query
 		}
-		s.open.statements = append(s.open.statements, statement)
+		s.open.own(statement, span, source)
 	}
 }
 
-// start opens a query of kind, headed by the definitions made before it. It
-// starts at its first pending definition, or at its own first statement.
+// start opens a query of kind, headed by the definitions made before it and
+// holding their source as the start of its own. It starts at its first
+// pending definition, or at its own first statement.
 func (s *splitter) start(kind Kind, start int) draft {
 	if s.pendingCount > 0 {
 		start = s.pendingStart
 	}
-	query := draft{kind: kind, prefix: slices.Clip(s.carried), start: start}
+	query := draft{kind: kind, prefix: slices.Clip(s.carried), start: start, source: strings.Join(s.pendingSources, "\n")}
 	s.pendingCount = 0
+	s.pendingSources, s.pendingSpans = nil, nil
 	return query
+}
+
+func joinSource(existing, next string) string {
+	if existing == "" {
+		return next
+	}
+	return existing + "\n" + next
 }
 
 // close ends the run of data statements being collected.
@@ -300,6 +358,8 @@ func (s *splitter) finish() []Query {
 		}
 		last := &s.drafts[len(s.drafts)-1]
 		last.statements = append(last.statements, trailing...)
+		last.spans = append(last.spans, s.pendingSpans...)
+		last.source = joinSource(last.source, strings.Join(s.pendingSources, "\n"))
 	}
 	queries := make([]Query, 0, len(s.drafts))
 	for _, query := range s.drafts {
@@ -308,6 +368,8 @@ func (s *splitter) finish() []Query {
 			Kind:       query.kind,
 			Text:       s.header + strings.Join(parts, ";\n"),
 			Statements: query.statements,
+			Spans:      query.spans,
+			Source:     query.source,
 			Start:      query.start,
 			Mixed:      query.mixed,
 		})
@@ -326,7 +388,7 @@ func translationSettings(tokens []yql.Token) ([]string, error) {
 		case token.Type == yql.TokenUnknown && strings.HasPrefix(token.Value, "--!"):
 			setting := strings.TrimSpace(token.Value)
 			if setting != supportedSetting {
-				return nil, &Refusal{Offset: token.Start, err: fmt.Errorf("%w: YQL is split as --!syntax_v1 reads it, "+
+				return nil, &Refusal{Offset: token.Start, End: commentEnd(token), err: fmt.Errorf("%w: YQL is split as --!syntax_v1 reads it, "+
 					"and YDB would read this text differently or refuse it; remove the line", ErrTranslationSetting)}
 			}
 			settings = append(settings, setting)
@@ -340,7 +402,7 @@ func translationSettings(tokens []yql.Token) ([]string, error) {
 // refuseClientDelimiters refuses a delimiter directive written as a comment or
 // as a statement of its own. A directive inside a string literal is text, and
 // the scanner reads it as part of the literal.
-func refuseClientDelimiters(tokens []yql.Token) error {
+func refuseClientDelimiters(text string, tokens []yql.Token) error {
 	statementStart := true
 	for _, token := range tokens {
 		switch token.Type {
@@ -348,7 +410,7 @@ func refuseClientDelimiters(tokens []yql.Token) error {
 			continue
 		case yql.TokenComment:
 			if atlasDelimiter(token.Value) {
-				return delimiterRefusal(token.Start)
+				return delimiterRefusal(token.Start, commentEnd(token))
 			}
 			continue
 		case yql.TokenSemicolon:
@@ -356,11 +418,27 @@ func refuseClientDelimiters(tokens []yql.Token) error {
 			continue
 		}
 		if statementStart && token.IsWord("DELIMITER") {
-			return delimiterRefusal(token.Start)
+			return delimiterRefusal(token.Start, lineEnd(text, token.Start))
 		}
 		statementStart = false
 	}
 	return nil
+}
+
+// commentEnd is where a line comment ends, without the line break it reads.
+func commentEnd(token yql.Token) int {
+	return token.Start + len(strings.TrimRightFunc(token.Value, unicode.IsSpace))
+}
+
+// lineEnd is where the line holding offset ends, without trailing whitespace
+// or the line break. A DELIMITER directive takes its line: what follows it
+// there is the delimiter it would set.
+func lineEnd(text string, offset int) int {
+	end := len(text)
+	if newline := strings.IndexByte(text[offset:], '\n'); newline >= 0 {
+		end = offset + newline
+	}
+	return offset + len(strings.TrimRightFunc(text[offset:end], unicode.IsSpace))
 }
 
 // atlasDelimiter reports an `-- atlas:delimiter` directive comment: the
@@ -374,7 +452,7 @@ func atlasDelimiter(comment string) bool {
 	return strings.ContainsRune(" \t\n\r", rune(trimmed[len(keyword)])) && strings.TrimSpace(trimmed[len(keyword):]) != ""
 }
 
-func delimiterRefusal(offset int) error {
-	return &Refusal{Offset: offset, err: fmt.Errorf("%w: a delimiter directive has no meaning in YQL, which ends every statement "+
+func delimiterRefusal(offset, end int) error {
+	return &Refusal{Offset: offset, End: end, err: fmt.Errorf("%w: a delimiter directive has no meaning in YQL, which ends every statement "+
 		"with a semicolon; remove the directive and terminate each statement with a semicolon", ErrClientDelimiter)}
 }

@@ -6,14 +6,16 @@
       "text": "PRAGMA AnsiInForEmptyOrNullableItemsCollections;\nDECLARE $p AS Int64;\nSELECT $p",
       "statements": [
         "SELECT $p"
-      ]
+      ],
+      "source": "PRAGMA AnsiInForEmptyOrNullableItemsCollections;\nDECLARE $p AS Int64;\nSELECT $p;"
     },
     {
       "kind": "scheme",
       "text": "PRAGMA AnsiInForEmptyOrNullableItemsCollections;\nDECLARE $p AS Int64;\nDROP TABLE x",
       "statements": [
         "DROP TABLE x"
-      ]
+      ],
+      "source": "DROP TABLE x;"
     }
   ]
 }

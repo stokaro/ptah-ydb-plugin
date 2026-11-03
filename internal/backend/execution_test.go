@@ -17,6 +17,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -257,7 +258,7 @@ func TestCancellationBetweenUnitsPreservesConfirmedPrefix(t *testing.T) {
 	defer cancel()
 	runner := &cancelAfterExecution{cancel: cancel}
 	unit := sqlRequest("").Units[0]
-	result := executeUnits(ctx, 0, nil, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
+	result := executeUnits(ctx, 0, nil, unconfirmed, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
 		_, err := runner.ExecContext(ctx, unit.GetSql())
 		return true, err
 	}, []*protocol.Unit{unit, unit})
@@ -313,7 +314,7 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			calls := 0
-			result := executeUnits(t.Context(), 0, nil, func(context.Context, *protocol.Unit) (bool, error) {
+			result := executeUnits(t.Context(), 0, nil, unconfirmed, func(context.Context, *protocol.Unit) (bool, error) {
 				calls++
 				if calls > test.prefix {
 					return test.dispatched, errors.New("secret-marker")
@@ -419,6 +420,12 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 	}
 }
 
+// unconfirmed answers for a failed unit as Execute does for one outside a
+// transaction.
+func unconfirmed(unit *protocol.Unit, err error, applied uint32) *protocol.Execution {
+	return ydbfailure.Failed(ydbfailure.Read(err), ydbfailure.Unit{Text: unit.GetSql()}, applied)
+}
+
 // blockUntilDone is a unit that runs until its context ends.
 func blockUntilDone(ctx context.Context, unit *protocol.Unit) (bool, error) {
 	if unit.GetChangeId() == "quick" {
@@ -453,7 +460,7 @@ func TestStatementTimeoutAnswersForTheStoppedUnit(t *testing.T) {
 				return test.stopped
 			}
 
-			result := executeUnits(t.Context(), 20*time.Millisecond, stopped, blockUntilDone, test.units)
+			result := executeUnits(t.Context(), 20*time.Millisecond, stopped, unconfirmed, blockUntilDone, test.units)
 
 			c.Assert(result.Outcome, qt.Equals, test.outcome)
 			c.Assert(result.AppliedCount, qt.Equals, test.applied)
@@ -471,7 +478,7 @@ func TestCanceledCallIsNotATimeout(t *testing.T) {
 	defer cancel()
 	stopped := func(*protocol.Unit) stopOutcome { return stopNotApplied }
 
-	result := executeUnits(ctx, time.Hour, stopped, blockUntilDone, []*protocol.Unit{{ChangeId: "slow"}})
+	result := executeUnits(ctx, time.Hour, stopped, unconfirmed, blockUntilDone, []*protocol.Unit{{ChangeId: "slow"}})
 
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
 	c.Assert(result.StatementTimedOut, qt.IsFalse)
