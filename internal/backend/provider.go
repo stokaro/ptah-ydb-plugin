@@ -170,6 +170,10 @@ func negotiatedFeatures(ctx context.Context) []string {
 // availability_period, which 25.4 and later take (`AVAILABILITY_PERIOD:
 // unknown option for consumer` on 25.1 to 25.3, as the host measured).
 //
+// ddl_inside_transaction is false on every line: YDB refuses a schema
+// statement inside an explicit transaction, so the host runs a schema apply's
+// statements without one rather than asking for a transaction YDB cannot give.
+//
 // external_data_sources and external_object_replace are false, because
 // their flags are off by default on every line; the cluster's flags replace
 // them where the address names the monitoring endpoint.
@@ -181,7 +185,7 @@ func sessionCapabilities(version string) map[string]bool {
 		"alter_column_default":    releaseline.AtLeast(version, 26, 2),
 		"add_column_with_default": releaseline.AtLeast(version, 26, 1),
 		"small_integer_defaults":  releaseline.AtLeast(version, 25, 2), "document_type_defaults": releaseline.AtLeast(version, 25, 3),
-		"transactional_ddl": false, "secrets": releaseline.AtLeast(version, 25, 4), "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+		"transactional_ddl": false, "ddl_inside_transaction": false, "secrets": releaseline.AtLeast(version, 25, 4), "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true,
 		"relative_grant_paths": releaseline.AtLeast(version, 26, 1), "topics": true, "topic_consumer_availability_period": releaseline.AtLeast(version, 25, 4), workload.CapabilityResourcePools: false, streaming.Capability: false,
 		changefeeds.CapabilityChangefeeds: true, changefeeds.CapabilityUserSIDs: releaseline.AtLeast(version, 26, 1),
