@@ -243,7 +243,10 @@ address that keeps the operator's scheme, host and credentials and names the
 realm in place of any it named. Releasing the lease removes the realm with
 everything in it, and then `ptah_dev` when no realm is left in it; an object
 there is no statement to drop for stops the removal before anything is dropped.
-The provider also removes the realms it holds when its process ends.
+The provider also removes the realms it holds when its process ends. A realm is
+a directory, which YDB creates only for a user who holds
+`ydb.granular.create_directory`; a user refused the directory is refused the
+realm with that right named.
 
 The session receipt reports the realm's path as its database, and inspection,
 locks, migration history, migration metadata and every native write resolve
@@ -566,6 +569,13 @@ root-level grant also needs the captured absolute database path; rendering
 refuses an unbound path. Native grant targets retain the provider's naming,
 including literal dots in resource-pool names.
 
+Inspection marks as implicit the entries YDB gives an object when it creates
+it, which no GRANT made, as the host's embedded engine marks them: the entries
+of the default resource pool that name `ydb.granular.select_row` and
+`ydb.granular.describe_schema` together, and the `ydb.granular.describe_schema`
+entry a new secret gets for every subject whose effective permissions on the
+secret's directory carry that permission.
+
 Mixed plans check captured native state before changing its access. A native
 alteration precedes grants, revocations, and principal changes. A final native
 drop accounts for matching revocations by removing the object's access; a
@@ -673,6 +683,17 @@ return stale state during leader changes; see the
 [YDB coordination documentation](https://ydb.tech/docs/en/reference/ydb-sdk/coordination).
 This changes the requirements for an older Ptah lock node; pre-v1, so no
 compatibility is owed. Configure that reserved node explicitly before using it.
+
+The provider finds the node by describing its path rather than by listing the
+database root, so a user granted the node takes the lock without the right to
+list the root. A server that refuses the user the lock is answered with
+PermissionDenied, and the message names the step and the right: the node is
+missing and the user may not create it, the user may not use the node, or the
+server refused the session on the node. The first two are the host's embedded
+engine's words. For the third that engine reports a timeout, because its SDK
+retries a refused session without saying why, while the server answers at once
+with UNAUTHORIZED. The SDK hands the host the code of the refusal and not its
+message.
 
 Acquisition is nonblocking. Only a confirmed BUSY permits the host to try a new
 handle under its wait policy. Handles are single-use and bound to the exact
@@ -2605,6 +2626,14 @@ coordination, topic, external data source, external table, streaming query and s
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query` or `secret` limits that claim, for one object
 or, without a name, for the kind.
+
+A limit names an object by its path from the database root, a dot being part
+of a name, so `app.events` names a topic at the root and `app/events` one in
+the directory app. A dotted limit of a topic, a secret or an external object
+that names nothing the database holds, while the plan would drop the object
+the same path written with a slash names, refuses the comparison with the
+spelling that keeps that object, as the host's embedded engine refuses it. A
+dotted limit that names an object the database holds is read as written.
 
 A refused token is quoted with at most its first 64 bytes, where Ptah quotes it
 whole: a schema file can hold a secret in a string literal.
