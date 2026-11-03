@@ -467,3 +467,38 @@ func TestHostInferenceAnswersWithoutTheSourceContent(t *testing.T) {
 		c.Assert(answer, qt.Not(qt.Contains), "row-key-7", qt.Commentf("a source key value reached the answer"))
 	}
 }
+
+// A generation that declares no index is searched exhaustively both ways by
+// the host's evaluate through the provider, so every answer is exact: recall
+// and agreement are 1.000, which a wrong distance function or a wrong order
+// cannot reach, and the index verb says there is nothing to build. The fifth
+// article mixes pricing and support, as the host's own corpus has it, so each
+// case's second key is the nearest one and not a tie.
+func TestHostRunsAnExhaustiveSearchThroughTheProvider(t *testing.T) {
+	c := testcheck.New(t)
+	host, manifest := hostManifest(c)
+	f := newEmbeddingFixture(c)
+	f.exec(c, "CREATE TABLE articles (id Int64 NOT NULL, title Utf8, body Utf8, updated_at Timestamp, PRIMARY KEY (id))",
+		"UPSERT INTO articles (id, title, body, updated_at) VALUES "+
+			"(1, 'Pricing', 'pricing pricing pricing support', Timestamp('2026-10-01T00:00:00Z')), "+
+			"(2, 'Support', 'support support support pricing', Timestamp('2026-10-01T00:00:00Z')), "+
+			"(3, 'Billing', 'billing billing billing support', Timestamp('2026-10-01T00:00:00Z')), "+
+			"(4, 'Renewals', 'renewal renewal renewal billing', Timestamp('2026-10-01T00:00:00Z')), "+
+			"(5, 'Costs', 'pricing pricing support support', Timestamp('2026-10-01T00:00:00Z'))")
+	spec := writeInferenceSpec(c, embeddingsEndpoint(c).URL, inferenceTarget{column: "embedding", revision: "1", noIndex: true})
+	through := providerInference{host: host, manifest: manifest, address: f.address}
+	corpus := filepath.Join(c.TempDir(), "corpus.yaml")
+	c.Assert(os.WriteFile(corpus, []byte("version: 1\nname: topics\ndefault_k: 2\ncases:\n"+
+		"  - id: pricing\n    query: pricing\n    required: [\"1\"]\n    relevant: {\"1\": 3, \"5\": 2}\n"+
+		"  - id: support\n    query: support\n    required: [\"2\"]\n    relevant: {\"2\": 3, \"5\": 2}\n"+
+		"  - id: billing\n    query: billing\n    required: [\"3\"]\n    relevant: {\"3\": 3, \"4\": 1}\n"), 0o600), qt.IsNil)
+
+	through.run(c, "prepare", spec, "--run-id", "exact")
+	through.run(c, "backfill", spec, "--run-id", "exact")
+	index := through.run(c, "index", spec, "--run-id", "exact")
+	evaluated := through.run(c, "evaluate", spec, "--corpus", corpus, "--min-recall", "1.0", "--min-exact-agreement", "1.0")
+
+	c.Assert(index, qt.Contains, "declares no index method")
+	c.Assert(evaluated, qt.Contains, "recall 1.000, MRR 1.000, NDCG 1.000 over 3 cases")
+	c.Assert(evaluated, qt.Contains, "the index agrees with an exhaustive search on 1.000 of results, over 3 cases")
+}

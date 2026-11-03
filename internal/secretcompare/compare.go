@@ -65,7 +65,7 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 		}
 	}
 	family := objectcompare.Family{
-		ServiceID: ServiceID, Kind: schema.SecretProperties, Capability: secrets.Capability, ChangeCapability: true, Noun: "secret",
+		ServiceID: ServiceID, Kind: schema.SecretProperties, Capability: secrets.Capability, ChangeCapability: true, Noun: "secret", DottedLimits: true,
 		Unread: func(capabilities map[string]bool) string {
 			if capabilities[secrets.Capability] {
 				return ""

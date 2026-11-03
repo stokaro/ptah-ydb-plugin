@@ -12,6 +12,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -150,6 +151,15 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 					reserve(result, &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: "table", Name: name}, description.reservation)
 					break
 				}
+				// A table an async replication writes, or wrote without
+				// failing over, is the replication's: YDB refuses every
+				// write and ALTER on it, and a plan that read it as an
+				// ordinary table would drop it as undeclared or alter it.
+				// The replication's items name it; the read leaves it out
+				// of the tables, as the host's embedded engine does.
+				if replication.IsReplica(description.table.GetAttributes()) {
+					break
+				}
 				table, err := readTable(database, selected, name, description.table)
 				if err != nil {
 					return nil, err
@@ -209,6 +219,23 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				}
 				result.NativeObjects = append(result.NativeObjects, value)
 				observe(result, []*protocol.Envelope{value})
+			case Ydb_Scheme.Entry_REPLICATION, Ydb_Scheme.Entry_TRANSFER:
+				kind := schema.ReplicationProperties
+				if entry.GetType() == Ydb_Scheme.Entry_TRANSFER {
+					kind = schema.TransferProperties
+				}
+				owner := &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: kind, Name: name}
+				value, err := source.replications.Capture(ctx, database, owner)
+				if reason := unreadReplication(err); reason != "" {
+					result.Coverage.Subjects = append(result.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner),
+						Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: reason}})
+					break
+				}
+				if err != nil {
+					return nil, err
+				}
+				result.NativeObjects = append(result.NativeObjects, value)
+				observe(result, []*protocol.Envelope{value})
 			case Ydb_Scheme.Entry_SECRET, Ydb_Scheme.Entry_VIEW, Ydb_Scheme.Entry_COORDINATION_NODE, Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE, Ydb_Scheme.Entry_EXTERNAL_TABLE:
 				kind, described, err := source.readObject(ctx, path.Join(database, selected, name), entry.GetType())
 				if err != nil {
@@ -261,6 +288,14 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 			replaceStreamingInventory(result, inventory)
 		case err == nil:
 			RealmStreamingInventory(result, inventory, leaveOut)
+		}
+	} else if common.ContextInventory {
+		inventory, err := ReadStreamingInventory(ctx, database, source.directory, queries)
+		if err != nil && ctx.Err() != nil {
+			return nil, err
+		}
+		if err == nil {
+			result.PlanningContext = OutsideStreamingInventory(inventory, selectors)
 		}
 	}
 	slices.SortFunc(result.Tables, func(a, b *protocol.Table) int {
@@ -321,9 +356,6 @@ func scopes(database string, selectors, leaveOut []string) ([]string, []*protoco
 func readTable(database, directory, name string, described *nativeprotocol.DescribeTableResult) (*protocol.Table, error) {
 	if described.GetSelf().GetName() != name || described.GetSelf().GetType() != Ydb_Scheme.Entry_TABLE {
 		return nil, fmt.Errorf("YDB listing and table description disagree")
-	}
-	if _, replica := described.GetAttributes()["__async_replica"]; replica {
-		return nil, fmt.Errorf("YDB replica table requires its replication owner")
 	}
 	ref := &protocol.Reference{Engine: "ydb", Database: database, Schema: directory, Kind: "table", Name: name}
 	table := &protocol.Table{Identity: ref, NormalizedIdentity: proto.CloneOf(ref)}

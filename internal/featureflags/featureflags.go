@@ -76,6 +76,15 @@ var gates = []Gate{
 	// leaves the preset's answer. With it off, a full-text index is refused
 	// with `Fulltext index support is disabled`.
 	{Key: "full_text_indexes", Flag: "EnableFulltextIndex"},
+	// Off on 25.1 and on from 25.2. With the flag on, 25.1 creates a
+	// transfer, moves a topic's message into its table, describes it and
+	// changes its lambda and batch settings in place.
+	{Key: "transfers", Flag: "EnableTopicTransfer"},
+	// Listed on 26.2 only, on by default; the lines before it create a
+	// replication with no flag at all, so an absent flag keeps their preset.
+	// Turned off, CREATE ASYNC REPLICATION answers `Asynchronous replication
+	// is disabled`.
+	{Key: "async_replication", Flag: "EnableReplication"},
 }
 
 // Gates returns every capability a flag decides, in a fixed order.

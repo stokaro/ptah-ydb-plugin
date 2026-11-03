@@ -25,7 +25,7 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 // Family is the topic's part of a comparison.
 func Family() objectcompare.Family {
 	return objectcompare.Family{
-		ServiceID: ServiceID, Kind: schema.TopicProperties, Capability: topics.CapabilityTopics, Noun: "topic",
+		ServiceID: ServiceID, Kind: schema.TopicProperties, Capability: topics.CapabilityTopics, Noun: "topic", DottedLimits: true,
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(schema.TopicProperties) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 			return schema.NativeBoundOwner(schema.TopicProperties, subject)

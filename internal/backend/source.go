@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replicationsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
@@ -93,6 +94,13 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
+		replications, err := replicationsource.Decode(ctx, document)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, status.FromContextError(ctx.Err()).Err()
+			}
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		if err := refuseColumnTableChangefeeds(tables, feeds); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
@@ -106,6 +114,8 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 				values = queries[index]
 			case topicsource.Owns(fragment):
 				values = topics[index]
+			case replicationsource.Owns(fragment):
+				values = replications[index]
 			case workloadsource.Owns(fragment):
 				values = workloads[index]
 			case changefeedsource.Owns(fragment):

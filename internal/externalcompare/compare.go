@@ -83,7 +83,7 @@ func Family(kind, root string) objectcompare.Family {
 		noun = "external table"
 	}
 	return objectcompare.Family{
-		ServiceID: ServiceID, Kind: kind, Noun: noun,
+		ServiceID: ServiceID, Kind: kind, Noun: noun, DottedLimits: true,
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(kind) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 			return schema.NativeBoundOwner(kind, subject)

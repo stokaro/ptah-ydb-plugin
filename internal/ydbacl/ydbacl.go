@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -51,6 +52,37 @@ var permissionKeywords = []struct{ name, keyword string }{
 // GrantPermission is the permission WITH GRANT OPTION adds beside the one it
 // is written with.
 const GrantPermission = "ydb.access.grant"
+
+// DescribeSchemaPermission is the permission YDB gives a secret it creates,
+// one entry per subject that may describe the directory the secret is
+// created in.
+//
+// Measured by the host on 26.2.1.14: a new secret inherits nothing from its
+// directory, and its access list holds ydb.granular.describe_schema for every
+// subject whose effective permissions on the directory carry it --
+// METADATA-READERS on a default cluster, through ydb.generic.list on the
+// database root -- and no other entry.
+const DescribeSchemaPermission = "ydb.granular.describe_schema"
+
+// describingPermissions are the permissions that carry
+// DescribeSchemaPermission. Measured by the host on 26.2.1.14 by granting each
+// permission alone on a directory and creating a secret in it: these seven
+// gave the secret the entry, and the others did not.
+var describingPermissions = []string{
+	DescribeSchemaPermission,
+	"ydb.generic.list",
+	"ydb.generic.read",
+	"ydb.generic.use_legacy",
+	"ydb.generic.use",
+	"ydb.generic.full_legacy",
+	"ydb.generic.full",
+}
+
+// DescribesSchema reports whether permission, as YDB names it, carries
+// DescribeSchemaPermission.
+func DescribesSchema(permission string) bool {
+	return slices.Contains(describingPermissions, permission)
+}
 
 // Permission returns the YDB permission a declared privilege names, and false
 // for one that names none. A privilege is a permission name, in any case, or

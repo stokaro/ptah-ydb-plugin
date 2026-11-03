@@ -28,6 +28,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
+      # The provider reports this version in its description, and a host
+      # records it beside what it writes.
+      - -X github.com/stokaro/ptah-ydb-plugin/internal/buildversion.linked={{ .Version }}
 
 # A snapshot is named after its commit, not after whatever tag `git describe`
 # finds, so a tag with a slash cannot put a path separator in an artifact name.
