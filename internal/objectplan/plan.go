@@ -48,6 +48,22 @@ type Family struct {
 	// holding capabilities, or returns nil; a nil Refuse refuses nothing.
 	// Its error is a refusal of the change, not of the request.
 	Refuse func(change *protocol.Envelope, capabilities map[string]bool) error
+	// RefuseInPlan says why a normalized change cannot be planned beside the
+	// captured tables and common steps of request, or returns nil; a nil
+	// RefuseInPlan refuses nothing. Its error is a refusal of the change.
+	RefuseInPlan func(request *protocol.PlanFeaturesRequest, change *protocol.Envelope) error
+	// Paths names the scheme paths of the session's database a normalized
+	// change acts on beyond its own, such as the replica tables an async
+	// replication creates, each with its action. A nil Paths names none.
+	Paths func(request *protocol.PlanFeaturesRequest, change *protocol.Envelope) ([]PathEffect, error)
+}
+
+// PathEffect is one scheme path a change acts on beyond its own: a path
+// relative to the database root, as a directory and a leaf name, and what the
+// change does there.
+type PathEffect struct {
+	Schema, Name string
+	Action       protocol.PlanningEffect_Action
 }
 
 type change struct {
@@ -104,6 +120,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 				return refusal(family, i, err.Error()), nil
 			}
 		}
+		if family.RefuseInPlan != nil {
+			if err := family.RefuseInPlan(request, captured.Value); err != nil {
+				return refusal(family, i, err.Error()), nil
+			}
+		}
 		value, err := family.Operation("pending", captured.Value)
 		if err != nil {
 			return refusal(family, i, err.Error()), nil
@@ -156,6 +177,14 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 			if len(access.Sources) != 0 {
 				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: access.Sources, Replacement: proto.CloneOf(id)})
 			}
+		}
+		if family.Paths != nil {
+			effects, ordered, err := sidePaths(pathRequest, family, item, id)
+			if err != nil {
+				return refusal(family, item.index, err.Error()), nil
+			}
+			step.Metadata.Effects = append(step.Metadata.Effects, effects...)
+			edges = append(edges, ordered...)
 		}
 		contribution.Steps = append(contribution.Steps, step)
 		contribution.Dependencies = append(contribution.Dependencies, edges...)

@@ -61,6 +61,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # 25.1 keeps EnableTopicTransfer at its default, off, so the
+          # transfer tests check the refusal there: with the flag on,
+          # dropping a table a dropped transfer wrote into stops 25.1.4.7 on
+          # a schemeshard VERIFY (`AliveChildrenCount >= 1`).
           - image: ydbplatform/local-ydb:25.1.4.7
             features: enable_vector_index,enable_external_data_sources
             host: release
@@ -80,9 +84,13 @@ jobs:
     services:
       ydb:
         image: ${{ matrix.image }}
+        # local-ydb leaves the replication API out of the gRPC services it
+        # starts, and the provider describes an async replication and a
+        # transfer through it; YDB_GRPC_SERVICES adds it to the others.
         env:
           YDB_USE_IN_MEMORY_PDISKS: 'true'
           YDB_FEATURE_FLAGS: ${{ matrix.features }}
+          YDB_GRPC_SERVICES: replication
         ports:
           - 2136:2136
           - 8765:8765

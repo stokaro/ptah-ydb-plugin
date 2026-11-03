@@ -190,6 +190,10 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 				normalize = schema.NormalizeWorkloadChange
 			case schema.StreamingQueryChange:
 				normalize = schema.NormalizeStreamingQueryChange
+			case schema.ReplicationChange:
+				normalize = schema.NormalizeReplicationChange
+			case schema.TransferChange:
+				normalize = schema.NormalizeTransferChange
 			}
 			normalized, changeErr := normalize(input)
 			if changeErr != nil {

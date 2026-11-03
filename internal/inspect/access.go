@@ -179,6 +179,10 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 			ref.Kind, types = "topic", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP}
 		case schema.StreamingQueryProperties:
 			ref.Kind, types = "streaming query", []Ydb_Scheme.Entry_Type{streamingQueryEntry}
+		case schema.ReplicationProperties:
+			ref.Kind, types = "async replication", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_REPLICATION}
+		case schema.TransferProperties:
+			ref.Kind, types = "transfer", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TRANSFER}
 		case schema.CoordinationProperties:
 			ref.Kind, types = "coordination node", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_COORDINATION_NODE}
 		case schema.ExternalSourceProperties:
