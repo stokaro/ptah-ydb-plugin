@@ -347,6 +347,27 @@ contain several SQL statements, so its error cannot prove that none ran.
 Cancellation between units reports the confirmed prefix. Diagnostics omit raw
 driver errors and SQL text.
 
+A unit refused before dispatch reports `NOT_STARTED`, or `PARTIAL` after an
+applied prefix, with the diagnostic `ydb.precondition-refused`. Where the
+reason is the provider's own text about the object, such as a plan the object
+changed after, a path another object holds, or a read the server answered with
+a status other than success, the message is that reason, naming the object by
+its path and the server's status by its name. Any other reason, such as a lost
+lock or a failed system-view query, gets a fixed sentence, so no server text,
+credential or declared value reaches the host.
+
+Every native creation reads where its object goes before the write: the
+listing of its directory, or the system view for a streaming query and the
+resource pools. YDB creates the directories an object needs with the object,
+so a directory that does not exist holds no occupant, by the rule a filtered
+read uses (see [Schema observations](#schema-observations)), and the first
+object of a new directory is created there. On 26.2.1.14, YDB created a topic,
+a coordination node, a secret, an external data source and an external table,
+a row table (through YQL and through native CreateTable), a column table, a
+view and a streaming query two directory levels below an existing directory;
+25.1.4.7 did the same for every kind but secrets and streaming queries, which
+it does not keep. Resource pools and classifiers have no directory.
+
 The provider offers `units.statement-timeout`. A host that lists it sends a
 migration's statement timeout with each Execute call, and the provider bounds
 each unit with it and answers for what YDB does when it fires, as the host's
@@ -681,7 +702,24 @@ empty when its parent's listing, proved the same way up to the database root,
 does not name it. That is the evidence a walk from the root takes for any
 entry a listing leaves out, and it lets `schema apply --schemas` create the
 first object of a new directory. A directory its parent names but the session
-cannot list is still refused.
+cannot list is still refused, and so is a path below an object that is not a
+directory. Execution reads the directory of each object it creates through
+the same rule; see [Execution and transactions](#execution-and-transactions).
+
+A read with no selector cannot do the same for a directory it never listed. It
+claims each directory it lists complete, and a coverage region names one exact
+directory, so no region covers a directory that does not exist. A claim for the
+whole database would also cover the dot-prefixed directories and the dev realm
+directory the walk leaves out, and everything below them, which the read does
+not know. So `schema apply` with no `--schemas` leaves a native object in a new
+directory unplanned, prints why, and exits 0, as for a topic in `fresh/nested`:
+
+```text
+Warning: github.com/stokaro/ptah-ydb-plugin/topic fresh/nested.events could not be compared between the database and the desired schema: The current topic or its absence was not established.
+No changes planned, but 1 comparison limit remains unresolved.
+```
+
+Name the directory with `--schemas` to create the object.
 
 Unknown native fields and enum values are refused before JSON conversion.
 Shared topic consumers, unextracted native object kinds, and
@@ -1289,8 +1327,8 @@ overlapping parent/descendant paths are refused until a directory lifecycle is
 captured. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
-the change is refused. The parent directory must already exist; execution never
-creates or deletes it.
+the change is refused. A parent directory that does not exist holds no node,
+and CreateNode creates it with the node; execution never deletes a directory.
 
 Rendering validates the complete operation receipt and emits a native envelope,
 or, in the TEXT form, the coordination node statement the host's embedded
@@ -1299,10 +1337,10 @@ AlterNode, and DropNode requests. A nonempty database identity must equal the
 selected session database. The provider validates every envelope and transaction
 constraint before executing any unit in the batch.
 
-Before each native write, execution lists the exact parent directory and reads
-the node. The current configuration and access metadata must match the captured
-observation, or creation must have established absence. A stale operation is
-refused before dispatch. Effective settings are sent explicitly, including
+Before each native write, execution lists the parent directory, or proves
+that it does not exist, and reads the node. The current configuration and
+access metadata must match the captured observation, or creation must have
+established absence. A stale operation is refused before dispatch. Effective settings are sent explicitly, including
 omitted settings that reset to defaults. Alteration preserves the existing node.
 After a successful reply, execution reads back the configuration or confirms
 absence; alteration also checks that access metadata did not change.
@@ -1885,9 +1923,10 @@ Its replacement carries table and physical-path effects and forbids SQL
 transactions. A refusal returns no successful planning prefix. Rendering emits
 a native operation envelope and validates its safety metadata again.
 
-Execution requires an existing parent directory and establishes absence through
-its complete listing. An existing path is refused, including an existing table
-with the same schema. The provider binds the session and absolute path, checks
+Execution establishes absence through the complete listing of the parent
+directory, or through the proof that the directory does not exist, which
+CreateTable then creates with the table. An existing path is refused,
+including an existing table with the same schema. The provider binds the session and absolute path, checks
 its guarding leases, sends CreateTable once, and reads the result back. It
 confirms columns, key order, requested settings, and the absence of unexpected
 indexes or changefeeds. A failed reply or unconfirmed result remains UNKNOWN.

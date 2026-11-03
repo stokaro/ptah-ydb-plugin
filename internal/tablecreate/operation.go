@@ -43,7 +43,7 @@ func buildOperationModel() *protocol.ValueModel {
 		"indexes":      "global indexes, sync, async or unique, each with its ordered key columns and covered columns over declared columns and no settings of its own, built with the table",
 		"omission":     "omitted creation settings request server defaults; explicit settings are confirmed after creation",
 		"execution":    "native CreateTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
-		"precondition": "complete exact parent directory listing must establish absence; parent must exist; root ptah_locks is reserved; no atomic compare-and-set",
+		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root ptah_locks is reserved; no atomic compare-and-set",
 		"confirmation": "read back columns, ordered primary key, requested settings, the requested indexes ready with their definitions and no other index, and no changefeed; a successful create does not establish exclusive ownership",
 		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
 	})

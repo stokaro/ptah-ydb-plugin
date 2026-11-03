@@ -408,7 +408,7 @@ func executeUnits(ctx context.Context, timeout time.Duration, stopped stoppedUni
 					outcome = protocol.Execution_PARTIAL
 				}
 				message := "The unit was not dispatched because its precondition or lock guarantee was not established"
-				if refusal, ok := errors.AsType[*nativeapi.StatementRefusal](err); ok {
+				if refusal, ok := errors.AsType[*nativeapi.Refusal](err); ok {
 					message = rowdata.OneLine(refusal.Error())
 				}
 				return &protocol.Execution{Outcome: outcome, AppliedCount: applied, DiagnosticCode: "ydb.precondition-refused", Message: message}
