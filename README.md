@@ -676,6 +676,13 @@ therefore establishes native-object absence there. Unread descendants, excluded
 system directories, and other namespaces remain unknown. Table and column
 facets keep subject-only coverage.
 
+A selected directory YDB does not show (it answers SCHEME_ERROR) reads as
+empty when its parent's listing, proved the same way up to the database root,
+does not name it. That is the evidence a walk from the root takes for any
+entry a listing leaves out, and it lets `schema apply --schemas` create the
+first object of a new directory. A directory its parent names but the session
+cannot list is still refused.
+
 Unknown native fields and enum values are refused before JSON conversion.
 Shared topic consumers, unextracted native object kinds, and
 replication-owned tables refuse inspection. A failed traversal returns no snapshot.

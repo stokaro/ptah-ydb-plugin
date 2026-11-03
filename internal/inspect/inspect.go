@@ -91,7 +91,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 			return nil, fmt.Errorf("YDB schema traversal exceeds directory limit")
 		}
 		visited[selected] = true
-		listed, err := source.directory(ctx, path.Join(database, selected))
+		listed, err := ListSelected(ctx, source.directory, database, selected)
 		if err != nil {
 			return nil, err
 		}

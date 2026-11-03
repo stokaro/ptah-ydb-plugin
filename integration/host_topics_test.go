@@ -107,3 +107,30 @@ func TestHostAppliesATopic_HappyPath(t *testing.T) {
 		})
 	}
 }
+
+// A filtered apply creates the first object of a directory that does not
+// exist yet: the selected directory is absent from its parent's listing, so
+// the read finds it empty instead of refusing it. The host's run takes the
+// schema lock at the database root, whose node the lock fixture removes.
+func TestHostCreatesTheFirstObjectOfANewDirectory_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	fresh := path.Join(directory, "fresh")
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_ = execFixtureSchema(ctx, opened.DB, "DROP TOPIC `"+path.Join(database, fresh, "events")+"`")
+		_ = opened.Driver.Scheme().RemoveDirectory(ctx, path.Join(database, fresh))
+	})
+	source := "topics:\n  events:\n    schema: " + fresh + "\n    min_active_partitions: 1\n"
+	output, err := hostApplySelected(c, fresh, "yaml", source)
+	c.Assert(err, qt.IsNil, qt.Commentf("creation: %s", output))
+	c.Assert(output, qt.Matches, `(?s).*Schema apply completed successfully.*`)
+	listing, err := opened.Driver.Scheme().ListDirectory(c.Context(), path.Join(database, fresh))
+	c.Assert(err, qt.IsNil)
+	c.Assert(listing.Children, qt.HasLen, 1)
+	c.Assert(listing.Children[0].Name, qt.Equals, "events")
+	output, err = hostApplySelected(c, fresh, "yaml", source)
+	c.Assert(err, qt.IsNil, qt.Commentf("a second run: %s", output))
+	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`)
+}

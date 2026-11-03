@@ -18,6 +18,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Topic_V1"
 	"github.com/ydb-platform/ydb-go-genproto/draft/Ydb_View_V1"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
@@ -50,6 +51,9 @@ func (s *source) directory(ctx context.Context, path string) (*Ydb_Scheme.ListDi
 	response, err := s.scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: path})
 	if err != nil {
 		return nil, fmt.Errorf("list YDB directory: transport failed")
+	}
+	if operation := response.GetOperation(); operation.GetReady() && operation.GetStatus() == Ydb.StatusIds_SCHEME_ERROR {
+		return nil, fmt.Errorf("list YDB directory: %w", ErrNotVisible)
 	}
 	var result Ydb_Scheme.ListDirectoryResult
 	if err := nativeapi.Operation(response.GetOperation(), &result); err != nil {
