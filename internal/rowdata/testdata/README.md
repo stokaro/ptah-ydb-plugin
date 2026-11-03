@@ -19,7 +19,9 @@ the same answer.
 - `query-dialect.golden.json` is the query-builder spelling of the host's YDB
   descriptor and the capabilities the builder assumes for YDB.
 - `../../yqlquery/testdata/corpus/<case>.yql` is a YQL text, and its golden file
-  the queries `internal/yqlquery.Split` cuts it into, or the error.
+  the queries `internal/yqlquery.Split` cuts it into, with the source of each,
+  or the error. The provider's migration split (`internal/migrationunits`)
+  reads the same files.
 
 A value is a JSON object with one key that names its case, as the contract's
 DataValue does: `null`, `bool`, `int64` and `uint64` (decimal text), `double`,

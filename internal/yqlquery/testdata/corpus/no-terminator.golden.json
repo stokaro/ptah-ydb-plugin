@@ -6,7 +6,8 @@
       "text": "UPSERT INTO t (id) VALUES (1)",
       "statements": [
         "UPSERT INTO t (id) VALUES (1)"
-      ]
+      ],
+      "source": "UPSERT INTO t (id) VALUES (1)"
     }
   ]
 }

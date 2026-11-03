@@ -6,14 +6,16 @@
       "text": "--!syntax_v1\nUPSERT INTO t (id) VALUES (1)",
       "statements": [
         "UPSERT INTO t (id) VALUES (1)"
-      ]
+      ],
+      "source": "UPSERT INTO t (id) VALUES (1);"
     },
     {
       "kind": "scheme",
       "text": "--!syntax_v1\nDROP TABLE x",
       "statements": [
         "DROP TABLE x"
-      ]
+      ],
+      "source": "DROP TABLE x;"
     }
   ]
 }

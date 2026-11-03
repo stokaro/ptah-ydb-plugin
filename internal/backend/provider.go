@@ -124,7 +124,8 @@ func providerFeatures() []string {
 		provider.PlanningObjectContextFeature,
 		provider.EntryKeysFeature,
 		provider.HCLSourceFeature,
-		provider.EncodeSourceFeature}
+		provider.EncodeSourceFeature,
+		provider.MigrationSplitFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
