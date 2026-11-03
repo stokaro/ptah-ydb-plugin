@@ -56,8 +56,9 @@ func TestHostReplacesAnIndexWhoseKindChanges_HappyPath(t *testing.T) {
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
 	const (
-		created  = `(?s).*row-table-create-operation.*Schema apply completed successfully.*`
-		replaced = `(?s).*row-table-drop-index.*row-table-add-index.*Schema apply completed successfully.*`
+		created = `(?s).*row-table-create-operation.*Schema apply completed successfully.*`
+		// The plan prints the removal's reason, then the addition's operation.
+		replaced = `(?s).*Drops a secondary index.*row-table-alter-operation.*Schema apply completed successfully.*`
 		synced   = `(?s).*Schema is synced, no changes to be made.*`
 	)
 	for _, run := range []struct {
