@@ -43,7 +43,7 @@ func providerBinary(c *qt.C) (string, string) {
 
 // hostFeatures are the features startProvider's host negotiates.
 func hostFeatures() []string {
-	return []string{provider.ObservedColumnsFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature}
+	return []string{provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature}
 }
 
 // negotiated are the engine features client negotiated with the provider,

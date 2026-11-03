@@ -6,7 +6,8 @@
       "text": "DO BEGIN SELECT 1; CREATE TABLE m (id Int64, PRIMARY KEY (id)); END DO",
       "statements": [
         "DO BEGIN SELECT 1; CREATE TABLE m (id Int64, PRIMARY KEY (id)); END DO"
-      ]
+      ],
+      "source": "DO BEGIN SELECT 1; CREATE TABLE m (id Int64, PRIMARY KEY (id)); END DO;"
     }
   ]
 }

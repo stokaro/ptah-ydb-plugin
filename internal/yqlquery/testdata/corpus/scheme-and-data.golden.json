@@ -6,21 +6,24 @@
       "text": "UPSERT INTO t (id) VALUES (1)",
       "statements": [
         "UPSERT INTO t (id) VALUES (1)"
-      ]
+      ],
+      "source": "UPSERT INTO t (id) VALUES (1);"
     },
     {
       "kind": "scheme",
       "text": "CREATE TABLE m (id Int64, PRIMARY KEY (id))",
       "statements": [
         "CREATE TABLE m (id Int64, PRIMARY KEY (id))"
-      ]
+      ],
+      "source": "CREATE TABLE m (id Int64, PRIMARY KEY (id));"
     },
     {
       "kind": "data",
       "text": "UPSERT INTO t (id) VALUES (2)",
       "statements": [
         "UPSERT INTO t (id) VALUES (2)"
-      ]
+      ],
+      "source": "UPSERT INTO t (id) VALUES (2);"
     }
   ]
 }

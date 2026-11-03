@@ -1,0 +1,29 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "queries": [
+    {
+      "kind": "data",
+      "text": "$x = 1;\nUPSERT INTO t (id) VALUES ($x)",
+      "statements": [
+        "UPSERT INTO t (id) VALUES ($x)"
+      ],
+      "source": "$x = 1;\nUPSERT INTO t (id) VALUES ($x)\n;"
+    },
+    {
+      "kind": "scheme",
+      "text": "$x = 1;\nCREATE TABLE m (id Int64, PRIMARY KEY (id))",
+      "statements": [
+        "CREATE TABLE m (id Int64, PRIMARY KEY (id))"
+      ],
+      "source": "CREATE TABLE m (id Int64, PRIMARY KEY (id));"
+    },
+    {
+      "kind": "data",
+      "text": "$x = 1;\nUPSERT INTO t (id) VALUES (2)",
+      "statements": [
+        "UPSERT INTO t (id) VALUES (2)"
+      ],
+      "source": "UPSERT INTO t (id) VALUES (2) -- no terminator"
+    }
+  ]
+}
