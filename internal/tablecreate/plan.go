@@ -184,7 +184,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				rebuilds = append(rebuilds, item)
 				continue
 			}
-			changes, reason, err := planAlteration(owner, table, request.Capabilities)
+			changes, reason, err := planAlteration(owner, table, request.CommonSteps, request.Capabilities)
 			if err != nil {
 				return nil, err
 			}
@@ -455,14 +455,23 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			*number++
 			index.operation.Id = index.id.Name
 			facts := index.operation.OperationSemantics
+			changed := indexSubject(subject, index.change.name())
+			if source := index.change.source; source != nil {
+				// The replacement changes the index the host's step names.
+				changed = proto.CloneOf(source.GetMetadata().GetEffects()[1].GetSubject())
+				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: []*protocol.StepIdentity{proto.CloneOf(source.Id)}, Replacement: proto.CloneOf(index.id)})
+			}
+			// The lifecycle phase lets a removal and the addition that
+			// replaces it under the same name be ordered in one window.
 			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: index.id,
-				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: index.operation},
+				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: index.operation, Phase: protocol.PlanningOperation_LIFECYCLE},
 				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
 					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
-						{Subject: indexSubject(subject, index.change.name()), Action: action}}}})
+						{Subject: changed, Action: action}}}})
 			contribution.Dependencies = append(contribution.Dependencies, indexStepDependencies(*item, index, request.CommonSteps)...)
 			ordered = append(ordered, index.id)
 		}
+		contribution.Dependencies = append(contribution.Dependencies, indexReplacements(item.indexes)...)
 		if item.feeds != nil {
 			step, dependencies := item.feeds.planningStep(feedNumber, subject, nil)
 			feedNumber++
