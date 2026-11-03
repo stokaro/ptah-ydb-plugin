@@ -85,6 +85,42 @@ func TestIndexSequenceProjectionValidatesBeforeExcludingPosition(t *testing.T) {
 	c.Assert(err, qt.IsNotNil)
 }
 
+// A read reports store_external_blobs DISABLED for every index implementation
+// table, the server's default; the declaration converted from it states no
+// storage for the implementation, and stays the same across a round trip. An
+// explicit setting stays.
+func TestIndexConversionLeavesDefaultImplementationStorageOut(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		storage *Ydb_Table.StorageSettings
+		stated  bool
+	}{
+		{"the server's default", &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_DISABLED}, false},
+		{"external blobs", &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_ENABLED}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			index := indexObservation("idx")
+			index.Tables[0].Description.StorageSettings = test.storage
+			observed, err := schema.CaptureIndexes(tableOwner(), &native.IndexObservations{Indexes: []*native.ObservedIndex{index}})
+			c.Assert(err, qt.IsNil)
+			desired, err := schema.ConvertNative(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+			c.Assert(err, qt.IsNil)
+			var intent native.IndexSetIntent
+			c.Assert(protojson.Unmarshal(desired.Payload, &intent), qt.IsNil)
+			c.Assert(intent.Indexes[0].Implementation[0].Settings.StorageSettings != nil, qt.Equals, test.stated)
+			back, err := schema.ConvertNative(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+			c.Assert(err, qt.IsNil)
+			var read native.IndexObservations
+			c.Assert(protojson.Unmarshal(back.Payload, &read), qt.IsNil)
+			c.Assert(read.Indexes[0].Tables[0].Description.StorageSettings != nil, qt.Equals, test.stated)
+			again, err := schema.ConvertNative(back, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+			c.Assert(err, qt.IsNil)
+			c.Assert(proto.Equal(again, desired), qt.IsTrue)
+		})
+	}
+}
+
 func TestIndexConversionRefusesPhysicalBoundaries(t *testing.T) {
 	c := testcheck.New(t)
 	input := &native.IndexObservations{Indexes: []*native.ObservedIndex{indexObservation("idx")}}
