@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -91,7 +92,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 			return nil, fmt.Errorf("YDB schema traversal exceeds directory limit")
 		}
 		visited[selected] = true
-		listed, err := source.directory(ctx, path.Join(database, selected))
+		listed, err := nativeapi.ListDirectory(ctx, source.directory, database, selected)
 		if err != nil {
 			return nil, err
 		}
@@ -157,6 +158,12 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				indexes, err := source.readIndexes(ctx, path.Join(database, selected, name), description)
 				if err != nil {
 					return nil, err
+				}
+				if common.Indexes {
+					// The host holds what the common model describes; the
+					// native facet keeps only the rest.
+					table.Indexes = commonIndexes(table.Identity, indexes)
+					indexes = nativeIndexes(indexes)
 				}
 				facet, err := schema.CaptureIndexes(table.Identity, indexes)
 				if err != nil {

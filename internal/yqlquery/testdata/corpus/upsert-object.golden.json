@@ -6,7 +6,8 @@
       "text": "UPSERT OBJECT s (TYPE SECRET) WITH value = 'v'",
       "statements": [
         "UPSERT OBJECT s (TYPE SECRET) WITH value = 'v'"
-      ]
+      ],
+      "source": "UPSERT OBJECT s (TYPE SECRET) WITH value = 'v';"
     }
   ]
 }
