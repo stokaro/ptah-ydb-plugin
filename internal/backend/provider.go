@@ -124,6 +124,7 @@ func providerFeatures() []string {
 		provider.CommonAccessFeature,
 		provider.PlanningLifecycleFeature,
 		provider.PlanningObjectContextFeature,
+		provider.PlanningContextInventoryFeature,
 		provider.EntryKeysFeature,
 		provider.HCLSourceFeature,
 		provider.EncodeSourceFeature,
