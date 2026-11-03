@@ -13,6 +13,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -192,7 +193,7 @@ func ConvertTable(value *protocol.Envelope, from, to protocol.ValueInput_Represe
 
 func tableIntent(observed *native.DescribeTableResult) *native.RowTableIntent {
 	result := &native.RowTableIntent{PrimaryKey: slices.Clone(observed.PrimaryKey), TtlSettings: proto.CloneOf(observed.TtlSettings),
-		StorageSettings: proto.CloneOf(observed.StorageSettings), PartitioningSettings: proto.CloneOf(observed.PartitioningSettings),
+		StorageSettings: declaredStorage(observed.StorageSettings), PartitioningSettings: proto.CloneOf(observed.PartitioningSettings),
 		KeyBloomFilter: observed.KeyBloomFilter, ReadReplicasSettings: proto.CloneOf(observed.ReadReplicasSettings), Tiering: observed.Tiering, Temporary: observed.Temporary,
 	}
 	for _, family := range observed.ColumnFamilies {
@@ -217,4 +218,15 @@ func tableObservation(intent *native.RowTableIntent) *native.DescribeTableResult
 	result.Attributes = maps.Clone(intent.Attributes)
 	result.Self = accessObservation(intent.Access)
 	return result
+}
+
+// declaredStorage is the storage settings a read reports, as a declaration
+// states them. YDB reports store_external_blobs as DISABLED for every row
+// table that sets nothing, which is the server's default; as a declaration it
+// is no setting, and a creation written from the read needs none.
+func declaredStorage(settings *Ydb_Table.StorageSettings) *Ydb_Table.StorageSettings {
+	if settings == nil || proto.Equal(settings, &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_DISABLED}) {
+		return nil
+	}
+	return proto.CloneOf(settings)
 }

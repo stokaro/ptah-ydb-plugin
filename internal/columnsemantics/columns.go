@@ -5,9 +5,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
@@ -185,17 +185,9 @@ func sequenceChanges(desired *protocol.DeclaredColumn, current *protocol.Observe
 	return result
 }
 
-func canonicalSequence(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "1"
-	}
-	number, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return value
-	}
-	return strconv.FormatInt(number, 10)
-}
+// canonicalSequence is the form the planner reads a sequence setting in, so
+// two spellings of one setting compare equal.
+func canonicalSequence(value string) string { return ydbsequence.Canonical(value) }
 
 func defaultLiteral(column *protocol.DeclaredColumn, heldType string) string {
 	if !column.DefaultSet && column.DefaultValue == "" {

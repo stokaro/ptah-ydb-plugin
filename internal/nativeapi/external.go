@@ -69,11 +69,11 @@ func (e *External) Apply(ctx context.Context, database string, value *protocol.E
 	display := externals.Display(owner)
 	current, err := e.read(ctx, owner)
 	if err != nil {
-		return false, err
+		return false, refused("read "+noun(owner.Kind)+" "+display, err)
 	}
 	absent := before == nil || operation == schema.ExternalRestore
 	if absent != (current == nil) || (!absent && !sameObservation(before, current)) {
-		return false, fmt.Errorf("%s %s changed since the plan read it", noun(owner.Kind), display)
+		return false, &Refusal{Err: fmt.Errorf("%s %s changed since the plan read it", noun(owner.Kind), display)}
 	}
 	statements, err := externalStatements(owner, database, operation, after)
 	if err != nil {
@@ -189,15 +189,12 @@ func (e *External) restoreAccess(ctx context.Context, owner *protocol.Reference,
 }
 
 // read lists the object's directory and describes the object, or returns
-// nil where the directory holds no entry of its name.
+// nil where the directory holds no entry of its name, or does not exist; see
+// [ListDirectory].
 func (e *External) read(ctx context.Context, owner *protocol.Reference) (*protocol.Envelope, error) {
 	directory := path.Join(owner.Database, owner.Schema)
-	response, err := e.Scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: directory})
+	listing, err := ListDirectory(ctx, SchemeLister(e.Scheme), owner.Database, owner.Schema)
 	if err != nil {
-		return nil, fmt.Errorf("read YDB external object namespace: transport failed")
-	}
-	var listing Ydb_Scheme.ListDirectoryResult
-	if err := Operation(response.GetOperation(), &listing); err != nil {
 		return nil, err
 	}
 	if listing.GetSelf().GetName() != path.Base(directory) || (listing.GetSelf().GetType() != Ydb_Scheme.Entry_DATABASE && listing.GetSelf().GetType() != Ydb_Scheme.Entry_DIRECTORY) || len(listing.Children) > 4096 {

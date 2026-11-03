@@ -23,6 +23,7 @@ type query struct {
 	Kind       string   `json:"kind"`
 	Text       string   `json:"text"`
 	Statements []string `json:"statements"`
+	Source     string   `json:"source"`
 	Mixed      bool     `json:"mixed"`
 }
 
@@ -62,7 +63,7 @@ func splitCorpus(c *qt.C, split bool) []splitRow {
 func TestSplitMatchesTheHost_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	rows := splitCorpus(c, true)
-	c.Assert(len(rows) >= 18, qt.IsTrue, qt.Commentf("%d split texts", len(rows)))
+	c.Assert(len(rows) >= 21, qt.IsTrue, qt.Commentf("%d split texts", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -72,9 +73,34 @@ func TestSplitMatchesTheHost_HappyPath(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			got := make([]query, len(queries))
 			for i, q := range queries {
-				got[i] = query{Kind: q.Kind.String(), Text: q.Text, Statements: q.Statements, Mixed: q.Mixed}
+				got[i] = query{Kind: q.Kind.String(), Text: q.Text, Statements: q.Statements, Source: q.Source, Mixed: q.Mixed}
 			}
 			c.Assert(got, qt.DeepEquals, row.queries)
+		})
+	}
+}
+
+// TestSplitSpansNameEachStatement pins that each query's spans say where its
+// own statements are written, one span for each statement in the same order:
+// a span starts at the statement's first token and holds the statement
+// through its terminator.
+func TestSplitSpansNameEachStatement(t *testing.T) {
+	c := testcheck.New(t)
+	for _, row := range splitCorpus(c, true) {
+		t.Run(row.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			queries, err := yqlquery.Split(row.text)
+
+			c.Assert(err, qt.IsNil)
+			for _, q := range queries {
+				c.Assert(q.Spans, qt.HasLen, len(q.Statements))
+				for i, span := range q.Spans {
+					written := row.text[span.Start:span.End]
+					c.Assert(strings.HasPrefix(written, strings.Fields(q.Statements[i])[0]), qt.IsTrue, qt.Commentf("%q does not start %q", written, q.Statements[i]))
+					c.Assert(q.Source, qt.Contains, written)
+				}
+			}
 		})
 	}
 }

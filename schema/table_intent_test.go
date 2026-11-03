@@ -138,3 +138,28 @@ func TestDesiredTableWithoutAKeyIsNotAnObservation(t *testing.T) {
 	c.Assert(result == nil, qt.IsTrue)
 	c.Assert(err, qt.ErrorMatches, "observed YDB table properties require a primary key")
 }
+
+// A read reports store_external_blobs DISABLED for every row table that sets
+// nothing; the declaration converted from it states no storage settings. An
+// explicit setting stays.
+func TestTableConversionLeavesDefaultStorageOut(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		storage *Ydb_Table.StorageSettings
+		stated  bool
+	}{
+		{"the server's default", &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_DISABLED}, false},
+		{"external blobs", &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_ENABLED}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			observed, err := schema.CaptureTable(tableOwner(), &native.DescribeTableResult{PrimaryKey: []string{"id"}, StorageSettings: test.storage})
+			c.Assert(err, qt.IsNil)
+			desired, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+			c.Assert(err, qt.IsNil)
+			var intent native.RowTableIntent
+			c.Assert(protojson.Unmarshal(desired.Payload, &intent), qt.IsNil)
+			c.Assert(intent.StorageSettings != nil, qt.Equals, test.stated)
+		})
+	}
+}

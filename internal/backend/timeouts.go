@@ -39,19 +39,7 @@ func (s *session) timedOut(ctx context.Context, request *protocol.ExecuteRequest
 		if request.GetTransactionId() != "" {
 			// The transaction can only be rolled back now, so it is, and
 			// its outcome is retained for the caller's finish.
-			if record := s.transactions[request.GetTransactionId()]; record != nil && record.tx != nil {
-				record.failed = true
-				rollback, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-				defer cancel()
-				s.closeMetadataReaders(request.GetTransactionId(), false)
-				s.finishTransaction(rollback, record, protocol.FinishTransactionRequest_ROLLBACK)
-				// The driver answers the rollback that the session is not
-				// valid for reuse, because the canceled query ended it. The
-				// transaction never sent a commit, and a YDB transaction is
-				// applied only by its commit, so it is rolled back either way.
-				record.outcome = protocol.TransactionResult_ROLLED_BACK
-				s.active = ""
-			}
+			s.abandonTransaction(ctx, request.GetTransactionId())
 			return stopNotApplied
 		}
 		table, altered := yql.AlteredTable(unit.GetSql())

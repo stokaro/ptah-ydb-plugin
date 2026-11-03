@@ -6,21 +6,24 @@
       "text": "$x = 9l;\nUPSERT INTO t (id) VALUES ($x)",
       "statements": [
         "UPSERT INTO t (id) VALUES ($x)"
-      ]
+      ],
+      "source": "$x = 9l;\nUPSERT INTO t (id) VALUES ($x);"
     },
     {
       "kind": "scheme",
       "text": "$x = 9l;\nCREATE TABLE m (id Int64, PRIMARY KEY (id))",
       "statements": [
         "CREATE TABLE m (id Int64, PRIMARY KEY (id))"
-      ]
+      ],
+      "source": "CREATE TABLE m (id Int64, PRIMARY KEY (id));"
     },
     {
       "kind": "data",
       "text": "$x = 9l;\nUPSERT INTO t (id) VALUES ($x + 1)",
       "statements": [
         "UPSERT INTO t (id) VALUES ($x + 1)"
-      ]
+      ],
+      "source": "UPSERT INTO t (id) VALUES ($x + 1);"
     }
   ]
 }
