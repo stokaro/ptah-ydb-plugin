@@ -17,7 +17,11 @@ import (
 func assessObjects(ctx context.Context, request *protocol.PlanFeaturesRequest, result *protocol.PlannedFeatures, builder *lifecycleBuilder) error {
 	writes := dependencyWrites(request, builder.paths)
 	if writes {
-		if err := completeQueryInventory(request); err != nil {
+		err := completeQueryInventory(request)
+		if err == nil {
+			err = outsideReaders(request, builder)
+		}
+		if err != nil {
 			result.Diagnostics = []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: schema.StreamingQueryProperties, Message: err.Error()}}
 			return nil
 		}

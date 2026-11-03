@@ -538,6 +538,498 @@ func (x *SecretIntent) GetValueEnv() string {
 	return ""
 }
 
+// How an async replication or a transfer reaches the database it reads: the
+// connection string as YDB rebuilds it from its parts, and the credential by
+// the secret that holds it, a name as written and a path relative to the
+// database root. YDB never reads a password or a token back, so neither is
+// carried. An empty field states nothing.
+type ReplicationConnection struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ConnectionString   string                 `protobuf:"bytes,1,opt,name=connection_string,json=connectionString,proto3" json:"connection_string,omitempty"`
+	TokenSecretName    string                 `protobuf:"bytes,2,opt,name=token_secret_name,json=tokenSecretName,proto3" json:"token_secret_name,omitempty"`
+	TokenSecretPath    string                 `protobuf:"bytes,3,opt,name=token_secret_path,json=tokenSecretPath,proto3" json:"token_secret_path,omitempty"`
+	User               string                 `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
+	PasswordSecretName string                 `protobuf:"bytes,5,opt,name=password_secret_name,json=passwordSecretName,proto3" json:"password_secret_name,omitempty"`
+	PasswordSecretPath string                 `protobuf:"bytes,6,opt,name=password_secret_path,json=passwordSecretPath,proto3" json:"password_secret_path,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ReplicationConnection) Reset() {
+	*x = ReplicationConnection{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplicationConnection) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplicationConnection) ProtoMessage() {}
+
+func (x *ReplicationConnection) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplicationConnection.ProtoReflect.Descriptor instead.
+func (*ReplicationConnection) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ReplicationConnection) GetConnectionString() string {
+	if x != nil {
+		return x.ConnectionString
+	}
+	return ""
+}
+
+func (x *ReplicationConnection) GetTokenSecretName() string {
+	if x != nil {
+		return x.TokenSecretName
+	}
+	return ""
+}
+
+func (x *ReplicationConnection) GetTokenSecretPath() string {
+	if x != nil {
+		return x.TokenSecretPath
+	}
+	return ""
+}
+
+func (x *ReplicationConnection) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *ReplicationConnection) GetPasswordSecretName() string {
+	if x != nil {
+		return x.PasswordSecretName
+	}
+	return ""
+}
+
+func (x *ReplicationConnection) GetPasswordSecretPath() string {
+	if x != nil {
+		return x.PasswordSecretPath
+	}
+	return ""
+}
+
+// One FOR <source> AS <target> pair of an async replication: a path of the
+// source database, relative to its root or absolute, and the path of the
+// replica in this database, relative to its root.
+type ReplicationItem struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Target        string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplicationItem) Reset() {
+	*x = ReplicationItem{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplicationItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplicationItem) ProtoMessage() {}
+
+func (x *ReplicationItem) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplicationItem.ProtoReflect.Descriptor instead.
+func (*ReplicationItem) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ReplicationItem) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *ReplicationItem) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+// An async replication as the replication service describes it: the
+// connection, one item per replicated table, the consistency level and a
+// commit interval other than YDB's default, and the state it reports
+// (running, paused, done or error). Runtime statistics, item ids and the
+// changefeeds YDB creates on the source are not settings.
+type AsyncReplicationSettings struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Connection       *ReplicationConnection `protobuf:"bytes,1,opt,name=connection,proto3" json:"connection,omitempty"`
+	Items            []*ReplicationItem     `protobuf:"bytes,2,rep,name=items,proto3" json:"items,omitempty"`
+	ConsistencyLevel string                 `protobuf:"bytes,3,opt,name=consistency_level,json=consistencyLevel,proto3" json:"consistency_level,omitempty"`
+	CommitInterval   string                 `protobuf:"bytes,4,opt,name=commit_interval,json=commitInterval,proto3" json:"commit_interval,omitempty"`
+	State            string                 `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AsyncReplicationSettings) Reset() {
+	*x = AsyncReplicationSettings{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AsyncReplicationSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AsyncReplicationSettings) ProtoMessage() {}
+
+func (x *AsyncReplicationSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AsyncReplicationSettings.ProtoReflect.Descriptor instead.
+func (*AsyncReplicationSettings) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AsyncReplicationSettings) GetConnection() *ReplicationConnection {
+	if x != nil {
+		return x.Connection
+	}
+	return nil
+}
+
+func (x *AsyncReplicationSettings) GetItems() []*ReplicationItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *AsyncReplicationSettings) GetConsistencyLevel() string {
+	if x != nil {
+		return x.ConsistencyLevel
+	}
+	return ""
+}
+
+func (x *AsyncReplicationSettings) GetCommitInterval() string {
+	if x != nil {
+		return x.CommitInterval
+	}
+	return ""
+}
+
+func (x *AsyncReplicationSettings) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+// A declared async replication: what CREATE ASYNC REPLICATION takes. An
+// empty consistency level and commit interval leave YDB's defaults.
+type AsyncReplicationIntent struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Connection       *ReplicationConnection `protobuf:"bytes,1,opt,name=connection,proto3" json:"connection,omitempty"`
+	Items            []*ReplicationItem     `protobuf:"bytes,2,rep,name=items,proto3" json:"items,omitempty"`
+	ConsistencyLevel string                 `protobuf:"bytes,3,opt,name=consistency_level,json=consistencyLevel,proto3" json:"consistency_level,omitempty"`
+	CommitInterval   string                 `protobuf:"bytes,4,opt,name=commit_interval,json=commitInterval,proto3" json:"commit_interval,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AsyncReplicationIntent) Reset() {
+	*x = AsyncReplicationIntent{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AsyncReplicationIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AsyncReplicationIntent) ProtoMessage() {}
+
+func (x *AsyncReplicationIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AsyncReplicationIntent.ProtoReflect.Descriptor instead.
+func (*AsyncReplicationIntent) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *AsyncReplicationIntent) GetConnection() *ReplicationConnection {
+	if x != nil {
+		return x.Connection
+	}
+	return nil
+}
+
+func (x *AsyncReplicationIntent) GetItems() []*ReplicationItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *AsyncReplicationIntent) GetConsistencyLevel() string {
+	if x != nil {
+		return x.ConsistencyLevel
+	}
+	return ""
+}
+
+func (x *AsyncReplicationIntent) GetCommitInterval() string {
+	if x != nil {
+		return x.CommitInterval
+	}
+	return ""
+}
+
+// A transfer as the replication service describes it: its connection, its
+// topic, its table, its lambda as written, its consumer, batch settings other
+// than YDB's defaults, and the state it reports.
+type TransferSettings struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Connection     *ReplicationConnection `protobuf:"bytes,1,opt,name=connection,proto3" json:"connection,omitempty"`
+	Source         string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
+	Target         string                 `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Lambda         string                 `protobuf:"bytes,4,opt,name=lambda,proto3" json:"lambda,omitempty"`
+	Consumer       string                 `protobuf:"bytes,5,opt,name=consumer,proto3" json:"consumer,omitempty"`
+	BatchSizeBytes uint64                 `protobuf:"varint,6,opt,name=batch_size_bytes,json=batchSizeBytes,proto3" json:"batch_size_bytes,omitempty"`
+	FlushInterval  string                 `protobuf:"bytes,7,opt,name=flush_interval,json=flushInterval,proto3" json:"flush_interval,omitempty"`
+	State          string                 `protobuf:"bytes,8,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TransferSettings) Reset() {
+	*x = TransferSettings{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferSettings) ProtoMessage() {}
+
+func (x *TransferSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferSettings.ProtoReflect.Descriptor instead.
+func (*TransferSettings) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *TransferSettings) GetConnection() *ReplicationConnection {
+	if x != nil {
+		return x.Connection
+	}
+	return nil
+}
+
+func (x *TransferSettings) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *TransferSettings) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *TransferSettings) GetLambda() string {
+	if x != nil {
+		return x.Lambda
+	}
+	return ""
+}
+
+func (x *TransferSettings) GetConsumer() string {
+	if x != nil {
+		return x.Consumer
+	}
+	return ""
+}
+
+func (x *TransferSettings) GetBatchSizeBytes() uint64 {
+	if x != nil {
+		return x.BatchSizeBytes
+	}
+	return 0
+}
+
+func (x *TransferSettings) GetFlushInterval() string {
+	if x != nil {
+		return x.FlushInterval
+	}
+	return ""
+}
+
+func (x *TransferSettings) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+// A declared transfer: what CREATE TRANSFER takes. An empty consumer lets
+// YDB create one, and zero batch settings leave YDB's defaults.
+type TransferIntent struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Connection     *ReplicationConnection `protobuf:"bytes,1,opt,name=connection,proto3" json:"connection,omitempty"`
+	Source         string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
+	Target         string                 `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Lambda         string                 `protobuf:"bytes,4,opt,name=lambda,proto3" json:"lambda,omitempty"`
+	Consumer       string                 `protobuf:"bytes,5,opt,name=consumer,proto3" json:"consumer,omitempty"`
+	BatchSizeBytes uint64                 `protobuf:"varint,6,opt,name=batch_size_bytes,json=batchSizeBytes,proto3" json:"batch_size_bytes,omitempty"`
+	FlushInterval  string                 `protobuf:"bytes,7,opt,name=flush_interval,json=flushInterval,proto3" json:"flush_interval,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TransferIntent) Reset() {
+	*x = TransferIntent{}
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferIntent) ProtoMessage() {}
+
+func (x *TransferIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_objects_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferIntent.ProtoReflect.Descriptor instead.
+func (*TransferIntent) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_objects_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *TransferIntent) GetConnection() *ReplicationConnection {
+	if x != nil {
+		return x.Connection
+	}
+	return nil
+}
+
+func (x *TransferIntent) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *TransferIntent) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *TransferIntent) GetLambda() string {
+	if x != nil {
+		return x.Lambda
+	}
+	return ""
+}
+
+func (x *TransferIntent) GetConsumer() string {
+	if x != nil {
+		return x.Consumer
+	}
+	return ""
+}
+
+func (x *TransferIntent) GetBatchSizeBytes() uint64 {
+	if x != nil {
+		return x.BatchSizeBytes
+	}
+	return 0
+}
+
+func (x *TransferIntent) GetFlushInterval() string {
+	if x != nil {
+		return x.FlushInterval
+	}
+	return ""
+}
+
 var File_internal_nativeprotocol_objects_proto protoreflect.FileDescriptor
 
 const file_internal_nativeprotocol_objects_proto_rawDesc = "" +
@@ -596,7 +1088,53 @@ const file_internal_nativeprotocol_objects_proto_rawDesc = "" +
 	"\x04_run\"\x10\n" +
 	"\x0eSecretPresence\"+\n" +
 	"\fSecretIntent\x12\x1b\n" +
-	"\tvalue_env\x18\x01 \x01(\tR\bvalueEnvB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
+	"\tvalue_env\x18\x01 \x01(\tR\bvalueEnv\"\x94\x02\n" +
+	"\x15ReplicationConnection\x12+\n" +
+	"\x11connection_string\x18\x01 \x01(\tR\x10connectionString\x12*\n" +
+	"\x11token_secret_name\x18\x02 \x01(\tR\x0ftokenSecretName\x12*\n" +
+	"\x11token_secret_path\x18\x03 \x01(\tR\x0ftokenSecretPath\x12\x12\n" +
+	"\x04user\x18\x04 \x01(\tR\x04user\x120\n" +
+	"\x14password_secret_name\x18\x05 \x01(\tR\x12passwordSecretName\x120\n" +
+	"\x14password_secret_path\x18\x06 \x01(\tR\x12passwordSecretPath\"A\n" +
+	"\x0fReplicationItem\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12\x16\n" +
+	"\x06target\x18\x02 \x01(\tR\x06target\"\x86\x02\n" +
+	"\x18AsyncReplicationSettings\x12F\n" +
+	"\n" +
+	"connection\x18\x01 \x01(\v2&.ptah.ydb.native.ReplicationConnectionR\n" +
+	"connection\x126\n" +
+	"\x05items\x18\x02 \x03(\v2 .ptah.ydb.native.ReplicationItemR\x05items\x12+\n" +
+	"\x11consistency_level\x18\x03 \x01(\tR\x10consistencyLevel\x12'\n" +
+	"\x0fcommit_interval\x18\x04 \x01(\tR\x0ecommitInterval\x12\x14\n" +
+	"\x05state\x18\x05 \x01(\tR\x05state\"\xee\x01\n" +
+	"\x16AsyncReplicationIntent\x12F\n" +
+	"\n" +
+	"connection\x18\x01 \x01(\v2&.ptah.ydb.native.ReplicationConnectionR\n" +
+	"connection\x126\n" +
+	"\x05items\x18\x02 \x03(\v2 .ptah.ydb.native.ReplicationItemR\x05items\x12+\n" +
+	"\x11consistency_level\x18\x03 \x01(\tR\x10consistencyLevel\x12'\n" +
+	"\x0fcommit_interval\x18\x04 \x01(\tR\x0ecommitInterval\"\xa5\x02\n" +
+	"\x10TransferSettings\x12F\n" +
+	"\n" +
+	"connection\x18\x01 \x01(\v2&.ptah.ydb.native.ReplicationConnectionR\n" +
+	"connection\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x12\x16\n" +
+	"\x06target\x18\x03 \x01(\tR\x06target\x12\x16\n" +
+	"\x06lambda\x18\x04 \x01(\tR\x06lambda\x12\x1a\n" +
+	"\bconsumer\x18\x05 \x01(\tR\bconsumer\x12(\n" +
+	"\x10batch_size_bytes\x18\x06 \x01(\x04R\x0ebatchSizeBytes\x12%\n" +
+	"\x0eflush_interval\x18\a \x01(\tR\rflushInterval\x12\x14\n" +
+	"\x05state\x18\b \x01(\tR\x05state\"\x8d\x02\n" +
+	"\x0eTransferIntent\x12F\n" +
+	"\n" +
+	"connection\x18\x01 \x01(\v2&.ptah.ydb.native.ReplicationConnectionR\n" +
+	"connection\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x12\x16\n" +
+	"\x06target\x18\x03 \x01(\tR\x06target\x12\x16\n" +
+	"\x06lambda\x18\x04 \x01(\tR\x06lambda\x12\x1a\n" +
+	"\bconsumer\x18\x05 \x01(\tR\bconsumer\x12(\n" +
+	"\x10batch_size_bytes\x18\x06 \x01(\x04R\x0ebatchSizeBytes\x12%\n" +
+	"\x0eflush_interval\x18\a \x01(\tR\rflushIntervalB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
 
 var (
 	file_internal_nativeprotocol_objects_proto_rawDescOnce sync.Once
@@ -610,7 +1148,7 @@ func file_internal_nativeprotocol_objects_proto_rawDescGZIP() []byte {
 	return file_internal_nativeprotocol_objects_proto_rawDescData
 }
 
-var file_internal_nativeprotocol_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_internal_nativeprotocol_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_internal_nativeprotocol_objects_proto_goTypes = []any{
 	(*ViewObservation)(nil),                // 0: ptah.ydb.native.ViewObservation
 	(*DescribeExternalTableResult)(nil),    // 1: ptah.ydb.native.DescribeExternalTableResult
@@ -620,23 +1158,35 @@ var file_internal_nativeprotocol_objects_proto_goTypes = []any{
 	(*StreamingQueryIntent)(nil),           // 5: ptah.ydb.native.StreamingQueryIntent
 	(*SecretPresence)(nil),                 // 6: ptah.ydb.native.SecretPresence
 	(*SecretIntent)(nil),                   // 7: ptah.ydb.native.SecretIntent
-	nil,                                    // 8: ptah.ydb.native.DescribeExternalTableResult.ContentEntry
-	(*Ydb_View.DescribeViewResult)(nil),    // 9: Ydb.View.DescribeViewResult
-	(*DescribeTableResult)(nil),            // 10: ptah.ydb.native.DescribeTableResult
-	(*Ydb_Scheme.Entry)(nil),               // 11: Ydb.Scheme.Entry
-	(*ColumnMeta)(nil),                     // 12: ptah.ydb.native.ColumnMeta
+	(*ReplicationConnection)(nil),          // 8: ptah.ydb.native.ReplicationConnection
+	(*ReplicationItem)(nil),                // 9: ptah.ydb.native.ReplicationItem
+	(*AsyncReplicationSettings)(nil),       // 10: ptah.ydb.native.AsyncReplicationSettings
+	(*AsyncReplicationIntent)(nil),         // 11: ptah.ydb.native.AsyncReplicationIntent
+	(*TransferSettings)(nil),               // 12: ptah.ydb.native.TransferSettings
+	(*TransferIntent)(nil),                 // 13: ptah.ydb.native.TransferIntent
+	nil,                                    // 14: ptah.ydb.native.DescribeExternalTableResult.ContentEntry
+	(*Ydb_View.DescribeViewResult)(nil),    // 15: Ydb.View.DescribeViewResult
+	(*DescribeTableResult)(nil),            // 16: ptah.ydb.native.DescribeTableResult
+	(*Ydb_Scheme.Entry)(nil),               // 17: Ydb.Scheme.Entry
+	(*ColumnMeta)(nil),                     // 18: ptah.ydb.native.ColumnMeta
 }
 var file_internal_nativeprotocol_objects_proto_depIdxs = []int32{
-	9,  // 0: ptah.ydb.native.ViewObservation.view:type_name -> Ydb.View.DescribeViewResult
-	10, // 1: ptah.ydb.native.ViewObservation.properties:type_name -> ptah.ydb.native.DescribeTableResult
-	11, // 2: ptah.ydb.native.DescribeExternalTableResult.self:type_name -> Ydb.Scheme.Entry
-	12, // 3: ptah.ydb.native.DescribeExternalTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
-	8,  // 4: ptah.ydb.native.DescribeExternalTableResult.content:type_name -> ptah.ydb.native.DescribeExternalTableResult.ContentEntry
-	5,  // [5:5] is the sub-list for method output_type
-	5,  // [5:5] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	15, // 0: ptah.ydb.native.ViewObservation.view:type_name -> Ydb.View.DescribeViewResult
+	16, // 1: ptah.ydb.native.ViewObservation.properties:type_name -> ptah.ydb.native.DescribeTableResult
+	17, // 2: ptah.ydb.native.DescribeExternalTableResult.self:type_name -> Ydb.Scheme.Entry
+	18, // 3: ptah.ydb.native.DescribeExternalTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
+	14, // 4: ptah.ydb.native.DescribeExternalTableResult.content:type_name -> ptah.ydb.native.DescribeExternalTableResult.ContentEntry
+	8,  // 5: ptah.ydb.native.AsyncReplicationSettings.connection:type_name -> ptah.ydb.native.ReplicationConnection
+	9,  // 6: ptah.ydb.native.AsyncReplicationSettings.items:type_name -> ptah.ydb.native.ReplicationItem
+	8,  // 7: ptah.ydb.native.AsyncReplicationIntent.connection:type_name -> ptah.ydb.native.ReplicationConnection
+	9,  // 8: ptah.ydb.native.AsyncReplicationIntent.items:type_name -> ptah.ydb.native.ReplicationItem
+	8,  // 9: ptah.ydb.native.TransferSettings.connection:type_name -> ptah.ydb.native.ReplicationConnection
+	8,  // 10: ptah.ydb.native.TransferIntent.connection:type_name -> ptah.ydb.native.ReplicationConnection
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_internal_nativeprotocol_objects_proto_init() }
@@ -655,7 +1205,7 @@ func file_internal_nativeprotocol_objects_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_nativeprotocol_objects_proto_rawDesc), len(file_internal_nativeprotocol_objects_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
