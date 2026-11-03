@@ -149,6 +149,25 @@ func replaceStreamingInventory(snapshot, inventory *protocol.Schema) {
 		return value.Model.Kind == schema.StreamingQueryProperties
 	})
 	snapshot.Coverage.Kinds = append(snapshot.Coverage.Kinds, inventory.Coverage.Kinds...)
-	snapshot.Coverage.Subjects = slices.DeleteFunc(snapshot.Coverage.Subjects, func(value *protocol.ModelSubjectCoverage) bool { return value.Kind == schema.StreamingQueryProperties })
+	// The inventory reads streaming queries alone. A name the snapshot reserved
+	// for provider-owned storage keeps the unrepresentable subject reserve
+	// wrote for this kind, since the reservation still lists the kind as a
+	// conflict and a reply without that subject is refused.
+	snapshot.Coverage.Subjects = slices.DeleteFunc(snapshot.Coverage.Subjects, func(value *protocol.ModelSubjectCoverage) bool {
+		return value.Kind == schema.StreamingQueryProperties && !reservedSubject(snapshot, value)
+	})
 	snapshot.Coverage.Subjects = append(snapshot.Coverage.Subjects, inventory.Coverage.Subjects...)
+}
+
+// reservedSubject reports a subject reserve wrote: the identity of a reserved
+// object under the subject's kind, known to be unrepresentable.
+func reservedSubject(snapshot *protocol.Schema, value *protocol.ModelSubjectCoverage) bool {
+	if value.GetKnowledge().GetState() != protocol.ModelKnowledge_UNREPRESENTABLE {
+		return false
+	}
+	return slices.ContainsFunc(snapshot.ReservedObjects, func(object *protocol.ReservedObject) bool {
+		subject := proto.CloneOf(object.GetObject())
+		subject.Kind = value.Kind
+		return proto.Equal(subject, value.GetSubject())
+	})
 }
