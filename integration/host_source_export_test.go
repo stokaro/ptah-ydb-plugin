@@ -5,7 +5,6 @@ package integration_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
@@ -44,10 +43,12 @@ import (
 // which the host writes.
 
 // exportHostFeatures are the features the host negotiates that a read and an
-// export depend on.
+// export depend on. With common access negotiated, converting a read leaves
+// out the native access requirement, since the grants travel as common
+// grants.
 func exportHostFeatures() []string {
 	return []string{provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature, provider.EncodeGroupsFeature,
-		provider.EntryKeysFeature, provider.HCLSourceFeature}
+		provider.EntryKeysFeature, provider.HCLSourceFeature, provider.CommonObjectsFeature, provider.CommonAccessFeature}
 }
 
 // createExportFixture creates, in directory: a row table events with a TTL,
@@ -117,36 +118,7 @@ func readDirectory(c *qt.C, directory string) readExport {
 	desired, err := client.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_OBSERVED, To: protocol.ValueInput_DESIRED,
 		Values: observed.Values, TargetFeatures: inputs.TargetFeatures})
 	c.Assert(err, qt.IsNil)
-	read := readExport{client: client, features: inputs.TargetFeatures, tables: snapshot.Tables}
-	for _, value := range desired.Values {
-		read.values = append(read.values, withoutReadAccess(c, value))
-	}
-	return read
-}
-
-// withoutReadAccess leaves out of a converted read what plugin #82 leaves out
-// of the conversion: the native access requirement, which the grants on the
-// common wire repeat and no source spells, and the storage settings YDB
-// reports for a row table that sets none. The export reports both as losses;
-// leaving them out here measures it over the rest of the read.
-func withoutReadAccess(c *qt.C, value *protocol.NormalizedValue) *protocol.NormalizedValue {
-	c.Helper()
-	envelope := value.GetValue()
-	var fields map[string]json.RawMessage
-	c.Assert(json.Unmarshal(envelope.GetPayload(), &fields), qt.IsNil)
-	delete(fields, "access")
-	if envelope.GetKind() == schema.TableProperties && string(fields["storageSettings"]) == `{"storeExternalBlobs":"DISABLED"}` {
-		delete(fields, "storageSettings")
-	}
-	payload, err := json.Marshal(fields)
-	c.Assert(err, qt.IsNil)
-	stripped := proto.CloneOf(value)
-	stripped.Value.Payload = payload
-	normalized, err := schema.NormalizeDesired(stripped.Value)
-	c.Assert(err, qt.IsNil)
-	normalized.Context = proto.CloneOf(envelope.GetContext())
-	stripped.Value, stripped.CanonicalProjection = normalized, normalized.Payload
-	return stripped
+	return readExport{client: client, features: inputs.TargetFeatures, tables: snapshot.Tables, values: desired.Values}
 }
 
 // readColumn is a common column of a read as the host's writer writes it.
