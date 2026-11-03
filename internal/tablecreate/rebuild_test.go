@@ -194,3 +194,32 @@ func TestRebuildPlanKeepsTheComments(t *testing.T) {
 		"COMMENT ON COLUMN `app/__ptah_rebuild_records`.`payload` IS 'the text';")
 	check.Assert(strings.HasSuffix(rendered.Units[0].GetSql(), "'the text';"), qt.IsTrue)
 }
+
+// A table that declares or holds a vector or full-text index is not rebuilt:
+// the new table is created with the global indexes of its declaration alone,
+// and the index would be lost.
+func TestRebuildPlanRefusesVectorAndFullTextIndexes(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		desired, held []string
+	}{
+		{"a declared vector index", []string{vectorIndexes(false)}, nil},
+		{"a held vector index", nil, []string{vectorIndexes(true)}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := rebuildRequest(c, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+			table := request.Tables[0]
+			for _, payload := range test.desired {
+				table.Desired.Features.Facets.Records = append(table.Desired.Features.Facets.Records, facet(c, schema.IndexProperties, "", payload))
+			}
+			for _, payload := range test.held {
+				table.Current.Features.Facets.Records = append(table.Current.Features.Facets.Records, observedFacet(c, schema.IndexProperties, "", payload))
+			}
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Diagnostics, qt.HasLen, 1)
+			c.Assert(plan.Diagnostics[0].Message, qt.Matches, `rebuilding table "app/records": the table declares or holds the vector or full-text index "by_embedding", which the rebuild does not create; .*`)
+		})
+	}
+}

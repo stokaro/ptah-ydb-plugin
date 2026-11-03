@@ -131,6 +131,10 @@ func CapturePartitioningAlteration(id string, owner *protocol.Reference, change 
 // CaptureIndexAlteration builds the operation for the addition or the removal
 // of one index planned against a table in owner.
 func CaptureIndexAlteration(id string, owner *protocol.Reference, change indexChange) (*protocol.NormalizedValue, error) {
+	if change.add != nil && nativeOnlyIndex(change.add) {
+		// The native call adds no vector or full-text index; YQL does.
+		return CaptureNativeIndex(id, owner, change.add)
+	}
 	if change.add == nil {
 		request := &Ydb_Table.AlterTableRequest{DropIndexes: []string{change.drop.Name}}
 		return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: map[string]string{}, HeldIndexes: []*native.TableIndexDescription{change.drop}})

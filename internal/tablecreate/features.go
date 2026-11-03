@@ -43,6 +43,9 @@ type declaredFacets struct {
 	// YDB adds a changefeed only to a table that exists, so each is a step of
 	// its own after the creation.
 	changefeeds *native.ChangefeedSetIntent
+	// indexes is the native index set of a row table, nil where the
+	// declaration states none.
+	indexes *native.IndexSetIntent
 }
 
 func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures) (declaredFacets, error) {
@@ -103,15 +106,21 @@ func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures)
 			}
 		case schema.IndexProperties:
 			// The native set holds the indexes the common model cannot
-			// describe, and this provider creates none of them with a table
-			// yet. An empty set, which a read of a table with only global
-			// indexes converts to, states nothing to create.
-			var set native.IndexSetIntent
-			if err := protojson.Unmarshal(value.Payload, &set); err != nil {
+			// describe, and the creation request carries none of it. A vector
+			// or full-text index is a step of its own after the creation (see
+			// plannedCreationIndexes). A global index the set states is
+			// refused: a new or rebuilt table takes its global indexes from
+			// the common declaration, and would come back without it. An empty
+			// set, which a read of a table with only global indexes converts
+			// to, states nothing to create.
+			result.indexes = &native.IndexSetIntent{}
+			if err := protojson.Unmarshal(value.Payload, result.indexes); err != nil {
 				return declaredFacets{}, err
 			}
-			if len(set.GetIndexes()) != 0 {
-				return declaredFacets{}, unsupported("YDB table creation does not yet create index %q, which only the native index set describes", set.GetIndexes()[0].GetSpecification().GetName())
+			for _, declaration := range result.indexes.GetIndexes() {
+				if spec := declaration.GetSpecification(); !nativeOnlyIndex(spec) {
+					return declaredFacets{}, unsupported("index %q: the native index set states a global index, and a new table takes its global indexes from the common declaration", spec.GetName())
+				}
 			}
 		case schema.ChangefeedProperties:
 			result.changefeeds = &native.ChangefeedSetIntent{}

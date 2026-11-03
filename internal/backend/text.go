@@ -97,6 +97,12 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.DropStatement(path), nil
+	case tablecreate.NativeIndexOperationKind:
+		addition, err := tablecreate.DecodeNativeIndex(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.NativeIndexStatement(path, addition), nil
 	case tablecreate.CopyOperationKind:
 		copied, err := tablecreate.DecodeCopy(value)
 		if err != nil {

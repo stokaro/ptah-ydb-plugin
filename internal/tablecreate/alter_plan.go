@@ -165,9 +165,17 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
+	// The vector and full-text indexes follow the rules of their own, with
+	// the column types and the key they read.
+	vectorAndText, reason := planNativeIndexes(nativeIndexInput{managed: desired.indexes != nil, desired: &wantedIndexes, held: &heldIndexes,
+		columns: declaredKeyTypes(table.Desired, &intent), capabilities: capabilities})
+	if reason != "" {
+		return alterationChanges{}, reason, nil
+	}
+	indexes = append(indexes, vectorAndText...)
 	// The host adds and drops the common indexes it compares, and this
-	// service carries out each step. An index both sides would change is
-	// declared twice.
+	// service carries out each step. An index both sides would change, a
+	// vector or full-text index of the native set included, is declared twice.
 	claimed, reason, err := claimIndexSteps(owner, table, steps, &heldIndexes, capabilities)
 	if err != nil || reason != "" {
 		return alterationChanges{}, reason, err
