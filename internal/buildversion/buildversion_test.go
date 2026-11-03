@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/buildversion"
 )
@@ -19,7 +20,7 @@ func TestResolve(t *testing.T) {
 		{name: "no build information", want: buildversion.Development},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			c := qt.New(t)
+			c := testcheck.New(t)
 			c.Assert(buildversion.Resolve(test.linked, test.module), qt.Equals, test.want)
 		})
 	}
@@ -28,6 +29,6 @@ func TestResolve(t *testing.T) {
 // A test binary records no main module version, so a binary built without the
 // release flags reports itself as a development build.
 func TestVersionOfADevelopmentBuild(t *testing.T) {
-	c := qt.New(t)
+	c := testcheck.New(t)
 	c.Assert(buildversion.Version(), qt.Equals, buildversion.Development)
 }
