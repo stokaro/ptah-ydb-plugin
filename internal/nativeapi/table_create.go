@@ -58,7 +58,7 @@ func (c *TableCreation) Apply(ctx context.Context, database string, value *proto
 		return false, err
 	}
 	directory := path.Join(database, owner.Schema)
-	if err := absent(ctx, c.Scheme, directory, owner); err != nil {
+	if err := absent(ctx, c.Scheme, database, owner); err != nil {
 		return false, err
 	}
 	session, err := c.Open(ctx)

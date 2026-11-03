@@ -133,7 +133,7 @@ func (w *Workload) Apply(ctx context.Context, database string, value *protocol.E
 		return false, err
 	}
 	if subject := differs(held, changes, true); subject != "" {
-		return false, fmt.Errorf("%s changed since the plan read it", subject)
+		return false, &Refusal{Err: fmt.Errorf("%s changed since the plan read it", subject)}
 	}
 	if err := beforeWrite(ctx); err != nil {
 		return false, err

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,6 +16,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
@@ -327,6 +329,20 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 			c.Assert(result.Message, qt.Not(qt.Contains), "secret-marker")
 		})
 	}
+}
+
+// A refusal before dispatch whose text is Ptah's own, naming the object, is
+// the unit's message, so the reason a precondition did not hold reaches the
+// host. The text of any other error stays out of the message.
+func TestExecutionReportsTheReasonOfARefusal(t *testing.T) {
+	c := testcheck.New(t)
+	refusal := &nativeapi.Refusal{Err: errors.New("topic app/events changed since the plan read it")}
+	result := executeUnits(t.Context(), 0, nil, func(context.Context, *protocol.Unit) (bool, error) {
+		return false, fmt.Errorf("apply: %w", refusal)
+	}, []*protocol.Unit{{}})
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
+	c.Assert(result.DiagnosticCode, qt.Equals, "ydb.precondition-refused")
+	c.Assert(result.Message, qt.Equals, "topic app/events changed since the plan read it")
 }
 
 // A statement timeout reaches the provider as the deadline of the Execute call.
