@@ -36,6 +36,10 @@ func planInventory(owner *protocol.Reference, table *protocol.PlanningTable, cla
 		if claimed(column.Name) || slices.ContainsFunc(table.Current.Columns, func(c *protocol.ObservedColumn) bool { return c.Name == column.Name }) {
 			continue
 		}
+		if column.GetFromSequence() != nil {
+			return nil, fmt.Sprintf("adding column %q to table %q: YDB adds no Serial column to an existing table (`Column addition with serial data type is unsupported`)",
+				column.Name, tableLabel(owner)), nil
+		}
 		addition := proto.CloneOf(column)
 		addition.Family = ""
 		change := &ColumnInventory{Add: addition}

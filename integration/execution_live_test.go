@@ -159,10 +159,13 @@ func TestNativeExecutionFailureAndBatchPreflight(t *testing.T) {
 	assertRowCount(c, opened, table, 1)
 
 	// Reusing a correlation ID is a new dispatch, not an exactly-once promise.
+	// YDB refuses the second insert of the key before applying anything,
+	// which proves the unit not applied.
 	first := executeSQL(c, client, session.Id, "", "INSERT INTO `"+table+"` (id) VALUES (2u)")
 	c.Assert(first.Outcome, qt.Equals, protocol.Execution_APPLIED)
 	second := executeSQL(c, client, session.Id, "", "INSERT INTO `"+table+"` (id) VALUES (2u)")
-	c.Assert(second.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(second.Outcome, qt.Equals, protocol.Execution_NOT_APPLIED)
+	c.Assert(second.Message, qt.Contains, "Conflict with existing key")
 	assertRowCount(c, opened, table, 2)
 }
 
@@ -252,11 +255,13 @@ func TestNativeSerializableTransactionRejectsRangeConflict(t *testing.T) {
 	c.Assert(executeSQL(c, client, session.Id, tx.Id, "SELECT id FROM `"+table+"` WHERE id >= 1u").Outcome, qt.Equals, protocol.Execution_APPLIED)
 	_, err = opened.DB.ExecContext(c.Context(), "SELECT id FROM `"+table+"` WHERE id >= 1u; UPSERT INTO `"+table+"` (id) VALUES (2u)")
 	c.Assert(err, qt.IsNil)
+	// YDB aborts the transaction at the write or at its commit, and either
+	// way it applies nothing.
 	written := executeSQL(c, client, session.Id, tx.Id, "UPSERT INTO `"+table+"` (id) VALUES (1u)")
-	c.Assert(written.Outcome == protocol.Execution_APPLIED || written.Outcome == protocol.Execution_UNKNOWN, qt.IsTrue)
+	c.Assert(written.Outcome == protocol.Execution_APPLIED || written.Outcome == protocol.Execution_NOT_APPLIED, qt.IsTrue)
 	finished, err := client.FinishTransaction(c.Context(), &protocol.FinishTransactionRequest{SessionId: session.Id, TransactionId: tx.Id, Action: protocol.FinishTransactionRequest_COMMIT})
 	c.Assert(finished, qt.IsNotNil)
-	c.Assert(finished.Outcome, qt.Equals, protocol.TransactionResult_UNKNOWN)
-	c.Assert(err, qt.ErrorIs, provider.ErrOutcomeUnknown)
+	c.Assert(finished.Outcome, qt.Equals, protocol.TransactionResult_ROLLED_BACK)
+	c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 	assertRowCount(c, opened, table, 1)
 }

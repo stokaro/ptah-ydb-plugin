@@ -1,0 +1,31 @@
+{
+  "host_commit": "4950d3ebff37bd21a0629e7a27b99d001dfe37c7",
+  "queries": [
+    {
+      "kind": "data",
+      "text": "PRAGMA TablePathPrefix(\"/local/app\");\nDECLARE $p AS Int64;\nUPSERT INTO t (id) VALUES ($p);\n$y = 2",
+      "statements": [
+        "UPSERT INTO t (id) VALUES ($p)",
+        "$y = 2"
+      ],
+      "source": "PRAGMA TablePathPrefix(\"/local/app\");\nDECLARE $p AS Int64;\nUPSERT INTO t (id) VALUES ($p);\n$y = 2;"
+    },
+    {
+      "kind": "scheme",
+      "text": "PRAGMA TablePathPrefix(\"/local/app\");\nDECLARE $p AS Int64;\n$y = 2;\nDROP TABLE m",
+      "statements": [
+        "DROP TABLE m"
+      ],
+      "source": "DROP TABLE m;"
+    },
+    {
+      "kind": "data",
+      "text": "PRAGMA TablePathPrefix(\"/local/app\");\nDECLARE $p AS Int64;\n$y = 2;\n$z = 3;\nUPSERT INTO t (id) VALUES ($y + $z);\n$tail = 4",
+      "statements": [
+        "UPSERT INTO t (id) VALUES ($y + $z)",
+        "$tail = 4"
+      ],
+      "source": "$z = 3;\nUPSERT INTO t (id) VALUES ($y + $z);\n$tail = 4;"
+    }
+  ]
+}

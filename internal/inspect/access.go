@@ -48,6 +48,11 @@ func Access(ctx context.Context, snapshot *protocol.Schema, database string, rea
 		if target.reference.Kind == "resource pool" && target.reference.Name == "default" && errors.Is(err, nativeapi.ErrAccessPathNotVisible) {
 			continue
 		}
+		// A selected directory the listing proved absent (see
+		// nativeapi.ListDirectory) has no owner and no grant to describe.
+		if target.reference.Kind == "schema" && errors.Is(err, nativeapi.ErrAccessPathNotVisible) {
+			continue
+		}
 		if err != nil {
 			return err
 		}

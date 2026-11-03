@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -169,7 +170,7 @@ func TestRowTableInspectionSubprocess(t *testing.T) {
 	c.Assert(string(again.Values[0].CanonicalProjection), qt.Equals, string(normalized.Values[0].CanonicalProjection))
 }
 
-func TestInspectionRefusesEscapingAndMissingScopes(t *testing.T) {
+func TestInspectionRefusesEscapingScopes(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -179,10 +180,34 @@ func TestInspectionRefusesEscapingAndMissingScopes(t *testing.T) {
 	c.Assert(empty.Tables, qt.HasLen, 0)
 	c.Assert(empty.Coverage.Subjects, qt.HasLen, 0)
 	createFixtureTable(c, opened, database, directory)
-	for _, selectors := range [][]string{{"../other"}, {directory, "/" + directory}, {""}, {".sys"}, {directory + "/../other"}, {directory + "/missing"}} {
+	for _, selectors := range [][]string{{"../other"}, {directory, "/" + directory}, {""}, {".sys"}, {directory + "/../other"}} {
 		snapshot, err := inspect.Read(ctx, opened.Driver, columnTables(opened), database, selectors)
 		c.Assert(snapshot, qt.IsNil)
 		c.Assert(err, qt.IsNotNil)
+	}
+}
+
+// A selected directory that does not exist reads as empty, because its
+// parent's listing does not name it: the absence a walk from the root takes
+// for any entry a listing leaves out. Its native objects are known absent.
+func TestInspectionReadsAMissingDirectoryAsEmpty(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := inspectionFixture(c)
+	createFixtureTable(c, opened, database, directory)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	for _, selected := range []string{directory + "/missing", directory + "/missing/nested"} {
+		snapshot, err := inspect.Read(ctx, opened.Driver, columnTables(opened), database, []string{selected})
+		c.Assert(err, qt.IsNil, qt.Commentf("%s", selected))
+		c.Assert(snapshot.Tables, qt.HasLen, 0)
+		c.Assert(snapshot.NativeObjects, qt.HasLen, 0)
+		topics := slices.IndexFunc(snapshot.Coverage.Kinds, func(kind *protocol.ModelKindCoverage) bool {
+			return kind.GetModel().GetKind() == schema.TopicProperties
+		})
+		c.Assert(topics, qt.Not(qt.Equals), -1)
+		c.Assert(snapshot.Coverage.Kinds[topics].Regions, qt.HasLen, 1)
+		c.Assert(snapshot.Coverage.Kinds[topics].Regions[0].Scope.Schema.Normalized, qt.Equals, selected)
+		c.Assert(snapshot.Coverage.Kinds[topics].Regions[0].Knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
 	}
 }
 
