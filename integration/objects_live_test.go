@@ -153,7 +153,7 @@ func TestNativeObjectsAndNamespaceCoverageSubprocess(t *testing.T) {
 	c.Assert(proto.Equal(again, normalized), qt.IsTrue)
 	convertNativeProperties(c, client, values)
 	t.Run("host export", func(t *testing.T) {
-		assertHostSchemaExport(t, client, binary, digest, []string{directory, child}, values)
+		assertHostSchemaExport(t, binary, digest, []string{directory, child}, values)
 	})
 }
 
