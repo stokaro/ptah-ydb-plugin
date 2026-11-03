@@ -159,7 +159,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			}
 			if column {
 				if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
-					if reason := completeColumnAlteration(owner, table, nil, nil, nil, request.Capabilities); reason != "" {
+					if reason := completeColumnAlteration(owner, table, nil, nil, nil, nil, request.Capabilities); reason != "" {
 						return refused(i, reason), nil
 					}
 				}
@@ -239,7 +239,14 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				if reason != "" {
 					return refused(i, reason), nil
 				}
-				if reason := completeColumnAlteration(owner, table, item.claims, item.defaults, item.inventory, request.Capabilities); reason != "" {
+				item.sequences, reason, err = planSequences(owner, table, request.Capabilities)
+				if err != nil {
+					return nil, err
+				}
+				if reason != "" {
+					return refused(i, reason), nil
+				}
+				if reason := completeColumnAlteration(owner, table, item.claims, item.defaults, item.inventory, item.sequences, request.Capabilities); reason != "" {
 					return refused(i, reason), nil
 				}
 			}
@@ -355,6 +362,8 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		receiptSteps[item.index] = ids
 	}
+	// sequenceSteps numbers the sequence changes of the altered tables.
+	sequenceSteps := 0
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, defaults, inventories int
 	for i := range alterations {
@@ -399,6 +408,12 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		for _, change := range item.defaults {
 			step := change.plan(subject, defaults)
 			defaults++
+			contribution.Steps = append(contribution.Steps, step)
+			ordered = append(ordered, step.Id)
+		}
+		for _, change := range item.sequences {
+			step := change.plan(subject, sequenceSteps)
+			sequenceSteps++
 			contribution.Steps = append(contribution.Steps, step)
 			ordered = append(ordered, step.Id)
 		}
@@ -480,7 +495,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			ordered = append(ordered, item.feeds.id)
 		}
 		ordered = append(ordered, dropped...)
-		if len(item.inventory)+len(item.defaults) > 0 {
+		if len(item.inventory)+len(item.defaults)+len(item.sequences) > 0 {
 			for n := 1; n < len(ordered); n++ {
 				contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(ordered[n-1]), After: proto.CloneOf(ordered[n])})
 			}

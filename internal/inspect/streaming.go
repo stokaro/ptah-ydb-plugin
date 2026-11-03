@@ -102,6 +102,46 @@ func ReadStreamingInventory(ctx context.Context, database string, list func(cont
 	return result, nil
 }
 
+// RealmStreamingInventory gives a read that left out the dev realm
+// directories realms the streaming query coverage that inventory, a read of
+// every directory in the database, establishes, when no query lives in a
+// realm. Absence there is what lets a query the read left out be no input
+// reader, so a change to an input proceeds. A query in a realm keeps the
+// narrower coverage, and a change to an input it might read is refused.
+func RealmStreamingInventory(snapshot, inventory *protocol.Schema, realms []string) {
+	inRealm := func(directory string) bool {
+		return slices.ContainsFunc(realms, func(realm string) bool { return directory == realm || strings.HasPrefix(directory, realm+"/") })
+	}
+	if slices.ContainsFunc(inventory.NativeObjects, func(value *protocol.Envelope) bool { return inRealm(value.GetOwner().GetSchema()) }) ||
+		slices.ContainsFunc(inventory.Coverage.GetSubjects(), func(value *protocol.ModelSubjectCoverage) bool { return inRealm(value.GetSubject().GetSchema()) }) {
+		return
+	}
+	replaceStreamingInventory(snapshot, inventory)
+}
+
+// OutsideStreamingInventory is the planning context of a read filtered to the
+// directories selected: the streaming queries inventory, a read of every
+// directory in the database, finds outside them, with the inventory's
+// database-wide coverage (ADR 0053). A query inside them is the snapshot's
+// own native object. A query whose settings could not be read stays an
+// unknown subject, which refuses a write of any input.
+func OutsideStreamingInventory(inventory *protocol.Schema, selected []string) *protocol.PlanningContextInventory {
+	outside := func(directory string) bool { return !slices.Contains(selected, directory) }
+	result := &protocol.PlanningContextInventory{Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED,
+		Kinds: slices.Clone(inventory.GetCoverage().GetKinds())}}
+	for _, value := range inventory.GetNativeObjects() {
+		if outside(value.GetOwner().GetSchema()) {
+			result.Objects = append(result.Objects, value)
+		}
+	}
+	for _, subject := range inventory.GetCoverage().GetSubjects() {
+		if outside(subject.GetSubject().GetSchema()) {
+			result.Coverage.Subjects = append(result.Coverage.Subjects, subject)
+		}
+	}
+	return result
+}
+
 func replaceStreamingInventory(snapshot, inventory *protocol.Schema) {
 	snapshot.NativeObjects = slices.DeleteFunc(snapshot.NativeObjects, func(value *protocol.Envelope) bool { return value.Kind == schema.StreamingQueryProperties })
 	snapshot.NativeObjects = append(snapshot.NativeObjects, inventory.NativeObjects...)
@@ -109,6 +149,25 @@ func replaceStreamingInventory(snapshot, inventory *protocol.Schema) {
 		return value.Model.Kind == schema.StreamingQueryProperties
 	})
 	snapshot.Coverage.Kinds = append(snapshot.Coverage.Kinds, inventory.Coverage.Kinds...)
-	snapshot.Coverage.Subjects = slices.DeleteFunc(snapshot.Coverage.Subjects, func(value *protocol.ModelSubjectCoverage) bool { return value.Kind == schema.StreamingQueryProperties })
+	// The inventory reads streaming queries alone. A name the snapshot reserved
+	// for provider-owned storage keeps the unrepresentable subject reserve
+	// wrote for this kind, since the reservation still lists the kind as a
+	// conflict and a reply without that subject is refused.
+	snapshot.Coverage.Subjects = slices.DeleteFunc(snapshot.Coverage.Subjects, func(value *protocol.ModelSubjectCoverage) bool {
+		return value.Kind == schema.StreamingQueryProperties && !reservedSubject(snapshot, value)
+	})
 	snapshot.Coverage.Subjects = append(snapshot.Coverage.Subjects, inventory.Coverage.Subjects...)
+}
+
+// reservedSubject reports a subject reserve wrote: the identity of a reserved
+// object under the subject's kind, known to be unrepresentable.
+func reservedSubject(snapshot *protocol.Schema, value *protocol.ModelSubjectCoverage) bool {
+	if value.GetKnowledge().GetState() != protocol.ModelKnowledge_UNREPRESENTABLE {
+		return false
+	}
+	return slices.ContainsFunc(snapshot.ReservedObjects, func(object *protocol.ReservedObject) bool {
+		subject := proto.CloneOf(object.GetObject())
+		subject.Kind = value.Kind
+		return proto.Equal(subject, value.GetSubject())
+	})
 }

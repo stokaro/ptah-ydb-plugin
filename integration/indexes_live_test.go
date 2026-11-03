@@ -99,8 +99,15 @@ func TestNativeIndexObservationsSubprocess(t *testing.T) {
 			c.Assert(table.Facets[1].Kind, qt.Equals, schema.IndexProperties)
 			var indexes native.IndexObservations
 			c.Assert(protojson.Unmarshal(table.Facets[1].Payload, &indexes), qt.IsNil)
-			c.Assert(indexes.Indexes, qt.HasLen, 1)
-			observed := indexes.Indexes[0]
+			// The native facet keeps only what the common model cannot describe.
+			c.Assert(indexes.Indexes, qt.HasLen, 1-len(common))
+			// The direct read reports no common index and describes every
+			// index natively.
+			c.Assert(direct.Tables[0].Indexes, qt.HasLen, 0)
+			var read native.IndexObservations
+			c.Assert(protojson.Unmarshal(direct.Tables[0].Facets[1].Payload, &read), qt.IsNil)
+			c.Assert(read.Indexes, qt.HasLen, 1)
+			observed := read.Indexes[0]
 			c.Assert(observed.Description.Name, qt.Equals, "idx")
 			selected := observed.Description.ProtoReflect().WhichOneof(observed.Description.ProtoReflect().Descriptor().Oneofs().ByName("type"))
 			c.Assert(string(selected.Name()), qt.Equals, test.kind)

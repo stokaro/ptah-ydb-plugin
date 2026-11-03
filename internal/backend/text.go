@@ -8,6 +8,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -60,7 +61,7 @@ func textOf(value *protocol.Envelope) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return tablecreate.RowTableStatement(path, request)
+		return tablecreate.RowTableStatementIn(owner.GetDatabase(), path, request)
 	case tablecreate.InventoryOperationKind:
 		change, err := tablecreate.DecodeInventory(value)
 		if err != nil {
@@ -108,6 +109,12 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.RenameStatement(path, rename), nil
+	case tablecreate.SequenceOperationKind:
+		change, err := tablecreate.DecodeSequence(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.SequenceAlterationStatement(owner.GetDatabase(), path, change)
 	case schema.SecretOperation:
 		return schema.SecretStatement(value)
 	case schema.CoordinationOperation:
@@ -129,6 +136,18 @@ func textOf(value *protocol.Envelope) (string, error) {
 		return statements[0], nil
 	case schema.WorkloadOperation:
 		return workloadText(value)
+	case schema.ReplicationOperation:
+		step, err := schema.ReplicationStepOf(schema.ReplicationOperationChange(value))
+		if err != nil {
+			return "", err
+		}
+		return replicationText(path, step), nil
+	case schema.TransferOperation:
+		step, err := schema.TransferStepOf(schema.TransferOperationChange(value))
+		if err != nil {
+			return "", err
+		}
+		return transferText(path, step), nil
 	default:
 		return "", fmt.Errorf("%w: the native operation %s has no YQL statement", tablecreate.ErrNoTextForm, value.GetKind())
 	}
@@ -248,4 +267,31 @@ func workloadText(value *protocol.Envelope) (string, error) {
 		return "", err
 	}
 	return strings.Join(statements, "\n"), nil
+}
+
+// replicationText writes an async replication operation as the statement
+// the host's embedded engine writes for it, every path relative to the
+// database root as declared.
+func replicationText(path string, step schema.ReplicationStep) string {
+	switch {
+	case step.Before == nil:
+		return replication.CreateReplicationStatement(path, *step.After)
+	case step.After == nil:
+		return replication.DropReplicationStatement(path, step.Cascade())
+	default:
+		return replication.AlterReplicationStatement(path, *step.After, *step.Before)
+	}
+}
+
+// transferText writes a transfer operation as the statement the host's
+// embedded engine writes for it.
+func transferText(path string, step schema.TransferStep) string {
+	switch {
+	case step.Before == nil:
+		return replication.CreateTransferStatement(path, *step.After)
+	case step.After == nil:
+		return replication.DropTransferStatement(path)
+	default:
+		return replication.AlterTransferStatement(path, *step.After, *step.Before)
+	}
 }

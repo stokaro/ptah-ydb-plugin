@@ -307,3 +307,95 @@ func TestStreamingContextRequiresCompleteUnnamedInventoryForWrites(t *testing.T)
 		})
 	}
 }
+
+// Creating an object needs no inventory of the streaming queries, since no
+// query reads an object the database does not hold yet. Dropping one does.
+func TestStreamingContextCreationNeedsNoInventory(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		action      protocol.PlanningEffect_Action
+		diagnostics int
+	}{{"a table creation", protocol.PlanningEffect_CREATE, 0}, {"a table removal", protocol.PlanningEffect_DROP, 1}} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := unchangedStreamingRequest(c, nil)
+			request.CurrentObjects.Records = request.CurrentObjects.Records[1:]
+			request.DesiredObjects.Records = request.DesiredObjects.Records[1:]
+			request.CurrentObjects.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
+			request.ChangedSubjects = nil
+			table := &protocol.ComparisonIdentity{Kind: "table", Schema: testcomparison.Part("app"), Name: testcomparison.Part("fresh")}
+			request.CommonSteps = []*protocol.CommonPlanningStep{{Id: &protocol.StepIdentity{Owner: "host", Name: "change-table"},
+				Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Change a table", Effects: []*protocol.PlanningEffect{{Subject: table, Action: test.action}}}}}
+			result, err := backend.New().PlanFeatures(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Diagnostics, qt.HasLen, test.diagnostics)
+		})
+	}
+}
+
+// contextInventoryRequest is a filtered plan that writes the input app/input:
+// its own coverage knows only the scope, and its context inventory covers the
+// whole database and lists the queries outside the scope, here outside.
+func contextInventoryRequest(c *qt.C, outside ...*protocol.Envelope) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	request := unchangedStreamingRequest(c, nil)
+	request.CurrentObjects.Records = request.CurrentObjects.Records[1:]
+	request.DesiredObjects.Records = request.DesiredObjects.Records[1:]
+	request.CurrentObjects.Coverage.Kinds[0].Sources[0].Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
+	request.ContextInventory = streamingContextState(c, protocol.ValueInput_OBSERVED, nil)
+	source := request.ContextInventory.Coverage.Kinds[0].Sources[0]
+	source.Outside = testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)
+	source.Regions = []*protocol.ComparisonRegion{{Scope: &protocol.ComparisonNamespace{Database: testcomparison.Part("/local"), Parent: &protocol.ComparisonPart{}, SubjectKinds: []string{schema.StreamingQueryProperties}}, Knowledge: testcomparison.Knowledge(protocol.ModelKnowledge_COMPLETE)}}
+	for _, value := range outside {
+		appendContextValue(c, request.ContextInventory, value)
+	}
+	return request
+}
+
+func outsideQuery(c *qt.C, text string) *protocol.Envelope {
+	c.Helper()
+	owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: "other", Name: "outside"}
+	desired, err := schema.CaptureStreamingQueryIntent(owner, streaming.Spec{Text: text}, false)
+	c.Assert(err, qt.IsNil)
+	observed, err := schema.ConvertNative(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+	c.Assert(err, qt.IsNil)
+	return observed
+}
+
+// A filtered plan may write an input when its context inventory proves that
+// no streaming query outside the scope reads it.
+func TestStreamingContextInventoryProvesTheOutside_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		outside []*protocol.Envelope
+	}{
+		{"no query outside the scope", nil},
+		{"a query outside the scope that reads another input", []*protocol.Envelope{outsideQuery(testcheck.New(t), "SELECT * FROM `other/source`;")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			result, err := backend.New().PlanFeatures(c.Context(), contextInventoryRequest(c, test.outside...))
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Diagnostics, qt.HasLen, 0)
+		})
+	}
+}
+
+// A running query outside the scope that reads the changed input refuses the
+// plan by name, and an unread query outside it refuses as unknown.
+func TestStreamingContextInventoryProvesTheOutside_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := contextInventoryRequest(c, outsideQuery(c, "SELECT * FROM `app/input`;"))
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].Message, qt.Contains, `streaming query "outside" outside the command's scope reads a changed input`)
+	request = contextInventoryRequest(c)
+	unknown := &protocol.ComparisonIdentity{Kind: schema.StreamingQueryProperties, Schema: testcomparison.Part("other"), Name: testcomparison.Part("unread")}
+	request.ContextInventory.Coverage.Subjects = append(request.ContextInventory.Coverage.Subjects, &protocol.ComparisonSubjectCoverage{Kind: unknown.Kind, Subject: unknown,
+		Knowledge: testcomparison.Knowledge(protocol.ModelKnowledge_UNINSPECTED)})
+	result, err = backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].Message, qt.Contains, "cannot exclude unknown streaming queries")
+}

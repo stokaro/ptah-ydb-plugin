@@ -69,3 +69,73 @@ message SecretPresence {}
 
 // A desired scheme secret holds a host-approved input reference only.
 message SecretIntent { string value_env = 1; }
+
+// How an async replication or a transfer reaches the database it reads: the
+// connection string as YDB rebuilds it from its parts, and the credential by
+// the secret that holds it, a name as written and a path relative to the
+// database root. YDB never reads a password or a token back, so neither is
+// carried. An empty field states nothing.
+message ReplicationConnection {
+    string connection_string = 1;
+    string token_secret_name = 2;
+    string token_secret_path = 3;
+    string user = 4;
+    string password_secret_name = 5;
+    string password_secret_path = 6;
+}
+
+// One FOR <source> AS <target> pair of an async replication: a path of the
+// source database, relative to its root or absolute, and the path of the
+// replica in this database, relative to its root.
+message ReplicationItem {
+    string source = 1;
+    string target = 2;
+}
+
+// An async replication as the replication service describes it: the
+// connection, one item per replicated table, the consistency level and a
+// commit interval other than YDB's default, and the state it reports
+// (running, paused, done or error). Runtime statistics, item ids and the
+// changefeeds YDB creates on the source are not settings.
+message AsyncReplicationSettings {
+    ReplicationConnection connection = 1;
+    repeated ReplicationItem items = 2;
+    string consistency_level = 3;
+    string commit_interval = 4;
+    string state = 5;
+}
+
+// A declared async replication: what CREATE ASYNC REPLICATION takes. An
+// empty consistency level and commit interval leave YDB's defaults.
+message AsyncReplicationIntent {
+    ReplicationConnection connection = 1;
+    repeated ReplicationItem items = 2;
+    string consistency_level = 3;
+    string commit_interval = 4;
+}
+
+// A transfer as the replication service describes it: its connection, its
+// topic, its table, its lambda as written, its consumer, batch settings other
+// than YDB's defaults, and the state it reports.
+message TransferSettings {
+    ReplicationConnection connection = 1;
+    string source = 2;
+    string target = 3;
+    string lambda = 4;
+    string consumer = 5;
+    uint64 batch_size_bytes = 6;
+    string flush_interval = 7;
+    string state = 8;
+}
+
+// A declared transfer: what CREATE TRANSFER takes. An empty consumer lets
+// YDB create one, and zero batch settings leave YDB's defaults.
+message TransferIntent {
+    ReplicationConnection connection = 1;
+    string source = 2;
+    string target = 3;
+    string lambda = 4;
+    string consumer = 5;
+    uint64 batch_size_bytes = 6;
+    string flush_interval = 7;
+}

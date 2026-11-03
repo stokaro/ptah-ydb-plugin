@@ -35,7 +35,11 @@ func convertProperties(c *qt.C, client *providerruntime.Client, request *protoco
 	}
 	back, err := client.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", TargetFeatures: request.TargetFeatures, From: protocol.ValueInput_DESIRED, To: protocol.ValueInput_OBSERVED, Values: desired.Values})
 	c.Assert(err, qt.IsNil)
-	c.Assert(proto.Equal(observed, back), qt.IsTrue)
+	// A declaration leaves out the storage default a read reports, so the read
+	// does not come back byte for byte; the declaration written from it does.
+	again, err := client.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", TargetFeatures: request.TargetFeatures, From: protocol.ValueInput_OBSERVED, To: protocol.ValueInput_DESIRED, Values: back.Values})
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(desired, again), qt.IsTrue)
 }
 
 func TestColumnConversionOfflineSubprocess(t *testing.T) {

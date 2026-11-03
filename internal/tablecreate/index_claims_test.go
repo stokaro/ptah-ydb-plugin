@@ -129,3 +129,21 @@ func TestIndexClaims_RefuseAnIndexChangedTwice(t *testing.T) {
 	c.Assert(plan.Diagnostics, qt.HasLen, 1)
 	c.Assert(plan.Diagnostics[0].Message, qt.Equals, `Index "by_label" is declared both in the native index set and as a common index`)
 }
+
+// A global index the native read leaves to the host is dropped as the host's
+// read of the table describes it.
+func TestIndexClaims_DropAnIndexTheHostRead(t *testing.T) {
+	c := testcheck.New(t)
+	request := commonIndexRequest(c, heldIndexes(), nil, commonIndexStep("drop", "by_label", protocol.PlanningEffect_DROP))
+	request.Tables[0].Current.Indexes = []*protocol.ObservedIndex{{Name: "by_label", TableName: "records", Schema: "app", Columns: []string{"label"}, IncludeColumns: []string{"extra"}, Method: "async"}}
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(rewrites(plan), qt.DeepEquals, []string{"drop => row-table-drop-index/000000"})
+	alteration, err := tablecreate.DecodeAlteration(plan.Contributions[0].Steps[0].Operation.Value.Value)
+	c.Assert(err, qt.IsNil)
+	c.Assert(alteration.HeldIndexes, qt.HasLen, 1)
+	held, err := protojson.Marshal(alteration.HeldIndexes[0])
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(held), qt.JSONEquals, jsonValue(c, `{"name":"by_label","indexColumns":["label"],"dataColumns":["extra"],"globalAsyncIndex":{}}`))
+}

@@ -55,30 +55,39 @@ func (s *source) readIndexes(ctx context.Context, tablePath string, table *descr
 // their key and covered columns. A vector or full-text index has settings
 // the common model has no place for, so it stays in the native index facet
 // alone, where the host can neither create nor drop it. An index's method is
-// its kind's common spelling ([ydbdecl.IndexKind.CommonMethod]), the one
-// table preparation states for a declared index. The comment travels on the
-// common-object wire.
+// its kind's common spelling ([ydbdecl.IndexKind.CommonMethod]), the one table
+// preparation states for a declared index: "async" for an asynchronous index
+// and none for a synchronous one. The comment travels on the common-object
+// wire.
 func commonIndexes(table *protocol.Reference, observed *native.IndexObservations) []*protocol.ObservedIndex {
 	var result []*protocol.ObservedIndex
 	for _, index := range observed.GetIndexes() {
 		description := index.GetDescription()
 		common := &protocol.ObservedIndex{Name: description.GetName(), TableName: table.GetName(), Schema: table.GetSchema(),
 			Columns: slices.Clone(description.GetIndexColumns()), IncludeColumns: slices.Clone(description.GetDataColumns())}
-		var kind ydbdecl.IndexKind
-		switch description.GetType().(type) {
-		case *native.TableIndexDescription_GlobalIndex:
-			kind = ydbdecl.IndexSync
-		case *native.TableIndexDescription_GlobalAsyncIndex:
-			kind = ydbdecl.IndexAsync
-		case *native.TableIndexDescription_GlobalUniqueIndex:
-			kind, common.Unique = ydbdecl.IndexSync, true
-		}
-		method, described := kind.CommonMethod()
-		if !described {
+		if !schema.CommonIndex(description) {
 			continue
 		}
-		common.Method = method
+		kind := ydbdecl.IndexSync
+		if description.GetGlobalAsyncIndex() != nil {
+			kind = ydbdecl.IndexAsync
+		}
+		// A common index is global, synchronous or asynchronous, and either
+		// kind has a common spelling.
+		common.Method, _ = kind.CommonMethod()
+		common.Unique = description.GetGlobalUniqueIndex() != nil
 		result = append(result, common)
+	}
+	return result
+}
+
+// nativeIndexes are the indexes of observed the common model cannot describe.
+func nativeIndexes(observed *native.IndexObservations) *native.IndexObservations {
+	result := &native.IndexObservations{}
+	for _, index := range observed.GetIndexes() {
+		if !schema.CommonIndex(index.GetDescription()) {
+			result.Indexes = append(result.Indexes, index)
+		}
 	}
 	return result
 }
