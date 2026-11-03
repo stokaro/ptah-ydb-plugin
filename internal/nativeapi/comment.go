@@ -60,14 +60,14 @@ func (c *Comments) RunStatement(ctx context.Context, database, root string, quer
 	}
 	absolute, err := query.Absolute(database, prefix)
 	if err != nil {
-		return false, &StatementRefusal{Err: err}
+		return false, &Refusal{Err: err}
 	}
 	relative, inside := strings.CutPrefix(absolute, strings.TrimSuffix(root, "/")+"/")
 	if !inside {
-		return false, &StatementRefusal{Err: fmt.Errorf("%w: %s is not in %s", ydbcomment.ErrStatement, absolute, root)}
+		return false, &Refusal{Err: fmt.Errorf("%w: %s is not in %s", ydbcomment.ErrStatement, absolute, root)}
 	}
 	if slices.ContainsFunc(strings.Split(relative, "/"), func(segment string) bool { return strings.HasPrefix(segment, ".") }) {
-		return false, &StatementRefusal{Err: fmt.Errorf("%w: %s is under a directory whose name starts with a dot, which belongs to the "+
+		return false, &Refusal{Err: fmt.Errorf("%w: %s is under a directory whose name starts with a dot, which belongs to the "+
 			"server or to the dev realms", ydbcomment.ErrStatement, absolute)}
 	}
 	subject := commentSubject(query.Statement, absolute)
@@ -76,7 +76,7 @@ func (c *Comments) RunStatement(ctx context.Context, database, root string, quer
 		return false, fmt.Errorf("set %s: %w", subject, err)
 	}
 	if err := commentTarget(query.Statement, absolute, entry.GetType()); err != nil {
-		return false, &StatementRefusal{Err: err}
+		return false, &Refusal{Err: err}
 	}
 	session, err := c.Open(ctx)
 	if err != nil {
@@ -89,7 +89,7 @@ func (c *Comments) RunStatement(ctx context.Context, database, root string, quer
 			return false, fmt.Errorf("set %s: %w", subject, err)
 		}
 		if !holds(described, query.Statement) {
-			return false, &StatementRefusal{Err: fmt.Errorf("%w: table %s has no %s %q", ydbcomment.ErrStatement, absolute,
+			return false, &Refusal{Err: fmt.Errorf("%w: table %s has no %s %q", ydbcomment.ErrStatement, absolute,
 				strings.ToLower(query.Object.Keyword()), query.Name)}
 		}
 	}

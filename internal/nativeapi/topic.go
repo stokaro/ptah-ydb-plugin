@@ -63,12 +63,13 @@ func (t *Topic) Apply(ctx context.Context, database string, value *protocol.Enve
 	if err != nil {
 		return false, err
 	}
+	display := topics.Display(owner.Schema, owner.Name)
 	current, err := t.read(ctx, owner)
 	if err != nil {
-		return false, err
+		return false, refused("read topic "+display, err)
 	}
 	if (before == nil) != (current == nil) || (before != nil && !bytes.Equal(before.Payload, current.Payload)) {
-		return false, fmt.Errorf("topic %s changed since the plan read it", topics.Display(owner.Schema, owner.Name))
+		return false, &Refusal{Err: fmt.Errorf("topic %s changed since the plan read it", display)}
 	}
 	if err := beforeWrite(ctx); err != nil {
 		return false, err
@@ -90,15 +91,12 @@ func (t *Topic) Apply(ctx context.Context, database string, value *protocol.Enve
 }
 
 // read lists the topic's directory and describes the topic, or returns nil
-// where the directory holds no entry of its name.
+// where the directory holds no entry of its name, or does not exist; see
+// [ListDirectory].
 func (t *Topic) read(ctx context.Context, owner *protocol.Reference) (*protocol.Envelope, error) {
 	directory := path.Join(owner.Database, owner.Schema)
-	response, err := t.Scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: directory})
+	listing, err := ListDirectory(ctx, SchemeLister(t.Scheme), owner.Database, owner.Schema)
 	if err != nil {
-		return nil, fmt.Errorf("read YDB topic namespace: transport failed")
-	}
-	var listing Ydb_Scheme.ListDirectoryResult
-	if err := Operation(response.GetOperation(), &listing); err != nil {
 		return nil, err
 	}
 	if listing.GetSelf().GetName() != path.Base(directory) || (listing.GetSelf().GetType() != Ydb_Scheme.Entry_DATABASE && listing.GetSelf().GetType() != Ydb_Scheme.Entry_DIRECTORY) || len(listing.Children) > 4096 {
