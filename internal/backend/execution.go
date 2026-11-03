@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
@@ -14,6 +15,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -149,7 +151,21 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		}
 	}
 	stopped := s.timedOut(ctx, request)
-	result := executeUnits(ctx, time.Duration(request.GetStatementTimeoutNanoseconds()), stopped, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
+	aborts := slices.Contains(provider.HostFeatures(ctx), provider.MigrationSplitFeature)
+	failed := func(unit *protocol.Unit, err error, applied uint32) *protocol.Execution {
+		failure := ydbfailure.Unit{Text: unit.GetSql(), Transaction: request.TransactionId != "", Aborts: aborts}
+		if _, split := services[unit]; split {
+			// A comment or coordination node statement runs outside the
+			// query service, beside the queries the unit holds.
+			failure.Text = ""
+		}
+		result := ydbfailure.Failed(ydbfailure.Read(err), failure, applied)
+		if result.GetOutcome() != protocol.Execution_UNKNOWN && request.TransactionId != "" {
+			s.abandonTransaction(ctx, request.TransactionId)
+		}
+		return result
+	}
+	result := executeUnits(ctx, time.Duration(request.GetStatementTimeoutNanoseconds()), stopped, failed, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
 		if unit.GetNative() != nil {
 			switch unit.GetNative().GetKind() {
 			case tablecreate.OperationKind:
@@ -184,6 +200,8 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyCopy(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.RenameOperationKind:
 				return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyRename(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case tablecreate.SequenceOperationKind:
+				return nativeapi.NewSerialSequence(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.capabilities, s.verifyLocks)
 			case schema.ChangefeedOperation:
 				return nativeapi.NewChangefeed(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.ExternalSourceOperation, schema.ExternalTableOperation:
@@ -372,10 +390,15 @@ const (
 	stopApplied
 )
 
+// failedUnit answers for a unit that failed after it was dispatched, given the
+// error and the count of units applied before it.
+type failedUnit func(unit *protocol.Unit, err error, applied uint32) *protocol.Execution
+
 // executeUnits runs units in order and stops at the first that fails. A
 // positive timeout bounds each unit; a unit it stops is answered for by
-// stopped and marked statement_timed_out.
-func executeUnits(ctx context.Context, timeout time.Duration, stopped stoppedUnit, run func(context.Context, *protocol.Unit) (bool, error), units []*protocol.Unit) *protocol.Execution {
+// stopped and marked statement_timed_out. A unit that fails otherwise after
+// dispatch is answered for by failed.
+func executeUnits(ctx context.Context, timeout time.Duration, stopped stoppedUnit, failed failedUnit, run func(context.Context, *protocol.Unit) (bool, error), units []*protocol.Unit) *protocol.Execution {
 	var applied uint32
 	for _, unit := range units {
 		if ctx.Err() != nil {
@@ -416,12 +439,12 @@ func executeUnits(ctx context.Context, timeout time.Duration, stopped stoppedUni
 					outcome = protocol.Execution_PARTIAL
 				}
 				message := "The unit was not dispatched because its precondition or lock guarantee was not established"
-				if refusal, ok := errors.AsType[*nativeapi.StatementRefusal](err); ok {
+				if refusal, ok := errors.AsType[*nativeapi.Refusal](err); ok {
 					message = rowdata.OneLine(refusal.Error())
 				}
 				return &protocol.Execution{Outcome: outcome, AppliedCount: applied, DiagnosticCode: "ydb.precondition-refused", Message: message}
 			}
-			return &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: applied, DiagnosticCode: "ydb.execution-unconfirmed", Message: "The dispatched unit's outcome is unknown; no automatic retry was attempted"}
+			return failed(unit, err, applied)
 		}
 		applied++
 	}

@@ -48,15 +48,7 @@ func open(ctx context.Context, driver *ydb.Driver) (*source, error) {
 func (s *source) close() error { return s.owner.Close() }
 
 func (s *source) directory(ctx context.Context, path string) (*Ydb_Scheme.ListDirectoryResult, error) {
-	response, err := s.scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: path})
-	if err != nil {
-		return nil, fmt.Errorf("list YDB directory: transport failed")
-	}
-	var result Ydb_Scheme.ListDirectoryResult
-	if err := nativeapi.Operation(response.GetOperation(), &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return nativeapi.SchemeLister(s.scheme)(ctx, path)
 }
 
 type description struct {

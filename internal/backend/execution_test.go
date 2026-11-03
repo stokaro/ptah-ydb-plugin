@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,8 +16,10 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -257,7 +260,7 @@ func TestCancellationBetweenUnitsPreservesConfirmedPrefix(t *testing.T) {
 	defer cancel()
 	runner := &cancelAfterExecution{cancel: cancel}
 	unit := sqlRequest("").Units[0]
-	result := executeUnits(ctx, 0, nil, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
+	result := executeUnits(ctx, 0, nil, unconfirmed, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
 		_, err := runner.ExecContext(ctx, unit.GetSql())
 		return true, err
 	}, []*protocol.Unit{unit, unit})
@@ -313,7 +316,7 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			calls := 0
-			result := executeUnits(t.Context(), 0, nil, func(context.Context, *protocol.Unit) (bool, error) {
+			result := executeUnits(t.Context(), 0, nil, unconfirmed, func(context.Context, *protocol.Unit) (bool, error) {
 				calls++
 				if calls > test.prefix {
 					return test.dispatched, errors.New("secret-marker")
@@ -326,6 +329,20 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 			c.Assert(result.Message, qt.Not(qt.Contains), "secret-marker")
 		})
 	}
+}
+
+// A refusal before dispatch whose text is Ptah's own, naming the object, is
+// the unit's message, so the reason a precondition did not hold reaches the
+// host. The text of any other error stays out of the message.
+func TestExecutionReportsTheReasonOfARefusal(t *testing.T) {
+	c := testcheck.New(t)
+	refusal := &nativeapi.Refusal{Err: errors.New("topic app/events changed since the plan read it")}
+	result := executeUnits(t.Context(), 0, nil, func(context.Context, *protocol.Unit) (bool, error) {
+		return false, fmt.Errorf("apply: %w", refusal)
+	}, []*protocol.Unit{{}})
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
+	c.Assert(result.DiagnosticCode, qt.Equals, "ydb.precondition-refused")
+	c.Assert(result.Message, qt.Equals, "topic app/events changed since the plan read it")
 }
 
 // A statement timeout reaches the provider as the deadline of the Execute call.
@@ -387,6 +404,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"resource_pools": false, "streaming_queries": false,
 		"async_replication": true, "transfers": true, "replication_secret_paths": true,
 		"wide_date_time_types": true, "parameterized_decimal": true, "alter_column_default": true, "add_column_with_default": true, "small_integer_defaults": true, "document_type_defaults": true,
+		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false,
 	})
 	// 25.1 takes none of the later changefeed options and no transfer, and
 	// 25.1 to 25.3 take no availability period on a consumer and no secret
@@ -400,6 +418,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"resource_pools": false, "streaming_queries": false,
 		"async_replication": true, "transfers": false, "replication_secret_paths": false,
 		"wide_date_time_types": false, "parameterized_decimal": false, "alter_column_default": false, "add_column_with_default": false, "small_integer_defaults": false, "document_type_defaults": false,
+		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false,
 	})
 	// Each option arrives on the line the host's presets name.
 	for _, test := range []struct {
@@ -419,6 +438,12 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 	} {
 		c.Assert(sessionCapabilities(test.version)[test.key], qt.Equals, test.want, qt.Commentf("%s on %s", test.key, test.version))
 	}
+}
+
+// unconfirmed answers for a failed unit as Execute does for one outside a
+// transaction.
+func unconfirmed(unit *protocol.Unit, err error, applied uint32) *protocol.Execution {
+	return ydbfailure.Failed(ydbfailure.Read(err), ydbfailure.Unit{Text: unit.GetSql()}, applied)
 }
 
 // blockUntilDone is a unit that runs until its context ends.
@@ -455,7 +480,7 @@ func TestStatementTimeoutAnswersForTheStoppedUnit(t *testing.T) {
 				return test.stopped
 			}
 
-			result := executeUnits(t.Context(), 20*time.Millisecond, stopped, blockUntilDone, test.units)
+			result := executeUnits(t.Context(), 20*time.Millisecond, stopped, unconfirmed, blockUntilDone, test.units)
 
 			c.Assert(result.Outcome, qt.Equals, test.outcome)
 			c.Assert(result.AppliedCount, qt.Equals, test.applied)
@@ -473,7 +498,7 @@ func TestCanceledCallIsNotATimeout(t *testing.T) {
 	defer cancel()
 	stopped := func(*protocol.Unit) stopOutcome { return stopNotApplied }
 
-	result := executeUnits(ctx, time.Hour, stopped, blockUntilDone, []*protocol.Unit{{ChangeId: "slow"}})
+	result := executeUnits(ctx, time.Hour, stopped, unconfirmed, blockUntilDone, []*protocol.Unit{{ChangeId: "slow"}})
 
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
 	c.Assert(result.StatementTimedOut, qt.IsFalse)

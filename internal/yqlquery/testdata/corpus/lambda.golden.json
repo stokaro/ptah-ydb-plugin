@@ -6,7 +6,8 @@
       "text": "$f = ($x) -\u003e { $y = $x + 1; RETURN $y; };\nSELECT $f(1)",
       "statements": [
         "SELECT $f(1)"
-      ]
+      ],
+      "source": "$f = ($x) -\u003e { $y = $x + 1; RETURN $y; };\nSELECT $f(1);"
     }
   ]
 }

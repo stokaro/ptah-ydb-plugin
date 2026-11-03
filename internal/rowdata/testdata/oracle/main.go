@@ -19,7 +19,8 @@
 //     migration/datadiff renders for each write with the YDB data services, or
 //     its error;
 //   - internal/yqlquery/testdata/corpus/*.yql: the queries
-//     internal/yqlquery.Split cuts the text into, or its error;
+//     internal/yqlquery.Split cuts the text into, with the source of each, or
+//     its error;
 //
 // and internal/rowdata/testdata/query-dialect.golden.json, the query-builder
 // spelling of the YDB descriptor and the capabilities the builder assumes for
@@ -115,6 +116,7 @@ type query struct {
 	Kind       string   `json:"kind"`
 	Text       string   `json:"text"`
 	Statements []string `json:"statements"`
+	Source     string   `json:"source"`
 	Mixed      bool     `json:"mixed,omitempty"`
 }
 
@@ -261,7 +263,7 @@ func recordSplits(root, commit string) error {
 			return golden, nil
 		}
 		for _, q := range queries {
-			golden.Queries = append(golden.Queries, query{Kind: q.Kind.String(), Text: q.Text, Statements: q.Statements, Mixed: q.Mixed})
+			golden.Queries = append(golden.Queries, query{Kind: q.Kind.String(), Text: q.Text, Statements: q.Statements, Source: q.Source, Mixed: q.Mixed})
 		}
 		return golden, nil
 	})

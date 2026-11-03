@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -49,6 +50,11 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 			converted, err = schema.ConvertCoordination(value.Value, request.From, request.To)
 		default:
 			return nil, status.Error(codes.Unimplemented, "YDB model has no representation conversion")
+		}
+		if err == nil && request.From == protocol.ValueInput_OBSERVED && request.To == protocol.ValueInput_DESIRED &&
+			slices.Contains(request.TargetFeatures, provider.CommonAccessFeature) {
+			// The grants a read holds travel as common grants.
+			converted, err = schema.WithoutAccess(converted)
 		}
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())

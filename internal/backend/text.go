@@ -61,7 +61,7 @@ func textOf(value *protocol.Envelope) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return tablecreate.RowTableStatement(path, request)
+		return tablecreate.RowTableStatementIn(owner.GetDatabase(), path, request)
 	case tablecreate.InventoryOperationKind:
 		change, err := tablecreate.DecodeInventory(value)
 		if err != nil {
@@ -109,6 +109,12 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.RenameStatement(path, rename), nil
+	case tablecreate.SequenceOperationKind:
+		change, err := tablecreate.DecodeSequence(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.SequenceAlterationStatement(owner.GetDatabase(), path, change)
 	case schema.SecretOperation:
 		return schema.SecretStatement(value)
 	case schema.CoordinationOperation:

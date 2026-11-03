@@ -49,7 +49,7 @@ func compiledKey(owner *protocol.Reference, table *protocol.DeclaredTable, caps 
 		}
 		return slices.Clone(created.PrimaryKey), nil
 	}
-	compiled, err := Compile(owner, table, caps)
+	compiled, err := predictedCreation(owner, table, caps)
 	if err != nil {
 		return nil, err
 	}

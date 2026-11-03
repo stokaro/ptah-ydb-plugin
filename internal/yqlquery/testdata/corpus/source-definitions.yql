@@ -1,0 +1,8 @@
+PRAGMA TablePathPrefix("/local/app");
+DECLARE $p AS Int64;
+UPSERT INTO t (id) VALUES ($p);
+$y = 2;
+DROP TABLE m;
+$z = 3;
+UPSERT INTO t (id) VALUES ($y + $z);
+$tail = 4;

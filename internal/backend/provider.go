@@ -46,6 +46,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -90,7 +92,7 @@ type session struct {
 
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
-	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
+	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
 		provider.ScopeSelectionsFeature,
 		provider.StatementsFeature,
 		provider.ValidateSchemaFeature,
@@ -128,7 +130,8 @@ func providerFeatures() []string {
 		provider.PlanningObjectContextFeature,
 		provider.EntryKeysFeature,
 		provider.HCLSourceFeature,
-		provider.EncodeSourceFeature}
+		provider.EncodeSourceFeature,
+		provider.MigrationSplitFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -198,7 +201,8 @@ func sessionCapabilities(version string) map[string]bool {
 		changefeeds.CapabilityChangefeeds: true, changefeeds.CapabilityUserSIDs: releaseline.AtLeast(version, 26, 1),
 		changefeeds.CapabilitySchemaChanges: releaseline.AtLeast(version, 25, 3), changefeeds.CapabilityTopicAutoPartitioning: releaseline.AtLeast(version, 25, 2),
 		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": releaseline.AtLeast(version, 25, 4),
-		replication.CapabilityReplication: true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4)}
+		replication.CapabilityReplication: true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
+		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false}
 }
 
 // clusterCapabilities refines the preset with the feature flags of the
@@ -237,11 +241,25 @@ const minContractMinor = 7
 // partitioning and column families, and offline migration lint with the YD
 // rule catalog.
 func Description() *protocol.Description {
-	return &protocol.Description{
+	description := &protocol.Description{
 		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: "0.0.0-dev", SemanticIdentity: "ydb-table-lifecycle-2",
 		Features: providerFeatures(),
 		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.DefaultModel(), tablecreate.InventoryModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel(), tablecreate.DropModel(), tablecreate.CopyModel(), tablecreate.RenameModel(), declarationplan.Model()), Declarations: []*protocol.ModelDeclarations{{Id: declarationplan.ServiceID, Kinds: declarationplan.Kinds(), OperationKinds: []string{declarationplan.OperationKind}}}, Planning: []*protocol.ModelPlanning{{Id: secretplan.ServiceID, ChangeKinds: []string{schema.SecretChange}, OperationKinds: []string{schema.SecretOperation}}, {Id: streamingplan.ServiceID, ContextKinds: []string{schema.StreamingQueryProperties}, ChangeKinds: []string{schema.StreamingQueryChange}, OperationKinds: []string{schema.StreamingQueryOperation}}, {Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: topicplan.ServiceID, ChangeKinds: []string{schema.TopicChange}, OperationKinds: []string{schema.TopicOperation}}, {Id: externalplan.ServiceID, ChangeKinds: externalplan.ChangeKinds(), OperationKinds: externalplan.OperationKinds()}, {Id: workloadplan.ServiceID, ChangeKinds: workloadplan.ChangeKinds(), OperationKinds: []string{schema.WorkloadOperation}}, {Id: replicationplan.ReplicationServiceID, ContextKinds: []string{schema.ReplicationProperties}, ChangeKinds: []string{schema.ReplicationChange}, OperationKinds: []string{schema.ReplicationOperation}}, {Id: replicationplan.TransferServiceID, ChangeKinds: []string{schema.TransferChange}, OperationKinds: []string{schema.TransferOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.DefaultOperationKind, tablecreate.InventoryOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind, tablecreate.DropOperationKind, tablecreate.CopyOperationKind, tablecreate.RenameOperationKind, schema.ChangefeedOperation}}}, Comparisons: []*protocol.ModelComparison{{Id: secretcompare.ServiceID, Actions: []string{"rotate"}, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.SecretProperties}, ChangeKinds: []string{schema.SecretChange}}, {Id: streamingcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.StreamingQueryProperties}, ChangeKinds: []string{schema.StreamingQueryChange}}, {Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: topiccompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.TopicProperties}, ChangeKinds: []string{schema.TopicChange}}, {Id: externalcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: externalcompare.Kinds(), ChangeKinds: externalcompare.ChangeKinds()}, {Id: workloadcompare.PoolServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolProperties}, ChangeKinds: []string{schema.ResourcePoolChange}}, {Id: workloadcompare.ClassifierServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolClassifierProperties}, ChangeKinds: []string{schema.ResourcePoolClassifierChange}}, {Id: replicationcompare.ReplicationServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ReplicationProperties}, ChangeKinds: []string{schema.ReplicationChange}}, {Id: replicationcompare.TransferServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.TransferProperties}, ChangeKinds: []string{schema.TransferChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: slices.Concat([]*protocol.YAMLSourceKey{secretsource.YAMLKey(), schema.CoordinationYAMLKey(), streamingsource.YAMLKey(), topicsource.YAMLKey(), changefeedsource.YAMLKey()}, externalsource.YAMLKeys(), replicationsource.YAMLKeys(), tablesource.YAMLKeys(), tablesource.IndexYAMLKeys(), workloadsource.YAMLKeys()), GoSourceDirectives: slices.Concat(streamingsource.GoDirectives(), tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{secretsource.GoDirective(), schema.CoordinationGoDirective()}, topicsource.GoDirectives(), replicationsource.GoDirectives(), externalsource.GoDirectives(), workloadsource.GoDirectives()), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), SqlSchema: sqlSchemaDeclaration(), Features: engineFeatures(), Embeddings: &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes}, CommonObjects: commonobject.Support(), ScopeSelections: scopeSelections(), HclSource: &protocol.HCLSourceDeclaration{Blocks: []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock()}, HeaderKinds: []string{"coordination_node"}}}},
+	}
+	withSerialSequences(description.Engines[0])
+	return description
+}
+
+// withSerialSequences adds the change of a Serial column's sequence to the
+// engine: its operation model, and its operation kind among those the table
+// planning service writes.
+func withSerialSequences(engine *protocol.Engine) {
+	engine.ValueModels = append(engine.ValueModels, tablecreate.SequenceModel())
+	for _, planning := range engine.Planning {
+		if planning.Id == tablecreate.ServiceID {
+			planning.OperationKinds = append(planning.OperationKinds, tablecreate.SequenceOperationKind)
+		}
 	}
 }
 
