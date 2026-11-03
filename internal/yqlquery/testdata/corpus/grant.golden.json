@@ -6,14 +6,16 @@
       "text": "GRANT SELECT ON t TO u",
       "statements": [
         "GRANT SELECT ON t TO u"
-      ]
+      ],
+      "source": "GRANT SELECT ON t TO u;"
     },
     {
       "kind": "data",
       "text": "INSERT INTO t (id) VALUES (1)",
       "statements": [
         "INSERT INTO t (id) VALUES (1)"
-      ]
+      ],
+      "source": "INSERT INTO t (id) VALUES (1);"
     }
   ]
 }

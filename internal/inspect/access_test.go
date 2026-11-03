@@ -156,3 +156,49 @@ func accessRoot(owner string) *Ydb_Scheme.Entry {
 	return &Ydb_Scheme.Entry{Name: "local", Type: Ydb_Scheme.Entry_DATABASE, Owner: owner,
 		Permissions: []*Ydb_Scheme.Permissions{{Subject: "DATA-READERS", PermissionNames: []string{"ydb.generic.read", "ydb.generic.list", "ydb.generic.read"}}}}
 }
+
+// accessDirectory is a snapshot whose read listed the directory named, as a
+// read records a directory it found complete.
+func accessDirectory(directory string) *protocol.Schema {
+	snapshot := accessSnapshot()
+	snapshot.Coverage = &protocol.ModelCoverage{Kinds: []*protocol.ModelKindCoverage{{Regions: []*protocol.ModelNamespaceKnowledge{{
+		Scope: &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: "/local", Normalized: "/local"}, Catalog: &protocol.NamespaceComponent{},
+			Schema: &protocol.NamespaceComponent{Source: directory, Normalized: directory}},
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
+	}}}}}
+	return snapshot
+}
+
+// described answers the paths it holds and every other one as YDB answers a
+// path it does not show.
+func described(entries map[string]*Ydb_Scheme.Entry) func(context.Context, string) (*Ydb_Scheme.Entry, error) {
+	return func(_ context.Context, absolute string) (*Ydb_Scheme.Entry, error) {
+		entry, found := entries[absolute]
+		if !found {
+			return nil, nativeapi.ErrAccessPathNotVisible
+		}
+		return entry, nil
+	}
+}
+
+func TestAccessOfADirectoryTheReadProvedAbsent_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	snapshot := accessDirectory("fresh")
+	err := inspect.Access(c.Context(), snapshot, "/local", false, described(map[string]*Ydb_Scheme.Entry{"/local": accessRoot("root")}),
+		func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
+	c.Assert(err, qt.IsNil)
+	c.Assert(snapshot.CommonObjects.ObjectOwners, qt.HasLen, 1)
+	c.Assert(snapshot.CommonObjects.ObjectOwners[0].Object.Kind, qt.Equals, "database")
+}
+
+func TestAccessOfAnObjectItCannotSee_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	snapshot := accessSnapshot()
+	snapshot.NativeObjects = []*protocol.Envelope{{Kind: schema.StreamingQueryProperties,
+		Owner: &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: "/local", Schema: "app", Name: "copy"}}}
+	before := proto.CloneOf(snapshot)
+	err := inspect.Access(c.Context(), snapshot, "/local", false, described(map[string]*Ydb_Scheme.Entry{"/local": accessRoot("root")}),
+		func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
+	c.Assert(err, qt.ErrorIs, nativeapi.ErrAccessPathNotVisible)
+	c.Assert(proto.Equal(snapshot, before), qt.IsTrue)
+}

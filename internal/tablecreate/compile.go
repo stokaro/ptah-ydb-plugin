@@ -23,6 +23,19 @@ import (
 // session or path: execution must bind both after checking the captured owner.
 // Unknown or unimplemented populated fields refuse the complete declaration.
 func Compile(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) (*Ydb_Table.CreateTableRequest, error) {
+	result, err := predictedCreation(owner, table, caps)
+	if err != nil {
+		return nil, err
+	}
+	if err := serialSettingsRefusal(result, tableLabel(owner), caps); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// predictedCreation is the creation Compile writes, before it asks whether
+// the target takes the settings of its Serial sequences.
+func predictedCreation(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) (*Ydb_Table.CreateTableRequest, error) {
 	result, settings, err := compile(owner, table, caps)
 	if err != nil {
 		return nil, err
@@ -126,7 +139,7 @@ func compileRowColumns(result *Ydb_Table.CreateTableRequest, table *protocol.Dec
 	for _, column := range table.Columns {
 		declared := proto.CloneOf(column)
 		declared.Nullable = columnsemantics.EffectiveNullable(column, column.Primary || slices.Contains(result.PrimaryKey, column.Name))
-		compiled, err := compileColumn(declared, columns[column.GetName()], caps)
+		compiled, err := compileColumn(TextPath(table.Schema, table.Name), declared, columns[column.GetName()], caps)
 		if err != nil {
 			return nil, err
 		}
@@ -190,8 +203,11 @@ func declaredKey(table *protocol.DeclaredTable) ([]string, error) {
 	return parts, nil
 }
 
-func compileColumn(column *protocol.DeclaredColumn, settings *native.ColumnIntent, caps map[string]bool) (*Ydb_Table.ColumnMeta, error) {
-	if err := only(column, "name", "type", "type_raw_sql", "type_is_declared_text", "nullable", "primary", "default_value", "default_set", "default_expression"); err != nil {
+// compileColumn compiles one column of the table at path table, which a
+// refusal names.
+func compileColumn(table string, column *protocol.DeclaredColumn, settings *native.ColumnIntent, caps map[string]bool) (*Ydb_Table.ColumnMeta, error) {
+	if err := only(column, "name", "type", "type_raw_sql", "type_is_declared_text", "nullable", "primary", "default_value", "default_set", "default_expression",
+		"auto_increment", "identity_generation", "identity_start", "identity_increment", "identity_options"); err != nil {
 		return nil, err
 	}
 	if !validName(column.Name) {
@@ -201,23 +217,30 @@ func compileColumn(column *protocol.DeclaredColumn, settings *native.ColumnInten
 	if err != nil {
 		return nil, unsupported("%s", err)
 	}
-	if mapping.Serial {
-		return nil, unsupported("Serial creation requires its owned sequence lifecycle")
-	}
 	if mapping.Dropped != "" {
 		return nil, unsupported("YDB column type does not preserve %s", mapping.Dropped)
 	}
-	value, err := schema.StorageType(mapping.Type, column.Nullable)
+	stored, sequence, err := serialColumn(fmt.Sprintf("column %q of table %q", column.Name, table), column, mapping, caps)
+	if err != nil {
+		return nil, err
+	}
+	// A Serial column is NOT NULL whatever the declaration says.
+	nullable := column.Nullable && sequence == nil
+	value, err := schema.StorageType(stored, nullable)
 	if err != nil {
 		return nil, unsupported("%s", err)
 	}
-	result := &Ydb_Table.ColumnMeta{Name: column.Name, Type: value, NotNull: new(!column.Nullable)}
-	literal, err := columnsemantics.NativeDefault(column, mapping.Type, caps)
-	if err != nil {
-		return nil, unsupported("%s", err)
-	}
-	if literal != nil {
-		result.DefaultValue = &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: literal}
+	result := &Ydb_Table.ColumnMeta{Name: column.Name, Type: value, NotNull: new(!nullable)}
+	if sequence != nil {
+		result.DefaultValue = &Ydb_Table.ColumnMeta_FromSequence{FromSequence: sequence}
+	} else {
+		literal, err := columnsemantics.NativeDefault(column, mapping.Type, caps)
+		if err != nil {
+			return nil, unsupported("%s", err)
+		}
+		if literal != nil {
+			result.DefaultValue = &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: literal}
+		}
 	}
 	if settings == nil {
 		return result, nil
@@ -225,7 +248,7 @@ func compileColumn(column *protocol.DeclaredColumn, settings *native.ColumnInten
 	if err := only(settings, "family", "literal", "drop_default"); err != nil {
 		return nil, err
 	}
-	if settings.GetDefaultValue() != nil && (column.DefaultSet || column.DefaultValue != "") {
+	if settings.GetDefaultValue() != nil && (column.DefaultSet || column.DefaultValue != "" || sequence != nil) {
 		return nil, unsupported("a column default must have one declaration, common or native")
 	}
 	result.Family = settings.Family

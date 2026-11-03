@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -80,7 +81,7 @@ func validateObservedSequence(column *protocol.ObservedColumn, sequence *native.
 	default:
 		return fmt.Errorf("a Serial sequence requires a signed integer column")
 	}
-	if sequence.Name != nil && sequence.GetName() != "_serial_column_"+column.Name {
+	if sequence.Name != nil && sequence.GetName() != ydbsequence.Name(column.Name) {
 		return fmt.Errorf("sequence name differs from the column's owned sequence")
 	}
 	if sequence.MinValue != nil && sequence.GetMinValue() != 1 || sequence.Cache != nil && sequence.GetCache() != 1 || sequence.GetCycle() {
