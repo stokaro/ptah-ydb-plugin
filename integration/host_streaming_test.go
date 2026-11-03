@@ -18,15 +18,20 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // The external host schedules a stop before replacing an input table with a
 // topic, removes the old source, and restarts the query with the new body.
 // This exercises the host's combined graph rather than provider slice order.
+// The host's run takes the provider's schema lock at the database root, whose
+// node the lock fixture removes again.
 func TestHostStreamingQueryGraph(t *testing.T) {
 	c := testcheck.New(t)
-	opened, directory, database := inspectionFixture(c)
-	client := startProviderFor(c)
+	opened, directory, database := lockFixture(c)
+	// A streaming query's value requires object context, which the host
+	// offers; a client without it cannot read the query.
+	client := startProviderFor(c, provider.PlanningObjectContextFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
@@ -86,9 +91,46 @@ func TestHostStreamingQueryGraph(t *testing.T) {
 	c.Assert(output, qt.Contains, "Schema is synced")
 }
 
-func TestHostRefusesStreamingWithoutCapability(t *testing.T) {
+// A streaming query's value requires object context. A read for a client
+// that did not offer it is refused as a precondition rather than answered with
+// a reply that breaks the negotiated contract.
+func TestInspectionRefusesAStreamingQueryWithoutObjectContext(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
+	client := startProviderFor(c)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	if !session.Capabilities[streaming.Capability] {
+		c.Skip("the target does not support streaming queries")
+	}
+	quoted := func(name string) string { return "`" + path.Join(directory, name) + "`" }
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_ = execFixtureSchema(ctx, opened.DB, "DROP STREAMING QUERY "+quoted("copy"))
+		for _, name := range []string{"source", "sink"} {
+			_ = execFixtureSchema(ctx, opened.DB, "DROP TOPIC "+quoted(name))
+		}
+	})
+	body := "INSERT INTO `" + path.Join(database, directory, "sink") + "` SELECT * FROM `" + path.Join(database, directory, "source") + "`;"
+	for _, statement := range []string{
+		"CREATE TOPIC " + quoted("source"), "CREATE TOPIC " + quoted("sink"),
+		streaming.Create(directory, "copy", streaming.Spec{Text: body}, false),
+	} {
+		c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil)
+	}
+	snapshot, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
+	c.Assert(err, qt.ErrorMatches, `provider inspect failed \(FailedPrecondition\)`)
+	c.Assert(snapshot, qt.IsNil)
+}
+
+// The refused run still takes the provider's schema lock at the database root,
+// whose node the lock fixture removes again; left behind, it fails the lock
+// tests that run after this one.
+func TestHostRefusesStreamingWithoutCapability(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
 	client := startProviderFor(c)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)

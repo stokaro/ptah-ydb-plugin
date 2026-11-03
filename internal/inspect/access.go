@@ -37,6 +37,7 @@ func Access(ctx context.Context, snapshot *protocol.Schema, database string, rea
 	if err != nil {
 		return err
 	}
+	describers := map[string]map[string]bool{}
 	for _, target := range targets {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -58,7 +59,17 @@ func Access(ctx context.Context, snapshot *protocol.Schema, database string, rea
 		if entry.GetName() != path.Base(target.absolute) || !slices.Contains(target.types, entry.GetType()) {
 			return fmt.Errorf("YDB access description disagrees with the captured object")
 		}
-		if err := recordAccess(objects, target.reference, entry); err != nil {
+		var implicit func(subject, permission string) bool
+		if target.reference.Kind == "secret" {
+			subjects, err := secretDescribers(ctx, describe, path.Dir(target.absolute), describers)
+			if err != nil {
+				return err
+			}
+			implicit = func(subject, permission string) bool {
+				return permission == ydbacl.DescribeSchemaPermission && subjects[subject]
+			}
+		}
+		if err := recordAccess(objects, target.reference, entry, implicit); err != nil {
 			return err
 		}
 	}
@@ -179,6 +190,10 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 			ref.Kind, types = "topic", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP}
 		case schema.StreamingQueryProperties:
 			ref.Kind, types = "streaming query", []Ydb_Scheme.Entry_Type{streamingQueryEntry}
+		case schema.ReplicationProperties:
+			ref.Kind, types = "async replication", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_REPLICATION}
+		case schema.TransferProperties:
+			ref.Kind, types = "transfer", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TRANSFER}
 		case schema.CoordinationProperties:
 			ref.Kind, types = "coordination node", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_COORDINATION_NODE}
 		case schema.ExternalSourceProperties:
@@ -204,7 +219,37 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 	return result, nil
 }
 
-func recordAccess(objects *protocol.ObservedCommonObjects, reference *protocol.Reference, entry *Ydb_Scheme.Entry) error {
+// secretDescribers returns the subjects whose effective permissions on the
+// directory at absolute carry ydbacl.DescribeSchemaPermission, which are the
+// subjects YDB gives a secret it creates there an entry for. Each directory is
+// described once per read.
+func secretDescribers(ctx context.Context, describe func(context.Context, string) (*Ydb_Scheme.Entry, error), absolute string,
+	known map[string]map[string]bool,
+) (map[string]bool, error) {
+	if subjects, found := known[absolute]; found {
+		return subjects, nil
+	}
+	entry, err := describe(ctx, absolute)
+	if err != nil {
+		return nil, err
+	}
+	if entry.GetName() != path.Base(absolute) || (entry.GetType() != Ydb_Scheme.Entry_DIRECTORY && entry.GetType() != Ydb_Scheme.Entry_DATABASE) {
+		return nil, fmt.Errorf("YDB access description disagrees with the directory of a captured secret")
+	}
+	subjects := map[string]bool{}
+	for _, permission := range entry.GetEffectivePermissions() {
+		if slices.ContainsFunc(permission.GetPermissionNames(), ydbacl.DescribesSchema) {
+			subjects[permission.GetSubject()] = true
+		}
+	}
+	known[absolute] = subjects
+	return subjects, nil
+}
+
+// recordAccess records one object's owner and one grant per permission each
+// of its entries names. implicit, when not nil, marks the grants the object
+// holds because YDB created it rather than because a GRANT made them.
+func recordAccess(objects *protocol.ObservedCommonObjects, reference *protocol.Reference, entry *Ydb_Scheme.Entry, implicit func(subject, permission string) bool) error {
 	if entry.GetOwner() != "" {
 		objects.ObjectOwners = append(objects.ObjectOwners, &protocol.ObjectOwner{Object: proto.CloneOf(reference), Owner: entry.GetOwner()})
 	}
@@ -217,7 +262,7 @@ func recordAccess(objects *protocol.ObservedCommonObjects, reference *protocol.R
 		if strings.TrimSpace(permission.GetSubject()) == "" {
 			return fmt.Errorf("YDB reports a permission without a principal")
 		}
-		implicit := target.Kind == "resource pool" && target.Name == "default" && defaultPoolEntry(permission.GetPermissionNames())
+		pool := target.Kind == "resource pool" && target.Name == "default" && defaultPoolEntry(permission.GetPermissionNames())
 		for _, name := range permission.GetPermissionNames() {
 			if strings.TrimSpace(name) == "" {
 				return fmt.Errorf("YDB reports an empty permission")
@@ -227,7 +272,8 @@ func recordAccess(objects *protocol.ObservedCommonObjects, reference *protocol.R
 				continue
 			}
 			seen[key] = true
-			objects.Grants = append(objects.Grants, &protocol.ObservedGrant{Role: permission.GetSubject(), Privilege: name, Target: proto.CloneOf(target), Implicit: implicit})
+			objects.Grants = append(objects.Grants, &protocol.ObservedGrant{Role: permission.GetSubject(), Privilege: name, Target: proto.CloneOf(target),
+				Implicit: pool || (implicit != nil && implicit(permission.GetSubject(), name))})
 		}
 	}
 	return nil

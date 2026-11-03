@@ -29,7 +29,7 @@ const (
 // Inspection coverage and owner validation must use the same classification.
 func IsNativeObject(kind string) bool {
 	switch kind {
-	case SecretProperties, ViewProperties, CoordinationProperties, ExternalSourceProperties, ExternalTableProperties, TopicProperties, StreamingQueryProperties:
+	case SecretProperties, ViewProperties, CoordinationProperties, ExternalSourceProperties, ExternalTableProperties, TopicProperties, StreamingQueryProperties, ReplicationProperties, TransferProperties:
 		return true
 	default:
 		return false
@@ -147,6 +147,8 @@ func normalizeObject(described proto.Message) error {
 		return normalizeTopic(value)
 	case *native.StreamingQuerySettings:
 		return streaming.Validate(streaming.Spec{Text: value.GetText(), Run: value.Run, ResourcePool: value.GetResourcePool()})
+	case *native.AsyncReplicationSettings, *native.TransferSettings:
+		return normalizeReplicationObject(value)
 	default:
 		return fmt.Errorf("unsupported native YDB object model")
 	}

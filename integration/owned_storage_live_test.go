@@ -158,5 +158,5 @@ func TestLockNodeRemainsInManagedObservations(t *testing.T) {
 	c.Assert(snapshot.NativeObjects[0].Kind, qt.Equals, schema.CoordinationProperties)
 	inputs, err := provider.InspectionValues(client.Description(), &protocol.InspectRequest{SessionId: id, Schemas: []string{"/"}}, snapshot)
 	c.Assert(err, qt.IsNil)
-	t.Run("host export", func(t *testing.T) { assertHostSchemaExport(t, client, binary, digest, []string{"/"}, inputs) })
+	t.Run("host export", func(t *testing.T) { assertHostSchemaExport(t, binary, digest, []string{"/"}, inputs) })
 }

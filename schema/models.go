@@ -33,7 +33,7 @@ const (
 
 // ObservedModels returns fresh definitions for the supported native observations.
 func ObservedModels() []*protocol.ValueModel {
-	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties), model(ResourcePoolProperties), model(ResourcePoolClassifierProperties), model(StreamingQueryProperties), model(SecretProperties)}
+	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties), model(ResourcePoolProperties), model(ResourcePoolClassifierProperties), model(StreamingQueryProperties), model(SecretProperties), model(ReplicationProperties), model(TransferProperties)}
 }
 
 func message(kind string) proto.Message {
@@ -66,6 +66,10 @@ func message(kind string) proto.Message {
 		return &native.ResourcePoolClassifierSettings{}
 	case StreamingQueryProperties:
 		return &native.StreamingQuerySettings{}
+	case ReplicationProperties:
+		return &native.AsyncReplicationSettings{}
+	case TransferProperties:
+		return &native.TransferSettings{}
 	default:
 		return nil
 	}
@@ -88,6 +92,7 @@ var definitions = map[string]*protocol.ValueModel{
 	ViewProperties: buildModel(ViewProperties), CoordinationProperties: buildModel(CoordinationProperties), ExternalSourceProperties: buildModel(ExternalSourceProperties), ExternalTableProperties: buildModel(ExternalTableProperties),
 	ResourcePoolProperties: buildModel(ResourcePoolProperties), ResourcePoolClassifierProperties: buildModel(ResourcePoolClassifierProperties),
 	StreamingQueryProperties: buildModel(StreamingQueryProperties),
+	ReplicationProperties:    buildModel(ReplicationProperties), TransferProperties: buildModel(TransferProperties),
 }
 
 func model(kind string) *protocol.ValueModel { return proto.CloneOf(definitions[kind]) }
@@ -127,6 +132,9 @@ func buildModel(kind string) *protocol.ValueModel {
 	}
 	if kind == StreamingQueryProperties {
 		definition["streaming_queries"] = streamingDefinition
+	}
+	if kind == ReplicationProperties || kind == TransferProperties {
+		definition["replication_objects"] = replicationDefinition
 	}
 	if kind == ColumnStorageProperties {
 		definition["not_observed"] = []string{"column_table_access", "shared_topic_consumers"}
@@ -328,7 +336,7 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), NativeDesiredModel(SecretProperties), SecretChangeModel(), SecretOperationModel(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(), TopicChangeModel(), TopicOperationModel(), ExternalSourceChangeModel(), ExternalSourceOperationModel(), ExternalTableChangeModel(), ExternalTableOperationModel(), TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel(), NativeDesiredModel(ResourcePoolProperties), NativeDesiredModel(ResourcePoolClassifierProperties), ResourcePoolChangeModel(), ResourcePoolClassifierChangeModel(), WorkloadOperationModel(), NativeDesiredModel(StreamingQueryProperties), StreamingQueryChangeModel(), StreamingQueryOperationModel())
+	return append(ObservedModels(), NativeDesiredModel(SecretProperties), SecretChangeModel(), SecretOperationModel(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(), TopicChangeModel(), TopicOperationModel(), ExternalSourceChangeModel(), ExternalSourceOperationModel(), ExternalTableChangeModel(), ExternalTableOperationModel(), TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel(), NativeDesiredModel(ResourcePoolProperties), NativeDesiredModel(ResourcePoolClassifierProperties), ResourcePoolChangeModel(), ResourcePoolClassifierChangeModel(), WorkloadOperationModel(), NativeDesiredModel(StreamingQueryProperties), StreamingQueryChangeModel(), StreamingQueryOperationModel(), NativeDesiredModel(ReplicationProperties), ReplicationChangeModel(), ReplicationOperationModel(), NativeDesiredModel(TransferProperties), TransferChangeModel(), TransferOperationModel())
 }
 
 func validateModelOwner(value *protocol.Envelope) error {
@@ -390,6 +398,10 @@ func modelDisplayName(kind string) string {
 		return "YDB resource pool classifiers"
 	case StreamingQueryProperties:
 		return "YDB streaming queries"
+	case ReplicationProperties:
+		return "YDB async replications"
+	case TransferProperties:
+		return "YDB transfers"
 	default:
 		return ""
 	}

@@ -28,6 +28,7 @@ var nativeIntentDefinitions = map[string]*protocol.ValueModel{
 	ViewProperties: buildNativeIntentModel(ViewProperties), ExternalSourceProperties: buildNativeIntentModel(ExternalSourceProperties), ExternalTableProperties: buildNativeIntentModel(ExternalTableProperties), ColumnStorageProperties: buildNativeIntentModel(ColumnStorageProperties),
 	ResourcePoolProperties: buildNativeIntentModel(ResourcePoolProperties), ResourcePoolClassifierProperties: buildNativeIntentModel(ResourcePoolClassifierProperties),
 	StreamingQueryProperties: buildNativeIntentModel(StreamingQueryProperties),
+	ReplicationProperties:    buildNativeIntentModel(ReplicationProperties), TransferProperties: buildNativeIntentModel(TransferProperties),
 }
 
 func nativeIntentMessage(kind string) proto.Message {
@@ -54,6 +55,10 @@ func nativeIntentMessage(kind string) proto.Message {
 		return &native.ResourcePoolClassifierSettings{}
 	case StreamingQueryProperties:
 		return &native.StreamingQueryIntent{}
+	case ReplicationProperties:
+		return &native.AsyncReplicationIntent{}
+	case TransferProperties:
+		return &native.TransferIntent{}
 	default:
 		return nil
 	}
@@ -87,6 +92,9 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	if kind == StreamingQueryProperties {
 		definition["streaming_queries"] = streamingDefinition
 	}
+	if kind == ReplicationProperties || kind == TransferProperties {
+		definition["replication_objects"] = replicationDeclaration
+	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
 		panic(err)
@@ -98,6 +106,11 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	digest := sha256.Sum256(canonical)
 	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
 	switch kind {
+	case ReplicationProperties, TransferProperties:
+		// A YAML or Go source declares replications and transfers at
+		// document scope, as for the host's embedded engine, and describes
+		// them completely.
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
 	case SecretProperties, ColumnStorageProperties, TopicProperties, ExternalSourceProperties, ExternalTableProperties, ResourcePoolProperties, ResourcePoolClassifierProperties, StreamingQueryProperties:
 		// A YAML, Go or SQL source says whether a table stores columns, so the
 		// absence of the facet on a table such a source describes is a request
@@ -251,6 +264,9 @@ func nativeIntent(value proto.Message) (proto.Message, error) {
 		return proto.Clone(v), nil
 	case *native.StreamingQuerySettings:
 		return &native.StreamingQueryIntent{Text: v.GetText(), Run: v.Run, ResourcePool: v.GetResourcePool()}, nil
+	case *native.AsyncReplicationSettings, *native.TransferSettings:
+		intent, _ := replicationIntent(v)
+		return intent, nil
 	default:
 		return objectIntent(value)
 	}
@@ -284,6 +300,9 @@ func nativeObservation(value proto.Message) (proto.Message, error) {
 			return nil, err
 		}
 		return observed, nil
+	case *native.AsyncReplicationIntent, *native.TransferIntent:
+		observed, _, err := replicationObservation(v)
+		return observed, err
 	default:
 		return objectObservation(value)
 	}

@@ -69,6 +69,8 @@ func lockResult(request *protocol.LockRequest, outcome protocol.LockResult_Outco
 
 // TryLock reserves a single-use handle before creating or contacting native
 // coordination storage. Only a confirmed busy result permits another attempt.
+// A server that refuses this user the lock node or its session answers
+// PermissionDenied, with a message that names the missing right.
 func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (*protocol.LockResult, error) {
 	s, unlock, err := p.lockSession(request)
 	if err != nil {
@@ -98,6 +100,13 @@ func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (
 	defer stop()
 	record.outcome = protocol.LockResult_UNKNOWN
 	hold, busy, err := locking.Try(guarded, s.connection.Driver, s.database, request.Scope.Name)
+	if errors.Is(err, locking.ErrRefused) {
+		// The server refused this user before anything was acquired, so the
+		// handle holds nothing and the session keeps no uncertainty. The
+		// message names the right the user lacks.
+		record.outcome = protocol.LockResult_NOT_ACQUIRED
+		return nil, status.Error(codes.PermissionDenied, err.Error())
+	}
 	if err != nil {
 		s.fenced = true
 		return lockResult(request, record.outcome), nil

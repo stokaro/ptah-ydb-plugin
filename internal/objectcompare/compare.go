@@ -39,6 +39,11 @@ type Family struct {
 	DatabaseWide bool
 	// Noun names one object in a reason, such as "coordination node".
 	Noun string
+	// DottedLimits refuses a comparison that would drop an object a dotted
+	// limit of the desired source reads like; see refuseDottedLimits. It is
+	// for a family whose limits name an object by its path, a dot being part
+	// of a name.
+	DottedLimits bool
 	// DesiredModel returns the desired model a preserved record carries.
 	DesiredModel func() *protocol.ValueModel
 	// Owner validates a subject of the family and returns its owner.
@@ -64,6 +69,10 @@ type Family struct {
 	// Preserve returns the desired value that keeps the current object as it
 	// is, for an object the desired source does not describe.
 	Preserve func(owner *protocol.Reference, current *protocol.Envelope) (*protocol.Envelope, error)
+	// Unkeepable says why the current object has no declaration that keeps
+	// it, which leaves it undecided rather than preserved, or "". A nil
+	// Unkeepable keeps every object.
+	Unkeepable func(current *protocol.Envelope) (string, error)
 }
 
 type object struct {
@@ -185,10 +194,61 @@ func compare(ctx context.Context, request *protocol.CompareModelsRequest, famili
 			decided = append(decided, *pair)
 		}
 	}
+	for _, family := range families {
+		if err := refuseDottedLimits(bound, family, objects, decided); err != nil {
+			return nil, nil, err
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 	return result, decided, nil
+}
+
+// refuseDottedLimits refuses a comparison that drops an object a dotted limit
+// of the desired source reads like, as Ptah's embedded YDB engine refuses it.
+// A limit is a path relative to the database root, so a limit written
+// app.events names app.events at the root, while app/events differs from it
+// only in the separator. Where the limit names nothing the database holds and
+// the plan drops the object its dotted directory form names, the source most
+// likely means to keep that object, and dropping it loses data nothing can
+// restore, so the comparison is refused with the spelling that keeps it. A
+// limit that names an object the database holds is read as written.
+func refuseDottedLimits(request *protocol.CompareModelsRequest, family Family, objects []object, decided []Decided) error {
+	if !family.DottedLimits {
+		return nil
+	}
+	display := func(subject *protocol.ComparisonIdentity) string {
+		if directory := subject.GetSchema().GetSource(); directory != "" {
+			return strings.TrimRight(directory, "/") + "/" + subject.GetName().GetSource()
+		}
+		return subject.GetName().GetSource()
+	}
+	for _, claim := range request.GetDesired().GetCoverage().GetSubjects() {
+		if claim.Kind != family.Kind || !selected(claim.Targets) || !unknown(claim.Knowledge) {
+			continue
+		}
+		if slices.ContainsFunc(objects, func(item object) bool {
+			return item.family.Kind == family.Kind && item.current != nil && provider.CompareIdentities(item.subject, claim.Subject) == 0
+		}) {
+			continue
+		}
+		written := display(claim.Subject)
+		for _, pair := range decided {
+			// Only a written path with a dot can equal this join, so a
+			// limit without one is never refused.
+			directory := pair.Subject.GetSchema().GetSource()
+			if pair.Kind != family.Kind || pair.Change == nil || pair.Desired != nil || directory == "" ||
+				directory+"."+pair.Subject.GetName().GetSource() != written {
+				continue
+			}
+			dropped := display(pair.Subject)
+			return fmt.Errorf("the %s limit %q names %s at the database root, which the database does not hold, "+
+				"while this plan would drop %s, which the same name written with a slash names. Write the limit as %q to keep that %s",
+				family.Noun, written, written, dropped, dropped, family.Noun)
+		}
+	}
+	return nil
 }
 
 // capture pairs the records and coverage claims of both sides. bound is the
@@ -348,13 +408,13 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		if item.current == nil {
 			return nil, nil
 		}
-		return nil, preserve(result, family, item, id)
+		return nil, keep(result, family, item, id)
 	}
 	if item.desired == nil && unknown(knowledge(request.Desired.Coverage, family.Kind, item.subject)) {
 		if item.current == nil {
 			return nil, nil
 		}
-		return nil, preserve(result, family, item, id)
+		return nil, keep(result, family, item, id)
 	}
 	if item.desired == nil && item.current == nil {
 		return nil, nil
@@ -399,6 +459,22 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Value: change})
 	pair.Change = change
 	return pair, nil
+}
+
+// keep preserves the current object, or leaves undecided one the family has
+// no declaration for.
+func keep(result *protocol.ComparedModels, family Family, item object, id string) error {
+	if family.Unkeepable != nil {
+		reason, err := family.Unkeepable(item.current)
+		if err != nil {
+			return err
+		}
+		if reason != "" {
+			undecided(result, family, item, reason)
+			return nil
+		}
+	}
+	return preserve(result, family, item, id)
 }
 
 func preserve(result *protocol.ComparedModels, family Family, item object, id string) error {
