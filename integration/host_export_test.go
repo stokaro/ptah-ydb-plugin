@@ -18,13 +18,14 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/proto"
 )
 
 // This is an external binary contract test. The provider module does not import
 // host packages; CI builds the pinned host in a separate checkout.
-func assertHostSchemaExport(t *testing.T, client *providerruntime.Client, binary, digest string, schemas []string, inputs *protocol.NormalizeValuesRequest) {
+func assertHostSchemaExport(t *testing.T, binary, digest string, schemas []string, inputs *protocol.NormalizeValuesRequest) {
 	t.Helper()
 	c := testcheck.New(t)
 	host := os.Getenv("PTAH_HOST_TEST_BIN")
@@ -64,9 +65,20 @@ func assertHostSchemaExport(t *testing.T, client *providerruntime.Client, binary
 	for _, kind := range schema.ObservedModels() {
 		c.Assert(seenKinds[kind.Kind], qt.IsTrue, qt.Commentf("missing coverage: %s", kind.Kind))
 	}
-	normalized, err := client.NormalizeValues(ctx, inputs)
+	// The host converts the read with the features it negotiates, common
+	// access among them, which moves an object's access to the common wire.
+	// The expected values come from a client that offers the same.
+	start, cancelStart := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancelStart()
+	exporter, err := providerruntime.Start(start, providerruntime.Options{Executable: binary, SHA256: digest, ProviderID: schema.ProviderID,
+		HostFeatures: append(hostFeatures(), provider.CommonObjectsFeature, provider.CommonAccessFeature)})
 	c.Assert(err, qt.IsNil)
-	expected, err := client.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_OBSERVED, To: protocol.ValueInput_DESIRED, Values: normalized.Values, TargetFeatures: inputs.TargetFeatures})
+	defer exporter.Close()
+	exported := proto.CloneOf(inputs)
+	exported.TargetFeatures = negotiated(exporter)
+	normalized, err := exporter.NormalizeValues(ctx, exported)
+	c.Assert(err, qt.IsNil)
+	expected, err := exporter.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_OBSERVED, To: protocol.ValueInput_DESIRED, Values: normalized.Values, TargetFeatures: exported.TargetFeatures})
 	c.Assert(err, qt.IsNil)
 	var tree any
 	c.Assert(json.Unmarshal(output, &tree), qt.IsNil)
