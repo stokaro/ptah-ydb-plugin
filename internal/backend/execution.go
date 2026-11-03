@@ -184,6 +184,8 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyCopy(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.RenameOperationKind:
 				return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyRename(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case tablecreate.SequenceOperationKind:
+				return nativeapi.NewSerialSequence(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.capabilities, s.verifyLocks)
 			case schema.ChangefeedOperation:
 				return nativeapi.NewChangefeed(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.ExternalSourceOperation, schema.ExternalTableOperation:

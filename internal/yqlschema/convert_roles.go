@@ -3,16 +3,16 @@ package yqlschema
 import (
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 )
 
 // sequenceName is the name of the sequence YDB keeps a Serial column's
 // values in.
-func sequenceName(column string) string { return "_serial_column_" + column }
+func sequenceName(column string) string { return ydbsequence.Name(column) }
 
 // declaresSerial reports whether a declared column type is a Serial.
 func declaresSerial(declared string) bool {
@@ -23,26 +23,8 @@ func declaresSerial(declared string) bool {
 // checkSequence refuses the START and INCREMENT a Serial's sequence cannot
 // take.
 func checkSequence(start, increment string) error {
-	if err := sequenceSetting("identity_start", start, "a start", "`Start value: 0 cannot be less than min value: 1`"); err != nil {
-		return err
-	}
-	return sequenceSetting("identity_increment", increment, "an increment",
-		"a negative increment is a parse error, and 0 answers `Increment must not be zero`")
-}
-
-func sequenceSetting(attribute, value, setting, measured string) error {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil
-	}
-	parsed, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return fmt.Errorf("%s %q is not a whole number YDB's ALTER SEQUENCE takes", attribute, value)
-	}
-	if parsed < 1 {
-		return fmt.Errorf("%s %d: a YDB Serial's sequence takes %s of 1 or more (measured: %s)", attribute, parsed, setting, measured)
-	}
-	return nil
+	_, err := ydbsequence.Parse(start, increment)
+	return err
 }
 
 // role is the principal a written name names, in the statement's document

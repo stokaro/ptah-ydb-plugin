@@ -33,6 +33,7 @@ type alteration struct {
 	claims                []*columnClaim
 	defaults              []defaultStep
 	inventory             []inventoryStep
+	sequences             []sequenceStep
 }
 
 // indexStep is the native operation of one index change.

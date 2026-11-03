@@ -401,7 +401,8 @@ this provider's `Execute` does with it what the native call does:
 
 | Operation | Statement |
 | --- | --- |
-| Row-table creation | `CREATE TABLE` with its columns, key, families, TTL, automatic partitioning, read replicas, key bloom filter and starting layout |
+| Row-table creation | `CREATE TABLE` with its columns, key, families, TTL, automatic partitioning, read replicas, key bloom filter and starting layout, then `ALTER SEQUENCE ... RESTART WITH` for a Serial whose sequence the declaration gives a start or an increment |
+| Serial sequence change | `ALTER SEQUENCE` on the sequence's absolute path, with `START WITH` and `INCREMENT BY` and no restart |
 | Row-table alteration | One `ALTER TABLE`: families and placements, added or dropped columns, `SET (TTL = ...)` or `RESET (TTL)`, the whole automatic partitioning set, or `ADD`/`DROP INDEX` |
 | Column table | The `CREATE TABLE ... STORE = COLUMN` and TTL statements the provider runs |
 | Coordination node | `CREATE COORDINATION NODE ... WITH (...)`, `ALTER ... SET (...)` naming the settings that change, `DROP COORDINATION NODE` |
@@ -418,8 +419,10 @@ transaction, or one that cannot be read, refuses the batch before any unit runs.
 
 A change only the native call makes refuses the batch with `NO_TEXT_FORM` and
 no unit: user attributes other than Ptah's comments, storage settings, tiering, the partition columns, a
-family kept in memory, a default from a sequence or of a type without a
-literal, a TTL run interval other than YDB's own, a coordination node that
+family kept in memory, a default of a type without a literal, a sequence on a
+column that is no Int16, Int32 or Int64, a start or an increment on a 16-bit or
+32-bit Serial's sequence, a sequence of a creation or a change that names no
+database (ALTER SEQUENCE takes only the absolute path), a TTL run interval other than YDB's own, a coordination node that
 declares its access, an external data source or external table dropped and
 created again around the plan's other statements, which the native call gives
 the owner and the access entries of the old one, and every topic and
@@ -1787,8 +1790,8 @@ expressions are refused. A default has one source declaration, either a common
 column field or native column settings. Wide date/time types and parameterized
 Decimal follow the cluster flags; small integer and document defaults follow the
 measured release line. A column table accepts no defaults or serial columns.
-Serial creation and sequence changes still require their separate operation
-implementation before the extraction is complete.
+Serial columns are created with their sequences and the sequence of an existing
+Serial changes in place; see [Serial columns](#serial-columns).
 
 ## Offline table preparation
 
@@ -1899,7 +1902,7 @@ refused too, since the pinned table protocol builds none of them with a table.
 Execution confirms each index by reading it back. In the TEXT form each index
 is an INDEX clause of the CREATE TABLE.
 
-Access requirements, temporary tables, changefeeds, sequence defaults, column
+Access requirements, temporary tables, changefeeds, column
 compression or encoding, and richer common constraints are refused.
 Removal and rebuild are described below, and alteration covers column
 families, the addition and removal of columns, the TTL and the automatic partitioning settings (see below). An unknown populated
@@ -1914,6 +1917,78 @@ gets past validation and stops at the host's common-step stage ("A common step i
 outside the supported table creation lifecycle"), because the host's common table
 comparison does not yet preserve complete native declarations. These SDK checks do
 not establish a complete native CLI table migration workflow.
+
+### Serial columns
+
+A column is a Serial when its type is `Serial`, `BigSerial` or `SmallSerial`
+(or one of the spellings YDB shares with PostgreSQL: `SERIAL`, `SERIAL4`,
+`BIGSERIAL`, `SERIAL8`, `SMALLSERIAL`, `SERIAL2`), or when an Int16, Int32 or
+Int64 column is declared `auto_increment` or with an identity, as the host's
+embedded engine reads it. The host sends the start and the increment of its
+sequence with the common column, as `identity_start` and `identity_increment`:
+Go and YAML write them as attributes of the field, and a YQL schema as the
+`START WITH` and `INCREMENT BY` of an `ALTER SEQUENCE` on the sequence's
+absolute path. No native facet holds them. A Serial is NOT NULL whatever the
+declaration says, and its default is its sequence.
+
+```go
+//ptah:schema:field name="id" type="BIGSERIAL" primary="true" identity_start="100" identity_increment="5"
+//ptah:schema:field name="id" type="BIGINT" primary="true" auto_increment="true" identity_increment="3"
+```
+
+The native CreateTable call creates the column with its sequence, named
+`_serial_column_<column>`, starting at the declared start, stepping by the
+declared increment and ending at the maximum of the column's type. Measured on
+25.1.4.7 and 26.2.1.14, a sequence created this way issues its start first and
+records no restart. The call gives a sequence the Int64 maximum unless the
+request names one, whatever the column's width, so the request names the
+maximum YQL's `Serial` and `SmallSerial` have. Execution confirms the sequence
+by reading it back, and the operation payload is held to the same sequence, so
+a forged request cannot name another one, count down or cycle.
+
+The TEXT form writes the column as its Serial type and, for a start or an
+increment other than 1, the `ALTER SEQUENCE` the host's embedded engine writes
+after the CREATE TABLE, with `RESTART WITH` the start where it is not 1:
+`START` alone leaves the next value at 1. The statement names the sequence by
+its absolute path, so the migration file carries the database path, and YDB
+records the restart, which it replays on every later `ALTER SEQUENCE`. A table
+created from such a file therefore keeps the settings it was created with (see
+below), where a table the native call creates can change them.
+
+The planner refuses, in the embedded engine's words, an auto-increment column
+of a type YDB has no Serial for, `GENERATED ALWAYS`, identity options other than
+the start and the increment, a default on a Serial, a start or an increment
+below 1 or not a whole number, and a start or an increment on a 16-bit or
+32-bit Serial. Every line reports `serial_sequence_keeps_range` false: any
+`ALTER SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the
+column then stores the value after its own maximum as a negative number without
+an error. The native call could create such a sequence with its range kept,
+but no later change and no migration file could, so it is refused at creation
+too. A column table takes no Serial, and YDB adds no Serial column to a table
+that exists (`Column addition with serial data type is unsupported`).
+
+When the declared start or increment of an existing Serial differs from what
+the read reports, the planner writes one step, `serial-sequence/N`: one YQL
+`ALTER SEQUENCE ... START WITH ... INCREMENT BY ...` on the sequence's absolute
+path through the query service, outside a transaction and without a restart,
+since a restart onto a value a row holds fails the next insert. The table
+service has no call that changes a sequence: an AlterTable that names it
+answers SCHEME_ERROR. Execution reads the column first and refuses one that
+changed since the plan (`NOT_STARTED`), sends the statement once, and reads the
+sequence back. The next row still takes the value the sequence computed before
+the change: with an increment of 3 moved to 7 after the rows 1 and 4, the next
+rows are 7 and 14. The planner refuses to change a sequence some
+`ALTER SEQUENCE` restarted, since the next insert would take the restart's
+value again (`Conflict with existing key`), and the sequence of a 16-bit or
+32-bit Serial. A column that becomes or stops being a Serial changes type,
+which only a rebuild makes, and a rebuild of a table with a Serial is refused.
+
+The session reports `serial_columns` and `serial_sequence_options` on every
+line, and `serial_sequence_keeps_range` on none. Subprocess tests create a
+Serial by the native call and by its TEXT form and change a sequence both ways;
+host tests apply Go and YQL schemas with Serial keys, read the sequences back,
+insert rows, change an increment, and show each refusal against the server
+state that makes it necessary, on 25.1.4.7 and 26.2.1.14.
 
 ## Native table removal
 
@@ -1966,6 +2041,12 @@ target. A table holding a changefeed is refused, since YDB renames no such
 table; so is a column table, whose rebuild needs an explicit data migration.
 The live tests rebuild a table natively and by text on both release lines,
 read the copied rows back, and fail a copy whose value does not convert.
+
+A table whose declaration holds a Serial column is not rebuilt: the new
+table's sequence would start at 1 while the copied rows keep their values, so
+the next insert would collide (`Conflict with existing key`), and `ALTER
+SEQUENCE ... RESTART WITH` takes only a literal, so no statement can move it
+past the copied rows.
 
 ## Secrets
 

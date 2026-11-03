@@ -117,7 +117,7 @@ func confirmTableCreation(owner *protocol.Reference, wanted *Ydb_Table.CreateTab
 		}
 		if column.Name != actual.Name || expectedType != actualType || expectedNullable != actualNullable ||
 			family(column.Family) != family(actual.Family) || !proto.Equal(column.GetFromLiteral(), actual.GetFromLiteral()) ||
-			actual.GetFromSequence() != nil || actual.Compression != nil || len(actual.Encoding) > 0 {
+			!sameSequence(column.GetFromSequence(), actual.GetFromSequence()) || actual.Compression != nil || len(actual.Encoding) > 0 {
 			return fmt.Errorf("YDB created column differs from the request")
 		}
 	}
