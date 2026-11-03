@@ -337,7 +337,7 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 func TestExecutionReportsTheReasonOfARefusal(t *testing.T) {
 	c := testcheck.New(t)
 	refusal := &nativeapi.Refusal{Err: errors.New("topic app/events changed since the plan read it")}
-	result := executeUnits(t.Context(), 0, nil, func(context.Context, *protocol.Unit) (bool, error) {
+	result := executeUnits(t.Context(), 0, nil, unconfirmed, func(context.Context, *protocol.Unit) (bool, error) {
 		return false, fmt.Errorf("apply: %w", refusal)
 	}, []*protocol.Unit{{}})
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
