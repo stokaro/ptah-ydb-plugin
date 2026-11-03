@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/url"
+	"path"
 	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
@@ -87,6 +88,9 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	if slices.Contains(result.TargetFeatures, provider.ValueContextFeature) {
 		bindInspectionContext(result, &protocol.DatabaseContext{Database: session.database, SourceDatabase: session.connection.Database()})
 	}
+	if value, feature := schema.UnofferedFeature(provider.HostFeatures(ctx), inspectedValues(result)...); feature != "" {
+		return nil, status.Errorf(codes.FailedPrecondition, "YDB inspection of %s %q requires %s, which the host did not offer", value.GetKind(), path.Join(value.GetOwner().GetSchema(), value.GetOwner().GetName()), feature)
+	}
 	// The reply is checked against the description the host holds: one that
 	// did not list the common wire declares no common object.
 	if _, err := provider.InspectionValues(provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx)), request, result); err != nil {
@@ -96,6 +100,19 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		return nil, status.FromContextError(err).Err()
 	}
 	return result, nil
+}
+
+// inspectedValues returns every value a snapshot carries: native objects and
+// the facets of tables and columns.
+func inspectedValues(snapshot *protocol.Schema) []*protocol.Envelope {
+	values := slices.Clone(snapshot.GetNativeObjects())
+	for _, table := range snapshot.GetTables() {
+		values = append(values, table.GetFacets()...)
+		for _, column := range table.GetColumns() {
+			values = append(values, column.GetFacets()...)
+		}
+	}
+	return values
 }
 
 func (s *session) streaming() inspect.StreamingQuery {
