@@ -6,6 +6,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replicationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
@@ -47,6 +48,10 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 		compare = workloadcompare.ComparePools
 	case workloadcompare.ClassifierServiceID:
 		compare = workloadcompare.CompareClassifiers
+	case replicationcompare.ReplicationServiceID:
+		compare = replicationcompare.CompareReplications
+	case replicationcompare.TransferServiceID:
+		compare = replicationcompare.CompareTransfers
 	}
 	result, err := compare(ctx, request)
 	if err != nil {

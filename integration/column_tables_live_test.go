@@ -117,7 +117,7 @@ func TestColumnTableInspectionSubprocess(t *testing.T) {
 	normalized, err := client.NormalizeValues(ctx, values)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidateNormalizedInspection(client.Description(), request, snapshot, normalized), qt.IsNil)
-	t.Run("host export", func(t *testing.T) { assertHostSchemaExport(t, client, binary, digest, []string{directory}, values) })
+	t.Run("host export", func(t *testing.T) { assertHostSchemaExport(t, binary, digest, []string{directory}, values) })
 }
 
 // TestColumnTableInspectionWithoutMonitoringSubprocess reads the same kind of

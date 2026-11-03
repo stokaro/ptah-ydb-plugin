@@ -33,6 +33,7 @@ type alteration struct {
 	claims                []*columnClaim
 	defaults              []defaultStep
 	inventory             []inventoryStep
+	sequences             []sequenceStep
 }
 
 // indexStep is the native operation of one index change.
@@ -56,7 +57,7 @@ func stepKey(id *protocol.StepIdentity) string { return id.GetOwner() + "\x00" +
 // planAlteration reads the families, column placements and TTL a captured ALTER
 // carries on both sides and returns the changes that give the table what the
 // declaration states. A non-empty reason refuses the whole request.
-func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, capabilities map[string]bool) (alterationChanges, string, error) {
+func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, capabilities map[string]bool) (alterationChanges, string, error) {
 	desired, err := facetEnvelopes(owner, table.Desired.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
 	if err != nil {
 		return alterationChanges{}, "", err
@@ -164,6 +165,19 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, ca
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
+	// The host adds and drops the common indexes it compares, and this
+	// service carries out each step. An index both sides would change is
+	// declared twice.
+	claimed, reason, err := claimIndexSteps(owner, table, steps, &heldIndexes, capabilities)
+	if err != nil || reason != "" {
+		return alterationChanges{}, reason, err
+	}
+	for _, change := range claimed {
+		if slices.ContainsFunc(indexes, func(other indexChange) bool { return other.name() == change.name() }) {
+			return alterationChanges{}, fmt.Sprintf("Index %q is declared both in the native index set and as a common index", change.name()), nil
+		}
+	}
+	indexes = append(claimed, indexes...)
 	// The changefeeds are managed by a declaration that states them, and by a
 	// source that describes the changefeeds of every table it declares. Without
 	// the table's own read, a changefeed the table already holds would look
@@ -176,6 +190,13 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, ca
 		indexNames = nil
 		for _, index := range wantedIndexes.GetIndexes() {
 			indexNames = append(indexNames, index.GetSpecification().GetName())
+		}
+	}
+	// The table also holds the common indexes it declares, which the host
+	// keeps out of the native set.
+	for _, index := range table.Desired.GetIndexes() {
+		if !slices.Contains(indexNames, index.GetName()) {
+			indexNames = append(indexNames, index.GetName())
 		}
 	}
 	// YDB never changes a table's key, so the declaration's first key column

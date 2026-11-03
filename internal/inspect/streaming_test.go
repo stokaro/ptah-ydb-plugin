@@ -164,3 +164,18 @@ func TestRealmStreamingInventory(t *testing.T) {
 		})
 	}
 }
+
+// A read filtered to some directories reports, as its planning context, the
+// streaming queries the database-wide inventory finds outside them, with the
+// inventory's database-wide coverage. A query inside them is not repeated.
+func TestOutsideStreamingInventory(t *testing.T) {
+	c := testcheck.New(t)
+	inventory := realmInventory(c, "/local/app/copy", "/local/ptah_dev/realm/copy")
+	context := inspect.OutsideStreamingInventory(inventory, []string{"app"})
+	c.Assert(context.Objects, qt.HasLen, 1)
+	c.Assert(context.Objects[0].Owner.Schema, qt.Equals, "ptah_dev/realm")
+	c.Assert(context.Coverage.Subjects, qt.HasLen, 1)
+	c.Assert(context.Coverage.Subjects[0].Subject.Schema, qt.Equals, "ptah_dev/realm")
+	c.Assert(context.Coverage.Kinds, qt.HasLen, 1)
+	c.Assert(context.Coverage.Kinds[0].Regions[0].Scope.Schema, qt.IsNil)
+}

@@ -22,11 +22,14 @@ type fakeSession struct {
 	calls       atomic.Int32
 	closes      atomic.Int32
 	onDescribe  func()
+	// deadline is the deadline of the last describe's context.
+	deadline time.Time
 }
 
 func (s *fakeSession) SessionID() uint64 { return 7 }
-func (s *fakeSession) DescribeSemaphore(context.Context, string, ...options.DescribeSemaphoreOption) (*coordination.SemaphoreDescription, error) {
+func (s *fakeSession) DescribeSemaphore(ctx context.Context, _ string, _ ...options.DescribeSemaphoreOption) (*coordination.SemaphoreDescription, error) {
 	s.calls.Add(1)
+	s.deadline, _ = ctx.Deadline()
 	if s.onDescribe != nil {
 		s.onDescribe()
 	}
@@ -128,4 +131,20 @@ func TestWatchCancelsWorkWhenNativeLeaseEnds(t *testing.T) {
 		t.Fatal("lease loss did not stop guarded work")
 	}
 	c.Assert(h.Check(c.Context()), qt.ErrorIs, ErrLost)
+}
+
+// A check right after a confirmation may wait for the whole freshness window,
+// not only the interval between checks: a slow reply within the window still
+// confirms ownership.
+func TestHoldCheckWaitsForTheFreshnessWindow(t *testing.T) {
+	c := testcheck.New(t)
+	native := &fakeSession{description: ownedDescription()}
+	confirmed := time.Now()
+	h := newHold(native, fakeLease{context.Background()}, "lock", confirmed, time.Now, func(context.Context) error { return nil })
+	c.Assert(h.Check(c.Context()), qt.IsNil)
+	checked := time.Now()
+	c.Assert(native.deadline.Sub(checked) > checkInterval, qt.IsTrue, qt.Commentf("the check was bounded by %s", native.deadline.Sub(checked)))
+	// The window began at the confirmation, so it ends before a full window
+	// after the check.
+	c.Assert(native.deadline.Before(checked.Add(freshness)), qt.IsTrue)
 }

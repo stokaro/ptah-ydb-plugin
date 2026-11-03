@@ -9,6 +9,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/devclean"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 )
 
 // Realms creates and removes the dev realms of a database the operator
@@ -88,16 +90,30 @@ type NativeRealms struct{}
 
 // Create makes the realm's directory, and the realms' directory above it when
 // it is missing.
+//
+// The scheme service asks for a right of its own: measured on 25.1.4.7 and
+// 26.2.1.14, a user granted ydb.granular.create_table,
+// ydb.granular.describe_schema and ydb.granular.remove_schema is refused the
+// directory (UNAUTHORIZED) until it holds ydb.granular.create_directory. A
+// refusal names that right, as Ptah's embedded YDB engine names it.
 func (NativeRealms) Create(ctx context.Context, address connection.Address, name string) (err error) {
 	opened, err := connection.Open(ctx, address)
 	if err != nil {
 		return errors.New("the database could not be reached")
 	}
 	defer func() { err = errors.Join(err, opened.Close()) }()
-	if err := opened.Driver.Scheme().MakeDirectory(ctx, path.Join(address.Database(), connection.RealmDirectory, name)); err != nil {
+	err = opened.Driver.Scheme().MakeDirectory(ctx, path.Join(address.Database(), connection.RealmDirectory, name))
+	switch {
+	case err == nil:
+		return nil
+	case ydb.IsOperationError(err, Ydb.StatusIds_UNAUTHORIZED):
+		// The SDK's error carries the connection's masked credentials, which
+		// the refusal has no need to repeat.
+		return errors.New("the realm's directory could not be created (UNAUTHORIZED); " +
+			"creating a directory needs the ydb.granular.create_directory right on the database")
+	default:
 		return errors.New("the realm's directory could not be created")
 	}
-	return nil
 }
 
 // Remove removes the realm through the database it lives in.

@@ -189,3 +189,18 @@ func TestCompileRefusesUnimplementedOrForgedState(t *testing.T) {
 		})
 	}
 }
+
+// A read of a table that holds only global indexes converts to an empty
+// native index set, which states nothing to create. A native index the set
+// names is one this provider does not create with a table yet.
+func TestCompileNativeIndexSet(t *testing.T) {
+	c := testcheck.New(t)
+	table := withSettings(c)
+	table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.IndexProperties, "", `{}`))
+	_, err := tablecreate.Compile(owner(), table, nil)
+	c.Assert(err, qt.IsNil)
+	table = withSettings(c)
+	table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.IndexProperties, "", vectorIndexes(false)))
+	_, err = tablecreate.Compile(owner(), table, nil)
+	c.Assert(err, qt.ErrorMatches, `.*does not yet create index "by_embedding", which only the native index set describes`)
+}

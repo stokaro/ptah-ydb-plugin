@@ -101,6 +101,18 @@ func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures)
 			if err := protojson.Unmarshal(value.Payload, result.storage); err != nil {
 				return declaredFacets{}, err
 			}
+		case schema.IndexProperties:
+			// The native set holds the indexes the common model cannot
+			// describe, and this provider creates none of them with a table
+			// yet. An empty set, which a read of a table with only global
+			// indexes converts to, states nothing to create.
+			var set native.IndexSetIntent
+			if err := protojson.Unmarshal(value.Payload, &set); err != nil {
+				return declaredFacets{}, err
+			}
+			if len(set.GetIndexes()) != 0 {
+				return declaredFacets{}, unsupported("YDB table creation does not yet create index %q, which only the native index set describes", set.GetIndexes()[0].GetSpecification().GetName())
+			}
 		case schema.ChangefeedProperties:
 			result.changefeeds = &native.ChangefeedSetIntent{}
 			if err := protojson.Unmarshal(value.Payload, result.changefeeds); err != nil {

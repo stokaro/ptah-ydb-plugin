@@ -6,7 +6,8 @@
       "text": "COMMENT ON TABLE t IS 'x'",
       "statements": [
         "COMMENT ON TABLE t IS 'x'"
-      ]
+      ],
+      "source": "COMMENT ON TABLE t IS 'x';"
     }
   ]
 }

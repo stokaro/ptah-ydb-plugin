@@ -10,6 +10,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replicationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
@@ -60,6 +62,10 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 		}
 	case workloadplan.ServiceID:
 		result, err = workloadplan.Plan(ctx, request)
+	case replicationplan.ReplicationServiceID:
+		result, err = replicationplan.PlanReplications(ctx, request)
+	case replicationplan.TransferServiceID:
+		result, err = replicationplan.PlanTransfers(ctx, request)
 	default:
 		err = fmt.Errorf("unsupported YDB planning service")
 	}
@@ -140,6 +146,12 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		}
 		if captured.GetValue().GetKind() == schema.StreamingQueryOperation && !request.Capabilities[streaming.Capability] {
 			return nil, status.Error(codes.FailedPrecondition, streaming.CapabilityRefusal("streaming query"))
+		}
+		if captured.GetValue().GetKind() == schema.ReplicationOperation && !request.Capabilities[replication.CapabilityReplication] {
+			return nil, status.Error(codes.FailedPrecondition, "async replication rendering requires the async_replication capability")
+		}
+		if captured.GetValue().GetKind() == schema.TransferOperation && !request.Capabilities[replication.CapabilityTransfers] {
+			return nil, status.Error(codes.FailedPrecondition, "transfer rendering requires the transfers capability")
 		}
 		if captured.GetValue().GetKind() == schema.WorkloadOperation && !request.Capabilities[workload.CapabilityResourcePools] {
 			return nil, status.Error(codes.FailedPrecondition, "resource pools require target capability resource_pools; "+workload.FlagHint)

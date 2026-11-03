@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -43,12 +44,17 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 		case schema.TableProperties:
 			converted, err = schema.ConvertTable(value.Value, request.From, request.To)
 		case schema.SecretProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.TopicProperties, schema.ViewProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties, schema.ColumnStorageProperties,
-			schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties, schema.StreamingQueryProperties:
+			schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties, schema.StreamingQueryProperties, schema.ReplicationProperties, schema.TransferProperties:
 			converted, err = schema.ConvertNative(value.Value, request.From, request.To)
 		case schema.CoordinationProperties:
 			converted, err = schema.ConvertCoordination(value.Value, request.From, request.To)
 		default:
 			return nil, status.Error(codes.Unimplemented, "YDB model has no representation conversion")
+		}
+		if err == nil && request.From == protocol.ValueInput_OBSERVED && request.To == protocol.ValueInput_DESIRED &&
+			slices.Contains(request.TargetFeatures, provider.CommonAccessFeature) {
+			// The grants a read holds travel as common grants.
+			converted, err = schema.WithoutAccess(converted)
 		}
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())

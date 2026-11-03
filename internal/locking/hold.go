@@ -68,7 +68,12 @@ func (h *Hold) Check(ctx context.Context) error {
 	if confirmationExpired(asked, h.confirmed) {
 		return h.fail(ErrUnknown)
 	}
-	bounded, cancel := context.WithTimeout(ctx, checkInterval)
+	// The check may take what is left of the freshness window. A reply after
+	// it proves nothing, and a reply within it confirms ownership however long
+	// the server took. Bounded by the check interval, a server slower than
+	// that would end a lease it still held: the expired call cancels the
+	// session it was sent on.
+	bounded, cancel := context.WithTimeout(ctx, freshness-asked.Sub(h.confirmed))
 	defer cancel()
 	if err := h.validate(bounded); err != nil {
 		return h.fail(ErrUnknown)

@@ -1,0 +1,171 @@
+package ydbfailure_test
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"google.golang.org/protobuf/testing/protocmp"
+)
+
+// A live server answers the statuses below on demand only for some of them
+// (integration/migration_split_live_test.go); these tests give each status as
+// a decoded Answer.
+
+func answer(status Ydb.StatusIds_StatusCode, issues ...string) ydbfailure.Answer {
+	return ydbfailure.Answer{Status: status, Issues: issues}
+}
+
+func TestReadKnowsNoStatusOfAnErrorYDBDidNotReturn(t *testing.T) {
+	c := testcheck.New(t)
+	for _, err := range []error{nil, errors.New("PRECONDITION_FAILED"), context.Canceled} {
+		c.Assert(ydbfailure.Read(err), qt.DeepEquals, ydbfailure.Answer{})
+	}
+}
+
+func TestConfirmed(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		answer ydbfailure.Answer
+		text   string
+		want   bool
+	}{
+		{"bad request", answer(Ydb.StatusIds_BAD_REQUEST), "CREATE TABLE t", true},
+		{"scheme error", answer(Ydb.StatusIds_SCHEME_ERROR), "DROP TABLE t", true},
+		{"precondition", answer(Ydb.StatusIds_PRECONDITION_FAILED), "INSERT INTO t (id) VALUES (1)", true},
+		{"already exists", answer(Ydb.StatusIds_ALREADY_EXISTS), "CREATE TABLE t", true},
+		{"not found", answer(Ydb.StatusIds_NOT_FOUND), "DROP TABLE t", true},
+		{"unsupported", answer(Ydb.StatusIds_UNSUPPORTED), "ALTER TABLE t", true},
+		{"aborted", answer(Ydb.StatusIds_ABORTED), "UPSERT INTO t (id) VALUES (1)", true},
+		{"generic data", answer(Ydb.StatusIds_GENERIC_ERROR), "UPSERT INTO t (id) VALUES (\"x\")", true},
+		{"generic scheme", answer(Ydb.StatusIds_GENERIC_ERROR), "CREATE TABLE t (id Int64, PRIMARY KEY (id))", false},
+		{"generic batch", answer(Ydb.StatusIds_GENERIC_ERROR), "BATCH UPDATE t SET v = 1", false},
+		{"generic block", answer(Ydb.StatusIds_GENERIC_ERROR), "SELECT 1; DO BEGIN SELECT 1; END DO", false},
+		{"unavailable", answer(Ydb.StatusIds_UNAVAILABLE), "UPSERT INTO t (id) VALUES (1)", false},
+		{"undetermined", answer(Ydb.StatusIds_UNDETERMINED), "UPSERT INTO t (id) VALUES (1)", false},
+		{"timeout", answer(Ydb.StatusIds_TIMEOUT), "UPSERT INTO t (id) VALUES (1)", false},
+		{"no status", answer(Ydb.StatusIds_STATUS_CODE_UNSPECIFIED), "UPSERT INTO t (id) VALUES (1)", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(test.answer.Confirmed(test.text), qt.Equals, test.want)
+		})
+	}
+}
+
+func TestRejected(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		answer        ydbfailure.Answer
+		text          string
+		inTransaction bool
+		want          bool
+	}{
+		{"data query", answer(Ydb.StatusIds_PRECONDITION_FAILED), "$v = 1u; INSERT INTO t (id) VALUES ($v); UPSERT INTO t (id) VALUES (2u)", false, true},
+		{"scheme statement", answer(Ydb.StatusIds_SCHEME_ERROR), "DROP TABLE t", false, true},
+		{"data block", answer(Ydb.StatusIds_PRECONDITION_FAILED), "DO BEGIN INSERT INTO t (id) VALUES (1); END DO", false, true},
+		{"scheme block", answer(Ydb.StatusIds_ALREADY_EXISTS), "DO BEGIN CREATE TABLE t (id Int64, PRIMARY KEY (id)); END DO", false, false},
+		{"scheme loop", answer(Ydb.StatusIds_ALREADY_EXISTS), "DEFINE ACTION $m($n) AS CREATE TABLE $n (id Int64, PRIMARY KEY (id)); END DEFINE; EVALUATE FOR $t IN AsList('a', 'b') DO $m($t)", false, false},
+		{"batch", answer(Ydb.StatusIds_PRECONDITION_FAILED), "BATCH DELETE FROM t WHERE id > 0", false, false},
+		{"two scheme statements", answer(Ydb.StatusIds_ALREADY_EXISTS), "CREATE TABLE a (id Int64, PRIMARY KEY (id)); CREATE TABLE b (id Int64, PRIMARY KEY (id))", false, false},
+		{"unsplittable", answer(Ydb.StatusIds_BAD_REQUEST), "--!ansi_lexer\nSELECT 1", false, false},
+		{"batch in a transaction", answer(Ydb.StatusIds_PRECONDITION_FAILED), "BATCH DELETE FROM t WHERE id > 0", true, true},
+		{"scheme block in a transaction", answer(Ydb.StatusIds_PRECONDITION_FAILED), "DO BEGIN CREATE TABLE t (id Int64, PRIMARY KEY (id)); END DO", true, true},
+		{"unconfirmed in a transaction", answer(Ydb.StatusIds_UNAVAILABLE), "UPSERT INTO t (id) VALUES (1)", true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(test.answer.Rejected(test.text, test.inTransaction), qt.Equals, test.want)
+		})
+	}
+}
+
+func TestMessageIsTheServersIssuesOnOneLine(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		answer ydbfailure.Answer
+		want   string
+	}{
+		{"issues", answer(Ydb.StatusIds_PRECONDITION_FAILED, "Constraint violated. Table: `/local/t`.", "Conflict with existing key."), "Constraint violated. Table: `/local/t`.; Conflict with existing key."},
+		{"line breaks", answer(Ydb.StatusIds_GENERIC_ERROR, "first\nsecond\r\n", "\tthird"), "first second; third"},
+		{"none", answer(Ydb.StatusIds_ABORTED), "fallback"},
+		{"long", answer(Ydb.StatusIds_BAD_REQUEST, strings.Repeat("é", 300)), strings.Repeat("é", 256)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(test.answer.Message("fallback"), qt.Equals, test.want)
+		})
+	}
+}
+
+func TestFailed(t *testing.T) {
+	const insert = "INSERT INTO t (id) VALUES (1u)"
+	conflict := answer(Ydb.StatusIds_ABORTED, "Transaction locks invalidated. Table: `/local/t`.")
+	duplicate := answer(Ydb.StatusIds_PRECONDITION_FAILED, "Conflict with existing key.")
+	unknown := &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, DiagnosticCode: "ydb.execution-unconfirmed",
+		Message: "The dispatched unit's outcome is unknown; no automatic retry was attempted"}
+	unknownAfterOne := &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: 1, DiagnosticCode: unknown.DiagnosticCode, Message: unknown.Message}
+	for _, test := range []struct {
+		name    string
+		answer  ydbfailure.Answer
+		unit    ydbfailure.Unit
+		applied uint32
+		want    *protocol.Execution
+	}{
+		{"rejected", duplicate, ydbfailure.Unit{Text: insert}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Conflict with existing key."}},
+		{"rejected after a prefix", duplicate, ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 2,
+			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 2, DiagnosticCode: "ydb.statement-rejected", Message: "Conflict with existing key."}},
+		{"rejected without issues", answer(Ydb.StatusIds_SCHEME_ERROR), ydbfailure.Unit{Text: "DROP TABLE t"}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "YDB rejected the unit"}},
+		{"aborted", conflict, ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated. Table: `/local/t`.", TransactionAborted: true}},
+		{"aborted, not negotiated", conflict, ydbfailure.Unit{Text: insert, Transaction: true}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated. Table: `/local/t`."}},
+		{"aborted after a prefix", conflict, ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 1,
+			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 1, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated. Table: `/local/t`."}},
+		{"aborted without issues", answer(Ydb.StatusIds_ABORTED), ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "YDB aborted the transaction for a conflict", TransactionAborted: true}},
+		{"aborted outside a transaction", conflict, ydbfailure.Unit{Text: insert, Aborts: true}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Transaction locks invalidated. Table: `/local/t`."}},
+		{"native", duplicate, ydbfailure.Unit{}, 0, unknown},
+		{"service statement in a transaction", duplicate, ydbfailure.Unit{Transaction: true, Aborts: true}, 0, unknown},
+		{"not applied whole", duplicate, ydbfailure.Unit{Text: "BATCH DELETE FROM t WHERE id > 0"}, 0, unknown},
+		{"unconfirmed", answer(Ydb.StatusIds_UNDETERMINED), ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0, unknown},
+		{"unconfirmed after a prefix", answer(Ydb.StatusIds_TIMEOUT), ydbfailure.Unit{Text: insert}, 1, unknownAfterOne},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(ydbfailure.Failed(test.answer, test.unit, test.applied), qt.CmpEquals(protocmp.Transform()), test.want)
+		})
+	}
+}
+
+func TestCommitOfAnAbortedTransactionIsRolledBack(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		aborts bool
+		want   *protocol.TransactionResult
+	}{
+		{"negotiated", true, &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, Aborted: true, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated."}},
+		{"not negotiated", false, &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated."}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(ydbfailure.Commit(answer(Ydb.StatusIds_ABORTED, "Transaction locks invalidated."), test.aborts), qt.CmpEquals(protocmp.Transform()), test.want)
+		})
+	}
+}
+
+func TestCommitOfAnotherFailureIsUnknown(t *testing.T) {
+	c := testcheck.New(t)
+	for _, status := range []Ydb.StatusIds_StatusCode{Ydb.StatusIds_STATUS_CODE_UNSPECIFIED, Ydb.StatusIds_UNDETERMINED, Ydb.StatusIds_PRECONDITION_FAILED, Ydb.StatusIds_UNAVAILABLE} {
+		c.Assert(ydbfailure.Commit(answer(status), true), qt.IsNil, qt.Commentf("%s", status))
+	}
+}

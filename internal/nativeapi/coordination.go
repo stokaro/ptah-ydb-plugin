@@ -54,12 +54,13 @@ func (c *Coordination) Apply(ctx context.Context, database string, value *protoc
 	if err != nil {
 		return false, err
 	}
+	display := path.Join(owner.Schema, owner.Name)
 	current, err := c.read(ctx, owner)
 	if err != nil {
-		return false, err
+		return false, refused("read coordination node "+display, err)
 	}
 	if (before == nil) != (current == nil) || (before != nil && !bytes.Equal(before.Payload, current.Payload)) {
-		return false, fmt.Errorf("coordination state changed since capture")
+		return false, &Refusal{Err: fmt.Errorf("coordination node %s changed since the plan read it", display)}
 	}
 	var config *Ydb_Coordination.Config
 	if after != nil {
@@ -112,14 +113,13 @@ func (c *Coordination) Apply(ctx context.Context, database string, value *protoc
 	return true, nil
 }
 
+// read lists the node's directory and describes the node, or returns nil
+// where the directory holds no entry of its name, or does not exist; see
+// [ListDirectory].
 func (c *Coordination) read(ctx context.Context, owner *protocol.Reference) (*protocol.Envelope, error) {
 	directory := path.Join(owner.Database, owner.Schema)
-	response, err := c.Scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: directory})
+	listing, err := ListDirectory(ctx, SchemeLister(c.Scheme), owner.Database, owner.Schema)
 	if err != nil {
-		return nil, fmt.Errorf("read YDB coordination namespace: transport failed")
-	}
-	var listing Ydb_Scheme.ListDirectoryResult
-	if err := Operation(response.GetOperation(), &listing); err != nil {
 		return nil, err
 	}
 	if listing.GetSelf().GetName() != path.Base(directory) || (listing.GetSelf().GetType() != Ydb_Scheme.Entry_DATABASE && listing.GetSelf().GetType() != Ydb_Scheme.Entry_DIRECTORY) || len(listing.Children) > 4096 {
@@ -223,10 +223,10 @@ func (c *Coordination) RunStatement(ctx context.Context, database, root string, 
 	}
 	absolute, err := query.Absolute(database, prefix)
 	if err != nil {
-		return false, &StatementRefusal{Err: err}
+		return false, &Refusal{Err: err}
 	}
 	if _, inside := strings.CutPrefix(absolute, strings.TrimSuffix(root, "/")+"/"); !inside {
-		return false, &StatementRefusal{Err: fmt.Errorf("%w: coordination node %s is not in %s", coordinationsql.ErrStatement, absolute, root)}
+		return false, &Refusal{Err: fmt.Errorf("%w: coordination node %s is not in %s", coordinationsql.ErrStatement, absolute, root)}
 	}
 	relative := strings.TrimPrefix(absolute, database+"/")
 	directory := path.Dir(relative)
@@ -234,9 +234,9 @@ func (c *Coordination) RunStatement(ctx context.Context, database, root string, 
 		directory = ""
 	}
 	if err := ydbdecl.RefuseCoordinationName(directory, path.Base(relative)); err != nil {
-		return false, &StatementRefusal{Err: fmt.Errorf("%w: %w", coordinationsql.ErrStatement, err)}
+		return false, &Refusal{Err: fmt.Errorf("%w: %w", coordinationsql.ErrStatement, err)}
 	}
-	current, found, err := c.describeNode(ctx, absolute)
+	current, found, err := c.describeNode(ctx, database, absolute)
 	if err != nil {
 		return false, err
 	}
@@ -244,7 +244,7 @@ func (c *Coordination) RunStatement(ctx context.Context, database, root string, 
 	switch query.Verb {
 	case coordinationsql.Create:
 		if found {
-			return false, &StatementRefusal{Err: fmt.Errorf("create YDB coordination node %s: the node already exists", absolute)}
+			return false, &Refusal{Err: fmt.Errorf("create YDB coordination node %s: the node already exists", absolute)}
 		}
 		call = func() (*Ydb_Operations.Operation, error) {
 			response, err := c.Nodes.CreateNode(ctx, &Ydb_Coordination.CreateNodeRequest{Path: absolute, Config: statementConfig(query.Settings)})
@@ -252,10 +252,10 @@ func (c *Coordination) RunStatement(ctx context.Context, database, root string, 
 		}
 	case coordinationsql.Alter:
 		if !found {
-			return false, &StatementRefusal{Err: fmt.Errorf("change YDB coordination node %s: no coordination node is at this path", absolute)}
+			return false, &Refusal{Err: fmt.Errorf("change YDB coordination node %s: no coordination node is at this path", absolute)}
 		}
 		if err := ydbdecl.ValidateCoordinationNode(coordinationsql.Merge(current, query.Settings)); err != nil {
-			return false, &StatementRefusal{Err: fmt.Errorf("%w: change YDB coordination node %s: %w", coordinationsql.ErrStatement, absolute, err)}
+			return false, &Refusal{Err: fmt.Errorf("%w: change YDB coordination node %s: %w", coordinationsql.ErrStatement, absolute, err)}
 		}
 		call = func() (*Ydb_Operations.Operation, error) {
 			response, err := c.Nodes.AlterNode(ctx, &Ydb_Coordination.AlterNodeRequest{Path: absolute, Config: statementConfig(query.Settings)})
@@ -263,7 +263,7 @@ func (c *Coordination) RunStatement(ctx context.Context, database, root string, 
 		}
 	default:
 		if !found {
-			return false, &StatementRefusal{Err: fmt.Errorf("drop YDB coordination node %s: no coordination node is at this path", absolute)}
+			return false, &Refusal{Err: fmt.Errorf("drop YDB coordination node %s: no coordination node is at this path", absolute)}
 		}
 		call = func() (*Ydb_Operations.Operation, error) {
 			response, err := c.Nodes.DropNode(ctx, &Ydb_Coordination.DropNodeRequest{Path: absolute})
@@ -286,25 +286,15 @@ func (c *Coordination) RunStatement(ctx context.Context, database, root string, 
 	return true, nil
 }
 
-// StatementRefusal is why a coordination node statement was refused before
-// anything was sent: the statement and what the server holds disagree. Its
-// text is Ptah's own and names the node, never a credential or server text.
-type StatementRefusal struct{ Err error }
-
-func (r *StatementRefusal) Error() string { return r.Err.Error() }
-func (r *StatementRefusal) Unwrap() error { return r.Err }
-
-// describeNode reads the configuration of the node at absolute as YDB keeps
-// it, every setting nobody sent left out, and reports whether a node is
-// there. A path that holds an object of another kind is an error.
-func (c *Coordination) describeNode(ctx context.Context, absolute string) (ydbdecl.CoordinationNode, bool, error) {
-	response, err := c.Scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: path.Dir(absolute)})
+// describeNode reads the configuration of the node at absolute, a path in
+// database, as YDB keeps it, every setting nobody sent left out, and reports
+// whether a node is there. A directory that does not exist holds no node; see
+// [ListDirectory]. A path that holds an object of another kind is an error.
+func (c *Coordination) describeNode(ctx context.Context, database, absolute string) (ydbdecl.CoordinationNode, bool, error) {
+	directory := strings.TrimPrefix(strings.TrimPrefix(path.Dir(absolute), database), "/")
+	listing, err := ListDirectory(ctx, SchemeLister(c.Scheme), database, directory)
 	if err != nil {
-		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("read YDB coordination namespace: transport failed")
-	}
-	var listing Ydb_Scheme.ListDirectoryResult
-	if err := Operation(response.GetOperation(), &listing); err != nil {
-		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("read the directory of YDB coordination node %s: %w", absolute, err)
+		return ydbdecl.CoordinationNode{}, false, &Refusal{Err: fmt.Errorf("read the directory of YDB coordination node %s: %w", absolute, err)}
 	}
 	found := false
 	for _, entry := range listing.GetChildren() {
@@ -312,7 +302,7 @@ func (c *Coordination) describeNode(ctx context.Context, absolute string) (ydbde
 			continue
 		}
 		if entry.GetType() != Ydb_Scheme.Entry_COORDINATION_NODE {
-			return ydbdecl.CoordinationNode{}, false, &StatementRefusal{Err: fmt.Errorf("%w: %s is a YDB object of another kind than a coordination node",
+			return ydbdecl.CoordinationNode{}, false, &Refusal{Err: fmt.Errorf("%w: %s is a YDB object of another kind than a coordination node",
 				coordinationsql.ErrStatement, absolute)}
 		}
 		found = true
@@ -322,15 +312,15 @@ func (c *Coordination) describeNode(ctx context.Context, absolute string) (ydbde
 	}
 	described, err := c.Nodes.DescribeNode(ctx, &Ydb_Coordination.DescribeNodeRequest{Path: absolute})
 	if err != nil {
-		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("describe YDB coordination node: transport failed")
+		return ydbdecl.CoordinationNode{}, false, &Refusal{Err: fmt.Errorf("describe YDB coordination node %s: transport failed", absolute)}
 	}
 	var result Ydb_Coordination.DescribeNodeResult
 	if err := Operation(described.GetOperation(), &result); err != nil {
-		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("describe YDB coordination node %s: %w", absolute, err)
+		return ydbdecl.CoordinationNode{}, false, &Refusal{Err: fmt.Errorf("describe YDB coordination node %s: %w", absolute, err)}
 	}
 	current, err := nodeSettings(result.GetConfig())
 	if err != nil {
-		return ydbdecl.CoordinationNode{}, false, fmt.Errorf("describe YDB coordination node %s: %w", absolute, err)
+		return ydbdecl.CoordinationNode{}, false, &Refusal{Err: fmt.Errorf("describe YDB coordination node %s: %w", absolute, err)}
 	}
 	return current, true, nil
 }
