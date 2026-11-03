@@ -62,16 +62,25 @@ func commonIndexes(table *protocol.Reference, observed *native.IndexObservations
 		description := index.GetDescription()
 		common := &protocol.ObservedIndex{Name: description.GetName(), TableName: table.GetName(), Schema: table.GetSchema(),
 			Columns: slices.Clone(description.GetIndexColumns()), IncludeColumns: slices.Clone(description.GetDataColumns())}
-		switch description.GetType().(type) {
-		case *native.TableIndexDescription_GlobalIndex:
-		case *native.TableIndexDescription_GlobalAsyncIndex:
-			common.Method = "async"
-		case *native.TableIndexDescription_GlobalUniqueIndex:
-			common.Unique = true
-		default:
+		if !schema.CommonIndex(description) {
 			continue
 		}
+		if description.GetGlobalAsyncIndex() != nil {
+			common.Method = "async"
+		}
+		common.Unique = description.GetGlobalUniqueIndex() != nil
 		result = append(result, common)
+	}
+	return result
+}
+
+// nativeIndexes are the indexes of observed the common model cannot describe.
+func nativeIndexes(observed *native.IndexObservations) *native.IndexObservations {
+	result := &native.IndexObservations{}
+	for _, index := range observed.GetIndexes() {
+		if !schema.CommonIndex(index.GetDescription()) {
+			result.Indexes = append(result.Indexes, index)
+		}
 	}
 	return result
 }
