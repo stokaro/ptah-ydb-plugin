@@ -34,6 +34,8 @@ type wireSession struct {
 	name      string
 	acquired  bool
 	ended     atomic.Bool
+	// failure is the failure the server ended the stream with, if any.
+	failure   atomic.Pointer[wire.SessionResponse_Failure]
 	closeOnce sync.Once
 	closeErr  error
 }
@@ -55,7 +57,7 @@ func openSession(ctx context.Context, driver *ydb.Driver, node string) (*wireSes
 	if err != nil || result.GetSessionStarted().GetSessionId() == 0 {
 		cancel()
 		<-s.receiving
-		return nil, fmt.Errorf("start YDB lock session failed")
+		return nil, s.startFailure(node)
 	}
 	s.id = result.GetSessionStarted().GetSessionId()
 	if !stop() || ctx.Err() != nil {
@@ -65,6 +67,18 @@ func openSession(ctx context.Context, driver *ydb.Driver, node string) (*wireSes
 	}
 	go s.keepAlive()
 	return s, nil
+}
+
+// startFailure says why the server started no session on node. The server
+// refuses one to a user who may describe the node but not use it, and says so:
+// measured on 25.1.4.7 and 26.2.1.14, it ends the stream at once with
+// UNAUTHORIZED, `User has no access to the coordination node`.
+func (s *wireSession) startFailure(node string) error {
+	if s.failure.Load().GetStatus() == Ydb.StatusIds_UNAUTHORIZED {
+		return refused("open a session on the YDB coordination node %s, which holds Ptah's locks: the server refused it "+
+			"(UNAUTHORIZED); grant the user the right to use it", node)
+	}
+	return fmt.Errorf("start YDB lock session failed")
 }
 func (s *wireSession) Context() context.Context { return s.ctx }
 func (s *wireSession) SessionID() uint64        { return s.id }
@@ -98,6 +112,7 @@ func (s *wireSession) receive() {
 			}
 		case *wire.SessionResponse_Pong:
 		case *wire.SessionResponse_Failure_:
+			s.failure.Store(value.Failure)
 			if value.Failure.GetStatus() == Ydb.StatusIds_SESSION_EXPIRED {
 				s.ended.Store(true)
 			}
