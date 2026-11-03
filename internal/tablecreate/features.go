@@ -43,6 +43,9 @@ type declaredFacets struct {
 	// YDB adds a changefeed only to a table that exists, so each is a step of
 	// its own after the creation.
 	changefeeds *native.ChangefeedSetIntent
+	// indexes is the native index set of a row table, nil where the
+	// declaration states none.
+	indexes *native.IndexSetIntent
 }
 
 func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures) (declaredFacets, error) {
@@ -99,6 +102,15 @@ func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures)
 		case schema.ColumnStorageProperties:
 			result.storage = &native.ColumnStorageIntent{}
 			if err := protojson.Unmarshal(value.Payload, result.storage); err != nil {
+				return declaredFacets{}, err
+			}
+		case schema.IndexProperties:
+			// The native index set: the creation request carries none of it.
+			// A vector or full-text index is a step of its own after the
+			// creation (see plannedCreationIndexes), and a global index the set
+			// states is refused there.
+			result.indexes = &native.IndexSetIntent{}
+			if err := protojson.Unmarshal(value.Payload, result.indexes); err != nil {
 				return declaredFacets{}, err
 			}
 		case schema.ChangefeedProperties:

@@ -137,7 +137,7 @@ func indexSignatures(specs []*native.IndexIntent, held bool) (names []string, si
 func declaredSpecs(set *native.IndexSetIntent) []*native.IndexIntent {
 	var result []*native.IndexIntent
 	for _, declaration := range set.GetIndexes() {
-		result = append(result, declaration.GetSpecification())
+		result = append(result, comparableIndex(declaration.GetSpecification()))
 	}
 	return result
 }
@@ -145,7 +145,7 @@ func declaredSpecs(set *native.IndexSetIntent) []*native.IndexIntent {
 func heldSpecs(observed *native.IndexObservations) (specs []*native.IndexIntent, held map[string]*native.TableIndexDescription) {
 	held = map[string]*native.TableIndexDescription{}
 	for _, index := range observed.GetIndexes() {
-		specs = append(specs, schema.IndexSpecification(index.GetDescription()))
+		specs = append(specs, comparableIndex(schema.IndexSpecification(index.GetDescription())))
 		held[index.GetDescription().GetName()] = index.GetDescription()
 	}
 	return specs, held
@@ -155,15 +155,18 @@ func heldSpecs(observed *native.IndexObservations) (specs []*native.IndexIntent,
 // set the declaration states, in name order, or the reason it cannot be made.
 // An empty result means the table already satisfies the declaration.
 //
-// Only global secondary indexes are added and dropped: sync, async and unique.
-// A vector or fulltext index, and an index that states settings of its own,
-// are refused by name rather than ignored. An index the table holds under a
+// Only global secondary indexes are added and dropped here: sync, async and
+// unique. An index name either side holds as a vector or full-text index is
+// left to planNativeIndexes. An index that states settings of its own is
+// refused by name rather than ignored. An index the table holds under a
 // declared name but with another definition is refused too, because YDB cannot
 // alter an index in place and a drop followed by an addition rebuilds it.
 func planIndexes(in indexInput) ([]indexChange, string) {
 	if !in.managed {
 		return nil, ""
 	}
+	// planNativeIndexes plans the vector and full-text indexes.
+	in = withoutNativeIndexes(in)
 	wantedSpecs := declaredSpecs(in.desired)
 	heldSpecList, heldByName := heldSpecs(in.held)
 	wantedNames, wanted, wantedByName := indexSignatures(wantedSpecs, false)

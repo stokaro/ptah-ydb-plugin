@@ -164,6 +164,14 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, ca
 	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
+	// The vector and full-text indexes follow the rules of their own, with
+	// the column types and the key they read.
+	vectorAndText, reason := planNativeIndexes(nativeIndexInput{managed: desired.indexes != nil, desired: &wantedIndexes, held: &heldIndexes,
+		columns: declaredKeyTypes(table.Desired, &intent), capabilities: capabilities})
+	if reason != "" {
+		return alterationChanges{}, reason, nil
+	}
+	indexes = append(indexes, vectorAndText...)
 	// The changefeeds are managed by a declaration that states them, and by a
 	// source that describes the changefeeds of every table it declares. Without
 	// the table's own read, a changefeed the table already holds would look

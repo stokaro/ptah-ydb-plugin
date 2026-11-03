@@ -69,6 +69,13 @@ var gates = []Gate{
 	// YDB answers `Resource pools are disabled` and `Resource pool classifiers
 	// are disabled`, and .sys/resource_pools lists nothing.
 	{Key: "resource_pools", Flag: "EnableResourcePools"},
+	// Off by default on 25.1.4.7 and on on 26.2.1.14. With it off, a vector
+	// index is refused with `Vector index support is disabled`.
+	{Key: "vector_indexes", Flag: "EnableVectorIndex"},
+	// On by default on 26.2.1.14, and absent from the 25.1.4.7 page, which
+	// leaves the preset's answer. With it off, a full-text index is refused
+	// with `Fulltext index support is disabled`.
+	{Key: "full_text_indexes", Flag: "EnableFulltextIndex"},
 }
 
 // Gates returns every capability a flag decides, in a fixed order.

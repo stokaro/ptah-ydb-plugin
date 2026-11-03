@@ -127,6 +127,9 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 		{name: "row-table settings beside the storage", storage: `{}`, modify: func(c *qt.C, table *protocol.DeclaredTable) {
 			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.TableProperties, "", `{"keyBloomFilter":"ENABLED"}`))
 		}, wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
+		{name: "a vector index", storage: `{}`, modify: func(c *qt.C, table *protocol.DeclaredTable) {
+			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.IndexProperties, "", vectorIndexes(false)))
+		}, wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
 		{name: "a column in a family", storage: `{}`, modify: func(c *qt.C, table *protocol.DeclaredTable) {
 			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.ColumnProperties, "body", `{"family":"cold"}`))
 		}, wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},

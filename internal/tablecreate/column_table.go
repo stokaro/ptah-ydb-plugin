@@ -92,7 +92,7 @@ func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable
 	if captured.storage == nil {
 		return nil, fmt.Errorf("YDB column table declaration has no column-storage facet")
 	}
-	if captured.stated && !proto.Equal(captured.table, &native.RowTableIntent{}) || len(captured.changefeeds.GetChangefeeds()) != 0 {
+	if captured.stated && !proto.Equal(captured.table, &native.RowTableIntent{}) || len(captured.changefeeds.GetChangefeeds()) != 0 || len(captured.indexes.GetIndexes()) != 0 {
 		return nil, unsupported("%s", schema.ColumnTableRowSettingsRefusal)
 	}
 	result := &native.ColumnTableCreation{PrimaryKey: key, HashColumns: slices.Clone(captured.storage.HashColumns),

@@ -242,6 +242,10 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 				"drop them, rebuild, and add them again", nil
 		}
 	}
+	if name := rebuiltNativeIndex(table); name != "" {
+		return nil, subject + fmt.Sprintf(": the table declares or holds the vector or full-text index %q, which the rebuild does not create; "+
+			"drop it, rebuild, and add it again", name), nil
+	}
 	scratch, err := freeName(owner, rebuildPrefix, names)
 	if err != nil {
 		return nil, subject + ": " + err.Error(), nil
