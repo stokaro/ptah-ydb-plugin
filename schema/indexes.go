@@ -31,6 +31,18 @@ func ValidateIndexes(values []*native.TableIndexDescription) error {
 	return nil
 }
 
+// CommonIndex reports an index the common model describes: a global secondary
+// index, synchronous, asynchronous or unique, which a host that negotiates
+// schema.observed-indexes compares and changes by its key and covered columns.
+// A vector or full-text index has settings the common model has no place for.
+func CommonIndex(index *native.TableIndexDescription) bool {
+	switch index.GetType().(type) {
+	case *native.TableIndexDescription_GlobalIndex, *native.TableIndexDescription_GlobalAsyncIndex, *native.TableIndexDescription_GlobalUniqueIndex:
+		return true
+	}
+	return false
+}
+
 // ImplementationNames names the physical tables YDB uses for this index kind.
 // The mapping follows NTableIndex::GetImplTables at the pinned upstream commit
 // recorded in third_party/ydb/NOTICE.md. A vector prefix is a separate table.

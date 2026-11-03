@@ -6,21 +6,24 @@
       "text": "BATCH UPDATE t SET v = 1 WHERE id \u003e 0",
       "statements": [
         "BATCH UPDATE t SET v = 1 WHERE id \u003e 0"
-      ]
+      ],
+      "source": "BATCH UPDATE t SET v = 1 WHERE id \u003e 0;"
     },
     {
       "kind": "data",
       "text": "UPSERT INTO t (id) VALUES (1)",
       "statements": [
         "UPSERT INTO t (id) VALUES (1)"
-      ]
+      ],
+      "source": "UPSERT INTO t (id) VALUES (1);"
     },
     {
       "kind": "batch",
       "text": "BATCH DELETE FROM t WHERE id \u003c 0",
       "statements": [
         "BATCH DELETE FROM t WHERE id \u003c 0"
-      ]
+      ],
+      "source": "BATCH DELETE FROM t WHERE id \u003c 0;"
     }
   ]
 }

@@ -71,8 +71,11 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.9.0, which speaks provider contract 25.7.
-Builds require neither the Ptah application source nor a local SDK checkout.
+The module pins `provider-sdk` v0.11.1-0.20261102235223-72d2bd2e6503, a
+pseudo-version of the SDK that speaks provider contract 25.12. The provider
+still requires 25.7 of its host and offers each later feature to a host that
+lists it. Builds require neither the Ptah application source nor a local SDK
+checkout.
 
 Database context is resolved without connecting or reading credentials. A dev
 realm carries both its selected root and the authored database root. Context
@@ -341,11 +344,46 @@ SQL units use a pinned connection; native coordination, table creation and table
 use their native services. Dispatched writes are not retried.
 Request IDs correlate calls and do not provide exactly-once execution.
 
-Results distinguish a confirmed prefix from an uncertain remainder. A failed
-dispatched unit reports UNKNOWN, even when earlier units succeeded. A unit may
-contain several SQL statements, so its error cannot prove that none ran.
-Cancellation between units reports the confirmed prefix. Diagnostics omit raw
-driver errors and SQL text.
+Results distinguish a confirmed prefix from an uncertain remainder. A
+dispatched unit YDB refused is `NOT_APPLIED`, or `PARTIAL` after a confirmed
+prefix, when nothing of it can have been applied. That takes a status that
+establishes the refusal (`BAD_REQUEST`, `SCHEME_ERROR`, `PRECONDITION_FAILED`,
+`ALREADY_EXISTS`, `NOT_FOUND`, `UNSUPPORTED`, `ABORTED`, or `GENERIC_ERROR` for
+a plain data statement) and a unit that ran in a caller transaction, which YDB
+applies only by its commit, or that is one query YDB applies whole: a data
+query or one scheme statement. Its message is YDB's own issue text on one line.
+Every other failed dispatched unit reports `UNKNOWN`, even when earlier units
+succeeded: a block or action call that runs scheme statements, a `BATCH`
+statement, a unit of several scheme statements, a native unit, a unit that
+holds a comment or coordination node statement, a unit that expands secret
+inputs, and a failure that carries no server status. Cancellation between
+units reports the confirmed prefix. Diagnostics omit raw driver errors.
+
+A unit YDB refused in a caller transaction ends the transaction: measured on
+26.2.1.14, YDB has dropped it, and a rollback answers `Transaction not found`.
+The provider rolls it back and retains `ROLLED_BACK` for the caller's finish.
+A commit YDB answered `ABORTED` applied nothing and is `ROLLED_BACK`.
+
+A unit refused before dispatch reports `NOT_STARTED`, or `PARTIAL` after an
+applied prefix, with the diagnostic `ydb.precondition-refused`. Where the
+reason is the provider's own text about the object, such as a plan the object
+changed after, a path another object holds, or a read the server answered with
+a status other than success, the message is that reason, naming the object by
+its path and the server's status by its name. Any other reason, such as a lost
+lock or a failed system-view query, gets a fixed sentence, so no server text,
+credential or declared value reaches the host.
+
+Every native creation reads where its object goes before the write: the
+listing of its directory, or the system view for a streaming query and the
+resource pools. YDB creates the directories an object needs with the object,
+so a directory that does not exist holds no occupant, by the rule a filtered
+read uses (see [Schema observations](#schema-observations)), and the first
+object of a new directory is created there. On 26.2.1.14, YDB created a topic,
+a coordination node, a secret, an external data source and an external table,
+a row table (through YQL and through native CreateTable), a column table, a
+view and a streaming query two directory levels below an existing directory;
+25.1.4.7 did the same for every kind but secrets and streaming queries, which
+it does not keep. Resource pools and classifiers have no directory.
 
 The provider offers `units.statement-timeout`. A host that lists it sends a
 migration's statement timeout with each Execute call, and the provider bounds
@@ -372,7 +410,7 @@ RPC therefore does not roll back later work.
 
 A session permits one active transaction. Execution must name its handle while
 it is active. Commit and rollback retain their terminal result, including
-UNKNOWN, without issuing a second database operation. Rollback of an unused
+UNKNOWN and an aborted commit, without issuing a second database operation. Rollback of an unused
 handle fences a late begin. The SDK client sends rollback after a failed begin,
 including a duplicate begin; callers must not reuse handles.
 Each session retains at most 1,024 transaction handles.
@@ -391,6 +429,48 @@ models remain to be extracted. A SQL unit that runs one of the host's
 coordination node statements is run through the coordination service; the
 host's extended comment statements are not implemented here.
 
+## Migration splits
+
+The provider and the ydb engine list `units.migration-split` (contract 25.12,
+ADR 0054 in Ptah) beside the `sessions.transactions` and `sessions.history`
+services it requires. `SplitMigration` reads one migration body offline and
+returns the queries YDB runs it as, cut by `internal/yqlquery` as the host's
+embedded YDB engine cuts them: each scheme statement and each `BATCH`
+statement a query of its own, each run of data statements one query, and
+every `PRAGMA`, `DECLARE`, named expression and action carried into each later
+query. A unit's `sql` is that query's text, and its `source` is the query's own
+statements as written, which the host hashes and records. The corpus under
+`internal/yqlquery/testdata/corpus` holds the host's text and source for each
+case, recorded by `internal/rowdata/testdata/oracle`.
+
+A data query is `WITH_CHECKPOINT`: the host runs it in a serializable
+transaction together with the history write that records it. A scheme query,
+a `BATCH` query, and a block or action call that runs a scheme statement are
+`OUTSIDE`, and the host runs each with no transaction. A block or an
+`EVALUATE FOR` that runs only data statements is a data query: measured on
+26.2.1.14, YDB runs and commits `DO BEGIN UPSERT ...; END DO`, `DO $a(1)` over a
+data action and `EVALUATE FOR ... DO BEGIN UPSERT ...; END DO` in an
+interactive serializable transaction, and refuses one that runs a scheme
+statement there.
+
+The split refuses the whole body, with the byte range of the refused text and
+a reason that quotes nothing from the body, where the host's embedded engine
+refuses it before a run: a translation setting other than `--!syntax_v1` (such
+as `--!ansi_lexer`), a client delimiter directive (`DELIMITER` or
+`-- atlas:delimiter`), a statement that controls a transaction (such as
+`COMMIT`), and a block or action call that runs a scheme statement and a
+statement that reads or writes a table, which YDB refuses whole. Each check
+assertion gets the verdict `RunStatement` gives the same text under
+`READ_ONLY` before it opens anything, so a dry run refuses what the run
+refuses. The run still proves the reads local against the catalog.
+
+For a host that lists the feature, a unit YDB aborted for a conflict in a
+caller transaction (`ABORTED`, `Transaction locks invalidated`) is
+`NOT_APPLIED` with `Execution.transaction_aborted`, and a commit YDB aborted is
+`ROLLED_BACK` with `TransactionResult.aborted`. Neither applied anything, and
+the host may run the transaction again. A host that does not list the feature
+gets the same outcomes without the flags.
+
 ## Text units
 
 The provider lists `render.text-units` (contract 25.3, ADR 0034 in Ptah). A
@@ -401,7 +481,8 @@ this provider's `Execute` does with it what the native call does:
 
 | Operation | Statement |
 | --- | --- |
-| Row-table creation | `CREATE TABLE` with its columns, key, families, TTL, automatic partitioning, read replicas, key bloom filter and starting layout |
+| Row-table creation | `CREATE TABLE` with its columns, key, families, TTL, automatic partitioning, read replicas, key bloom filter and starting layout, then `ALTER SEQUENCE ... RESTART WITH` for a Serial whose sequence the declaration gives a start or an increment |
+| Serial sequence change | `ALTER SEQUENCE` on the sequence's absolute path, with `START WITH` and `INCREMENT BY` and no restart |
 | Row-table alteration | One `ALTER TABLE`: families and placements, added or dropped columns, `SET (TTL = ...)` or `RESET (TTL)`, the whole automatic partitioning set, or `ADD`/`DROP INDEX` |
 | Column table | The `CREATE TABLE ... STORE = COLUMN` and TTL statements the provider runs |
 | Coordination node | `CREATE COORDINATION NODE ... WITH (...)`, `ALTER ... SET (...)` naming the settings that change, `DROP COORDINATION NODE` |
@@ -418,8 +499,10 @@ transaction, or one that cannot be read, refuses the batch before any unit runs.
 
 A change only the native call makes refuses the batch with `NO_TEXT_FORM` and
 no unit: user attributes other than Ptah's comments, storage settings, tiering, the partition columns, a
-family kept in memory, a default from a sequence or of a type without a
-literal, a TTL run interval other than YDB's own, a coordination node that
+family kept in memory, a default of a type without a literal, a sequence on a
+column that is no Int16, Int32 or Int64, a start or an increment on a 16-bit or
+32-bit Serial's sequence, a sequence of a creation or a change that names no
+database (ALTER SEQUENCE takes only the absolute path), a TTL run interval other than YDB's own, a coordination node that
 declares its access, an external data source or external table dropped and
 created again around the plan's other statements, which the native call gives
 the owner and the access entries of the old one, and every topic and
@@ -675,6 +758,30 @@ exact database, empty catalog, and exact schema directory. An empty directory
 therefore establishes native-object absence there. Unread descendants, excluded
 system directories, and other namespaces remain unknown. Table and column
 facets keep subject-only coverage.
+
+A selected directory YDB does not show (it answers SCHEME_ERROR) reads as
+empty when its parent's listing, proved the same way up to the database root,
+does not name it. That is the evidence a walk from the root takes for any
+entry a listing leaves out, and it lets `schema apply --schemas` create the
+first object of a new directory. A directory its parent names but the session
+cannot list is still refused, and so is a path below an object that is not a
+directory. Execution reads the directory of each object it creates through
+the same rule; see [Execution and transactions](#execution-and-transactions).
+
+A read with no selector cannot do the same for a directory it never listed. It
+claims each directory it lists complete, and a coverage region names one exact
+directory, so no region covers a directory that does not exist. A claim for the
+whole database would also cover the dot-prefixed directories and the dev realm
+directory the walk leaves out, and everything below them, which the read does
+not know. So `schema apply` with no `--schemas` leaves a native object in a new
+directory unplanned, prints why, and exits 0, as for a topic in `fresh/nested`:
+
+```text
+Warning: github.com/stokaro/ptah-ydb-plugin/topic fresh/nested.events could not be compared between the database and the desired schema: The current topic or its absence was not established.
+No changes planned, but 1 comparison limit remains unresolved.
+```
+
+Name the directory with `--schemas` to create the object.
 
 Unknown native fields and enum values are refused before JSON conversion.
 Shared topic consumers, unextracted native object kinds, and
@@ -1282,8 +1389,8 @@ overlapping parent/descendant paths are refused until a directory lifecycle is
 captured. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
-the change is refused. The parent directory must already exist; execution never
-creates or deletes it.
+the change is refused. A parent directory that does not exist holds no node,
+and CreateNode creates it with the node; execution never deletes a directory.
 
 Rendering validates the complete operation receipt and emits a native envelope,
 or, in the TEXT form, the coordination node statement the host's embedded
@@ -1292,10 +1399,10 @@ AlterNode, and DropNode requests. A nonempty database identity must equal the
 selected session database. The provider validates every envelope and transaction
 constraint before executing any unit in the batch.
 
-Before each native write, execution lists the exact parent directory and reads
-the node. The current configuration and access metadata must match the captured
-observation, or creation must have established absence. A stale operation is
-refused before dispatch. Effective settings are sent explicitly, including
+Before each native write, execution lists the parent directory, or proves
+that it does not exist, and reads the node. The current configuration and
+access metadata must match the captured observation, or creation must have
+established absence. A stale operation is refused before dispatch. Effective settings are sent explicitly, including
 omitted settings that reset to defaults. Alteration preserves the existing node.
 After a successful reply, execution reads back the configuration or confirms
 absence; alteration also checks that access metadata did not change.
@@ -1787,8 +1894,8 @@ expressions are refused. A default has one source declaration, either a common
 column field or native column settings. Wide date/time types and parameterized
 Decimal follow the cluster flags; small integer and document defaults follow the
 measured release line. A column table accepts no defaults or serial columns.
-Serial creation and sequence changes still require their separate operation
-implementation before the extraction is complete.
+Serial columns are created with their sequences and the sequence of an existing
+Serial changes in place; see [Serial columns](#serial-columns).
 
 ## Offline table preparation
 
@@ -1878,9 +1985,10 @@ Its replacement carries table and physical-path effects and forbids SQL
 transactions. A refusal returns no successful planning prefix. Rendering emits
 a native operation envelope and validates its safety metadata again.
 
-Execution requires an existing parent directory and establishes absence through
-its complete listing. An existing path is refused, including an existing table
-with the same schema. The provider binds the session and absolute path, checks
+Execution establishes absence through the complete listing of the parent
+directory, or through the proof that the directory does not exist, which
+CreateTable then creates with the table. An existing path is refused,
+including an existing table with the same schema. The provider binds the session and absolute path, checks
 its guarding leases, sends CreateTable once, and reads the result back. It
 confirms columns, key order, requested settings, and the absence of unexpected
 indexes or changefeeds. A failed reply or unconfirmed result remains UNKNOWN.
@@ -1899,7 +2007,7 @@ refused too, since the pinned table protocol builds none of them with a table.
 Execution confirms each index by reading it back. In the TEXT form each index
 is an INDEX clause of the CREATE TABLE.
 
-Access requirements, temporary tables, changefeeds, sequence defaults, column
+Access requirements, temporary tables, changefeeds, column
 compression or encoding, and richer common constraints are refused.
 Removal and rebuild are described below, and alteration covers column
 families, the addition and removal of columns, the TTL and the automatic partitioning settings (see below). An unknown populated
@@ -1914,6 +2022,78 @@ gets past validation and stops at the host's common-step stage ("A common step i
 outside the supported table creation lifecycle"), because the host's common table
 comparison does not yet preserve complete native declarations. These SDK checks do
 not establish a complete native CLI table migration workflow.
+
+### Serial columns
+
+A column is a Serial when its type is `Serial`, `BigSerial` or `SmallSerial`
+(or one of the spellings YDB shares with PostgreSQL: `SERIAL`, `SERIAL4`,
+`BIGSERIAL`, `SERIAL8`, `SMALLSERIAL`, `SERIAL2`), or when an Int16, Int32 or
+Int64 column is declared `auto_increment` or with an identity, as the host's
+embedded engine reads it. The host sends the start and the increment of its
+sequence with the common column, as `identity_start` and `identity_increment`:
+Go and YAML write them as attributes of the field, and a YQL schema as the
+`START WITH` and `INCREMENT BY` of an `ALTER SEQUENCE` on the sequence's
+absolute path. No native facet holds them. A Serial is NOT NULL whatever the
+declaration says, and its default is its sequence.
+
+```go
+//ptah:schema:field name="id" type="BIGSERIAL" primary="true" identity_start="100" identity_increment="5"
+//ptah:schema:field name="id" type="BIGINT" primary="true" auto_increment="true" identity_increment="3"
+```
+
+The native CreateTable call creates the column with its sequence, named
+`_serial_column_<column>`, starting at the declared start, stepping by the
+declared increment and ending at the maximum of the column's type. Measured on
+25.1.4.7 and 26.2.1.14, a sequence created this way issues its start first and
+records no restart. The call gives a sequence the Int64 maximum unless the
+request names one, whatever the column's width, so the request names the
+maximum YQL's `Serial` and `SmallSerial` have. Execution confirms the sequence
+by reading it back, and the operation payload is held to the same sequence, so
+a forged request cannot name another one, count down or cycle.
+
+The TEXT form writes the column as its Serial type and, for a start or an
+increment other than 1, the `ALTER SEQUENCE` the host's embedded engine writes
+after the CREATE TABLE, with `RESTART WITH` the start where it is not 1:
+`START` alone leaves the next value at 1. The statement names the sequence by
+its absolute path, so the migration file carries the database path, and YDB
+records the restart, which it replays on every later `ALTER SEQUENCE`. A table
+created from such a file therefore keeps the settings it was created with (see
+below), where a table the native call creates can change them.
+
+The planner refuses, in the embedded engine's words, an auto-increment column
+of a type YDB has no Serial for, `GENERATED ALWAYS`, identity options other than
+the start and the increment, a default on a Serial, a start or an increment
+below 1 or not a whole number, and a start or an increment on a 16-bit or
+32-bit Serial. Every line reports `serial_sequence_keeps_range` false: any
+`ALTER SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the
+column then stores the value after its own maximum as a negative number without
+an error. The native call could create such a sequence with its range kept,
+but no later change and no migration file could, so it is refused at creation
+too. A column table takes no Serial, and YDB adds no Serial column to a table
+that exists (`Column addition with serial data type is unsupported`).
+
+When the declared start or increment of an existing Serial differs from what
+the read reports, the planner writes one step, `serial-sequence/N`: one YQL
+`ALTER SEQUENCE ... START WITH ... INCREMENT BY ...` on the sequence's absolute
+path through the query service, outside a transaction and without a restart,
+since a restart onto a value a row holds fails the next insert. The table
+service has no call that changes a sequence: an AlterTable that names it
+answers SCHEME_ERROR. Execution reads the column first and refuses one that
+changed since the plan (`NOT_STARTED`), sends the statement once, and reads the
+sequence back. The next row still takes the value the sequence computed before
+the change: with an increment of 3 moved to 7 after the rows 1 and 4, the next
+rows are 7 and 14. The planner refuses to change a sequence some
+`ALTER SEQUENCE` restarted, since the next insert would take the restart's
+value again (`Conflict with existing key`), and the sequence of a 16-bit or
+32-bit Serial. A column that becomes or stops being a Serial changes type,
+which only a rebuild makes, and a rebuild of a table with a Serial is refused.
+
+The session reports `serial_columns` and `serial_sequence_options` on every
+line, and `serial_sequence_keeps_range` on none. Subprocess tests create a
+Serial by the native call and by its TEXT form and change a sequence both ways;
+host tests apply Go and YQL schemas with Serial keys, read the sequences back,
+insert rows, change an increment, and show each refusal against the server
+state that makes it necessary, on 25.1.4.7 and 26.2.1.14.
 
 ## Native table removal
 
@@ -1966,6 +2146,12 @@ target. A table holding a changefeed is refused, since YDB renames no such
 table; so is a column table, whose rebuild needs an explicit data migration.
 The live tests rebuild a table natively and by text on both release lines,
 read the copied rows back, and fail a copy whose value does not convert.
+
+A table whose declaration holds a Serial column is not rebuilt: the new
+table's sequence would start at 1 while the copied rows keep their values, so
+the next insert would collide (`Conflict with existing key`), and `ALTER
+SEQUENCE ... RESTART WITH` takes only a literal, so no statement can move it
+past the copied rows.
 
 ## Secrets
 
@@ -2627,7 +2813,7 @@ settings other than column families, planning, rendering and operation models fo
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
 rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object, resource pool, streaming query and secret lifecycles, approved execution inputs, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, offline SQL analysis, SQL schema reading, migration lint, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
+lock, offline SQL analysis, SQL schema reading, migration lint, migration splits, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
 capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

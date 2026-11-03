@@ -72,7 +72,7 @@ func (q *StreamingQuery) Apply(ctx context.Context, database string, value *prot
 		return false, err
 	}
 	if !sameStreaming(held, change.Before) {
-		return false, fmt.Errorf("streaming query %q changed since the plan read it", absolute)
+		return false, &Refusal{Err: fmt.Errorf("streaming query %q changed since the plan read it", absolute)}
 	}
 	statements, err := streaming.Statements(change)
 	if err != nil {

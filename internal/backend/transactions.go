@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
@@ -20,6 +22,9 @@ type transaction struct {
 	cancel  context.CancelFunc
 	outcome protocol.TransactionResult_Outcome
 	failed  bool
+	// refusal is what YDB answered a commit it aborted with, from which
+	// every finish of the handle answers.
+	refusal ydbfailure.Answer
 }
 
 // BeginTransaction reserves a session-scoped caller handle exactly once.
@@ -144,9 +149,12 @@ func (p *Provider) FinishTransaction(ctx context.Context, request *protocol.Fini
 		}
 		s.finishTransaction(ctx, record, action)
 		if action == protocol.FinishTransactionRequest_COMMIT && s.verifyLocks(ctx) != nil {
-			record.outcome = protocol.TransactionResult_UNKNOWN
+			record.outcome, record.refusal = protocol.TransactionResult_UNKNOWN, ydbfailure.Answer{}
 		}
 		s.active = ""
+	}
+	if refused := ydbfailure.Commit(record.refusal, slices.Contains(provider.HostFeatures(ctx), provider.MigrationSplitFeature)); refused != nil {
+		return refused, nil
 	}
 	result := &protocol.TransactionResult{Outcome: record.outcome}
 	if record.outcome == protocol.TransactionResult_UNKNOWN {
@@ -173,8 +181,35 @@ func (s *session) finishTransaction(ctx context.Context, record *transaction, ac
 	if err != nil {
 		record.outcome = protocol.TransactionResult_UNKNOWN
 	}
+	if answer := ydbfailure.Read(err); action == protocol.FinishTransactionRequest_COMMIT && ydbfailure.Commit(answer, false) != nil {
+		// YDB aborted the transaction for a conflict and applied nothing
+		// (see ydbfailure.Commit).
+		record.outcome, record.refusal = protocol.TransactionResult_ROLLED_BACK, answer
+	}
 	s.cleanupErr = errors.Join(s.cleanupErr, closeSQLConnection(record.conn))
 	record.tx, record.conn, record.cancel = nil, nil, nil
+}
+
+// abandonTransaction rolls back the caller transaction id after YDB stopped
+// or refused a unit in it, and retains ROLLED_BACK for the caller's finish.
+// YDB has ended the transaction already: measured on 26.2.1.14, a rollback
+// after a refused query answers `Transaction not found`, and after a canceled
+// one the driver answers that the session is not valid for reuse. The
+// transaction never sent a commit, and a YDB transaction is applied only by
+// its commit, so it is rolled back either way.
+func (s *session) abandonTransaction(ctx context.Context, id string) {
+	record := s.transactions[id]
+	if record == nil || record.tx == nil {
+		return
+	}
+	record.failed = true
+	rollback, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	s.closeStatements(id, false)
+	s.closeMetadataReaders(id, false)
+	s.finishTransaction(rollback, record, protocol.FinishTransactionRequest_ROLLBACK)
+	record.outcome = protocol.TransactionResult_ROLLED_BACK
+	s.active = ""
 }
 
 func (s *session) rollbackTransactions() {

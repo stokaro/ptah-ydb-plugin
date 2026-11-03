@@ -25,6 +25,10 @@ type Common struct {
 	// prefix YDB stores at the head of a view the session created, and empty
 	// on a database.
 	Realm string
+	// Indexes reports a row table's global secondary indexes, synchronous,
+	// asynchronous and unique, as the table's common indexes; see
+	// commonIndexes.
+	Indexes bool
 }
 
 // coverage is the common-object part of a reply before anything is read: one

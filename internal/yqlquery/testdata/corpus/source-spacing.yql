@@ -1,0 +1,8 @@
+-- a comment before the first statement
+$x = 1;  -- a comment after the terminator
+/* block */ UPSERT INTO t (id) VALUES ($x)
+;
+CREATE TABLE m (id Int64, PRIMARY KEY (id));
+
+  UPSERT INTO t (id) VALUES (2) -- no terminator
+
