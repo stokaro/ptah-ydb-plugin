@@ -4,12 +4,7 @@ package integration_test
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -22,24 +17,6 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 )
-
-func providerBinary(c *qt.C) (string, string) {
-	c.Helper()
-	suffix := ""
-	if runtime.GOOS == "windows" {
-		suffix = ".exe"
-	}
-	binary := filepath.Join(c.TempDir(), "ptah-plugin-ydb"+suffix)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "build", "-race", "-o", binary, "../cmd/ptah-plugin-ydb")
-	output, err := cmd.CombinedOutput()
-	c.Assert(err, qt.IsNil, qt.Commentf("build provider: %s", output))
-	bytes, err := os.ReadFile(binary)
-	c.Assert(err, qt.IsNil)
-	digest := sha256.Sum256(bytes)
-	return binary, hex.EncodeToString(digest[:])
-}
 
 // hostFeatures are the features startProvider's host negotiates.
 func hostFeatures() []string {
