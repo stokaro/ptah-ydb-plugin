@@ -74,7 +74,7 @@ func (c *ColumnTableCreation) Apply(ctx context.Context, database string, value 
 		return false, err
 	}
 	directory := path.Join(database, owner.Schema)
-	if err := absent(ctx, c.Scheme, directory, owner); err != nil {
+	if err := absent(ctx, c.Scheme, database, owner); err != nil {
 		return false, err
 	}
 	session, err := c.Open(ctx)
@@ -99,15 +99,23 @@ func (c *ColumnTableCreation) Apply(ctx context.Context, database string, value 
 	return true, confirmColumnTable(creation, described, observed)
 }
 
-// absent lists the exact parent directory and refuses an occupied path, a
-// missing parent, or a listing that is not a directory's.
-func absent(ctx context.Context, scheme Ydb_Scheme_V1.SchemeServiceClient, directory string, owner *protocol.Reference) error {
-	listing, err := scheme.ListDirectory(ctx, &Ydb_Scheme.ListDirectoryRequest{Path: directory})
-	if err != nil {
-		return fmt.Errorf("read YDB table namespace: transport failed")
+// absent lists the table's directory in database and refuses an occupied
+// path or a listing that is not a directory's. A directory that does not
+// exist holds no table; see [ListDirectory]. YDB creates the directories a
+// table needs. Every refusal is a [Refusal].
+func absent(ctx context.Context, scheme Ydb_Scheme_V1.SchemeServiceClient, database string, owner *protocol.Reference) error {
+	display := path.Join(owner.Schema, owner.Name)
+	if err := listedAbsent(ctx, scheme, database, owner); err != nil {
+		return refused("read table "+display, err)
 	}
-	var entries Ydb_Scheme.ListDirectoryResult
-	if err := Operation(listing.GetOperation(), &entries); err != nil {
+	return nil
+}
+
+// listedAbsent is the check [absent] reports as a refusal.
+func listedAbsent(ctx context.Context, scheme Ydb_Scheme_V1.SchemeServiceClient, database string, owner *protocol.Reference) error {
+	directory := path.Join(database, owner.Schema)
+	entries, err := ListDirectory(ctx, SchemeLister(scheme), database, owner.Schema)
+	if err != nil {
 		return err
 	}
 	if entries.GetSelf().GetName() != path.Base(directory) ||

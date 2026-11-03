@@ -110,7 +110,7 @@ func TestRunCoordinationStatement_FailurePath(t *testing.T) {
 			transport := &coordinationTransport{state: tc.held, foreign: tc.foreign}
 			dispatched, err := executor(transport).RunStatement(c.Context(), "/local", tc.root, recognized(c, tc.text), allow)
 			c.Assert(err, qt.ErrorMatches, tc.want)
-			c.Assert(err, qt.ErrorAs, new(*nativeapi.StatementRefusal))
+			c.Assert(err, qt.ErrorAs, new(*nativeapi.Refusal))
 			c.Assert(errors.Is(err, coordinationsql.ErrStatement), qt.Equals, tc.statement)
 			c.Assert(dispatched, qt.IsFalse)
 			c.Assert(transport.writes, qt.Equals, 0)

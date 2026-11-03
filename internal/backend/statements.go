@@ -45,22 +45,12 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 	refuse := func(reason string) (*protocol.StatementResult, error) {
 		return &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_REFUSED, Refusal: rowdata.OneLine(reason)}, nil
 	}
-	if len(secretvalue.References(request.Sql)) != 0 {
-		return refuse("secret references require approved execution inputs")
-	}
-	piece, err := recognizePiece(request.Sql)
-	if err != nil {
-		return refuse(err.Error())
+	piece, reason := statementText(ctx, request.Sql, request.Access)
+	if reason != "" {
+		return refuse(reason)
 	}
 	if piece.service() && (request.TransactionId != "" || len(request.Arguments) != 0) {
 		return refuse("a comment or coordination statement runs without a transaction or bound arguments")
-	}
-	analysis, err := yql.Analyze(ctx, &protocol.AnalyzeSQLRequest{Engine: "ydb", Sources: []string{request.Sql}})
-	if err != nil {
-		return refuse("statement cannot be parsed: " + err.Error())
-	}
-	if len(analysis.Files[0].Statements) != 1 {
-		return refuse("a statement request must hold exactly one statement")
 	}
 	arguments := make([]any, len(request.Arguments))
 	for i, argument := range request.Arguments {
@@ -69,11 +59,6 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 			return refuse(err.Error())
 		}
 		arguments[i] = sql.Named(fmt.Sprintf("p%d", i+1), value)
-	}
-	if request.Access == protocol.RunStatementRequest_READ_ONLY {
-		if err := readproof.ReadOnly(request.Sql); err != nil {
-			return refuse(err.Error())
-		}
 	}
 	s, err := p.lookup(request.SessionId)
 	if err != nil {
@@ -186,6 +171,36 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 		return nil, err
 	}
 	return result, nil
+}
+
+// statementText reads an operator's statement before anything is opened for
+// it, and returns why RunStatement refuses its text, or "" when it does not: a
+// reference to a secret, which only approved execution inputs may carry; a
+// comment or coordination statement Ptah cannot read; text that is not
+// exactly one statement; and, under READ_ONLY, text [readproof.ReadOnly]
+// does not prove one read-only SELECT. A migration split gives each check
+// assertion this verdict, so a dry run refuses what the run would.
+func statementText(ctx context.Context, text string, access protocol.RunStatementRequest_Access) (sqlPiece, string) {
+	if len(secretvalue.References(text)) != 0 {
+		return sqlPiece{}, "secret references require approved execution inputs"
+	}
+	piece, err := recognizePiece(text)
+	if err != nil {
+		return sqlPiece{}, err.Error()
+	}
+	analysis, err := yql.Analyze(ctx, &protocol.AnalyzeSQLRequest{Engine: "ydb", Sources: []string{text}})
+	if err != nil {
+		return sqlPiece{}, "statement cannot be parsed: " + err.Error()
+	}
+	if len(analysis.Files[0].Statements) != 1 {
+		return sqlPiece{}, "a statement request must hold exactly one statement"
+	}
+	if access == protocol.RunStatementRequest_READ_ONLY {
+		if err := readproof.ReadOnly(text); err != nil {
+			return sqlPiece{}, err.Error()
+		}
+	}
+	return piece, ""
 }
 
 // ReadStatementRows consumes the next bounded page of a session-owned result.

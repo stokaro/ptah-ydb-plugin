@@ -28,6 +28,10 @@ type Common struct {
 	// ContextInventory has a filtered read report the streaming queries
 	// outside its scope as its planning context; see OutsideStreamingInventory.
 	ContextInventory bool
+	// Indexes reports a row table's global secondary indexes, synchronous,
+	// asynchronous and unique, as the table's common indexes; see
+	// commonIndexes.
+	Indexes bool
 }
 
 // coverage is the common-object part of a reply before anything is read: one

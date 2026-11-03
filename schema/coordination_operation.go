@@ -27,8 +27,8 @@ var coordinationOperationModel = buildCoordinationOperationModel()
 func buildCoordinationOperationModel() *protocol.ValueModel {
 	data, err := json.Marshal(map[string]any{"kind": CoordinationOperation, "representation": "operation", "schema_version": 1,
 		"payload":       json.RawMessage(CoordinationChangeModel().DefinitionJson),
-		"execution":     "native CreateNode, AlterNode, or DropNode; no SQL text; no automatic mutation retry; outside SQL transactions; require an existing parent directory",
-		"precondition":  "before is the complete normalized observation or established absence; verify configuration and access metadata immediately before dispatch; the API has no atomic compare-and-set",
+		"execution":     "native CreateNode, AlterNode, or DropNode; no SQL text; no automatic mutation retry; outside SQL transactions; CreateNode creates a missing parent directory",
+		"precondition":  "before is the complete normalized observation or established absence; a parent directory YDB does not show establishes absence when the listing of its own parent, proved the same way up to the database root, does not name it; verify configuration and access metadata immediately before dispatch; the API has no atomic compare-and-set",
 		"confirmation":  "read back effective configuration after create/alter or absence after drop; alter must preserve access metadata; a successful create does not establish exclusive ownership",
 		"database":      "a nonempty owner database must equal the selected session database; empty selects that session database for offline creation",
 		"configuration": "send all effective settings; never replace the node to alter settings; semantic no-op operations refused"})

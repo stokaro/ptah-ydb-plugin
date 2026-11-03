@@ -57,7 +57,8 @@ func main() {
 		ReplayGuard:     owner,
 		EmbeddingStore:  owner,
 		CommonObjects:   owner,
-		SourceEncoder:   owner})
+		SourceEncoder:   owner,
+		MigrationSplits: owner})
 	if closeErr := dev.Close(); closeErr != nil {
 		fmt.Fprintln(os.Stderr, closeErr)
 	}

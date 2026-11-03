@@ -18,6 +18,9 @@ const (
 	otherByLabel    = `{"name":"by_label","indexColumns":["extra"],"status":"STATUS_READY","globalIndex":{}}`
 	changedExtra    = `{"name":"by_extra","indexColumns":["label"],"status":"STATUS_READY","globalAsyncIndex":{}}`
 	asyncByLabel    = `{"name":"by_label","indexColumns":["label"],"status":"STATUS_READY","globalAsyncIndex":{}}`
+	// partitionedByLabel is by_label as the server reports it: with the
+	// partitioning of the table that implements it.
+	partitionedByLabel = `{"name":"by_label","indexColumns":["label"],"status":"STATUS_READY","globalIndex":{"settings":{"partitioningSettings":{"minPartitionsCount":"4"}}}}`
 
 	addByLabel = `{"request":{"addIndexes":[{"name":"by_label","indexColumns":["label"],"globalIndex":{}}]}}`
 	addByExtra = `{"request":{"addIndexes":[{"name":"by_extra","indexColumns":["extra"],"dataColumns":["label"],"globalAsyncIndex":{}}]}}`
@@ -66,6 +69,10 @@ func TestNativeTableAlteration_IndexHappyPath(t *testing.T) {
 		{"drops an index", indexedTable(byLabelIndex), indexedTable(), nil, dropIndex("by_label", byLabelIndex), "", []string{"by_label"},
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}},
 		{"drops an index and keeps another", indexedTable(byLabelIndex, byExtraIndex), indexedTable(byExtraIndex), nil, dropIndex("by_label", byLabelIndex), "", []string{"by_label"},
+			[]string{"open", "describe", "guard", "alter", "describe", "close"}},
+		// A plan made from the host's read of a common index carries no
+		// settings, and the drop does not depend on them.
+		{"drops a global index whatever its partitioning", indexedTable(partitionedByLabel), indexedTable(), nil, dropIndex("by_label", byLabelIndex), "", []string{"by_label"},
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
