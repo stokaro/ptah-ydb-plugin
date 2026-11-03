@@ -49,16 +49,12 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 	if reason != "" {
 		return refuse(reason)
 	}
-	if piece.service() && (request.TransactionId != "" || len(request.Arguments) != 0) {
+	if piece.service() && (request.TransactionId != "" || len(request.Arguments) != 0 || len(request.TypedArguments) != 0) {
 		return refuse("a comment or coordination statement runs without a transaction or bound arguments")
 	}
-	arguments := make([]any, len(request.Arguments))
-	for i, argument := range request.Arguments {
-		value, err := statementrows.Argument(argument)
-		if err != nil {
-			return refuse(err.Error())
-		}
-		arguments[i] = sql.Named(fmt.Sprintf("p%d", i+1), value)
+	arguments, err := statementArguments(request)
+	if err != nil {
+		return refuse(err.Error())
 	}
 	s, err := p.lookup(request.SessionId)
 	if err != nil {
@@ -323,4 +319,26 @@ func (s *session) closeStatements(transaction string, all bool) {
 			_ = s.releaseStatement(record)
 		}
 	}
+}
+
+// statementArguments binds the arguments of a statement, plain or typed, to
+// the parameters $p1, $p2 and so on, in order. A typed argument binds at the
+// type its caller chose; a plain one at the type its value's case names.
+func statementArguments(request *protocol.RunStatementRequest) ([]any, error) {
+	arguments := make([]any, 0, len(request.Arguments)+len(request.TypedArguments))
+	for _, argument := range request.Arguments {
+		value, err := statementrows.Argument(argument)
+		if err != nil {
+			return nil, err
+		}
+		arguments = append(arguments, sql.Named(fmt.Sprintf("p%d", len(arguments)+1), value))
+	}
+	for _, argument := range request.TypedArguments {
+		value, err := statementrows.TypedArgument(argument)
+		if err != nil {
+			return nil, err
+		}
+		arguments = append(arguments, sql.Named(fmt.Sprintf("p%d", len(arguments)+1), value))
+	}
+	return arguments, nil
 }

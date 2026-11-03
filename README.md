@@ -3075,6 +3075,18 @@ expected-error assertions, without the driver's address and transport wrapper.
 Bound arguments retain JSON, decimal, date, timestamp and interval types;
 precision the engine cannot represent is refused before execution.
 
+The provider offers `sessions.typed-arguments`. A host that lists it sends each
+argument with the type its caller bound it at, and the provider binds the
+parameter at that YDB type: `INT8` to `INT64` as `Int8` to `Int64`, `UINT8` to
+`UINT64` as `Uint8` to `Uint64`, `FLOAT32` as `Float`, `FLOAT64` as `Double`,
+`STRING` as `Utf8`, `BYTES` as `String`, `TIMESTAMP` as `Timestamp` and
+`INTERVAL` as `Interval`. An optional type binds as `Optional<T>` and its null
+as a null of `T`, a list as `List<T>` (an empty one keeps its element type),
+and an untyped null as `Void`, as a plain null binds. So a Go `int32` writes an
+`Int32` column, which an `Int64` parameter cannot, and a nil `*string` writes a
+null into an `Optional<Utf8>` one. A typed timestamp outside the `Timestamp`
+range is refused rather than bound as a `Timestamp64`.
+
 The negotiated `scope.selections` declaration makes coordination nodes, topics,
 external data sources and external tables selectable by their directory and
 name. Resource pools and classifiers use database-wide names, including literal
