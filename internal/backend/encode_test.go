@@ -3,6 +3,7 @@ package backend_test
 import (
 	"bytes"
 	"context"
+	"slices"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -35,21 +36,30 @@ func encodeRequest(format protocol.SourceDocument_Format, values ...*protocol.En
 	return &protocol.EncodeSourceRequest{Engine: "ydb", Format: format, Values: values}
 }
 
-// sourceDocument is the document a host would decode the fragments of an
-// encoding in, every part of it given a position.
-func sourceDocument(format protocol.SourceDocument_Format, encoded *protocol.EncodedSource) *protocol.DecodeSourceRequest {
-	document := &protocol.SourceDocument{Id: "doc", File: "exported", Format: format, ByteLength: 1, Models: []*protocol.ValueModel{schema.CoordinationDesiredModel()}}
-	for _, fragment := range encoded.Fragments {
-		positioned := proto.CloneOf(fragment.Fragment)
-		positioned.Span = span()
-		var place func(*protocol.SourceValue)
-		place = func(value *protocol.SourceValue) {
-			value.Span = span()
-			for _, entry := range value.GetMapping().GetEntries() {
-				entry.KeySpan = span()
-				place(entry.Value)
-			}
+// sourceDocument is the document a host would decode the parts of an
+// encoding in, every part of it given a position, with the request's
+// bindings and the engine's desired models of the format.
+func sourceDocument(format protocol.SourceDocument_Format, request *protocol.EncodeSourceRequest, encoded *protocol.EncodedSource) *protocol.DecodeSourceRequest {
+	document := &protocol.SourceDocument{Id: "doc", File: "exported", Format: format, ByteLength: 1, Bindings: request.GetBindings()}
+	for _, model := range backend.Description().Engines[0].ValueModels {
+		if model.Representation == protocol.ValueInput_DESIRED && slices.Contains(model.SourceFormats, format) {
+			document.Models = append(document.Models, proto.CloneOf(model))
 		}
+	}
+	var place func(*protocol.SourceValue)
+	place = func(value *protocol.SourceValue) {
+		value.Span = span()
+		for _, entry := range value.GetMapping().GetEntries() {
+			entry.KeySpan = span()
+			place(entry.Value)
+		}
+		for _, item := range value.GetSequence().GetValues() {
+			place(item)
+		}
+	}
+	for _, part := range provider.EncodedSourceParts(encoded) {
+		positioned := proto.CloneOf(part.Fragment)
+		positioned.Span = span()
 		if value := positioned.GetValue(); value != nil {
 			place(value)
 		}
@@ -66,6 +76,22 @@ func sourceDocument(format protocol.SourceDocument_Format, encoded *protocol.Enc
 		document.Fragments = append(document.Fragments, positioned)
 	}
 	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{document}}
+}
+
+// decodedProjections are the canonical projections of what decoding the
+// parts gives, by the owner's directory and name.
+func decodedProjections(c *qt.C, ctx context.Context, request *protocol.DecodeSourceRequest) map[string]string {
+	c.Helper()
+	decoded, err := backend.New().DecodeSource(ctx, request)
+	c.Assert(err, qt.IsNil)
+	projections := map[string]string{}
+	for _, fragment := range decoded.Documents[0].Fragments {
+		for _, value := range fragment.Values {
+			owner := value.Value.Value.Owner
+			projections[value.Value.Value.Kind+" "+owner.Schema+"/"+owner.Name] = string(value.Value.CanonicalProjection)
+		}
+	}
+	return projections
 }
 
 // Each format writes the nodes as the fragments its claim reads, and decoding
@@ -87,19 +113,9 @@ func TestEncodeSource_CoordinationNodes(t *testing.T) {
 			c.Assert(encoded.Losses, qt.HasLen, 0)
 			c.Assert(provider.ValidateEncodedSource(provider.NegotiatedDescription(backend.Description(), provider.HostFeatures(encodingContext(c))), request, encoded), qt.IsNil)
 
-			decoding := sourceDocument(format, encoded)
-			decoded, err := backend.New().DecodeSource(encodingContext(c), decoding)
-			c.Assert(err, qt.IsNil)
-			projections := map[string]string{}
-			for _, fragment := range decoded.Documents[0].Fragments {
-				for _, value := range fragment.Values {
-					owner := value.Value.Value.Owner
-					projections[owner.Schema+"/"+owner.Name] = string(value.Value.CanonicalProjection)
-				}
-			}
-			c.Assert(projections, qt.DeepEquals, map[string]string{
-				"app/workers/queue": string(values[0].Value.CanonicalProjection),
-				"/plain":            string(values[1].Value.CanonicalProjection),
+			c.Assert(decodedProjections(c, encodingContext(c), sourceDocument(format, request, encoded)), qt.DeepEquals, map[string]string{
+				schema.CoordinationProperties + " app/workers/queue": string(values[0].Value.CanonicalProjection),
+				schema.CoordinationProperties + " /plain":            string(values[1].Value.CanonicalProjection),
 			})
 		})
 	}
@@ -120,35 +136,52 @@ func TestEncodeSource_WritesWhatTheFormatHolds(t *testing.T) {
 	c.Assert(hcl.Fragments[0].Placement, qt.Equals, protocol.EncodedFragment_AFTER_TABLES)
 }
 
-// A table's YDB settings are lost in every format, with a line that names the
-// table: one value, which a source writes as several declarations, and no HCL
-// spelling at all.
-func TestEncodeSource_ReportsTableSettingsAsLosses(t *testing.T) {
-	c := testcheck.New(t)
+// tableFacet is the desired row-table facet of app/records with payload.
+func tableFacet(c *qt.C, payload string) *protocol.EncodeSourceValue {
+	c.Helper()
 	table := &protocol.Reference{Engine: "ydb", Kind: "table", Schema: "app", Name: "records"}
 	model := schema.TableDesiredModel()
-	payload := []byte(`{"keyBloomFilter":"ENABLED"}`)
 	envelope, err := schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion,
-		Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: table, Payload: payload})
+		Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: table, Payload: []byte(payload)})
 	c.Assert(err, qt.IsNil)
-	facet := &protocol.EncodeSourceValue{Placement: protocol.SourceModelValue_FACET, BindingId: "records", Value: &protocol.NormalizedValue{Id: "records",
+	return &protocol.EncodeSourceValue{Placement: protocol.SourceModelValue_FACET, BindingId: "records", Value: &protocol.NormalizedValue{Id: "records",
 		Value: envelope, NormalizedOwner: proto.CloneOf(table), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(envelope.Payload)}}
-	for _, tc := range []struct {
-		format protocol.SourceDocument_Format
-		want   string
-	}{
-		{protocol.SourceDocument_YAML, "the YDB settings of table app/records: this provider holds a table's settings as one value, which a source writes as several declarations"},
-		{protocol.SourceDocument_HCL, "the YDB settings of table app/records: HCL has no spelling for a YDB table's partitioning, layout, TTL, column families or column storage"},
-	} {
-		t.Run(tc.format.String(), func(t *testing.T) {
+}
+
+func tableRequest(format protocol.SourceDocument_Format, values ...*protocol.EncodeSourceValue) *protocol.EncodeSourceRequest {
+	request := encodeRequest(format, values...)
+	request.Bindings = []*protocol.SourceBinding{{Id: "records", EntryKey: "records", StructName: "Record",
+		Object: &protocol.Reference{Engine: "ydb", Kind: "table", Schema: "app", Name: "records"}}}
+	return request
+}
+
+// HCL has no spelling for a table's YDB settings, as the host's embedded
+// engine reports, so a table's facet is lost there with a line that names the
+// table.
+func TestEncodeSource_ReportsTableSettingsAsHCLLosses(t *testing.T) {
+	c := testcheck.New(t)
+	encoded, err := backend.New().EncodeSource(encodingContext(c), tableRequest(protocol.SourceDocument_HCL, tableFacet(c, `{"keyBloomFilter":"ENABLED"}`)))
+	c.Assert(err, qt.IsNil)
+	c.Assert(encoded.Fragments, qt.HasLen, 0)
+	c.Assert(encoded.Losses, qt.HasLen, 1)
+	c.Assert(encoded.Losses[0].Message, qt.Equals,
+		"the YDB settings of table app/records: HCL has no spelling for a YDB table's partitioning, layout, TTL, column families or column storage")
+}
+
+// YAML and Go write a table's settings, and decoding them gives the facet
+// back; one setting is one part, which a host without encoding groups takes
+// as a flat fragment.
+func TestEncodeSource_WritesTableSettings_HappyPath(t *testing.T) {
+	for _, format := range []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS} {
+		t.Run(format.String(), func(t *testing.T) {
 			c := testcheck.New(t)
-			request := encodeRequest(tc.format, facet)
-			request.Bindings = []*protocol.SourceBinding{{Id: "records", EntryKey: "records", Object: table}}
+			request := tableRequest(format, tableFacet(c, `{"keyBloomFilter":"ENABLED"}`))
 			encoded, err := backend.New().EncodeSource(encodingContext(c), request)
 			c.Assert(err, qt.IsNil)
-			c.Assert(encoded.Fragments, qt.HasLen, 0)
-			c.Assert(encoded.Losses, qt.HasLen, 1)
-			c.Assert(encoded.Losses[0].Message, qt.Equals, tc.want)
+			c.Assert(encoded.Losses, qt.HasLen, 0)
+			c.Assert(encoded.Fragments, qt.HasLen, 1)
+			c.Assert(decodedProjections(c, encodingContext(c), sourceDocument(format, request, encoded)), qt.DeepEquals,
+				map[string]string{schema.TableProperties + " app/records": `{"keyBloomFilter":"ENABLED"}`})
 		})
 	}
 }
@@ -172,7 +205,7 @@ func TestEncodeSource_ReportsAccessConstraintsAsLosses(t *testing.T) {
 			c.Assert(len(encoded.Fragments), qt.Equals, 0)
 			c.Assert(encoded.Losses, qt.HasLen, 1)
 			c.Assert(encoded.Losses[0].ValueId, qt.Equals, "queue")
-			c.Assert(encoded.Losses[0].Message, qt.Equals, "coordination node app/queue: access constraints have no source spelling")
+			c.Assert(encoded.Losses[0].Message, qt.Equals, "the access requirement of coordination node app/queue has no source spelling")
 		})
 	}
 }

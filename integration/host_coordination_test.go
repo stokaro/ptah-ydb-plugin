@@ -21,7 +21,7 @@ import (
 
 // hostApplySource runs the host's `schema apply` over one source with this
 // provider selected for ydb, restricted to the fixture directory: a Go file
-// under --root-dir for "go", and a schema file for "yaml" and "sql".
+// under --root-dir for "go", and a schema file for "yaml", "sql" and "hcl".
 func hostApplySource(c *qt.C, directory, format, text string) (string, error) {
 	c.Helper()
 	return hostApplySelected(c, directory, format, text)
@@ -33,7 +33,7 @@ func hostApplySelected(c *qt.C, selectors, format, text string) (string, error) 
 	c.Helper()
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
-	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql"}[format]
+	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql", "hcl": "schema.hcl"}[format]
 	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil)
 	source := []string{"--schema-file", filepath.Join(root, name)}
 	if format == "go" {

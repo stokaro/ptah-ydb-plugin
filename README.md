@@ -926,16 +926,46 @@ none, is the one header kind the engine declares; the host applies it to the
 document's claim, and the provider refuses a name no node can take with the
 host's words. A host that does not list the feature reads no such block.
 
-`EncodeSource` (`source.encode`, ADR 0037) writes a desired node back as the
-fragment each format reads: an entry of `coordination_nodes`, one directive, or
-one block placed after the tables, which decode to the same node. Access
-constraints are reported as losses because no source can represent them.
-`struct_name` is written in YAML alone. Incomplete kind or subject coverage
-refuses the export, because these fragments cannot preserve that knowledge.
-A table's YDB settings are reported as losses: this provider holds them as one
-value, which a source writes as several declarations, and the contract writes
-one value with one fragment; HCL has no spelling for them at all, as the host's
-embedded engine reports. Every other native object is a loss too.
+`EncodeSource` (`source.encode`, ADR 0037, and `source.encode-groups`, ADR
+0040) writes desired values back as the keys, directives and blocks this
+provider's decoders read, which decode to the same declarations:
+
+| Value | YAML | Go | HCL |
+|---|---|---|---|
+| Coordination node | entry of `coordination_nodes` | `ptah:schema:coordinationnode` | `coordination_node` block after the tables |
+| Topic and its consumers | entry of `topics` | `ptah:schema:topic`, `ptah:schema:topic:consumer` | loss |
+| Secret, by the variable its value comes from | entry of `secrets` | `ptah:schema:secret` | loss |
+| External data source and external table | entries of their keys | their directives | loss |
+| Resource pool and classifier | entries of their keys | their directives | loss |
+| Streaming query | entry of `streaming_queries` | `ptah:schema:streamingquery` | loss |
+| Row-table partitioning, read replicas, key Bloom filter, starting layout, TTL | table keys, TTL in `platform.ydb` | attributes of `ptah:schema:table` | loss |
+| Column families and the columns they hold | `column_families` | `ptah:schema:columnfamily` | loss |
+| Column-table storage, hash key, shards, TTL | `column_store` | attributes of `ptah:schema:table` | loss |
+| Changefeeds and their consumers | `changefeeds` | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` | loss |
+
+A value is written as the declaration the provider compares it as: a topic or a
+changefeed as its declared settings, without the attributes YDB keeps on it; a
+table's settings without the primary key the common columns carry; a column
+default not at all, since the common column carries it. A facet a source states
+by writing nothing, such as an empty changefeed set, an empty native index set
+or a column of the default family, is written by the table's own part. A Go
+export also gives each column the Go type of its YDB type, as the host's
+embedded engine does, and refuses a nullable key column, which no declaration
+can ask for.
+
+What no declaration states is a loss for its value, in one line that names it:
+an access requirement, table attributes, storage settings, tiering, a temporary
+table, a family kept in memory, a TTL run interval, a disabled changefeed or the
+stream of an async replication, a native index, a column's sequence,
+compression or encoding, a native view (the host writes views from the common
+wire), and an object of another database than the one it was read in. A
+secret's value is never written. HCL declares coordination nodes only, as the
+host's embedded engine does; its other YDB settings are losses. The parts are
+decoded again before they are returned, and a value they do not give back is a
+loss. A value that needs several declarations is a loss for a host that does not
+negotiate `source.encode-groups`. `struct_name` is written in YAML alone.
+Incomplete kind or subject coverage refuses the export, because these fragments
+cannot preserve that knowledge.
 
 The subprocess tests exercise decoding, encoding, normalization, and
 representation conversion without a database address; a YQL schema declares

@@ -152,7 +152,10 @@ func YAMLKeys() []*protocol.YAMLSourceKey {
 		models := []string{schema.TableProperties}
 		switch key {
 		case KeyColumnFamilies:
-			models = []string{schema.TableProperties, schema.ColumnProperties}
+			// The families place columns. A table entry states a column of
+			// the default family and an empty native index set by writing
+			// nothing, and the families key is where an export writes that.
+			models = []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties}
 		case KeyColumnStore:
 			models = []string{schema.ColumnStorageProperties}
 		case KeyPlatformYDB:
@@ -190,9 +193,11 @@ func GoDirectives() []*protocol.GoSourceDirective {
 	index := claim(DirectiveIndex, indexAttributes()...)
 	index.Scope = protocol.GoSourceDirective_INDEX
 	// The table directive declares a row table's settings or a column table's
-	// storage.
+	// storage. It is also where a table states what it states by writing
+	// nothing: a column of the default family, no changefeed and no native
+	// index, which an export writes as the directive's part.
 	table := claim(DirectiveTable, tableAttributes()...)
-	table.Models = append(table.Models, schema.ColumnStorageProperties)
+	table.Models = append(table.Models, schema.ColumnStorageProperties, schema.ColumnProperties, schema.ChangefeedProperties, schema.IndexProperties)
 	return []*protocol.GoSourceDirective{
 		table,
 		index,

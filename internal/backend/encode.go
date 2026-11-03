@@ -6,10 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path"
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/sourceencode"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -20,22 +22,27 @@ import (
 )
 
 // EncodeSource writes DESIRED values back as the fragments this provider's
-// claims read (contract 25.3, source.encode), offline: a coordination node as
-// one entry of the coordination_nodes YAML key, one ptah:schema:coordinationnode
-// directive, or one coordination_node HCL block, which decodes to the same
-// node. The host writes the syntax.
+// claims read (contract 25.3, source.encode), offline. The host writes the
+// syntax.
 //
-// Access constraints have no source spelling and are reported as a loss.
-// A node's struct name, which records where a YAML source
-// declared it and has no server counterpart, is written in YAML alone.
+// A native object is written as one entry of its YAML key or one directive of
+// its own with the directives of its children: a coordination node, a topic
+// and its consumers, a secret by the variable its value comes from, an
+// external data source and an external table, a resource pool and a
+// classifier, and a streaming query. HCL declares a coordination node, in a
+// coordination_node block, and no other object. The facets of one table are
+// written together as the table declaration the table decoders read (see
+// sourceencode.EncodeTable); HCL has no spelling for any of them, as the
+// host's embedded engine reports. A Go export also gives each column the Go
+// type of its YDB type, and loses a table with a nullable key column, which
+// no declaration can ask for.
 //
-// Every other value is reported as a loss. This provider holds a table's YDB
-// settings, its partitioning, layout, TTL, families and column storage, as one
-// value, which a source writes as several declarations, and the contract
-// writes one value with one fragment; HCL has no spelling for them at all, as
-// the host's embedded engine reports. Other native objects have no encoder.
-// Coverage that is not complete is refused: these fragments cannot preserve
-// the captured knowledge when the host reads them back.
+// A value that needs several parts is written through a group when the host
+// negotiated source.encode-groups, and is a loss otherwise. A value no source
+// spells, or one whose parts do not decode back to it, is a loss with one line
+// that names it and never its content. Coverage that is not complete is
+// refused: these fragments cannot preserve the captured knowledge when the
+// host reads them back.
 func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourceRequest) (*protocol.EncodedSource, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -47,36 +54,110 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	if err := encodeCoverage(request.GetCoverage()); err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
+	format := request.GetFormat()
 	result := &protocol.EncodedSource{Complete: true}
+	var units []encodedUnit
 	var nodes []encodedNode
+	// subjects names each value as a loss line names it.
+	subjects := make(map[string]string, len(request.GetValues()))
+	tables := make(map[string]*sourceencode.Table)
+	var order []string
 	for _, value := range request.GetValues() {
 		if err := ctx.Err(); err != nil {
 			return nil, status.FromContextError(err).Err()
 		}
 		envelope := value.GetValue().GetValue()
-		if envelope.GetKind() != schema.CoordinationProperties || value.GetPlacement() != protocol.SourceModelValue_NATIVE_OBJECT {
-			result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: value.GetValue().GetId(), Message: lossMessage(request.GetFormat(), envelope)})
-			continue
+		id := value.GetValue().GetId()
+		subjects[id] = envelope.GetOwner().GetKind() + " " + sourceencode.Subject(envelope.GetOwner())
+		if value.GetPlacement() == protocol.SourceModelValue_NATIVE_OBJECT {
+			subjects[id] = sourceencode.Noun(envelope.GetKind()) + " " + sourceencode.Subject(envelope.GetOwner())
 		}
-		node, err := nodeOf(value.GetValue())
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+		switch {
+		case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL:
+			result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: id, Message: lossMessage(format, envelope)})
+		case value.GetPlacement() == protocol.SourceModelValue_FACET:
+			table, bound := tables[value.GetBindingId()]
+			if !bound {
+				table = &sourceencode.Table{Binding: bindingOf(request, value.GetBindingId())}
+				tables[value.GetBindingId()] = table
+				order = append(order, value.GetBindingId())
+			}
+			table.Values = append(table.Values, value)
+		case envelope.GetKind() == schema.CoordinationProperties:
+			node, err := nodeOf(value.GetValue())
+			if err != nil {
+				return nil, status.Error(codes.InvalidArgument, err.Error())
+			}
+			if node.access {
+				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: node.id, Message: sourceencode.AccessLoss("coordination node", node.owner).Loss})
+				continue
+			}
+			nodes = append(nodes, node)
+		default:
+			encoded, err := encodeNative(format, value.GetValue())
+			if err != nil {
+				return nil, status.Error(codes.InvalidArgument, err.Error())
+			}
+			if encoded.Loss != "" {
+				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: id, Message: encoded.Loss})
+				continue
+			}
+			units = append(units, encodedUnit{ids: []string{id}, parts: encoded.Parts})
 		}
-		if node.access {
-			result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: node.id,
-				Message: fmt.Sprintf("coordination node %s: access constraints have no source spelling", path.Join(node.owner.GetSchema(), node.owner.GetName()))})
-			continue
-		}
-		nodes = append(nodes, node)
 	}
 	slices.SortFunc(nodes, func(a, b encodedNode) int {
 		return cmp.Or(strings.Compare(a.owner.GetSchema(), b.owner.GetSchema()), strings.Compare(a.owner.GetName(), b.owner.GetName()))
 	})
-	fragments, err := nodeFragments(request.GetFormat(), nodes)
+	fragments, err := nodeFragments(format, nodes)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	result.Fragments = fragments
+	for _, fragment := range fragments {
+		units = append(units, encodedUnit{ids: fragment.GetValueIds(), parts: []*protocol.EncodedSourcePart{{Fragment: fragment.GetFragment(), Placement: fragment.GetPlacement()}}})
+	}
+	// A table with a column no declaration can ask for is lost whole. The
+	// loss carries the reason to the host, which refuses a Go export with it;
+	// an error's text does not reach the host.
+	refused := nullableKeys(request)
+	for _, binding := range order {
+		if reason, found := refused[binding]; found {
+			for _, value := range tables[binding].Values {
+				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: value.GetValue().GetId(), Message: reason})
+			}
+			delete(refused, binding)
+			continue
+		}
+		encoded, err := sourceencode.EncodeTable(format, *tables[binding])
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		result.Losses = append(result.Losses, encoded.Losses...)
+		if len(encoded.Written) != 0 {
+			units = append(units, encodedUnit{ids: encoded.Written, parts: encoded.Parts})
+		}
+	}
+	// A table the request binds and holds no facet of has no value to carry
+	// the loss.
+	for _, binding := range slices.Sorted(maps.Keys(refused)) {
+		return nil, status.Error(codes.FailedPrecondition, refused[binding])
+	}
+	if format == protocol.SourceDocument_GO_ANNOTATIONS {
+		result.FieldTypes = fieldTypes(request)
+	}
+	grouped := slices.Contains(description.GetEngines()[0].GetFeatures(), provider.EncodeGroupsFeature)
+	for _, unit := range units {
+		switch {
+		case grouped:
+			result.Groups = append(result.Groups, &protocol.EncodedSourceGroup{ValueIds: unit.ids, Parts: unit.parts})
+		case len(unit.parts) == 1:
+			result.Fragments = append(result.Fragments, &protocol.EncodedFragment{ValueIds: unit.ids, Fragment: unit.parts[0].GetFragment(), Placement: unit.parts[0].GetPlacement()})
+		default:
+			for _, id := range unit.ids {
+				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: id,
+					Message: fmt.Sprintf("%s needs several declarations, which a host that does not negotiate %s cannot write", subjects[id], provider.EncodeGroupsFeature)})
+			}
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
@@ -84,6 +165,73 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return result, nil
+}
+
+// encodedUnit is what writes some values together: the values, and the
+// ordered parts that write them.
+type encodedUnit struct {
+	ids   []string
+	parts []*protocol.EncodedSourcePart
+}
+
+// bindingOf is the request's binding of id. The SDK checked that a facet's
+// binding exists.
+func bindingOf(request *protocol.EncodeSourceRequest, id string) *protocol.SourceBinding {
+	for _, binding := range request.GetBindings() {
+		if binding.GetId() == id {
+			return binding
+		}
+	}
+	return nil
+}
+
+// encodeNative writes one native object other than a coordination node.
+func encodeNative(format protocol.SourceDocument_Format, value *protocol.NormalizedValue) (sourceencode.Result, error) {
+	encoders := map[string]func(protocol.SourceDocument_Format, *protocol.NormalizedValue) (sourceencode.Result, error){
+		schema.SecretProperties:                 sourceencode.Secret,
+		schema.ExternalSourceProperties:         sourceencode.ExternalSource,
+		schema.ExternalTableProperties:          sourceencode.ExternalTable,
+		schema.TopicProperties:                  sourceencode.Topic,
+		schema.ResourcePoolProperties:           sourceencode.ResourcePool,
+		schema.ResourcePoolClassifierProperties: sourceencode.ResourcePoolClassifier,
+		schema.StreamingQueryProperties:         sourceencode.StreamingQuery,
+	}
+	encode, known := encoders[value.GetValue().GetKind()]
+	if !known {
+		return sourceencode.Result{Loss: lossMessage(format, value.GetValue())}, nil
+	}
+	return encode(format, value)
+}
+
+// nullableKeys says, by binding, why a table of a Go export cannot be
+// written: it has a nullable key column. YDB takes one, but no declaration can
+// ask for it, since the provider writes NOT NULL on every key column it
+// creates, and written as an ordinary key field the column would be rebuilt
+// NOT NULL wherever the models are applied. The first such column of a table
+// is named.
+func nullableKeys(request *protocol.EncodeSourceRequest) map[string]string {
+	refused := make(map[string]string)
+	for _, column := range request.GetColumns() {
+		if _, named := refused[column.GetBindingId()]; named || !column.GetNullable() || !column.GetPrimaryKey() {
+			continue
+		}
+		table := bindingOf(request, column.GetBindingId()).GetObject()
+		refused[column.GetBindingId()] = fmt.Sprintf("column %q of table %q is a nullable key column, which no Ptah declaration can represent: "+
+			"Ptah writes NOT NULL on every YDB key column", column.GetName(), path.Join(table.GetSchema(), table.GetName()))
+	}
+	return refused
+}
+
+// fieldTypes gives each column of a Go export the Go type of its YDB type,
+// and leaves a type it does not know to the host.
+func fieldTypes(request *protocol.EncodeSourceRequest) []*protocol.EncodedFieldType {
+	var types []*protocol.EncodedFieldType
+	for _, column := range request.GetColumns() {
+		if goType, known := ydbtype.GoTypeOf(column.GetType()); known {
+			types = append(types, &protocol.EncodedFieldType{BindingId: column.GetBindingId(), Column: column.GetName(), GoType: goType.Name, GoImport: goType.Import})
+		}
+	}
+	return types
 }
 
 // encodedNode is a coordination node a request asks to write, with the
@@ -230,19 +378,22 @@ func nodeFragments(format protocol.SourceDocument_Format, nodes []encodedNode) (
 }
 
 // lossMessage says, in one line, why a value is not written, naming it and
-// never its content.
+// never its content: a table's facet in HCL, which has no spelling for one,
+// or a native object no source of the provider declares.
 func lossMessage(format protocol.SourceDocument_Format, envelope *protocol.Envelope) string {
 	owner := envelope.GetOwner()
-	subject := path.Join(slices.Concat([]string{owner.GetSchema()}, owner.GetPath(), []string{owner.GetName()})...)
+	subject := sourceencode.Subject(owner)
 	switch envelope.GetKind() {
 	case schema.TableProperties, schema.ColumnStorageProperties, schema.ColumnProperties:
-		if format == protocol.SourceDocument_HCL {
-			return fmt.Sprintf("the YDB settings of %s %s: HCL has no spelling for a YDB table's partitioning, layout, TTL, column families or column storage", owner.GetKind(), subject)
-		}
-		return fmt.Sprintf("the YDB settings of %s %s: this provider holds a table's settings as one value, which a source writes as several declarations", owner.GetKind(), subject)
-	default:
-		return fmt.Sprintf("%s %s: this provider writes no source for it", strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/"), "-", " "), subject)
+		return fmt.Sprintf("the YDB settings of %s %s: HCL has no spelling for a YDB table's partitioning, layout, TTL, column families or column storage", owner.GetKind(), subject)
+	case schema.IndexProperties, schema.ChangefeedProperties:
+		return fmt.Sprintf("the %s of %s %s: HCL has no spelling for a YDB table's native indexes or changefeeds",
+			strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/table-"), "-", " "), owner.GetKind(), subject)
 	}
+	if format == protocol.SourceDocument_HCL {
+		return sourceencode.HCLLoss(envelope).Loss
+	}
+	return fmt.Sprintf("%s %s: this provider writes no source for it", strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/"), "-", " "), subject)
 }
 
 var _ provider.SourceEncoder = (*Provider)(nil)
