@@ -94,6 +94,7 @@ type session struct {
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
 	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
+		provider.IndexMethodsFeature,
 		provider.ScopeSelectionsFeature,
 		provider.StatementsFeature,
 		provider.ValidateSchemaFeature,

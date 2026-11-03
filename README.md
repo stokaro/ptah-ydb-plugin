@@ -2526,6 +2526,19 @@ effect. An addition is `ADD INDEX name GLOBAL [SYNC|ASYNC] [UNIQUE] ON (keys)
 [COVER (columns)]`; a removal is `DROP INDEX name`. Impact is additive for an
 addition and destructive for a removal.
 
+The common indexes a source declares, such as a `ptah:schema:index` directive,
+are compared by the host. Inspection reports a row table's global indexes as
+its common indexes: a synchronous one, unique or not, with no method, and an
+asynchronous one with the method `async`. For a host that lists
+`schema.index-methods`, table preparation states the kind of each declared
+index in the same spelling, reading its type with the host's embedded engine's
+spellings: none, `BTREE`, `GLOBAL`, `SYNC` and `GLOBAL SYNC` are synchronous,
+and `ASYNC` and `GLOBAL ASYNC` are asynchronous, in any case and with `_` for a
+space. The host compares the two spellings, so a declaration that changes only
+an index's kind is a removal and an addition of the index under its name, which
+this service carries out as the two steps above, the removal first. A host
+without the feature compares no kind, and such a change plans nothing.
+
 The declaration is the index set model (`table-indexes`, desired side) as a
 facet of the table, beside the table properties. It is managed when the
 declaration states it: an index the table holds and the set leaves out is

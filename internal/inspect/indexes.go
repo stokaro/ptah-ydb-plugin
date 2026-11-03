@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -53,9 +54,11 @@ func (s *source) readIndexes(ctx context.Context, tablePath string, table *descr
 // the global secondary indexes, synchronous, asynchronous and unique, by
 // their key and covered columns. A vector or full-text index has settings
 // the common model has no place for, so it stays in the native index facet
-// alone, where the host can neither create nor drop it. An asynchronous
-// index's method is "async", the type a declaration spells it with; a
-// synchronous one states none. The comment travels on the common-object wire.
+// alone, where the host can neither create nor drop it. An index's method is
+// its kind's common spelling ([ydbdecl.IndexKind.CommonMethod]), the one table
+// preparation states for a declared index: "async" for an asynchronous index
+// and none for a synchronous one. The comment travels on the common-object
+// wire.
 func commonIndexes(table *protocol.Reference, observed *native.IndexObservations) []*protocol.ObservedIndex {
 	var result []*protocol.ObservedIndex
 	for _, index := range observed.GetIndexes() {
@@ -65,9 +68,13 @@ func commonIndexes(table *protocol.Reference, observed *native.IndexObservations
 		if !schema.CommonIndex(description) {
 			continue
 		}
+		kind := ydbdecl.IndexSync
 		if description.GetGlobalAsyncIndex() != nil {
-			common.Method = "async"
+			kind = ydbdecl.IndexAsync
 		}
+		// A common index is global, synchronous or asynchronous, and either
+		// kind has a common spelling.
+		common.Method, _ = kind.CommonMethod()
 		common.Unique = description.GetGlobalUniqueIndex() != nil
 		result = append(result, common)
 	}
