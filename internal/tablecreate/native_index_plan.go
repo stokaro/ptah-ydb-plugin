@@ -155,23 +155,6 @@ func keptColumns(spec *native.IndexIntent, columns nativeIndexColumns) string {
 	return ""
 }
 
-// indexReplacements orders the removal of an index before the addition of an
-// index under the same name, which replaces it.
-func indexReplacements(steps []*indexStep) []*protocol.PlanningDependency {
-	var result []*protocol.PlanningDependency
-	for _, drop := range steps {
-		if drop.change.drop == nil {
-			continue
-		}
-		for _, add := range steps {
-			if add.change.add != nil && add.change.name() == drop.change.name() {
-				result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(drop.id), After: proto.CloneOf(add.id)})
-			}
-		}
-	}
-	return result
-}
-
 // declaredKeyTypes returns the YDB type of every column a declaration states,
 // and its key in order, for the rules a vector or full-text index follows.
 func declaredKeyTypes(table *protocol.DeclaredTable, intent *native.RowTableIntent) nativeIndexColumns {
@@ -192,7 +175,8 @@ func declaredKeyTypes(table *protocol.DeclaredTable, intent *native.RowTableInte
 // creationIndexes are the vector and full-text indexes a new table declares
 // in its native index set, each added by a step of its own after the table is
 // created: the native creation call of the pinned bindings carries neither
-// kind. A global index the set states is refused: a new table takes its global
+// kind. A global index the set states never reaches it: the compilation of the
+// creation refuses one (see tableFacets), since a new table takes its global
 // indexes from the common declaration (see declaredIndexes).
 func creationIndexes(owner *protocol.Reference, table *protocol.DeclaredTable, request *nativeCreation, capabilities map[string]bool) ([]indexChange, string, error) {
 	facets, err := facetEnvelopes(owner, table.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
@@ -209,10 +193,7 @@ func creationIndexes(owner *protocol.Reference, table *protocol.DeclaredTable, r
 	var changes []indexChange
 	for _, declaration := range declared.GetIndexes() {
 		spec := declaration.GetSpecification()
-		switch {
-		case !nativeOnlyIndex(spec):
-			return nil, fmt.Sprintf("index %q: the native index set states a global index, and a new table takes its global indexes from the common declaration", spec.GetName()), nil
-		case slices.Contains(request.names, spec.GetName()):
+		if slices.Contains(request.names, spec.GetName()) {
 			return nil, fmt.Sprintf("table %q: two of its indexes are named %q, and YDB names an index once per table", tableLabel(owner), spec.GetName()), nil
 		}
 		if reason := nativeIndexRefusal(spec, request.columns, capabilities); reason != "" {

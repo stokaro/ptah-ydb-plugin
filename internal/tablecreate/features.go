@@ -105,13 +105,22 @@ func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures)
 				return declaredFacets{}, err
 			}
 		case schema.IndexProperties:
-			// The native index set: the creation request carries none of it.
-			// A vector or full-text index is a step of its own after the
-			// creation (see plannedCreationIndexes), and a global index the set
-			// states is refused there.
+			// The native set holds the indexes the common model cannot
+			// describe, and the creation request carries none of it. A vector
+			// or full-text index is a step of its own after the creation (see
+			// plannedCreationIndexes). A global index the set states is
+			// refused: a new or rebuilt table takes its global indexes from
+			// the common declaration, and would come back without it. An empty
+			// set, which a read of a table with only global indexes converts
+			// to, states nothing to create.
 			result.indexes = &native.IndexSetIntent{}
 			if err := protojson.Unmarshal(value.Payload, result.indexes); err != nil {
 				return declaredFacets{}, err
+			}
+			for _, declaration := range result.indexes.GetIndexes() {
+				if spec := declaration.GetSpecification(); !nativeOnlyIndex(spec) {
+					return declaredFacets{}, unsupported("index %q: the native index set states a global index, and a new table takes its global indexes from the common declaration", spec.GetName())
+				}
 			}
 		case schema.ChangefeedProperties:
 			result.changefeeds = &native.ChangefeedSetIntent{}

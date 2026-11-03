@@ -11,6 +11,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -222,4 +223,51 @@ func TestViewCaptureExcludesOnlyMeasuredDisabledPartitionSwitches(t *testing.T) 
 	refused, err = schema.CaptureObject(objectOwner(schema.ViewProperties), view)
 	c.Assert(refused, qt.IsNil)
 	c.Assert(err, qt.IsNotNil)
+}
+
+// On a target that carries grants on the common wire, a read converted to a
+// declaration leaves the native access requirement out, for every kind that
+// carries one, and keeps the rest of the value.
+func TestWithoutAccessLeavesTheRequirementOut(t *testing.T) {
+	for _, test := range []struct {
+		name, kind string
+		value      proto.Message
+	}{
+		{"view", schema.ViewProperties, &native.ViewObservation{View: &Ydb_View.DescribeViewResult{Self: objectSelf(), QueryText: "SELECT 1 AS id"}, Properties: &native.DescribeTableResult{Self: objectSelf()}}},
+		{"source", schema.ExternalSourceProperties, &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: proto.String("PostgreSQL"), Location: proto.String("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "NONE"}}},
+		{"coordination node", schema.CoordinationProperties, &Ydb_Coordination.DescribeNodeResult{Self: objectSelf(), Config: &Ydb_Coordination.Config{SelfCheckPeriodMillis: 2000}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			observed, err := schema.CaptureObject(objectOwner(test.kind), test.value)
+			c.Assert(err, qt.IsNil)
+			observed.Context = &protocol.DatabaseContext{Database: "/local", SourceDatabase: "/local"}
+			desired, err := convertToDesired(observed)
+			c.Assert(err, qt.IsNil)
+			c.Assert(string(desired.Payload), qt.Contains, `"alice"`)
+			stripped, err := schema.WithoutAccess(desired)
+			c.Assert(err, qt.IsNil)
+			c.Assert(string(stripped.Payload), qt.Not(qt.Contains), `"alice"`)
+			c.Assert(proto.Equal(stripped.Owner, desired.Owner), qt.IsTrue)
+			c.Assert(proto.Equal(stripped.Context, desired.Context), qt.IsTrue)
+		})
+	}
+	c := testcheck.New(t)
+	observed, err := schema.CaptureTable(tableOwner(), &native.DescribeTableResult{PrimaryKey: []string{"id"}, Self: &Ydb_Scheme.Entry{Owner: "alice"}})
+	c.Assert(err, qt.IsNil)
+	desired, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	c.Assert(err, qt.IsNil)
+	stripped, err := schema.WithoutAccess(desired)
+	c.Assert(err, qt.IsNil)
+	var intent native.RowTableIntent
+	c.Assert(protojson.Unmarshal(stripped.Payload, &intent), qt.IsNil)
+	c.Assert(intent.Access, qt.IsNil)
+	c.Assert(intent.PrimaryKey, qt.DeepEquals, []string{"id"})
+}
+
+func convertToDesired(observed *protocol.Envelope) (*protocol.Envelope, error) {
+	if observed.Kind == schema.CoordinationProperties {
+		return schema.ConvertCoordination(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	}
+	return schema.ConvertNative(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 }

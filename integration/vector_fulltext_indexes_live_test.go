@@ -164,10 +164,10 @@ func (f *facetFixture) run(c *qt.C, id string, plan *protocol.PlannedFeatures) {
 	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
 }
 
-// requireCapability skips a test on a target whose session lacks key: the
-// suite runs on every release line, and a line without the capability runs
-// the refusal tests instead.
-func requireCapability(c *qt.C, session *protocol.Session, key string, wanted bool) {
+// requireSessionCapability skips a test on a target whose session does not
+// report key as wanted: the suite runs on every release line, and a line
+// without the capability runs the refusal tests instead.
+func requireSessionCapability(c *qt.C, session *protocol.Session, key string, wanted bool) {
 	c.Helper()
 	if session.Capabilities[key] != wanted {
 		c.Skipf("the target's %s is %t; this test needs %t", key, session.Capabilities[key], wanted)
@@ -362,7 +362,7 @@ const (
 func TestFullTextIndexRoundTripSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newDocumentsFixture(c)
-	requireCapability(c, fixture.session, tablecreate.FullTextIndexesCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.FullTextIndexesCapability, true)
 	declared := nativeIndexSet(nativeIndex(fullTextIndex("globalFulltextRelevanceIndex", "ft", "body", standardBody), relevanceTables))
 	plan := fixture.indexPlan(c, declared)
 	_, statements := fixture.planned(c, plan)
@@ -400,7 +400,7 @@ func TestFullTextIndexRoundTripSubprocess(t *testing.T) {
 func TestFullTextIndexOlderLineSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newDocumentsFixture(c)
-	requireCapability(c, fixture.session, tablecreate.FullTextIndexesCapability, false)
+	requireSessionCapability(c, fixture.session, tablecreate.FullTextIndexesCapability, false)
 	declared := nativeIndexSet(nativeIndex(fullTextIndex("globalFulltextRelevanceIndex", "ft", "body", standardBody), relevanceTables))
 	found := fixture.compareIndexes(c, declared)
 	plan := fixture.plan(c, found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
@@ -418,7 +418,7 @@ func TestFullTextIndexOlderLineSubprocess(t *testing.T) {
 func TestFullTextIndexDisabledFlagSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newDocumentsFixture(c)
-	requireCapability(c, fixture.session, tablecreate.FullTextIndexesCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.FullTextIndexesCapability, true)
 	address := monitoredAddress(c)
 	flags := newClusterFlags(c, fixture.connection(c))
 	flags.set(c, map[string]bool{"EnableFulltextIndex": false})

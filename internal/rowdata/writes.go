@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -178,19 +179,21 @@ func columnLiteral(ydbType, column, role string, value *protocol.DataValue) (str
 // maxLine is the most bytes a provider-authored line a host may show holds.
 const maxLine = 512
 
-// OneLine is text cut to the longest prefix of whole characters that fits
-// one diagnostic line. The text it is given names columns with %q, so it holds
-// no line break.
+// OneLine is text on one diagnostic line: control characters and line
+// separators read as spaces, invalid UTF-8 as '?', and the text is cut to the
+// longest prefix of whole characters that fits the line.
 func OneLine(text string) string {
-	text = strings.TrimSpace(text)
-	if len(text) <= maxLine {
-		return text
+	var line strings.Builder
+	for _, r := range strings.ToValidUTF8(text, "?") {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+			r = ' '
+		}
+		if line.Len()+utf8.RuneLen(r) > maxLine {
+			break
+		}
+		line.WriteRune(r)
 	}
-	cut := maxLine
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return strings.TrimSpace(text[:cut])
+	return strings.TrimSpace(line.String())
 }
 
 func cloneValue(value *protocol.DataValue) *protocol.DataValue {

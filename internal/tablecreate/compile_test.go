@@ -189,3 +189,30 @@ func TestCompileRefusesUnimplementedOrForgedState(t *testing.T) {
 		})
 	}
 }
+
+// A read of a table that holds only global indexes converts to an empty
+// native index set, which states nothing to create. A vector or full-text
+// index the set names is added by a step of its own after the creation (see
+// TestNativeIndexCreation_HappyPath), so the creation request carries none of
+// the set either way. A global index the set names is one the creation would
+// leave out, and is refused.
+func TestCompileNativeIndexSet(t *testing.T) {
+	c := testcheck.New(t)
+	plain, err := tablecreate.Compile(owner(), withSettings(c), nil)
+	c.Assert(err, qt.IsNil)
+	table := withSettings(c)
+	table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.IndexProperties, "", `{}`))
+	empty, err := tablecreate.Compile(owner(), table, nil)
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(empty, plain), qt.IsTrue)
+	table = withSettings(c)
+	table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.IndexProperties, "", vectorIndexes(false)))
+	vector, err := tablecreate.Compile(owner(), table, nil)
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(vector, plain), qt.IsTrue)
+	table = withSettings(c)
+	table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.IndexProperties, "", declaredIndexes(indexJSON("globalIndex", "by_value", []string{"value"}, nil))))
+	global, err := tablecreate.Compile(owner(), table, nil)
+	c.Assert(err, qt.ErrorMatches, `index "by_value": the native index set states a global index, and a new table takes its global indexes from the common declaration`)
+	c.Assert(global, qt.IsNil)
+}

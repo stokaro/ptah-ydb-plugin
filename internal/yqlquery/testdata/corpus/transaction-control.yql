@@ -1,0 +1,3 @@
+UPSERT INTO t (id) VALUES (1);
+COMMIT;
+UPSERT INTO t (id) VALUES (2);
