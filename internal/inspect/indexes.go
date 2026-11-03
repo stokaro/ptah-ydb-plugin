@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -53,24 +54,30 @@ func (s *source) readIndexes(ctx context.Context, tablePath string, table *descr
 // the global secondary indexes, synchronous, asynchronous and unique, by
 // their key and covered columns. A vector or full-text index has settings
 // the common model has no place for, so it stays in the native index facet
-// alone, where the host can neither create nor drop it. An asynchronous
-// index's method is "async", the type a declaration spells it with; a
-// synchronous one states none. The comment travels on the common-object wire.
+// alone, where the host can neither create nor drop it. An index's method is
+// its kind's common spelling ([ydbdecl.IndexKind.CommonMethod]), the one
+// table preparation states for a declared index. The comment travels on the
+// common-object wire.
 func commonIndexes(table *protocol.Reference, observed *native.IndexObservations) []*protocol.ObservedIndex {
 	var result []*protocol.ObservedIndex
 	for _, index := range observed.GetIndexes() {
 		description := index.GetDescription()
 		common := &protocol.ObservedIndex{Name: description.GetName(), TableName: table.GetName(), Schema: table.GetSchema(),
 			Columns: slices.Clone(description.GetIndexColumns()), IncludeColumns: slices.Clone(description.GetDataColumns())}
+		var kind ydbdecl.IndexKind
 		switch description.GetType().(type) {
 		case *native.TableIndexDescription_GlobalIndex:
+			kind = ydbdecl.IndexSync
 		case *native.TableIndexDescription_GlobalAsyncIndex:
-			common.Method = "async"
+			kind = ydbdecl.IndexAsync
 		case *native.TableIndexDescription_GlobalUniqueIndex:
-			common.Unique = true
-		default:
+			kind, common.Unique = ydbdecl.IndexSync, true
+		}
+		method, described := kind.CommonMethod()
+		if !described {
 			continue
 		}
+		common.Method = method
 		result = append(result, common)
 	}
 	return result
