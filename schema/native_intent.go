@@ -112,6 +112,11 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		// declares, as for the host's embedded engine, so a table it declares
 		// with none is declared to have none.
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
+	case IndexProperties:
+		// A YAML or Go source spells no native index, so the native index set
+		// a table it declares states is empty; an export writes an empty set
+		// with the table's declaration.
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
 	}
 	return result
 }

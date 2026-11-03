@@ -13,12 +13,16 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
-// ExternalSource writes a data source's exact settings and secret references.
-// Access constraints without a source spelling remain an explicit loss.
+// ExternalSource writes a data source's exact settings and the secrets it
+// names by path or name, never a secret's value. An access requirement is a
+// loss.
 func ExternalSource(format protocol.SourceDocument_Format, value *protocol.NormalizedValue) (Result, error) {
 	intent, err := schema.DesiredExternalSource(value.GetValue())
 	if err != nil {
 		return Result{}, err
+	}
+	if intent.GetAccess() != nil {
+		return AccessLoss(Noun(schema.ExternalSourceProperties), value.GetValue().GetOwner()), nil
 	}
 	fields, result, err := localIdentity(value)
 	if err != nil || result.Loss != "" {
@@ -26,7 +30,7 @@ func ExternalSource(format protocol.SourceDocument_Format, value *protocol.Norma
 	}
 	spec, err := externals.SourceFromIntent(intent, "")
 	if err != nil {
-		return Result{Loss: "The source grammar requires a complete external data source declaration"}, nil
+		return loss("external data source %s: %v", Subject(value.GetValue().GetOwner()), err), nil
 	}
 	fields = append(fields, field(externals.AttributeSourceType, spec.SourceType), field(externals.AttributeLocation, spec.Location), field(externals.AttributeAuthMethod, spec.AuthMethod))
 	fields = appendOptions(fields, format, spec.Options)
@@ -39,13 +43,16 @@ func ExternalTable(format protocol.SourceDocument_Format, value *protocol.Normal
 	if err != nil {
 		return Result{}, err
 	}
+	if intent.GetAccess() != nil {
+		return AccessLoss(Noun(schema.ExternalTableProperties), value.GetValue().GetOwner()), nil
+	}
 	fields, result, err := localIdentity(value)
 	if err != nil || result.Loss != "" {
 		return result, err
 	}
 	spec, err := externals.TableFromIntent(intent, "")
 	if err != nil {
-		return Result{Loss: "The source grammar requires a complete external table declaration"}, nil
+		return loss("external table %s: %v", Subject(value.GetValue().GetOwner()), err), nil
 	}
 	fields = append(fields, field(externals.AttributeDataSource, spec.DataSource), field(externals.AttributeLocation, spec.Location))
 	fields = append(fields, columns(format, spec.Columns))

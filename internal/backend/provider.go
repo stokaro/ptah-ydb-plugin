@@ -96,6 +96,9 @@ func providerFeatures() []string {
 		provider.RenderFeature,
 		provider.CompareModelsFeature,
 		provider.DecodeSourceFeature,
+		// A table's facets, a topic with its consumers and a changefeed set
+		// are each written by several declarations; see EncodeSource.
+		provider.EncodeGroupsFeature,
 		provider.InspectFeature,
 		provider.NormalizeValuesFeature,
 		provider.ConvertValuesFeature,

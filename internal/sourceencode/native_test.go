@@ -110,13 +110,13 @@ func TestNativeFragmentsRefuseLostFactsWithoutPartialOutput(t *testing.T) {
 	value := normalized(c, schema.ExternalSourceProperties, source)
 	result, err := sourceencode.ExternalSource(protocol.SourceDocument_YAML, value)
 	c.Assert(err, qt.IsNil)
-	c.Assert(result.Loss, qt.Contains, "cannot preserve all")
+	c.Assert(result.Loss, qt.Equals, "the access requirement of external data source app/eu/a.b has no source spelling")
 	c.Assert(result.Parts, qt.HasLen, 0)
 	bound := normalized(c, schema.SecretProperties, &native.SecretIntent{ValueEnv: "PTAH_SECRET_REFERENCE"})
 	bound.Value.Owner.Database, bound.NormalizedOwner.Database = "/tenant", "/tenant"
 	result, err = sourceencode.Secret(protocol.SourceDocument_YAML, bound)
 	c.Assert(err, qt.IsNil)
-	c.Assert(result.Loss, qt.Contains, "source binding")
+	c.Assert(result.Loss, qt.Equals, "secret app/eu/a.b names database /tenant, which a source cannot name")
 	c.Assert(result.Parts, qt.HasLen, 0)
 }
 
@@ -135,7 +135,7 @@ func TestExternalSourceReportsIncompleteIntentAsLoss(t *testing.T) {
 	value := normalized(c, schema.ExternalSourceProperties, &native.ExternalSourceIntent{SourceType: new("ObjectStorage"), Location: new("bucket")})
 	result, err := sourceencode.ExternalSource(protocol.SourceDocument_YAML, value)
 	c.Assert(err, qt.IsNil)
-	c.Assert(result.Loss, qt.Contains, "complete external data source")
+	c.Assert(result.Loss, qt.Matches, `external data source app/eu/a\.b: .+`)
 	c.Assert(result.Parts, qt.HasLen, 0)
 }
 
@@ -146,7 +146,7 @@ func TestExternalTableReportsIncompleteIntentAsLoss(t *testing.T) {
 	value := normalized(c, schema.ExternalTableProperties, intent)
 	result, err := sourceencode.ExternalTable(protocol.SourceDocument_YAML, value)
 	c.Assert(err, qt.IsNil)
-	c.Assert(result.Loss, qt.Contains, "complete external table")
+	c.Assert(result.Loss, qt.Matches, `external table app/eu/a\.b: .+`)
 	c.Assert(result.Parts, qt.HasLen, 0)
 }
 
