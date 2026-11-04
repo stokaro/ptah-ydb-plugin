@@ -191,7 +191,7 @@ func (item *changefeedStep) planningStep(number int, subject *protocol.Compariso
 // changefeeds of one table never share an effect subject.
 func changefeedSubject(table *protocol.ComparisonIdentity, name string) *protocol.ComparisonIdentity {
 	subject := proto.CloneOf(table)
-	subject.Kind, subject.Parent = "ydb.changefeed", proto.CloneOf(table.GetName())
+	subject.Kind, subject.Parent = schema.ChangefeedEffectKind, proto.CloneOf(table.GetName())
 	subject.Name = &protocol.ComparisonPart{Source: name, Normalized: name}
 	return subject
 }

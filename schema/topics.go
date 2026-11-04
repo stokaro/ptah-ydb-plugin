@@ -18,6 +18,12 @@ const (
 	ChangefeedProperties = modelNamespace + "table-changefeeds"
 )
 
+// ChangefeedEffectKind names one changefeed of a table as a planning step's
+// effect subject: under the table, with the changefeed's name. The changefeed
+// planner names each changefeed it adds, drops or changes so, and a transfer
+// that reads one names it the same way, which is how the host orders the two.
+const ChangefeedEffectKind = "ydb.changefeed"
+
 func projectTopic(topic *native.DescribeTopicResult) {
 	topic.Partitions = nil
 	topic.TopicStats = nil

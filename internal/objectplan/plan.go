@@ -61,9 +61,16 @@ type Family struct {
 // PathEffect is one scheme path a change acts on beyond its own: a path
 // relative to the database root, as a directory and a leaf name, and what the
 // change does there.
+//
+// Subject, when set, names the object at the path by its own identity
+// instead, such as a topic or a changefeed. The host orders a step that acts
+// on such a subject against the steps of other planning services that act on
+// the same one, and no common step names it, so it orders nothing against
+// the common steps. Schema and Name are then unused.
 type PathEffect struct {
 	Schema, Name string
 	Action       protocol.PlanningEffect_Action
+	Subject      *protocol.ComparisonIdentity
 }
 
 type change struct {
