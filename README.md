@@ -570,6 +570,13 @@ can name a cluster-managed group, but cannot declare self-membership or make a
 principal a member of a declared user. Inspection preserves every observed
 membership, including edges whose principals are outside the managed role list.
 
+A user's password is set when the user is created, from a YAML or Go
+declaration, and is never read back: a declaration that names another password
+plans nothing, as the host's embedded engine plans it. The statement holds the
+password in plain text below a warning, as the host's engine writes it; a
+declared password hash (`CREATE USER ... HASH`) keeps the password out of the
+plan.
+
 `schema.common-access` (contract 25.5) carries independently covered owners and
 memberships. An owner's login state is optional: unknown remains unknown,
 including when the server refuses its principal views. Principal queries read
@@ -1815,6 +1822,13 @@ its object, and a drop replaces the REVOKE the host planned, since YDB drops an
 object's access list with it and a REVOKE after the drop would name a path that
 is gone. A change in place, such as a new lambda, keeps the entries.
 
+A grant names a replication or a transfer by its directory and name
+(`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
+path. The planner puts a GRANT or a REVOKE after the creation or the change of
+its object, and a drop replaces the REVOKE the host planned, since YDB drops an
+object's access list with it and a REVOKE after the drop would name a path that
+is gone. A change in place, such as a new lambda, keeps the entries.
+
 Execution reads the object before the statement and refuses one that changed
 since the plan read it, runs the statement once, and reads the object back. The
 statement names the object, the replica targets, the transfer's table and a
@@ -2918,7 +2932,9 @@ carry is refused by name, with no partial reading:
   of a table in a SQL schema reading, and a changefeed is one. A YQL source
   therefore leaves the changefeeds of its tables as they are; declare them in
   YAML or Go;
-- a user's password;
+- a user's password: the reply's role carries none, so the host would create
+  the user without it; a YAML or Go declaration carries the password, which
+  the host sets when it creates the user;
 - a grant on a resource pool whose name holds a dot, a quote or a bracket: Ptah
   names a pool it reads from a provider as it names a table, so the grant
   would come back on a renamed pool;

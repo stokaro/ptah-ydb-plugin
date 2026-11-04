@@ -23,10 +23,11 @@ import (
 )
 
 // accessSession opens a provider session on the test address for a host that
-// carries common objects and access, closed by the cleanup.
+// carries common objects and access, and offers object context, which a read
+// of a streaming query needs, closed by the cleanup.
 func accessSession(c *qt.C) (*providerruntime.Client, *protocol.Session) {
 	c.Helper()
-	client := startProviderFor(c, provider.CommonObjectsFeature, provider.CommonAccessFeature)
+	client := startProviderFor(c, provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningObjectContextFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
@@ -42,6 +43,15 @@ func skipWithout(c *qt.C, session *protocol.Session, key string) {
 	}
 }
 
+// skipWith skips the test on a target whose session establishes the
+// capability key.
+func skipWith(c *qt.C, session *protocol.Session, key string) {
+	c.Helper()
+	if session.Capabilities[key] {
+		c.Skipf("the target establishes %s", key)
+	}
+}
+
 // grantEntry is one permission a read reports a principal holds on one
 // object.
 type grantEntry struct {
@@ -53,7 +63,14 @@ type grantEntry struct {
 // the given grant kinds, for the roles given, sorted.
 func grantsIn(c *qt.C, client *providerruntime.Client, session *protocol.Session, directory string, kinds, roles []string) []grantEntry {
 	c.Helper()
-	snapshot, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
+	return grantsInSchemas(c, client, session, []string{directory}, kinds, roles)
+}
+
+// grantsInSchemas is grantsIn over a read of the directories given; / is
+// the database root, whose read also reports the resource pools.
+func grantsInSchemas(c *qt.C, client *providerruntime.Client, session *protocol.Session, schemas, kinds, roles []string) []grantEntry {
+	c.Helper()
+	snapshot, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session.Id, Schemas: schemas})
 	c.Assert(err, qt.IsNil)
 	var entries []grantEntry
 	for _, grant := range snapshot.GetCommonObjects().GetGrants() {
@@ -81,8 +98,9 @@ func principalName(prefix string) string {
 // REVOKE, since a REVOKE after the drop would name a path that is gone.
 //
 // The source table is applied first, as TestHostAppliesAnAsyncReplication_HappyPath
-// applies it; TestHostCreatesAReplicationAfterItsSourceTable_HappyPath plans
-// both in one run.
+// applies it: the replication planner does not order a creation after the
+// creation of a table it replicates, and a replication created before its
+// source never makes its replica. The host's engine plans both in one run.
 func TestHostGrantsOnAnAsyncReplication_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -132,8 +150,9 @@ func TestHostGrantsOnAnAsyncReplication_HappyPath(t *testing.T) {
 // a REVOKE. The transfer reads through a consumer the changefeed declares, as
 // TestHostAppliesATransfer_HappyPath does, because the provider does not adopt
 // the consumer YDB would create. The tables and the changefeed are applied
-// first, as that test applies them; TestHostCreatesATransferAfterItsChangefeed_HappyPath
-// plans a transfer and its changefeed in one run.
+// first, as that test applies them: the transfer planner orders a creation
+// after its table but not after the changefeed whose topic it reads, which
+// another planning service adds.
 func TestHostGrantsOnATransfer_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
