@@ -218,6 +218,9 @@ reports the defaults of every supported line.
 | `secrets` | `EnableSchemaSecrets` | `false` through 25.3, `true` from 25.4 |
 | `vector_indexes` | `EnableVectorIndex` | `false` on 25.1, `true` from 25.2 |
 | `full_text_indexes` | `EnableFulltextIndex` | `false` through 26.1, `true` from 26.2 |
+| `local_bloom_indexes` | `EnableLocalBloomFilterIndex` | `false` through 26.1, `true` from 26.2 |
+| `local_ngram_indexes` | `EnableLocalBloomNgramFilterIndex` | `false` through 26.1, `true` from 26.2 |
+| `local_min_max_indexes` | `EnableLocalMinMaxIndex` | `false` on every line from 25.1 to 26.2 |
 
 The release line alone decides the other vector capabilities, as the host's
 line presets name them: `vector_index_maintained_on_write` from 25.3 (an index
@@ -357,7 +360,9 @@ refused (`UNSUPPORTED`), and a missing command or an unreachable daemon is
 Execution sends native SQL units through YDB's query service. A batch is checked
 before its first unit runs. Unsupported native envelopes refuse the whole batch.
 SQL units use a pinned connection; native coordination, table creation and table alteration units
-use their native services. Dispatched writes are not retried.
+use their native services. Dispatched writes are not retried, except a
+changefeed statement YDB refused because another schema operation held the
+table's path (see [Changefeeds](#changefeeds)).
 Request IDs correlate calls and do not provide exactly-once execution.
 
 Results distinguish a confirmed prefix from an uncertain remainder. A
@@ -568,6 +573,13 @@ can name a cluster-managed group, but cannot declare self-membership or make a
 principal a member of a declared user. Inspection preserves every observed
 membership, including edges whose principals are outside the managed role list.
 
+A user's password is set when the user is created, from a YAML or Go
+declaration, and is never read back: a declaration that names another password
+plans nothing, as the host's embedded engine plans it. The statement holds the
+password in plain text below a warning, as the host's engine writes it; a
+declared password hash (`CREATE USER ... HASH`) keeps the password out of the
+plan.
+
 `schema.common-access` (contract 25.5) carries independently covered owners and
 memberships. An owner's login state is optional: unknown remains unknown,
 including when the server refuses its principal views. Principal queries read
@@ -590,7 +602,12 @@ entry a new secret gets for every subject whose effective permissions on the
 secret's directory carry that permission.
 
 Mixed plans check captured native state before changing its access. A native
-alteration precedes grants, revocations, and principal changes. A final native
+alteration precedes grants, revocations, and principal changes. A grant or a
+revocation on a directory changes the directory's access list and occupies no
+path, so the native planners leave it out of their path checks; a native
+creation in that directory, or below it, comes first, because creating the
+object creates a missing directory and YDB grants nothing on a path that holds
+nothing. A final native
 drop accounts for matching revocations by removing the object's access; a
 temporary external-table drop keeps revocations after restoration. These plans
 require the negotiated `planning.lifecycle` feature. Workload operations retain
@@ -974,9 +991,24 @@ coordination_node "app" "limits" {
 ```
 
 A `ptah:not-described coordination_node` header entry, with a node's path or
-none, is the one header kind the engine declares; the host applies it to the
-document's claim, and the provider refuses a name no node can take with the
-host's words. A host that does not list the feature reads no such block.
+none, is the one header kind the engine declares, and the provider refuses a
+name no node can take with the host's words. With `source.limits` negotiated,
+the document's claim leaves the node it names, or every node, unmanaged. A host
+that does not list `source.hcl` reads no such block.
+
+A Go source carries the same entries as `ptah:schema:notdescribed`
+declarations, under `source.limits`, of the kinds the engine lists in
+`go_header_kinds`: `coordination_node`, `streaming_query`, `resource_pool`,
+`resource_pool_classifier`, `secret`, `topic`, `external_data_source`,
+`external_table`, `replication` and `transfer`. An entry without a name leaves
+the kind unmanaged; one with a name, written as a YQL header names it, leaves
+that object unmanaged. A source that declares an object it also leaves
+unmanaged is refused.
+
+```go
+//ptah:schema:notdescribed kind="topic" reason="not-inspected" provenance="observed"
+type PtahSchemaObjects struct{}
+```
 
 `EncodeSource` (`source.encode`, ADR 0037, and `source.encode-groups`, ADR
 0040) writes desired values back as the keys, directives and blocks this
@@ -1016,8 +1048,25 @@ host's embedded engine does; its other YDB settings are losses. The parts are
 decoded again before they are returned, and a value they do not give back is a
 loss. A value that needs several declarations is a loss for a host that does not
 negotiate `source.encode-groups`. `struct_name` is written in YAML alone.
-Incomplete kind or subject coverage refuses the export, because these fragments
-cannot preserve that knowledge.
+
+A source claims every model its format lists, completely. An export of a read
+is complete for the selection it is applied to, as the host's embedded YDB
+engine writes it: a host that writes a read narrowed by `--schemas` sends each
+kind the read knew in every directory it listed as complete. Applied back over
+that directory, the export plans nothing, and an object whose declaration is
+removed from it is dropped; applied over more directories, it drops their
+objects too. What the request does not know is written as not-described
+entries, so that the source read back claims no more than that: a kind no
+directory of the read knew, or one the read knew less in some directory, is
+left unmanaged as a whole, since a header cannot name a directory, with
+`reason="not-inspected" provenance="observed"`. An object whose own knowledge
+is not complete gets an entry that names it. A facet is known where its table
+is, so a table the export declares carries its facets as the read holds them,
+and a declared table whose facet knowledge is not complete refuses the export.
+Knowledge left unmanaged by a source's own entry is passed on with
+`provenance="declared"`. YAML writes no header, and neither does a format for a
+host that does not negotiate `source.limits`, so there such knowledge refuses
+the export, as does a kind no entry names.
 
 The subprocess tests exercise decoding, encoding, normalization, and
 representation conversion without a database address; a YQL schema declares
@@ -1205,12 +1254,36 @@ key column in a column table, and a Go field marked primary is nullable unless
 it says `not_null`. The table is read back from the table service and the
 monitoring endpoint and must hold the declared columns and key, the declared
 hash key or, without one, the whole key, the declared shard count, the declared
-TTL and no local index. A creation in a session whose address names no
-monitoring endpoint is refused before anything is written. A tier that moves
+TTL and the declared local indexes. A creation in a session whose address names
+no monitoring endpoint is refused before anything is written. A tier that moves
 rows needs the `tiered_ttl` capability, which a session reads from
 `EnableTieringInColumnShard`; without it the plan is refused with the reason.
-Column defaults, Serial columns, column families, indexes, local indexes and a
-data channel count other than the server's 64 are refused.
+Column defaults, Serial columns, column families, global indexes and a data
+channel count other than the server's 64 are refused. A TTL column has to be
+first in the key: the host's embedded engine also takes one later in the key
+that a min_max local index reads, which 26.2.1.14 refuses with the index in
+place (`Haven't MAX-index for TTL column and TTL column is not first column in
+primary key`), so the provider refuses it before a statement is sent.
+
+Local indexes. The column-storage facet states a column table's local indexes
+as its read describes them: a `bloom` (`bloom_filter`), an `ngram`
+(`bloom_ngram_filter`) or a `minMax` (`min_max`) index, each over one column,
+with its settings. A setting the declaration leaves out is the server's
+default: a probability of 0.1, an n-gram size of 3 and case-sensitive
+matching. The storage YDB places an index in is not part of a declaration, and
+the comparison leaves it out, since YDB describes an index created with its
+table in other storage than one added later. An index reads one column
+(26.2.1.14 answers `Local bloom index on column tables requires exactly one
+index column`, where the host's embedded engine takes several for a bloom
+index), an n-gram index a `Utf8` one, an n-gram size is 3 to 8, and a
+probability gives at most 8 n-gram hashes, as that engine requires. Each kind
+needs its capability (see [Feature flags](#feature-flags)); 25.1 has no local
+index grammar at all (`local: alternative is not implemented yet`). A new
+table's local indexes are written inside its CREATE TABLE, as ``INDEX `bf`
+LOCAL USING bloom_filter ON (`body`) WITH (false_positive_probability =
+0.01)``, every setting named. No Go or YAML source declares a local index yet: the host turns
+an index directive into a common index, whose model has no place for the
+settings, and the provider refuses the settings where it decodes them.
 
 Comparison and planning. The comparison `ydb-row-table-properties` compares the
 column-storage facet of a table that exists on both sides, and reports a
@@ -1224,9 +1297,29 @@ creates the table and copies no column table into a new one, so the planner
 refuses each of these changes with the host's words (`changing between row and
 column storage requires an explicit data migration`, `changing a column
 table's hash key or shard count requires an explicit data migration`, with both
-values; `column-table rebuilds require an explicit data migration`). A change of
-its local indexes and any column step of a column table are refused as not
-planned yet.
+values; `column-table rebuilds require an explicit data migration`). A column step of
+a column table is refused as not planned yet.
+
+The local indexes are managed when the declaration states at least one: an
+index the table holds and the declaration leaves out is dropped, and a
+declaration that states none leaves the table's own alone, since no other
+source declares them. Each change is one step in the lifecycle phase,
+`column-table-add-local-index/N` or `column-table-drop-local-index/N`, of the
+operation kind `column-table-local-index-operation`, running `ALTER TABLE ...
+ADD INDEX ... LOCAL USING ...` or `ALTER TABLE ... DROP INDEX ...` through the
+query service. An index whose kind, column or settings differ is dropped and
+added again under its name, the removal first, and a renamed index is dropped
+under its old name and added under its new one, as the host's embedded engine
+plans both on a target without `index_rename`, which this provider never
+reports. 26.2.1.14 also renames a local index (`RENAME INDEX`) and changes its
+probability in place (`ALTER INDEX ... SET (false_positive_probability = ...)`),
+which neither engine plans. Only an index a plan adds needs its capability.
+Execution reads the table from the table service and the monitoring endpoint
+and refuses before it writes when the table holds an index of the name to add,
+lacks its column or holds it with another type than an n-gram index reads, or
+holds the index to drop otherwise than the plan captured it; after the call it
+requires the added index to read back as requested or the dropped one to be
+gone, and every other local index, the layout and the TTL to be unchanged.
 
 The TTL changes in place, as the host's embedded engine changes it: `ALTER
 TABLE ... RESET (TTL)` removes the TTL the table holds and `ALTER TABLE ... SET
@@ -1759,9 +1852,23 @@ assesses every replication the plan keeps, and refuses a table the plan
 creates at the path of a live replica, and a failed-over replica the plan drops
 while the schema keeps the replication. A creation names its replica paths as created and a drop of a running
 replication with `CASCADE` names them as dropped, so each step is ordered
-against the common steps at those paths; a transfer reads its table and a local
-topic. A drop of a failed-over replication runs without `CASCADE` and keeps its
-tables. The provider never pauses, resumes or fails over an object.
+against the common steps at those paths. A replication of this database also
+reads its source tables, so it is created after a table the plan creates and
+dropped before one the plan drops: a replication created before its source
+creates no replica. A transfer reads its table and, at a local source, the
+topic or the changefeed of a table. It names the changefeed as the changefeed
+planner does, so the host creates it after a changefeed the plan adds; a
+dropped transfer names the topic by the topic's identity rather than its path,
+so the drop comes before the topic's even where the plan creates another object
+at that path. A drop of a failed-over replication runs without `CASCADE` and
+keeps its tables. The provider never pauses, resumes or fails over an object.
+
+A grant names a replication or a transfer by its directory and name
+(`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
+path. The planner puts a GRANT or a REVOKE after the creation or the change of
+its object, and a drop replaces the REVOKE the host planned, since YDB drops an
+object's access list with it and a REVOKE after the drop would name a path that
+is gone. A change in place, such as a new lambda, keeps the entries.
 
 A grant names a replication or a transfer by its directory and name
 (`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
@@ -1980,7 +2087,13 @@ Execution reads the table and each changefeed's topic before the first
 statement and refuses a changefeed that changed since the plan read it; it runs
 each statement once and reads the table back, requiring each declared
 changefeed with its topic's retention and consumers, or a removed one's
-absence. An unconfirmed result is UNKNOWN and is never retried. A changefeed
+absence. The one statement that runs again is one YDB refuses because another
+schema operation holds the table's path (OVERLOADED, `path ... has been locked
+by tx` or `path is under operation`), which changed nothing: a changefeed added
+with an initial scan holds the path until the scan has read every row, so the
+next statement waits, 50 ms at first and up to a second between attempts,
+until it runs or the request's context ends. Any other unconfirmed result is
+UNKNOWN and is never retried. A changefeed
 operation has no TEXT form yet, so a host that writes a migration file is
 refused with `NO_TEXT_FORM`.
 
@@ -2887,7 +3000,9 @@ carry is refused by name, with no partial reading:
   of a table in a SQL schema reading, and a changefeed is one. A YQL source
   therefore leaves the changefeeds of its tables as they are; declare them in
   YAML or Go;
-- a user's password;
+- a user's password: the reply's role carries none, so the host would create
+  the user without it; a YAML or Go declaration carries the password, which
+  the host sets when it creates the user;
 - a grant on a resource pool whose name holds a dot, a quote or a bracket: Ptah
   names a pool it reads from a provider as it names a table, so the grant
   would come back on a renamed pool.

@@ -420,9 +420,10 @@ func coordinationIntent(spec ydbdecl.CoordinationNode) schema.CoordinationIntent
 	return intent
 }
 
-// limitedKinds are the header kinds a load's claim can be limited by, with
-// the model each limits, how a limit names an object of it, and the reason a
-// limit of the whole kind gives.
+// limitedKinds are the header kinds a load's or a source's claim can be
+// limited by, with the model each limits, how a limit names an object of it,
+// and the reason a limit of the whole kind gives. A YQL load claims no async
+// replication or transfer, so their limits change only a source's claim.
 var limitedKinds = map[string]struct {
 	model  string
 	path   func(string) (string, string)
@@ -470,7 +471,7 @@ func claim(limits []*protocol.SchemaCoverageLimit) (*protocol.ModelCoverage, *Re
 		seen[key] = true
 		owner := &protocol.Reference{Engine: "ydb", Kind: kind.model, Schema: schemaName, Name: name}
 		subjects = append(subjects, &protocol.ModelSubjectCoverage{Kind: kind.model, Subject: owner, NormalizedSubject: proto.CloneOf(owner),
-			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "the source leaves this object unmanaged"}})
+			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: unmanagedObject}})
 	}
 	for _, model := range ClaimedModels() {
 		knowledge := &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}

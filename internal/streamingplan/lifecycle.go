@@ -43,6 +43,11 @@ func (b *lifecycleBuilder) add(prefix string, subject *protocol.ComparisonIdenti
 		}
 		metadata.Effects = append(metadata.Effects, access.Effects...)
 		b.contribution.Dependencies = append(b.contribution.Dependencies, access.Dependencies...)
+		below, err := objectplan.AfterCreationBelowDirectoryAccess(b.request, action, subject, id)
+		if err != nil {
+			return nil, err
+		}
+		b.contribution.Dependencies = append(b.contribution.Dependencies, below...)
 		// Streaming preconditions contain only the persistent query settings.
 		// Principal edits do not change that capture; matching access writes
 		// still follow the query operation through OrderAccess.

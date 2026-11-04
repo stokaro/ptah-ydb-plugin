@@ -84,6 +84,18 @@ func (a Answer) Aborted() bool {
 	return a.Status == Ydb.StatusIds_ABORTED
 }
 
+// PathBusy reports an answer that says another schema operation holds the
+// path a schema statement acts on, such as the initial scan of a changefeed
+// added to the table a moment before: OVERLOADED, naming the path as under
+// operation or as locked by the operation's transaction (`path ... has been
+// locked by tx`). YDB refuses the statement before it starts, so it changed
+// nothing and may run again once that operation is done.
+func (a Answer) PathBusy() bool {
+	return a.Status == Ydb.StatusIds_OVERLOADED && slices.ContainsFunc(a.Issues, func(issue string) bool {
+		return strings.Contains(issue, "path is under operation") || strings.Contains(issue, "has been locked by tx")
+	})
+}
+
 // Message is the answer's issues on one line, or fallback when YDB attached
 // none.
 func (a Answer) Message(fallback string) string {

@@ -99,6 +99,12 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.ColumnTTLStatement(path, alteration), nil
+	case tablecreate.ColumnLocalIndexOperationKind:
+		alteration, err := tablecreate.ColumnLocalIndexAlteration(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.ColumnLocalIndexStatement(path, alteration), nil
 	case tablecreate.DropOperationKind:
 		if _, err := tablecreate.DecodeDrop(value); err != nil {
 			return "", err

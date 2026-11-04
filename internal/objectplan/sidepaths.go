@@ -39,6 +39,10 @@ func sidePaths(request *protocol.PlanFeaturesRequest, family Family, item change
 		edges = append(edges, &protocol.PlanningDependency{Before: proto.CloneOf(before), After: proto.CloneOf(after)})
 	}
 	for _, path := range paths {
+		if path.Subject != nil {
+			effects = append(effects, &protocol.PlanningEffect{Subject: proto.CloneOf(path.Subject), Action: path.Action})
+			continue
+		}
 		subject := PathSubject(path.Schema, path.Name)
 		if samePath(subject, item.input.Subject) {
 			continue

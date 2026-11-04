@@ -36,16 +36,17 @@ func ColumnModel() *protocol.ValueModel { return proto.CloneOf(columnOperationMo
 func buildColumnOperationModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": ColumnOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
-		"message":      string((&native.ColumnTableCreation{}).ProtoReflect().Descriptor().FullName()),
-		"columns":      "distinct names, exact native storage types and an explicit matching notNull; no family, default, compression or encoding; key columns are not null",
-		"keys":         "ordered nonempty distinct existing columns; hash columns, when stated, are distinct key columns; without them YDB hashes by the whole key",
-		"shards":       "a stated count of at least 1 that fits 32 bits; without one YDB chooses",
-		"ttl":          "absent for none, or tiers that grow strictly, of which only the last may delete and every other moves rows to an external data source named by its absolute path; the column is declared, first in the key, and of a type the mode reads: a date type without a unit, Uint32, Uint64 or DyNumber with one",
-		"render":       "YQL CREATE TABLE ... PARTITION BY HASH (...) WITH (STORE = COLUMN, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = n, TTL = ...), as the host's embedded engine writes it; the native CreateTable call writes another hash function (HASH_FUNCTION_MODULO_N), which the host does not read",
-		"execution":    "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
-		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root ptah_locks is reserved; the session must name the monitoring endpoint, which the confirmation reads",
-		"confirmation": "read the table service's and the monitoring endpoint's descriptions back: the columns in order with their types and nullability, the key, the hash key the request states or the whole key, the shard count the request states, the TTL and no local index",
-		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
+		"message":       string((&native.ColumnTableCreation{}).ProtoReflect().Descriptor().FullName()),
+		"columns":       "distinct names, exact native storage types and an explicit matching notNull; no family, default, compression or encoding; key columns are not null",
+		"keys":          "ordered nonempty distinct existing columns; hash columns, when stated, are distinct key columns; without them YDB hashes by the whole key",
+		"shards":        "a stated count of at least 1 that fits 32 bits; without one YDB chooses",
+		"ttl":           "absent for none, or tiers that grow strictly, of which only the last may delete and every other moves rows to an external data source named by its absolute path; the column is declared, first in the key, and of a type the mode reads: a date type without a unit, Uint32, Uint64 or DyNumber with one",
+		"local_indexes": "distinct names, each over one declared column, of kind bloom_filter, bloom_ngram_filter over a Utf8 column, or min_max, with every setting named and no storage; an n-gram size from 3 to 8 and a probability that gives at most 8 n-gram hashes",
+		"render":        "YQL CREATE TABLE ... (columns, PRIMARY KEY (...), INDEX `name` LOCAL USING kind ON (`column`) WITH (...)) PARTITION BY HASH (...) WITH (STORE = COLUMN, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = n, TTL = ...), as the host's embedded engine writes it; the native CreateTable call writes another hash function (HASH_FUNCTION_MODULO_N), which the host does not read",
+		"execution":     "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
+		"precondition":  "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root ptah_locks is reserved; the session must name the monitoring endpoint, which the confirmation reads",
+		"confirmation":  "read the table service's and the monitoring endpoint's descriptions back: the columns in order with their types and nullability, the key, the hash key the request states or the whole key, the shard count the request states, the TTL and the local indexes the request states, each as stated",
+		"database":      "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
 		panic(err)
@@ -70,7 +71,8 @@ func IsColumnTable(table *protocol.DeclaredTable) bool {
 // CompileColumnTable compiles a column table's declaration into its creation.
 // The result has no path: execution binds it after checking the captured
 // owner. A declaration CREATE TABLE cannot carry, or that YDB refuses only
-// after the statement runs, is refused.
+// after the statement runs, is refused. Planning holds each local index of a
+// creation to the target's capabilities.
 func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[string]bool) (*native.ColumnTableCreation, error) {
 	if err := validateOwner(owner); err != nil {
 		return nil, err
@@ -103,11 +105,15 @@ func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable
 	if count := captured.storage.DataChannelCount; count != 0 && count != 64 {
 		return nil, unsupported("a column table's data channel count is set by the server; the provider creates tables with its 64")
 	}
-	if len(captured.storage.LocalIndexes) != 0 {
-		return nil, unsupported("the local indexes of a column table are not created by the provider yet")
-	}
 	if err := compileColumnTableColumns(result, table, captured, caps); err != nil {
 		return nil, err
+	}
+	types := creationTypes(result)
+	for _, index := range captured.storage.LocalIndexes {
+		if reason := localIndexShapeRefusal(index, types); reason != "" {
+			return nil, unsupported("%s", reason)
+		}
+		result.LocalIndexes = append(result.LocalIndexes, ResolvedLocalIndex(index))
 	}
 	if err := ValidateColumnTableCreation(result); err != nil {
 		return nil, err
@@ -188,10 +194,13 @@ func validateColumnTableColumn(column *protocol.DeclaredColumn, settings *native
 
 // ValidateColumnTableCreation holds a creation to what CREATE TABLE writes and
 // YDB keeps, so a refusal comes before the statement runs: a key of NOT NULL
-// declared columns, hash columns among the key columns, and a TTL whose column
-// is declared, first in the key (the host's rule: a later key column needs a
-// local min_max index, which the provider does not create) and of a type its
-// mode reads.
+// declared columns, hash columns among the key columns, local indexes a column
+// table takes, and a TTL whose column is declared, first in the key and of a
+// type its mode reads. The host's embedded engine also takes a TTL on a later
+// key column that a local min_max index reads, which 26.2.1.14 refuses with the
+// index in place, in CREATE TABLE and in ALTER TABLE ... SET (TTL) alike:
+// `Haven't MAX-index for TTL column and TTL column is not first column in
+// primary key`.
 func ValidateColumnTableCreation(creation *native.ColumnTableCreation) error {
 	if err := schema.Known(creation); err != nil {
 		return err
@@ -240,6 +249,17 @@ func ValidateColumnTableCreation(creation *native.ColumnTableCreation) error {
 	if creation.Partitions > 1<<32-1 {
 		return fmt.Errorf("column shard count exceeds a 32-bit integer")
 	}
+	if err := schema.ValidateDeclaredLocalIndexes(creation.LocalIndexes); err != nil {
+		return err
+	}
+	for _, index := range creation.LocalIndexes {
+		if !proto.Equal(index, ResolvedLocalIndex(index)) {
+			return fmt.Errorf("a column table's creation names every setting of each local index and no storage")
+		}
+		if reason := localIndexShapeRefusal(index, types); reason != "" {
+			return unsupported("%s", reason)
+		}
+	}
 	if creation.Ttl == nil {
 		return nil
 	}
@@ -262,12 +282,25 @@ func ValidateColumnTableCreation(creation *native.ColumnTableCreation) error {
 		return unsupported("the TTL reads column %q, which the table does not declare", enabled.Column)
 	}
 	if creation.PrimaryKey[0] != enabled.Column {
-		return unsupported("TTL column %q must be first in the primary key or have a LOCAL min_max index", enabled.Column)
+		return unsupported("TTL column %q must be first in the primary key: YDB refuses one later in the key whatever local index reads it (`Haven't MAX-index for TTL column and TTL column is not first column in primary key`)", enabled.Column)
 	}
 	if reason := TTLColumnRefusal(enabled.Column, ydbType, enabled.ColumnUnit != 0); reason != "" {
 		return unsupported("the TTL %s", reason)
 	}
 	return nil
+}
+
+// creationTypes maps each column of a valid creation to its type, as
+// schema.ColumnType spells it without its optional wrapper.
+func creationTypes(creation *native.ColumnTableCreation) map[string]string {
+	types := make(map[string]string, len(creation.Columns))
+	for _, column := range creation.Columns {
+		spelling, _, err := schema.ColumnType(column.Type)
+		if err == nil {
+			types[column.Name] = spelling
+		}
+	}
+	return types
 }
 
 // MovesRows reports whether a column table's TTL moves rows to an external data
@@ -370,7 +403,7 @@ func decodeColumnTable(payload []byte) (*native.ColumnTableCreation, error) {
 // ColumnTableStatement writes the CREATE TABLE statement for a creation at an
 // absolute path, in the form the host's embedded engine writes:
 //
-//	CREATE TABLE `path` (`c` Type NOT NULL, ..., PRIMARY KEY (`k`))
+//	CREATE TABLE `path` (`c` Type NOT NULL, ..., PRIMARY KEY (`k`), INDEX `i` LOCAL USING ...)
 //	PARTITION BY HASH (`h`) WITH (STORE = COLUMN, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = n, TTL = ...)
 //
 // Intervals are written in seconds. The creation must be valid.
@@ -385,6 +418,9 @@ func ColumnTableStatement(path string, creation *native.ColumnTableCreation) str
 		lines = append(lines, line)
 	}
 	lines = append(lines, "PRIMARY KEY ("+quoteList(creation.PrimaryKey)+")")
+	for _, index := range creation.LocalIndexes {
+		lines = append(lines, LocalIndexClause(index))
+	}
 	statement := "CREATE TABLE " + QuoteIdentifier(path) + " (\n    " + strings.Join(lines, ",\n    ") + "\n)"
 	if len(creation.HashColumns) != 0 {
 		statement += " PARTITION BY HASH (" + quoteList(creation.HashColumns) + ")"

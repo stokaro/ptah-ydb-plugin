@@ -97,7 +97,7 @@ func TestColumnTablePlan_TTLChange_HappyPath(t *testing.T) {
 			}
 			c.Assert(plan.Contributions[0].Dependencies, qt.HasLen, test.dependencies)
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, len(test.steps))
-			c.Assert(plan.Parents[0].Receipt.Strategy, qt.Matches, `Reset the column table's TTL and set the declared one .*`)
+			c.Assert(plan.Parents[0].Receipt.Strategy, qt.Matches, `Drop and add the column table's local indexes, and reset its TTL and set the declared one, .*`)
 			c.Assert(proto.Equal(request, original), qt.IsTrue)
 		})
 	}
@@ -136,7 +136,7 @@ func TestColumnTablePlan_TTLChange_FailurePath(t *testing.T) {
 		{"a tiered TTL on a target without tiering", `{"ttl":` + tiered + `}`,
 			`table "app/records" declares a TTL tier that moves rows to an external data source, which requires target capability tiered_ttl, unavailable on this ydb target .*`},
 		{"a TTL on a later key column", `{"ttl":{"enabled":{"column":"id","columnUnit":"1","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`,
-			`TTL column "id" must be first in the primary key or have a LOCAL min_max index`},
+			`TTL column "id" must be first in the primary key: YDB refuses one later in the key whatever local index reads it .*`},
 		{"a TTL on an undeclared column", `{"ttl":{"enabled":{"column":"gone","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`,
 			`the TTL reads column "gone", which the table does not declare`},
 	} {

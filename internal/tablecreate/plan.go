@@ -73,10 +73,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	names := requestTableNames(request)
 	var alterations []alteration
 	// columnAlterations are the column tables the request alters. Each holds
-	// what the declaration asks for, or differs from it in its TTL alone, since
-	// every other change is refused. columnTTLs are the TTL changes.
+	// what the declaration asks for, or differs from it in its local indexes
+	// and its TTL alone, since every other change is refused. columnChanges
+	// are those changes.
 	var columnAlterations []int
-	var columnTTLs []columnTTLStep
+	var columnChanges []columnTableStep
 	for i, table := range request.Tables {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -153,7 +154,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("YDB table creation targets another database")
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			column, reason, columnTTL, err := planColumnAlteration(owner, table, request.CommonSteps, request.Capabilities)
+			column, reason, columnChange, err := planColumnAlteration(owner, table, request.CommonSteps, request.Capabilities)
 			if err != nil {
 				return nil, err
 			}
@@ -167,8 +168,8 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 					}
 				}
 				columnAlterations = append(columnAlterations, i)
-				if columnTTL != nil {
-					columnTTLs = append(columnTTLs, columnTTLStep{index: i, table: table, owner: owner, change: *columnTTL})
+				if columnChange != nil {
+					columnChanges = append(columnChanges, columnTableStep{index: i, table: table, owner: owner, change: *columnChange})
 				}
 				continue
 			}
@@ -286,6 +287,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			}
 			if reason := tieredTTLRefusal(request.Capabilities, fmt.Sprintf("column table %q", tableLabel(owner)), created.Ttl); reason != "" {
 				return refused(i, reason), nil
+			}
+			for _, index := range created.LocalIndexes {
+				if reason := localIndexCapabilityRefusal(index, request.Capabilities); reason != "" {
+					return refused(i, reason), nil
+				}
 			}
 		}
 		feeds, reason, err := plannedCreationChangefeeds(owner, table.Desired, request.Capabilities)
@@ -538,9 +544,10 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		receiptSteps[item.index] = ordered
 	}
-	slices.SortFunc(columnTTLs, func(a, b columnTTLStep) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	for number, item := range columnTTLs {
-		steps, dependencies, err := item.plan(number)
+	slices.SortFunc(columnChanges, func(a, b columnTableStep) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
+	var localIndexes localIndexNumbers
+	for number, item := range columnChanges {
+		steps, dependencies, err := item.plan(number, &localIndexes)
 		if err != nil {
 			return refused(item.index, err.Error()), nil
 		}
@@ -626,9 +633,10 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		strategy := "Create the complete captured row table through the native table service, then add its changefeeds with YQL's ALTER TABLE through the query service"
 		if slices.Contains(columnAlterations, i) {
-			strategy = "The column table already holds the declared storage: its kind, its hash key and its shard count are fixed when YDB creates it, and its TTL is the declared one"
+			strategy = "The column table already holds the declared storage: its kind, its hash key and its shard count are fixed when YDB creates it, and its local indexes and its TTL are the declared ones"
 			if len(receiptSteps[i]) != 0 {
-				strategy = "Reset the column table's TTL and set the declared one with YQL's ALTER TABLE through the query service; its kind, its hash key and its shard count are fixed when YDB creates it and already match"
+				strategy = "Drop and add the column table's local indexes, and reset its TTL and set the declared one, with YQL's ALTER TABLE through the query service; " +
+					"its kind, its hash key and its shard count are fixed when YDB creates it and already match"
 			}
 		}
 		if table.Action == protocol.PlanningTable_DROP {
