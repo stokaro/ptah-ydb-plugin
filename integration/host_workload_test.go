@@ -56,11 +56,15 @@ func TestHostAppliesResourcePools_HappyPath(t *testing.T) {
 			c.Cleanup(func() {
 				cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
 				defer cancel()
+				// The table goes first: classifier a routes every query to the
+				// pool, so once the pool is dropped a query may fail until the
+				// workload manager's cache lets go of the classifier.
+				c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+database+"/"+directory+"/items`"), qt.IsNil)
 				for _, name := range []string{first, second} {
 					_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL CLASSIFIER `"+name+"`")
 				}
 				_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL `"+poolName+"`")
-				c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+database+"/"+directory+"/items`"), qt.IsNil)
+				c.Check(awaitPoolRouting(cleanup, opened.DB), qt.IsNil)
 			})
 			replacer := strings.NewReplacer("{dir}", directory, "{pool}", poolName, "{a}", first, "{b}", second,
 				"{low}", strconv.FormatInt(low, 10), "{high}", strconv.FormatInt(high, 10))

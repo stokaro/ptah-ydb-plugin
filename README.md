@@ -1117,7 +1117,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | --- | --- |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
-| Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. A vector or full-text index is created and changed from the native index set (see [Vector and full-text indexes](#vector-and-full-text-indexes)), which no Go or YAML source writes yet, and neither does a pgvector operator class (`ops`) on a source index. |
+| Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. The index set model takes an index's partitioning and read replicas, and the planner changes them on an index the table holds (see [Index alteration](#index-alteration)). A vector or full-text index is created and changed from the native index set (see [Vector and full-text indexes](#vector-and-full-text-indexes)). No Go or YAML source writes either into the index set yet, and neither does a pgvector operator class (`ops`) on a source index. |
 
 A table is managed for its TTL when its source states table properties for it,
 or when the host reports complete knowledge of the table properties of the
@@ -2230,7 +2230,8 @@ creation: a new table takes its global indexes from the common declaration.
 Access requirements, temporary tables, changefeeds, column
 compression or encoding, and richer common constraints are refused.
 Removal and rebuild are described below, and alteration covers column
-families, the addition and removal of columns, the TTL and the automatic partitioning settings (see below). An unknown populated
+families, the addition and removal of columns, the TTL, the automatic partitioning settings, the read replicas, the key bloom filter, and
+the partitioning and read replicas of an index (see below). An unknown populated
 field cannot disappear during compilation. A mixed SQL/native batch is validated
 before its first unit executes.
 
@@ -2426,9 +2427,11 @@ inside the selected database or dev realm.
 
 The same planning service (`ydb-row-table-create`) accepts captured ALTER
 lifecycles for row tables. It owns five facets of an altered table: its column
-families, the addition and removal of its columns, its TTL, its automatic
-partitioning settings, and its global secondary indexes. Each becomes native
-AlterTable calls. Everything else about an altered table stays with the host:
+families, the addition and removal of its columns, its TTL, its settings (the
+automatic partitioning, the read replicas and the key bloom filter), and its
+global secondary indexes with their partitioning and read replicas. Each
+becomes native AlterTable calls, except the settings of an index, which the
+native call cannot state and YQL's `ALTER INDEX` changes. Everything else about an altered table stays with the host:
 other table settings, and any column step the native call cannot state. The
 service also plans the changefeeds of a new or an altered table (see
 [Changefeeds](#changefeeds)).
@@ -2522,12 +2525,14 @@ table holds afterward (`set_ttl_settings`) or removes it
   are not session capabilities of this provider. The host keeps refusing a TTL
   its target cannot write.
 
-### Partitioning settings
+### Partitioning settings, read replicas and key bloom filter
 
-The service changes the automatic partitioning settings of an existing row
-table with one native `AlterTable` step, `row-table-partitioning/N`. The step
-carries only the settings that change, and also the whole partitioning the table
-held when the plan was made. The settings are `AUTO_PARTITIONING_BY_SIZE`,
+The service changes the automatic partitioning settings, the read replicas and
+the key bloom filter of an existing row table with one native `AlterTable`
+step, `row-table-partitioning/N`, as the host's embedded engine changes them
+with one `ALTER TABLE ... SET`. The step carries only the settings that change,
+and also the value the table held for each group it changes: the whole
+partitioning, the filter, or the replicas. The settings are `AUTO_PARTITIONING_BY_SIZE`,
 `AUTO_PARTITIONING_BY_LOAD`, `AUTO_PARTITIONING_PARTITION_SIZE_MB`,
 `AUTO_PARTITIONING_MIN_PARTITIONS_COUNT` and
 `AUTO_PARTITIONING_MAX_PARTITIONS_COUNT`, which the declaration spells
@@ -2556,11 +2561,23 @@ held when the plan was made. The settings are `AUTO_PARTITIONING_BY_SIZE`,
   disabled partitioning by size is refused too: the server turns partitioning by
   size on when a size is set, so the declaration has to state both.
 - When the step switches partitioning by size on, it names every setting the
-  declaration states, because the server resets the size and the minimum count
-  the call leaves out.
+  table keeps: the ones the declaration states and the held value of the others.
+  The server resets the size and the minimum count the call leaves out, so a
+  minimum nobody declared would otherwise drop to 1. The size the table takes is
+  2048 MB unless the declaration states one, and the TEXT form names it.
+- `keyBloomFilter` takes `ENABLED` or `DISABLED`. A table that reports the filter
+  as unspecified keeps none, so a declared `DISABLED` matches it (measured on
+  25.1.4.7 and 26.2.1.14 by the host's embedded engine).
+- `readReplicasSettings` takes `perAzReadReplicasCount` or
+  `anyAzReadReplicasCount`. A count of zero in either mode is no replicas, and a
+  table that holds some loses them through `PER_AZ:0`, since YDB has no reset
+  for them. Replicas the declaration leaves out stay.
+- Setting one of the three groups resets nothing of the others, so the step
+  names a filter or replicas only where they change. Execution confirms that
+  the groups the step does not name read back as they were.
 - Impact is behavioral: the settings decide when YDB splits and merges
-  partitions. The step reads the table and alters its partitioning only, and does
-  not depend on the family, column or TTL steps.
+  partitions and where it serves reads. The step reads the table and alters its
+  settings only, and does not depend on the family, column or TTL steps.
 
 ### Index alteration
 
@@ -2604,10 +2621,10 @@ that table itself.
   a rebuild is wanted.
 - The rules above are those of global sync, async and unique indexes. A vector
   or full-text index follows its own (see
-  [Vector and full-text indexes](#vector-and-full-text-indexes)). An index that
-  states settings of its own (such as the partitioning of its table) is refused
-  by name when the plan would have to add it, drop it or tell it from the held
-  one.
+  [Vector and full-text indexes](#vector-and-full-text-indexes)). An index to
+  add that states its partitioning or read replicas is refused by name: the step
+  that adds it carries none, so add the index first and declare its settings in
+  a later plan.
 - A unique index needs a server that accepts `ALTER TABLE ... ADD INDEX ...
   GLOBAL UNIQUE`; YDB 25.1 refuses it unless `enable_add_unique_index` is set.
 - An index reads columns the declaration states. A declared index that reads a
@@ -2619,6 +2636,18 @@ that table itself.
   not name its column is assumed to remove any column. Execution reads the
   indexes of the table before dropping a column as well, so a column an index
   still reads is refused before the call.
+- The partitioning and the read replicas of an index the table holds, stated in
+  the `settings` of its global kind, change in place with one step,
+  `row-table-index-settings/N`, that reads the table and alters the index. It
+  runs `ALTER TABLE ... ALTER INDEX ... SET (...)` through the query service, as
+  the host's embedded engine writes it, because the native AlterTable call has
+  no field for an index's settings. The rules are the table's: a setting the
+  declaration leaves out keeps what the index holds, the statement names every
+  partitioning setting the index ends with when the partitioning changes, and
+  replicas declared as none are written as `PER_AZ:0`. A starting layout and
+  partition columns are refused by name. The server describes an index's
+  settings on the index itself (measured on 25.1.4.7 and 26.2.1.14), and the
+  comparison reads them there. Impact is behavioral.
 - YDB builds a new index in the background. The provider waits for the index to
   read back as ready, bounded by ten minutes, before it confirms the step.
   Inspection refuses an index that is not ready, so a table with an index in
@@ -2693,10 +2722,12 @@ column or a partitioning column; the server refuses each of those only after the
 call, which would leave the outcome uncertain, so the provider reads them first.
 A TTL operation requires the table to hold exactly the TTL the plan captured, or
 none, and a TTL to set must read a column the table holds with a type its mode
-reads. A partitioning operation requires the table to hold exactly the
-partitioning settings the plan captured. An index addition requires the index
+reads. A settings operation requires the table to hold exactly the
+partitioning settings, the key bloom filter and the read replicas the plan
+captured for each group it changes. An index addition requires the index
 to be absent and to read columns the table holds, and an index removal requires
-the table to hold the index as the plan captured it. A table that changed since
+the table to hold the index as the plan captured it. A change of an index's
+settings requires the table to hold the index as captured, settings included. A table that changed since
 planning is refused before the call.
 
 After the call the provider reads the table back and checks that the requested
@@ -2705,10 +2736,15 @@ names and types, their order, the key, and the TTL. The TTL must read back as
 the one the request sets, run interval included, or as none after a removal, and
 as before for every other operation. After an index operation the added index
 must be ready and hold the requested kind and columns, a dropped index must be
-gone, and every other index must read back unchanged. After a partitioning operation the table
-must hold every setting the request names and the partition columns it held; the
-settings the server derives from them, such as the partition size it no longer
-reports once partitioning by size is off, are not compared. An added column must read back with its
+gone, and every other index must read back unchanged. After a settings operation the table
+must hold every partitioning setting the request names and the partition columns
+it held; the settings the server derives from them, such as the partition size
+it no longer reports once partitioning by size is off, are not compared. The
+key bloom filter and the read replicas must read back as the ones set, or as
+they were, and a request that names no partitioning setting leaves the
+partitioning as it was. After a change of an index's settings the index must
+keep its definition and be ready, and hold the settings by the same rules,
+while every other index, every column and the key read back unchanged. An added column must read back with its
 type, nullable and in the default family. A failed reply or unconfirmed
 read remains UNKNOWN and is never retried. As for creation, these checks do not
 establish exclusive ownership against another schema writer.
@@ -2720,24 +2756,31 @@ including switching partitioning by size off and on again; setting, changing, mo
 a TTL to an added column in the same plan that drops the column it read; and the
 refusal of an indexed column, of a TTL column the server would refuse, and of a
 stale alteration before the call; and adding and dropping sync, async, covering
-and unique indexes, with the refusal of a changed index definition. They plan again from the read back to show the declaration no
+and unique indexes, with the refusal of a changed index definition. They set,
+change and remove the read replicas and the key bloom filter of a table, alone
+and with its partitioning, and the partitioning and read replicas of sync,
+async and unique indexes, including switching partitioning by size off and on
+again with a minimum the declaration leaves out, and refuse a stale settings
+plan before the call. The TEXT form of each change is run on a twin table and
+reads back the same. They plan again from the read back to show the declaration no
 longer changes anything, and check that rows survive.
 
 ### Table property comparison
 
 The offline `models.compare` service `ydb-row-table-properties` compares the
 table and column properties of a row table that exists on both sides. It reports
-one `github.com/stokaro/ptah-ydb-plugin/row-table-properties-change` for a table whose TTL, partitioning settings or column families
-differ from the declaration, one for each column that sits in another
+one `github.com/stokaro/ptah-ydb-plugin/row-table-properties-change` for a table whose TTL, partitioning settings, read replicas,
+key bloom filter or column families differ from the declaration, one for each column that sits in another
 family, and one for a table whose index set differs from the declared one: an
-index added, removed or changed. An index change carries both complete index
+index added, removed or changed, or an index whose partitioning or read
+replicas differ from the ones it declares. An index change carries both complete index
 sets and names them with a `facet` key, so a table can have a property change
 and an index change at once. A changefeed set that differs is reported the same
 way, with the changefeed set as its facet; a source that describes the
 changefeeds of every table it declares states a table with none as one without
 changefeeds (see [Changefeeds](#changefeeds)). The comparison applies the rules of the alteration planner, so a
 difference it reports is one the planner acts on, and a table that differs only
-in its TTL, its partitioning settings or its families still reaches the planner. A change carries both
+in its TTL, its settings or its families still reaches the planner. A change carries both
 complete facets, replaces no owner, removes no state and leaves access
 unchanged. A facet present on one side only states nothing to compare; the
 planner decides what the missing read means. The planner accepts exactly these
@@ -3099,6 +3142,18 @@ retried. Confirmed atomic query failures preserve the server's issue text for
 expected-error assertions, without the driver's address and transport wrapper.
 Bound arguments retain JSON, decimal, date, timestamp and interval types;
 precision the engine cannot represent is refused before execution.
+
+The provider offers `sessions.typed-arguments`. A host that lists it sends each
+argument with the type its caller bound it at, and the provider binds the
+parameter at that YDB type: `INT8` to `INT64` as `Int8` to `Int64`, `UINT8` to
+`UINT64` as `Uint8` to `Uint64`, `FLOAT32` as `Float`, `FLOAT64` as `Double`,
+`STRING` as `Utf8`, `BYTES` as `String`, `TIMESTAMP` as `Timestamp` and
+`INTERVAL` as `Interval`. An optional type binds as `Optional<T>` and its null
+as a null of `T`, a list as `List<T>` (an empty one keeps its element type),
+and an untyped null as `Void`, as a plain null binds. So a Go `int32` writes an
+`Int32` column, which an `Int64` parameter cannot, and a nil `*string` writes a
+null into an `Optional<Utf8>` one. A typed timestamp outside the `Timestamp`
+range is refused rather than bound as a `Timestamp64`.
 
 The negotiated `scope.selections` declaration makes coordination nodes, topics,
 external data sources and external tables selectable by their directory and
