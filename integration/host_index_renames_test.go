@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // commentedItems declares items in directory with a synchronous index on kind
@@ -36,6 +37,16 @@ func describedItems(c *qt.C, opened *connection.Connection, absolute string) (ma
 	return indexes, described.GetAttributes()
 }
 
+// requireHostNegotiates skips a test whose host does not negotiate feature
+// with this provider, as a released host that predates it does not.
+func requireHostNegotiates(c *qt.C, feature string) {
+	c.Helper()
+	host, manifest := hostManifest(c)
+	if !hostNegotiates(c, host, manifest, feature) {
+		c.Skipf("the selected host did not negotiate %s", feature)
+	}
+}
+
 // The host's TestYDBGlobalIndexes_RenameRoundTrip. With EnableMoveIndex on, a
 // session reports index_rename to a host that lists planning.index-renames,
 // and the index the declaration renames is one step that renames it in place,
@@ -44,6 +55,7 @@ func describedItems(c *qt.C, opened *connection.Connection, absolute string) (ma
 // synced.
 func TestHostRenamesAnIndexInPlace_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.IndexRenamesFeature)
 	opened, directory, absolute := itemsFixture(c)
 	newClusterFlags(c, opened).set(c, map[string]bool{"EnableMoveIndex": true})
 	output, err := hostApply(c, directory, commentedItems(directory, "idx_items_kind"))
