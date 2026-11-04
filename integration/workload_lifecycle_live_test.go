@@ -9,6 +9,7 @@ import (
 	"hash/fnv"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,6 +86,26 @@ func workloadRanks(directory string) (int64, int64) {
 	return base, base + 1
 }
 
+// awaitPoolRouting waits until a query is no longer routed to a dropped
+// resource pool. The workload manager reads its classifiers from a cache, so
+// for a while after a classifier and its pool are dropped a query can still
+// be sent to the pool and fail with "Failed to resolve pool id", whichever
+// test sends it.
+func awaitPoolRouting(ctx context.Context, db *sql.DB) error {
+	for {
+		var one int32
+		err := db.QueryRowContext(ctx, "SELECT 1").Scan(&one)
+		if err == nil || !strings.Contains(err.Error(), "Failed to resolve pool id") {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(time.Second):
+		}
+	}
+}
+
 // TestWorkloadLifecycleSubprocess drives resource pools and classifiers
 // through the provider's services the way the host does, and reads them back
 // from the system views after each step: a creation, a rank swap written as
@@ -106,6 +127,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 			_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL CLASSIFIER `"+name+"`")
 		}
 		_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL `"+poolName+"`")
+		c.Check(awaitPoolRouting(cleanup, opened.DB), qt.IsNil)
 	})
 	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
