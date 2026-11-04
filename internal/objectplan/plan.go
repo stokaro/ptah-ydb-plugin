@@ -155,6 +155,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 			return refusal(family, item.index, err.Error()), nil
 		}
 		access.Dependencies = append(access.Dependencies, BeforePrincipalChanges(request, item.action, id)...)
+		below, err := AfterCreationBelowDirectoryAccess(request, item.action, item.input.Subject, id)
+		if err != nil {
+			return refusal(family, item.index, err.Error()), nil
+		}
+		access.Dependencies = append(access.Dependencies, below...)
 		pathRequest, err := PathContext(request)
 		if err != nil {
 			return refusal(family, item.index, err.Error()), nil

@@ -590,7 +590,12 @@ entry a new secret gets for every subject whose effective permissions on the
 secret's directory carry that permission.
 
 Mixed plans check captured native state before changing its access. A native
-alteration precedes grants, revocations, and principal changes. A final native
+alteration precedes grants, revocations, and principal changes. A grant or a
+revocation on a directory changes the directory's access list and occupies no
+path, so the native planners leave it out of their path checks; a native
+creation in that directory, or below it, comes first, because creating the
+object creates a missing directory and YDB grants nothing on a path that holds
+nothing. A final native
 drop accounts for matching revocations by removing the object's access; a
 temporary external-table drop keeps revocations after restoration. These plans
 require the negotiated `planning.lifecycle` feature. Workload operations retain

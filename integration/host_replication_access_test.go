@@ -62,9 +62,7 @@ func grantsIn(c *qt.C, client *providerruntime.Client, session *protocol.Session
 			entries = append(entries, grantEntry{grant.GetRole(), grant.GetPrivilege(), target.GetKind(), path.Join(target.GetSchema(), target.GetName()), grant.GetImplicit()})
 		}
 	}
-	slices.SortFunc(entries, func(a, b grantEntry) int {
-		return strings.Compare(a.Name+" "+a.Role+" "+a.Privilege, b.Name+" "+b.Role+" "+b.Privilege)
-	})
+	sortGrantEntries(entries)
 	return entries
 }
 
