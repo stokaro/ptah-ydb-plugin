@@ -223,13 +223,27 @@ message EvictionToExternalStorageSettings {
 // The creation of a column table, the payload of the provider's creation
 // operation. A column holds its name, its type and its nullability only; a
 // hash key, a shard count and a TTL the declaration leaves out are the
-// server's choice.
+// server's choice. Each local index states its name, its column and its kind
+// with every setting, defaults included, and no storage: YDB places a local
+// index's data itself.
 message ColumnTableCreation {
     repeated Ydb.Table.ColumnMeta columns = 1;
     repeated string primary_key = 2;
     repeated string hash_columns = 3;
     uint64 partitions = 4;
     ColumnTTLPolicy ttl = 5;
+    repeated LocalIndexObservation local_indexes = 6;
+}
+
+// One step of a change of a column table's local indexes, the payload of the
+// provider's local-index operation: `ALTER TABLE ... ADD INDEX ... LOCAL USING
+// ...` for add, `ALTER TABLE ... DROP INDEX ...` for drop. Exactly one is
+// present. add states the index as a creation does; drop is the index as the
+// table held it when the step was planned, and a table that holds another one
+// under that name refuses the step before it is written.
+message ColumnTableLocalIndexAlteration {
+    LocalIndexObservation add = 1;
+    LocalIndexObservation drop = 2;
 }
 
 // One step of an in-place change of a column table's TTL, the payload of the

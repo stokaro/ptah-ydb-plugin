@@ -405,6 +405,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"async_replication": true, "transfers": true, "replication_secret_paths": true,
 		"wide_date_time_types": true, "parameterized_decimal": true, "alter_column_default": true, "add_column_with_default": true, "small_integer_defaults": true, "document_type_defaults": true,
 		"vector_indexes": true, "vector_index_maintained_on_write": true, "vector_bit_type": true, "full_text_indexes": true,
+		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false,
 		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false,
 	})
 	// 25.1 takes none of the later changefeed options and no transfer, and
@@ -420,6 +421,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"async_replication": true, "transfers": false, "replication_secret_paths": false,
 		"wide_date_time_types": false, "parameterized_decimal": false, "alter_column_default": false, "add_column_with_default": false, "small_integer_defaults": false, "document_type_defaults": false,
 		"vector_indexes": false, "vector_index_maintained_on_write": false, "vector_bit_type": false, "full_text_indexes": false,
+		"local_bloom_indexes": false, "local_ngram_indexes": false, "local_min_max_indexes": false,
 		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false,
 	})
 	// Each option arrives on the line the host's presets name.
@@ -444,6 +446,10 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		{"26.1.1", "vector_bit_type", true},
 		{"26.1.1", "full_text_indexes", false},
 		{"26.2.1", "full_text_indexes", true},
+		{"26.1.1", "local_bloom_indexes", false},
+		{"26.2.1", "local_bloom_indexes", true},
+		{"26.1.1", "local_ngram_indexes", false},
+		{"26.2.1", "local_ngram_indexes", true},
 	} {
 		c.Assert(sessionCapabilities(test.version)[test.key], qt.Equals, test.want, qt.Commentf("%s on %s", test.key, test.version))
 	}

@@ -32,16 +32,6 @@ func ColumnTTLEqual(desired, held *native.ColumnTTLPolicy) bool {
 	return a.Column == b.Column && a.ColumnUnit == b.ColumnUnit && slices.EqualFunc(a.Tiers, b.Tiers, func(x, y *native.ColumnTTLTier) bool { return proto.Equal(x, y) })
 }
 
-// localIndexesDiffer reports whether a declaration states local indexes the
-// table does not hold exactly. A declaration that states none leaves the
-// table's local indexes alone: no source declares them yet.
-func localIndexesDiffer(desired *native.ColumnStorageIntent, held *native.ColumnStorageObservation) bool {
-	if len(desired.LocalIndexes) == 0 {
-		return false
-	}
-	return !slices.EqualFunc(desired.LocalIndexes, held.LocalIndexes, func(a, b *native.LocalIndexObservation) bool { return proto.Equal(a, b) })
-}
-
 // ColumnStorageDiffers reports whether a column table holding held does not
 // already satisfy the declared column storage: another hash key or shard count
 // the declaration states, another TTL, or local indexes the declaration states

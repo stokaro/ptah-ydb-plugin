@@ -183,6 +183,8 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewColumnTableCreation(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.ColumnTTLOperationKind:
 				return nativeapi.NewColumnTableTTL(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case tablecreate.ColumnLocalIndexOperationKind:
+				return nativeapi.NewColumnTableLocalIndex(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case schema.SecretOperation:
 				if !s.capabilities["secrets"] {
 					return false, fmt.Errorf("the target does not support scheme secrets")

@@ -80,6 +80,13 @@ var gates = []Gate{
 	// transfer, moves a topic's message into its table, describes it and
 	// changes its lambda and batch settings in place.
 	{Key: "transfers", Flag: "EnableTopicTransfer"},
+	// The local indexes of a column table, listed on 26.2 only: bloom_filter
+	// and bloom_ngram_filter on by default, min_max off. With EnableLocalMinMaxIndex
+	// off, 26.2.1.14 answers `Local min_max index is disabled with
+	// EnableLocalMinMaxIndex feature flag`.
+	{Key: "local_bloom_indexes", Flag: "EnableLocalBloomFilterIndex"},
+	{Key: "local_ngram_indexes", Flag: "EnableLocalBloomNgramFilterIndex"},
+	{Key: "local_min_max_indexes", Flag: "EnableLocalMinMaxIndex"},
 	// Listed on 26.2 only, on by default; the lines before it create a
 	// replication with no flag at all, so an absent flag keeps their preset.
 	// Turned off, CREATE ASYNC REPLICATION answers `Asynchronous replication

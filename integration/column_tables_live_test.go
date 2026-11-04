@@ -183,7 +183,14 @@ func newClusterFlags(c *qt.C, opened *connection.Connection) *clusterFlags {
 // page reads the database's flags with what each was explicitly set to.
 func (f *clusterFlags) page(c *qt.C) (featureflags.Flags, map[string]bool) {
 	c.Helper()
-	body, err := f.opened.ReadMonitoring(c.Context(), "feature flags", featureflags.Path, url.Values{"database": {f.opened.Database()}})
+	return f.pageIn(c.Context(), c)
+}
+
+// pageIn is page within ctx, for a cleanup, which runs after the test's own
+// context has ended.
+func (f *clusterFlags) pageIn(ctx context.Context, c *qt.C) (featureflags.Flags, map[string]bool) {
+	c.Helper()
+	body, err := f.opened.ReadMonitoring(ctx, "feature flags", featureflags.Path, url.Values{"database": {f.opened.Database()}})
 	c.Assert(err, qt.IsNil)
 	flags, err := featureflags.Decode(body, f.opened.Database())
 	c.Assert(err, qt.IsNil)
@@ -222,14 +229,18 @@ func (f *clusterFlags) identity(ctx context.Context, c *qt.C) *Ydb_DynamicConfig
 // set replaces the cluster's feature flags with every flag the cluster was
 // started with and the ones given. A dynamic configuration replaces the flags
 // of the static one as a whole, so the flags the cluster was started with are
-// written out again.
+// written out again. When the test ends the configuration is dropped and the
+// flags given are awaited at the values they had before: the cluster hands a
+// configuration to its nodes in the background, so a test that runs next and
+// reads the flags would otherwise see these.
 func (f *clusterFlags) set(c *qt.C, flags map[string]bool) {
 	c.Helper()
 	before := f.identity(c.Context(), c)
 	c.Assert(before.GetConfig(), qt.Equals, "", qt.Commentf("the cluster carries a dynamic configuration of its own, which this test would replace"))
-	_, started := f.page(c)
+	initial, started := f.page(c)
+	restored := make(map[string]bool, len(flags))
 	for name, value := range flags {
-		started[name] = value
+		started[name], restored[name] = value, initial[name]
 	}
 	var section strings.Builder
 	for name, value := range started {
@@ -240,7 +251,12 @@ func (f *clusterFlags) set(c *qt.C, flags map[string]bool) {
 	replaced, err := f.client.ReplaceConfig(c.Context(), &Ydb_DynamicConfig.ReplaceConfigRequest{Config: config})
 	c.Assert(err, qt.IsNil)
 	c.Assert(replaced.GetOperation().GetStatus(), qt.Equals, Ydb.StatusIds_SUCCESS, qt.Commentf("%v", replaced.GetOperation().GetIssues()))
-	c.Cleanup(func() { f.drop(context.Background(), c) })
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		f.drop(ctx, c)
+		f.awaitIn(ctx, c, restored)
+	})
 	f.await(c, flags)
 }
 
@@ -258,9 +274,15 @@ func (f *clusterFlags) drop(ctx context.Context, c *qt.C) {
 // await waits until the page reports every flag given with its value.
 func (f *clusterFlags) await(c *qt.C, want map[string]bool) {
 	c.Helper()
+	f.awaitIn(c.Context(), c, want)
+}
+
+// awaitIn is await within ctx.
+func (f *clusterFlags) awaitIn(ctx context.Context, c *qt.C, want map[string]bool) {
+	c.Helper()
 	deadline := time.Now().Add(time.Minute)
 	for {
-		flags, _ := f.page(c)
+		flags, _ := f.pageIn(ctx, c)
 		matched := true
 		for name, value := range want {
 			matched = matched && flags[name] == value
