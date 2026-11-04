@@ -38,9 +38,10 @@ func UnstatedTableFacet(owner *protocol.Reference) (*protocol.Envelope, error) {
 // FacetDiffers reports whether the table the observed facet describes does not
 // already satisfy the desired facet. It applies the rules the alteration
 // planner applies, so a difference reported here is one the planner can act on:
-// the TTL, the automatic partitioning settings and the column families of a
-// table facet, the family a column sits in for a column facet, and the names
-// and definitions of the indexes for an index set. A changefeed set compares
+// the TTL, the automatic partitioning settings, the read replicas, the key
+// bloom filter and the column families of a table facet, the family a column
+// sits in for a column facet, and the names and definitions of the indexes for
+// an index set. A changefeed set compares
 // through ChangefeedDifference, which can also leave it undecided. Both
 // envelopes must be validated and belong to one owner.
 func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
@@ -83,15 +84,19 @@ func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
 	}
 }
 
-// tableDiffers applies the TTL, partitioning and family rules to the table properties. The
-// declaration it reads manages the TTL, so one without a TTL differs from a
-// table that holds one. The caller decides that the table is managed: either the
+// tableDiffers applies the TTL, partitioning, read replica, key bloom filter
+// and family rules to the table properties. The declaration it reads manages
+// the TTL, so one without a TTL differs from a table that holds one. The caller decides that the table is managed: either the
 // declaration states properties, or the source established them.
 func tableDiffers(want *native.RowTableIntent, held *native.DescribeTableResult) bool {
 	if want.TtlSettings == nil && held.TtlSettings != nil || want.TtlSettings != nil && !sameTTL(want.TtlSettings, held.TtlSettings) {
 		return true
 	}
 	if partitioningDelta(want.PartitioningSettings, held.PartitioningSettings) != nil {
+		return true
+	}
+	if bloomDelta(want.KeyBloomFilter, held.KeyBloomFilter) != Ydb.FeatureFlag_STATUS_UNSPECIFIED ||
+		replicasDelta(want.ReadReplicasSettings, held.ReadReplicasSettings) != nil {
 		return true
 	}
 	// A layout the table was not created with differs, so that the plan reaches

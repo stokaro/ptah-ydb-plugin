@@ -176,6 +176,8 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				return nativeapi.NewColumnDefault(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.AlterOperationKind:
 				return nativeapi.NewTableAlteration(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			case tablecreate.IndexSettingsOperationKind:
+				return nativeapi.NewIndexSettings(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.ColumnOperationKind:
 				return nativeapi.NewColumnTableCreation(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
 			case tablecreate.ColumnTTLOperationKind:
