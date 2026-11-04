@@ -41,10 +41,12 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			return nil, status.FromContextError(err).Err()
 		}
 		decoded := &protocol.DecodedSourceDocument{Id: document.Id, Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_DESIRED}}
-		// An HCL document's ptah:not-described header leaves coordination
-		// nodes, or one of them, outside its claim, as a YQL document's does.
-		// The host applies the limits; a limit no node can take is refused here
-		// with the host's words.
+		// A source's ptah:not-described header, the HCL document's or the Go
+		// source's, leaves a native kind or one object of it outside the
+		// document's claim, as a YQL document's does: with source.limits
+		// negotiated the claim below leaves what a limit names uninspected
+		// (see limitedClaim). A limit no object can take is refused here with
+		// the host's words.
 		if err := yqlschema.CheckLimits(document.GetLimits()); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
@@ -141,6 +143,9 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 				decoded.Coverage.Subjects = append(decoded.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: value.Value.Value.Kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}})
 			}
 		}
+		if err := limitedClaim(ctx, document, decoded.Coverage); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		result.Documents = append(result.Documents, decoded)
 	}
 	if err := ctx.Err(); err != nil {
@@ -150,6 +155,17 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	return result, nil
+}
+
+// limitedClaim leaves outside a document's claim what its ptah:not-described
+// limits name, when the host negotiated source.limits. Without the feature the
+// SDK lets a decoding claim only complete knowledge, and the limits change
+// nothing.
+func limitedClaim(ctx context.Context, document *protocol.SourceDocument, coverage *protocol.ModelCoverage) error {
+	if len(document.GetLimits()) == 0 || !slices.Contains(negotiatedFeatures(ctx), provider.SourceLimitsFeature) {
+		return nil
+	}
+	return yqlschema.LimitCoverage(coverage, document.GetLimits())
 }
 
 // refuseColumnTableChangefeeds refuses a changefeed of a table the document
