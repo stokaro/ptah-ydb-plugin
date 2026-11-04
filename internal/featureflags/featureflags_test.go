@@ -53,6 +53,7 @@ func linePreset(autoPartitionedFeeds bool, secrets bool) map[string]bool {
 	caps["local_ngram_indexes"] = secrets
 	caps["local_min_max_indexes"] = false
 	caps["transfers"] = autoPartitionedFeeds
+	caps["unique_index_on_existing_table"] = false
 	if autoPartitionedFeeds {
 		caps["alter_column_default"] = true
 		caps["async_replication"] = true
@@ -82,14 +83,15 @@ func TestRefine_EveryLineDefaultIsThePreset(t *testing.T) {
 }
 
 // TestRefine_ClusterThatTurnedTieringOn reads a page from 26.2.1.14 whose
-// dynamic configuration turned EnableTieringInColumnShard on.
+// dynamic configuration turned EnableTieringInColumnShard on. The server ran
+// with enable_add_unique_index, as the CI's 26.2 server does.
 func TestRefine_ClusterThatTurnedTieringOn(t *testing.T) {
 	c := testcheck.New(t)
 	flags, err := featureflags.Decode(page(c, "local-ydb-26.2.1.14-tiering-on.json"), "/local")
 	c.Assert(err, qt.IsNil)
 	c.Assert(flags["EnableTieringInColumnShard"], qt.IsTrue)
 	c.Assert(flags.Refine(linePreset(true, true)), qt.DeepEquals, with(map[string]bool{"secrets": true, "alter_column_default": true, "add_column_with_default": true, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "wide_date_time_types": true, "parameterized_decimal": true, "vector_indexes": true, "full_text_indexes": true, "transfers": true, "async_replication": true,
-		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false}))
+		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false, "unique_index_on_existing_table": true}))
 }
 
 // TestRefine_HappyPath pins what each flag does to its capability, and that a
@@ -108,7 +110,10 @@ func TestRefine_HappyPath(t *testing.T) {
 		{name: "parameterized decimal on", flags: featureflags.Flags{"EnableParameterizedDecimal": true}, want: with(map[string]bool{"parameterized_decimal": true})},
 		{name: "tiering on", flags: featureflags.Flags{"EnableTieringInColumnShard": true}, want: with(map[string]bool{"tiered_ttl": true})},
 		{name: "tiering off", flags: featureflags.Flags{"EnableTieringInColumnShard": false}, want: preset()},
-		{name: "tiering not listed", flags: featureflags.Flags{"EnableAddUniqueIndex": true}, want: preset()},
+		{name: "tiering not listed", flags: featureflags.Flags{"EnableTempTables": true}, want: preset()},
+		// 25.3 and later list EnableAddUniqueIndex, off by default.
+		{name: "unique indexes on existing tables on", flags: featureflags.Flags{"EnableAddUniqueIndex": true}, want: with(map[string]bool{"unique_index_on_existing_table": true})},
+		{name: "unique indexes on existing tables off", flags: featureflags.Flags{"EnableAddUniqueIndex": false}, want: with(map[string]bool{"unique_index_on_existing_table": false})},
 		// 25.1 keeps a vector index behind EnableVectorIndex, and every line
 		// a full-text one behind EnableFulltextIndex.
 		{name: "vector indexes off", flags: featureflags.Flags{"EnableVectorIndex": false}, want: with(map[string]bool{"vector_indexes": false})},
@@ -171,7 +176,7 @@ func TestGates_NameEveryFlagOnce(t *testing.T) {
 		keys[gate.Key], flags[gate.Flag] = true, true
 	}
 	c.Assert(keys, qt.DeepEquals, map[string]bool{"secrets": true, "alter_column_default": true, "add_column_with_default": true, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "external_object_replace": true, "resource_pools": true, "wide_date_time_types": true, "parameterized_decimal": true, "vector_indexes": true, "full_text_indexes": true, "transfers": true, "async_replication": true,
-		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": true})
+		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": true, "unique_index_on_existing_table": true})
 }
 
 func TestDecode_HappyPath(t *testing.T) {

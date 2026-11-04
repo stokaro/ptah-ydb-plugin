@@ -220,6 +220,7 @@ reports the defaults of every supported line.
 | `full_text_indexes` | `EnableFulltextIndex` | `false` through 26.1, `true` from 26.2 |
 | `local_bloom_indexes` | `EnableLocalBloomFilterIndex` | `false` through 26.1, `true` from 26.2 |
 | `local_ngram_indexes` | `EnableLocalBloomNgramFilterIndex` | `false` through 26.1, `true` from 26.2 |
+| `unique_index_on_existing_table` | `EnableAddUniqueIndex` | `false` on every line; 25.1 and 25.2 do not list the flag |
 | `local_min_max_indexes` | `EnableLocalMinMaxIndex` | `false` on every line from 25.1 to 26.2 |
 
 The release line alone decides the other vector capabilities, as the host's
@@ -2778,8 +2779,16 @@ that table itself.
   add that states its partitioning or read replicas is refused by name: the step
   that adds it carries none, so add the index first and declare its settings in
   a later plan.
-- A unique index needs a server that accepts `ALTER TABLE ... ADD INDEX ...
-  GLOBAL UNIQUE`; YDB 25.1 refuses it unless `enable_add_unique_index` is set.
+- A unique index added to a table that exists needs
+  `unique_index_on_existing_table`. YDB 25.1 and 25.2 never add one, and later
+  lines keep it behind `EnableAddUniqueIndex`, off by default; without it the
+  server refuses the call (`Adding a unique index to an existing table is
+  disabled`) with an outcome the provider cannot confirm. So a session without
+  the capability refuses such an addition when it is planned, in the host's
+  embedded engine's words: `adding unique index "<name>" to table
+  "<table>", which exists already, which requires target capability
+  unique_index_on_existing_table, unavailable on this ydb target`. A table
+  the plan creates takes its unique indexes with it and needs nothing.
 - An index reads columns the declaration states. A declared index that reads a
   column the declaration does not state is refused, and so is a kept index whose
   column the declaration drops.
