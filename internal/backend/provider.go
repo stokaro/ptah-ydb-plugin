@@ -147,7 +147,11 @@ func providerFeatures() []string {
 		// A Go or HCL source leaves a native kind unmanaged with a
 		// not-described entry; see EncodeSource and DecodeSource.
 		provider.SourceLimitsFeature,
-		provider.MigrationSplitFeature}
+		provider.MigrationSplitFeature,
+		// The host sends an index it pairs with one declared under another
+		// name as one rename step, which the table service claims with
+		// RENAME INDEX; see indexRenames.
+		provider.IndexRenamesFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -218,6 +222,11 @@ func negotiatedFeatures(ctx context.Context) []string {
 // which 25.4 and later take and 25.1 to 25.3 read as a missing name
 // (`PASSWORD_SECRET_NAME requires key`).
 //
+// index_rename is true on every line: YDB renames an index in place with
+// EnableMoveIndex on, its default from 25.1.4.7 to 26.2.1.14, and the flag
+// decides it where the address names the monitoring endpoint. A host that
+// does not list planning.index-renames sees it false (see indexRenames).
+//
 // async_replication is true on every line, as the host measured: CREATE
 // ASYNC REPLICATION runs on 25.1 to 26.2 with default flags, and 26.2 lists
 // EnableReplication, on by default. transfers is EnableTopicTransfer, off by
@@ -243,7 +252,18 @@ func sessionCapabilities(version string) map[string]bool {
 		tablecreate.LocalBloomIndexesCapability: releaseline.AtLeast(version, 26, 2), tablecreate.LocalNgramIndexesCapability: releaseline.AtLeast(version, 26, 2),
 		tablecreate.LocalMinMaxIndexesCapability: false,
 		replication.CapabilityReplication:        true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
-		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false}
+		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, tablecreate.IndexRenameCapability: true}
+}
+
+// indexRenames returns capabilities with index_rename true only for a host
+// that lists planning.index-renames. The host pairs renamed indexes under the
+// capability, and a host that does not list the feature has no step to send a
+// pair with: it would refuse every plan that renames an index. With the
+// capability false the host plans a rename as a drop and an add.
+func indexRenames(ctx context.Context, capabilities map[string]bool) map[string]bool {
+	result := maps.Clone(capabilities)
+	result[tablecreate.IndexRenameCapability] = result[tablecreate.IndexRenameCapability] && slices.Contains(provider.HostFeatures(ctx), provider.IndexRenamesFeature)
+	return result
 }
 
 // clusterCapabilities refines the preset with the feature flags of the
@@ -349,6 +369,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 		}
 		return nil, authored.Status(codes.Unavailable, err)
 	}
+	capabilities = indexRenames(ctx, capabilities)
 	if err := ctx.Err(); err != nil {
 		_ = opened.Close()
 		return nil, status.FromContextError(err).Err()

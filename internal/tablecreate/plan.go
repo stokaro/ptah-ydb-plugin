@@ -395,7 +395,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	// sequenceSteps numbers the sequence changes of the altered tables.
 	sequenceSteps := 0
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, indexSettings, defaults, inventories int
+	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, indexRenames, indexSettings, defaults, inventories int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -494,17 +494,22 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		for _, index := range item.indexes {
 			prefix, number, action := "row-table-drop-index", &indexRemovals, protocol.PlanningEffect_DROP
-			if index.change.add != nil {
+			switch {
+			case index.change.add != nil:
 				prefix, number, action = "row-table-add-index", &indexAdditions, protocol.PlanningEffect_CREATE
+			case index.change.rename != nil:
+				prefix, number = "row-table-rename-index", &indexRenames
 			}
 			index.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", prefix, *number)}
 			*number++
 			index.operation.Id = index.id.Name
 			facts := index.operation.OperationSemantics
-			changed := indexSubject(subject, index.change.name())
+			effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
+				{Subject: indexSubject(subject, index.change.name()), Action: action}}
 			if source := index.change.source; source != nil {
-				// The replacement changes the index the host's step names.
-				changed = proto.CloneOf(source.GetMetadata().GetEffects()[1].GetSubject())
+				// The replacement changes the index the host's step names: a
+				// rename drops the held name and creates the declared one.
+				effects = cloneEffects(source.GetMetadata().GetEffects())
 				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: []*protocol.StepIdentity{proto.CloneOf(source.Id)}, Replacement: proto.CloneOf(index.id)})
 			}
 			// The lifecycle phase lets a removal and the addition that
@@ -512,8 +517,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: index.id,
 				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: index.operation, Phase: protocol.PlanningOperation_LIFECYCLE},
 				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
-					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
-						{Subject: changed, Action: action}}}})
+					Effects: effects}})
 			contribution.Dependencies = append(contribution.Dependencies, indexStepDependencies(*item, index, request.CommonSteps)...)
 			ordered = append(ordered, index.id)
 		}
