@@ -465,6 +465,11 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 			return refused(changes[planned.input], err), nil
 		}
 		access.Dependencies = append(access.Dependencies, objectplan.BeforePrincipalChanges(request, accessAction, id)...)
+		below, err := objectplan.AfterCreationBelowDirectoryAccess(request, planned.action, planned.subject, id)
+		if err != nil {
+			return refused(changes[planned.input], err), nil
+		}
+		access.Dependencies = append(access.Dependencies, below...)
 		contribution.Dependencies = append(contribution.Dependencies, edges...)
 		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(planned.subject), Action: planned.action}, {Subject: objectplan.Slot(planned.subject), Action: planned.action}}
 		for _, path := range planned.secrets {

@@ -82,8 +82,63 @@ func PathContext(request *protocol.PlanFeaturesRequest) (*protocol.PlanFeaturesR
 		if err != nil {
 			return nil, err
 		}
-		if !principal && object == nil {
+		_, directory, err := directoryAccess(common)
+		if err != nil {
+			return nil, err
+		}
+		if !principal && object == nil && !directory {
 			result.CommonSteps = append(result.CommonSteps, proto.CloneOf(common))
+		}
+	}
+	return result, nil
+}
+
+// directoryAccess reports a common step that grants or revokes a permission
+// on a directory, and the directory it names. Such a step changes the
+// directory's access list: it occupies no path and creates or drops none, so
+// it takes no part in path conflict detection. The host's typed operand and
+// its one effect must agree before the step is set aside.
+func directoryAccess(common *protocol.CommonPlanningStep) (string, bool, error) {
+	change := common.GetCommonObject()
+	grant := change.GetGrant()
+	if grant == nil {
+		grant = change.GetRevoke()
+	}
+	if grant == nil || strings.ToLower(strings.TrimSpace(grant.GetTarget().GetKind())) != "schema" {
+		return "", false, nil
+	}
+	effects := common.GetMetadata().GetEffects()
+	if len(effects) != 1 {
+		return "", false, fmt.Errorf("directory access step needs exactly its directory's access list")
+	}
+	subject := effects[0].GetSubject()
+	target := grant.GetTarget()
+	if effects[0].GetAction() != protocol.PlanningEffect_ALTER || subject.GetKind() != "schema" || subject.GetName().GetSource() != target.GetName() ||
+		subject.GetSchema().GetNormalized() != "" || subject.GetParent().GetNormalized() != "" || len(subject.GetPath())+len(subject.GetSignature()) != 0 ||
+		target.GetSchema() != "" || target.GetCatalog() != "" || len(target.GetPath())+len(target.GetOverload()) != 0 || target.GetName() == "" {
+		return "", false, fmt.Errorf("directory access operand differs from its structural footprint")
+	}
+	return target.GetName(), true, nil
+}
+
+// AfterCreationBelowDirectoryAccess keeps a native creation ahead of a grant
+// or a revoke on a directory that holds it. Creating the object creates the
+// directories above it that do not exist yet, and YDB grants nothing on a
+// path that holds nothing. An operation other than a creation needs no order
+// against a directory's access.
+func AfterCreationBelowDirectoryAccess(request *protocol.PlanFeaturesRequest, action protocol.PlanningEffect_Action, subject *protocol.ComparisonIdentity, id *protocol.StepIdentity) ([]*protocol.PlanningDependency, error) {
+	if action != protocol.PlanningEffect_CREATE {
+		return nil, nil
+	}
+	var result []*protocol.PlanningDependency
+	for _, common := range request.GetCommonSteps() {
+		directory, granted, err := directoryAccess(common)
+		if err != nil {
+			return nil, err
+		}
+		holder := subject.GetSchema().GetSource()
+		if granted && (holder == directory || strings.HasPrefix(holder, directory+"/")) {
+			result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(id), After: proto.CloneOf(common.Id)})
 		}
 	}
 	return result, nil
