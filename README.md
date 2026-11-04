@@ -1758,9 +1758,16 @@ assesses every replication the plan keeps, and refuses a table the plan
 creates at the path of a live replica, and a failed-over replica the plan drops
 while the schema keeps the replication. A creation names its replica paths as created and a drop of a running
 replication with `CASCADE` names them as dropped, so each step is ordered
-against the common steps at those paths; a transfer reads its table and a local
-topic. A drop of a failed-over replication runs without `CASCADE` and keeps its
-tables. The provider never pauses, resumes or fails over an object.
+against the common steps at those paths. A replication of this database also
+reads its source tables, so it is created after a table the plan creates and
+dropped before one the plan drops: a replication created before its source
+creates no replica. A transfer reads its table and, at a local source, the
+topic or the changefeed of a table. It names the changefeed as the changefeed
+planner does, so the host creates it after a changefeed the plan adds; a
+dropped transfer names the topic by the topic's identity rather than its path,
+so the drop comes before the topic's even where the plan creates another object
+at that path. A drop of a failed-over replication runs without `CASCADE` and
+keeps its tables. The provider never pauses, resumes or fails over an object.
 
 A grant names a replication or a transfer by its directory and name
 (`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
