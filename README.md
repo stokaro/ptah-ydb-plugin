@@ -357,7 +357,9 @@ refused (`UNSUPPORTED`), and a missing command or an unreachable daemon is
 Execution sends native SQL units through YDB's query service. A batch is checked
 before its first unit runs. Unsupported native envelopes refuse the whole batch.
 SQL units use a pinned connection; native coordination, table creation and table alteration units
-use their native services. Dispatched writes are not retried.
+use their native services. Dispatched writes are not retried, except a
+changefeed statement YDB refused because another schema operation held the
+table's path (see [Changefeeds](#changefeeds)).
 Request IDs correlate calls and do not provide exactly-once execution.
 
 Results distinguish a confirmed prefix from an uncertain remainder. A
@@ -1977,7 +1979,13 @@ Execution reads the table and each changefeed's topic before the first
 statement and refuses a changefeed that changed since the plan read it; it runs
 each statement once and reads the table back, requiring each declared
 changefeed with its topic's retention and consumers, or a removed one's
-absence. An unconfirmed result is UNKNOWN and is never retried. A changefeed
+absence. The one statement that runs again is one YDB refuses because another
+schema operation holds the table's path (OVERLOADED, `path ... has been locked
+by tx` or `path is under operation`), which changed nothing: a changefeed added
+with an initial scan holds the path until the scan has read every row, so the
+next statement waits, 50 ms at first and up to a second between attempts,
+until it runs or the request's context ends. Any other unconfirmed result is
+UNKNOWN and is never retried. A changefeed
 operation has no TEXT form yet, so a host that writes a migration file is
 refused with `NO_TEXT_FORM`.
 

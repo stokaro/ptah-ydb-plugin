@@ -169,3 +169,25 @@ func TestCommitOfAnotherFailureIsUnknown(t *testing.T) {
 		c.Assert(ydbfailure.Commit(answer(status), true), qt.IsNil, qt.Commentf("%s", status))
 	}
 }
+
+// TestPathBusy reports the refusal YDB gives a schema statement on a path
+// another schema operation holds, in either of the words it gives one, and no
+// other answer.
+func TestPathBusy(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		answer ydbfailure.Answer
+		want   bool
+	}{
+		{"a path an initial scan holds", answer(Ydb.StatusIds_OVERLOADED, "Check failed: path: '/local/d/events', error: path has been locked by tx: 281474976710672"), true},
+		{"a path under operation", answer(Ydb.StatusIds_OVERLOADED, "Check failed: path: '/local/d/events', error: path is under operation"), true},
+		{"another overload", answer(Ydb.StatusIds_OVERLOADED, "too many requests"), false},
+		{"an overload with no words", answer(Ydb.StatusIds_OVERLOADED), false},
+		{"the words with another status", answer(Ydb.StatusIds_SCHEME_ERROR, "path is under operation"), false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(test.answer.PathBusy(), qt.Equals, test.want)
+		})
+	}
+}
