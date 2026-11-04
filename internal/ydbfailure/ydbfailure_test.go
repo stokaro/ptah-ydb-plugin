@@ -11,8 +11,10 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
@@ -27,6 +29,12 @@ func answer(status Ydb.StatusIds_StatusCode, issues ...string) ydbfailure.Answer
 // compiled is an answer in which YDB refused the text while compiling it.
 func compiled(status Ydb.StatusIds_StatusCode, issues ...string) ydbfailure.Answer {
 	return ydbfailure.Answer{Status: status, Issues: issues, Compiled: true}
+}
+
+// located is answer with the most specific issue code and position YDB gave.
+func located(answer ydbfailure.Answer, code, row, column uint32) ydbfailure.Answer {
+	answer.Code, answer.Row, answer.Column = code, row, column
+	return answer
 }
 
 // answered is an operation error as the SDK returns one: the status YDB
@@ -58,23 +66,23 @@ func TestReadPlacesARefusalBeforeExecution(t *testing.T) {
 		want   ydbfailure.Answer
 	}{
 		{"an unknown type", []*Ydb_Issue.IssueMessage{issue(0, 1, 26, "Unknown simple type 'NoSuchType'")},
-			compiled(Ydb.StatusIds_GENERIC_ERROR, "Unknown simple type 'NoSuchType'")},
+			located(compiled(Ydb.StatusIds_GENERIC_ERROR, "Unknown simple type 'NoSuchType'"), 0, 1, 26)},
 		{"a parse error at the first column", []*Ydb_Issue.IssueMessage{issue(0, 1, 0, "mismatched input 'BROKEN' expecting {';'}")},
-			compiled(Ydb.StatusIds_GENERIC_ERROR, "mismatched input 'BROKEN' expecting {';'}")},
+			located(compiled(Ydb.StatusIds_GENERIC_ERROR, "mismatched input 'BROKEN' expecting {';'}"), 0, 1, 0)},
 		{"type annotation", []*Ydb_Issue.IssueMessage{issue(1030, 0, 0, "Type annotation",
 			issue(0, 1, 33, "At function: KiAlterTable!", issue(0, 1, 33, "Column: \"id\" is a key column. Key column drop is not supported")))},
-			compiled(Ydb.StatusIds_GENERIC_ERROR, "Type annotation", "At function: KiAlterTable!", "Column: \"id\" is a key column. Key column drop is not supported")},
+			located(compiled(Ydb.StatusIds_GENERIC_ERROR, "Type annotation", "At function: KiAlterTable!", "Column: \"id\" is a key column. Key column drop is not supported"), 1030, 1, 33)},
 		{"pre type annotation", []*Ydb_Issue.IssueMessage{issue(1020, 0, 0, "Pre type annotation", issue(0, 1, 9, "analyze is not supported for oltp tables."))},
-			compiled(Ydb.StatusIds_GENERIC_ERROR, "Pre type annotation", "analyze is not supported for oltp tables.")},
+			located(compiled(Ydb.StatusIds_GENERIC_ERROR, "Pre type annotation", "analyze is not supported for oltp tables."), 1020, 1, 9)},
 		{"a position inside the execution stage", []*Ydb_Issue.IssueMessage{issue(1060, 0, 0, "Execution", issue(0, 1, 56, "Unknown index type: syncGlobalUnique"))},
-			answer(Ydb.StatusIds_GENERIC_ERROR, "Execution", "Unknown index type: syncGlobalUnique")},
+			located(answer(Ydb.StatusIds_GENERIC_ERROR, "Execution", "Unknown index type: syncGlobalUnique"), 1060, 1, 56)},
 		{"a schema operation", []*Ydb_Issue.IssueMessage{issue(0, 0, 0, "Executing ESchemeOpCreatePersQueueGroup", issue(0, 0, 0, "Scheme operation failed, status: ExecError"))},
 			answer(Ydb.StatusIds_GENERIC_ERROR, "Executing ESchemeOpCreatePersQueueGroup", "Scheme operation failed, status: ExecError")},
 		// 26.2 words a schema operation's refusal this way, with no position;
 		// the position nested in it is constructed, to pin that the stage
 		// decides and not the position.
 		{"a position inside a schema operation", []*Ydb_Issue.IssueMessage{issue(2017, 0, 0, "Executing ESchemeOpAlterTable", issue(2017, 1, 1, "Unsupported column type"))},
-			answer(Ydb.StatusIds_GENERIC_ERROR, "Executing ESchemeOpAlterTable", "Unsupported column type")},
+			located(answer(Ydb.StatusIds_GENERIC_ERROR, "Executing ESchemeOpAlterTable", "Unsupported column type"), 2017, 1, 1)},
 		{"no position", []*Ydb_Issue.IssueMessage{issue(0, 0, 0, "Scheme operation failed, status: ExecError")},
 			answer(Ydb.StatusIds_GENERIC_ERROR, "Scheme operation failed, status: ExecError")},
 		{"no issues", nil, answer(Ydb.StatusIds_GENERIC_ERROR)},
@@ -181,41 +189,59 @@ func TestFailed(t *testing.T) {
 	unknown := &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, DiagnosticCode: "ydb.execution-unconfirmed",
 		Message: "The dispatched unit's outcome is unknown; no automatic retry was attempted"}
 	unknownAfterOne := &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: 1, DiagnosticCode: unknown.DiagnosticCode, Message: unknown.Message}
+	const (
+		refusedDuplicate = "YDB refused the statement (PRECONDITION_FAILED)"
+		aborted          = "YDB aborted the transaction for a conflict (ABORTED)"
+		unknownDuplicate = "the unit's outcome is unknown: YDB answered PRECONDITION_FAILED, which does not show whether the unit applied"
+	)
 	for _, test := range []struct {
 		name    string
 		answer  ydbfailure.Answer
 		unit    ydbfailure.Unit
 		applied uint32
 		want    *protocol.Execution
+		reason  string
 	}{
 		{"rejected", duplicate, ydbfailure.Unit{Text: insert}, 0,
-			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Conflict with existing key."}},
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Conflict with existing key."}, refusedDuplicate},
 		{"rejected after a prefix", duplicate, ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 2,
-			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 2, DiagnosticCode: "ydb.statement-rejected", Message: "Conflict with existing key."}},
-		{"rejected while compiling", compiled(Ydb.StatusIds_GENERIC_ERROR, "Unknown simple type 'NoSuchType'"), ydbfailure.Unit{Text: "CREATE TABLE t (id NoSuchType NOT NULL, PRIMARY KEY (id))"}, 2,
-			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 2, DiagnosticCode: "ydb.statement-rejected", Message: "Unknown simple type 'NoSuchType'"}},
-		{"refused while running", answer(Ydb.StatusIds_GENERIC_ERROR, "Scheme operation failed"), ydbfailure.Unit{Text: "CREATE TOPIC t"}, 0, unknown},
+			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 2, DiagnosticCode: "ydb.statement-rejected", Message: "Conflict with existing key."}, refusedDuplicate},
+		{"rejected while compiling", located(compiled(Ydb.StatusIds_GENERIC_ERROR, "Unknown simple type 'NoSuchType'"), 0, 1, 27),
+			ydbfailure.Unit{Text: "CREATE TABLE t (id NoSuchType NOT NULL, PRIMARY KEY (id))"}, 2,
+			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 2, DiagnosticCode: "ydb.statement-rejected", Message: "Unknown simple type 'NoSuchType'"},
+			"YDB refused the statement while compiling it (GENERIC_ERROR, line 1, column 27)"},
+		{"refused while running", answer(Ydb.StatusIds_GENERIC_ERROR, "Scheme operation failed"), ydbfailure.Unit{Text: "CREATE TOPIC t"}, 0, unknown,
+			"the unit's outcome is unknown: YDB answered GENERIC_ERROR, which does not show whether the unit applied"},
 		{"rejected without issues", answer(Ydb.StatusIds_SCHEME_ERROR), ydbfailure.Unit{Text: "DROP TABLE t"}, 0,
-			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "YDB rejected the unit"}},
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "YDB rejected the unit"},
+			"YDB refused the statement (SCHEME_ERROR)"},
 		{"aborted", conflict, ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0,
-			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated. Table: `/local/t`.", TransactionAborted: true}},
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated. Table: `/local/t`.", TransactionAborted: true},
+			aborted},
 		{"aborted, not negotiated", conflict, ydbfailure.Unit{Text: insert, Transaction: true}, 0,
-			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated. Table: `/local/t`."}},
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated. Table: `/local/t`."}, aborted},
 		{"aborted after a prefix", conflict, ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 1,
-			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 1, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated. Table: `/local/t`."}},
+			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 1, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated. Table: `/local/t`."}, aborted},
 		{"aborted without issues", answer(Ydb.StatusIds_ABORTED), ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0,
-			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "YDB aborted the transaction for a conflict", TransactionAborted: true}},
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "YDB aborted the transaction for a conflict", TransactionAborted: true},
+			aborted},
 		{"aborted outside a transaction", conflict, ydbfailure.Unit{Text: insert, Aborts: true}, 0,
-			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Transaction locks invalidated. Table: `/local/t`."}},
-		{"native", duplicate, ydbfailure.Unit{}, 0, unknown},
-		{"service statement in a transaction", duplicate, ydbfailure.Unit{Transaction: true, Aborts: true}, 0, unknown},
-		{"not applied whole", duplicate, ydbfailure.Unit{Text: "BATCH DELETE FROM t WHERE id > 0"}, 0, unknown},
-		{"unconfirmed", answer(Ydb.StatusIds_UNDETERMINED), ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0, unknown},
-		{"unconfirmed after a prefix", answer(Ydb.StatusIds_TIMEOUT), ydbfailure.Unit{Text: insert}, 1, unknownAfterOne},
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Transaction locks invalidated. Table: `/local/t`."},
+			"YDB refused the statement (ABORTED)"},
+		{"native", duplicate, ydbfailure.Unit{}, 0, unknown, unknownDuplicate},
+		{"service statement in a transaction", duplicate, ydbfailure.Unit{Transaction: true, Aborts: true}, 0, unknown, unknownDuplicate},
+		{"not applied whole", duplicate, ydbfailure.Unit{Text: "BATCH DELETE FROM t WHERE id > 0"}, 0, unknown, unknownDuplicate},
+		{"unconfirmed", answer(Ydb.StatusIds_UNDETERMINED), ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0, unknown,
+			"the unit's outcome is unknown: YDB answered UNDETERMINED, which does not show whether the unit applied"},
+		{"unconfirmed after a prefix", answer(Ydb.StatusIds_TIMEOUT), ydbfailure.Unit{Text: insert}, 1, unknownAfterOne,
+			"the unit's outcome is unknown: YDB answered TIMEOUT, which does not show whether the unit applied"},
+		{"no answer", ydbfailure.Answer{}, ydbfailure.Unit{Text: insert}, 0, unknown, "the unit's outcome is unknown: no answer of YDB's shows whether it applied"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			c.Assert(ydbfailure.Failed(test.answer, test.unit, test.applied), qt.CmpEquals(protocmp.Transform()), test.want)
+			want := proto.CloneOf(test.want)
+			want.Diagnostic = &protocol.ProviderDiagnostic{Reason: test.reason}
+			c.Assert(ydbfailure.Failed(test.answer, test.unit, test.applied), qt.CmpEquals(protocmp.Transform()), want)
 		})
 	}
 }
@@ -226,8 +252,10 @@ func TestCommitOfAnAbortedTransactionIsRolledBack(t *testing.T) {
 		aborts bool
 		want   *protocol.TransactionResult
 	}{
-		{"negotiated", true, &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, Aborted: true, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated."}},
-		{"not negotiated", false, &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, DiagnosticCode: "ydb.transaction-aborted", Message: "Transaction locks invalidated."}},
+		{"negotiated", true, &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, Aborted: true, DiagnosticCode: "ydb.transaction-aborted",
+			Message: "Transaction locks invalidated.", Diagnostic: &protocol.ProviderDiagnostic{Reason: "YDB aborted the transaction for a conflict (ABORTED)"}}},
+		{"not negotiated", false, &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, DiagnosticCode: "ydb.transaction-aborted",
+			Message: "Transaction locks invalidated.", Diagnostic: &protocol.ProviderDiagnostic{Reason: "YDB aborted the transaction for a conflict (ABORTED)"}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -261,6 +289,90 @@ func TestPathBusy(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			c.Assert(test.answer.PathBusy(), qt.Equals, test.want)
+		})
+	}
+}
+
+// The answers below are the ones 25.1.4.7 and 26.2.1.14 gave, measured, for
+// statements YDB refused. Each issue text quotes a token of the statement, a
+// literal in it or the table's path; the reason says what YDB did with the
+// status, the issue code and the position alone, and quotes none of it.
+func TestRefusedReasonQuotesNothingOfTheAnswer(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		status Ydb.StatusIds_StatusCode
+		issues []*Ydb_Issue.IssueMessage
+		text   string
+		want   string
+		quoted string
+	}{
+		{"an unknown type", Ydb.StatusIds_GENERIC_ERROR, []*Ydb_Issue.IssueMessage{issue(0, 1, 27, "Unknown simple type 'NoSuchType'")},
+			"CREATE TABLE `g75/t1` (id NoSuchType NOT NULL, PRIMARY KEY (id))",
+			"YDB refused the statement while compiling it (GENERIC_ERROR, line 1, column 27)", "NoSuchType"},
+		{"a parse error at a literal", Ydb.StatusIds_GENERIC_ERROR,
+			[]*Ydb_Issue.IssueMessage{issue(0, 1, 43, "extraneous input ''extra'' expecting {<EOF>, ';'}")},
+			"CREATE USER g75u PASSWORD 'hunter2-secret' 'extra'",
+			"YDB refused the statement while compiling it (GENERIC_ERROR, line 1, column 43)", "extra"},
+		{"a key the table holds, 26.2", Ydb.StatusIds_PRECONDITION_FAILED, []*Ydb_Issue.IssueMessage{
+			issue(2012, 0, 0, "Constraint violated. Table: `/local/g75/t2`.", issue(2012, 0, 0, "Conflict with existing key."))},
+			"INSERT INTO `g75/t2` (id, v) VALUES (1, 'hunter2-secret'u)",
+			"YDB refused the statement: it violates a constraint of the table, such as a key the table holds (PRECONDITION_FAILED, issue 2012)", "/local"},
+		{"a key the table holds, 25.1", Ydb.StatusIds_PRECONDITION_FAILED, []*Ydb_Issue.IssueMessage{issue(2012, 0, 0, "Conflict with existing key.")},
+			"INSERT INTO `g75/t2` (id, v) VALUES (1, 'hunter2-secret'u)",
+			"YDB refused the statement: it violates a constraint of the table, such as a key the table holds (PRECONDITION_FAILED, issue 2012)", "Conflict"},
+		{"a NOT NULL column without a value", Ydb.StatusIds_BAD_REQUEST, []*Ydb_Issue.IssueMessage{issue(1030, 0, 0, "Type annotation",
+			issue(0, 1, 13, "At function: KiWriteTable!", issue(2032, 1, 13, "Missing not null column in input: v. All not null columns should be initialized")))},
+			"INSERT INTO `g75/t2` (id) VALUES (2)",
+			"YDB refused the statement while compiling it: it gives no value to a NOT NULL column (BAD_REQUEST, issue 2032, line 1, column 13)", "column in input: v"},
+		{"a value of another type", Ydb.StatusIds_GENERIC_ERROR, []*Ydb_Issue.IssueMessage{issue(1030, 0, 0, "Type annotation",
+			issue(0, 1, 13, "At function: KiWriteTable!",
+				issue(0, 1, 27, "Failed to convert type: Struct<'id':String,'v':Utf8> to Struct<'id':Int64,'v':Utf8>", issue(0, 1, 27, "Failed to convert 'id': String to Int64")),
+				issue(2031, 1, 27, "Failed to convert input columns types to scheme types")))},
+			"UPSERT INTO `g75/t2` (id, v) VALUES ('hunter2-secret', 'x'u)",
+			"YDB refused the statement while compiling it: a value it writes does not convert to its column's type (GENERIC_ERROR, issue 2031, line 1, column 27)", "Struct<"},
+		{"a table that does not exist", Ydb.StatusIds_SCHEME_ERROR, []*Ydb_Issue.IssueMessage{issue(1030, 0, 0, "Type annotation",
+			issue(0, 1, 12, "At function: KiDropTable!", issue(2003, 1, 12, "Cannot find table 'db.[/local/g75/missing]' because it does not exist or you do not have access permissions.")))},
+			"DROP TABLE `g75/missing`",
+			"YDB refused the statement while compiling it: it names a scheme object that does not exist or that the connection may not read (SCHEME_ERROR, issue 2003, line 1, column 12)",
+			"/local"},
+		{"a password the server refuses", Ydb.StatusIds_PRECONDITION_FAILED, []*Ydb_Issue.IssueMessage{issue(2029, 0, 0, "Executing ESchemeOpAlterLogin",
+			issue(2029, 0, 0, "Kikimr precondition failed", issue(0, 0, 0, "Password contains unacceptable characters")))},
+			"CREATE USER g75u PASSWORD 'hunter2-secret'",
+			"YDB refused the statement (PRECONDITION_FAILED, issue 2029)", "Password"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			read := ydbfailure.Read(fmt.Errorf("execute: %w", &answered{status: test.status, issues: test.issues}))
+
+			result := ydbfailure.Failed(read, ydbfailure.Unit{Text: test.text}, 0)
+
+			c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
+			c.Assert(result.GetDiagnostic().GetReason(), qt.Equals, test.want)
+			c.Assert(result.GetMessage(), qt.Contains, test.quoted)
+			c.Assert(result.GetDiagnostic().GetReason(), qt.Not(qt.Contains), test.quoted)
+			c.Assert(result.GetDiagnostic().GetReason(), qt.Not(qt.Contains), "hunter2")
+			c.Assert(provider.ValidateDiagnostic(result.GetDiagnostic()), qt.IsNil)
+		})
+	}
+}
+
+// A unit sent with lines in front of it, as a session on a dev realm sends
+// one, has its position counted from its own text, and a position inside the
+// lines in front is no position of the unit's.
+func TestWithoutLinesCountsFromTheUnitsText(t *testing.T) {
+	for _, test := range []struct {
+		name                string
+		row, column         uint32
+		wantRow, wantColumn uint32
+	}{
+		{"a position in the unit", 2, 26, 1, 26},
+		{"a position in the lines in front", 1, 9, 0, 0},
+		{"no position", 0, 0, 0, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			moved := located(compiled(Ydb.StatusIds_GENERIC_ERROR), 0, test.row, test.column).WithoutLines(1)
+			c.Assert([]uint32{moved.Row, moved.Column}, qt.DeepEquals, []uint32{test.wantRow, test.wantColumn})
 		})
 	}
 }
