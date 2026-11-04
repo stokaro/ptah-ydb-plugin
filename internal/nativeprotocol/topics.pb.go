@@ -568,8 +568,9 @@ type ObservedChangefeed struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	Description *ChangefeedDescription `protobuf:"bytes,1,opt,name=description,proto3" json:"description,omitempty"`
 	Topic       *DescribeTopicResult   `protobuf:"bytes,2,opt,name=topic,proto3" json:"topic,omitempty"`
-	// Presence of the native initial_scan_progress records the requested scan
-	// even after it completes. Progress counters themselves are not schema.
+	// Records the requested scan: the native initial_scan_progress, which stays
+	// after the scan completes, or STATE_INITIAL_SCAN, which YDB reports before
+	// the first progress. Progress counters themselves are not schema.
 	InitialScan   bool `protobuf:"varint,3,opt,name=initial_scan,json=initialScan,proto3" json:"initial_scan,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
