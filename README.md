@@ -536,6 +536,12 @@ YDB does, and writes each change as the host's embedded engine writes it. A
 host that does not list it gets none of this: views stay native objects, and a
 declared comment is refused as a table setting no creation states.
 
+The comments of a table the host creates, of its columns and of its indexes,
+and of a column or an index it adds to a table, reach the provider as comment
+steps after the step that creates the object, as for any comment change. The
+provider takes them off the declaration it creates the table from, and runs
+the steps after its own steps on that table.
+
 Views and comments use these shared stages:
 
 | Step | Views | Comments |
