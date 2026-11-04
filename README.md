@@ -2236,7 +2236,11 @@ They require `add_column_with_default`, established from the release line and
 A removal checks its captured column definition and refuses key, index, TTL, or
 partitioning dependencies before dispatch. Each operation verifies the remaining
 columns and table settings after its single write. The graph orders additions
-before dependent settings and removals after them.
+before the default and sequence changes, and removals after them. The table's
+family, TTL, partitioning, index and changefeed steps are outside that
+sequence. Each carries its own edges to the column steps it depends on, and
+otherwise runs where the host places it: the host drops an index before it
+adds a column.
 
 The negotiated `schema.columns` service compares the exact columns the host
 pairs inside their full captured tables. It reports type and default
