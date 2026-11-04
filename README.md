@@ -1762,6 +1762,13 @@ against the common steps at those paths; a transfer reads its table and a local
 topic. A drop of a failed-over replication runs without `CASCADE` and keeps its
 tables. The provider never pauses, resumes or fails over an object.
 
+A grant names a replication or a transfer by its directory and name
+(`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
+path. The planner puts a GRANT or a REVOKE after the creation or the change of
+its object, and a drop replaces the REVOKE the host planned, since YDB drops an
+object's access list with it and a REVOKE after the drop would name a path that
+is gone. A change in place, such as a new lambda, keeps the entries.
+
 Execution reads the object before the statement and refuses one that changed
 since the plan read it, runs the statement once, and reads the object back. The
 statement names the object, the replica targets, the transfer's table and a
@@ -1791,7 +1798,10 @@ changefeed into a table, moves a row through it, changes its lambda and drops
 it, and `TestTransferRefusedWithoutTheCapabilitySubprocess` checks the refusal on
 a line without transfers. `TestHostAppliesAnAsyncReplication_HappyPath` and
 `TestHostAppliesATransfer_HappyPath` drive `ptah schema apply` from YAML through
-the same steps. Each needs a server whose gRPC services include replication.
+the same steps. `TestHostGrantsOnAnAsyncReplication_HappyPath` and
+`TestHostGrantsOnATransfer_HappyPath` grant a user a permission in the plan that
+creates the object, keep it through a change in place and drop the object
+without a REVOKE. Each needs a server whose gRPC services include replication.
 
 ## Resource pools and classifiers
 
@@ -3167,12 +3177,16 @@ and an untyped null as `Void`, as a plain null binds. So a Go `int32` writes an
 null into an `Optional<Utf8>` one. A typed timestamp outside the `Timestamp`
 range is refused rather than bound as a `Timestamp64`.
 
-The negotiated `scope.selections` declaration makes coordination nodes, topics,
-external data sources and external tables selectable by their directory and
-name. Resource pools and classifiers use database-wide names, including literal
-dots. A kept classifier keeps the pool it requires when the input contains that
-pool; an explicit exclusion of the pool still wins. Grants follow the object
-their target names.
+The negotiated `scope.selections` declaration makes secrets, streaming queries,
+coordination nodes, topics, external data sources, external tables, async
+replications and transfers selectable by their directory and name. Resource
+pools and classifiers use database-wide names, including literal dots. A kept
+classifier keeps the pool it requires when the input contains that pool; an
+explicit exclusion of the pool still wins. Grants follow the object their
+target names: each kind except the classifier declares the grant object type
+the host's embedded engine names it with, such as `ASYNC REPLICATION` or
+`TRANSFER`. A grant on a type no selection declares is read as a grant on a
+table of the same name, so a scoped plan would leave it out.
 
 ## Extraction still required
 
