@@ -124,6 +124,23 @@ func indexIntentOf(index *Ydb_Table.TableIndex) *native.IndexIntent {
 	return result
 }
 
+// settingsAfterAdditions orders the addition of an index before the change
+// that gives it its declared settings, which needs the index to exist.
+func settingsAfterAdditions(steps []*indexStep, settings []*indexSettingsStep) []*protocol.PlanningDependency {
+	var result []*protocol.PlanningDependency
+	for _, add := range steps {
+		if add.change.add == nil {
+			continue
+		}
+		for _, change := range settings {
+			if change.change.held.GetName() == add.change.name() {
+				result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(add.id), After: proto.CloneOf(change.id)})
+			}
+		}
+	}
+	return result
+}
+
 // indexReplacements orders the removal of an index before the addition of an
 // index under the same name, which replaces it.
 func indexReplacements(steps []*indexStep) []*protocol.PlanningDependency {
