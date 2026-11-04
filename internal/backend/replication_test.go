@@ -431,17 +431,18 @@ func replicationContextState(c *qt.C, representation protocol.ValueInput_Represe
 	if value != nil {
 		normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Features, Values: []*protocol.ValueInput{{Id: "mirror", Representation: representation, Value: value}}})
 		c.Assert(err, qt.IsNil)
-		state.Records = []*protocol.ComparisonRecord{{Kind: value.Kind, Subject: testplanning.Subject(&protocol.Reference{Engine: "ydb", Kind: value.Kind, Schema: "app", Name: "mirror"}), Value: normalized.Values[0]}}
+		state.Records = []*protocol.ComparisonRecord{{Kind: value.Kind, Subject: testplanning.Subject(value.Owner), Value: normalized.Values[0]}}
 	}
 	return state
 }
 
 // keptReplicationRequest plans no replication change beside table, with the
-// replication mirror held in state and declared as it is held.
-func keptReplicationRequest(c *qt.C, state string, table *protocol.PlanningTable) *protocol.PlanFeaturesRequest {
+// replication mirror held in state and declared as it is held. The read
+// replication names database, the session's as the host sends it, or none.
+func keptReplicationRequest(c *qt.C, state, database string, table *protocol.PlanningTable) *protocol.PlanFeaturesRequest {
 	c.Helper()
 	read := readReplication(c, new(mirror()), state)
-	read.Owner.Database = ""
+	read.Owner.Database = database
 	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: replicationplan.ReplicationServiceID, DatabasePath: "/local", ContextKinds: []string{schema.ReplicationProperties},
 		TargetFeatures: backend.Description().Features, Capabilities: replicationCapabilities(), Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
 		DesiredObjects: replicationContextState(c, protocol.ValueInput_DESIRED, declaredReplication(c, new(mirror()))),
@@ -456,7 +457,7 @@ func TestKeptReplicationAssessment_HappyPath(t *testing.T) {
 	elsewhere.Schema = "other"
 	subject := replicaTable()
 	subject.Schema = testcomparison.Part("other")
-	result, err := backend.New().PlanFeatures(t.Context(), keptReplicationRequest(c, replication.StateRunning, &protocol.PlanningTable{Subject: subject, Action: protocol.PlanningTable_CREATE, Desired: elsewhere}))
+	result, err := backend.New().PlanFeatures(t.Context(), keptReplicationRequest(c, replication.StateRunning, "", &protocol.PlanningTable{Subject: subject, Action: protocol.PlanningTable_CREATE, Desired: elsewhere}))
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Diagnostics, qt.HasLen, 0)
 	c.Assert(result.Objects, qt.HasLen, 1)
@@ -467,25 +468,33 @@ func TestKeptReplicationAssessment_HappyPath(t *testing.T) {
 // at the path of a running replication's replica, and a failed-over replica
 // the plan drops while the schema keeps the replication.
 func TestKeptReplicationAssessment_FailurePath(t *testing.T) {
+	dropped := &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_DROP, Current: &protocol.ObservedTable{Schema: "replica", Name: "accounts", Features: &protocol.CapturedFeatures{
+		Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}},
+		Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}}}}}
 	tests := []struct {
-		name    string
-		state   string
-		table   *protocol.PlanningTable
-		wantErr string
+		name     string
+		state    string
+		database string
+		table    *protocol.PlanningTable
+		wantErr  string
 	}{
 		{name: "a table at a live replica", state: replication.StateRunning,
 			table:   &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_CREATE, Desired: declaredReplica()},
 			wantErr: "table replica/accounts: it is a replica table async replication app/mirror writes, read-only while the replication runs .*"},
-		{name: "a failed-over replica dropped", state: replication.StateDone,
-			table: &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_DROP, Current: &protocol.ObservedTable{Schema: "replica", Name: "accounts", Features: &protocol.CapturedFeatures{
-				Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}},
-				Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}}}}},
+		{name: "a failed-over replica dropped", state: replication.StateDone, table: dropped,
 			wantErr: "table replica/accounts: it is a table async replication app/mirror created and failed over, which the schema keeps; .*"},
+		// The host names the declared replication without its database
+		// and the read one with the session's.
+		{name: "a failed-over replica dropped, read in the session's database", state: replication.StateDone, database: "/local", table: dropped,
+			wantErr: "table replica/accounts: it is a table async replication app/mirror created and failed over, which the schema keeps; .*"},
+		{name: "a table at a live replica, read in the session's database", state: replication.StateRunning, database: "/local",
+			table:   &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_CREATE, Desired: declaredReplica()},
+			wantErr: "table replica/accounts: it is a replica table async replication app/mirror writes, read-only while the replication runs .*"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			result, err := backend.New().PlanFeatures(t.Context(), keptReplicationRequest(c, test.state, test.table))
+			result, err := backend.New().PlanFeatures(t.Context(), keptReplicationRequest(c, test.state, test.database, test.table))
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Objects, qt.HasLen, 0)
 			c.Assert(result.Diagnostics, qt.HasLen, 1)
