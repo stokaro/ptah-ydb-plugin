@@ -342,7 +342,7 @@ func hostReplanSource(c *qt.C, directory, format, text string) (string, error) {
 	c.Helper()
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
-	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml"}[format]
+	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "hcl": "schema.hcl"}[format]
 	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil)
 	source := []string{"--schema-file", filepath.Join(root, name)}
 	if format == "go" {

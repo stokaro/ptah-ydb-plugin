@@ -995,20 +995,24 @@ decoded again before they are returned, and a value they do not give back is a
 loss. A value that needs several declarations is a loss for a host that does not
 negotiate `source.encode-groups`. `struct_name` is written in YAML alone.
 
-A source claims every model its format lists, completely; what the request does
-not know is written as not-described entries, so that the source read back
-claims no more than the read it was written from. A read knows a native kind
-only in the directories it listed, and a header cannot name a directory, so a Go
-or HCL export of a read leaves every native kind of the format unmanaged, with
-`reason="not-inspected" provenance="observed"`: applied back, even over more
-directories than were read, it removes no object it does not declare. An object
-whose own knowledge is not complete gets an entry that names it. A facet is
-known where its table is, so a table the export declares carries its facets as
-the read holds them, and a declared table whose facet knowledge is not complete
-refuses the export. Knowledge left unmanaged by a source's own entry is passed
-on with `provenance="declared"`. YAML writes no header, and neither does a
-format for a host that does not negotiate `source.limits`, so there such
-knowledge refuses the export, as does a kind no entry names.
+A source claims every model its format lists, completely. An export of a read
+is complete for the selection it is applied to, as the host's embedded YDB
+engine writes it: a host that writes a read narrowed by `--schemas` sends each
+kind the read knew in every directory it listed as complete. Applied back over
+that directory, the export plans nothing, and an object whose declaration is
+removed from it is dropped; applied over more directories, it drops their
+objects too. What the request does not know is written as not-described
+entries, so that the source read back claims no more than that: a kind no
+directory of the read knew, or one the read knew less in some directory, is
+left unmanaged as a whole, since a header cannot name a directory, with
+`reason="not-inspected" provenance="observed"`. An object whose own knowledge
+is not complete gets an entry that names it. A facet is known where its table
+is, so a table the export declares carries its facets as the read holds them,
+and a declared table whose facet knowledge is not complete refuses the export.
+Knowledge left unmanaged by a source's own entry is passed on with
+`provenance="declared"`. YAML writes no header, and neither does a format for a
+host that does not negotiate `source.limits`, so there such knowledge refuses
+the export, as does a kind no entry names.
 
 The subprocess tests exercise decoding, encoding, normalization, and
 representation conversion without a database address; a YQL schema declares

@@ -72,9 +72,9 @@ func TestEncodeSource_WritesTheKnowledgeItLacks_HappyPath(t *testing.T) {
 			subjects []*protocol.ModelSubjectCoverage
 			want     []string
 		}{
-			{name: "a read of one directory", kinds: []*protocol.ModelKindCoverage{
+			{name: "a kind known in one directory only", kinds: []*protocol.ModelKindCoverage{
 				kindKnowledge(schema.CoordinationDesiredModel(), protocol.ModelKnowledge_UNINSPECTED, directory("app"))}, want: []string{"coordination_node "}},
-			{name: "a read of several directories", kinds: []*protocol.ModelKindCoverage{
+			{name: "a kind known in some directories only", kinds: []*protocol.ModelKindCoverage{
 				kindKnowledge(schema.CoordinationDesiredModel(), protocol.ModelKnowledge_UNINSPECTED, directory("app"), directory("other"))}, want: []string{"coordination_node "}},
 			{name: "a kind no region knows", kinds: []*protocol.ModelKindCoverage{
 				kindKnowledge(schema.CoordinationDesiredModel(), protocol.ModelKnowledge_UNINSPECTED)}, want: []string{"coordination_node "}},
@@ -82,11 +82,11 @@ func TestEncodeSource_WritesTheKnowledgeItLacks_HappyPath(t *testing.T) {
 				Knowledge: knowledge(protocol.ModelKnowledge_COMPLETE),
 				Regions:   []*protocol.ModelNamespaceKnowledge{{Scope: directory("app"), Knowledge: knowledge(protocol.ModelKnowledge_UNINSPECTED)}}}},
 				want: []string{"coordination_node "}},
-			{name: "a read of the whole database", kinds: []*protocol.ModelKindCoverage{
+			{name: "a kind known in its database only", kinds: []*protocol.ModelKindCoverage{
 				kindKnowledge(schema.CoordinationDesiredModel(), protocol.ModelKnowledge_UNINSPECTED, wholeDatabase())}, want: []string{"coordination_node "}},
 			{name: "complete knowledge in regions", kinds: []*protocol.ModelKindCoverage{
 				kindKnowledge(schema.CoordinationDesiredModel(), protocol.ModelKnowledge_COMPLETE, directory("app"))}, want: []string{"coordination_node "}},
-			{name: "complete knowledge", kinds: []*protocol.ModelKindCoverage{
+			{name: "a kind a narrowed read knows in every directory it listed", kinds: []*protocol.ModelKindCoverage{
 				kindKnowledge(schema.CoordinationDesiredModel(), protocol.ModelKnowledge_COMPLETE)}},
 			{name: "an object the request does not know", kinds: []*protocol.ModelKindCoverage{
 				kindKnowledge(schema.CoordinationDesiredModel(), protocol.ModelKnowledge_COMPLETE)},

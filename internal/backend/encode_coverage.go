@@ -17,16 +17,17 @@ import (
 // model its format lists, and claims it complete; the entries are how it says
 // less.
 //
-// A native kind is known completely in the source only where the request
-// knows it completely, in every namespace. A kind the request knows in some
-// namespaces only, as a read knows a kind in the directories it listed and
-// not outside the database it read, is written as an entry that leaves the
-// whole kind unmanaged: a header names no namespace, so leaving the kind
+// A native kind the request knows completely gets no entry. A host sends a
+// read that knows a kind in every namespace it listed as complete: the source
+// describes what the read listed and is complete for the selection a later
+// plan applies it to, as the host's embedded YDB engine writes a read that
+// --schemas narrowed, so removing an object's declaration removes the object.
+// A kind the request knows less, a kind no read knew anywhere or one with a
+// namespace region the read did not know, is written as an entry that leaves
+// the whole kind unmanaged: a header names no namespace, so leaving the kind
 // unmanaged everywhere is the claim that says no more than the request knew.
-// It also says less than the request knew inside those namespaces, which only
-// keeps a later plan from removing an object there. An object of a kind the
-// source knows completely, but whose own knowledge is not complete, is written
-// as an entry that names it.
+// An object of a kind the source knows completely, but whose own knowledge is
+// not complete, is written as an entry that names it.
 //
 // A facet is known where its table is: a source states the facets of the
 // tables it declares, and a read reports every facet of each table it lists.
