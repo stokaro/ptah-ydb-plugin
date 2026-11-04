@@ -83,6 +83,32 @@ func TestCompileNativeCreation(t *testing.T) {
 	request.PrimaryKey[0] = "mutated"
 	c.Assert(proto.Equal(original, table), qt.IsTrue)
 }
+
+// A declared type whose detail YDB does not keep compiles to the type that
+// holds its values, as the host's built-in engine creates it: the length of a
+// string, the display width of an integer and the precision of a timestamp
+// are left out.
+func TestCompileLeavesOutADetailYDBDoesNotKeep(t *testing.T) {
+	for _, test := range []struct{ declared, want string }{
+		{"VARCHAR(80)", "Utf8"},
+		{"CHAR(2)", "Utf8"},
+		{"INT(11)", "Int32"},
+		{"BIGINT(20)", "Int64"},
+		{"TIMESTAMP(3)", "Timestamp"},
+	} {
+		t.Run(test.declared, func(t *testing.T) {
+			c := testcheck.New(t)
+			table := declaration()
+			table.Columns[2] = &protocol.DeclaredColumn{Name: "value", Type: test.declared, Nullable: true}
+			request, err := tablecreate.Compile(owner(), table, nil)
+			c.Assert(err, qt.IsNil)
+			spelling, nullable, err := schema.ColumnType(request.Columns[2].Type)
+			c.Assert(err, qt.IsNil)
+			c.Assert(spelling, qt.Equals, test.want)
+			c.Assert(nullable, qt.IsTrue)
+		})
+	}
+}
 func TestCompilePrimaryKeySources(t *testing.T) {
 	for _, test := range []struct {
 		name    string
