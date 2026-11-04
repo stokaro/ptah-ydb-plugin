@@ -9,21 +9,33 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// partitioningChange is what one AlterTable call does to a table's automatic
-// partitioning settings.
+// partitioningChange is what one AlterTable call does to a table's settings:
+// its automatic partitioning, its read replicas and its key bloom filter. The
+// host's embedded engine changes them together, in one ALTER TABLE ... SET.
 type partitioningChange struct {
-	// set holds the settings the call changes and nothing else: a field it does
-	// not name stays as the table holds it. It is nil when nothing changes.
+	// set holds the partitioning settings the call changes and nothing else: a
+	// field it does not name stays as the table holds it. It is nil when the
+	// partitioning does not change.
 	set *Ydb_Table.PartitioningSettings
 	// held is the whole partitioning the table held when the change was planned.
 	held *Ydb_Table.PartitioningSettings
+	// bloom is the key bloom filter the call sets, and unspecified when it
+	// leaves the filter as the table holds it. heldBloom is the filter the
+	// table held.
+	bloom, heldBloom Ydb.FeatureFlag_Status
+	// replicas are the read replicas the call sets, and nil when it leaves them
+	// as the table holds them. heldReplicas are the replicas the table held, nil
+	// for none.
+	replicas, heldReplicas *Ydb_Table.ReadReplicasSettings
 }
 
-func (c partitioningChange) empty() bool { return c.set == nil }
+func (c partitioningChange) empty() bool {
+	return c.set == nil && c.bloom == Ydb.FeatureFlag_STATUS_UNSPECIFIED && c.replicas == nil
+}
 
-// partitioningInput is what the partitioning rule reads. managed is true when
+// partitioningInput is what the settings rule reads. managed is true when
 // the declaration states table properties for this target; a declaration with
-// no table properties leaves the partitioning alone.
+// no table properties leaves the settings alone.
 type partitioningInput struct {
 	managed bool
 	desired *Ydb_Table.PartitioningSettings
@@ -31,6 +43,12 @@ type partitioningInput struct {
 	// layout is the starting layout the declaration states, which YDB takes only
 	// when it creates a table.
 	layout layout
+	// desiredBloom and heldBloom are the key bloom filter the declaration
+	// states and the one the table holds.
+	desiredBloom, heldBloom Ydb.FeatureFlag_Status
+	// desiredReplicas and heldReplicas are the read replicas the declaration
+	// states, nil where it states none, and the ones the table holds.
+	desiredReplicas, heldReplicas *Ydb_Table.ReadReplicasSettings
 }
 
 // partitioningDelta returns the settings of want that a table holding held does
@@ -61,11 +79,21 @@ func partitioningDelta(want, held *Ydb_Table.PartitioningSettings) *Ydb_Table.Pa
 	return delta
 }
 
-// statedPartitioning returns the settings of want that state a value, without
-// the partition columns.
-func statedPartitioning(want *Ydb_Table.PartitioningSettings) *Ydb_Table.PartitioningSettings {
-	return &Ydb_Table.PartitioningSettings{PartitioningBySize: want.GetPartitioningBySize(), PartitioningByLoad: want.GetPartitioningByLoad(),
-		PartitionSizeMb: want.GetPartitionSizeMb(), MinPartitionsCount: want.GetMinPartitionsCount(), MaxPartitionsCount: want.GetMaxPartitionsCount()}
+// defaultPartitionSizeMB is the partition size YDB gives a table when it
+// turns partitioning by size on without a size: measured on 25.1.4.7 and
+// 26.2.1.14, `SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)` on a table that did
+// not split by size leaves 2048 MB.
+const defaultPartitionSizeMB = 2048
+
+// resolvedPartitioning returns every setting a table holding held keeps once
+// the settings want states replace its own, without the partition columns: the
+// stated value of each setting, else the held one. A size is named only where
+// one is stated or held; a table that turns partitioning by size on takes
+// defaultPartitionSizeMB otherwise.
+func resolvedPartitioning(want, held *Ydb_Table.PartitioningSettings) *Ydb_Table.PartitioningSettings {
+	result := ApplyPartitioning(held, want)
+	result.PartitionBy = nil
+	return result
 }
 
 // ApplyPartitioning returns the settings a table holds after an alteration
@@ -120,8 +148,9 @@ func PartitioningHolds(got, set *Ydb_Table.PartitioningSettings) bool {
 }
 
 // planPartitioning returns the change that gives the table the automatic
-// partitioning settings the declaration states, or the reason it cannot be
-// made. An empty change means the table already satisfies the declaration.
+// partitioning settings, the read replicas and the key bloom filter the
+// declaration states, or the reason it cannot be made. An empty change means
+// the table already satisfies the declaration.
 //
 // Only AUTO_PARTITIONING_BY_SIZE, AUTO_PARTITIONING_BY_LOAD,
 // AUTO_PARTITIONING_PARTITION_SIZE_MB, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT
@@ -130,6 +159,9 @@ func PartitioningHolds(got, set *Ydb_Table.PartitioningSettings) bool {
 // names other columns is refused rather than ignored. A starting layout is set
 // when the table is created too: a declaration of one is refused when the
 // minimum partition count it implies is not the one the table holds.
+//
+// The read replicas and the key bloom filter change in the same call. A
+// declaration that leaves either out keeps what the table holds.
 func planPartitioning(in partitioningInput) (partitioningChange, string) {
 	if !in.managed {
 		return partitioningChange{}, ""
@@ -137,27 +169,102 @@ func planPartitioning(in partitioningInput) (partitioningChange, string) {
 	if reason := layoutRefusal(in.layout, in.desired, in.held); reason != "" {
 		return partitioningChange{}, reason
 	}
+	change := partitioningChange{bloom: bloomDelta(in.desiredBloom, in.heldBloom), replicas: replicasDelta(in.desiredReplicas, in.heldReplicas)}
+	if change.bloom != Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+		change.heldBloom = in.heldBloom
+	}
+	if change.replicas != nil {
+		change.heldReplicas = heldReplicas(in.heldReplicas)
+	}
 	if in.desired == nil {
-		return partitioningChange{}, ""
+		return change, ""
 	}
 	if columns := in.desired.GetPartitionBy(); len(columns) != 0 && !slices.Equal(columns, in.held.GetPartitionBy()) {
 		return partitioningChange{}, fmt.Sprintf("the partition columns %q differ from the %q the table holds, and YDB sets them only when the table is created", columns, in.held.GetPartitionBy())
 	}
 	delta := partitioningDelta(in.desired, in.held)
 	if delta == nil {
-		return partitioningChange{}, ""
+		return change, ""
 	}
 	if reason := partitioningRefusal(in.held, delta); reason != "" {
 		return partitioningChange{}, reason
 	}
 	if delta.GetPartitioningBySize() == Ydb.FeatureFlag_ENABLED {
 		// Switching the size partitioning on resets the size and the minimum
-		// count the call does not name, so the call names every setting stated.
-		delta = statedPartitioning(in.desired)
+		// count the call does not name, so the call names every setting the
+		// table keeps: the stated ones and the held value of the others, as
+		// the host's embedded engine writes them.
+		delta = resolvedPartitioning(in.desired, in.held)
 	}
 	held := proto.CloneOf(in.held)
 	if held == nil {
 		held = &Ydb_Table.PartitioningSettings{}
 	}
-	return partitioningChange{set: delta, held: held}, ""
+	change.set, change.held = delta, held
+	return change, ""
+}
+
+// bloomEnabled reports whether a table keeps a bloom filter of its keys. A new
+// table describes its filter as unspecified, and keeps none: measured on
+// 25.1.4.7 and 26.2.1.14 by the host's embedded engine, unspecified and
+// DISABLED both mean no filter.
+func bloomEnabled(status Ydb.FeatureFlag_Status) bool { return status == Ydb.FeatureFlag_ENABLED }
+
+// SameKeyBloomFilter reports whether two descriptions of a key bloom filter
+// keep the same filter: an unspecified one is DISABLED.
+func SameKeyBloomFilter(a, b Ydb.FeatureFlag_Status) bool { return bloomEnabled(a) == bloomEnabled(b) }
+
+// bloomDelta returns the key bloom filter a table holding held has to be
+// given to satisfy want, or unspecified when it already does or want states
+// nothing.
+func bloomDelta(want, held Ydb.FeatureFlag_Status) Ydb.FeatureFlag_Status {
+	if want == Ydb.FeatureFlag_STATUS_UNSPECIFIED || bloomEnabled(want) == bloomEnabled(held) {
+		return Ydb.FeatureFlag_STATUS_UNSPECIFIED
+	}
+	return want
+}
+
+// replicaCount reads read replicas as their mode and count. Nil, and settings
+// that name no mode, are none.
+func replicaCount(replicas *Ydb_Table.ReadReplicasSettings) (perAZ bool, count uint64) {
+	switch settings := replicas.GetSettings().(type) {
+	case *Ydb_Table.ReadReplicasSettings_PerAzReadReplicasCount:
+		return true, settings.PerAzReadReplicasCount
+	case *Ydb_Table.ReadReplicasSettings_AnyAzReadReplicasCount:
+		return false, settings.AnyAzReadReplicasCount
+	}
+	return false, 0
+}
+
+// SameReplicas reports whether two read replica settings keep the same
+// replicas. A count of zero is none in either mode: `PER_AZ:0` is how a
+// declaration removes the replicas a table holds, since YDB has no RESET for
+// them, and a table read back after it holds none.
+func SameReplicas(a, b *Ydb_Table.ReadReplicasSettings) bool {
+	aPerAZ, aCount := replicaCount(a)
+	bPerAZ, bCount := replicaCount(b)
+	return aCount == bCount && (aCount == 0 || aPerAZ == bPerAZ)
+}
+
+// replicasDelta returns the read replicas a table holding held has to be
+// given to satisfy want, or nil when it already does or want states nothing.
+// Replicas declared as none, on a table that holds some, are written as
+// `PER_AZ:0`.
+func replicasDelta(want, held *Ydb_Table.ReadReplicasSettings) *Ydb_Table.ReadReplicasSettings {
+	if want.GetSettings() == nil || SameReplicas(want, held) {
+		return nil
+	}
+	if _, count := replicaCount(want); count == 0 {
+		return &Ydb_Table.ReadReplicasSettings{Settings: &Ydb_Table.ReadReplicasSettings_PerAzReadReplicasCount{}}
+	}
+	return proto.CloneOf(want)
+}
+
+// heldReplicas returns the read replicas a table holds, never nil: settings
+// that name no mode stand for none.
+func heldReplicas(held *Ydb_Table.ReadReplicasSettings) *Ydb_Table.ReadReplicasSettings {
+	if held == nil {
+		return &Ydb_Table.ReadReplicasSettings{}
+	}
+	return proto.CloneOf(held)
 }

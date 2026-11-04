@@ -259,6 +259,35 @@ func TestAlterationStatement_HappyPath(t *testing.T) {
 				"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2);",
 		},
 		{
+			name:    "the partitioning switched to splitting by size names the size YDB gives it",
+			request: `{"alterPartitioningSettings":{"partitioningBySize":"ENABLED","partitioningByLoad":"ENABLED","minPartitionsCount":"2"}}`,
+			held:    `{"partitioningBySize":"DISABLED","partitioningByLoad":"ENABLED","minPartitionsCount":"2"}`,
+			want: "ALTER TABLE `app/jobs` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, " +
+				"AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2);",
+		},
+		{
+			name:    "a key bloom filter names nothing else",
+			request: `{"setKeyBloomFilter":"ENABLED"}`,
+			want:    "ALTER TABLE `app/jobs` SET (KEY_BLOOM_FILTER = ENABLED);",
+		},
+		{
+			name:    "read replicas name nothing else",
+			request: `{"setReadReplicasSettings":{"anyAzReadReplicasCount":"2"}}`,
+			want:    "ALTER TABLE `app/jobs` SET (READ_REPLICAS_SETTINGS = \"ANY_AZ:2\");",
+		},
+		{
+			name:    "read replicas removed as PER_AZ:0",
+			request: `{"setReadReplicasSettings":{"perAzReadReplicasCount":"0"}}`,
+			want:    "ALTER TABLE `app/jobs` SET (READ_REPLICAS_SETTINGS = \"PER_AZ:0\");",
+		},
+		{
+			name:    "the partitioning, the replicas and the filter in one statement",
+			request: `{"alterPartitioningSettings":{"maxPartitionsCount":"8"},"setReadReplicasSettings":{"perAzReadReplicasCount":"0"},"setKeyBloomFilter":"DISABLED"}`,
+			held:    `{"partitioningBySize":"DISABLED","partitioningByLoad":"ENABLED","minPartitionsCount":"2","maxPartitionsCount":"9"}`,
+			want: "ALTER TABLE `app/jobs` SET (AUTO_PARTITIONING_BY_SIZE = DISABLED, AUTO_PARTITIONING_BY_LOAD = ENABLED, " +
+				"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2, AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 8, READ_REPLICAS_SETTINGS = \"PER_AZ:0\", KEY_BLOOM_FILTER = DISABLED);",
+		},
+		{
 			name:    "a sync index with covered columns",
 			request: `{"addIndexes":[{"name":"by_ts","indexColumns":["ts","id"],"dataColumns":["payload"],"globalIndex":{}}]}`,
 			want:    "ALTER TABLE `app/jobs` ADD INDEX `by_ts` GLOBAL SYNC ON (`ts`, `id`) COVER (`payload`);",

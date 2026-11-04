@@ -86,6 +86,40 @@ func alterationScenarios() []alterationScenario {
 				}
 				return held
 			}},
+		{name: "partitioning by size switched off and on with a minimum the declaration leaves out", statements: []string{"ALTER TABLE", "ALTER TABLE", "ALTER TABLE"},
+			apply: func(c *qt.C, f *facetFixture) any {
+				var held []any
+				for _, declared := range []string{partitioningDeclaration(`{"minPartitionsCount":"2"}`), partitioningDeclaration(`{"partitioningBySize":"DISABLED"}`),
+					partitioningDeclaration(`{"partitioningBySize":"ENABLED"}`)} {
+					f.apply(c, "partitioning", declared, f.compare(c, declared).Changes)
+					held = append(held, f.heldPartitioning(c))
+					c.Assert(f.compare(c, declared).Changes, qt.HasLen, 0)
+				}
+				return held
+			}},
+		{name: "the read replicas and the key bloom filter", statements: []string{"ALTER TABLE", "ALTER TABLE", "ALTER TABLE"},
+			apply: func(c *qt.C, f *facetFixture) any {
+				var held []any
+				for _, declared := range []string{settingsDeclaration(`"keyBloomFilter":"ENABLED","readReplicasSettings":{"perAzReadReplicasCount":"1"}`),
+					settingsDeclaration(`"partitioningSettings":{"maxPartitionsCount":"8"},"readReplicasSettings":{"anyAzReadReplicasCount":"2"}`),
+					settingsDeclaration(`"keyBloomFilter":"DISABLED","readReplicasSettings":{"perAzReadReplicasCount":"0"}`)} {
+					f.apply(c, "settings", declared, f.compare(c, declared).Changes)
+					bloom, replicas := f.heldReadSettings(c)
+					held = append(held, bloom, replicas, f.heldPartitioning(c))
+					c.Assert(f.compare(c, declared).Changes, qt.HasLen, 0)
+				}
+				return held
+			}},
+		{name: "an index's partitioning and read replicas", clauses: ", INDEX by_payload GLOBAL SYNC ON (payload)", statements: []string{"ALTER TABLE", "ALTER TABLE"},
+			apply: func(c *qt.C, f *facetFixture) any {
+				var held []string
+				for _, settings := range []string{`"partitioningSettings":{"partitioningByLoad":"ENABLED","minPartitionsCount":"3"},"readReplicasSettings":{"perAzReadReplicasCount":"1"}`,
+					`"partitioningSettings":{"partitioningBySize":"DISABLED"},"readReplicasSettings":{"perAzReadReplicasCount":"0"}`} {
+					f.applyIndexSettings(c, "index-settings", declaredIndexes(indexWithSettings("globalIndex", "", settings)))
+					held = append(held, f.heldIndexSettings(c))
+				}
+				return held
+			}},
 		{name: "an index added", statements: []string{"ALTER TABLE"},
 			apply: func(c *qt.C, f *facetFixture) any {
 				f.applyRecords(c, "index-add", f.compareIndexes(c, declaredIndex).Changes, desiredFacet(c, f.client, f.owner, schema.IndexProperties, declaredIndex))

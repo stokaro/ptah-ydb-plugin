@@ -79,8 +79,14 @@ const (
 	syncByNote    = `"name":"by_note","indexColumns":["note"],"globalIndex":{}`
 	coveringLabel = `"name":"by_label","indexColumns":["label"],"dataColumns":["note"],"globalIndex":{}`
 	uniqueByLabel = `"name":"by_label","indexColumns":["label"],"globalUniqueIndex":{}`
-	byNoteAndText = `"name":"by_both","indexColumns":["note","text"],"globalIndex":{}`
-	byTextAndNote = `"name":"by_both","indexColumns":["text","note"],"globalIndex":{}`
+	// heldDefaultsByLabel is syncByLabel with the settings YDB reports for a new index.
+	heldDefaultsByLabel = `"name":"by_label","indexColumns":["label"],"globalIndex":{"settings":{"partitioningSettings":` +
+		`{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","minPartitionsCount":"1"}}}`
+	minThreeByLabel   = `"name":"by_label","indexColumns":["label"],"globalIndex":{"settings":{"partitioningSettings":{"minPartitionsCount":"3"}}}`
+	replicasByLabel   = `"name":"by_label","indexColumns":["label"],"globalIndex":{"settings":{"readReplicasSettings":{"perAzReadReplicasCount":"1"}}}`
+	defaultsKeptLabel = `"name":"by_label","indexColumns":["label"],"globalIndex":{"settings":{"partitioningSettings":{"partitioningBySize":"ENABLED"}}}`
+	byNoteAndText     = `"name":"by_both","indexColumns":["note","text"],"globalIndex":{}`
+	byTextAndNote     = `"name":"by_both","indexColumns":["text","note"],"globalIndex":{}`
 )
 
 const (
@@ -263,6 +269,17 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"one setting among several that differs",
 			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"512","maxPartitionsCount":"8"}`)},
 			side{table: withPartitioning(`{"partitioningBySize":"ENABLED","partitionSizeMb":"512","maxPartitionsCount":"50"}`)}, []string{"records"}},
+		{"a key bloom filter the table does not keep", side{table: withLayout(`"keyBloomFilter":"ENABLED"`)}, side{table: plain}, []string{"records"}},
+		{"a key bloom filter declared off on a table that keeps one",
+			side{table: withLayout(`"keyBloomFilter":"DISABLED"`)}, side{table: withLayout(`"keyBloomFilter":"ENABLED"`)}, []string{"records"}},
+		{"read replicas the table does not hold",
+			side{table: withLayout(`"readReplicasSettings":{"perAzReadReplicasCount":"1"}`)}, side{table: plain}, []string{"records"}},
+		{"read replicas in another mode",
+			side{table: withLayout(`"readReplicasSettings":{"perAzReadReplicasCount":"1"}`)},
+			side{table: withLayout(`"readReplicasSettings":{"anyAzReadReplicasCount":"1"}`)}, []string{"records"}},
+		{"read replicas declared away",
+			side{table: withLayout(`"readReplicasSettings":{"perAzReadReplicasCount":"0"}`)},
+			side{table: withLayout(`"readReplicasSettings":{"anyAzReadReplicasCount":"2"}`)}, []string{"records"}},
 		{"a family with another compression",
 			side{table: withFamily(`{"name":"archive","compression":"COMPRESSION_LZ4"}`)},
 			side{table: withFamily(`{"name":"archive","compression":"COMPRESSION_NONE"}`)}, []string{"records"}},
@@ -284,6 +301,8 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"an index with another covered column", side{indexes: declaredIndexes(coveringLabel)}, side{indexes: heldIndexes(syncByLabel)}, []string{"records"}},
 		{"an index with its key columns in another order", side{indexes: declaredIndexes(byTextAndNote)}, side{indexes: heldIndexes(byNoteAndText)}, []string{"records"}},
 		{"another index in place of the held one", side{indexes: declaredIndexes(syncByNote)}, side{indexes: heldIndexes(syncByLabel)}, []string{"records"}},
+		{"an index with another minimum partition count", side{indexes: declaredIndexes(minThreeByLabel)}, side{indexes: heldIndexes(heldDefaultsByLabel)}, []string{"records"}},
+		{"an index without the declared read replicas", side{indexes: declaredIndexes(replicasByLabel)}, side{indexes: heldIndexes(heldDefaultsByLabel)}, []string{"records"}},
 		{"an index and a TTL in one table change", side{table: withTTL(hourly), indexes: declaredIndexes(syncByLabel)}, side{table: plain, indexes: heldIndexes()}, []string{"records", "records"}},
 		{"a TTL on a table the source states no properties for", side{}, side{table: withTTL(hourly)}, []string{"records"}},
 		{"a table and a column",
@@ -336,6 +355,15 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 			side{table: withLayout(`"uniformPartitions":"4","partitioningSettings":{"minPartitionsCount":"1"}`)}, side{table: withPartitioning(`{"minPartitionsCount":"1"}`)}},
 		{"partition columns the table holds",
 			side{table: withPartitioning(`{"partitionBy":["id"]}`)}, side{table: withPartitioning(`{"partitionBy":["id"]}`)}},
+		{"an index that holds the settings it declares", side{indexes: declaredIndexes(defaultsKeptLabel)}, side{indexes: heldIndexes(heldDefaultsByLabel)}},
+		{"index settings the declaration leaves out", side{indexes: declaredIndexes(syncByLabel)}, side{indexes: heldIndexes(heldDefaultsByLabel)}},
+		{"a key bloom filter declared off on a table that reports none", side{table: withLayout(`"keyBloomFilter":"DISABLED"`)}, side{table: plain}},
+		{"a key bloom filter the declaration leaves out", side{table: plain}, side{table: withLayout(`"keyBloomFilter":"ENABLED"`)}},
+		{"no read replicas declared on a table that holds none",
+			side{table: withLayout(`"readReplicasSettings":{"anyAzReadReplicasCount":"0"}`)}, side{table: plain}},
+		{"the read replicas the table holds",
+			side{table: withLayout(`"readReplicasSettings":{"anyAzReadReplicasCount":"2"}`)}, side{table: withLayout(`"readReplicasSettings":{"anyAzReadReplicasCount":"2"}`)}},
+		{"read replicas the declaration leaves out", side{table: plain}, side{table: withLayout(`"readReplicasSettings":{"anyAzReadReplicasCount":"2"}`)}},
 		{"partition columns the comparison leaves to the planner",
 			side{table: withPartitioning(`{"partitionBy":["id","ts"]}`)}, side{table: withPartitioning(`{"partitionBy":["id"]}`)}},
 		{"a family the table already holds",

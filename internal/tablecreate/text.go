@@ -1,6 +1,7 @@
 package tablecreate
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -404,9 +405,10 @@ func splitValueText(kind *Ydb.Type, value *Ydb.Value) (string, error) {
 //   - additions and removals: `ADD COLUMN` and `DROP COLUMN`, one action per
 //     column;
 //   - the TTL: `SET (TTL = ...)` or `RESET (TTL)`;
-//   - the partitioning: `SET (...)` naming every automatic partitioning
-//     setting the table ends with, since a setting YQL leaves out can be reset
-//     by one it names;
+//   - the settings: `SET (...)` naming every automatic partitioning setting
+//     the table ends with when the partitioning changes, since a setting YQL
+//     leaves out can be reset by one it names, then READ_REPLICAS_SETTINGS and
+//     KEY_BLOOM_FILTER where they change, which reset nothing;
 //   - an index: `ADD INDEX` or `DROP INDEX`.
 func AlterationStatement(path string, alteration *Alteration) (string, error) {
 	request := alteration.Request
@@ -442,8 +444,8 @@ func AlterationStatement(path string, alteration *Alteration) (string, error) {
 			return "", err
 		}
 		return prefix + "SET (TTL = " + setting + ");", nil
-	case request.GetAlterPartitioningSettings() != nil:
-		return prefix + "SET (" + strings.Join(partitioningActions(alteration), ", ") + ");", nil
+	case request.GetAlterPartitioningSettings() != nil || changesSettings(request):
+		return prefix + "SET (" + strings.Join(settingsActions(alteration), ", ") + ");", nil
 	case len(request.GetAddIndexes()) != 0:
 		clause, err := indexClause(request.GetAddIndexes()[0])
 		if err != nil {
@@ -504,6 +506,26 @@ func familyActions(alteration *Alteration) ([]string, error) {
 	return actions, nil
 }
 
+// settingsActions are the settings of the one SET that changes a table's
+// settings, in the order the host's embedded engine writes them: every
+// automatic partitioning setting when the partitioning changes, then the read
+// replicas and the key bloom filter where they change. Replicas going away
+// are written as `PER_AZ:0`, since YQL has no RESET for them.
+func settingsActions(alteration *Alteration) []string {
+	request := alteration.Request
+	var settings []string
+	if request.GetAlterPartitioningSettings() != nil {
+		settings = partitioningActions(alteration)
+	}
+	if replicas := request.GetSetReadReplicasSettings(); replicas != nil {
+		settings = append(settings, `READ_REPLICAS_SETTINGS = "`+replicasText(replicas)+`"`)
+	}
+	if flag := request.GetSetKeyBloomFilter(); flag != Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+		settings = append(settings, "KEY_BLOOM_FILTER = "+flagText(flag))
+	}
+	return settings
+}
+
 // partitioningActions name every automatic partitioning setting the table
 // holds once the alteration's settings replace its own: by size, with the
 // partition size where it splits by size, by load, the minimum count, and
@@ -511,7 +533,12 @@ func familyActions(alteration *Alteration) ([]string, error) {
 // names one of them can reset another it leaves out, so the statement names
 // the whole set, as the host's embedded engine writes it.
 func partitioningActions(alteration *Alteration) []string {
-	held, changes := alteration.HeldPartitioning, alteration.Request.GetAlterPartitioningSettings()
+	return splittingActions(alteration.HeldPartitioning, alteration.Request.GetAlterPartitioningSettings())
+}
+
+// splittingActions name every automatic partitioning setting a table or an
+// index holding held ends with once changes replace its own settings.
+func splittingActions(held, changes *Ydb_Table.PartitioningSettings) []string {
 	bySize := held.GetPartitioningBySize()
 	if flag := changes.GetPartitioningBySize(); flag != Ydb.FeatureFlag_STATUS_UNSPECIFIED {
 		bySize = flag
@@ -534,7 +561,9 @@ func partitioningActions(alteration *Alteration) []string {
 	}
 	settings := []string{"AUTO_PARTITIONING_BY_SIZE = " + flagText(bySize)}
 	if bySize == Ydb.FeatureFlag_ENABLED {
-		settings = append(settings, "AUTO_PARTITIONING_PARTITION_SIZE_MB = "+strconv.FormatUint(size, 10))
+		// A table that does not split by size reports no size, and the native
+		// call that turns splitting on leaves the size YDB gives it.
+		settings = append(settings, "AUTO_PARTITIONING_PARTITION_SIZE_MB = "+strconv.FormatUint(cmp.Or(size, defaultPartitionSizeMB), 10))
 	}
 	settings = append(settings, "AUTO_PARTITIONING_BY_LOAD = "+flagText(byLoad),
 		"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = "+strconv.FormatUint(max(minimum, 1), 10))

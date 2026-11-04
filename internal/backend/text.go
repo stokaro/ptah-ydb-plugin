@@ -80,6 +80,12 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.AlterationStatement(path, alteration)
+	case tablecreate.IndexSettingsOperationKind:
+		settings, err := tablecreate.DecodeIndexSettings(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.IndexSettingsStatement(path, settings), nil
 	case tablecreate.ColumnOperationKind:
 		creation, err := tablecreate.ColumnTable(value)
 		if err != nil {
