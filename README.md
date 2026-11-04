@@ -372,7 +372,9 @@ dispatched unit YDB refused is `NOT_APPLIED`, or `PARTIAL` after a confirmed
 prefix, when nothing of it can have been applied. That takes a status that
 establishes the refusal (`BAD_REQUEST`, `SCHEME_ERROR`, `PRECONDITION_FAILED`,
 `ALREADY_EXISTS`, `NOT_FOUND`, `UNSUPPORTED`, `ABORTED`, or `GENERIC_ERROR` for
-a plain data statement) and a unit that ran in a caller transaction, which YDB
+a plain data statement or for a text YDB refused while compiling it, which its
+issues show by naming a position in the text and no execution stage) and a
+unit that ran in a caller transaction, which YDB
 applies only by its commit, or that is one query YDB applies whole: a data
 query or one scheme statement. Its message is YDB's own issue text on one line.
 Every other failed dispatched unit reports `UNKNOWN`, even when earlier units

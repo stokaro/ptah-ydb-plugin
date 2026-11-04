@@ -126,3 +126,28 @@ func TestCreationProjectionConvertsBeforeDatabaseBinding(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(restored.Values[0], value), qt.IsTrue)
 }
+
+// A table read back from a database names the database its facets were read
+// from where its subject names none, as the host hands the target of a
+// rollback or a checkpoint. The projection keeps the owner the declaration gave
+// the table's facet, which the host's check requires unchanged.
+func TestCreationProjectionKeepsTheOwnerOfADeclaredFacet(t *testing.T) {
+	c := testcheck.New(t)
+	request := projectionRequest(c)
+	input := request.Tables[0]
+	input.Subject.Database = nil
+	input.FacetOwners = []*protocol.ComparisonIdentity{proto.CloneOf(input.Subject)}
+	for _, record := range input.Declaration.Features.Facets.Records {
+		record.Subject.Database = nil
+	}
+	declared := proto.CloneOf(input.Declaration.Features.Facets.Records[0].Value)
+	c.Assert(declared.Value.Owner.Database, qt.Equals, "/local")
+
+	result, err := backend.New().ProjectTableCreations(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Tables[0].DesiredFacets, qt.HasLen, 1)
+	projected := result.Tables[0].DesiredFacets[0].Value
+	c.Assert(proto.Equal(projected.Value.Owner, declared.Value.Owner), qt.IsTrue, qt.Commentf("%v", projected.Value.Owner))
+	c.Assert(proto.Equal(projected.NormalizedOwner, declared.NormalizedOwner), qt.IsTrue, qt.Commentf("%v", projected.NormalizedOwner))
+}
