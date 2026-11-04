@@ -433,20 +433,21 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				dropped = append(dropped, step.Id)
 			}
 		}
-		var ordered []*protocol.StepIdentity
+		var ordered, kept []*protocol.StepIdentity
 		ordered = append(ordered, added...)
 		for _, change := range item.defaults {
 			step := change.plan(subject, defaults)
 			defaults++
 			contribution.Steps = append(contribution.Steps, step)
-			ordered = append(ordered, step.Id)
+			kept = append(kept, step.Id)
 		}
 		for _, change := range item.sequences {
 			step := change.plan(subject, sequenceSteps)
 			sequenceSteps++
 			contribution.Steps = append(contribution.Steps, step)
-			ordered = append(ordered, step.Id)
+			kept = append(kept, step.Id)
 		}
+		ordered = append(ordered, kept...)
 		if item.operation != nil {
 			item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-alter/%06d", families)}
 			families++
@@ -537,9 +538,19 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			ordered = append(ordered, item.feeds.id)
 		}
 		ordered = append(ordered, dropped...)
+		// The column changes run in sequence: the additions, then the default
+		// and sequence changes of the columns the table keeps, then the
+		// removals. The table's other steps stay out of the sequence. Each
+		// carries its own edges to the column steps it depends on, and the
+		// host places it: a step that replaces a host step takes that step's
+		// place in the host's sequence, and any other step joins the window of
+		// its phase. A sequence through them would contradict that order and
+		// close a cycle, since the host drops an index before it adds a
+		// column, and adds a common index before a TTL changes.
 		if len(item.inventory)+len(item.defaults)+len(item.sequences) > 0 {
-			for n := 1; n < len(ordered); n++ {
-				contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(ordered[n-1]), After: proto.CloneOf(ordered[n])})
+			columns := slices.Concat(added, kept, dropped)
+			for n := 1; n < len(columns); n++ {
+				contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(columns[n-1]), After: proto.CloneOf(columns[n])})
 			}
 		}
 		receiptSteps[item.index] = ordered
