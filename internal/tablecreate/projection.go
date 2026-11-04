@@ -82,15 +82,34 @@ func projectCreation(input *protocol.TableCreationInput, index int, targetFeatur
 		return nil, err
 	}
 	model := schema.TableDesiredModel()
+	facetOwner, normalizedOwner := owner, owner
+	if declared := declaredTableFacet(input); declared != nil {
+		// A table read back from a database, as the host hands the target of a
+		// rollback or a checkpoint, names the database its facets were read
+		// from where its subject names none. The projected facet keeps the
+		// owner the declaration gave it, which the host requires unchanged.
+		facetOwner, normalizedOwner = declared.GetValue().GetValue().GetOwner(), declared.GetValue().GetNormalizedOwner()
+	}
 	value, err := schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind,
-		SchemaVersion: model.SchemaVersion, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: owner, Payload: payload})
+		SchemaVersion: model.SchemaVersion, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: proto.CloneOf(facetOwner), Payload: payload})
 	if err != nil {
 		return nil, err
 	}
 	result.DesiredFacets = []*protocol.ComparisonRecord{{Kind: model.Kind, Subject: proto.CloneOf(input.Subject),
-		Value: &protocol.NormalizedValue{Id: fmt.Sprintf("create/%06d/table", index), Value: value, NormalizedOwner: proto.CloneOf(owner),
+		Value: &protocol.NormalizedValue{Id: fmt.Sprintf("create/%06d/table", index), Value: value, NormalizedOwner: proto.CloneOf(normalizedOwner),
 			CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)}}}
 	return result, nil
+}
+
+// declaredTableFacet is the row-table facet the declaration states for the
+// table it creates, or nil when it states none.
+func declaredTableFacet(input *protocol.TableCreationInput) *protocol.ComparisonRecord {
+	for _, record := range input.GetDeclaration().GetFeatures().GetFacets().GetRecords() {
+		if record.GetKind() == schema.TableProperties && record.GetValue() != nil && proto.Equal(record.GetSubject(), input.GetSubject()) {
+			return record
+		}
+	}
+	return nil
 }
 
 func tablePropertiesExcluded(table *protocol.DeclaredTable) bool {
