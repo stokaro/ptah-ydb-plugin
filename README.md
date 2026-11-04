@@ -2579,9 +2579,12 @@ partitioning, the filter, or the replicas. The settings are `AUTO_PARTITIONING_B
   witness and is not compared. The comparison reports the refused layout as a
   difference, so that the plan reaches the planner.
 - A minimum count above a nonzero maximum is refused, checked against the value
-  the table holds for a bound the declaration leaves out. A partition size beside
-  disabled partitioning by size is refused too: the server turns partitioning by
-  size on when a size is set, so the declaration has to state both.
+  the table holds for a bound the declaration leaves out.
+- A partition size declared without `partitioningBySize` turns partitioning by
+  size on, as the server does when a size is set and as the host's embedded
+  engine reads the declaration (measured on 25.1.4.7 and 26.2.1.14 for a table
+  and an index that did not split by size). A size beside a declared
+  `partitioningBySize` of `DISABLED` is refused.
 - When the step switches partitioning by size on, it names every setting the
   table keeps: the ones the declaration states and the held value of the others.
   The server resets the size and the minimum count the call leaves out, so a

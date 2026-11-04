@@ -48,6 +48,12 @@ func TestIndexSettingsPlan_HappyPath(t *testing.T) {
 			`{"partitioningSettings":{"partitioningBySize":"ENABLED","partitioningByLoad":"ENABLED","minPartitionsCount":"3"}}`,
 			"ALTER TABLE `app/records` ALTER INDEX `by_label` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, " +
 				"AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3);"},
+		{"turns partitioning by size on for a size declared without the switch, as YDB does",
+			indexSettingsCase(`"partitioningSettings":{"partitionSizeMb":"512","minPartitionsCount":"6"}`,
+				`"partitioningSettings":{"partitioningBySize":"DISABLED","partitioningByLoad":"DISABLED","minPartitionsCount":"6"}`),
+			`{"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"512","partitioningByLoad":"DISABLED","minPartitionsCount":"6"}}`,
+			"ALTER TABLE `app/records` ALTER INDEX `by_label` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 512, " +
+				"AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 6);"},
 		{"sets read replicas",
 			indexSettingsCase(`"readReplicasSettings":{"perAzReadReplicasCount":"1"}`, heldIndexDefaults),
 			`{"readReplicasSettings":{"perAzReadReplicasCount":"1"}}`,
@@ -137,8 +143,8 @@ func TestIndexSettingsPlan_FailurePath(t *testing.T) {
 		{"a minimum above the maximum",
 			indexSettingsCase(`"partitioningSettings":{"minPartitionsCount":"10"}`, `"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","minPartitionsCount":"1","maxPartitionsCount":"9"}`),
 			`index "by_label": AUTO_PARTITIONING_MIN_PARTITIONS_COUNT 10 exceeds AUTO_PARTITIONING_MAX_PARTITIONS_COUNT 9`},
-		{"a size while the index does not partition by size",
-			indexSettingsCase(`"partitioningSettings":{"partitionSizeMb":"512"}`, `"partitioningSettings":{"partitioningBySize":"DISABLED","minPartitionsCount":"1"}`),
+		{"a size beside the switch the declaration turns off",
+			indexSettingsCase(`"partitioningSettings":{"partitioningBySize":"DISABLED","partitionSizeMb":"512"}`, heldIndexDefaults),
 			`index "by_label": AUTO_PARTITIONING_PARTITION_SIZE_MB 512 needs AUTO_PARTITIONING_BY_SIZE enabled.*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
