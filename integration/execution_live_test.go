@@ -17,6 +17,7 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -148,9 +149,15 @@ func TestNativeExecutionFailureAndBatchPreflight(t *testing.T) {
 	_, err = opened.DB.ExecContext(c.Context(), "SELECT * FROM `"+table+"`")
 	c.Assert(err, qt.IsNotNil)
 
+	// YDB refuses the third unit while it parses it, so nothing of it was
+	// applied, and its message is YDB's, which quotes the token it stopped at
+	// and not the rest of the text: `mismatched input 'BROKEN'` on 26.2 and
+	// `Unexpected token 'BROKEN'` on 25.1.
 	result = executeSQL(c, client, session.Id, "", create, "UPSERT INTO `"+table+"` (id) VALUES (1u)", "BROKEN SQL secret-test-marker")
-	c.Assert(result.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_PARTIAL)
 	c.Assert(result.AppliedCount, qt.Equals, uint32(2))
+	c.Assert(result.DiagnosticCode, qt.Equals, "ydb.statement-rejected")
+	c.Assert(result.Message, qt.Contains, "'BROKEN'")
 	c.Assert(result.Message, qt.Not(qt.Contains), "secret-test-marker")
 	c.Cleanup(func() {
 		_, err := opened.DB.ExecContext(context.Background(), "DROP TABLE `"+table+"`")
@@ -167,6 +174,40 @@ func TestNativeExecutionFailureAndBatchPreflight(t *testing.T) {
 	c.Assert(second.Outcome, qt.Equals, protocol.Execution_NOT_APPLIED)
 	c.Assert(second.Message, qt.Contains, "Conflict with existing key")
 	assertRowCount(c, opened, table, 2)
+}
+
+// A schema statement YDB refuses while it compiles the text applied nothing,
+// and the reply says so with YDB's words. One YDB refuses while it runs it
+// stays unknown: GENERIC_ERROR names no stage there, so it proves nothing.
+func TestNativeExecutionKnowsWhatYDBRefusedBeforeRunningIt(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := inspectionFixture(c)
+	table := path.Join(database, directory, "compiled")
+	binary, digest := providerBinary(c)
+	client := startProvider(c, binary, digest)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	_, err = opened.DB.ExecContext(c.Context(), "CREATE TABLE `"+table+"` (id Uint64 NOT NULL, PRIMARY KEY (id))")
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() {
+		_, err := opened.DB.ExecContext(context.Background(), "DROP TABLE `"+table+"`")
+		c.Check(err, qt.IsNil)
+	})
+
+	unknownType := executeSQL(c, client, session.Id, "", "$id = 1l;\nCREATE TABLE `"+table+"_b` (id NoSuchType NOT NULL, PRIMARY KEY (id))")
+	keyDrop := executeSQL(c, client, session.Id, "", "ALTER TABLE `"+table+"` DROP COLUMN id")
+	topicOverTable := executeSQL(c, client, session.Id, "", "CREATE TOPIC `"+table+"`")
+
+	c.Assert(unknownType.Outcome, qt.Equals, protocol.Execution_NOT_APPLIED)
+	c.Assert(unknownType.DiagnosticCode, qt.Equals, "ydb.statement-rejected")
+	c.Assert(unknownType.Message, qt.Contains, "Unknown simple type 'NoSuchType'")
+	c.Assert(keyDrop.Outcome, qt.Equals, protocol.Execution_NOT_APPLIED)
+	c.Assert(keyDrop.Message, qt.Contains, "Key column drop is not supported")
+	c.Assert(topicOverTable.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(topicOverTable.DiagnosticCode, qt.Equals, "ydb.execution-unconfirmed")
+	assertRowCount(c, opened, table, 0)
+	c.Assert(heldEntries(c, opened, path.Join(database, directory)), qt.DeepEquals, map[string]Ydb_Scheme.Entry_Type{"compiled": Ydb_Scheme.Entry_TABLE})
 }
 
 func TestNativeTransactionRefusesDDLAndControlEscape(t *testing.T) {
