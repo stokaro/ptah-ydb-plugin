@@ -73,18 +73,6 @@ func createNode(c *qt.C, opened *connection.Connection, absolute string) {
 	})
 }
 
-// entries are the names a directory holds.
-func entries(c *qt.C, opened *connection.Connection, database, directory string) []string {
-	c.Helper()
-	listing, err := opened.Driver.Scheme().ListDirectory(c.Context(), path.Join(database, directory))
-	c.Assert(err, qt.IsNil)
-	var names []string
-	for _, entry := range listing.Children {
-		names = append(names, entry.Name)
-	}
-	return names
-}
-
 // hostExport runs one of the host's commands over the directory with this
 // provider selected for ydb, and returns its standard output and what it
 // reported.
