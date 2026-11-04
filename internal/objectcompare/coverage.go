@@ -99,6 +99,12 @@ func subjectKnowledge(coverage *protocol.ComparisonCoverage, kind string, subjec
 	return nil, false
 }
 
+// reservedName reports the claim a read makes for a name the provider's own
+// storage occupies.
+func reservedName(knowledge *protocol.ModelKnowledge) bool {
+	return knowledge.GetState() == protocol.ModelKnowledge_UNREPRESENTABLE && knowledge.GetReason() == schema.ReservedNameReason
+}
+
 func unknown(knowledge *protocol.ModelKnowledge) bool {
 	return knowledge.GetState() != protocol.ModelKnowledge_COMPLETE && knowledge.GetState() != protocol.ModelKnowledge_ABSENT
 }

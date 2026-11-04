@@ -25,6 +25,12 @@ const (
 	ExternalTableProperties = modelNamespace + "external-table"
 )
 
+// ReservedNameReason is the reason a read gives for an identity the provider's
+// own storage occupies on a native kind: its history table or its lock node.
+// The comparison reads the reason back, so the name is left out rather than
+// reported as an object whose absence was not established.
+const ReservedNameReason = "Name is occupied by provider-owned operational storage"
+
 // IsNativeObject distinguishes standalone objects from table/column facets.
 // Inspection coverage and owner validation must use the same classification.
 func IsNativeObject(kind string) bool {
