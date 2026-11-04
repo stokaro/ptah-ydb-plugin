@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -29,7 +31,7 @@ func (p *Provider) TypeRows(ctx context.Context, request *protocol.TypeRowsReque
 	}
 	result, err := rowdata.TypeRows(request)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	return result, nil
 }
@@ -42,7 +44,7 @@ func (p *Provider) RenderRowWrites(ctx context.Context, request *protocol.Render
 	}
 	result, err := rowdata.RenderRowWrites(request)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	return result, nil
 }
@@ -59,10 +61,10 @@ type rowReader interface {
 func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsRequest) (result *protocol.RowPage, err error) {
 	table := request.GetTable()
 	if table.GetCatalog() != "" || len(table.GetPath()) != 0 || len(table.GetOverload()) != 0 {
-		return nil, status.Error(codes.InvalidArgument, "a YDB table is named by its directory and name")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "a YDB table is named by its directory and name")
 	}
 	if err := rowdata.ValidateDirectory(table.GetSchema()); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, err := p.lookup(request.GetSessionId())
 	if err != nil {
@@ -71,10 +73,10 @@ func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsReque
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
 	if table.GetDatabase() != "" && table.GetDatabase() != s.database {
-		return nil, status.Error(codes.InvalidArgument, "the table belongs to another database than the session's")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "the table belongs to another database than the session's")
 	}
 	runner, err := s.reader(request.GetTransactionId())
 	if err != nil {
@@ -82,7 +84,7 @@ func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsReque
 	}
 	identity, err := ownedtable.Resolve(s.database, table.GetSchema(), table.GetName())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	described, err := identity.Find(ctx, s.connection.Driver)
 	if err != nil {
@@ -95,7 +97,7 @@ func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsReque
 	for _, column := range described.GetColumns() {
 		kind, _, err := schema.ColumnType(column.GetType())
 		if err != nil {
-			return nil, status.Error(codes.FailedPrecondition, fmt.Sprintf("column %q: %v", column.GetName(), err))
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("column %q: %v", column.GetName(), err))
 		}
 		types[column.GetName()] = kind
 	}
@@ -103,11 +105,11 @@ func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsReque
 	for i, name := range request.GetColumns() {
 		kind, found := types[name]
 		if !found {
-			return nil, status.Error(codes.FailedPrecondition, fmt.Sprintf("the table holds no column %q", name))
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("the table holds no column %q", name))
 		}
 		columns[i] = &protocol.DataColumn{Name: name, Type: kind, Kind: rowdata.Kind(kind)}
 		if columns[i].Kind == protocol.DataKind_DATA_KIND_UNSPECIFIED {
-			return nil, status.Error(codes.FailedPrecondition, fmt.Sprintf("column %q: no value of type %s is read", name, kind))
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("column %q: no value of type %s is read", name, kind))
 		}
 	}
 	order := rowdata.Order(request.GetKeyColumns(), described.GetPrimaryKey())
@@ -121,12 +123,12 @@ func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsReque
 	}
 	if request.GetPageToken() != "" {
 		if query.After, err = rowdata.DecodeToken(request.GetPageToken(), order); err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 	}
 	text, err := query.Text()
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result = &protocol.RowPage{Table: proto.CloneOf(table), Exists: true, Columns: columns}
 	last, more, err := readPage(ctx, runner, text, query, request, types, result)
@@ -143,7 +145,7 @@ func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsReque
 		return result, nil
 	}
 	if result.NextPageToken, err = rowdata.EncodeToken(order, last); err != nil {
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
+		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	return result, nil
 }
@@ -218,13 +220,13 @@ func (e *driverError) Unwrap() error { return e.err }
 func (s *session) reader(transactionID string) (rowReader, error) {
 	if transactionID == "" {
 		if s.active != "" {
-			return nil, status.Error(codes.FailedPrecondition, "YDB session has an active transaction")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session has an active transaction")
 		}
 		return s.connection.DB, nil
 	}
 	record := s.transactions[transactionID]
 	if record == nil || record.tx == nil || s.active != transactionID || record.failed {
-		return nil, status.Error(codes.FailedPrecondition, "YDB transaction is not active")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB transaction is not active")
 	}
 	return record.tx, nil
 }
@@ -236,7 +238,7 @@ func readError(ctx context.Context, err error) error {
 		return status.FromContextError(ctxErr).Err()
 	}
 	if failed := (*driverError)(nil); errors.As(err, &failed) {
-		return status.Error(codes.Unavailable, "YDB row read failed")
+		return runtime.ErrorWithReason(codes.Unavailable, "YDB row read failed")
 	}
 	return status.Error(codes.FailedPrecondition, "YDB row read failed: "+err.Error())
 }

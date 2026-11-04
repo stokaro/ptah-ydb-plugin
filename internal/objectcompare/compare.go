@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
@@ -176,7 +177,7 @@ func compare(ctx context.Context, request *protocol.CompareModelsRequest, famili
 			return nil, nil, err
 		}
 		if len(captured) > 0 && !families[i].ChangeCapability && families[i].Capability != "" && !request.Capabilities[families[i].Capability] {
-			return nil, nil, fmt.Errorf("%s capability was not established", families[i].Noun)
+			return nil, nil, authored.New(families[i].Noun + " capability was not established")
 		}
 		objects = append(objects, captured...)
 	}
@@ -450,7 +451,7 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		}
 	}
 	if family.ChangeCapability && !request.Capabilities[family.Capability] {
-		return nil, fmt.Errorf("changing %ss requires %s", family.Noun, family.Capability)
+		return nil, authored.New(fmt.Sprintf("changing %ss requires %s", family.Noun, family.Capability))
 	}
 	change, err := family.Change("change-"+id, reported, pair.Current, pair.Desired)
 	if err != nil {

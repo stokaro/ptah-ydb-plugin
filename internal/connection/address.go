@@ -2,7 +2,6 @@
 package connection
 
 import (
-	"errors"
 	"net"
 	"net/url"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	environ "github.com/ydb-platform/ydb-go-sdk-auth-environ"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 )
@@ -35,7 +35,7 @@ type Address struct {
 func Parse(raw string) (Address, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Opaque != "" || u.Fragment != "" || u.Hostname() == "" {
-		return Address{}, errors.New("invalid YDB connection URL")
+		return Address{}, authored.New("invalid YDB connection URL")
 	}
 	scheme, port := "grpc", "2136"
 	switch strings.ToLower(u.Scheme) {
@@ -43,46 +43,46 @@ func Parse(raw string) (Address, error) {
 	case "ydbs":
 		scheme, port = "grpcs", "2135"
 	default:
-		return Address{}, errors.New("YDB requires a ydb:// or ydbs:// address")
+		return Address{}, authored.New("YDB requires a ydb:// or ydbs:// address")
 	}
 	if u.Port() != "" {
 		port = u.Port()
 	}
 	n, err := strconv.Atoi(port)
 	if err != nil || n < 1 || n > 65535 {
-		return Address{}, errors.New("invalid YDB port")
+		return Address{}, authored.New("invalid YDB port")
 	}
 	q, err := url.ParseQuery(u.RawQuery)
 	if err != nil {
-		return Address{}, errors.New("invalid YDB URL parameters")
+		return Address{}, authored.New("invalid YDB URL parameters")
 	}
 	for key, values := range q {
 		if len(values) != 1 {
-			return Address{}, errors.New("YDB URL parameters must appear once")
+			return Address{}, authored.New("YDB URL parameters must appear once")
 		}
 		if !slices.Contains(acceptedParameters, key) {
-			return Address{}, errors.New("unsupported YDB URL parameter; supported parameters: " + strings.Join(acceptedParameters, ", "))
+			return Address{}, authored.New("unsupported YDB URL parameter; supported parameters: " + strings.Join(acceptedParameters, ", "))
 		}
 	}
 	database := strings.Trim(u.Path, "/")
 	if q.Has("database") {
 		value := strings.Trim(q.Get("database"), "/")
 		if value == "" || (database != "" && database != value) {
-			return Address{}, errors.New("YDB URL database path and parameter must identify the same nonempty database")
+			return Address{}, authored.New("YDB URL database path and parameter must identify the same nonempty database")
 		}
 		database = value
 	}
 	if database == "" {
-		return Address{}, errors.New("YDB URL must name a database")
+		return Address{}, authored.New("YDB URL must name a database")
 	}
 	for _, part := range strings.Split(database, "/") {
 		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "\\\x00\r\n") {
-			return Address{}, errors.New("invalid YDB database path")
+			return Address{}, authored.New("invalid YDB database path")
 		}
 	}
 	token := q.Get("token")
 	if q.Has("token") && (strings.TrimSpace(token) == "" || u.User != nil) {
-		return Address{}, errors.New("provide exactly one nonempty YDB credential source")
+		return Address{}, authored.New("provide exactly one nonempty YDB credential source")
 	}
 	useEnv := false
 	if q.Has("use_env_credentials") {
@@ -92,18 +92,18 @@ func Parse(raw string) (Address, error) {
 		if raw := strings.TrimSpace(q.Get("use_env_credentials")); raw != "" {
 			enabled, err := strconv.ParseBool(raw)
 			if err != nil {
-				return Address{}, errors.New("use_env_credentials must be a boolean")
+				return Address{}, authored.New("use_env_credentials must be a boolean")
 			}
 			useEnv = enabled
 		}
 		if useEnv && (u.User != nil || q.Has("token")) {
-			return Address{}, errors.New("provide exactly one nonempty YDB credential source")
+			return Address{}, authored.New("provide exactly one nonempty YDB credential source")
 		}
 	}
 	if u.User != nil {
 		password, ok := u.User.Password()
 		if u.User.Username() == "" || !ok || password == "" {
-			return Address{}, errors.New("YDB static credentials require a user and password")
+			return Address{}, authored.New("YDB static credentials require a user and password")
 		}
 	}
 	passed, err := sdkParameters(q)
@@ -206,10 +206,10 @@ func CheckEnvironment(lookup func(string) (string, bool)) error {
 		return ok
 	})
 	if !set {
-		return errors.New("use_env_credentials is set and no credential variable is: set one of " + strings.Join(environmentCredentials, ", "))
+		return authored.New("use_env_credentials is set and no credential variable is: set one of " + strings.Join(environmentCredentials, ", "))
 	}
 	if value, ok := lookup("YDB_METADATA_CREDENTIALS"); ok && value != "1" {
-		return errors.New("YDB_METADATA_CREDENTIALS is ignored by the YDB SDK, which reads only 1")
+		return authored.New("YDB_METADATA_CREDENTIALS is ignored by the YDB SDK, which reads only 1")
 	}
 	if _, ok := lookup("YDB_STATIC_CREDENTIALS_USER"); ok {
 		var missing []string
@@ -219,7 +219,7 @@ func CheckEnvironment(lookup func(string) (string, bool)) error {
 			}
 		}
 		if len(missing) > 0 {
-			return errors.New("YDB_STATIC_CREDENTIALS_USER is set without " + strings.Join(missing, " and ") + ", and the YDB SDK would connect anonymously instead")
+			return authored.New("YDB_STATIC_CREDENTIALS_USER is set without " + strings.Join(missing, " and ") + ", and the YDB SDK would connect anonymously instead")
 		}
 	}
 	return nil

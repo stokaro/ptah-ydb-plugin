@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
@@ -33,7 +34,7 @@ import (
 // complete result.
 func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourceRequest) (*protocol.DecodedSource, error) {
 	if err := provider.ValidateSourceRequest(Description(), request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.DecodedSource{Complete: true}
 	for _, document := range request.Documents {
@@ -46,7 +47,7 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 		// The host applies the limits; a limit no node can take is refused here
 		// with the host's words.
 		if err := yqlschema.CheckLimits(document.GetLimits()); err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		for _, model := range document.Models {
 			decoded.Coverage.Kinds = append(decoded.Coverage.Kinds, &protocol.ModelKindCoverage{Model: proto.CloneOf(model), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}})
@@ -56,53 +57,53 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			if ctx.Err() != nil {
 				return nil, status.FromContextError(ctx.Err()).Err()
 			}
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		secretValues, err := secretsource.Decode(ctx, document)
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		topics, err := topicsource.Decode(ctx, document)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, status.FromContextError(ctx.Err()).Err()
 			}
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		feeds, err := changefeedsource.Decode(ctx, document)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, status.FromContextError(ctx.Err()).Err()
 			}
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		externals, err := externalsource.Decode(ctx, document)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, status.FromContextError(ctx.Err()).Err()
 			}
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		workloads, err := workloadsource.Decode(ctx, document)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, status.FromContextError(ctx.Err()).Err()
 			}
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		queries, err := streamingsource.Decode(ctx, document)
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		replications, err := replicationsource.Decode(ctx, document)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, status.FromContextError(ctx.Err()).Err()
 			}
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		if err := refuseColumnTableChangefeeds(tables, feeds); err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		for index, fragment := range document.Fragments {
 			var values []*protocol.SourceModelValue
@@ -129,13 +130,13 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 				if ctx.Err() != nil {
 					return nil, status.FromContextError(ctx.Err()).Err()
 				}
-				return nil, status.Error(codes.InvalidArgument, err.Error())
+				return nil, authored.Status(codes.InvalidArgument, err)
 			}
 			decoded.Fragments = append(decoded.Fragments, &protocol.DecodedSourceFragment{Id: fragment.Id, Values: values})
 			for _, value := range values {
 				value.Value.RequiredObjects, value.Value.RequiresDatabaseContext, err = schema.RequiredObjects(value.Value.Value)
 				if err != nil {
-					return nil, status.Error(codes.InvalidArgument, err.Error())
+					return nil, authored.Status(codes.InvalidArgument, err)
 				}
 				owner := value.Value.Value.Owner
 				decoded.Coverage.Subjects = append(decoded.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: value.Value.Value.Kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}})
@@ -147,7 +148,7 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 		return nil, status.FromContextError(err).Err()
 	}
 	if err := provider.ValidateDecodedSource(Description(), request, result); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	return result, nil
 }

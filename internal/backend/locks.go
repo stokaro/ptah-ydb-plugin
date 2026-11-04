@@ -3,13 +3,15 @@ package backend
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -29,12 +31,15 @@ type lockRecord struct {
 
 const lockHandleLimit = 1024
 
+// heldLockLimit is the most locks one session holds at once.
+const heldLockLimit = 16
+
 func (s *session) reserveLock(scope *protocol.LockScope) (*lockRecord, error) {
 	if s.locks[scope.LockId] != nil {
-		return nil, status.Error(codes.AlreadyExists, "YDB lock handle was already reserved")
+		return nil, runtime.ErrorWithReason(codes.AlreadyExists, "YDB lock handle was already reserved")
 	}
 	if len(s.locks) >= lockHandleLimit {
-		return nil, status.Error(codes.ResourceExhausted, "YDB lock handle limit reached; open another session")
+		return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB lock handle limit reached; open another session")
 	}
 	if s.locks == nil {
 		s.locks = make(map[string]*lockRecord)
@@ -45,7 +50,7 @@ func (s *session) reserveLock(scope *protocol.LockScope) (*lockRecord, error) {
 }
 func (p *Provider) lockSession(request *protocol.LockRequest) (*session, func(), error) {
 	if err := provider.ValidateLockRequest(request); err != nil {
-		return nil, nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, err := p.lookup(request.Scope.SessionId)
 	if err != nil {
@@ -54,11 +59,11 @@ func (p *Provider) lockSession(request *protocol.LockRequest) (*session, func(),
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return nil, nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
 	if record := s.locks[request.Scope.LockId]; record != nil && record.name != request.Scope.Name {
 		s.mu.Unlock()
-		return nil, nil, status.Error(codes.InvalidArgument, "YDB lock handle names a different lock")
+		return nil, nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB lock handle names a different lock")
 	}
 	return s, s.mu.Unlock, nil
 }
@@ -67,10 +72,19 @@ func lockResult(request *protocol.LockRequest, outcome protocol.LockResult_Outco
 	return result
 }
 
+// failedLock is a TryLock receipt with an outcome other than ACQUIRED and
+// the reason for it, which names the session's state and never a value. The
+// SDK sends the reason only to a host that lists errors.reasons.
+func failedLock(request *protocol.LockRequest, outcome protocol.LockResult_Outcome, reason string) *protocol.LockResult {
+	result := lockResult(request, outcome)
+	result.Diagnostic = &protocol.ProviderDiagnostic{Reason: reason}
+	return result
+}
+
 // TryLock reserves a single-use handle before creating or contacting native
 // coordination storage. Only a confirmed busy result permits another attempt.
 // A server that refuses this user the lock node or its session answers
-// PermissionDenied, with a message that names the missing right.
+// PermissionDenied, with a reason that names the missing right.
 func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (*protocol.LockResult, error) {
 	s, unlock, err := p.lockSession(request)
 	if err != nil {
@@ -81,8 +95,14 @@ func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (
 	if err != nil {
 		return nil, err
 	}
-	if ctx.Err() != nil || s.active != "" || s.fenced {
+	if ctx.Err() != nil {
 		return lockResult(request, record.outcome), nil
+	}
+	if s.active != "" {
+		return failedLock(request, record.outcome, "a YDB session takes no lock while it has an active transaction"), nil
+	}
+	if s.fenced {
+		return failedLock(request, record.outcome, "the YDB session lost a lock guarantee and takes no further lock"), nil
 	}
 	active := 0
 	for _, existing := range s.locks {
@@ -90,12 +110,12 @@ func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (
 			active++
 		}
 	}
-	if active >= 16 {
-		return lockResult(request, record.outcome), nil
+	if active >= heldLockLimit {
+		return failedLock(request, record.outcome, fmt.Sprintf("the YDB session already holds %d locks, the most one session holds", heldLockLimit)), nil
 	}
 	guarded, stop, err := s.guard(ctx)
 	if err != nil {
-		return lockResult(request, record.outcome), nil
+		return failedLock(request, record.outcome, "the YDB session lost its lock guarantee"), nil
 	}
 	defer stop()
 	record.outcome = protocol.LockResult_UNKNOWN
@@ -103,9 +123,9 @@ func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (
 	if errors.Is(err, locking.ErrRefused) {
 		// The server refused this user before anything was acquired, so the
 		// handle holds nothing and the session keeps no uncertainty. The
-		// message names the right the user lacks.
+		// reason names the right the user lacks.
 		record.outcome = protocol.LockResult_NOT_ACQUIRED
-		return nil, status.Error(codes.PermissionDenied, err.Error())
+		return nil, authored.Status(codes.PermissionDenied, err)
 	}
 	if err != nil {
 		s.fenced = true
@@ -113,7 +133,7 @@ func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (
 	}
 	if busy {
 		record.outcome = protocol.LockResult_BUSY
-		return lockResult(request, record.outcome), nil
+		return failedLock(request, record.outcome, "another YDB session holds the lock"), nil
 	}
 	record.hold = hold
 	record.outcome = protocol.LockResult_ACQUIRED
@@ -214,12 +234,12 @@ func (s *session) observeLockLoss() bool {
 }
 func (s *session) verifyLocks(ctx context.Context) error {
 	if s.observeLockLoss() {
-		return status.Error(codes.FailedPrecondition, "YDB session lost its lock guarantee")
+		return runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session lost its lock guarantee")
 	}
 	for _, record := range s.locks {
 		if record.hold != nil && !record.released {
 			if s.checkLock(ctx, record) != nil {
-				return status.Error(codes.FailedPrecondition, "YDB session lost its lock guarantee")
+				return runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session lost its lock guarantee")
 			}
 		}
 	}

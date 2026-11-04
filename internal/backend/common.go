@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -23,11 +24,11 @@ func (*Provider) PrepareCommonObjects(ctx context.Context, request *protocol.Pre
 	}
 	description := Description()
 	if err := provider.ValidatePrepareCommonObjectsRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.PreparedCommonObjects{Complete: true, Prepared: commonobject.Prepare(request.GetDeclared())}
 	if err := provider.ValidatePreparedCommonObjects(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }

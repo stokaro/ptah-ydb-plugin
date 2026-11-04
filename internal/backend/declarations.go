@@ -3,9 +3,11 @@ package backend
 import (
 	"context"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -18,14 +20,14 @@ func (p *Provider) PlanDeclarations(ctx context.Context, request *protocol.PlanD
 	}
 	description := provider.NegotiatedDescription(Description(), request.GetTargetFeatures())
 	if err := provider.ValidateDeclarationsRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) || request.Identifiers.GetDefaultSchema() != "" || request.Identifiers.GetCatalogCollation() != "" {
-		return nil, status.Error(codes.InvalidArgument, "YDB authored declarations require exact identifier rules")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB authored declarations require exact identifier rules")
 	}
 	for _, name := range request.Identifiers.GetResolvedNames() {
 		if name.Name != name.Key {
-			return nil, status.Error(codes.InvalidArgument, "YDB authored declarations require exact resolved names")
+			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB authored declarations require exact resolved names")
 		}
 	}
 	inputs := &protocol.NormalizeValuesRequest{Engine: request.Engine, TargetFeatures: request.TargetFeatures}
@@ -38,7 +40,7 @@ func (p *Provider) PlanDeclarations(ctx context.Context, request *protocol.PlanD
 	}
 	for i, value := range normalized.Values {
 		if !proto.Equal(value, request.Objects[i].Value) {
-			return nil, status.Error(codes.InvalidArgument, "authored declaration normalization changed")
+			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "authored declaration normalization changed")
 		}
 	}
 	result, err := declarationplan.Plan(ctx, request)
@@ -46,10 +48,10 @@ func (p *Provider) PlanDeclarations(ctx context.Context, request *protocol.PlanD
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if err := provider.ValidatePlannedDeclarations(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()

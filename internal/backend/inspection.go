@@ -3,10 +3,12 @@ package backend
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/url"
 	"path"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
@@ -15,6 +17,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -24,18 +27,18 @@ import (
 // handle cannot reopen a connection or fall back to an embedded engine.
 func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest) (*protocol.Schema, error) {
 	if !slices.Contains(provider.HostFeatures(ctx), provider.ObservedColumnsFeature) {
-		return nil, status.Error(codes.FailedPrecondition, "YDB inspection requires schema.observed-columns")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB inspection requires schema.observed-columns")
 	}
 	p.mu.Lock()
 	session := p.sessions[request.GetSessionId()]
 	p.mu.Unlock()
 	if session == nil {
-		return nil, status.Error(codes.NotFound, "unknown YDB session")
+		return nil, runtime.ErrorWithReason(codes.NotFound, "unknown YDB session")
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	if session.closed {
-		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -54,14 +57,14 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
+		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	read, unread := session.workload()
 	if err := inspect.Workload(ctx, result, session.database, request.GetSchemas(), read, unread); err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
+		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	if carriesCommon(provider.HostFeatures(ctx)) {
 		if slices.Contains(provider.HostFeatures(ctx), provider.CommonAccessFeature) {
@@ -72,7 +75,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 				if ctx.Err() != nil {
 					return nil, status.FromContextError(ctx.Err()).Err()
 				}
-				return nil, status.Error(codes.FailedPrecondition, err.Error())
+				return nil, authored.Status(codes.FailedPrecondition, err)
 			}
 		} else {
 			for _, kind := range []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_ROLE, protocol.CommonObjectSupport_GRANT} {
@@ -89,12 +92,12 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		bindInspectionContext(result, &protocol.DatabaseContext{Database: session.database, SourceDatabase: session.connection.Database()})
 	}
 	if value, feature := schema.UnofferedFeature(provider.HostFeatures(ctx), inspectedValues(result)...); feature != "" {
-		return nil, status.Errorf(codes.FailedPrecondition, "YDB inspection of %s %q requires %s, which the host did not offer", value.GetKind(), path.Join(value.GetOwner().GetSchema(), value.GetOwner().GetName()), feature)
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("YDB inspection of %s %q requires %s, which the host did not offer", value.GetKind(), path.Join(value.GetOwner().GetSchema(), value.GetOwner().GetName()), feature))
 	}
 	// The reply is checked against the description the host holds: one that
 	// did not list the common wire declares no common object.
 	if _, err := provider.InspectionValues(provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx)), request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -155,7 +158,7 @@ func (s *session) columnTables() inspect.ColumnTables {
 // preserve the complete input provenance and expose no successful prefix.
 func (*Provider) NormalizeValues(ctx context.Context, request *protocol.NormalizeValuesRequest) (*protocol.NormalizedValues, error) {
 	if err := provider.ValidateValueInputs(Description(), request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.NormalizedValues{Complete: true}
 	for _, input := range request.GetValues() {
@@ -169,7 +172,7 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 		case protocol.ValueInput_OPERATION:
 			normalized, operationErr := normalizeOperation(input)
 			if operationErr != nil {
-				return nil, status.Error(codes.InvalidArgument, operationErr.Error())
+				return nil, authored.Status(codes.InvalidArgument, operationErr)
 			}
 			result.Values = append(result.Values, normalized)
 			continue
@@ -197,7 +200,7 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 			}
 			normalized, changeErr := normalize(input)
 			if changeErr != nil {
-				return nil, status.Error(codes.InvalidArgument, changeErr.Error())
+				return nil, authored.Status(codes.InvalidArgument, changeErr)
 			}
 			result.Values = append(result.Values, normalized)
 			continue
@@ -207,14 +210,14 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 			value, err = schema.NormalizeDesired(input.GetValue())
 			format = input.GetValue().GetKind() + "/desired-json-v1"
 		default:
-			return nil, status.Error(codes.InvalidArgument, "unsupported YDB model representation")
+			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "unsupported YDB model representation")
 		}
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		required, pending, err := schema.RequiredObjects(value)
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		result.Values = append(result.Values, &protocol.NormalizedValue{Id: input.GetId(), Value: value, NormalizedOwner: proto.CloneOf(value.Owner),
 			CanonicalFormat: format, CanonicalProjection: bytes.Clone(value.Payload), RequiredObjects: required, RequiresDatabaseContext: pending})

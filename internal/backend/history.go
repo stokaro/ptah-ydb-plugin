@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/history"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -24,24 +26,24 @@ func (p *Provider) historySession(ctx context.Context, scope *protocol.HistorySc
 		return nil, history.Store{}, nil, err
 	}
 	if s.closed {
-		return fail(status.Error(codes.FailedPrecondition, "YDB session is closed"))
+		return fail(runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed"))
 	}
 	if err := ctx.Err(); err != nil {
 		return fail(status.FromContextError(err).Err())
 	}
 	if scope.TransactionId == "" {
 		if s.active != "" {
-			return fail(status.Error(codes.FailedPrecondition, "YDB session has an active transaction"))
+			return fail(runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session has an active transaction"))
 		}
 	} else {
 		record := s.transactions[scope.TransactionId]
 		if record == nil || record.tx == nil || s.active != scope.TransactionId || record.failed {
-			return fail(status.Error(codes.FailedPrecondition, "YDB transaction is not active for history"))
+			return fail(runtime.ErrorWithReason(codes.FailedPrecondition, "YDB transaction is not active for history"))
 		}
 	}
 	store, err := history.Resolve(s.database, scope)
 	if err != nil {
-		return fail(status.Error(codes.InvalidArgument, err.Error()))
+		return fail(authored.Status(codes.InvalidArgument, err))
 	}
 	return s, store, s.mu.Unlock, nil
 }
@@ -54,7 +56,7 @@ func historyResult(scope *protocol.HistoryScope, id string, outcome protocol.His
 // an unmarked table, changes revision rows, or upgrades an earlier layout.
 func (p *Provider) PrepareHistory(ctx context.Context, request *protocol.PrepareHistoryRequest) (*protocol.HistoryResult, error) {
 	if err := provider.ValidatePrepareHistoryRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, store, unlock, err := p.historySession(ctx, request.Scope)
 	if err != nil {
@@ -84,7 +86,7 @@ func (p *Provider) PrepareHistory(ctx context.Context, request *protocol.Prepare
 // ReadHistory preserves the exact scope, complete rows, and missing-store state.
 func (p *Provider) ReadHistory(ctx context.Context, request *protocol.ReadHistoryRequest) (result *protocol.HistorySnapshot, err error) {
 	if err := provider.ValidateReadHistoryRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, store, unlock, err := p.historySession(ctx, request.Scope)
 	if err != nil {
@@ -98,7 +100,7 @@ func (p *Provider) ReadHistory(ctx context.Context, request *protocol.ReadHistor
 	}()
 	exists, err := store.Check(ctx, s.connection.Driver)
 	if err != nil {
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
+		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	result = &protocol.HistorySnapshot{Scope: proto.CloneOf(request.Scope), Exists: exists, Complete: true}
 	if !exists {
@@ -116,20 +118,20 @@ func (p *Provider) ReadHistory(ctx context.Context, request *protocol.ReadHistor
 			if closeErr := closeSQLConnection(conn); closeErr != nil {
 				s.cleanupErr = errors.Join(s.cleanupErr, closeErr)
 				result = nil
-				err = status.Error(codes.Unavailable, "close YDB history connection failed")
+				err = runtime.ErrorWithReason(codes.Unavailable, "close YDB history connection failed")
 			}
 		}()
 		runner = conn
 	}
 	result.Revisions, err = store.Read(ctx, runner, request.MaxRevisions)
 	if err != nil {
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
+		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	if proto.Size(result) > history.MaxSnapshotBytes {
-		return nil, status.Error(codes.ResourceExhausted, "YDB history exceeds snapshot size limit")
+		return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB history exceeds snapshot size limit")
 	}
 	if err := provider.ValidateHistorySnapshot(request, result); err != nil {
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
+		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	return result, nil
 }
@@ -138,7 +140,7 @@ func (p *Provider) ReadHistory(ctx context.Context, request *protocol.ReadHistor
 // or one private serializable transaction. No failure authorizes a retry.
 func (p *Provider) MutateHistory(ctx context.Context, request *protocol.MutateHistoryRequest) (*protocol.HistoryResult, error) {
 	if err := provider.ValidateMutateHistoryRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, store, unlock, err := p.historySession(ctx, request.Scope)
 	if err != nil {

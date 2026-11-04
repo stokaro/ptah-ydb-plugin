@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
@@ -18,6 +19,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -38,10 +40,10 @@ func (p *Provider) seedSession(ctx context.Context, id string) (*session, error)
 	switch {
 	case s.closed:
 		s.mu.Unlock()
-		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	case s.active != "":
 		s.mu.Unlock()
-		return nil, status.Error(codes.FailedPrecondition, "YDB session has an active transaction")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session has an active transaction")
 	}
 	if err := ctx.Err(); err != nil {
 		s.mu.Unlock()
@@ -56,7 +58,7 @@ func (p *Provider) seedSession(ctx context.Context, id string) (*session, error)
 // with a dot, which belongs to the server, holds no table.
 func (p *Provider) ListSeedTables(ctx context.Context, request *protocol.ListSeedTablesRequest) (*protocol.SeedTables, error) {
 	if err := rowdata.ValidateDirectory(request.GetSchema()); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, err := p.seedSession(ctx, request.GetSessionId())
 	if err != nil {
@@ -77,7 +79,7 @@ func (p *Provider) ListSeedTables(ctx context.Context, request *protocol.ListSee
 	}
 	var listing Ydb_Scheme.ListDirectoryResult
 	if err := nativeapi.Operation(response.GetOperation(), &listing); err != nil {
-		return nil, status.Error(codes.Unavailable, err.Error())
+		return nil, authored.Status(codes.Unavailable, err)
 	}
 	var names []string
 	for _, entry := range listing.GetChildren() {
@@ -206,11 +208,11 @@ func (p *Provider) ReadSeedLedger(ctx context.Context, request *protocol.ReadSee
 	defer s.mu.Unlock()
 	identity, err := ownedtable.Resolve(s.database, "", seeds.Table)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	exists, err := identity.Check(ctx, s.connection.Driver, seeds.CheckLayout)
 	if err != nil {
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
+		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	ledger := &protocol.SeedLedger{Exists: exists, Complete: true}
 	if !exists {
@@ -228,7 +230,7 @@ func (p *Provider) ReadSeedLedger(ctx context.Context, request *protocol.ReadSee
 			return nil, connectionError(ctx, "read the YDB seed ledger")
 		}
 		if len(ledger.Entries) == int(request.GetMaxEntries()) {
-			return nil, status.Error(codes.ResourceExhausted, fmt.Sprintf("the seed ledger holds more than %d entries", request.GetMaxEntries()))
+			return nil, runtime.ErrorWithReason(codes.ResourceExhausted, fmt.Sprintf("the seed ledger holds more than %d entries", request.GetMaxEntries()))
 		}
 		entry.AppliedAtSeconds, entry.AppliedAtNanos = applied.Unix(), int32(applied.Nanosecond())
 		ledger.Entries = append(ledger.Entries, &entry)

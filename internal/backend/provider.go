@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/buildversion"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
@@ -52,6 +53,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -95,6 +97,9 @@ type session struct {
 func providerFeatures() []string {
 	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
 		provider.IndexMethodsFeature,
+		// A refusal reaches the host with the reason the provider wrote, and a
+		// driver's error with its code alone; see package authored.
+		provider.ErrorReasonsFeature,
 		provider.ScopeSelectionsFeature,
 		provider.StatementsFeature,
 		provider.ValidateSchemaFeature,
@@ -297,16 +302,16 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 		return nil, status.FromContextError(err).Err()
 	}
 	if request.GetEngine() != "ydb" {
-		return nil, status.Error(codes.InvalidArgument, "unsupported engine")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "unsupported engine")
 	}
 	address, err := connection.Parse(request.GetAddress())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	p.mu.Lock()
 	if len(p.sessions)+p.opening >= 1024 {
 		p.mu.Unlock()
-		return nil, status.Error(codes.ResourceExhausted, "YDB session handle limit reached; restart the provider")
+		return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB session handle limit reached; restart the provider")
 	}
 	p.opening++
 	p.mu.Unlock()
@@ -326,7 +331,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, status.FromContextError(ctxErr).Err()
 		}
-		return nil, status.Error(codes.Unavailable, err.Error())
+		return nil, authored.Status(codes.Unavailable, err)
 	}
 	if err := ctx.Err(); err != nil {
 		_ = opened.Close()
@@ -350,7 +355,7 @@ func (p *Provider) Close(_ context.Context, request *protocol.CloseRequest) erro
 	opened := p.sessions[request.GetSessionId()]
 	p.mu.Unlock()
 	if opened == nil {
-		return status.Error(codes.NotFound, "unknown YDB session")
+		return runtime.ErrorWithReason(codes.NotFound, "unknown YDB session")
 	}
 	opened.mu.Lock()
 	defer opened.mu.Unlock()
@@ -363,7 +368,7 @@ func (p *Provider) Close(_ context.Context, request *protocol.CloseRequest) erro
 		opened.closeErr = errors.Join(opened.cleanupErr, opened.connection.Close())
 	}
 	if opened.closeErr != nil {
-		return status.Error(codes.Unavailable, "close YDB connection failed")
+		return runtime.ErrorWithReason(codes.Unavailable, "close YDB connection failed")
 	}
 	return nil
 }
@@ -374,7 +379,7 @@ func connectionError(ctx context.Context, operation string) error {
 	}
 	// Native authentication errors may embed credential-source details. Until
 	// structured redaction is available, return the operation without raw text.
-	return status.Error(codes.Unavailable, operation+" failed")
+	return runtime.ErrorWithReason(codes.Unavailable, operation+" failed")
 }
 
 // leftOut names the directories at the session's root that belong to other

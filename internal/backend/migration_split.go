@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationunits"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -23,7 +24,7 @@ var _ provider.MigrationSplitter = (*Provider)(nil)
 func (*Provider) SplitMigration(ctx context.Context, request *protocol.SplitMigrationRequest) (*protocol.MigrationSplit, error) {
 	description := provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx))
 	if err := provider.ValidateSplitMigrationRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.MigrationSplit{}
 	result.Units, result.Refusal = migrationunits.Split(request.GetBody())
@@ -38,7 +39,7 @@ func (*Provider) SplitMigration(ctx context.Context, request *protocol.SplitMigr
 		return nil, status.FromContextError(err).Err()
 	}
 	if err := provider.ValidateMigrationSplit(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }

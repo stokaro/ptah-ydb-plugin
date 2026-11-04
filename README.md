@@ -71,8 +71,8 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.11.1-0.20261102235223-72d2bd2e6503, a
-pseudo-version of the SDK that speaks provider contract 25.12. The provider
+The module pins `provider-sdk` v0.14.1-0.20261104150804-7e71a23c3a16, a
+pseudo-version of the SDK that speaks provider contract 25.16. The provider
 still requires 25.7 of its host and offers each later feature to a host that
 lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -700,13 +700,17 @@ compatibility is owed. Configure that reserved node explicitly before using it.
 The provider finds the node by describing its path rather than by listing the
 database root, so a user granted the node takes the lock without the right to
 list the root. A server that refuses the user the lock is answered with
-PermissionDenied, and the message names the step and the right: the node is
+PermissionDenied, and the reason names the step and the right: the node is
 missing and the user may not create it, the user may not use the node, or the
 server refused the session on the node. The first two are the host's embedded
 engine's words. For the third that engine reports a timeout, because its SDK
 retries a refused session without saying why, while the server answers at once
-with UNAUTHORIZED. The SDK hands the host the code of the refusal and not its
-message.
+with UNAUTHORIZED. A host that lists `errors.reasons` prints the reason after
+the code; see [Error reasons](#error-reasons).
+
+A `TryLock` that takes no lock says why in its receipt: another session holds
+the lock, the session has an active transaction, it lost a lock guarantee, or
+it already holds 16 locks.
 
 Acquisition is nonblocking. Only a confirmed BUSY permits the host to try a new
 handle under its wait policy. Handles are single-use and bound to the exact
@@ -743,6 +747,27 @@ nontransactional DDL atomic with ownership. Live tests cover competing provider
 processes, independent names, immediate takeover after confirmed close, process
 exit, node removal, and refusal of execution/history/commit after loss. Controlled
 clock tests cover stale confirmations without relying on a scheduled watcher.
+
+## Error reasons
+
+The provider lists `errors.reasons`, so a host that lists it too prints why a
+call failed after its gRPC code:
+
+```text
+provider compare models failed (InvalidArgument): streaming query capability was not established
+```
+
+A reason is a sentence the provider wrote. It names the subject, a capability
+or a parameter, and never quotes statement text, a value, an address or a
+credential. Package `internal/authored` keeps such sentences apart from the
+errors the provider receives: `authored.New` marks one, and `authored.Status`
+sends it as the reason, with the error's whole text as the status message,
+which no host prints. The reasons the provider gives are its refusals of a
+connection address, of a capability the target lacks, of a lock the server
+refuses this user, and the refusals whose text is a fixed sentence, such as a
+closed session or a reached handle limit. A YDB driver's error is never a
+reason, because YDB can quote a statement and its values, or a credential
+source: the host prints its code alone.
 
 ## Operational storage reservations
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
@@ -43,7 +44,7 @@ func renderText(ctx context.Context, changes []*protocol.Change, operations []*p
 				Message: rowdata.OneLine(err.Error())}}, nil
 		}
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		result.Units = append(result.Units, &protocol.Unit{ChangeId: change.GetId(), Body: &protocol.Unit_Sql{Sql: statement}})
 	}

@@ -1,7 +1,6 @@
 package connection
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"net/url"
@@ -9,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/ydb-platform/ydb-go-sdk/v3/balancers"
 )
 
@@ -47,24 +47,24 @@ func sdkParameters(query url.Values) (url.Values, error) {
 			// The SDK falls back to its default balancer on a value it cannot
 			// parse and says nothing.
 			if _, err := balancers.CreateFromConfig(value); err != nil {
-				return nil, fmt.Errorf("parameter %s is not a balancer ydb-go-sdk knows: use disable, single, random_choice, round_robin or a JSON balancer config", key)
+				return nil, authored.New(fmt.Sprintf("parameter %s is not a balancer ydb-go-sdk knows: use disable, single, random_choice, round_robin or a JSON balancer config", key))
 			}
 		case paramQueryMode, paramLegacyQueryMode:
 			if value != "query" {
-				return nil, fmt.Errorf("parameter %s is refused: the provider runs its reads and DDL through the query service; use %s=query or leave it out", key, key)
+				return nil, authored.New(fmt.Sprintf("parameter %s is refused: the provider runs its reads and DDL through the query service; use %s=query or leave it out", key, key))
 			}
 		case paramDefaultIdempotent:
 			if _, err := strconv.ParseBool(value); err != nil {
-				return nil, fmt.Errorf("parameter %s is not a boolean", key)
+				return nil, authored.New(fmt.Sprintf("parameter %s is not a boolean", key))
 			}
 		case paramPrefetchParts:
 			if parts, err := strconv.Atoi(value); err != nil || parts < 0 {
-				return nil, fmt.Errorf("parameter %s is not a non-negative integer", key)
+				return nil, authored.New(fmt.Sprintf("parameter %s is not a non-negative integer", key))
 			}
 		case paramFakeTx:
-			return nil, fmt.Errorf("parameter %s is refused: a schema is read in a snapshot read-only transaction, and a faked transaction would read outside it", key)
+			return nil, authored.New(fmt.Sprintf("parameter %s is refused: a schema is read in a snapshot read-only transaction, and a faked transaction would read outside it", key))
 		case paramQueryBind:
-			return nil, fmt.Errorf("parameter %s is refused: the provider binds parameters itself, and the SDK's binders rewrite a ? inside a YQL literal", key)
+			return nil, authored.New(fmt.Sprintf("parameter %s is refused: the provider binds parameters itself, and the SDK's binders rewrite a ? inside a YQL literal", key))
 		}
 		switch key {
 		case paramBalancer, paramLegacyBalancer, paramDefaultIdempotent, paramPrefetchParts:
@@ -72,7 +72,7 @@ func sdkParameters(query url.Values) (url.Values, error) {
 		}
 	}
 	if passed.Has(paramBalancer) && passed.Has(paramLegacyBalancer) {
-		return nil, fmt.Errorf("parameters %s and %s both choose a balancer; give one", paramBalancer, paramLegacyBalancer)
+		return nil, authored.New(fmt.Sprintf("parameters %s and %s both choose a balancer; give one", paramBalancer, paramLegacyBalancer))
 	}
 	return passed, nil
 }
@@ -87,22 +87,22 @@ func monitoringEndpoint(query url.Values) (*url.URL, error) {
 	}
 	value := query.Get(paramMonitoring)
 	if value == "" {
-		return nil, errors.New("the monitoring parameter is empty: write monitoring=http://host:8765")
+		return nil, authored.New("the monitoring parameter is empty: write monitoring=http://host:8765")
 	}
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return nil, errors.New("the monitoring parameter is not a URL: write monitoring=http://host:8765")
+		return nil, authored.New("the monitoring parameter is not a URL: write monitoring=http://host:8765")
 	}
 	endpoint := &url.URL{Scheme: parsed.Scheme, Host: parsed.Host}
 	switch {
 	case parsed.Scheme != "http" && parsed.Scheme != "https":
-		return nil, errors.New("the monitoring parameter names no http:// or https:// endpoint: write monitoring=http://host:8765")
+		return nil, authored.New("the monitoring parameter names no http:// or https:// endpoint: write monitoring=http://host:8765")
 	case parsed.Hostname() == "":
-		return nil, errors.New("the monitoring parameter names no host: write monitoring=http://host:8765")
+		return nil, authored.New("the monitoring parameter names no host: write monitoring=http://host:8765")
 	case parsed.User != nil:
-		return nil, errors.New("the monitoring parameter carries a user; name the endpoint only, as monitoring=http://host:8765")
+		return nil, authored.New("the monitoring parameter carries a user; name the endpoint only, as monitoring=http://host:8765")
 	case strings.Trim(parsed.EscapedPath(), "/") != "" || parsed.RawQuery != "" || parsed.Fragment != "":
-		return nil, errors.New("the monitoring parameter names a page; name the endpoint only, as monitoring=http://host:8765")
+		return nil, authored.New("the monitoring parameter names a page; name the endpoint only, as monitoring=http://host:8765")
 	}
 	return endpoint, nil
 }
@@ -127,7 +127,7 @@ func realmName(query url.Values) (string, error) {
 	}
 	realm := query.Get(paramRealm)
 	if realm == "" || len(realm) > maxRealmLength || strings.IndexFunc(realm, notRealmRune) >= 0 {
-		return "", fmt.Errorf("the dev_realm parameter is not a realm name: use 1 to %d lowercase letters, digits and underscores", maxRealmLength)
+		return "", authored.New(fmt.Sprintf("the dev_realm parameter is not a realm name: use 1 to %d lowercase letters, digits and underscores", maxRealmLength))
 	}
 	return realm, nil
 }
