@@ -388,113 +388,6 @@ func TestReplicationPlanningRefusesReplicaTables(t *testing.T) {
 	}
 }
 
-// TestReplicationConversion_HappyPath converts a declaration to the
-// observation YDB reports for it, and an observation to the declaration
-// that keeps it, as the host asks before it compares.
-func TestReplicationConversion_HappyPath(t *testing.T) {
-	c := testcheck.New(t)
-	ingestHeld := ingest()
-	ingestHeld.Consumer = "6f0b8c"
-	for _, test := range []struct {
-		name     string
-		value    *protocol.Envelope
-		from, to protocol.ValueInput_Representation
-	}{
-		{name: "a declared replication", value: declaredReplication(c, new(mirror())), from: protocol.ValueInput_DESIRED, to: protocol.ValueInput_OBSERVED},
-		{name: "a read replication", value: readReplication(c, new(mirror()), replication.StatePaused), from: protocol.ValueInput_OBSERVED, to: protocol.ValueInput_DESIRED},
-		{name: "a declared transfer", value: declaredTransfer(c, new(ingest())), from: protocol.ValueInput_DESIRED, to: protocol.ValueInput_OBSERVED},
-		{name: "a read transfer", value: readTransfer(c, &ingestHeld, replication.StateRunning), from: protocol.ValueInput_OBSERVED, to: protocol.ValueInput_DESIRED},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			c := testcheck.New(t)
-			service := backend.New()
-			normalized, err := service.NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "v", Representation: test.from, Value: test.value}}})
-			c.Assert(err, qt.IsNil)
-			converted, err := service.ConvertValues(t.Context(), &protocol.ConvertValuesRequest{Engine: "ydb", From: test.from, To: test.to, Values: normalized.Values})
-			c.Assert(err, qt.IsNil)
-			c.Assert(converted.Values, qt.HasLen, 1)
-			c.Assert(converted.Values[0].Value.Kind, qt.Equals, test.value.Kind)
-		})
-	}
-}
-
-// replicationContextState is a context state holding one replication, or
-// none for a nil value.
-func replicationContextState(c *qt.C, representation protocol.ValueInput_Representation, value *protocol.Envelope) *protocol.ComparisonState {
-	c.Helper()
-	var model *protocol.ValueModel
-	for _, candidate := range schema.Models() {
-		if candidate.Kind == schema.ReplicationProperties && candidate.Representation == representation {
-			model = candidate
-		}
-	}
-	state := testcomparison.State(model)
-	if value != nil {
-		normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Features, Values: []*protocol.ValueInput{{Id: "mirror", Representation: representation, Value: value}}})
-		c.Assert(err, qt.IsNil)
-		state.Records = []*protocol.ComparisonRecord{{Kind: value.Kind, Subject: testplanning.Subject(&protocol.Reference{Engine: "ydb", Kind: value.Kind, Schema: "app", Name: "mirror"}), Value: normalized.Values[0]}}
-	}
-	return state
-}
-
-// keptReplicationRequest plans no replication change beside table, with the
-// replication mirror held in state and declared as it is held.
-func keptReplicationRequest(c *qt.C, state string, table *protocol.PlanningTable) *protocol.PlanFeaturesRequest {
-	c.Helper()
-	read := readReplication(c, new(mirror()), state)
-	read.Owner.Database = ""
-	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: replicationplan.ReplicationServiceID, DatabasePath: "/local", ContextKinds: []string{schema.ReplicationProperties},
-		TargetFeatures: backend.Description().Features, Capabilities: replicationCapabilities(), Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
-		DesiredObjects: replicationContextState(c, protocol.ValueInput_DESIRED, declaredReplication(c, new(mirror()))),
-		CurrentObjects: replicationContextState(c, protocol.ValueInput_OBSERVED, read), Tables: []*protocol.PlanningTable{table}}
-}
-
-// TestKeptReplicationAssessment_HappyPath acknowledges a replication the plan
-// leaves alone with a receipt and no step, beside a table elsewhere.
-func TestKeptReplicationAssessment_HappyPath(t *testing.T) {
-	c := testcheck.New(t)
-	elsewhere := declaredReplica()
-	elsewhere.Schema = "other"
-	subject := replicaTable()
-	subject.Schema = testcomparison.Part("other")
-	result, err := backend.New().PlanFeatures(t.Context(), keptReplicationRequest(c, replication.StateRunning, &protocol.PlanningTable{Subject: subject, Action: protocol.PlanningTable_CREATE, Desired: elsewhere}))
-	c.Assert(err, qt.IsNil)
-	c.Assert(result.Diagnostics, qt.HasLen, 0)
-	c.Assert(result.Objects, qt.HasLen, 1)
-	c.Assert(result.Objects[0].Steps, qt.HasLen, 0)
-}
-
-// TestKeptReplicationAssessment_FailurePath refuses a table the plan creates
-// at the path of a running replication's replica, and a failed-over replica
-// the plan drops while the schema keeps the replication.
-func TestKeptReplicationAssessment_FailurePath(t *testing.T) {
-	tests := []struct {
-		name    string
-		state   string
-		table   *protocol.PlanningTable
-		wantErr string
-	}{
-		{name: "a table at a live replica", state: replication.StateRunning,
-			table:   &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_CREATE, Desired: declaredReplica()},
-			wantErr: "table replica/accounts: it is a replica table async replication app/mirror writes, read-only while the replication runs .*"},
-		{name: "a failed-over replica dropped", state: replication.StateDone,
-			table: &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_DROP, Current: &protocol.ObservedTable{Schema: "replica", Name: "accounts", Features: &protocol.CapturedFeatures{
-				Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}},
-				Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}}}}},
-			wantErr: "table replica/accounts: it is a table async replication app/mirror created and failed over, which the schema keeps; .*"},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			c := testcheck.New(t)
-			result, err := backend.New().PlanFeatures(t.Context(), keptReplicationRequest(c, test.state, test.table))
-			c.Assert(err, qt.IsNil)
-			c.Assert(result.Objects, qt.HasLen, 0)
-			c.Assert(result.Diagnostics, qt.HasLen, 1)
-			c.Assert(result.Diagnostics[0].Message, qt.Matches, test.wantErr)
-		})
-	}
-}
-
 // sourceStep is a common step at src/accounts, the source mirror replicates,
 // with action.
 func sourceStep(name string, action protocol.PlanningEffect_Action) *protocol.CommonPlanningStep {
@@ -614,6 +507,113 @@ func TestTransferPlanningReadsWhatItReads(t *testing.T) {
 
 			c.Assert(planned.Diagnostics, qt.HasLen, 0)
 			c.Assert(reads(planned), qt.DeepEquals, test.want)
+		})
+	}
+}
+
+// TestReplicationConversion_HappyPath converts a declaration to the
+// observation YDB reports for it, and an observation to the declaration
+// that keeps it, as the host asks before it compares.
+func TestReplicationConversion_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	ingestHeld := ingest()
+	ingestHeld.Consumer = "6f0b8c"
+	for _, test := range []struct {
+		name     string
+		value    *protocol.Envelope
+		from, to protocol.ValueInput_Representation
+	}{
+		{name: "a declared replication", value: declaredReplication(c, new(mirror())), from: protocol.ValueInput_DESIRED, to: protocol.ValueInput_OBSERVED},
+		{name: "a read replication", value: readReplication(c, new(mirror()), replication.StatePaused), from: protocol.ValueInput_OBSERVED, to: protocol.ValueInput_DESIRED},
+		{name: "a declared transfer", value: declaredTransfer(c, new(ingest())), from: protocol.ValueInput_DESIRED, to: protocol.ValueInput_OBSERVED},
+		{name: "a read transfer", value: readTransfer(c, &ingestHeld, replication.StateRunning), from: protocol.ValueInput_OBSERVED, to: protocol.ValueInput_DESIRED},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			service := backend.New()
+			normalized, err := service.NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "v", Representation: test.from, Value: test.value}}})
+			c.Assert(err, qt.IsNil)
+			converted, err := service.ConvertValues(t.Context(), &protocol.ConvertValuesRequest{Engine: "ydb", From: test.from, To: test.to, Values: normalized.Values})
+			c.Assert(err, qt.IsNil)
+			c.Assert(converted.Values, qt.HasLen, 1)
+			c.Assert(converted.Values[0].Value.Kind, qt.Equals, test.value.Kind)
+		})
+	}
+}
+
+// replicationContextState is a context state holding one replication, or
+// none for a nil value.
+func replicationContextState(c *qt.C, representation protocol.ValueInput_Representation, value *protocol.Envelope) *protocol.ComparisonState {
+	c.Helper()
+	var model *protocol.ValueModel
+	for _, candidate := range schema.Models() {
+		if candidate.Kind == schema.ReplicationProperties && candidate.Representation == representation {
+			model = candidate
+		}
+	}
+	state := testcomparison.State(model)
+	if value != nil {
+		normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Features, Values: []*protocol.ValueInput{{Id: "mirror", Representation: representation, Value: value}}})
+		c.Assert(err, qt.IsNil)
+		state.Records = []*protocol.ComparisonRecord{{Kind: value.Kind, Subject: testplanning.Subject(&protocol.Reference{Engine: "ydb", Kind: value.Kind, Schema: "app", Name: "mirror"}), Value: normalized.Values[0]}}
+	}
+	return state
+}
+
+// keptReplicationRequest plans no replication change beside table, with the
+// replication mirror held in state and declared as it is held.
+func keptReplicationRequest(c *qt.C, state string, table *protocol.PlanningTable) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	read := readReplication(c, new(mirror()), state)
+	read.Owner.Database = ""
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: replicationplan.ReplicationServiceID, DatabasePath: "/local", ContextKinds: []string{schema.ReplicationProperties},
+		TargetFeatures: backend.Description().Features, Capabilities: replicationCapabilities(), Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
+		DesiredObjects: replicationContextState(c, protocol.ValueInput_DESIRED, declaredReplication(c, new(mirror()))),
+		CurrentObjects: replicationContextState(c, protocol.ValueInput_OBSERVED, read), Tables: []*protocol.PlanningTable{table}}
+}
+
+// TestKeptReplicationAssessment_HappyPath acknowledges a replication the plan
+// leaves alone with a receipt and no step, beside a table elsewhere.
+func TestKeptReplicationAssessment_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	elsewhere := declaredReplica()
+	elsewhere.Schema = "other"
+	subject := replicaTable()
+	subject.Schema = testcomparison.Part("other")
+	result, err := backend.New().PlanFeatures(t.Context(), keptReplicationRequest(c, replication.StateRunning, &protocol.PlanningTable{Subject: subject, Action: protocol.PlanningTable_CREATE, Desired: elsewhere}))
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	c.Assert(result.Objects, qt.HasLen, 1)
+	c.Assert(result.Objects[0].Steps, qt.HasLen, 0)
+}
+
+// TestKeptReplicationAssessment_FailurePath refuses a table the plan creates
+// at the path of a running replication's replica, and a failed-over replica
+// the plan drops while the schema keeps the replication.
+func TestKeptReplicationAssessment_FailurePath(t *testing.T) {
+	tests := []struct {
+		name    string
+		state   string
+		table   *protocol.PlanningTable
+		wantErr string
+	}{
+		{name: "a table at a live replica", state: replication.StateRunning,
+			table:   &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_CREATE, Desired: declaredReplica()},
+			wantErr: "table replica/accounts: it is a replica table async replication app/mirror writes, read-only while the replication runs .*"},
+		{name: "a failed-over replica dropped", state: replication.StateDone,
+			table: &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_DROP, Current: &protocol.ObservedTable{Schema: "replica", Name: "accounts", Features: &protocol.CapturedFeatures{
+				Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}},
+				Facets:  &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}}}}},
+			wantErr: "table replica/accounts: it is a table async replication app/mirror created and failed over, which the schema keeps; .*"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			result, err := backend.New().PlanFeatures(t.Context(), keptReplicationRequest(c, test.state, test.table))
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Objects, qt.HasLen, 0)
+			c.Assert(result.Diagnostics, qt.HasLen, 1)
+			c.Assert(result.Diagnostics[0].Message, qt.Matches, test.wantErr)
 		})
 	}
 }
