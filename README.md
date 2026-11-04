@@ -827,9 +827,12 @@ transfers](#async-replications-and-transfers)). Right after `CREATE ASYNC
 REPLICATION`, YDB can list the replica while DescribeTable still answers
 SCHEME_ERROR. So a row table a listing names and the table service answers
 SCHEME_ERROR for is described again for up to 10 seconds, and the directory is
-listed again before each wait. The read fails if the listing stops naming the
-table, if that listing fails, or if the table is still not described when the
-time runs out; it never reads such a table as absent. A failed traversal
+listed again before each wait. The topic of a changefeed is waited for the
+same way, with its table described again before each wait: the changefeed the
+replication adds to its source table can be named before DescribeTopic
+describes its topic. The read fails if the new listing or description stops
+naming the object, if it fails, or if the object is still not described when
+the time runs out; it never reads such an object as absent. A failed traversal
 returns no snapshot.
 These limitations preserve data for the remaining extraction work.
 
