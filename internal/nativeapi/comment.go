@@ -72,6 +72,13 @@ func (c *Comments) RunStatement(ctx context.Context, database, root string, quer
 	}
 	subject := commentSubject(query.Statement, absolute)
 	entry, err := c.describePath(ctx, absolute)
+	if isSchemeError(err) {
+		// YDB answers SCHEME_ERROR for a path that holds nothing, or that the
+		// session may not see. Nothing was written, and the path is the
+		// statement's own, so the refusal names it.
+		return false, &Refusal{Err: fmt.Errorf("%w: set %s: YDB holds no object at the path, or the session may not see it (SCHEME_ERROR)",
+			ydbcomment.ErrStatement, subject)}
+	}
 	if err != nil {
 		return false, fmt.Errorf("set %s: %w", subject, err)
 	}

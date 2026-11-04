@@ -561,7 +561,9 @@ YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table
 service, after checking that the object is in the session's database or realm,
 is a row table or a view of the kind the statement names, and for a non-empty
-comment has the column or the index. A unit holding a comment statement beside
+comment has the column or the index. A statement whose path holds nothing, or
+one the session may not see, is refused before any write with a message that
+names the path. A unit holding a comment statement beside
 other statements, such as a commented view, runs as the queries a migration
 file is split into, one statement after another. A comment statement in a
 transaction, or one that cannot be read, refuses the batch before any unit
