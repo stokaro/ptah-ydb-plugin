@@ -400,7 +400,7 @@ func CheckTopic(schema, name string, spec Topic) error {
 // ValidateTopic holds a topic's settings and consumers to the rules a
 // declaration is read with.
 func ValidateTopic(spec Topic) error {
-	if _, err := ParseTopic(topicValues(spec)); err != nil {
+	if _, err := ParseTopic(TopicValues(spec)); err != nil {
 		return err
 	}
 	names := make(map[string]bool, len(spec.Consumers))
@@ -417,7 +417,8 @@ func ValidateTopic(spec Topic) error {
 	return nil
 }
 
-func topicValues(spec Topic) map[string]string {
+// TopicValues writes the settings [ParseTopic] reads, without consumers.
+func TopicValues(spec Topic) map[string]string {
 	values := make(map[string]string)
 	counts := []struct {
 		attribute string

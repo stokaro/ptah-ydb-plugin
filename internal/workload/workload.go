@@ -330,6 +330,21 @@ func settingsOf(spec PoolSpec) []setting {
 	}
 }
 
+// PoolValues writes the present settings [ParsePool] reads. An explicit zero
+// stays present, while an unset limit contributes no attribute.
+func PoolValues(spec PoolSpec) map[string]string {
+	values := make(map[string]string)
+	for _, setting := range settingsOf(spec) {
+		switch {
+		case setting.integer != nil:
+			values[strings.ToLower(setting.option)] = strconv.FormatInt(int64(*setting.integer), 10)
+		case setting.fraction != nil:
+			values[strings.ToLower(setting.option)] = strconv.FormatFloat(*setting.fraction, 'f', -1, 64)
+		}
+	}
+	return values
+}
+
 func (s setting) set() bool { return s.integer != nil || s.fraction != nil }
 
 // literal writes the setting's value as YQL takes it. A WITH option of a pool

@@ -209,10 +209,8 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 			`index "by_both" holds a global index on \(label, extra\), but the declaration states a global index on \(extra, label\).*`},
 		{"a declared index states settings", indexCase(declaredIndexes(settings), heldIndexes(), "label"),
 			`the declared index "by_label" states its partitioning or read replicas, which this provider changes only on an index the table holds; add the index first, then declare them`},
-		{"a vector index is declared", indexCase(vectorIndexes(false), heldIndexes(), "label"),
-			`the declared index "by_embedding" is outside the global secondary indexes this provider alters: it is a vector index`},
-		{"a vector index is left out", indexCase(declaredIndexes(), vectorIndexes(true), "label"),
-			`the index "by_embedding" the declaration leaves out is outside the global secondary indexes this provider alters: it is a vector index`},
+		{"a vector index on a target without vector indexes", indexCase(vectorIndexes(false), heldIndexes(), "label"),
+			`index "by_embedding" declares vector settings, which requires target capability vector_indexes, unavailable on this ydb target .*`},
 		{"a declared index reads an undeclared column", indexCase(declaredIndexes(indexJSON("globalIndex", "by_other", []string{"other"}, nil)), heldIndexes(), "label"),
 			`index "by_other" reads column "other", which the declaration does not state`},
 		{"a kept index reads a column the declaration drops", indexCase(

@@ -66,6 +66,24 @@ func (k IndexKind) IsLocal() bool {
 	return k == IndexLocalBloom || k == IndexLocalNgram || k == IndexLocalMinMax
 }
 
+// CommonMethod returns the method the common model spells kind with, and
+// whether kind is a common index at all. A synchronous global index, unique
+// or not, has no method, and an asynchronous one has "async". Inspection
+// reports a held index's method with it and table preparation a declared
+// index's, so the two spellings a host compares cannot drift apart. A vector,
+// full-text or local index has settings the common model has no place for,
+// and no common spelling.
+func (k IndexKind) CommonMethod() (method string, common bool) {
+	switch k {
+	case IndexSync:
+		return "", true
+	case IndexAsync:
+		return "async", true
+	default:
+		return "", false
+	}
+}
+
 // String names the kind the way a declaration may.
 func (k IndexKind) String() string {
 	switch k {

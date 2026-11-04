@@ -73,6 +73,9 @@ func convertNativeProperties(c *qt.C, client *providerruntime.Client, inputs *pr
 			expected, err = schema.Normalize(expected)
 			c.Assert(err, qt.IsNil)
 		}
+		if expected.Kind == schema.IndexProperties {
+			expected = withoutDefaultImplementationStorage(c, expected)
+		}
 		c.Assert(proto.Equal(expected, back.Values[i].Value), qt.IsTrue)
 	}
 	again, err := client.ConvertValues(ctx, &protocol.ConvertValuesRequest{Engine: "ydb", From: protocol.ValueInput_OBSERVED, To: protocol.ValueInput_DESIRED, Values: back.Values, TargetFeatures: inputs.TargetFeatures})
@@ -80,12 +83,38 @@ func convertNativeProperties(c *qt.C, client *providerruntime.Client, inputs *pr
 	c.Assert(proto.Equal(desired, again), qt.IsTrue)
 }
 
+// withoutDefaultImplementationStorage returns an observed index set as a round
+// trip through its declaration gives it back. YDB reports store_external_blobs
+// DISABLED for every implementation table, the server's default, and the
+// declaration states no storage for such a table: no creation sets the storage
+// of an implementation table. Any other storage setting comes back.
+func withoutDefaultImplementationStorage(c *qt.C, value *protocol.Envelope) *protocol.Envelope {
+	c.Helper()
+	var indexes native.IndexObservations
+	c.Assert(protojson.Unmarshal(value.Payload, &indexes), qt.IsNil)
+	serverDefault := &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_DISABLED}
+	for _, index := range indexes.Indexes {
+		for _, table := range index.Tables {
+			if proto.Equal(table.Description.StorageSettings, serverDefault) {
+				table.Description.StorageSettings = nil
+			}
+		}
+	}
+	result := proto.CloneOf(value)
+	var err error
+	result.Payload, err = protojson.Marshal(&indexes)
+	c.Assert(err, qt.IsNil)
+	result, err = schema.Normalize(result)
+	c.Assert(err, qt.IsNil)
+	return result
+}
+
 func TestChildConversionOfflineSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	owner := &protocol.Reference{Engine: "ydb", Database: "/local", Schema: "App", Kind: "table", Name: "Records"}
 	indexes, err := schema.CaptureIndexes(owner, &native.IndexObservations{Indexes: []*native.ObservedIndex{{
 		Description: &native.TableIndexDescription{Name: "by_label", IndexColumns: []string{"label"}, Status: native.TableIndexDescription_STATUS_READY, Type: &native.TableIndexDescription_GlobalAsyncIndex{GlobalAsyncIndex: &native.GlobalAsyncIndex{}}},
-		Tables:      []*native.ImplementationTable{{Name: "indexImplTable", Description: &native.DescribeTableResult{PrimaryKey: []string{"label"}, Columns: []*native.ColumnMeta{{Name: "label", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}}}, PartitioningSettings: &Ydb_Table.PartitioningSettings{MinPartitionsCount: 4}}}},
+		Tables:      []*native.ImplementationTable{{Name: "indexImplTable", Description: &native.DescribeTableResult{PrimaryKey: []string{"label"}, Columns: []*native.ColumnMeta{{Name: "label", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}}}, PartitioningSettings: &Ydb_Table.PartitioningSettings{MinPartitionsCount: 4}, StorageSettings: &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_DISABLED}}}},
 	}}})
 	c.Assert(err, qt.IsNil)
 	topic := &native.DescribeTopicResult{PartitioningSettings: &Ydb_Topic.PartitioningSettings{MinActivePartitions: 2}, MetricsLevel: proto.Uint32(0), Consumers: []*native.Consumer{{Name: "reader", ConsumerType: &native.Consumer_StreamingConsumerType{StreamingConsumerType: &native.StreamingConsumerType{}}}}}

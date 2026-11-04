@@ -109,7 +109,11 @@ PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
 
 The test servers enable `enable_vector_index` and
 `enable_external_data_sources`; the 26.2 fixture also enables
-`enable_add_unique_index`. Fulltext creation is expected to be refused on 25.1.
+`enable_add_unique_index`. A full-text index is refused on 25.1, and the
+full-text tests that need one skip there; the 25.1 run checks the refusal
+instead. One full-text test turns `enable_fulltext_index` off for the whole
+26.2 cluster through its dynamic configuration and drops the configuration
+when it ends.
 
 CI runs this process test against YDB 25.1.4.7 and 26.2.1.14. It also rejects
 host-module imports and local module replacements. These checks cover sessions,
@@ -212,6 +216,15 @@ reports the defaults of every supported line.
 | `external_object_replace` | `EnableReplaceIfExistsForExternalEntities` | `false` on every line from 25.1 to 26.2 |
 | `resource_pools` | `EnableResourcePools` | `false` on every line from 25.1 to 26.2 |
 | `secrets` | `EnableSchemaSecrets` | `false` through 25.3, `true` from 25.4 |
+| `vector_indexes` | `EnableVectorIndex` | `false` on 25.1, `true` from 25.2 |
+| `full_text_indexes` | `EnableFulltextIndex` | `false` through 26.1, `true` from 26.2 |
+
+The release line alone decides the other vector capabilities, as the host's
+line presets name them: `vector_index_maintained_on_write` from 25.3 (an index
+built on 25.1 or 25.2 does not find the rows written after its build), and
+`vector_bit_type` from 26.1 (25.1 to 25.4 do not build an index over bit
+vectors over rows: `bit vector type is not supported`, `Unsupported
+vector_type: VECTOR_TYPE_BIT`).
 
 The host maps more flags than these. The provider reports only the
 capabilities it plans with, because the host plans with the others itself: an
@@ -746,13 +759,15 @@ directory completeness at these occupied names, so omission does not assert
 absence. Filtered reads return reservations only from the exact directories
 they inspect. Names or layout alone never establish ownership.
 
-Coordination nodes remain managed observations. YDB returns SUCCESS for repeated
-native CreateNode requests, so a successful create cannot prove that this
-provider created the node. Installing an ownership marker based on that result
-could claim a concurrently created foreign node. Lock-node ownership and
-reservation need a separate initialization contract and remain pending. No
-node is hidden or reserved merely because it is named `ptah_locks` or has
-strict consistency settings.
+The coordination node `ptah_locks` at the root of the session's database is
+reserved with purpose LOCK by its name alone. The lock service takes whatever
+node it finds at that path, after checking its consistency settings, so the
+name is the reservation; YDB returns SUCCESS for a repeated CreateNode, so no
+creation receipt could prove more. A read reports the name as taken and
+describes no node there, so `db read` and an export leave it out, as the host's
+embedded engine does. A reservation never changes or drops the node. Every
+other coordination node, one named `ptah_locks` in a directory included, is a
+managed observation.
 
 Operational storage reservations support host collision and reference guards. They do not
 establish native directory-cascade safety; containment qualification remains
@@ -926,16 +941,46 @@ none, is the one header kind the engine declares; the host applies it to the
 document's claim, and the provider refuses a name no node can take with the
 host's words. A host that does not list the feature reads no such block.
 
-`EncodeSource` (`source.encode`, ADR 0037) writes a desired node back as the
-fragment each format reads: an entry of `coordination_nodes`, one directive, or
-one block placed after the tables, which decode to the same node. Access
-constraints are reported as losses because no source can represent them.
-`struct_name` is written in YAML alone. Incomplete kind or subject coverage
-refuses the export, because these fragments cannot preserve that knowledge.
-A table's YDB settings are reported as losses: this provider holds them as one
-value, which a source writes as several declarations, and the contract writes
-one value with one fragment; HCL has no spelling for them at all, as the host's
-embedded engine reports. Every other native object is a loss too.
+`EncodeSource` (`source.encode`, ADR 0037, and `source.encode-groups`, ADR
+0040) writes desired values back as the keys, directives and blocks this
+provider's decoders read, which decode to the same declarations:
+
+| Value | YAML | Go | HCL |
+|---|---|---|---|
+| Coordination node | entry of `coordination_nodes` | `ptah:schema:coordinationnode` | `coordination_node` block after the tables |
+| Topic and its consumers | entry of `topics` | `ptah:schema:topic`, `ptah:schema:topic:consumer` | loss |
+| Secret, by the variable its value comes from | entry of `secrets` | `ptah:schema:secret` | loss |
+| External data source and external table | entries of their keys | their directives | loss |
+| Resource pool and classifier | entries of their keys | their directives | loss |
+| Streaming query | entry of `streaming_queries` | `ptah:schema:streamingquery` | loss |
+| Row-table partitioning, read replicas, key Bloom filter, starting layout, TTL | table keys, TTL in `platform.ydb` | attributes of `ptah:schema:table` | loss |
+| Column families and the columns they hold | `column_families` | `ptah:schema:columnfamily` | loss |
+| Column-table storage, hash key, shards, TTL | `column_store` | attributes of `ptah:schema:table` | loss |
+| Changefeeds and their consumers | `changefeeds` | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` | loss |
+
+A value is written as the declaration the provider compares it as: a topic or a
+changefeed as its declared settings, without the attributes YDB keeps on it; a
+table's settings without the primary key the common columns carry; a column
+default not at all, since the common column carries it. A facet a source states
+by writing nothing, such as an empty changefeed set, an empty native index set
+or a column of the default family, is written by the table's own part. A Go
+export also gives each column the Go type of its YDB type, as the host's
+embedded engine does, and refuses a nullable key column, which no declaration
+can ask for.
+
+What no declaration states is a loss for its value, in one line that names it:
+an access requirement, table attributes, storage settings, tiering, a temporary
+table, a family kept in memory, a TTL run interval, a disabled changefeed or the
+stream of an async replication, a native index, a column's sequence,
+compression or encoding, a native view (the host writes views from the common
+wire), and an object of another database than the one it was read in. A
+secret's value is never written. HCL declares coordination nodes only, as the
+host's embedded engine does; its other YDB settings are losses. The parts are
+decoded again before they are returned, and a value they do not give back is a
+loss. A value that needs several declarations is a loss for a host that does not
+negotiate `source.encode-groups`. `struct_name` is written in YAML alone.
+Incomplete kind or subject coverage refuses the export, because these fragments
+cannot preserve that knowledge.
 
 The subprocess tests exercise decoding, encoding, normalization, and
 representation conversion without a database address; a YQL schema declares
@@ -1047,7 +1092,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | --- | --- |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
 | `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
-| Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. The index set model takes an index's partitioning and read replicas, and the planner changes them on an index the table holds (see [Index alteration](#index-alteration)); neither source writes them into it yet. |
+| Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. The index set model takes an index's partitioning and read replicas, and the planner changes them on an index the table holds (see [Index alteration](#index-alteration)). A vector or full-text index is created and changed from the native index set (see [Vector and full-text indexes](#vector-and-full-text-indexes)). No Go or YAML source writes either into the index set yet, and neither does a pgvector operator class (`ops`) on a source index. |
 
 A table is managed for its TTL when its source states table properties for it,
 or when the host reports complete knowledge of the table properties of the
@@ -1217,13 +1262,11 @@ cannot promise inherited permissions or apply grants.
 The comparison refuses contradictory identities, forged normalization receipts,
 and collisions with declared relations. Required nodes are not removed.
 Exclusions for this model match exact relative paths such as `app/workers`,
-without case folding or trimming. The comparison leaves the database-root
-`ptah_locks` node out, as the host's embedded engine leaves it out of every
-read: it plans no removal of it and reports nothing about it. A declaration at
-that path is the one case it reports, as undecided. Offline conversion and host
-schema export retain this observation, including its configuration and access
-metadata. Export does not authorize management: YAML and Go declarations and
-change normalization still reject this root path.
+without case folding or trimming. Inspection reserves the database-root
+`ptah_locks` node (see the reservations above), and the comparison leaves that
+path out too: it plans no removal and reports nothing about it. A declaration
+at that path is the one case it reports, as undecided; YAML and Go declarations
+and change normalization reject it.
 This changes the desired model definition; pre-v1, no compatibility with the
 earlier experimental definition is owed.
 
@@ -2146,9 +2189,18 @@ release that refuses one on an existing table. What a YDB index has no clause
 for is refused in the embedded engine's words: an expression, an order, a
 prefix, a NULLS order or an operator class on a key column, an index on the
 table's key, a covered key column. A vector, full-text or local index is
-refused too, since the pinned table protocol builds none of them with a table.
-Execution confirms each index by reading it back. In the TEXT form each index
-is an INDEX clause of the CREATE TABLE.
+refused as a common index, since the pinned table protocol builds none of them
+with a table. Execution confirms each index by reading it back. In the TEXT
+form each index is an INDEX clause of the CREATE TABLE.
+
+The vector and full-text indexes of the table's native index set are built
+after the creation, one step each (`row-table-create-index/N`, ordered after
+the creation), with the rules and the statement of
+[Vector and full-text indexes](#vector-and-full-text-indexes). The host's
+embedded engine writes them inside the CREATE TABLE instead; the end state is
+the same, and a target that cannot build one refuses the whole creation before
+the table is created. A global index the native set states is refused at
+creation: a new table takes its global indexes from the common declaration.
 
 Access requirements, temporary tables, changefeeds, column
 compression or encoding, and richer common constraints are refused.
@@ -2513,6 +2565,19 @@ effect. An addition is `ADD INDEX name GLOBAL [SYNC|ASYNC] [UNIQUE] ON (keys)
 [COVER (columns)]`; a removal is `DROP INDEX name`. Impact is additive for an
 addition and destructive for a removal.
 
+The common indexes a source declares, such as a `ptah:schema:index` directive,
+are compared by the host. Inspection reports a row table's global indexes as
+its common indexes: a synchronous one, unique or not, with no method, and an
+asynchronous one with the method `async`. For a host that lists
+`schema.index-methods`, table preparation states the kind of each declared
+index in the same spelling, reading its type with the host's embedded engine's
+spellings: none, `BTREE`, `GLOBAL`, `SYNC` and `GLOBAL SYNC` are synchronous,
+and `ASYNC` and `GLOBAL ASYNC` are asynchronous, in any case and with `_` for a
+space. The host compares the two spellings, so a declaration that changes only
+an index's kind is a removal and an addition of the index under its name, which
+this service carries out as the two steps above, the removal first. A host
+without the feature compares no kind, and such a change plans nothing.
+
 The declaration is the index set model (`table-indexes`, desired side) as a
 facet of the table, beside the table properties. It is managed when the
 declaration states it: an index the table holds and the set leaves out is
@@ -2529,12 +2594,12 @@ that table itself.
   definitions. It does not plan a drop followed by an addition, because that
   rebuilds the index. Declare the removal and the addition in separate plans if
   a rebuild is wanted.
-- Only global sync, async and unique indexes are altered. A vector or fulltext
-  index is refused by name when the plan would have to add it, drop it or tell it
-  from the held one. The same index on both sides, unchanged, is no difference
-  and needs no support. An index to add that states its partitioning or read
-  replicas is refused by name too: the step that adds it carries none, so add
-  the index first and declare its settings in a later plan.
+- The rules above are those of global sync, async and unique indexes. A vector
+  or full-text index follows its own (see
+  [Vector and full-text indexes](#vector-and-full-text-indexes)). An index to
+  add that states its partitioning or read replicas is refused by name: the step
+  that adds it carries none, so add the index first and declare its settings in
+  a later plan.
 - A unique index needs a server that accepts `ALTER TABLE ... ADD INDEX ...
   GLOBAL UNIQUE`; YDB 25.1 refuses it unless `enable_add_unique_index` is set.
 - An index reads columns the declaration states. A declared index that reads a
@@ -2562,6 +2627,65 @@ that table itself.
   read back as ready, bounded by ten minutes, before it confirms the step.
   Inspection refuses an index that is not ready, so a table with an index in
   the build is never compared.
+
+### Vector and full-text indexes
+
+A vector index (`vector_kmeans_tree`) and a full-text index (`fulltext_plain`,
+`fulltext_relevance`) are entries of the native index set, with their settings,
+and the comparison, the planner and execution follow the rules of the host's
+embedded engine for them:
+
+- An index the set states and the table does not hold is added with one step,
+  `row-table-add-index/N`, of its own operation kind,
+  `row-table-native-index-operation`. The native `AlterTable` call of the
+  pinned bindings carries neither kind, so execution runs YQL's `ALTER TABLE ...
+  ADD INDEX` through the query service, as the host's embedded engine writes
+  it: `INDEX name GLOBAL USING vector_kmeans_tree ON (prefix, vector) [COVER
+  (columns)] WITH (distance=cosine, vector_type=float, vector_dimension=3,
+  levels=1, clusters=2)`, the metric spelled `similarity=` where the index
+  names a similarity, and `INDEX name GLOBAL USING fulltext_relevance ON
+  (column) WITH (...)` with the analyzers in name order and the language
+  quoted. The TEXT form is the same statement.
+- An index the table holds and the set leaves out is dropped by the native
+  `AlterTable` call, `row-table-drop-index/N`.
+- YDB changes nothing of a vector or full-text index in place (`ALTER INDEX ...
+  SET (levels=2)` answers `Unknown table setting: levels`). An index whose
+  columns, kind or settings differ is dropped and added again under its name,
+  the removal first, and a renamed index is dropped under its old name and added
+  under its new one. The table is not rebuilt. A global index under the name of
+  a vector or full-text one, or the other way round, is refused.
+- The comparison reads an index's name, its ordered key and covered columns,
+  its kind and its vector or full-text settings, exactly; a full-text filter
+  switched off is read as one the index does not name, because YDB applies no
+  filter it is not told to. The settings of the tables that implement the index
+  are not compared: the server reports its defaults for them on every index, and
+  YDB changes none of them on a vector index that exists. An addition that
+  states other settings for them than YDB gives a new index is refused.
+- A vector index names one metric, a vector type, a dimension from 1 to 16384,
+  levels from 1 to 16 and clusters from 2 to 2048, with clusters to the power
+  of levels at most 2^30, the limits 25.3 and later hold every index to; 25.1
+  and 25.2 check none of them, and the planner holds every line to them, as the
+  host's embedded engine does. Its last key column is the vector, a `String`;
+  the others are its prefix. Overlap settings are refused by name.
+- A full-text index reads one `String` or `Utf8` column of a table whose key is
+  one `Uint64` column (26.2 answers `Fulltext index requires primary key column
+  ... to be of type 'Uint64'`), analyzed by the one column entry of its
+  settings, with a tokenizer. An n-gram filter names both its lengths, a
+  language goes with the snowball filter, and the snowball filter takes no
+  n-gram filter, as 26.2 answers.
+- A target without `vector_indexes` refuses a vector index before a statement
+  is sent, one without `vector_bit_type` an index over bit vectors, and one
+  without `full_text_indexes` a full-text index (see
+  [Feature flags](#feature-flags)). A server answers each with `Vector index
+  support is disabled`, `bit vector type is not supported` (25.1, over rows),
+  `FULLTEXT_RELEVANCE index subtype is not supported` (25.1) or `Fulltext index
+  support is disabled` (26.2 with `EnableFulltextIndex` off).
+- Execution reads the table, requires the index to be absent and its columns
+  to exist, runs the statement once, reads the table back until the index is
+  ready, and requires it to hold the requested definition and everything else
+  to be unchanged.
+- A table rebuild of a table that declares or holds a vector or full-text index
+  is refused: the new table is created with its global indexes alone.
 
 ### Execution
 

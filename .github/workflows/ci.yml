@@ -55,12 +55,13 @@ jobs:
   # provider early; it does not block, because a red Ptah master is not this
   # repository's defect.
   live:
+    name: live (${{ matrix.line.image }}, ${{ matrix.line.host }}, shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.host == 'master' }}
+    continue-on-error: ${{ matrix.line.host == 'master' }}
     strategy:
       fail-fast: false
       matrix:
-        include:
+        line:
           # 25.1 keeps EnableTopicTransfer at its default, off, so the
           # transfer tests check the refusal there: with the flag on,
           # dropping a table a dropped transfer wrote into stops 25.1.4.7 on
@@ -74,6 +75,9 @@ jobs:
           - image: ydbplatform/local-ydb:26.2.1.14
             features: enable_vector_index,enable_add_unique_index,enable_external_data_sources,enable_streaming_queries
             host: master
+        # The suite outgrew one job's test timeout, so each line runs in
+        # shards; scripts/live-shard.sh deals the tests out.
+        shard: [1, 2, 3]
     env:
       GOWORK: 'off'
       # 8765 is the server's monitoring endpoint. The address names it, so a
@@ -83,13 +87,13 @@ jobs:
       PTAH_YDB_TEST_URL: ydb://127.0.0.1:2136/local?go_balancer=disable&monitoring=http://127.0.0.1:8765
     services:
       ydb:
-        image: ${{ matrix.image }}
+        image: ${{ matrix.line.image }}
         # local-ydb leaves the replication API out of the gRPC services it
         # starts, and the provider describes an async replication and a
         # transfer through it; YDB_GRPC_SERVICES adds it to the others.
         env:
           YDB_USE_IN_MEMORY_PDISKS: 'true'
-          YDB_FEATURE_FLAGS: ${{ matrix.features }}
+          YDB_FEATURE_FLAGS: ${{ matrix.line.features }}
           YDB_GRPC_SERVICES: replication
         ports:
           - 2136:2136
@@ -109,7 +113,7 @@ jobs:
         id: host
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/resolve-host.sh '${{ matrix.host }}'
+        run: scripts/resolve-host.sh '${{ matrix.line.host }}'
       - name: Check out the host
         if: steps.host.outputs.skip != 'true'
         uses: actions/checkout@v7
@@ -126,8 +130,7 @@ jobs:
           host_binary="$RUNNER_TEMP/ptah-contract"
           CGO_ENABLED=0 go build -C .host-contract -o "$host_binary" ./cmd/ptah
           printf 'PTAH_HOST_TEST_BIN=%s\n' "$host_binary" >> "$GITHUB_ENV"
-      # The suite, the host-driven tests included, takes from under an hour to
-      # past ninety minutes on a hosted runner: the same run of 25.1.4.7 took
-      # 57 minutes on one runner and passed the 90-minute limit on another.
+      # The whole suite, the host-driven tests included, ran past its
+      # 150-minute test timeout on a hosted runner, so a job runs one shard.
       - if: steps.host.outputs.skip != 'true'
-        run: go test -race -tags integration ./integration -count=1 -v -timeout 150m
+        run: scripts/live-shard.sh ${{ matrix.shard }} 3 -race -count=1 -v -timeout 150m

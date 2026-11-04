@@ -144,7 +144,7 @@ func indexSignatures(specs []*native.IndexIntent) (names []string, signatures ma
 func declaredSpecs(set *native.IndexSetIntent) []*native.IndexIntent {
 	var result []*native.IndexIntent
 	for _, declaration := range set.GetIndexes() {
-		result = append(result, declaration.GetSpecification())
+		result = append(result, comparableIndex(declaration.GetSpecification()))
 	}
 	return result
 }
@@ -152,7 +152,7 @@ func declaredSpecs(set *native.IndexSetIntent) []*native.IndexIntent {
 func heldSpecs(observed *native.IndexObservations) (specs []*native.IndexIntent, held map[string]*native.TableIndexDescription) {
 	held = map[string]*native.TableIndexDescription{}
 	for _, index := range observed.GetIndexes() {
-		specs = append(specs, schema.IndexSpecification(index.GetDescription()))
+		specs = append(specs, comparableIndex(schema.IndexSpecification(index.GetDescription())))
 		held[index.GetDescription().GetName()] = index.GetDescription()
 	}
 	return specs, held
@@ -164,17 +164,20 @@ func heldSpecs(observed *native.IndexObservations) (specs []*native.IndexIntent,
 // cannot be made. An empty result means the table already satisfies the
 // declaration.
 //
-// Only global secondary indexes are added and dropped: sync, async and unique.
-// A vector or fulltext index is refused by name rather than ignored, and so is
-// an index to add that states its partitioning or read replicas. An index the
-// table holds under a declared name but with another definition is refused
-// too, because YDB cannot alter an index in place and a drop followed by an
+// Only global secondary indexes are added and dropped here: sync, async and
+// unique. An index name either side holds as a vector or full-text index is
+// left to planNativeIndexes. An index to add that states its partitioning or
+// read replicas is refused by name rather than ignored. An index the table
+// holds under a declared name but with another definition is refused too,
+// because YDB cannot alter an index in place and a drop followed by an
 // addition rebuilds it. Its partitioning and read replicas YDB changes in
 // place (see planIndexSettings).
 func planIndexes(in indexInput) ([]indexChange, []indexSettingsChange, string) {
 	if !in.managed {
 		return nil, nil, ""
 	}
+	// planNativeIndexes plans the vector and full-text indexes.
+	in = withoutNativeIndexes(in)
 	wantedSpecs := declaredSpecs(in.desired)
 	heldSpecList, heldByName := heldSpecs(in.held)
 	wantedNames, wanted, wantedByName := indexSignatures(wantedSpecs)

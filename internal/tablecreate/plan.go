@@ -29,6 +29,9 @@ type creation struct {
 	id        *protocol.StepIdentity
 	// feeds adds the changefeeds the new table declares, after its creation.
 	feeds *changefeedStep
+	// indexes add the vector and full-text indexes the new table declares,
+	// each after its creation.
+	indexes []*indexStep
 }
 
 // removal is a table the plan drops, and the host's steps its drop replaces.
@@ -292,12 +295,19 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		if reason != "" {
 			return refused(i, reason), nil
 		}
-		creations = append(creations, creation{index: i, table: table, operation: operation, feeds: feeds})
+		indexes, reason, err := plannedCreationIndexes(owner, table.Desired, operation, request.Capabilities)
+		if err != nil {
+			return nil, err
+		}
+		if reason != "" {
+			return refused(i, reason), nil
+		}
+		creations = append(creations, creation{index: i, table: table, operation: operation, feeds: feeds, indexes: indexes})
 	}
 	slices.SortFunc(creations, func(a, b creation) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
 	receiptSteps := make(map[int][]*protocol.StepIdentity)
-	var rowCreations, columnCreations int
+	var rowCreations, columnCreations, creationIndexNumber int
 	feedNumber := 0
 	for i := range creations {
 		item := &creations[i]
@@ -335,6 +345,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
 				Effects: effects}})
 		receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
+		for _, index := range item.indexes {
+			step, dependency := index.creationStep(creationIndexNumber, item.table.Subject, item.id)
+			creationIndexNumber++
+			contribution.Steps = append(contribution.Steps, step)
+			contribution.Dependencies = append(contribution.Dependencies, dependency)
+			receiptSteps[item.index] = append(receiptSteps[item.index], index.id)
+		}
 		if item.feeds != nil {
 			step, dependencies := item.feeds.planningStep(feedNumber, item.table.Subject, []*protocol.StepIdentity{item.id})
 			feedNumber++

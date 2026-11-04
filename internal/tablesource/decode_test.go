@@ -45,7 +45,9 @@ func TestClaims(t *testing.T) {
 	for _, key := range keys[:9] {
 		c.Assert(models[key], qt.DeepEquals, []string{schema.TableProperties}, qt.Commentf(key))
 	}
-	c.Assert(models["column_families"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties})
+	// The families key is also where an export states a column of the
+	// default family and an empty native index set.
+	c.Assert(models["column_families"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties})
 	c.Assert(models["platform.ydb"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnStorageProperties})
 	c.Assert(models["column_store"], qt.DeepEquals, []string{schema.ColumnStorageProperties})
 	directives := tablesource.GoDirectives()
@@ -56,13 +58,14 @@ func TestClaims(t *testing.T) {
 		names = append(names, directive.Directive)
 		scopes[directive.Directive] = directive.Scope
 		// A family lists the columns it holds, so it answers for them too, and
-		// the table directive declares a row table or a column table.
+		// the table directive declares a row table or a column table, and is
+		// where an export states what a table states by writing nothing.
 		want := []string{schema.TableProperties}
 		switch directive.Directive {
 		case tablesource.DirectiveColumnFamily:
 			want = append(want, schema.ColumnProperties)
 		case tablesource.DirectiveTable:
-			want = append(want, schema.ColumnStorageProperties)
+			want = append(want, schema.ColumnStorageProperties, schema.ColumnProperties, schema.ChangefeedProperties, schema.IndexProperties)
 		}
 		c.Assert(directive.Models, qt.DeepEquals, want, qt.Commentf(directive.Directive))
 	}
