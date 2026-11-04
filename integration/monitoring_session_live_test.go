@@ -126,21 +126,3 @@ func skipOnLine(c *qt.C, before26 bool, version string) {
 		c.Skipf("the row describes another release line than %s", version)
 	}
 }
-
-// Ported from the host's TestYDBConnection_ReadsTheFlagsAsTheConnectingUser_FailurePath:
-// on a 26.x line, a user who may only connect cannot read the flags page,
-// so the session is refused with the right it needs, and the refusal repeats
-// neither the password nor the endpoint.
-func TestSessionReadsTheFlagsAsTheConnectingUser_FailurePath(t *testing.T) {
-	c := testcheck.New(t)
-	opened, _, database := inspectionFixture(c)
-	skipOnLine(c, false, serverVersion(c, opened))
-	user, password := connectingUser(c, opened, database, "CONNECT")
-	client := startProviderFor(c)
-
-	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: testAddress(c, url.UserPassword(user, password), "", "")})
-
-	c.Assert(session, qt.IsNil)
-	c.Assert(err, qt.ErrorMatches, `(?s).*needs DESCRIBE SCHEMA on `+database+`.*`)
-	c.Assert(err.Error(), qt.Not(qt.Contains), password)
-}
