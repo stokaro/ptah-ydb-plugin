@@ -42,7 +42,7 @@ func ValidateDeclaration(subject *protocol.ComparisonIdentity, table *protocol.D
 		_, err = CompileColumnTable(owner, table, caps)
 		return err
 	}
-	request, _, err := compile(owner, table, caps)
+	request, _, err := compile(owner, withoutUniqueness(table), caps)
 	if err != nil {
 		return err
 	}

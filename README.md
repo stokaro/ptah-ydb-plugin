@@ -2368,6 +2368,18 @@ refused as a common index, since the pinned table protocol builds none of them
 with a table. Execution confirms each index by reading it back. In the TEXT
 form each index is an INDEX clause of the CREATE TABLE.
 
+YDB has no UNIQUE constraint: it refuses one as a parse error and holds the
+same rows with a global unique index, a second row with the same value refused
+and rows whose value is NULL not. A session reports `unique_constraints` as
+`false`, and a host that reads it so turns a declared UNIQUE constraint, and a
+column's UNIQUE, into that index before it compares and plans, under the name
+its YDB renderer gives it: the constraint's name, or `<table>_<columns>_key`.
+A UNIQUE over the key folds into the key. The provider then creates and reads
+an index, never a constraint. Schema validation and the creation projection
+read the source the operator wrote past its UNIQUE, since the index changes no
+column of the table; a UNIQUE the host does not turn into an index, such as a
+deferrable one, is refused when it is planned.
+
 The vector and full-text indexes of the table's native index set are built
 after the creation, one step each (`row-table-create-index/N`, ordered after
 the creation), with the rules and the statement of

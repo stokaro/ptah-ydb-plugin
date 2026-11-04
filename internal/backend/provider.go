@@ -218,6 +218,11 @@ func negotiatedFeatures(ctx context.Context) []string {
 // which 25.4 and later take and 25.1 to 25.3 read as a missing name
 // (`PASSWORD_SECRET_NAME requires key`).
 //
+// unique_constraints is false on every line: YDB refuses a UNIQUE constraint
+// as a parse error and holds the same rows with a global unique index. The
+// host then reads a declared UNIQUE as that index, which this service creates
+// with the table and the inspection reports.
+//
 // async_replication is true on every line, as the host measured: CREATE
 // ASYNC REPLICATION runs on 25.1 to 26.2 with default flags, and 26.2 lists
 // EnableReplication, on by default. transfers is EnableTopicTransfer, off by
@@ -243,7 +248,7 @@ func sessionCapabilities(version string) map[string]bool {
 		tablecreate.LocalBloomIndexesCapability: releaseline.AtLeast(version, 26, 2), tablecreate.LocalNgramIndexesCapability: releaseline.AtLeast(version, 26, 2),
 		tablecreate.LocalMinMaxIndexesCapability: false,
 		replication.CapabilityReplication:        true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
-		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false}
+		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, "unique_constraints": false}
 }
 
 // clusterCapabilities refines the preset with the feature flags of the
