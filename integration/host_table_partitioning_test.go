@@ -16,9 +16,10 @@ import (
 // on, which alone would reset the minimum, and the table keeps the size, the
 // minimum, the maximum, the read replicas and the bloom filter the
 // declaration leaves out. Declared away through PER_AZ:0 and DISABLED, since
-// neither can be reset, the replicas and the filter go. Turning splitting by
-// size off and on again keeps the size it held, and a declaration that names
-// no setting plans nothing, the maximum YDB cannot remove included.
+// neither can be reset, the replicas and the filter go. With splitting by
+// size off YDB reports no partition size, as the host's test reads it on both
+// lines; a declaration that turns it on again names the size, and one that
+// names no setting plans nothing, the maximum YDB cannot remove included.
 func TestHostChangesTablePartitioning_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -39,7 +40,7 @@ func TestHostChangesTablePartitioning_HappyPath(t *testing.T) {
 		{name: "replicas and filter declared away", attributes: ` read_replicas_settings="PER_AZ:0" key_bloom_filter="DISABLED"`,
 			want: storedTable{Partitioning: "by_size=ENABLED size=100 by_load=ENABLED min=6 max=20", KeyBloomFilter: "DISABLED"}},
 		{name: "by size turned off", attributes: ` auto_partitioning_by_size="DISABLED" auto_partitioning_by_load="ENABLED" auto_partitioning_min_partitions_count="6" auto_partitioning_max_partitions_count="20"`,
-			want: storedTable{Partitioning: "by_size=DISABLED size=100 by_load=ENABLED min=6 max=20", KeyBloomFilter: "DISABLED"}},
+			want: storedTable{Partitioning: "by_size=DISABLED size=0 by_load=ENABLED min=6 max=20", KeyBloomFilter: "DISABLED"}},
 		{name: "by size turned on again", attributes: ` auto_partitioning_partition_size_mb="100" auto_partitioning_by_load="ENABLED" auto_partitioning_min_partitions_count="6" auto_partitioning_max_partitions_count="20"`,
 			want: storedTable{Partitioning: "by_size=ENABLED size=100 by_load=ENABLED min=6 max=20", KeyBloomFilter: "DISABLED"}},
 	} {
