@@ -63,6 +63,11 @@ type Family struct {
 	// current one, such as access the plan cannot establish, or nil. Either
 	// side may be nil.
 	Unsettled func(current, desired *protocol.Envelope) error
+	// Adopt returns the desired value with what the current object holds and
+	// the declaration keeps without naming it, such as the consumer YDB made
+	// for a transfer, or desired itself. The comparison and the change read
+	// the result. A nil Adopt adopts nothing.
+	Adopt func(current, desired *protocol.Envelope) (*protocol.Envelope, error)
 	// Equal reports whether the current object already holds the desired one.
 	Equal func(current, desired *protocol.Envelope) (bool, error)
 	// Change captures the change from current to desired, either nil.
@@ -459,9 +464,16 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		return nil, nil
 	}
 	reported := owner(family, item.reported)
-	pair := &Decided{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Owner: reported, Desired: rebound(item.desired, reported), Current: rebound(item.current, reported)}
+	desired := item.desired
+	if family.Adopt != nil && item.desired != nil && item.current != nil {
+		var err error
+		if desired, err = family.Adopt(item.current, item.desired); err != nil {
+			return nil, err
+		}
+	}
+	pair := &Decided{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Owner: reported, Desired: rebound(desired, reported), Current: rebound(item.current, reported)}
 	if item.desired != nil && item.current != nil {
-		equal, err := family.Equal(item.current, item.desired)
+		equal, err := family.Equal(item.current, desired)
 		if err != nil {
 			return nil, err
 		}
