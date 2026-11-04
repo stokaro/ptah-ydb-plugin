@@ -27,10 +27,9 @@ it was recorded at in its `host` field.
   `ptah:not-described` header entries Ptah sends a provider with the
   documents.
 - `unsupported.txt` lists the accepted loads this provider refuses by name,
-  with the construct it names. Ptah reads these statements into objects
-  this provider has no model for: async replications, transfers and secrets. The suite
-  fails when a listed load is accepted, and when an unlisted load is refused
-  this way.
+  with the construct it names: a statement Ptah reads into an object this
+  provider has no model for. It lists none now. The suite fails when a listed
+  load is accepted, and when an unlisted load is refused this way.
 - `oracle/main.go` is the program that records the answers.
 
 ## Where the cases come from

@@ -97,7 +97,7 @@ func gaps(reading *yqlschema.Reading) []string {
 			if _, err := externals.TableIntent(*object.Spec.(*ydbdecl.ExternalTable)); err == nil {
 				continue
 			}
-		case yqlschema.KindResourcePool, yqlschema.KindResourcePoolClassifier, yqlschema.KindStreamingQuery:
+		case yqlschema.KindResourcePool, yqlschema.KindResourcePoolClassifier, yqlschema.KindStreamingQuery, yqlschema.KindReplication, yqlschema.KindTransfer:
 			continue
 		}
 		found = append(found, string(object.Kind)+" "+object.Name)
@@ -345,6 +345,18 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 			spec, allow, err := schema.DesiredStreamingQuery(envelope)
 			c.Assert(err, qt.IsNil)
 			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindStreamingQuery), Schema: owner.GetSchema(), Name: owner.GetName(), Payload: decodeAny(c, marshal(c, map[string]any{"spec": spec, "allow_state_reset": allow}))})
+			continue
+		case schema.ReplicationProperties:
+			spec, err := schema.DesiredReplication(envelope)
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindReplication), Schema: owner.GetSchema(), Name: owner.GetName(),
+				Payload: decodeAny(c, marshal(c, map[string]any{"spec": spec}))})
+			continue
+		case schema.TransferProperties:
+			spec, err := schema.DesiredTransfer(envelope)
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindTransfer), Schema: owner.GetSchema(), Name: owner.GetName(),
+				Payload: decodeAny(c, marshal(c, map[string]any{"spec": spec}))})
 			continue
 		case schema.ResourcePoolProperties:
 			spec, err := schema.WorkloadPool(envelope)

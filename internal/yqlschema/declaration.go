@@ -1,10 +1,7 @@
 package yqlschema
 
 import (
-	"strings"
-
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
 
 func (p *parser) declaration() []statement {
@@ -29,9 +26,11 @@ func one[T statement](node T) []statement {
 func (p *parser) createDeclaration() []statement {
 	switch {
 	case p.word("ASYNC"):
-		return p.unsupportedReplication("CREATE ASYNC REPLICATION", "ASYNC", "REPLICATION")
+		p.pos++
+		return one(p.createReplication())
 	case p.word("TRANSFER"):
-		return p.unsupportedReplication("CREATE TRANSFER", "TRANSFER")
+		p.pos++
+		return one(p.createTransfer())
 	case p.word("STREAMING"):
 		return one(p.streamingQuery(false))
 	case p.word("USER"):
@@ -86,9 +85,11 @@ func (p *parser) alterDeclaration() []statement {
 		p.pos++
 		return one(p.alterSerialSequence())
 	case p.word("ASYNC"):
-		return p.unsupportedReplication("ALTER ASYNC REPLICATION", "ASYNC", "REPLICATION")
+		p.pos++
+		return one(p.alterReplication())
 	case p.word("TRANSFER"):
-		return p.unsupportedReplication("ALTER TRANSFER", "TRANSFER")
+		p.pos++
+		return one(p.alterTransfer())
 	case p.word("USER"):
 		p.pos++
 		return one(p.alterUser())
@@ -114,66 +115,6 @@ func (p *parser) alterDeclaration() []statement {
 	}
 }
 
-// unsupportedReplication is [parser.unsupported] for an async replication
-// or a transfer, whose keywords the host's reader refuses without naming a
-// token, since a connection clause may hold a credential.
-func (p *parser) unsupportedReplication(construct string, keywords ...string) []statement {
-	for _, keyword := range keywords {
-		if !p.word(keyword) {
-			p.failf("expected %s", keyword)
-			p.failAt(replicationRefusal)
-			return nil
-		}
-		p.pos++
-	}
-	return p.skip(construct)
-}
-
 // replicationRefusal is the host's refusal of a malformed async replication
 // or transfer.
 const replicationRefusal = "invalid replication or transfer declaration; use modeled settings and secret references, with an inline lambda for a transfer"
-
-// unsupported reads a statement the host's reader declares an object of and
-// this provider has no model for: the keywords that name its kind, which the
-// host's reader requires as they are, and then everything to the semicolon
-// that ends it. It returns the statement to be refused by name.
-func (p *parser) unsupported(construct string, keywords ...string) []statement {
-	for _, keyword := range keywords {
-		p.wantWord(keyword)
-	}
-	if p.err != nil {
-		return nil
-	}
-	return p.skip(construct)
-}
-
-// skip consumes the rest of a statement. A semicolon inside an inline action
-// or a lambda belongs to the statement, as it does to the view a CREATE VIEW
-// ... AS DO declares. No token of the statement is ever reported: a secret, a
-// password and a replication's connection all live in these statements.
-func (p *parser) skip(construct string) []statement {
-	var bodies yql.Bodies
-	depth := 0
-	for !p.done() {
-		token := p.peek()
-		if token.Type == yql.TokenSemicolon && !keepSemicolon(&bodies) && depth == 0 {
-			break
-		}
-		switch {
-		case token.Type == yql.TokenIdentifier:
-			bodies.Word(strings.ToUpper(token.Value))
-		case token.Type != yql.TokenSemicolon:
-			bodies.Symbol(token.Value)
-		}
-		switch token.Value {
-		case "(", "[":
-			depth++
-		case ")", "]":
-			if depth > 0 {
-				depth--
-			}
-		}
-		p.pos++
-	}
-	return []statement{&unsupported{construct: construct}}
-}
