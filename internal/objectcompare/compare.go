@@ -92,6 +92,12 @@ type object struct {
 	current *protocol.Envelope
 }
 
+// present reports an object the desired or the current side holds, as opposed
+// to a subject only a coverage claim names.
+func present(item object) bool {
+	return item.desired != nil || item.current != nil
+}
+
 // Compare pairs the declared and the read objects of the family by path and
 // decides, object by object, whether each needs a change. Coverage decides
 // what an absence means: an object the desired source does not describe is
@@ -176,7 +182,10 @@ func compare(ctx context.Context, request *protocol.CompareModelsRequest, famili
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(captured) > 0 && !families[i].ChangeCapability && families[i].Capability != "" && !request.Capabilities[families[i].Capability] {
+		// A coverage claim alone is no object: a reservation states that a
+		// name is taken on every native kind, including one the target cannot
+		// hold, and the comparison leaves such a subject undecided.
+		if slices.ContainsFunc(captured, present) && !families[i].ChangeCapability && families[i].Capability != "" && !request.Capabilities[families[i].Capability] {
 			return nil, nil, authored.New(families[i].Noun + " capability was not established")
 		}
 		objects = append(objects, captured...)
@@ -384,6 +393,16 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		// declaration at its path is worth a word.
 		if item.desired != nil {
 			undecided(result, family, item, reason)
+		}
+		return nil, nil
+	}
+	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && reservedName(claim) {
+		// The read reserves the name for the provider's own storage on every
+		// native kind, so it holds no object of this family. It is left out as
+		// Reserved leaves the family's own objects; only a declaration at the
+		// name is worth a word.
+		if item.desired != nil {
+			undecided(result, family, item, claim.GetReason())
 		}
 		return nil, nil
 	}
