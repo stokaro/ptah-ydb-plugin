@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,8 +29,9 @@ func hostApplySource(c *qt.C, directory, format, text string) (string, error) {
 }
 
 // hostApplySelected is hostApplySource over the comma-separated selectors
-// given, such as a directory and the database root.
-func hostApplySelected(c *qt.C, selectors, format, text string) (string, error) {
+// given, such as a directory and the database root, with the further flags
+// given, such as --allow-table-rebuild.
+func hostApplySelected(c *qt.C, selectors, format, text string, flags ...string) (string, error) {
 	c.Helper()
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
@@ -42,7 +44,7 @@ func hostApplySelected(c *qt.C, selectors, format, text string) (string, error) 
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
 	arguments := append([]string{"schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
-		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", selectors}, source...)
+		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", selectors}, slices.Concat(flags, source)...)
 	cmd := exec.CommandContext(ctx, host, arguments...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output

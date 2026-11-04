@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,9 +43,10 @@ func (u plannedUnit) head() string {
 
 // hostPlanned runs the host's `schema apply --dry-run --json` over one source
 // with this provider selected for ydb, restricted to the comma-separated
-// selectors, and returns the head of each unit it would run, in order, or
-// none for a plan with nothing to run. The run changes nothing.
-func hostPlanned(c *qt.C, selectors, format, text string) []string {
+// selectors and with the further flags given, and returns the head of each
+// unit it would run, in order, or none for a plan with nothing to run. The
+// run changes nothing.
+func hostPlanned(c *qt.C, selectors, format, text string, flags ...string) []string {
 	c.Helper()
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
@@ -57,7 +59,7 @@ func hostPlanned(c *qt.C, selectors, format, text string) []string {
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
 	arguments := append([]string{"schema", "apply", "--dry-run", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
-		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", selectors}, source...)
+		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", selectors}, slices.Concat(flags, source)...)
 	cmd := exec.CommandContext(ctx, host, arguments...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
