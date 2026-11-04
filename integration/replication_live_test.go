@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -14,7 +15,9 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replicationcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replicationplan"
@@ -28,6 +31,7 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"github.com/ydb-platform/ydb-go-sdk/v3/scheme"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -159,21 +163,28 @@ func (f *replicationFixture) await(what string, ready func(*protocol.Schema) boo
 // still being created, which the next call asks about again.
 func (f *replicationFixture) replicaWritten(name string) bool {
 	f.c.Helper()
-	listing, err := f.opened.Driver.Scheme().ListDirectory(f.ctx, path.Join(f.database, f.directory))
-	f.c.Assert(err, qt.IsNil)
+	return replicaWritten(f.c, f.ctx, f.opened, path.Join(f.database, f.directory), name)
+}
+
+// replicaWritten is [replicationFixture.replicaWritten] for the directory at
+// the absolute path directory.
+func replicaWritten(c *qt.C, ctx context.Context, opened *connection.Connection, directory, name string) bool {
+	c.Helper()
+	listing, err := opened.Driver.Scheme().ListDirectory(ctx, directory)
+	c.Assert(err, qt.IsNil)
 	if !slices.ContainsFunc(listing.Children, func(entry scheme.Entry) bool { return entry.Name == name && entry.IsTable() }) {
 		return false
 	}
 	var attributes map[string]string
-	err = f.opened.Driver.Table().Do(f.ctx, func(ctx context.Context, session table.Session) error {
-		described, err := session.DescribeTable(ctx, f.absolute(name))
+	err = opened.Driver.Table().Do(ctx, func(ctx context.Context, session table.Session) error {
+		described, err := session.DescribeTable(ctx, path.Join(directory, name))
 		attributes = described.Attributes
 		return err
 	})
 	if ydb.IsOperationErrorSchemeError(err) {
 		return false
 	}
-	f.c.Assert(err, qt.IsNil)
+	c.Assert(err, qt.IsNil)
 	return replication.IsReplica(attributes)
 }
 
@@ -480,4 +491,107 @@ func TestTransferRefusedWithoutTheCapabilitySubprocess(t *testing.T) {
 	compared, err := f.client.CompareModels(f.ctx, request)
 	c.Assert(err, qt.ErrorMatches, `provider compare models failed \(InvalidArgument\)`)
 	c.Assert(compared, qt.IsNil)
+}
+
+// tableNames names the tables a snapshot holds, in the order it lists them.
+func tableNames(snapshot *protocol.Schema) []string {
+	names := []string{}
+	for _, table := range snapshot.Tables {
+		names = append(names, table.Identity.Name)
+	}
+	return names
+}
+
+// sourceChangefeeds reads the changefeeds of table name as the snapshot
+// captured them.
+func sourceChangefeeds(c *qt.C, snapshot *protocol.Schema, name string) []*native.ObservedChangefeed {
+	c.Helper()
+	for _, table := range snapshot.Tables {
+		if table.Identity.Name != name {
+			continue
+		}
+		for _, facet := range table.Facets {
+			if facet.Kind != schema.ChangefeedProperties {
+				continue
+			}
+			var set native.ChangefeedObservations
+			c.Assert(protojson.Unmarshal(facet.Payload, &set), qt.IsNil)
+			return set.Changefeeds
+		}
+	}
+	c.Fatalf("the snapshot holds no table %s with changefeeds", name)
+	return nil
+}
+
+// Ported from the host's TestYDBReplication_RoundTrip, the part about the
+// source table: the replication controller gives the source a changefeed of
+// its own, bound to the replica by the `__async_replication` attribute. The
+// read takes it as the replication's, with the replica's path and the item it
+// feeds, and leaves the replica out of the tables. The host's run after a
+// creation (TestHostAppliesAnAsyncReplication_HappyPath) declares the source
+// without the changefeed and plans nothing.
+func TestReplicationSourceChangefeedSubprocess(t *testing.T) {
+	c := testcheck.New(t)
+	f := newReplicationFixture(c)
+	f.exec(fmt.Sprintf("CREATE TABLE `%s` (id Int64 NOT NULL, note Utf8, PRIMARY KEY (id))", f.absolute("src")))
+	f.drop("DROP ASYNC REPLICATION `"+f.absolute("mirror")+"` CASCADE", "DROP TABLE `"+f.absolute("rep")+"`", "DROP TABLE `"+f.absolute("src")+"`")
+	f.exec(fmt.Sprintf("CREATE ASYNC REPLICATION `%s` FOR `%s` AS `%s` WITH (CONNECTION_STRING = '%s')", f.absolute("mirror"), f.absolute("src"), f.absolute("rep"), selfConnection(c, f.opened)))
+	snapshot := f.await("the replica created", func(snapshot *protocol.Schema) bool {
+		return object(snapshot, schema.ReplicationProperties, "mirror") != nil && f.replicaWritten("rep")
+	})
+
+	feeds := sourceChangefeeds(c, snapshot, "src")
+
+	c.Assert(tableNames(snapshot), qt.DeepEquals, []string{"src"})
+	c.Assert(feeds, qt.HasLen, 1)
+	read, err := changefeeds.FromObserved(feeds[0])
+	c.Assert(err, qt.IsNil)
+	c.Assert(read.Replicated, qt.IsTrue)
+	var binding struct {
+		Path string `json:"path"`
+		ID   string `json:"id"`
+	}
+	c.Assert(json.Unmarshal([]byte(feeds[0].Description.Attributes["__async_replication"]), &binding), qt.IsNil)
+	c.Assert(binding.Path, qt.Equals, f.absolute("rep"))
+	c.Assert(binding.ID, qt.Equals, "1")
+}
+
+// Ported from the host's TestYDBReplication_ReadsWhileReplicasComeAndGo: the
+// directory is read straight after a replication is created and straight
+// after it is dropped with CASCADE, five times. The replica is then being
+// created or dropped, and YDB may list it while it does not describe it. Every
+// read succeeds and leaves the replica out of the tables, and once the drop
+// has settled the read holds neither the replication nor its replica.
+//
+// Each cycle waits for the replica to be written before it drops the
+// replication: a CASCADE that lands while the replication controller's own
+// CREATE TABLE is in flight drops the replication and leaves the table behind,
+// which is not what the test measures. A listing names the replica before the
+// controller is done with it: measured on 25.1.4.7 and 26.2.1.14, a drop sent
+// once the listing named it left the replica behind for two minutes.
+func TestReplicationReadsWhileReplicasComeAndGoSubprocess(t *testing.T) {
+	c := testcheck.New(t)
+	f := newReplicationFixture(c)
+	f.exec(fmt.Sprintf("CREATE TABLE `%s` (id Int64 NOT NULL, PRIMARY KEY (id))", f.absolute("src")))
+	f.drop("DROP ASYNC REPLICATION `"+f.absolute("cycle")+"` CASCADE", "DROP TABLE `"+f.absolute("cycle_rep")+"`", "DROP TABLE `"+f.absolute("src")+"`")
+	connection := selfConnection(c, f.opened)
+	directory := path.Join(f.database, f.directory)
+
+	for range 5 {
+		f.exec(fmt.Sprintf("CREATE ASYNC REPLICATION `%s` FOR `%s` AS `%s` WITH (CONNECTION_STRING = '%s')", f.absolute("cycle"), f.absolute("src"), f.absolute("cycle_rep"), connection))
+		created := f.inspect()
+		f.await("the replica created", func(*protocol.Schema) bool { return f.replicaWritten("cycle_rep") })
+		f.exec("DROP ASYNC REPLICATION `" + f.absolute("cycle") + "` CASCADE")
+		dropped := f.inspect()
+
+		c.Assert(object(created, schema.ReplicationProperties, "cycle"), qt.IsNotNil)
+		c.Assert(tableNames(created), qt.DeepEquals, []string{"src"})
+		c.Assert(object(dropped, schema.ReplicationProperties, "cycle"), qt.IsNil)
+		c.Assert(tableNames(dropped), qt.DeepEquals, []string{"src"})
+
+		awaitNames(c, f.opened, directory, []string{"src"})
+		settled := f.inspect()
+		c.Assert(object(settled, schema.ReplicationProperties, "cycle"), qt.IsNil)
+		c.Assert(tableNames(settled), qt.DeepEquals, []string{"src"})
+	}
 }
