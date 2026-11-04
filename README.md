@@ -357,7 +357,9 @@ refused (`UNSUPPORTED`), and a missing command or an unreachable daemon is
 Execution sends native SQL units through YDB's query service. A batch is checked
 before its first unit runs. Unsupported native envelopes refuse the whole batch.
 SQL units use a pinned connection; native coordination, table creation and table alteration units
-use their native services. Dispatched writes are not retried.
+use their native services. Dispatched writes are not retried, except a
+changefeed statement YDB refused because another schema operation held the
+table's path (see [Changefeeds](#changefeeds)).
 Request IDs correlate calls and do not provide exactly-once execution.
 
 Results distinguish a confirmed prefix from an uncertain remainder. A
@@ -1770,9 +1772,23 @@ assesses every replication the plan keeps, and refuses a table the plan
 creates at the path of a live replica, and a failed-over replica the plan drops
 while the schema keeps the replication. A creation names its replica paths as created and a drop of a running
 replication with `CASCADE` names them as dropped, so each step is ordered
-against the common steps at those paths; a transfer reads its table and a local
-topic. A drop of a failed-over replication runs without `CASCADE` and keeps its
-tables. The provider never pauses, resumes or fails over an object.
+against the common steps at those paths. A replication of this database also
+reads its source tables, so it is created after a table the plan creates and
+dropped before one the plan drops: a replication created before its source
+creates no replica. A transfer reads its table and, at a local source, the
+topic or the changefeed of a table. It names the changefeed as the changefeed
+planner does, so the host creates it after a changefeed the plan adds; a
+dropped transfer names the topic by the topic's identity rather than its path,
+so the drop comes before the topic's even where the plan creates another object
+at that path. A drop of a failed-over replication runs without `CASCADE` and
+keeps its tables. The provider never pauses, resumes or fails over an object.
+
+A grant names a replication or a transfer by its directory and name
+(`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
+path. The planner puts a GRANT or a REVOKE after the creation or the change of
+its object, and a drop replaces the REVOKE the host planned, since YDB drops an
+object's access list with it and a REVOKE after the drop would name a path that
+is gone. A change in place, such as a new lambda, keeps the entries.
 
 A grant names a replication or a transfer by its directory and name
 (`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
@@ -1982,7 +1998,13 @@ Execution reads the table and each changefeed's topic before the first
 statement and refuses a changefeed that changed since the plan read it; it runs
 each statement once and reads the table back, requiring each declared
 changefeed with its topic's retention and consumers, or a removed one's
-absence. An unconfirmed result is UNKNOWN and is never retried. A changefeed
+absence. The one statement that runs again is one YDB refuses because another
+schema operation holds the table's path (OVERLOADED, `path ... has been locked
+by tx` or `path is under operation`), which changed nothing: a changefeed added
+with an initial scan holds the path until the scan has read every row, so the
+next statement waits, 50 ms at first and up to a second between attempts,
+until it runs or the request's context ends. Any other unconfirmed result is
+UNKNOWN and is never retried. A changefeed
 operation has no TEXT form yet, so a host that writes a migration file is
 refused with `NO_TEXT_FORM`.
 
@@ -2591,9 +2613,12 @@ partitioning, the filter, or the replicas. The settings are `AUTO_PARTITIONING_B
   witness and is not compared. The comparison reports the refused layout as a
   difference, so that the plan reaches the planner.
 - A minimum count above a nonzero maximum is refused, checked against the value
-  the table holds for a bound the declaration leaves out. A partition size beside
-  disabled partitioning by size is refused too: the server turns partitioning by
-  size on when a size is set, so the declaration has to state both.
+  the table holds for a bound the declaration leaves out.
+- A partition size declared without `partitioningBySize` turns partitioning by
+  size on, as the server does when a size is set and as the host's embedded
+  engine reads the declaration (measured on 25.1.4.7 and 26.2.1.14 for a table
+  and an index that did not split by size). A size beside a declared
+  `partitioningBySize` of `DISABLED` is refused.
 - When the step switches partitioning by size on, it names every setting the
   table keeps: the ones the declaration states and the held value of the others.
   The server resets the size and the minimum count the call leaves out, so a

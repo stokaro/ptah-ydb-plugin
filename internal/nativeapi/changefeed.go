@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Topic_V1"
@@ -34,20 +36,34 @@ type Changefeed struct {
 	Topics Ydb_Topic_V1.TopicServiceClient
 	// Execute runs one schema statement through the query service, once.
 	Execute func(context.Context, string) error
+	// Busy reports a refusal of a statement that changed nothing and that
+	// runs again once another schema operation on the table is done. Nil
+	// runs no statement again.
+	Busy func(error) bool
 }
 
 // NewChangefeed binds the session's native clients and statement runner.
 func NewChangefeed(driver *ydb.Driver, execute func(context.Context, string) error) *Changefeed {
 	return &Changefeed{Open: func(ctx context.Context) (ChangefeedTable, error) { return OpenTable(ctx, driver) },
-		Topics: Ydb_Topic_V1.NewTopicServiceClient(ydb.GRPCConn(driver)), Execute: execute}
+		Topics: Ydb_Topic_V1.NewTopicServiceClient(ydb.GRPCConn(driver)), Execute: execute,
+		Busy: func(err error) bool { return ydbfailure.Read(err).PathBusy() }}
 }
 
 // Apply verifies that each changefeed is as the plan read it, or absent for an
 // addition, runs the operation's statements one query each, and reads the
 // result back. Dispatched is true as soon as a statement was sent. A failed
-// statement or an unconfirmed read leaves the outcome uncertain; nothing is
-// retried. YDB has no atomic schema compare-and-set, so another writer can
-// change a changefeed between the check and the statement.
+// statement or an unconfirmed read leaves the outcome uncertain. YDB has no
+// atomic schema compare-and-set, so another writer can change a changefeed
+// between the check and the statement.
+//
+// The one statement that runs again is one YDB refuses because another schema
+// operation holds the table's path, which [Changefeed.Busy] reports. A
+// changefeed added with an initial scan holds the path until the scan has
+// read every row, so the next ALTER TABLE of the same operation meets that
+// refusal: measured on 25.1.4.7 and 26.2.1.14 on a table of 300000 rows, run
+// once, the second ADD CHANGEFEED failed the operation with an unknown outcome
+// two seconds in. The statement runs again, waiting 50 ms at first and up to a
+// second between attempts, until it runs or ctx ends.
 func (c *Changefeed) Apply(ctx context.Context, database string, value *protocol.Envelope, beforeWrite func(context.Context) error) (dispatched bool, err error) {
 	normalized, err := schema.NormalizeChangefeedOperation(&protocol.ValueInput{Id: "execute", Representation: protocol.ValueInput_OPERATION, Value: value})
 	if err != nil {
@@ -92,7 +108,7 @@ func (c *Changefeed) Apply(ctx context.Context, database string, value *protocol
 		return false, err
 	}
 	for _, statement := range statements {
-		if err := c.Execute(ctx, statement); err != nil {
+		if err := c.run(ctx, statement); err != nil {
 			return true, err
 		}
 	}
@@ -106,6 +122,25 @@ func (c *Changefeed) Apply(ctx context.Context, database string, value *protocol
 		}
 	}
 	return true, nil
+}
+
+// run runs one statement, and runs it again while [Changefeed.Busy] reports
+// its refusal, until ctx ends. A wait ended by ctx returns the refusal with
+// the context's error.
+func (c *Changefeed) run(ctx context.Context, statement string) error {
+	wait := 50 * time.Millisecond
+	for {
+		err := c.Execute(ctx, statement)
+		if err == nil || c.Busy == nil || !c.Busy(err) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return errors.Join(err, ctx.Err())
+		case <-time.After(wait):
+		}
+		wait = min(2*wait, time.Second)
+	}
 }
 
 // validTablePath reports whether the owner names a table by path components

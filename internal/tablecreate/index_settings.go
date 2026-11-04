@@ -116,13 +116,14 @@ func planIndexSettings(name string, want *native.GlobalIndexSettings, held *nati
 		return nil, fmt.Sprintf("index %q declares partition columns, and YDB partitions an index on its own key", name)
 	}
 	have := HeldIndexSettings(held)
-	delta := partitioningDelta(want.GetPartitioningSettings(), have.GetPartitioningSettings())
+	partitioning := withSizeSplitting(want.GetPartitioningSettings())
+	delta := partitioningDelta(partitioning, have.GetPartitioningSettings())
 	if delta != nil {
 		if reason := partitioningRefusal(have.GetPartitioningSettings(), delta); reason != "" {
 			return nil, fmt.Sprintf("index %q: %s", name, reason)
 		}
 		if delta.GetPartitioningBySize() == Ydb.FeatureFlag_ENABLED {
-			delta = resolvedPartitioning(want.GetPartitioningSettings(), have.GetPartitioningSettings())
+			delta = resolvedPartitioning(partitioning, have.GetPartitioningSettings())
 		}
 	}
 	replicas := replicasDelta(want.GetReadReplicasSettings(), have.GetReadReplicasSettings())
