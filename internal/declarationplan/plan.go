@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -80,6 +81,22 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 				ref.Schema = &protocol.ComparisonPart{Source: path.Schema, Normalized: path.Schema}
 				ref.Name = &protocol.ComparisonPart{Source: path.Name, Normalized: path.Name}
 				effects = append(effects, &protocol.PlanningEffect{Subject: ref, Action: protocol.PlanningEffect_READ})
+			}
+		}
+		if object.Kind == schema.StreamingQueryProperties {
+			// YDB compiles a streaming query when it creates it, so the query
+			// follows every topic and table it reads or writes: its effects
+			// read their scheme slots, which their creations make.
+			spec, _, err := schema.DesiredStreamingQuery(desired)
+			if err != nil {
+				return nil, err
+			}
+			reads, err := streamingplan.QueryReads("", spec)
+			if err != nil {
+				return refused(index, object.Kind, err.Error()), nil
+			}
+			for _, read := range reads {
+				effects = append(effects, &protocol.PlanningEffect{Subject: read, Action: protocol.PlanningEffect_READ})
 			}
 		}
 		secretReads, err := sourceSecretEffects(object)
