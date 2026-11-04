@@ -10,6 +10,7 @@
 package ydbfailure
 
 import (
+	"errors"
 	"slices"
 	"strings"
 
@@ -18,7 +19,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
-	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 )
 
 // Answer is what YDB answered a failed call with.
@@ -27,23 +28,62 @@ type Answer struct {
 	// STATUS_CODE_UNSPECIFIED for an error that carries none: a transport
 	// failure, a canceled call, or an error the provider raised itself.
 	Status Ydb.StatusIds_StatusCode
-	// Issues are the messages of the issues YDB attached, in order.
+	// Issues are the messages of the issues YDB attached, in order, each
+	// issue before the issues nested in it.
 	Issues []string
+	// Compiled reports an answer in which YDB refused the text while
+	// compiling it, before any of it ran: an issue names the position in the
+	// text of what YDB refused, and no issue comes from the stage that
+	// executes a query.
+	Compiled bool
+}
+
+// operation is the SDK's error for an operation status YDB returned: the
+// status and the issues YDB attached to it. The SDK's transport error has a
+// status code too, but no issues, so it is not one.
+type operation interface {
+	error
+	Code() int32
+	Issues() []*Ydb_Issue.IssueMessage
 }
 
 // Read returns what YDB answered with err, or the zero Answer for an error
 // that is not an operation status YDB returned.
 func Read(err error) Answer {
-	if err == nil || !ydb.IsOperationError(err) {
+	answered, ok := errors.AsType[operation](err)
+	if !ok {
 		return Answer{}
 	}
-	answer := Answer{Status: Ydb.StatusIds_StatusCode(ydb.OperationError(err).Code())}
-	ydb.IterateByIssues(err, func(message string, _ Ydb.StatusIds_StatusCode, _ uint32) {
-		if message != "" {
-			answer.Issues = append(answer.Issues, message)
+	answer := Answer{Status: Ydb.StatusIds_StatusCode(answered.Code())}
+	var positioned, executing bool
+	var walk func([]*Ydb_Issue.IssueMessage)
+	walk = func(issues []*Ydb_Issue.IssueMessage) {
+		for _, issue := range issues {
+			if issue.GetMessage() != "" {
+				answer.Issues = append(answer.Issues, issue.GetMessage())
+			}
+			positioned = positioned || issue.GetPosition().GetRow() > 0
+			executing = executing || executionIssue(issue)
+			walk(issue.GetIssues())
 		}
-	})
+	}
+	walk(answered.Issues())
+	answer.Compiled = positioned && !executing
 	return answer
+}
+
+// executionIssueCode is the code YQL gives the issue of its execution stage
+// (TIssuesIds::CORE_EXEC), which holds what a query reported while it ran.
+const executionIssueCode = 1060
+
+// executionIssue reports an issue of the stage that executes a query: the
+// execution stage's own, or a schema operation's, which YDB words as
+// `Executing ESchemeOp...`. Measured on 25.1.4.7 and 26.2.1.14, such an issue
+// may hold another that names a position in the text, as 25.1 answers
+// `Unknown index type` for a unique index, so a position alone does not place
+// the refusal before execution.
+func executionIssue(issue *Ydb_Issue.IssueMessage) bool {
+	return issue.GetIssueCode() == executionIssueCode || strings.HasPrefix(issue.GetMessage(), "Executing ")
 }
 
 // refusals are the statuses that establish a failure of the statement itself:
@@ -58,11 +98,12 @@ var refusals = []Ydb.StatusIds_StatusCode{
 // Confirmed reports an answer that establishes that the statement text failed:
 // a status in which YDB refused it or aborted its transaction, or
 // GENERIC_ERROR for a data statement the query service runs in one implicit
-// transaction. GENERIC_ERROR is also what YDB answers a compound statement, a
-// batch write or transaction control that may have applied a prefix, so for
-// those it establishes nothing.
+// transaction, or for any text YDB refused while compiling it. GENERIC_ERROR
+// is also what YDB answers a compound statement, a batch write or transaction
+// control that may have applied a prefix, so for those it establishes nothing
+// unless YDB refused the text before any of it ran.
 func (a Answer) Confirmed(text string) bool {
-	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && atomicDataStatement(text)
+	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || a.Compiled)
 }
 
 // Rejected reports an answer that proves nothing of a unit of text was
