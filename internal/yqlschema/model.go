@@ -148,6 +148,8 @@ const (
 	KindExternalTable    ObjectKind = "ptah.run/ydb/external-table"
 	KindStreamingQuery   ObjectKind = "ptah.run/ydb/streaming-query"
 	KindTopic            ObjectKind = "ptah.run/ydb/topic"
+	KindReplication      ObjectKind = "ptah.run/ydb/async-replication"
+	KindTransfer         ObjectKind = "ptah.run/ydb/transfer"
 	// KindResourcePool and KindResourcePoolClassifier belong to the whole
 	// database: their objects have no directory.
 	KindResourcePool           ObjectKind = "ptah.run/ydb/resource-pool"
@@ -163,7 +165,8 @@ type Object struct {
 	Name   string
 	// Spec is a *ydbdecl.Topic, *ydbdecl.CoordinationNode,
 	// *ydbdecl.ExternalDataSource, *ydbdecl.ExternalTable,
-	// *ydbdecl.Changefeed, *workload.PoolSpec or *workload.ClassifierSpec.
+	// *ydbdecl.Changefeed, *workload.PoolSpec, *workload.ClassifierSpec,
+	// *replication.ReplicationSpec or *replication.TransferSpec.
 	Spec     any
 	span     span
 	document int

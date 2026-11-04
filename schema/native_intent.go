@@ -107,10 +107,10 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
 	switch kind {
 	case ReplicationProperties, TransferProperties:
-		// A YAML or Go source declares replications and transfers at
+		// A YAML, Go or SQL source declares replications and transfers at
 		// document scope, as for the host's embedded engine, and describes
 		// them completely.
-		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}
 	case SecretProperties, ColumnStorageProperties, TopicProperties, ExternalSourceProperties, ExternalTableProperties, ResourcePoolProperties, ResourcePoolClassifierProperties, StreamingQueryProperties:
 		// A YAML, Go or SQL source says whether a table stores columns, so the
 		// absence of the facet on a table such a source describes is a request
