@@ -981,9 +981,24 @@ coordination_node "app" "limits" {
 ```
 
 A `ptah:not-described coordination_node` header entry, with a node's path or
-none, is the one header kind the engine declares; the host applies it to the
-document's claim, and the provider refuses a name no node can take with the
-host's words. A host that does not list the feature reads no such block.
+none, is the one header kind the engine declares, and the provider refuses a
+name no node can take with the host's words. With `source.limits` negotiated,
+the document's claim leaves the node it names, or every node, unmanaged. A host
+that does not list `source.hcl` reads no such block.
+
+A Go source carries the same entries as `ptah:schema:notdescribed`
+declarations, under `source.limits`, of the kinds the engine lists in
+`go_header_kinds`: `coordination_node`, `streaming_query`, `resource_pool`,
+`resource_pool_classifier`, `secret`, `topic`, `external_data_source`,
+`external_table`, `replication` and `transfer`. An entry without a name leaves
+the kind unmanaged; one with a name, written as a YQL header names it, leaves
+that object unmanaged. A source that declares an object it also leaves
+unmanaged is refused.
+
+```go
+//ptah:schema:notdescribed kind="topic" reason="not-inspected" provenance="observed"
+type PtahSchemaObjects struct{}
+```
 
 `EncodeSource` (`source.encode`, ADR 0037, and `source.encode-groups`, ADR
 0040) writes desired values back as the keys, directives and blocks this
@@ -1023,8 +1038,25 @@ host's embedded engine does; its other YDB settings are losses. The parts are
 decoded again before they are returned, and a value they do not give back is a
 loss. A value that needs several declarations is a loss for a host that does not
 negotiate `source.encode-groups`. `struct_name` is written in YAML alone.
-Incomplete kind or subject coverage refuses the export, because these fragments
-cannot preserve that knowledge.
+
+A source claims every model its format lists, completely. An export of a read
+is complete for the selection it is applied to, as the host's embedded YDB
+engine writes it: a host that writes a read narrowed by `--schemas` sends each
+kind the read knew in every directory it listed as complete. Applied back over
+that directory, the export plans nothing, and an object whose declaration is
+removed from it is dropped; applied over more directories, it drops their
+objects too. What the request does not know is written as not-described
+entries, so that the source read back claims no more than that: a kind no
+directory of the read knew, or one the read knew less in some directory, is
+left unmanaged as a whole, since a header cannot name a directory, with
+`reason="not-inspected" provenance="observed"`. An object whose own knowledge
+is not complete gets an entry that names it. A facet is known where its table
+is, so a table the export declares carries its facets as the read holds them,
+and a declared table whose facet knowledge is not complete refuses the export.
+Knowledge left unmanaged by a source's own entry is passed on with
+`provenance="declared"`. YAML writes no header, and neither does a format for a
+host that does not negotiate `source.limits`, so there such knowledge refuses
+the export, as does a kind no entry names.
 
 The subprocess tests exercise decoding, encoding, normalization, and
 representation conversion without a database address; a YQL schema declares
