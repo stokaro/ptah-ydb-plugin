@@ -104,8 +104,12 @@ func partitioningText(settings options.PartitioningSettings) string {
 }
 
 // replicasText is a table's read replicas as YQL writes them, or empty for
-// none.
+// none: a count of zero in either mode is none, which is how a table created
+// without replicas reads, and how one reads after `PER_AZ:0` removed them.
 func replicasText(settings options.ReadReplicasSettings) string {
+	if settings.Count == 0 {
+		return ""
+	}
 	switch settings.Type {
 	case options.ReadReplicasPerAzReadReplicas:
 		return fmt.Sprintf("PER_AZ:%d", settings.Count)
@@ -315,4 +319,46 @@ func TestHostKeepsTheClusterTableProfile_HappyPath(t *testing.T) {
 	c.Assert(hostPlanned(c, directory, "go", bySize), qt.HasLen, 0)
 	c.Assert(hostPlanned(c, directory, "go", silent), qt.HasLen, 0)
 	c.Assert(heldStorage(c, opened, absolute).Partitioning, qt.Equals, "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0")
+}
+
+// Ported from the host's TestYDBColumnFamilies_WhatTheDeclarationLeavesOutStays,
+// for a storage pool the declaration leaves out: the pool stays, since a
+// cluster's table profile can give one to every new table and YQL drops
+// none. The plan is the same with a rebuild allowed and without one, it
+// plans nothing, and the table keeps the family, the pool and the row.
+//
+// The host's other row leaves a family out, and the host's engine moves the
+// column the family held back to the default family; this provider keeps it
+// where it sits, because only a column property record moves a column (gap
+// G91 of stokaro/ptah#4204), so that row is not ported.
+func TestHostKeepsAStoragePoolADeclarationLeavesOut_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, families string
+		want           []string
+		wantRead       []string
+	}{
+		{name: "a pool left out", families: "//ptah:schema:columnfamily name=\"cold\" fields=\"body\"\n//ptah:schema:columnfamily name=\"warm\" fields=\"blob\"\n", want: []string{},
+			wantRead: []string{"cold data=hdd compression=off columns=body", "default compression=off", "warm compression=off columns=blob"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			opened, directory, database := lockFixture(c)
+			absolute := path.Join(database, directory, "docs")
+			emptyAtCleanup(c, opened, path.Join(database, directory))
+			created, err := hostApplySource(c, directory, "go", replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"cold\" data=\""+storagePool+
+				"\" fields=\"body\"\n//ptah:schema:columnfamily name=\"warm\" fields=\"blob\"\n", ""), directory))
+			c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
+			_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u)")
+			c.Assert(err, qt.IsNil)
+			source := replaceDirectory(familyDocs(test.families, ""), directory)
+
+			c.Assert(hostPlanned(c, directory, "go", source, "--allow-table-rebuild"), qt.DeepEquals, hostPlanned(c, directory, "go", source))
+			c.Assert(hostPlanned(c, directory, "go", source), qt.DeepEquals, test.want)
+			output, err := hostApplySource(c, directory, "go", source)
+			c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
+			c.Assert(hostPlanned(c, directory, "go", source), qt.HasLen, 0)
+			c.Assert(heldStorage(c, opened, absolute).Families, qt.DeepEquals, test.wantRead)
+			c.Assert(rowCount(c, opened, absolute, "body = 'one'u"), qt.Equals, int64(1))
+		})
+	}
 }
