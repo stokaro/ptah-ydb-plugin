@@ -122,11 +122,29 @@ func ApplyPartitioning(held, set *Ydb_Table.PartitioningSettings) *Ydb_Table.Par
 	return result
 }
 
+// withSizeSplitting returns want with partitioning by size turned on where it
+// declares a partition size and no switch, and want itself otherwise. YDB
+// turns splitting by size on when a size is set: measured by the host's
+// embedded engine on 25.1.4.7 and 26.2.1.14, `SET
+// (AUTO_PARTITIONING_PARTITION_SIZE_MB = 100)` on a table or an index that
+// does not split by size leaves it splitting by size at 100 MB. That engine
+// reads such a declaration the same way, so the change names the switch and,
+// because turning it on resets the settings the call leaves out, every other
+// setting too.
+func withSizeSplitting(want *Ydb_Table.PartitioningSettings) *Ydb_Table.PartitioningSettings {
+	if want.GetPartitionSizeMb() == 0 || want.GetPartitioningBySize() != Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+		return want
+	}
+	result := proto.CloneOf(want)
+	result.PartitioningBySize = Ydb.FeatureFlag_ENABLED
+	return result
+}
+
 // partitioningRefusal says why a table holding held cannot take the settings
 // set, or returns the empty string. The server turns partitioning by size on
-// when a partition size is set, so a size beside a disabled switch is refused
-// rather than left to contradict the plan, and a minimum above a nonzero
-// maximum is refused by name.
+// when a partition size is set, so a size beside a switch the declaration
+// turns off is refused rather than left to contradict the plan, and a minimum
+// above a nonzero maximum is refused by name.
 func partitioningRefusal(held, set *Ydb_Table.PartitioningSettings) string {
 	after := ApplyPartitioning(held, set)
 	if set.GetPartitionSizeMb() != 0 && after.GetPartitioningBySize() == Ydb.FeatureFlag_DISABLED {
@@ -182,7 +200,8 @@ func planPartitioning(in partitioningInput) (partitioningChange, string) {
 	if columns := in.desired.GetPartitionBy(); len(columns) != 0 && !slices.Equal(columns, in.held.GetPartitionBy()) {
 		return partitioningChange{}, fmt.Sprintf("the partition columns %q differ from the %q the table holds, and YDB sets them only when the table is created", columns, in.held.GetPartitionBy())
 	}
-	delta := partitioningDelta(in.desired, in.held)
+	desired := withSizeSplitting(in.desired)
+	delta := partitioningDelta(desired, in.held)
 	if delta == nil {
 		return change, ""
 	}
@@ -194,7 +213,7 @@ func planPartitioning(in partitioningInput) (partitioningChange, string) {
 		// count the call does not name, so the call names every setting the
 		// table keeps: the stated ones and the held value of the others, as
 		// the host's embedded engine writes them.
-		delta = resolvedPartitioning(in.desired, in.held)
+		delta = resolvedPartitioning(desired, in.held)
 	}
 	held := proto.CloneOf(in.held)
 	if held == nil {
