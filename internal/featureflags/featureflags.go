@@ -102,6 +102,22 @@ var gates = []Gate{
 // Gates returns every capability a flag decides, in a fixed order.
 func Gates() []Gate { return slices.Clone(gates) }
 
+// Clause is what a refusal for want of capability key adds when a feature
+// flag decides the key: the flag, and how to have a session report the
+// capability, in the words the host's embedded engine writes for a refusal
+// the flag causes. A session reads the flags only when the address names the
+// monitoring endpoint, and takes its release line's default otherwise, so
+// turning the flag on is not enough without it. Clause is empty for a key no
+// flag decides.
+func Clause(key string) string {
+	at := slices.IndexFunc(gates, func(gate Gate) bool { return gate.Key == key })
+	if at < 0 {
+		return ""
+	}
+	return fmt.Sprintf("; YDB keeps it behind feature flag %s: turn the flag on, and name the cluster's monitoring endpoint in the URL "+
+		"(monitoring=http://host:8765) so Ptah reads the flags before it plans", gates[at].Flag)
+}
+
 // Refine returns caps with every gated capability set from its flag, where the
 // flags list it. A flag the database does not list leaves its capability as
 // caps has it. caps is not changed.

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -90,7 +91,8 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 		return nil, fmt.Errorf("invalid %s planning assignment", family.Noun)
 	}
 	if len(request.Changes) > 0 && (!request.Capabilities[family.Capability] || request.Capabilities["transactional_ddl"]) {
-		return refusal(family, 0, fmt.Sprintf("Planning a %s requires the %s capability and nontransactional DDL", family.Noun, family.Capability)), nil
+		return refusal(family, 0, fmt.Sprintf("Planning a %s requires the %s capability and nontransactional DDL%s", family.Noun, family.Capability,
+			featureflags.Clause(family.Capability))), nil
 	}
 	if _, known := request.Capabilities["transactional_ddl"]; len(request.Changes) > 0 && !known {
 		return refusal(family, 0, "The DDL transaction capability was not established"), nil
