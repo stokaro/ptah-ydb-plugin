@@ -11,6 +11,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
@@ -31,11 +32,13 @@ func HeaderKinds() []string {
 
 // ClaimedModels are the desired models whose coverage a YQL document claims:
 // a row table's settings, a column's, a column table's storage, a
-// coordination node, a topic, an external data source and an external table.
+// coordination node, a topic, an external data source, an external table, an
+// async replication and a transfer.
 // Their source formats include SQL.
 func ClaimedModels() []*protocol.ValueModel {
 	return []*protocol.ValueModel{schema.NativeDesiredModel(schema.SecretProperties), schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel(),
-		schema.NativeDesiredModel(schema.StreamingQueryProperties), schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties), schema.NativeDesiredModel(schema.ResourcePoolProperties), schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties)}
+		schema.NativeDesiredModel(schema.StreamingQueryProperties), schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties), schema.NativeDesiredModel(schema.ResourcePoolProperties), schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties),
+		schema.NativeDesiredModel(schema.ReplicationProperties), schema.NativeDesiredModel(schema.TransferProperties)}
 }
 
 // Reply reads the documents of a ReadSQLSchema request and answers with the
@@ -298,6 +301,20 @@ func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 				Message: fmt.Sprintf("coordination node %s: %v", quoteName(ydbPath(object.Schema, object.Name)), err)}
 		}
 		return envelope, nil
+	case KindReplication:
+		spec := object.Spec.(*replication.ReplicationSpec)
+		envelope, err := schema.CaptureReplicationIntent(&protocol.Reference{Engine: "ydb", Kind: schema.ReplicationProperties, Schema: object.Schema, Name: object.Name}, *spec)
+		if err != nil {
+			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: replicationRefusal}
+		}
+		return envelope, nil
+	case KindTransfer:
+		spec := object.Spec.(*replication.TransferSpec)
+		envelope, err := schema.CaptureTransferIntent(&protocol.Reference{Engine: "ydb", Kind: schema.TransferProperties, Schema: object.Schema, Name: object.Name}, *spec)
+		if err != nil {
+			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: replicationRefusal}
+		}
+		return envelope, nil
 	case KindChangefeed:
 		return nil, at(fmt.Sprintf("changefeed %s of table %s has no home in a SQL schema reading: "+
 			"the host refuses the owned objects of a table in a SQL schema reading", quoteName(object.Name), quoteName(ydbPath(object.Schema, object.Parent))))
@@ -419,6 +436,8 @@ var limitedKinds = map[string]struct {
 	"external_table":           {schema.ExternalTableProperties, externalLimit, "the source leaves external tables unmanaged"},
 	"resource_pool":            {schema.ResourcePoolProperties, workloadLimit, "the source leaves resource pools unmanaged"},
 	"resource_pool_classifier": {schema.ResourcePoolClassifierProperties, workloadLimit, "the source leaves resource pool classifiers unmanaged"},
+	"replication":              {schema.ReplicationProperties, topicLimit, "the source leaves async replications unmanaged"},
+	"transfer":                 {schema.TransferProperties, topicLimit, "the source leaves transfers unmanaged"},
 }
 
 // claim is the coverage a load claims: every claimed model complete, less

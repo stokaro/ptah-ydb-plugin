@@ -1719,7 +1719,8 @@ A replication takes `connection_string`, one credential (`token_secret_name`,
 item. A transfer takes `source`, `target`, `using`, the connection settings,
 `consumer`, `batch_size_bytes` and `flush_interval`. Each is parsed and refused
 with the host's words. A Go item joins the replication of its name and
-directory in the same file. An HCL file and a YQL schema declare neither yet.
+directory in the same file. A YQL schema declares both through [SQL schema
+reading](#sql-schema-reading). An HCL file declares neither yet.
 
 Inspection describes each `REPLICATION` and `TRANSFER` entry through the
 replication service: the connection string rebuilt from its parts, the
@@ -1795,8 +1796,8 @@ operation neither checks nor confirms a marked consumer, since the transfer's
 drop, which the plan may run first, takes the one YDB made. A transfer read
 outside the selected directories marks nothing.
 
-Not modeled yet: HCL blocks and the YQL schema statements, and a transfer's
-check that its table and topic are declared.
+Not modeled yet: HCL blocks, and a transfer's check that its table and topic
+are declared.
 
 `TestReplicationLifecycleSubprocess` creates a replication of the server's own
 table, finds nothing to change, refuses a connection change while it runs,
@@ -2846,13 +2847,24 @@ declare, as this provider's topic model; and the data sources and external
 tables `CREATE [OR REPLACE] EXTERNAL DATA SOURCE` and `CREATE [OR REPLACE]
 EXTERNAL TABLE` declare, as this provider's external object models; and
 streaming query definitions as the streaming query model; and secrets whose
-values are approved input references. It
+values are approved input references; and the async replications and transfers
+`CREATE ASYNC REPLICATION` and `CREATE TRANSFER` declare, with what a later
+`ALTER ASYNC REPLICATION ... SET` or `ALTER TRANSFER ... SET` of the load
+changes folded in, as this provider's replication and transfer models. It
 says what each document declares, traces every object to its statement, and
 claims complete coverage of the row-table, column, column-storage,
-coordination, topic, external data source, external table, streaming query and secret models. A
+coordination, topic, external data source, external table, streaming query,
+secret, async replication and transfer models. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
-`external_data_source`, `external_table`, `streaming_query` or `secret` limits that claim, for one object
-or, without a name, for the kind.
+`external_data_source`, `external_table`, `streaming_query`, `secret`,
+`replication` or `transfer` limits that claim, for one object or, without a
+name, for the kind.
+
+A replication or a transfer is read as the host's reader reads it: the items
+of `FOR ... AS ...`, `ENDPOINT` and `DATABASE` as the connection string they
+spell, the lambda of `USING` byte for byte, and in an `ALTER` only the
+settings YDB changes in place. A malformed statement is refused without naming
+a token, since its connection clause may hold a credential written by mistake.
 
 A limit names an object by its path from the database root, a dot being part
 of a name, so `app.events` names a topic at the root and `app/events` one in
@@ -2878,10 +2890,7 @@ carry is refused by name, with no partial reading:
 - a user's password;
 - a grant on a resource pool whose name holds a dot, a quote or a bracket: Ptah
   names a pool it reads from a provider as it names a table, so the grant
-  would come back on a renamed pool;
-- async replications and transfers: the reading refuses `CREATE ASYNC
-  REPLICATION` and `CREATE TRANSFER`, which a YAML source declares instead (see
-  [Async replications and transfers](#async-replications-and-transfers)).
+  would come back on a renamed pool.
 
 Some of what a reading carries is not planned yet. Table creation refuses
 column defaults, and table comments on a host that does not list
