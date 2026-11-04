@@ -18,22 +18,39 @@ import (
 type indexChange struct {
 	add  *native.IndexIntent
 	drop *native.TableIndexDescription
+	// rename is an index the host renames in place, nil for any other change.
+	rename *indexRename
 	// source is the host's step the change replaces, or nil for a change of
 	// the native index set.
 	source *protocol.CommonPlanningStep
 }
 
+// indexRename is an index renamed in place: held is the index as the table
+// holds it, under its name, and to is the name the declaration gives it.
+type indexRename struct {
+	held *native.TableIndexDescription
+	to   string
+}
+
+// name is the name the change leaves the index with, or the name of the index
+// it drops.
 func (c indexChange) name() string {
-	if c.add != nil {
+	switch {
+	case c.add != nil:
 		return c.add.Name
+	case c.rename != nil:
+		return c.rename.to
 	}
 	return c.drop.Name
 }
 
 // columns returns the columns the index reads: its keys and the columns it covers.
 func (c indexChange) columns() []string {
-	if c.add != nil {
+	switch {
+	case c.add != nil:
 		return slices.Concat(c.add.IndexColumns, c.add.DataColumns)
+	case c.rename != nil:
+		return slices.Concat(c.rename.held.IndexColumns, c.rename.held.DataColumns)
 	}
 	return slices.Concat(c.drop.IndexColumns, c.drop.DataColumns)
 }

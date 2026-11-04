@@ -38,7 +38,8 @@ func with(set map[string]bool) map[string]bool {
 // 25.2, and a full-text index and the bloom_filter and bloom_ngram_filter
 // local indexes are on from 26.2. Resource pools and min_max local indexes
 // default to off on every line. 26.2 lists EnableReplication, on by default,
-// and 25.1 does not list it.
+// and 25.1 does not list it. EnableMoveIndex is on by default on both, so an
+// index is renamed in place.
 func linePreset(autoPartitionedFeeds bool, secrets bool) map[string]bool {
 	caps := preset()
 	caps["changefeed_topic_auto_partitioning"] = autoPartitionedFeeds
@@ -54,6 +55,7 @@ func linePreset(autoPartitionedFeeds bool, secrets bool) map[string]bool {
 	caps["local_min_max_indexes"] = false
 	caps["transfers"] = autoPartitionedFeeds
 	caps["unique_index_on_existing_table"] = false
+	caps["index_rename"] = true
 	if autoPartitionedFeeds {
 		caps["alter_column_default"] = true
 		caps["async_replication"] = true
@@ -91,7 +93,7 @@ func TestRefine_ClusterThatTurnedTieringOn(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(flags["EnableTieringInColumnShard"], qt.IsTrue)
 	c.Assert(flags.Refine(linePreset(true, true)), qt.DeepEquals, with(map[string]bool{"secrets": true, "alter_column_default": true, "add_column_with_default": true, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "wide_date_time_types": true, "parameterized_decimal": true, "vector_indexes": true, "full_text_indexes": true, "transfers": true, "async_replication": true,
-		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false, "unique_index_on_existing_table": true}))
+		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false, "unique_index_on_existing_table": true, "index_rename": true}))
 }
 
 // TestRefine_HappyPath pins what each flag does to its capability, and that a
@@ -120,7 +122,9 @@ func TestRefine_HappyPath(t *testing.T) {
 		{name: "vector indexes on", flags: featureflags.Flags{"EnableVectorIndex": true}, want: with(map[string]bool{"vector_indexes": true})},
 		{name: "full-text indexes off", flags: featureflags.Flags{"EnableFulltextIndex": false}, want: with(map[string]bool{"full_text_indexes": false})},
 		{name: "full-text indexes on", flags: featureflags.Flags{"EnableFulltextIndex": true}, want: with(map[string]bool{"full_text_indexes": true})},
-		{name: "a flag of a capability the host owns", flags: featureflags.Flags{"EnableMoveIndex": true}, want: preset()},
+		{name: "a flag of a capability the host owns", flags: featureflags.Flags{"EnableTableCacheModes": true}, want: preset()},
+		{name: "index renames off", flags: featureflags.Flags{"EnableMoveIndex": false}, want: with(map[string]bool{"index_rename": false})},
+		{name: "index renames on", flags: featureflags.Flags{"EnableMoveIndex": true}, want: with(map[string]bool{"index_rename": true})},
 		// 26.2 lists the three local-index flags, and the lines before it
 		// none of them.
 		{name: "local bloom indexes off", flags: featureflags.Flags{"EnableLocalBloomFilterIndex": false}, want: with(map[string]bool{"local_bloom_indexes": false})},
@@ -176,7 +180,7 @@ func TestGates_NameEveryFlagOnce(t *testing.T) {
 		keys[gate.Key], flags[gate.Flag] = true, true
 	}
 	c.Assert(keys, qt.DeepEquals, map[string]bool{"secrets": true, "alter_column_default": true, "add_column_with_default": true, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "external_object_replace": true, "resource_pools": true, "wide_date_time_types": true, "parameterized_decimal": true, "vector_indexes": true, "full_text_indexes": true, "transfers": true, "async_replication": true,
-		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": true, "unique_index_on_existing_table": true})
+		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": true, "unique_index_on_existing_table": true, "index_rename": true})
 }
 
 func TestDecode_HappyPath(t *testing.T) {

@@ -91,8 +91,9 @@ func TestHostAddsAnIndexToATableWithRows_HappyPath(t *testing.T) {
 // RENAME INDEX, a session reports no index_rename, and an index the
 // declaration renames is planned as a drop and an add, which the cluster
 // takes. The table keeps its rows, the next run is synced, and the index the
-// table holds is the declared one under its new name. This provider plans
-// every rename this way, flag or not (see the README's feature flags).
+// table holds is the declared one under its new name. With the flag on, a
+// host that lists planning.index-renames renames the index in place instead
+// (TestHostRenamesAnIndexInPlace_HappyPath).
 func TestHostRenamesAnIndexAsADropAndAnAdd_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, absolute := itemsFixture(c)
