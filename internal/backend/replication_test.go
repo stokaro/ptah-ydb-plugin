@@ -1,6 +1,7 @@
 package backend_test
 
 import (
+	"fmt"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -16,6 +17,7 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 // replicationCapabilities are a 26.2 session's capabilities for the family.
@@ -349,8 +351,7 @@ func TestReplicationPlanningOrdersReplicaPaths(t *testing.T) {
 	c.Assert(planned.Diagnostics, qt.HasLen, 0)
 	c.Assert(planned.Contributions, qt.HasLen, 1)
 	step := planned.Contributions[0].Steps[0]
-	c.Assert(step.Metadata.Effects[len(step.Metadata.Effects)-1].Action, qt.Equals, protocol.PlanningEffect_DROP)
-	c.Assert(step.Metadata.Effects[len(step.Metadata.Effects)-1].Subject.Name.Normalized, qt.Equals, "accounts")
+	c.Assert(step.Metadata.Effects, qt.Any(qt.CmpEquals(protocmp.Transform())), &protocol.PlanningEffect{Subject: objectplan.PathSubject("replica", "accounts"), Action: protocol.PlanningEffect_DROP})
 	c.Assert(planned.Contributions[0].Dependencies, qt.HasLen, 1)
 	c.Assert(proto.Equal(planned.Contributions[0].Dependencies[0], &protocol.PlanningDependency{Before: step.Id, After: creation.Id}), qt.IsTrue)
 }
@@ -490,6 +491,129 @@ func TestKeptReplicationAssessment_FailurePath(t *testing.T) {
 			c.Assert(result.Objects, qt.HasLen, 0)
 			c.Assert(result.Diagnostics, qt.HasLen, 1)
 			c.Assert(result.Diagnostics[0].Message, qt.Matches, test.wantErr)
+		})
+	}
+}
+
+// sourceStep is a common step at src/accounts, the source mirror replicates,
+// with action.
+func sourceStep(name string, action protocol.PlanningEffect_Action) *protocol.CommonPlanningStep {
+	return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: name},
+		Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Acts on a table",
+			Effects: []*protocol.PlanningEffect{{Subject: objectplan.PathSubject("src", "accounts"), Action: action}}}}
+}
+
+// edges writes a plan's dependencies as "before -> after", with the
+// replication's own step as "step".
+func edges(planned *protocol.PlannedFeatures) []string {
+	var written []string
+	for _, contribution := range planned.Contributions {
+		name := func(id *protocol.StepIdentity) string {
+			if proto.Equal(id, contribution.Steps[0].Id) {
+				return "step"
+			}
+			return id.Name
+		}
+		for _, dependency := range contribution.Dependencies {
+			written = append(written, name(dependency.Before)+" -> "+name(dependency.After))
+		}
+	}
+	return written
+}
+
+// TestReplicationPlanningOrdersSourceTables reads the tables a replication of
+// the session's database replicates: its creation comes after a common step
+// that creates its source table, and its drop, with CASCADE or without, before
+// one that drops it. A replication of another database orders against no
+// table here.
+func TestReplicationPlanningOrdersSourceTables(t *testing.T) {
+	absolute := mirror()
+	absolute.Items[0].Source = "/local/src/accounts"
+	elsewhere := mirror()
+	elsewhere.Connection.ConnectionString = "grpc://standby:2136/?database=/other"
+	for _, test := range []struct {
+		name           string
+		declared, read *replication.ReplicationSpec
+		state          string
+		common         *protocol.CommonPlanningStep
+		want           []string
+	}{
+		{name: "a creation after its source table's", declared: new(mirror()), common: sourceStep("create", protocol.PlanningEffect_CREATE), want: []string{"create -> step"}},
+		{name: "a source named by its absolute path", declared: &absolute, common: sourceStep("create", protocol.PlanningEffect_CREATE), want: []string{"create -> step"}},
+		{name: "a creation after a change of its source table", declared: new(mirror()), common: sourceStep("alter", protocol.PlanningEffect_ALTER), want: []string{"alter -> step"}},
+		{name: "a drop with CASCADE before its source table's", read: new(mirror()), state: replication.StateRunning, common: sourceStep("drop", protocol.PlanningEffect_DROP),
+			want: []string{"step -> drop"}},
+		{name: "a failed-over one's drop before its source table's", read: new(mirror()), state: replication.StateDone, common: sourceStep("drop", protocol.PlanningEffect_DROP),
+			want: []string{"step -> drop"}},
+		{name: "a replication of another database", declared: &elsewhere, common: sourceStep("create", protocol.PlanningEffect_CREATE)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := objectRequest(c, schema.ReplicationProperties, replicationcompare.ReplicationServiceID, "mirror", declaredReplication(c, test.declared), readReplication(c, test.read, test.state))
+			result, err := backend.New().CompareModels(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 1)
+
+			planned := planWith(c, result.Changes[0], nil, []*protocol.CommonPlanningStep{test.common})
+
+			c.Assert(planned.Diagnostics, qt.HasLen, 0)
+			c.Assert(planned.Contributions, qt.HasLen, 1)
+			c.Assert(edges(planned), qt.DeepEquals, test.want)
+		})
+	}
+}
+
+// reads writes the effects a plan's one step has beyond its own object, each
+// as its kind, database, directory, parent and name, and the action.
+func reads(planned *protocol.PlannedFeatures) []string {
+	var written []string
+	step := planned.Contributions[0].Steps[0]
+	for _, effect := range step.Metadata.Effects[2:] {
+		subject := effect.Subject
+		written = append(written, fmt.Sprintf("%s %s|%s|%s|%s %s", subject.Kind, subject.GetDatabase().GetNormalized(), subject.GetSchema().GetNormalized(),
+			subject.GetParent().GetNormalized(), subject.GetName().GetNormalized(), effect.Action))
+	}
+	return written
+}
+
+// TestTransferPlanningReadsWhatItReads names what a transfer reads beyond its
+// own path: the table it writes, and at its source both a topic and a
+// changefeed of a table, since only the plan knows which the path holds. The
+// changefeed is named as the changefeed planner names one, so the host orders
+// a transfer created beside its changefeed after it. A created transfer reads
+// the topic by its path, and a dropped one by the topic's own identity, so a
+// drop is not ordered after an object the plan creates at the path once the
+// topic is gone. A source of another database is read in none of these ways.
+func TestTransferPlanningReadsWhatItReads(t *testing.T) {
+	remote := ingest()
+	remote.Connection.ConnectionString = "grpc://standby:2136/?database=/other"
+	remote.Source = "events"
+	topic := ingest()
+	topic.Source = "app/events"
+	for _, test := range []struct {
+		name           string
+		declared, read *replication.TransferSpec
+		want           []string
+	}{
+		{name: "a creation from a changefeed", declared: new(ingest()), want: []string{
+			"ydb.scheme-path |||order_log READ", "ydb.scheme-path |orders||feed READ", "ydb.changefeed ||orders|feed READ"}},
+		{name: "a creation from a topic", declared: &topic, want: []string{
+			"ydb.scheme-path |||order_log READ", "ydb.scheme-path |app||events READ", "ydb.changefeed ||app|events READ"}},
+		{name: "a drop of one from a changefeed", read: new(ingest()), want: []string{
+			"ydb.scheme-path |||order_log READ", schema.TopicProperties + " |orders||feed READ", schema.TopicProperties + " /local|orders||feed READ", "ydb.changefeed ||orders|feed READ"}},
+		{name: "a creation from another database", declared: &remote, want: []string{"ydb.scheme-path |||order_log READ"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := objectRequest(c, schema.TransferProperties, replicationcompare.TransferServiceID, "ingest", declaredTransfer(c, test.declared), readTransfer(c, test.read, replication.StateRunning))
+			result, err := backend.New().CompareModels(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 1)
+
+			planned := plan(c, replicationplan.TransferServiceID, result.Changes[0])
+
+			c.Assert(planned.Diagnostics, qt.HasLen, 0)
+			c.Assert(reads(planned), qt.DeepEquals, test.want)
 		})
 	}
 }

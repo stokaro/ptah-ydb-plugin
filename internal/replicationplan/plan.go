@@ -6,10 +6,12 @@
 //
 // A replication creates its replica tables at its targets, and a drop with
 // CASCADE drops them, so each step names those paths beside its own and is
-// ordered against the common steps that act on them. A transfer reads its
-// table and a topic of this database, so its step is ordered after a common
-// step that creates or changes either, and its drop before one that drops
-// either.
+// ordered against the common steps that act on them. A replication of this
+// database reads its source tables, so it is created after a common step that
+// creates one and dropped before one that drops it. A transfer reads its
+// table and a topic or a changefeed of this database, so its step is ordered
+// after a step that creates or changes either, and its drop before one that
+// drops either.
 package replicationplan
 
 import (
@@ -68,16 +70,19 @@ func replicationFamily() objectplan.Family {
 			return nil
 		},
 		RefuseInPlan: refuseReplicaTables,
-		Paths: func(_ *protocol.PlanFeaturesRequest, operation *protocol.Envelope) ([]objectplan.PathEffect, error) {
+		Paths: func(request *protocol.PlanFeaturesRequest, operation *protocol.Envelope) ([]objectplan.PathEffect, error) {
 			step, err := schema.ReplicationStepOf(schema.ReplicationOperationChange(operation))
 			if err != nil {
 				return nil, err
 			}
+			root := request.GetDatabasePath()
 			switch {
 			case step.Before == nil:
-				return targetPaths(step.After.Items, protocol.PlanningEffect_CREATE), nil
+				return append(targetPaths(step.After.Items, protocol.PlanningEffect_CREATE), sourcePaths(root, *step.After)...), nil
 			case step.After == nil && step.Cascade():
-				return targetPaths(step.Before.Items, protocol.PlanningEffect_DROP), nil
+				return append(targetPaths(step.Before.Items, protocol.PlanningEffect_DROP), sourcePaths(root, *step.Before)...), nil
+			case step.After == nil:
+				return sourcePaths(root, *step.Before), nil
 			}
 			return nil, nil
 		},
@@ -114,11 +119,10 @@ func PlanTransfers(ctx context.Context, request *protocol.PlanFeaturesRequest) (
 			if err != nil {
 				return nil, err
 			}
-			spec := step.After
-			if spec == nil {
-				spec = step.Before
+			if step.After == nil {
+				return transferPaths(request.GetDatabasePath(), *step.Before, true), nil
 			}
-			return transferPaths(request.GetDatabasePath(), *spec), nil
+			return transferPaths(request.GetDatabasePath(), *step.After, false), nil
 		},
 	})
 }
@@ -181,10 +185,51 @@ func targetPaths(items []replication.Item, action protocol.PlanningEffect_Action
 	return effects
 }
 
-// transferPaths is a read of the table spec writes and of the topic of the
-// database at root it reads. A source of another database names no path
-// here.
-func transferPaths(root string, spec replication.TransferSpec) []objectplan.PathEffect {
+// sourcePaths is a read of each path a replication of the database at root
+// replicates, as the path below root: the step that creates the replication
+// comes after a common step that creates or changes the table, and the step
+// that drops it before a common step that drops it. A replication created
+// before its source table stays without its replica, measured on 25.1.4.7 and
+// 26.2.1.14: the replication reads as running with its item, and YDB creates
+// no replica table for a minute and more. A replication of another database
+// reads no path here.
+func sourcePaths(root string, spec replication.ReplicationSpec) []objectplan.PathEffect {
+	root = strings.TrimRight(root, "/")
+	if database := strings.TrimRight(replication.ConnectionDatabase(spec.Connection.ConnectionString), "/"); root == "" || database != root {
+		return nil
+	}
+	var effects []objectplan.PathEffect
+	seen := map[string]bool{}
+	for _, item := range spec.Items {
+		source := replication.SourceKey(item.Source, root)
+		if strings.HasPrefix(source, "/") || seen[source] {
+			continue
+		}
+		seen[source] = true
+		directory, name := split(source)
+		effects = append(effects, objectplan.PathEffect{Schema: directory, Name: name, Action: protocol.PlanningEffect_READ})
+	}
+	return effects
+}
+
+// transferPaths is a read of the table spec writes and of what it reads in
+// the database at root: a standalone topic or a changefeed of a table at its
+// source path. Only the plan knows which the path holds, so a transfer reads
+// both, and the one nothing touches orders nothing.
+//
+// The changefeed is read by its own identity, the one the changefeed planner
+// names, since the table's changefeeds are planned by another service than
+// the transfer and no scheme path of a changefeed is named by the step that
+// adds it: without it a transfer created beside its changefeed is created
+// first, measured on 26.2.1.14. A transfer that is created or changed reads
+// the topic by its path, so it comes after whatever creates or changes the
+// object at the path. A transfer that is dropped reads the topic by the
+// topic's own identity instead: a read of the path would read whatever the
+// plan creates there once the topic is gone, such as a secret, and the host
+// would then order the drop after that creation and after the topic's drop,
+// which YDB runs under a transfer that still reads the topic. A source of
+// another database names no path here.
+func transferPaths(root string, spec replication.TransferSpec, drop bool) []objectplan.PathEffect {
 	var effects []objectplan.PathEffect
 	directory, name := split(spec.Target)
 	effects = append(effects, objectplan.PathEffect{Schema: directory, Name: name, Action: protocol.PlanningEffect_READ})
@@ -199,7 +244,43 @@ func transferPaths(root string, spec replication.TransferSpec) []objectplan.Path
 		return effects
 	}
 	directory, name = split(source)
-	return append(effects, objectplan.PathEffect{Schema: directory, Name: name, Action: protocol.PlanningEffect_READ})
+	if drop {
+		databases := []string{""}
+		if root != "" {
+			databases = append(databases, root)
+		}
+		for _, database := range databases {
+			effects = append(effects, objectplan.PathEffect{Subject: topicSubject(database, directory, name), Action: protocol.PlanningEffect_READ})
+		}
+	} else {
+		effects = append(effects, objectplan.PathEffect{Schema: directory, Name: name, Action: protocol.PlanningEffect_READ})
+	}
+	if directory != "" {
+		schemaName, table := split(directory)
+		effects = append(effects, objectplan.PathEffect{Subject: changefeedSubject(schemaName, table, name), Action: protocol.PlanningEffect_READ})
+	}
+	return effects
+}
+
+// topicSubject is the topic at directory and name in database, as a step
+// that changes the topic names it: in no database, as the host names a topic
+// it compares, or in the session's, as a read names it. A topic step names one
+// of the two, so a dropped transfer reads both.
+func topicSubject(database, directory, name string) *protocol.ComparisonIdentity {
+	return &protocol.ComparisonIdentity{Kind: schema.TopicProperties, Database: part(database), Catalog: &protocol.ComparisonPart{}, Schema: part(directory),
+		Parent: &protocol.ComparisonPart{}, Name: part(name)}
+}
+
+// changefeedSubject is changefeed name of the table at directory and table as
+// the changefeed planner names it: under the table, which the host names
+// without its database.
+func changefeedSubject(directory, table, name string) *protocol.ComparisonIdentity {
+	return &protocol.ComparisonIdentity{Kind: schema.ChangefeedEffectKind, Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{},
+		Schema: part(directory), Parent: part(table), Name: part(name)}
+}
+
+func part(value string) *protocol.ComparisonPart {
+	return &protocol.ComparisonPart{Source: value, Normalized: value}
 }
 
 func split(relative string) (string, string) {
