@@ -174,3 +174,36 @@ func TestDiff_DesiredTheDeclarationCannotState(t *testing.T) {
 	c.Assert(undecided, qt.Matches, `the desired source cannot describe the complete changefeed: .*AWS region.*`)
 	c.Assert(planned, qt.HasLen, 0)
 }
+
+// readThroughByTransfer is a read changefeed set holding changefeed a, whose
+// topic has consumer generated, which a transfer of the read reads through.
+func readThroughByTransfer() *native.ChangefeedObservations {
+	set := held("a")
+	set.Changefeeds[0].Topic.Consumers = []*native.Consumer{{Name: "generated", Transfer: "app/ingest", Attributes: map[string]string{"_service_type": "data-streams"}}}
+	return set
+}
+
+// TestDiff_KeepsATransfersConsumer keeps the consumer a transfer reads a
+// changefeed through, which the declaration of the changefeed cannot name:
+// unchanged otherwise, the changefeed plans nothing, and a change of its topic
+// carries the consumer on its declared side, so its statements keep it.
+func TestDiff_KeepsATransfersConsumer(t *testing.T) {
+	c := testcheck.New(t)
+	updates := ydbdecl.Changefeed{Name: "a", Mode: "UPDATES", Format: "JSON"}
+	longer := updates
+	longer.RetentionPeriod = "P2D"
+
+	unchanged, unchangedUndecided := changefeeds.Diff(declared(c, updates), readThroughByTransfer())
+	changed, changedUndecided := changefeeds.Diff(declared(c, longer), readThroughByTransfer())
+
+	c.Assert(unchangedUndecided, qt.Equals, "")
+	c.Assert(unchanged, qt.HasLen, 0)
+	c.Assert(changedUndecided, qt.Equals, "")
+	c.Assert(steps(changed), qt.DeepEquals, []step{{Action: changefeeds.Topic, Name: "a"}})
+	desired, err := changefeeds.FromIntent(changed[0].After)
+	c.Assert(err, qt.IsNil)
+	c.Assert(desired.Consumers, qt.DeepEquals, []ydbdecl.Consumer{{Name: "generated"}})
+	statements, err := changefeeds.Statements("/local/app/t", changed)
+	c.Assert(err, qt.IsNil)
+	c.Assert(statements, qt.DeepEquals, []string{"ALTER TOPIC `/local/app/t/a` SET (retention_period = Interval('P2D'));"})
+}

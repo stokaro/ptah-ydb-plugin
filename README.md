@@ -1890,11 +1890,20 @@ into, after the transfer is gone, stops the server on a schemeshard VERIFY
 (`AliveChildrenCount >= 1`); 26.2.1.14 drops it. The provider's CI therefore
 keeps the flag at its default on 25.1 and checks the refusal there.
 
-Not modeled yet: HCL blocks and the YQL schema statements; the consumers a
-transfer reads through, which the host adopts onto the declared changefeed or
-topic (a comparison of that topic here plans a drop of such a consumer, which
-the plan reports as destructive); and a transfer's check that its table and
-topic are declared.
+A consumer a transfer reads through is the transfer's. YDB makes one with a
+generated name for a transfer that names none, and a declaration of the
+changefeed or the topic cannot name it. The read marks each consumer a
+transfer of the same read reads through (`Consumer.transfer` in the topic
+description, which YDB never sets), and the comparison of the topic or the
+changefeed keeps a marked consumer the declaration leaves out, as the host's
+embedded engine adopts it: the run after a transfer's creation plans nothing,
+and a change of the topic or the changefeed keeps the consumer. A topic
+operation neither checks nor confirms a marked consumer, since the transfer's
+drop, which the plan may run first, takes the one YDB made. A transfer read
+outside the selected directories marks nothing.
+
+Not modeled yet: HCL blocks and the YQL schema statements, and a transfer's
+check that its table and topic are declared.
 
 `TestReplicationLifecycleSubprocess` creates a replication of the server's own
 table, finds nothing to change, refuses a connection change while it runs,

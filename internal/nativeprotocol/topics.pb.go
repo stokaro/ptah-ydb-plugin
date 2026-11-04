@@ -129,7 +129,12 @@ type Consumer struct {
 	// Types that are valid to be assigned to ConsumerType:
 	//
 	//	*Consumer_StreamingConsumerType
-	ConsumerType  isConsumer_ConsumerType `protobuf_oneof:"consumer_type"`
+	ConsumerType isConsumer_ConsumerType `protobuf_oneof:"consumer_type"`
+	// Not a YDB field: a description YDB returns never carries it. The
+	// provider's read sets it to the path, below the database, of a transfer
+	// the same read found reading the topic through this consumer, so that a
+	// comparison keeps the consumer for the transfer.
+	Transfer      string `protobuf:"bytes,1000,opt,name=transfer,proto3" json:"transfer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -227,6 +232,13 @@ func (x *Consumer) GetStreamingConsumerType() *StreamingConsumerType {
 		}
 	}
 	return nil
+}
+
+func (x *Consumer) GetTransfer() string {
+	if x != nil {
+		return x.Transfer
+	}
+	return ""
 }
 
 type isConsumer_ConsumerType interface {
@@ -920,7 +932,7 @@ var File_internal_nativeprotocol_topics_proto protoreflect.FileDescriptor
 const file_internal_nativeprotocol_topics_proto_rawDesc = "" +
 	"\n" +
 	"$internal/nativeprotocol/topics.proto\x12\x0fptah.ydb.native\x1a\x16protos/ydb_topic.proto\x1a\x16protos/ydb_table.proto\x1a\x17protos/ydb_scheme.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x17\n" +
-	"\x15StreamingConsumerType\"\x85\b\n" +
+	"\x15StreamingConsumerType\"\xa2\b\n" +
 	"\bConsumer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\timportant\x18\x02 \x01(\bR\timportant\x127\n" +
@@ -931,7 +943,8 @@ const file_internal_nativeprotocol_topics_proto_rawDesc = "" +
 	"attributes\x12N\n" +
 	"\x0econsumer_stats\x18\a \x01(\v2'.ptah.ydb.native.Consumer.ConsumerStatsR\rconsumerStats\x12O\n" +
 	"\x13availability_period\x18\b \x01(\v2\x19.google.protobuf.DurationH\x01R\x12availabilityPeriod\x88\x01\x01\x12`\n" +
-	"\x17streaming_consumer_type\x18\t \x01(\v2&.ptah.ydb.native.StreamingConsumerTypeH\x00R\x15streamingConsumerType\x1a=\n" +
+	"\x17streaming_consumer_type\x18\t \x01(\v2&.ptah.ydb.native.StreamingConsumerTypeH\x00R\x15streamingConsumerType\x12\x1b\n" +
+	"\btransfer\x18\xe8\a \x01(\tR\btransfer\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\x8a\x03\n" +

@@ -219,3 +219,46 @@ func TestTopicPlanning_FailurePath(t *testing.T) {
 		})
 	}
 }
+
+// readByTransfer is readTopic with its consumer worker marked as the one a
+// transfer of the read reads the topic through.
+func readByTransfer() *native.DescribeTopicResult {
+	read := readTopic()
+	read.Consumers[0].Transfer = "app/ingest"
+	return read
+}
+
+// A declaration that leaves out the consumer a transfer reads the topic
+// through keeps it: the consumer is the transfer's, and dropping it under the
+// running transfer is what the comparison would plan otherwise.
+func TestTopicComparisonKeepsATransfersConsumer_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := topicRequest(c, &ydbdecl.Topic{RetentionPeriod: "PT24H"}, readByTransfer())
+
+	result, err := backend.New().CompareModels(t.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidateComparedModels(backend.Description(), request, result), qt.IsNil)
+	c.Assert(result.Undecided, qt.HasLen, 0)
+	c.Assert(result.Changes, qt.HasLen, 0)
+}
+
+// A change of a topic a transfer reads keeps the transfer's consumer the
+// declaration leaves out: the change's declared side holds it, so the plan
+// neither drops it nor reports the change as destructive.
+func TestTopicChangeKeepsATransfersConsumer_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := topicRequest(c, &ydbdecl.Topic{RetentionPeriod: "P2D"}, readByTransfer())
+
+	result, err := backend.New().CompareModels(t.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidateComparedModels(backend.Description(), request, result), qt.IsNil)
+	c.Assert(result.Changes, qt.HasLen, 1)
+	c.Assert(result.Changes[0].Value.ChangeSemantics.Impact, qt.Equals, protocol.ChangeSemantics_BEHAVIORAL)
+	c.Assert(result.Changes[0].Value.ChangeSemantics.GetRemovesState(), qt.IsFalse)
+	_, desired, err := schema.TopicSpecs(result.Changes[0].Value.Value)
+	c.Assert(err, qt.IsNil)
+	c.Assert(desired.Consumers, qt.DeepEquals, []ydbdecl.Consumer{{Name: "worker"}})
+	c.Assert(desired.RetentionPeriod, qt.Equals, "P2D")
+}

@@ -31,6 +31,11 @@ message Consumer {
         StreamingConsumerType streaming_consumer_type = 9;
         // Shared consumers require a separate reader. Unknown arm 10 is refused.
     }
+    // Not a YDB field: a description YDB returns never carries it. The
+    // provider's read sets it to the path, below the database, of a transfer
+    // the same read found reading the topic through this consumer, so that a
+    // comparison keeps the consumer for the transfer.
+    string transfer = 1000;
 }
 
 message DescribeTopicResult {

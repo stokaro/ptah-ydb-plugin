@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
+	"google.golang.org/protobuf/proto"
 )
 
 // Action is what a change does to one changefeed.
@@ -88,6 +90,25 @@ func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservatio
 			return nil, fmt.Sprintf("changefeed %q has settings this provider cannot represent, so the current changefeed was not established: %v", name, err)
 		}
 		having[name], havingFeeds[name] = observed, feed
+		// The consumers a transfer reads the changefeed through are the
+		// transfer's, and a declaration of the changefeed keeps them.
+		intent, declared := wanted[name]
+		if !declared {
+			continue
+		}
+		topic, adopted, err := topics.AdoptTransferConsumers(intent.GetTopic(), observed.GetTopic())
+		if err != nil {
+			return nil, fmt.Sprintf("changefeed %q: a consumer a transfer reads it through cannot be kept: %v", name, err)
+		}
+		if !adopted {
+			continue
+		}
+		intent = proto.CloneOf(intent)
+		intent.Topic = topic
+		if wantedFeeds[name], err = FromIntent(intent); err != nil {
+			return nil, fmt.Sprintf("the desired source cannot describe the complete changefeed: %v", err)
+		}
+		wanted[name] = intent
 	}
 	names := slices.Collect(maps.Keys(wanted))
 	for name := range having {

@@ -309,6 +309,9 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 			result.PlanningContext = OutsideStreamingInventory(inventory, selectors)
 		}
 	}
+	if err := markTransferReaders(result); err != nil {
+		return nil, err
+	}
 	slices.SortFunc(result.Tables, func(a, b *protocol.Table) int {
 		if compared := strings.Compare(a.Identity.Schema, b.Identity.Schema); compared != 0 {
 			return compared
