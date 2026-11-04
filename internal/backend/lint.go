@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -20,7 +21,7 @@ import (
 func (*Provider) SplitLintStatements(ctx context.Context, request *protocol.SplitLintRequest) (*protocol.SplitLint, error) {
 	description := lintDescription(ctx)
 	if err := provider.ValidateSplitLintRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	describe := slices.Contains(description.GetEngines()[0].GetFeatures(), provider.LintStatementFactsFeature)
 	result, err := migrationlint.SplitRequest(ctx, request, describe)
@@ -28,7 +29,7 @@ func (*Provider) SplitLintStatements(ctx context.Context, request *protocol.Spli
 		return nil, lintError(ctx, err)
 	}
 	if err := provider.ValidateSplitLint(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }
@@ -41,14 +42,14 @@ func (*Provider) SplitLintStatements(ctx context.Context, request *protocol.Spli
 func (*Provider) AnnotateLintStatements(ctx context.Context, request *protocol.AnnotateLintRequest) (*protocol.AnnotatedLint, error) {
 	description := lintDescription(ctx)
 	if err := provider.ValidateAnnotateLintRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result, err := migrationlint.AnnotateRequest(ctx, request)
 	if err != nil {
 		return nil, lintError(ctx, err)
 	}
 	if err := provider.ValidateAnnotatedLint(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }
@@ -60,14 +61,14 @@ func (*Provider) AnnotateLintStatements(ctx context.Context, request *protocol.A
 func (*Provider) CheckLintMigrations(ctx context.Context, request *protocol.CheckLintRequest) (*protocol.CheckedLint, error) {
 	description := lintDescription(ctx)
 	if err := provider.ValidateCheckLintRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result, err := migrationlint.CheckRequest(ctx, request)
 	if err != nil {
 		return nil, lintError(ctx, err)
 	}
 	if err := provider.ValidateCheckedLint(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }
@@ -84,5 +85,5 @@ func lintError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return status.FromContextError(ctx.Err()).Err()
 	}
-	return status.Error(codes.InvalidArgument, err.Error())
+	return authored.Status(codes.InvalidArgument, err)
 }

@@ -11,11 +11,13 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/sourceencode"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -49,10 +51,10 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	}
 	description := provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx))
 	if err := provider.ValidateEncodeSourceRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if err := encodeCoverage(request.GetCoverage()); err != nil {
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
+		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	format := request.GetFormat()
 	result := &protocol.EncodedSource{Complete: true}
@@ -86,7 +88,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 		case envelope.GetKind() == schema.CoordinationProperties:
 			node, err := nodeOf(value.GetValue())
 			if err != nil {
-				return nil, status.Error(codes.InvalidArgument, err.Error())
+				return nil, authored.Status(codes.InvalidArgument, err)
 			}
 			if node.access {
 				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: node.id, Message: sourceencode.AccessLoss("coordination node", node.owner).Loss})
@@ -96,7 +98,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 		default:
 			encoded, err := encodeNative(format, value.GetValue())
 			if err != nil {
-				return nil, status.Error(codes.InvalidArgument, err.Error())
+				return nil, authored.Status(codes.InvalidArgument, err)
 			}
 			if encoded.Loss != "" {
 				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: id, Message: encoded.Loss})
@@ -110,7 +112,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	})
 	fragments, err := nodeFragments(format, nodes)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	for _, fragment := range fragments {
 		units = append(units, encodedUnit{ids: fragment.GetValueIds(), parts: []*protocol.EncodedSourcePart{{Fragment: fragment.GetFragment(), Placement: fragment.GetPlacement()}}})
@@ -129,7 +131,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 		}
 		encoded, err := sourceencode.EncodeTable(format, *tables[binding])
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		result.Losses = append(result.Losses, encoded.Losses...)
 		if len(encoded.Written) != 0 {
@@ -139,7 +141,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	// A table the request binds and holds no facet of has no value to carry
 	// the loss.
 	for _, binding := range slices.Sorted(maps.Keys(refused)) {
-		return nil, status.Error(codes.FailedPrecondition, refused[binding])
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, refused[binding])
 	}
 	if format == protocol.SourceDocument_GO_ANNOTATIONS {
 		result.FieldTypes = fieldTypes(request)
@@ -162,7 +164,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 		return nil, status.FromContextError(err).Err()
 	}
 	if err := provider.ValidateEncodedSource(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }

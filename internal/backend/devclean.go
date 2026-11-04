@@ -5,8 +5,10 @@ import (
 	"errors"
 	"path"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/devclean"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -23,10 +25,10 @@ func (p *Provider) devSession(ctx context.Context, id string) (*session, error) 
 	switch {
 	case s.closed:
 		s.mu.Unlock()
-		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	case s.active != "":
 		s.mu.Unlock()
-		return nil, status.Error(codes.FailedPrecondition, "YDB session has an active transaction")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session has an active transaction")
 	}
 	if err := ctx.Err(); err != nil {
 		s.mu.Unlock()
@@ -53,7 +55,7 @@ func (s *session) devEntries(ctx context.Context, cleaner devclean.Native, schem
 			dir = ""
 		}
 		if path.IsAbs(dir) || dir == ".." || len(dir) >= 3 && dir[:3] == "../" {
-			return nil, status.Error(codes.InvalidArgument, "a dev cleanup schema is a directory below the database")
+			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "a dev cleanup schema is a directory below the database")
 		}
 		found, err := devclean.Walk(ctx, cleaner, tree, dir)
 		if errors.Is(err, devclean.ErrScheme) {
@@ -150,5 +152,5 @@ func devError(ctx context.Context, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return status.FromContextError(ctxErr).Err()
 	}
-	return status.Error(codes.Unavailable, err.Error())
+	return authored.Status(codes.Unavailable, err)
 }

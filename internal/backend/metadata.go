@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -24,7 +26,7 @@ func (p *Provider) metadataSession(ctx context.Context, scope *protocol.Metadata
 		return nil, metadata.Store{}, nil, err
 	}
 	if s.closed {
-		return fail(status.Error(codes.FailedPrecondition, "YDB session is closed"))
+		return fail(runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed"))
 	}
 	if err := ctx.Err(); err != nil {
 		return fail(status.FromContextError(err).Err())
@@ -32,14 +34,14 @@ func (p *Provider) metadataSession(ctx context.Context, scope *protocol.Metadata
 	if scope.TransactionId != "" {
 		record := s.transactions[scope.TransactionId]
 		if record == nil || record.tx == nil || record.failed || s.active != scope.TransactionId {
-			return fail(status.Error(codes.FailedPrecondition, "YDB transaction is not active for metadata"))
+			return fail(runtime.ErrorWithReason(codes.FailedPrecondition, "YDB transaction is not active for metadata"))
 		}
 	} else if scope.Kind == protocol.MetadataScope_TAGS && s.active != "" {
-		return fail(status.Error(codes.FailedPrecondition, "YDB tags require the active transaction"))
+		return fail(runtime.ErrorWithReason(codes.FailedPrecondition, "YDB tags require the active transaction"))
 	}
 	store, err := metadata.Resolve(s.database, scope)
 	if err != nil {
-		return fail(status.Error(codes.InvalidArgument, err.Error()))
+		return fail(authored.Status(codes.InvalidArgument, err))
 	}
 	return s, store, s.mu.Unlock, nil
 }
@@ -55,9 +57,9 @@ func metadataFailure(s *session, scope *protocol.MetadataScope, err error) error
 			return status.FromContextError(err).Err()
 		}
 		if status.Code(err) == codes.ResourceExhausted {
-			return status.Error(codes.ResourceExhausted, "YDB metadata resource limit reached")
+			return runtime.ErrorWithReason(codes.ResourceExhausted, "YDB metadata resource limit reached")
 		}
-		return status.Error(codes.FailedPrecondition, "YDB metadata storage or operation could not be verified")
+		return runtime.ErrorWithReason(codes.FailedPrecondition, "YDB metadata storage or operation could not be verified")
 	}
 	return nil
 }
@@ -66,7 +68,7 @@ func metadataFailure(s *session, scope *protocol.MetadataScope, err error) error
 // Inside a transaction it validates existing storage and performs no DDL.
 func (p *Provider) PrepareMetadata(ctx context.Context, request *protocol.PrepareMetadataRequest) (*protocol.MetadataResult, error) {
 	if err := provider.ValidatePrepareMetadataRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, store, unlock, err := p.metadataSession(ctx, request.Scope)
 	if err != nil {
@@ -113,12 +115,12 @@ func (s *session) openMetadataWork(ctx context.Context, scope *protocol.Metadata
 	}
 	conn, err := s.connection.DB.Conn(ctx)
 	if err != nil {
-		return nil, status.Error(codes.Unavailable, "acquire YDB metadata connection failed")
+		return nil, runtime.ErrorWithReason(codes.Unavailable, "acquire YDB metadata connection failed")
 	}
 	tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		s.cleanupErr = errors.Join(s.cleanupErr, closeSQLConnection(conn))
-		return nil, status.Error(codes.Unavailable, "begin YDB metadata transaction failed")
+		return nil, runtime.ErrorWithReason(codes.Unavailable, "begin YDB metadata transaction failed")
 	}
 	return &metadataWork{runner: tx, tx: tx, conn: conn}, nil
 }
@@ -140,7 +142,7 @@ func (w *metadataWork) close() error {
 // Each mutation is dispatched once; uncertain writes never authorize replay.
 func (p *Provider) MutateMetadata(ctx context.Context, request *protocol.MutateMetadataRequest) (*protocol.MetadataResult, error) {
 	if err := provider.ValidateMutateMetadataRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, store, unlock, err := p.metadataSession(ctx, request.Scope)
 	if err != nil {
@@ -209,7 +211,7 @@ func (p *Provider) MutateMetadata(ctx context.Context, request *protocol.MutateM
 // LookupMetadataTag preserves absence and exact signed versions without creating a store.
 func (p *Provider) LookupMetadataTag(ctx context.Context, request *protocol.LookupMetadataTagRequest) (result *protocol.MetadataTagResult, err error) {
 	if err := provider.ValidateLookupMetadataTagRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, store, unlock, err := p.metadataSession(ctx, request.Scope)
 	if err != nil {

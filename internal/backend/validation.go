@@ -3,9 +3,11 @@ package backend
 import (
 	"context"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/schemavalidation"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -21,20 +23,20 @@ func (*Provider) ValidateSchema(ctx context.Context, request *protocol.ValidateS
 	}
 	description := Description()
 	if err := provider.ValidateSchemaRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) {
-		return nil, status.Error(codes.InvalidArgument, "YDB validation requires its negotiated identifier rules")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB validation requires its negotiated identifier rules")
 	}
 	result, err := schemavalidation.Validate(ctx, request)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if err := provider.ValidateSchemaResult(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }

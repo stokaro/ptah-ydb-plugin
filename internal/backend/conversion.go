@@ -4,9 +4,11 @@ import (
 	"context"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -16,7 +18,7 @@ import (
 // recomputed from payloads; a caller-supplied projection is never authoritative.
 func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertValuesRequest) (*protocol.NormalizedValues, error) {
 	if err := provider.ValidateConversionRequest(Description(), request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	source := &protocol.NormalizeValuesRequest{Engine: request.Engine, TargetFeatures: request.TargetFeatures}
 	for _, value := range request.Values {
@@ -28,7 +30,7 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 	}
 	for i, value := range normalized.Values {
 		if !proto.Equal(value, request.Values[i]) {
-			return nil, status.Error(codes.InvalidArgument, "YDB conversion source normalization changed")
+			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB conversion source normalization changed")
 		}
 	}
 	destination := &protocol.NormalizeValuesRequest{Engine: request.Engine, TargetFeatures: request.TargetFeatures}
@@ -49,7 +51,7 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 		case schema.CoordinationProperties:
 			converted, err = schema.ConvertCoordination(value.Value, request.From, request.To)
 		default:
-			return nil, status.Error(codes.Unimplemented, "YDB model has no representation conversion")
+			return nil, runtime.ErrorWithReason(codes.Unimplemented, "YDB model has no representation conversion")
 		}
 		if err == nil && request.From == protocol.ValueInput_OBSERVED && request.To == protocol.ValueInput_DESIRED &&
 			slices.Contains(request.TargetFeatures, provider.CommonAccessFeature) {
@@ -57,7 +59,7 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 			converted, err = schema.WithoutAccess(converted)
 		}
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		destination.Values = append(destination.Values, &protocol.ValueInput{Id: value.Id, Representation: request.To, Value: converted})
 	}
@@ -66,7 +68,7 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 		return nil, err
 	}
 	if err := provider.ValidateConvertedValues(Description(), request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }

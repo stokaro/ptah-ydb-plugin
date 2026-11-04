@@ -3,9 +3,11 @@ package backend
 import (
 	"context"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -19,14 +21,14 @@ func (*Provider) CompareColumns(ctx context.Context, request *protocol.CompareCo
 		return nil, err
 	}
 	if err := provider.ValidateColumnsRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result, err := columnsemantics.Compare(ctx, request)
 	if err != nil {
 		return nil, columnsError(ctx, err)
 	}
 	if err := provider.ValidateComparedColumns(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }
@@ -39,14 +41,14 @@ func (*Provider) ReadColumnDefaults(ctx context.Context, request *protocol.ReadC
 		return nil, err
 	}
 	if err := provider.ValidateColumnDefaultsRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result, err := columnsemantics.ReadDefaults(ctx, request)
 	if err != nil {
 		return nil, columnsError(ctx, err)
 	}
 	if err := provider.ValidateColumnDefaults(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }
@@ -61,7 +63,7 @@ func columnsContext(ctx context.Context, request columnsRequest) (*protocol.Desc
 		return nil, status.FromContextError(err).Err()
 	}
 	if !proto.Equal(request.GetIdentifiers().GetRules(), identifierRules()) {
-		return nil, status.Error(codes.InvalidArgument, "YDB column semantics require its negotiated identifier rules")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB column semantics require its negotiated identifier rules")
 	}
 	return provider.NegotiatedDescription(Description(), request.GetTargetFeatures()), nil
 }
@@ -70,5 +72,5 @@ func columnsError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return status.FromContextError(ctx.Err()).Err()
 	}
-	return status.Error(codes.InvalidArgument, err.Error())
+	return authored.Status(codes.InvalidArgument, err)
 }

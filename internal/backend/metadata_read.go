@@ -5,11 +5,12 @@ import (
 	"errors"
 	"io"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -40,13 +41,13 @@ func metadataReadResult(request *protocol.MetadataReadRequest) *protocol.Metadat
 func (s *session) metadataReservation(request *protocol.MetadataReadRequest) (*metadataReader, error) {
 	reader := s.metadataReaders[request.ReaderId]
 	if reader != nil && !proto.Equal(reader.scope, request.Scope) {
-		return nil, status.Error(codes.FailedPrecondition, "YDB metadata reader scope changed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB metadata reader scope changed")
 	}
 	return reader, nil
 }
 func (s *session) reserveMetadata(request *protocol.MetadataReadRequest) (*metadataReader, error) {
 	if len(s.metadataReaders) >= metadataReaderLimit {
-		return nil, status.Error(codes.ResourceExhausted, "YDB metadata reader handle limit reached; open another session")
+		return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB metadata reader handle limit reached; open another session")
 	}
 	if s.metadataReaders == nil {
 		s.metadataReaders = make(map[string]*metadataReader)
@@ -60,7 +61,7 @@ func (s *session) reserveMetadata(request *protocol.MetadataReadRequest) (*metad
 // A failed or lost open consumes its handle; Close still releases or fences it.
 func (p *Provider) OpenMetadataRead(ctx context.Context, request *protocol.MetadataReadRequest) (result *protocol.MetadataReadResult, err error) {
 	if err := provider.ValidateMetadataReadRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, store, unlock, err := p.metadataSession(ctx, request.Scope)
 	if err != nil {
@@ -72,7 +73,7 @@ func (p *Provider) OpenMetadataRead(ctx context.Context, request *protocol.Metad
 		return nil, err
 	}
 	if previous != nil {
-		return nil, status.Error(codes.AlreadyExists, "YDB metadata reader handle was already reserved")
+		return nil, runtime.ErrorWithReason(codes.AlreadyExists, "YDB metadata reader handle was already reserved")
 	}
 	reader, err := s.reserveMetadata(request)
 	if err != nil {
@@ -93,7 +94,7 @@ func (p *Provider) OpenMetadataRead(ctx context.Context, request *protocol.Metad
 		}
 	}
 	if active >= metadataOpenLimit {
-		return nil, status.Error(codes.ResourceExhausted, "YDB metadata open reader limit reached")
+		return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB metadata open reader limit reached")
 	}
 	reader.exists, err = store.Check(ctx, s.connection.Driver)
 	if err != nil {
@@ -140,7 +141,7 @@ func (r *metadataReader) fill() error {
 // callers cannot replay an index after an uncertain reply.
 func (p *Provider) ReadMetadataPage(ctx context.Context, request *protocol.ReadMetadataPageRequest) (result *protocol.MetadataPage, err error) {
 	if err := provider.ValidateReadMetadataPageRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, _, unlock, err := p.metadataSession(ctx, request.Reader.Scope)
 	if err != nil {
@@ -155,7 +156,7 @@ func (p *Provider) ReadMetadataPage(ctx context.Context, request *protocol.ReadM
 		s.cleanupErr = errors.Join(s.cleanupErr, reader.close())
 	}
 	if reader == nil || reader.closed || reader.complete || request.Page != reader.page {
-		return nil, status.Error(codes.FailedPrecondition, "YDB metadata reader is not at the requested page")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB metadata reader is not at the requested page")
 	}
 	defer func() {
 		if err != nil {
@@ -184,7 +185,7 @@ func (p *Provider) ReadMetadataPage(ctx context.Context, request *protocol.ReadM
 		}
 		if proto.Size(result) > provider.MaxMetadataBytes {
 			if count == 0 {
-				return nil, status.Error(codes.ResourceExhausted, "YDB metadata record exceeds page size")
+				return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB metadata record exceeds page size")
 			}
 			if len(result.Logs) > 0 {
 				result.Logs = result.Logs[:len(result.Logs)-1]
@@ -221,7 +222,7 @@ func (p *Provider) ReadMetadataPage(ctx context.Context, request *protocol.ReadM
 // A close preceding open fences that ID. A changed scope never closes a reader.
 func (p *Provider) CloseMetadataRead(_ context.Context, request *protocol.MetadataReadRequest) (*protocol.MetadataReadResult, error) {
 	if err := provider.ValidateMetadataReadRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, err := p.lookup(request.Scope.SessionId)
 	if err != nil {
@@ -244,7 +245,7 @@ func (p *Provider) CloseMetadataRead(_ context.Context, request *protocol.Metada
 	}
 	if err := reader.close(); err != nil {
 		s.cleanupErr = errors.Join(s.cleanupErr, err)
-		return nil, status.Error(codes.Unavailable, "close YDB metadata reader failed")
+		return nil, runtime.ErrorWithReason(codes.Unavailable, "close YDB metadata reader failed")
 	}
 	return metadataReadResult(request), nil
 }

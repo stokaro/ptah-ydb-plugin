@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/readproof"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretvalue"
@@ -15,6 +16,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -40,7 +42,7 @@ var _ provider.StatementRunner = (*Provider)(nil)
 // read-only transaction. YDB reports no affected-row count.
 func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatementRequest) (*protocol.StatementResult, error) {
 	if err := provider.ValidateRunStatementRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	refuse := func(reason string) (*protocol.StatementResult, error) {
 		return &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_REFUSED, Refusal: rowdata.OneLine(reason)}, nil
@@ -63,7 +65,7 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
 	if s.realm {
 		if err := yql.ConfineToRealm(request.Sql); err != nil {
@@ -143,7 +145,7 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 	if err != nil {
 		_ = rows.Close()
 		s.failStatement(record)
-		return nil, status.Error(codes.FailedPrecondition, rowdata.OneLine(err.Error()))
+		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	result := &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_SUCCEEDED, Columns: record.cursor.Columns()}
 	record.columns = uint32(len(result.Columns))
@@ -202,7 +204,7 @@ func statementText(ctx context.Context, text string, access protocol.RunStatemen
 // ReadStatementRows consumes the next bounded page of a session-owned result.
 func (p *Provider) ReadStatementRows(ctx context.Context, request *protocol.ReadStatementRowsRequest) (*protocol.StatementRows, error) {
 	if err := provider.ValidateReadStatementRowsRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, err := p.lookup(request.SessionId)
 	if err != nil {
@@ -212,10 +214,10 @@ func (p *Provider) ReadStatementRows(ctx context.Context, request *protocol.Read
 	defer s.mu.Unlock()
 	record := s.statementResults[request.PageToken]
 	if s.closed || record == nil || record.closed {
-		return nil, status.Error(codes.FailedPrecondition, "statement result is closed or unknown")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "statement result is closed or unknown")
 	}
 	if record.columns != request.ColumnCount {
-		return nil, status.Error(codes.InvalidArgument, "statement column count changed")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "statement column count changed")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -231,7 +233,7 @@ func (p *Provider) ReadStatementRows(ctx context.Context, request *protocol.Read
 	rows, more, err := record.cursor.Page(request.MaxRows)
 	if err != nil || guarded.Err() != nil {
 		s.failStatement(record)
-		return nil, status.Error(codes.Aborted, "statement page could not be completed")
+		return nil, runtime.ErrorWithReason(codes.Aborted, "statement page could not be completed")
 	}
 	result := &protocol.StatementRows{Rows: rows}
 	if more {
@@ -246,7 +248,7 @@ func (p *Provider) ReadStatementRows(ctx context.Context, request *protocol.Read
 // A retained token repeats its original cleanup result.
 func (p *Provider) CloseStatement(_ context.Context, request *protocol.CloseStatementRequest) (*protocol.Empty, error) {
 	if err := provider.ValidateCloseStatementRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, err := p.lookup(request.SessionId)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
@@ -38,12 +39,12 @@ func New(rows *sql.Rows) (*Cursor, error) {
 		name := rowdata.ColumnType(column.DatabaseTypeName())
 		kind := rowdata.Kind(name)
 		if kind == protocol.DataKind_DATA_KIND_UNSPECIFIED {
-			return nil, fmt.Errorf("result column %q has unsupported YDB type %s", column.Name(), name)
+			return nil, authored.New(fmt.Sprintf("result column %q has unsupported YDB type %s", column.Name(), name))
 		}
 		metadata := &protocol.DataColumn{Name: column.Name(), Type: name, Kind: kind}
 		size += proto.Size(metadata) + 8
 		if size > metadataBytes {
-			return nil, errors.New("statement columns exceed the metadata byte limit")
+			return nil, authored.New("statement columns exceed the metadata byte limit")
 		}
 		cursor.columns = append(cursor.columns, metadata)
 	}

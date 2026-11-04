@@ -2,6 +2,8 @@ package backend
 
 import (
 	"context"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingcompare"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
@@ -13,6 +15,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadcompare"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -27,10 +30,10 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 	}
 	description := Description()
 	if err := provider.ValidateComparisonRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if !proto.Equal(request.GetIdentifiers().GetRules(), identifierRules()) {
-		return nil, status.Error(codes.InvalidArgument, "YDB comparison requires its negotiated identifier rules")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB comparison requires its negotiated identifier rules")
 	}
 	compare := coordinationcompare.Compare
 	switch request.GetComparisonId() {
@@ -58,10 +61,10 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if err := provider.ValidateComparedModels(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()

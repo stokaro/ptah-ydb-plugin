@@ -6,10 +6,12 @@ import (
 	"net/url"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/embedstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -35,7 +37,7 @@ func (p *Provider) embeddingStore(ctx context.Context, id string) (*embedstore.S
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
 	if s.embeddings != nil {
 		return s.embeddings, nil
@@ -47,7 +49,7 @@ func (p *Provider) embeddingStore(ctx context.Context, id string) (*embedstore.S
 			return nil, embeddingError(ctx, err)
 		}
 		if flags, err = featureflags.Decode(body, s.connection.Database()); err != nil {
-			return nil, status.Error(codes.Unavailable, err.Error())
+			return nil, authored.Status(codes.Unavailable, err)
 		}
 	}
 	s.embeddings = embedstore.New(s.connection.DB, s.connection.Driver, s.database, embedstore.LineCapabilities(s.version, flags))
@@ -63,10 +65,10 @@ func embeddingDescription(ctx context.Context) *protocol.Description {
 // embeddingSession validates a session request and returns its store.
 func (p *Provider) embeddingSession(ctx context.Context, id string, validate error) (*embedstore.Store, error) {
 	if validate != nil {
-		return nil, status.Error(codes.InvalidArgument, validate.Error())
+		return nil, authored.Status(codes.InvalidArgument, validate)
 	}
 	if !slices.Contains(embeddingDescription(ctx).GetFeatures(), provider.EmbeddingStoreFeature) {
-		return nil, status.Error(codes.FailedPrecondition, "the host did not list "+provider.EmbeddingStoreFeature)
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "the host did not list "+provider.EmbeddingStoreFeature)
 	}
 	return p.embeddingStore(ctx, id)
 }
@@ -80,11 +82,11 @@ func embeddingError(ctx context.Context, err error) error {
 	case ctx.Err() != nil:
 		return status.FromContextError(ctx.Err()).Err()
 	case errors.As(err, &refusal):
-		return status.Error(codes.FailedPrecondition, refusal.Message)
+		return runtime.ErrorWithReason(codes.FailedPrecondition, refusal.Message)
 	case errors.Is(err, embedstore.ErrStoreAbsent):
-		return status.Error(codes.FailedPrecondition, err.Error())
+		return authored.Status(codes.FailedPrecondition, err)
 	default:
-		return status.Error(codes.Unavailable, err.Error())
+		return authored.Status(codes.Unavailable, err)
 	}
 }
 
@@ -149,7 +151,7 @@ func (p *Provider) ReadEmbeddingEvents(ctx context.Context, request *protocol.Re
 // why YDB cannot hold the specification.
 func (p *Provider) DescribeEmbeddingTarget(ctx context.Context, request *protocol.DescribeEmbeddingTargetRequest) (*protocol.EmbeddingTargetObjects, error) {
 	if err := provider.ValidateDescribeEmbeddingTargetRequest(embeddingDescription(ctx), request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	return embedstore.DescribeTarget(request.GetSpec()), nil
 }

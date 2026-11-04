@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
@@ -23,6 +24,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -37,10 +39,10 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	// without independent access observations cannot supply their coverage.
 	description := provider.NegotiatedDescription(Description(), request.GetTargetFeatures())
 	if err := provider.ValidatePlanningRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) {
-		return nil, status.Error(codes.InvalidArgument, "YDB planning requires its negotiated identifier rules")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB planning requires its negotiated identifier rules")
 	}
 	var result *protocol.PlannedFeatures
 	var err error
@@ -73,10 +75,10 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if err := provider.ValidatePlannedFeatures(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -91,12 +93,12 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 // reads. Both forms check the whole batch before writing a unit.
 func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*protocol.RenderResult, error) {
 	if err := provider.ValidateRenderRequest(Description(), request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if len(request.Changes) > 0 {
 		transactional, known := request.Capabilities["transactional_ddl"]
 		if !known || transactional {
-			return nil, status.Error(codes.FailedPrecondition, "native YDB rendering requires established nontransactional DDL")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "native YDB rendering requires established nontransactional DDL")
 		}
 	}
 	// Each change is a native operation or, for a common object, its
@@ -110,63 +112,63 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		if common := change.GetCommonObject(); common != nil {
 			statement, err := commonobject.Render(common, request.GetCapabilities())
 			if err != nil {
-				return nil, status.Error(codes.FailedPrecondition, err.Error())
+				return nil, authored.Status(codes.FailedPrecondition, err)
 			}
 			statements[i] = statement
 			continue
 		}
 		native := change.GetNative()
 		if native.GetRole() != protocol.NativeOperation_STATEMENT || native.GetParent() != nil {
-			return nil, status.Error(codes.InvalidArgument, "only standalone native operations are implemented")
+			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "only standalone native operations are implemented")
 		}
 		captured := native.GetValue()
 		if captured.GetValue().GetKind() == tablecreate.InventoryOperationKind {
 			change, err := tablecreate.DecodeInventory(captured.GetValue())
 			if err != nil {
-				return nil, status.Error(codes.InvalidArgument, err.Error())
+				return nil, authored.Status(codes.InvalidArgument, err)
 			}
 			if err := change.CheckCapabilities(request.Capabilities); err != nil {
-				return nil, status.Error(codes.FailedPrecondition, err.Error())
+				return nil, authored.Status(codes.FailedPrecondition, err)
 			}
 		}
 		if captured.GetValue().GetKind() == schema.CoordinationOperation && !request.Capabilities["coordination_nodes"] {
-			return nil, status.Error(codes.FailedPrecondition, "native coordination rendering requires established capabilities")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "native coordination rendering requires established capabilities")
 		}
 		if captured.GetValue().GetKind() == schema.SecretOperation && !request.Capabilities["secrets"] {
-			return nil, status.Error(codes.FailedPrecondition, "secret rendering requires the secrets capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "secret rendering requires the secrets capability")
 		}
 		if captured.GetValue().GetKind() == schema.TopicOperation && !request.Capabilities[topics.CapabilityTopics] {
-			return nil, status.Error(codes.FailedPrecondition, "topic rendering requires the topics capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "topic rendering requires the topics capability")
 		}
 		if captured.GetValue().GetKind() == schema.ChangefeedOperation && !request.Capabilities[changefeeds.CapabilityChangefeeds] {
-			return nil, status.Error(codes.FailedPrecondition, "changefeed rendering requires the changefeeds capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "changefeed rendering requires the changefeeds capability")
 		}
 		if kind := captured.GetValue().GetKind(); (kind == schema.ExternalSourceOperation || kind == schema.ExternalTableOperation) && !request.Capabilities[externals.CapabilityExternalDataSources] {
-			return nil, status.Error(codes.FailedPrecondition, "external object rendering requires the external_data_sources capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "external object rendering requires the external_data_sources capability")
 		}
 		if captured.GetValue().GetKind() == schema.StreamingQueryOperation && !request.Capabilities[streaming.Capability] {
-			return nil, status.Error(codes.FailedPrecondition, streaming.CapabilityRefusal("streaming query"))
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, streaming.CapabilityRefusal("streaming query"))
 		}
 		if captured.GetValue().GetKind() == schema.ReplicationOperation && !request.Capabilities[replication.CapabilityReplication] {
-			return nil, status.Error(codes.FailedPrecondition, "async replication rendering requires the async_replication capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "async replication rendering requires the async_replication capability")
 		}
 		if captured.GetValue().GetKind() == schema.TransferOperation && !request.Capabilities[replication.CapabilityTransfers] {
-			return nil, status.Error(codes.FailedPrecondition, "transfer rendering requires the transfers capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "transfer rendering requires the transfers capability")
 		}
 		if captured.GetValue().GetKind() == schema.WorkloadOperation && !request.Capabilities[workload.CapabilityResourcePools] {
-			return nil, status.Error(codes.FailedPrecondition, "resource pools require target capability resource_pools; "+workload.FlagHint)
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "resource pools require target capability resource_pools; "+workload.FlagHint)
 		}
 		normalized, err := normalizeOperation(&protocol.ValueInput{Id: captured.GetId(), Representation: protocol.ValueInput_OPERATION, Value: captured.GetValue()})
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		if !proto.Equal(normalized, captured) {
-			return nil, status.Error(codes.InvalidArgument, "native operation metadata changed")
+			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "native operation metadata changed")
 		}
 		if normalized.Value.Kind == declarationplan.OperationKind {
 			statement, err := declarationplan.Text(normalized.Value, request.Capabilities)
 			if err != nil {
-				return nil, status.Error(codes.FailedPrecondition, err.Error())
+				return nil, authored.Status(codes.FailedPrecondition, err)
 			}
 			statements[i] = statement
 			continue
@@ -190,7 +192,7 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		}
 	}
 	if err := provider.ValidateRenderedBatch(Description(), request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()

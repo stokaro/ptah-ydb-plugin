@@ -8,6 +8,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
@@ -28,15 +29,11 @@ const checkInterval = time.Second
 // user lacks.
 var ErrRefused = errors.New("YDB refused this user Ptah's lock")
 
-// refusedError is a refusal in the words of Ptah's embedded YDB engine
-// (internal/dblockext/ydb).
-type refusedError struct{ message string }
-
-func (e *refusedError) Error() string        { return e.message }
-func (e *refusedError) Is(target error) bool { return target == ErrRefused }
-
+// refused is a refusal in the words of Ptah's embedded YDB engine
+// (internal/dblockext/ydb). It matches ErrRefused, and its text is the reason
+// a host shows: it names the coordination node and the right, never a value.
 func refused(format string, args ...any) error {
-	return &refusedError{message: fmt.Sprintf(format, args...)}
+	return authored.Wrap(ErrRefused, fmt.Sprintf(format, args...))
 }
 
 // Try makes a nonblocking semaphore acquisition within a new native session.

@@ -3,9 +3,11 @@ package backend
 import (
 	"context"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -19,21 +21,21 @@ func (*Provider) ProjectTableCreations(ctx context.Context, request *protocol.Pr
 	}
 	description := provider.NegotiatedDescription(Description(), request.GetTargetFeatures())
 	if err := provider.ValidateCreationRequest(description, request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) {
-		return nil, status.Error(codes.InvalidArgument, "YDB creation prediction requires its negotiated identifier rules")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB creation prediction requires its negotiated identifier rules")
 	}
 	stripped, err := creationsWithoutComments(request)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result, err := tablecreate.ProjectCreations(ctx, stripped)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	// Common comments are rendered separately, but remain part of the effective
 	// column definition that source projection returns.
@@ -43,7 +45,7 @@ func (*Provider) ProjectTableCreations(ctx context.Context, request *protocol.Pr
 		}
 	}
 	if err := provider.ValidateProjectedCreations(description, request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }
