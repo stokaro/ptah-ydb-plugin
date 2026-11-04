@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -19,15 +20,15 @@ func (*Provider) ResolveDatabaseContext(ctx context.Context, request *protocol.D
 		return nil, status.FromContextError(err).Err()
 	}
 	if err := provider.ValidateDatabaseContextRequest(Description(), request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	address, err := connection.Parse(request.GetAddress())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := databaseContext(address)
 	if err := schema.ValidateDatabaseContext(result); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	return result, nil
 }

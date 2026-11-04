@@ -7,6 +7,7 @@ import (
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -20,10 +21,10 @@ const maxSourceTokens = 65536
 // prefix. Native safety facts never infer that an unknown statement is safe.
 func Analyze(ctx context.Context, request *protocol.AnalyzeSQLRequest) (*protocol.SQLAnalysis, error) {
 	if request.GetEngine() != "ydb" {
-		return nil, status.Error(codes.InvalidArgument, "YDB SQL analysis requires engine ydb")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB SQL analysis requires engine ydb")
 	}
 	if len(request.Sources) > maxAnalysisSources || proto.Size(request) > maxAnalysisBytes {
-		return nil, status.Error(codes.ResourceExhausted, "YDB SQL analysis batch exceeds its limit")
+		return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB SQL analysis batch exceeds its limit")
 	}
 	result := &protocol.SQLAnalysis{Complete: true}
 	for _, source := range request.Sources {
@@ -36,7 +37,7 @@ func Analyze(ctx context.Context, request *protocol.AnalyzeSQLRequest) (*protoco
 		}
 		result.Files = append(result.Files, file)
 		if proto.Size(result) > maxAnalysisBytes {
-			return nil, status.Error(codes.ResourceExhausted, "YDB SQL analysis response exceeds its limit")
+			return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB SQL analysis response exceeds its limit")
 		}
 	}
 	if err := provider.ValidateSQLAnalysis(request, result); err != nil {
@@ -109,7 +110,7 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 		}
 		tokenCount++
 		if tokenCount > maxSourceTokens {
-			return nil, status.Error(codes.ResourceExhausted, "YDB SQL source exceeds its token limit")
+			return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB SQL source exceeds its token limit")
 		}
 		word := token.Value
 		if token.Type != TokenString && !strings.HasPrefix(word, "`") {
@@ -127,7 +128,7 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 		} else if len(file.Statements) > 0 {
 			file.Statements[len(file.Statements)-1].End = uint32(len(source))
 		} else {
-			return nil, status.Error(codes.InvalidArgument, "YDB SQL analysis requires an executable statement beside comments or terminators")
+			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB SQL analysis requires an executable statement beside comments or terminators")
 		}
 	}
 	return file, nil
@@ -160,8 +161,8 @@ func validateToken(token Token) error {
 	return nil
 }
 func invalidSource() error {
-	return status.Error(codes.InvalidArgument, "YDB SQL has invalid or incomplete lexical structure")
+	return runtime.ErrorWithReason(codes.InvalidArgument, "YDB SQL has invalid or incomplete lexical structure")
 }
 func unsupportedSetting() error {
-	return status.Error(codes.InvalidArgument, "YDB SQL analysis supports only the default lexer and syntax_v1 translation setting")
+	return runtime.ErrorWithReason(codes.InvalidArgument, "YDB SQL analysis supports only the default lexer and syntax_v1 translation setting")
 }

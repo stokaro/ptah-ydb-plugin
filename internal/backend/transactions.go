@@ -7,9 +7,11 @@ import (
 	"slices"
 	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -31,7 +33,7 @@ type transaction struct {
 // A begin RPC's lifetime is distinct from its database transaction lifetime.
 func (p *Provider) BeginTransaction(ctx context.Context, request *protocol.BeginTransactionRequest) (*protocol.Transaction, error) {
 	if err := provider.ValidateBeginTransactionRequest(request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, err := p.lookup(request.GetSessionId())
 	if err != nil {
@@ -40,7 +42,7 @@ func (p *Provider) BeginTransaction(ctx context.Context, request *protocol.Begin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -53,7 +55,7 @@ func (p *Provider) BeginTransaction(ctx context.Context, request *protocol.Begin
 		return nil, err
 	}
 	if s.active != "" {
-		return nil, status.Error(codes.FailedPrecondition, "YDB session has an active transaction")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session has an active transaction")
 	}
 	ctx, stopBegin := context.WithTimeout(ctx, 30*time.Second)
 	defer stopBegin()
@@ -91,10 +93,10 @@ func (p *Provider) BeginTransaction(ctx context.Context, request *protocol.Begin
 
 func (s *session) reserveTransaction(id string) (*transaction, error) {
 	if s.transactions[id] != nil {
-		return nil, status.Error(codes.AlreadyExists, "YDB transaction handle was already reserved")
+		return nil, runtime.ErrorWithReason(codes.AlreadyExists, "YDB transaction handle was already reserved")
 	}
 	if len(s.transactions) >= transactionLimit {
-		return nil, status.Error(codes.ResourceExhausted, "YDB transaction handle limit reached; open another session")
+		return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB transaction handle limit reached; open another session")
 	}
 	if s.transactions == nil {
 		s.transactions = make(map[string]*transaction)
@@ -108,10 +110,10 @@ func (s *session) reserveTransaction(id string) (*transaction, error) {
 // unused handle is fenced, so a rollback arriving before begin cannot be lost.
 func (p *Provider) FinishTransaction(ctx context.Context, request *protocol.FinishTransactionRequest) (*protocol.TransactionResult, error) {
 	if err := provider.ValidateTransactionRequest(request.GetSessionId(), request.GetTransactionId()); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if err := provider.ValidateTransactionAction(request.GetAction()); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	s, err := p.lookup(request.SessionId)
 	if err != nil {
@@ -120,7 +122,7 @@ func (p *Provider) FinishTransaction(ctx context.Context, request *protocol.Fini
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()

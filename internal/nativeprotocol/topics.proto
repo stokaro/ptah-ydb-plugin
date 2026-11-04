@@ -96,7 +96,8 @@ message ChangefeedObservations { repeated ObservedChangefeed changefeeds = 1; }
 message ObservedChangefeed {
     ChangefeedDescription description = 1;
     DescribeTopicResult topic = 2;
-    // Presence of the native initial_scan_progress records the requested scan
-    // even after it completes. Progress counters themselves are not schema.
+    // Records the requested scan: the native initial_scan_progress, which stays
+    // after the scan completes, or STATE_INITIAL_SCAN, which YDB reports before
+    // the first progress. Progress counters themselves are not schema.
     bool initial_scan = 3;
 }

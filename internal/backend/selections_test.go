@@ -1,6 +1,8 @@
 package backend_test
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -40,7 +42,48 @@ func TestScopeSelectionsNegotiation(t *testing.T) {
 	}
 	c.Assert(kinds, qt.ContentEquals, []string{schema.SecretProperties, schema.StreamingQueryProperties,
 		schema.CoordinationProperties, schema.TopicProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties,
-		schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties})
+		schema.ReplicationProperties, schema.TransferProperties, schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties})
+}
+
+// Every object with an access list of its own has a selection, so the host
+// reads a grant on it as a grant on that object, by the type the host's
+// embedded engine names it with. The host spells the grant's target kind as
+// the type in lower case, and the provider renders a GRANT on that kind.
+func TestScopeSelectionsNameEveryObjectWithAnAccessList(t *testing.T) {
+	tests := []struct {
+		kind, selector, grant, capability string
+		// directory holds the object; a resource pool belongs to the
+		// database and has none.
+		directory string
+	}{
+		{kind: schema.SecretProperties, selector: "secret", grant: "SECRET", capability: "secrets", directory: "app"},
+		{kind: schema.StreamingQueryProperties, selector: "streaming_query", grant: "STREAMING QUERY", capability: "streaming_queries", directory: "app"},
+		{kind: schema.CoordinationProperties, selector: "coordination_node", grant: "COORDINATION NODE", capability: "coordination_nodes", directory: "app"},
+		{kind: schema.TopicProperties, selector: "topic", grant: "TOPIC", capability: "topics", directory: "app"},
+		{kind: schema.ExternalSourceProperties, selector: "external_data_source", grant: "EXTERNAL DATA SOURCE", capability: "external_data_sources", directory: "app"},
+		{kind: schema.ExternalTableProperties, selector: "external_table", grant: "EXTERNAL TABLE", capability: "external_data_sources", directory: "app"},
+		{kind: schema.ReplicationProperties, selector: "async_replication", grant: "ASYNC REPLICATION", capability: "async_replication", directory: "app"},
+		{kind: schema.TransferProperties, selector: "transfer", grant: "TRANSFER", capability: "transfers", directory: "app"},
+		{kind: schema.ResourcePoolProperties, selector: "resource_pool", grant: "RESOURCE POOL", capability: "resource_pools"},
+	}
+	selections := provider.NegotiatedDescription(backend.Description(), []string{provider.ScopeSelectionsFeature}).Engines[0].ScopeSelections
+	for _, test := range tests {
+		t.Run(test.selector, func(t *testing.T) {
+			c := testcheck.New(t)
+			index := slices.IndexFunc(selections, func(selection *protocol.ScopeSelection) bool { return selection.Kind == test.kind })
+			c.Assert(index >= 0, qt.IsTrue, qt.Commentf("no selection for %s", test.kind))
+			c.Assert([]string{selections[index].SelectorType, selections[index].GrantObjectType}, qt.DeepEquals, []string{test.selector, test.grant})
+			target := &protocol.Reference{Engine: "ydb", Kind: strings.ToLower(test.grant), Schema: test.directory, Name: "object"}
+			rendered, err := backend.New().Render(c.Context(), &protocol.RenderRequest{Engine: "ydb", Form: protocol.RenderRequest_TEXT,
+				TargetFeatures: []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.TextUnitsFeature},
+				Capabilities:   map[string]bool{"transactional_ddl": false, "role_management": true, "relative_grant_paths": true, test.capability: true},
+				Changes: []*protocol.Change{{Id: "grant", Object: target, Operation: &protocol.Change_CommonObject{CommonObject: &protocol.CommonObjectChange{
+					Operation: &protocol.CommonObjectChange_Grant{Grant: &protocol.SQLGrant{Role: "reader", Privileges: []string{"SELECT"}, Target: target}}}}}}})
+			c.Assert(err, qt.IsNil)
+			c.Assert(rendered.Units, qt.HasLen, 1)
+			c.Assert(rendered.Units[0].GetSql(), qt.Matches, "GRANT 'ydb.generic.read' ON `.*object` TO `reader`;")
+		})
+	}
 }
 
 func TestClassifierScopeKeepsItsPool(t *testing.T) {

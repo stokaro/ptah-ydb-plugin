@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretvalue"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -20,18 +21,18 @@ var _ provider.ExecutionInputDescriber = (*Provider)(nil)
 // names. It performs no I/O and never reads the provider process environment.
 func (*Provider) DescribeExecutionInputs(ctx context.Context, request *protocol.DescribeExecutionInputsRequest) (*protocol.ExecutionInputs, error) {
 	if err := provider.ValidateExecutionInputsRequest(Description(), request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	inputs, err := requiredInputs(ctx, request.Units)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.ExecutionInputs{Complete: true, Inputs: inputs}
 	if err := provider.ValidateExecutionInputs(Description(), request, result); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
 }

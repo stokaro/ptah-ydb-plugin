@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
@@ -21,8 +22,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type sqlExecutor interface {
@@ -34,7 +35,7 @@ type sqlExecutor interface {
 // and cannot join a SQL transaction. Unknown outcomes are never retried.
 func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest) (*protocol.Execution, error) {
 	if request.GetSessionId() == "" || request.GetRequestId() == "" || len(request.GetUnits()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "session, request ID, and units are required")
+		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "session, request ID, and units are required")
 	}
 	hasSQL, hasNative := false, false
 	// services are the SQL units that run one of Ptah's comment or
@@ -44,7 +45,7 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	// Pure validation covers the whole batch before any prefix can execute.
 	for _, unit := range request.Units {
 		if err := provider.ValidateUnit(unit); err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
+			return nil, authored.Status(codes.InvalidArgument, err)
 		}
 		switch unit.Body.(type) {
 		case *protocol.Unit_Sql:
@@ -89,7 +90,7 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, status.Error(codes.FailedPrecondition, "YDB session is closed")
+		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
 	if !s.capabilities["secrets"] {
 		for _, unit := range request.Units {
@@ -467,7 +468,7 @@ func (p *Provider) lookup(id string) (*session, error) {
 	s := p.sessions[id]
 	p.mu.Unlock()
 	if s == nil {
-		return nil, status.Error(codes.NotFound, "unknown YDB session")
+		return nil, runtime.ErrorWithReason(codes.NotFound, "unknown YDB session")
 	}
 	return s, nil
 }

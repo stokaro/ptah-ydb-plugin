@@ -4,6 +4,7 @@ package nativeapi
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -61,9 +62,28 @@ func (s *Table) Close() error {
 // Status requires a completed successful operation and omits native diagnostics.
 func Status(op *Ydb_Operations.Operation) error {
 	if !op.GetReady() || op.GetStatus() != Ydb.StatusIds_SUCCESS {
-		return fmt.Errorf("YDB operation failed: ready=%t status=%s", op.GetReady(), op.GetStatus())
+		return &statusError{ready: op.GetReady(), status: op.GetStatus()}
 	}
 	return nil
+}
+
+// statusError is an operation YDB did not complete successfully. It keeps the
+// status so that a caller in this package can tell one answer from another;
+// its text names the status and nothing of the server's diagnostics.
+type statusError struct {
+	ready  bool
+	status Ydb.StatusIds_StatusCode
+}
+
+func (e *statusError) Error() string {
+	return fmt.Sprintf("YDB operation failed: ready=%t status=%s", e.ready, e.status)
+}
+
+// isSchemeError reports an operation YDB completed with SCHEME_ERROR, its
+// answer for a path that does not exist and for one the session may not see.
+func isSchemeError(err error) bool {
+	failed, ok := errors.AsType[*statusError](err)
+	return ok && failed.ready && failed.status == Ydb.StatusIds_SCHEME_ERROR
 }
 
 // Operation decodes a completed operation without dropping unknown fields.

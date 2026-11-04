@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
@@ -95,7 +96,7 @@ func assessUnchanged(request *protocol.PlanFeaturesRequest, builder *lifecycleBu
 		return nil, fmt.Errorf("restarting a streaming query requires established streaming_queries and nontransactional DDL")
 	}
 	if _, known := request.Capabilities["transactional_ddl"]; !known {
-		return nil, fmt.Errorf("the DDL transaction capability was not established")
+		return nil, authored.New("the DDL transaction capability was not established")
 	}
 	if err := survivingInputs(request, after); err != nil {
 		return nil, err

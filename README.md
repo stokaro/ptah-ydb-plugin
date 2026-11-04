@@ -71,8 +71,8 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.11.1-0.20261102235223-72d2bd2e6503, a
-pseudo-version of the SDK that speaks provider contract 25.12. The provider
+The module pins `provider-sdk` v0.14.1-0.20261104150804-7e71a23c3a16, a
+pseudo-version of the SDK that speaks provider contract 25.16. The provider
 still requires 25.7 of its host and offers each later feature to a host that
 lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -700,13 +700,17 @@ compatibility is owed. Configure that reserved node explicitly before using it.
 The provider finds the node by describing its path rather than by listing the
 database root, so a user granted the node takes the lock without the right to
 list the root. A server that refuses the user the lock is answered with
-PermissionDenied, and the message names the step and the right: the node is
+PermissionDenied, and the reason names the step and the right: the node is
 missing and the user may not create it, the user may not use the node, or the
 server refused the session on the node. The first two are the host's embedded
 engine's words. For the third that engine reports a timeout, because its SDK
 retries a refused session without saying why, while the server answers at once
-with UNAUTHORIZED. The SDK hands the host the code of the refusal and not its
-message.
+with UNAUTHORIZED. A host that lists `errors.reasons` prints the reason after
+the code; see [Error reasons](#error-reasons).
+
+A `TryLock` that takes no lock says why in its receipt: another session holds
+the lock, the session has an active transaction, it lost a lock guarantee, or
+it already holds 16 locks.
 
 Acquisition is nonblocking. Only a confirmed BUSY permits the host to try a new
 handle under its wait policy. Handles are single-use and bound to the exact
@@ -743,6 +747,27 @@ nontransactional DDL atomic with ownership. Live tests cover competing provider
 processes, independent names, immediate takeover after confirmed close, process
 exit, node removal, and refusal of execution/history/commit after loss. Controlled
 clock tests cover stale confirmations without relying on a scheduled watcher.
+
+## Error reasons
+
+The provider lists `errors.reasons`, so a host that lists it too prints why a
+call failed after its gRPC code:
+
+```text
+provider compare models failed (InvalidArgument): streaming query capability was not established
+```
+
+A reason is a sentence the provider wrote. It names the subject, a capability
+or a parameter, and never quotes statement text, a value, an address or a
+credential. Package `internal/authored` keeps such sentences apart from the
+errors the provider receives: `authored.New` marks one, and `authored.Status`
+sends it as the reason, with the error's whole text as the status message,
+which no host prints. The reasons the provider gives are its refusals of a
+connection address, of a capability the target lacks, of a lock the server
+refuses this user, and the refusals whose text is a fixed sentence, such as a
+closed session or a reached handle limit. A YDB driver's error is never a
+reason, because YDB can quote a statement and its values, or a credential
+source: the host prints its code alone.
 
 ## Operational storage reservations
 
@@ -823,8 +848,17 @@ Unknown native fields and enum values are refused before JSON conversion.
 Shared topic consumers and unextracted native object kinds refuse inspection.
 A table an async replication writes is left out of the tables, and the
 replication's items name it (see [Async replications and
-transfers](#async-replications-and-transfers)). A failed traversal returns no
-snapshot.
+transfers](#async-replications-and-transfers)). Right after `CREATE ASYNC
+REPLICATION`, YDB can list the replica while DescribeTable still answers
+SCHEME_ERROR. So a row table a listing names and the table service answers
+SCHEME_ERROR for is described again for up to 10 seconds, and the directory is
+listed again before each wait. The topic of a changefeed is waited for the
+same way, with its table described again before each wait: the changefeed the
+replication adds to its source table can be named before DescribeTopic
+describes its topic. The read fails if the new listing or description stops
+naming the object, if it fails, or if the object is still not described when
+the time runs out; it never reads such an object as absent. A failed traversal
+returns no snapshot.
 These limitations preserve data for the remaining extraction work.
 
 Observed property models use YDB's typed protocol definitions inside this
@@ -842,7 +876,10 @@ Changefeed observations combine the table API description with a topic API
 read for each child stream. They retain modes, formats, state, retention,
 consumers, access metadata, and attributes, including replication bindings.
 Initial scan presence is retained after completion; progress counters are
-excluded. An empty changefeed facet records absence on its inspected table.
+excluded. A changefeed in `STATE_INITIAL_SCAN` asked for a scan even before YDB
+reports its first progress, as for the changefeed `CREATE ASYNC REPLICATION`
+adds to a source table. An empty changefeed facet records absence on its
+inspected table.
 Standalone topics use the same reader and normalization rules, with their own
 object identities.
 
@@ -1757,6 +1794,13 @@ against the common steps at those paths; a transfer reads its table and a local
 topic. A drop of a failed-over replication runs without `CASCADE` and keeps its
 tables. The provider never pauses, resumes or fails over an object.
 
+A grant names a replication or a transfer by its directory and name
+(`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
+path. The planner puts a GRANT or a REVOKE after the creation or the change of
+its object, and a drop replaces the REVOKE the host planned, since YDB drops an
+object's access list with it and a REVOKE after the drop would name a path that
+is gone. A change in place, such as a new lambda, keeps the entries.
+
 Execution reads the object before the statement and refuses one that changed
 since the plan read it, runs the statement once, and reads the object back. The
 statement names the object, the replica targets, the transfer's table and a
@@ -1786,7 +1830,10 @@ changefeed into a table, moves a row through it, changes its lambda and drops
 it, and `TestTransferRefusedWithoutTheCapabilitySubprocess` checks the refusal on
 a line without transfers. `TestHostAppliesAnAsyncReplication_HappyPath` and
 `TestHostAppliesATransfer_HappyPath` drive `ptah schema apply` from YAML through
-the same steps. Each needs a server whose gRPC services include replication.
+the same steps. `TestHostGrantsOnAnAsyncReplication_HappyPath` and
+`TestHostGrantsOnATransfer_HappyPath` grant a user a permission in the plan that
+creates the object, keep it through a change in place and drop the object
+without a REVOKE. Each needs a server whose gRPC services include replication.
 
 ## Resource pools and classifiers
 
@@ -3162,12 +3209,16 @@ and an untyped null as `Void`, as a plain null binds. So a Go `int32` writes an
 null into an `Optional<Utf8>` one. A typed timestamp outside the `Timestamp`
 range is refused rather than bound as a `Timestamp64`.
 
-The negotiated `scope.selections` declaration makes coordination nodes, topics,
-external data sources and external tables selectable by their directory and
-name. Resource pools and classifiers use database-wide names, including literal
-dots. A kept classifier keeps the pool it requires when the input contains that
-pool; an explicit exclusion of the pool still wins. Grants follow the object
-their target names.
+The negotiated `scope.selections` declaration makes secrets, streaming queries,
+coordination nodes, topics, external data sources, external tables, async
+replications and transfers selectable by their directory and name. Resource
+pools and classifiers use database-wide names, including literal dots. A kept
+classifier keeps the pool it requires when the input contains that pool; an
+explicit exclusion of the pool still wins. Grants follow the object their
+target names: each kind except the classifier declares the grant object type
+the host's embedded engine names it with, such as `ASYNC REPLICATION` or
+`TRANSFER`. A grant on a type no selection declares is read as a grant on a
+table of the same name, so a scoped plan would leave it out.
 
 ## Extraction still required
 

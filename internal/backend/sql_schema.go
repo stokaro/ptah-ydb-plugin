@@ -3,6 +3,7 @@ package backend
 import (
 	"context"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -23,7 +24,7 @@ func sqlSchemaDeclaration() *protocol.SQLSchemaDeclaration {
 // partial schema.
 func (*Provider) ReadSQLSchema(ctx context.Context, request *protocol.ReadSQLSchemaRequest) (*protocol.SQLSchema, error) {
 	if err := provider.ValidateReadSQLSchemaRequest(Description(), request); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -33,7 +34,7 @@ func (*Provider) ReadSQLSchema(ctx context.Context, request *protocol.ReadSQLSch
 		return nil, status.FromContextError(err).Err()
 	}
 	if err := provider.ValidateSQLSchema(Description(), request, reply); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, authored.Status(codes.Internal, err)
 	}
 	return reply, nil
 }
