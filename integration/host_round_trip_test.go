@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
@@ -129,6 +130,13 @@ func TestHostAppliesTheRoundTripSchema_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
+	c.Cleanup(func() {
+		// emptyTree quotes a name as it is, and a backquote in the name
+		// ends the quoted identifier, so this table goes first, escaped.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		c.Check(execFixtureSchema(ctx, opened.DB, "DROP TABLE IF EXISTS `"+path.Join(database, directory, "tick\\`name.with.dot")+"`"), qt.IsNil)
+	})
 	selectors := directory + "," + directory + "/archive"
 
 	applyUntilSynced(c, selectors, "yaml", roundTripSchema(directory, targetCapabilities(c)))
