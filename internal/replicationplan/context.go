@@ -85,7 +85,7 @@ func keptReplicaRefusal(request *protocol.PlanFeaturesRequest, subject *protocol
 // subject names.
 func dropped(request *protocol.PlanFeaturesRequest, subject *protocol.ComparisonIdentity) bool {
 	for _, change := range request.GetChanges() {
-		if provider.CompareIdentities(change.Subject, subject) != 0 {
+		if !sameObject(change.Subject, subject) {
 			continue
 		}
 		_, after, err := schema.ReplicationOperands(change.GetValue().GetValue())
@@ -96,9 +96,21 @@ func dropped(request *protocol.PlanFeaturesRequest, subject *protocol.Comparison
 
 func record(state *protocol.ComparisonState, subject *protocol.ComparisonIdentity) *protocol.ComparisonRecord {
 	for _, candidate := range state.GetRecords() {
-		if candidate.GetKind() == schema.ReplicationProperties && provider.CompareIdentities(candidate.Subject, subject) == 0 {
+		if candidate.GetKind() == schema.ReplicationProperties && sameObject(candidate.Subject, subject) {
 			return candidate
 		}
 	}
 	return nil
+}
+
+// sameObject reports whether two identities name one replication. The host
+// names a declared replication without its database and a read one with the
+// session's, and a plan runs in one database, so the database is not
+// compared: compared, the declaration of a replication the plan keeps is
+// never found beside the read one, and the plan drops a failed-over replica
+// the schema leaves out, measured on 25.1.4.7 and 26.2.1.14.
+func sameObject(a, b *protocol.ComparisonIdentity) bool {
+	a, b = proto.CloneOf(a), proto.CloneOf(b)
+	a.Database, b.Database = &protocol.ComparisonPart{}, &protocol.ComparisonPart{}
+	return provider.CompareIdentities(a, b) == 0
 }
