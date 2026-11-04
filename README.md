@@ -218,6 +218,9 @@ reports the defaults of every supported line.
 | `secrets` | `EnableSchemaSecrets` | `false` through 25.3, `true` from 25.4 |
 | `vector_indexes` | `EnableVectorIndex` | `false` on 25.1, `true` from 25.2 |
 | `full_text_indexes` | `EnableFulltextIndex` | `false` through 26.1, `true` from 26.2 |
+| `local_bloom_indexes` | `EnableLocalBloomFilterIndex` | `false` through 26.1, `true` from 26.2 |
+| `local_ngram_indexes` | `EnableLocalBloomNgramFilterIndex` | `false` through 26.1, `true` from 26.2 |
+| `local_min_max_indexes` | `EnableLocalMinMaxIndex` | `false` on every line from 25.1 to 26.2 |
 
 The release line alone decides the other vector capabilities, as the host's
 line presets name them: `vector_index_maintained_on_write` from 25.3 (an index
@@ -1205,12 +1208,36 @@ key column in a column table, and a Go field marked primary is nullable unless
 it says `not_null`. The table is read back from the table service and the
 monitoring endpoint and must hold the declared columns and key, the declared
 hash key or, without one, the whole key, the declared shard count, the declared
-TTL and no local index. A creation in a session whose address names no
-monitoring endpoint is refused before anything is written. A tier that moves
+TTL and the declared local indexes. A creation in a session whose address names
+no monitoring endpoint is refused before anything is written. A tier that moves
 rows needs the `tiered_ttl` capability, which a session reads from
 `EnableTieringInColumnShard`; without it the plan is refused with the reason.
-Column defaults, Serial columns, column families, indexes, local indexes and a
-data channel count other than the server's 64 are refused.
+Column defaults, Serial columns, column families, global indexes and a data
+channel count other than the server's 64 are refused. A TTL column has to be
+first in the key: the host's embedded engine also takes one later in the key
+that a min_max local index reads, which 26.2.1.14 refuses with the index in
+place (`Haven't MAX-index for TTL column and TTL column is not first column in
+primary key`), so the provider refuses it before a statement is sent.
+
+Local indexes. The column-storage facet states a column table's local indexes
+as its read describes them: a `bloom` (`bloom_filter`), an `ngram`
+(`bloom_ngram_filter`) or a `minMax` (`min_max`) index, each over one column,
+with its settings. A setting the declaration leaves out is the server's
+default: a probability of 0.1, an n-gram size of 3 and case-sensitive
+matching. The storage YDB places an index in is not part of a declaration, and
+the comparison leaves it out, since YDB describes an index created with its
+table in other storage than one added later. An index reads one column
+(26.2.1.14 answers `Local bloom index on column tables requires exactly one
+index column`, where the host's embedded engine takes several for a bloom
+index), an n-gram index a `Utf8` one, an n-gram size is 3 to 8, and a
+probability gives at most 8 n-gram hashes, as that engine requires. Each kind
+needs its capability (see [Feature flags](#feature-flags)); 25.1 has no local
+index grammar at all (`local: alternative is not implemented yet`). A new
+table's local indexes are written inside its CREATE TABLE, as ``INDEX `bf`
+LOCAL USING bloom_filter ON (`body`) WITH (false_positive_probability =
+0.01)``, every setting named. No Go or YAML source declares a local index yet: the host turns
+an index directive into a common index, whose model has no place for the
+settings, and the provider refuses the settings where it decodes them.
 
 Comparison and planning. The comparison `ydb-row-table-properties` compares the
 column-storage facet of a table that exists on both sides, and reports a
@@ -1224,9 +1251,29 @@ creates the table and copies no column table into a new one, so the planner
 refuses each of these changes with the host's words (`changing between row and
 column storage requires an explicit data migration`, `changing a column
 table's hash key or shard count requires an explicit data migration`, with both
-values; `column-table rebuilds require an explicit data migration`). A change of
-its local indexes and any column step of a column table are refused as not
-planned yet.
+values; `column-table rebuilds require an explicit data migration`). A column step of
+a column table is refused as not planned yet.
+
+The local indexes are managed when the declaration states at least one: an
+index the table holds and the declaration leaves out is dropped, and a
+declaration that states none leaves the table's own alone, since no other
+source declares them. Each change is one step in the lifecycle phase,
+`column-table-add-local-index/N` or `column-table-drop-local-index/N`, of the
+operation kind `column-table-local-index-operation`, running `ALTER TABLE ...
+ADD INDEX ... LOCAL USING ...` or `ALTER TABLE ... DROP INDEX ...` through the
+query service. An index whose kind, column or settings differ is dropped and
+added again under its name, the removal first, and a renamed index is dropped
+under its old name and added under its new one, as the host's embedded engine
+plans both on a target without `index_rename`, which this provider never
+reports. 26.2.1.14 also renames a local index (`RENAME INDEX`) and changes its
+probability in place (`ALTER INDEX ... SET (false_positive_probability = ...)`),
+which neither engine plans. Only an index a plan adds needs its capability.
+Execution reads the table from the table service and the monitoring endpoint
+and refuses before it writes when the table holds an index of the name to add,
+lacks its column or holds it with another type than an n-gram index reads, or
+holds the index to drop otherwise than the plan captured it; after the call it
+requires the added index to read back as requested or the dropped one to be
+gone, and every other local index, the layout and the TTL to be unchanged.
 
 The TTL changes in place, as the host's embedded engine changes it: `ALTER
 TABLE ... RESET (TTL)` removes the TTL the table holds and `ALTER TABLE ... SET

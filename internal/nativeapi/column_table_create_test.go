@@ -221,8 +221,8 @@ func TestColumnTableCreationConfirmsTheWholeKeyAsTheHashKey(t *testing.T) {
 }
 
 // TestColumnTableCreationRefusesUnexpectedLocalIndexes leaves the creation
-// unconfirmed when the table reads back with local indexes nobody asked for,
-// as a page from local-ydb 26.2.1.14 holds them
+// unconfirmed when the table reads back with local indexes the request does
+// not state, as a page from local-ydb 26.2.1.14 holds them
 // (internal/columnstore/testdata/26-2-indexes).
 func TestColumnTableCreationRefusesUnexpectedLocalIndexes(t *testing.T) {
 	c := testcheck.New(t)
@@ -237,7 +237,7 @@ func TestColumnTableCreationRefusesUnexpectedLocalIndexes(t *testing.T) {
 	operation := tableOperation(c, &protocol.DeclaredTable{Name: "col_index_probe", PrimaryKey: []string{"id"},
 		Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "body", Type: "Utf8", Nullable: true}}}, `{"hashColumns":["id"]}`)
 	dispatched, err := fixture.api().Apply(t.Context(), "/local", operation.Value, func(context.Context) error { return nil })
-	c.Assert(err, qt.ErrorMatches, `YDB created column table has unexpected local indexes`)
+	c.Assert(err, qt.ErrorMatches, `YDB created column table local indexes differ from the request`)
 	c.Assert(dispatched, qt.IsTrue)
 }
 

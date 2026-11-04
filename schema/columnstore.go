@@ -46,7 +46,7 @@ func normalizeColumnStorage(value *native.ColumnStorageObservation) error {
 	if value.Partitions > math.MaxUint32 {
 		return fmt.Errorf("column shard count exceeds a 32-bit integer")
 	}
-	if err := validateLocalIndexes(value.LocalIndexes); err != nil {
+	if err := validateLocalIndexes(value.LocalIndexes, false); err != nil {
 		return err
 	}
 	slices.SortFunc(value.LocalIndexes, func(a, b *native.LocalIndexObservation) int { return cmp.Compare(a.Name, b.Name) })
@@ -65,7 +65,7 @@ func validateColumnStorageIntent(value *native.ColumnStorageIntent) error {
 	if value.Partitions > math.MaxUint32 {
 		return fmt.Errorf("column shard count exceeds a 32-bit integer")
 	}
-	if err := validateLocalIndexes(value.LocalIndexes); err != nil {
+	if err := validateLocalIndexes(value.LocalIndexes, true); err != nil {
 		return err
 	}
 	return validateDesiredColumnTTL(value.Ttl)
@@ -111,9 +111,19 @@ func validateDesiredColumnTTL(policy *native.ColumnTTLPolicy) error {
 	return nil
 }
 
+// ValidateDeclaredLocalIndexes checks local indexes of a column table as a
+// declaration, and the operations a declaration becomes, may state them:
+// distinct valid names, distinct columns, one kind with the encodings YDB
+// writes, a probability strictly between 0 and 1, and no storage or the
+// storage YDB writes.
+func ValidateDeclaredLocalIndexes(indexes []*native.LocalIndexObservation) error {
+	return validateLocalIndexes(indexes, true)
+}
+
 // validateLocalIndexes checks the local indexes of a column table, in either
-// representation.
-func validateLocalIndexes(indexes []*native.LocalIndexObservation) error {
+// representation. A read describes the storage YDB placed each index in; a
+// declaration may leave it out, since no statement names it.
+func validateLocalIndexes(indexes []*native.LocalIndexObservation, declared bool) error {
 	names := map[string]bool{}
 	for _, index := range indexes {
 		if !componentName(index.GetName()) || names[index.Name] || !distinctColumns(index.Columns) {
@@ -143,6 +153,9 @@ func validateLocalIndexes(indexes []*native.LocalIndexObservation) error {
 		}
 		if probability != nil && (math.IsNaN(*probability) || math.IsInf(*probability, 0) || *probability <= 0 || *probability >= 1) {
 			return fmt.Errorf("invalid YDB local index probability")
+		}
+		if declared && index.StorageId == "" && !index.InheritPortionStorage {
+			continue
 		}
 		if index.GetMinMax() != nil {
 			if index.StorageId != "__LOCAL_METADATA" || index.InheritPortionStorage {
