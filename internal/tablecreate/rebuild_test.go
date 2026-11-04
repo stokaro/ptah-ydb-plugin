@@ -223,3 +223,29 @@ func TestRebuildPlanRefusesVectorAndFullTextIndexes(t *testing.T) {
 		})
 	}
 }
+
+// A rebuild writes into the new table every family the old one holds, the
+// default family's own settings and a family no column sits in included,
+// and places each column where the old table holds it, when the
+// declaration states none of them: a cluster's table profile may have given
+// them, and YQL drops neither a family nor a setting. Without that the new
+// table would lose the default family's compression and the empty family.
+func TestRebuildPlanKeepsTheFamiliesTheTableHolds(t *testing.T) {
+	check := testcheck.New(t)
+	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+	held := alterRequest(check, alterCase{heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default","compression":"COMPRESSION_LZ4"},` +
+		`{"name":"cold","data":{"media":"hdd"},"compression":"COMPRESSION_NONE"},{"name":"extra","compression":"COMPRESSION_LZ4"}]}`,
+		heldColumns: map[string]string{"payload": `{"family":"cold"}`}, held: []string{"payload"}})
+	request.Tables[0].Current.Features = held.Tables[0].Current.Features
+	plan, err := backend.New().PlanFeatures(check.Context(), request)
+	check.Assert(err, qt.IsNil)
+	check.Assert(plan.Diagnostics, qt.HasLen, 0)
+
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
+	rendering.Form = protocol.RenderRequest_TEXT
+	rendered, err := backend.New().Render(check.Context(), rendering)
+
+	check.Assert(err, qt.IsNil)
+	check.Assert(rendered.Units[0].GetSql(), qt.Equals, "CREATE TABLE `app/__ptah_rebuild_records` (\n    `id` Uint64 NOT NULL,\n    `payload` Utf8 FAMILY `cold`,\n    `n` Int64,\n"+
+		"    PRIMARY KEY (`id`),\n    FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'off'),\n    FAMILY `default` (COMPRESSION = 'lz4'),\n    FAMILY `extra` (COMPRESSION = 'lz4')\n);")
+}

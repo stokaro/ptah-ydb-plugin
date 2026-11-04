@@ -2502,9 +2502,16 @@ converted with `CAST` and unwrapped, so a value that does not convert fails the
 copy with a message naming the table and the column instead of becoming NULL;
 a column made NOT NULL is unwrapped too, which fails the copy on a NULL row.
 The new table keeps the old table's attributes, and with them the comments Ptah
-keeps there, but none of its storage settings: what the declaration states is
-what it gets. Without the policy, the change is refused in the embedded
-engine's words, naming the request the host passes, such as
+keeps there, and each storage setting the declaration does not state, as the
+old table holds it: every column family, the default one and one no column
+sits in included, with the settings the declaration leaves out, the family each
+column sits in, the automatic partitioning, the read replicas, the key bloom
+filter, and the TTL where the declaration states no table properties. A
+cluster's table profile may have given the old table any of them, and YQL
+drops neither a family nor a setting, so a rebuild changes none that nobody
+declared. The new table's indexes take YDB's defaults rather than the
+partitioning their old indexes hold. Without the policy, the change is refused
+in the embedded engine's words, naming the request the host passes, such as
 `--allow-table-rebuild`.
 
 Every step writes as a YQL statement in the TEXT form, so a migration file
