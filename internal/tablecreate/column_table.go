@@ -122,8 +122,10 @@ func compileColumnTableColumns(result *native.ColumnTableCreation, table *protoc
 			marked = append(marked, column.GetName())
 		}
 	}
+	// As for a row table, the columns marked primary make the key in the
+	// order the declaration lists them when it orders none.
 	if len(result.PrimaryKey) == 0 {
-		if len(marked) != 1 {
+		if len(marked) == 0 {
 			return unsupported("YDB table creation requires an ordered primary key")
 		}
 		result.PrimaryKey = slices.Clone(marked)

@@ -160,8 +160,12 @@ func compileRowColumns(result *Ydb_Table.CreateTableRequest, table *protocol.Dec
 			return nil, fmt.Errorf("YDB column properties name no declared column")
 		}
 	}
+	// A declaration that orders no key takes the columns it marks primary
+	// in the order it declares them, as the host's embedded engine does:
+	// measured with host v0.19.0, a YAML table with two such columns is
+	// created with PRIMARY KEY (first, second) in declaration order.
 	if len(result.PrimaryKey) == 0 {
-		if len(marked) != 1 {
+		if len(marked) == 0 {
 			return nil, unsupported("YDB table creation requires an ordered primary key")
 		}
 		result.PrimaryKey = slices.Clone(marked)
