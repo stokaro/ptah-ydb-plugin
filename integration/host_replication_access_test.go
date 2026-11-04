@@ -83,9 +83,8 @@ func principalName(prefix string) string {
 // REVOKE, since a REVOKE after the drop would name a path that is gone.
 //
 // The source table is applied first, as TestHostAppliesAnAsyncReplication_HappyPath
-// applies it: the replication planner does not order a creation after the
-// creation of a table it replicates, and a replication created before its
-// source never makes its replica. The host's engine plans both in one run.
+// applies it; TestHostCreatesAReplicationAfterItsSourceTable_HappyPath plans
+// both in one run.
 func TestHostGrantsOnAnAsyncReplication_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -135,9 +134,8 @@ func TestHostGrantsOnAnAsyncReplication_HappyPath(t *testing.T) {
 // a REVOKE. The transfer reads through a consumer the changefeed declares, as
 // TestHostAppliesATransfer_HappyPath does, because the provider does not adopt
 // the consumer YDB would create. The tables and the changefeed are applied
-// first, as that test applies them: the transfer planner orders a creation
-// after its table but not after the changefeed whose topic it reads, which
-// another planning service adds.
+// first, as that test applies them; TestHostCreatesATransferAfterItsChangefeed_HappyPath
+// plans a transfer and its changefeed in one run.
 func TestHostGrantsOnATransfer_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
