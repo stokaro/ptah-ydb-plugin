@@ -58,11 +58,30 @@ type description struct {
 	changefeeds []*native.ChangefeedDescription
 }
 
+// describeListedTable describes the row table name, which the listing of the
+// absolute directory named. It waits out a table the listing names before the
+// table service describes it, such as the replica an async replication is
+// still creating; see [nativeapi.DescribeListedTable].
+func (s *source) describeListedTable(ctx context.Context, directory, name string) (*description, error) {
+	result, err := nativeapi.DescribeListedTable(ctx, s.owner.Describe, s.directory, directory, name)
+	if err != nil {
+		return nil, err
+	}
+	return classifyTable(path.Join(directory, name), result)
+}
+
+// describeTable describes the row table at absolute, which no listing named.
 func (s *source) describeTable(ctx context.Context, absolute string) (*description, error) {
 	result, err := s.owner.Describe(ctx, absolute)
 	if err != nil {
 		return nil, err
 	}
+	return classifyTable(absolute, result)
+}
+
+// classifyTable reads the description of the row table at absolute into its
+// reservation, its own description and its child objects.
+func classifyTable(absolute string, result *native.DescribeTableResult) (*description, error) {
 	// Classify before projecting children away: a marked table with an index
 	// or changefeed is altered storage and must not be silently hidden.
 	owned, err := history.Owned(path.Base(absolute), result)

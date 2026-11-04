@@ -5,8 +5,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -146,4 +148,74 @@ func TestUnknownConsumerArmsAndNestedMissingMessagesCannotDisappear(t *testing.T
 	value, err := schema.CaptureChangefeeds(tableOwner(), incomplete)
 	c.Assert(value, qt.IsNil)
 	c.Assert(err, qt.IsNotNil)
+}
+
+// initialScanRows are changefeeds as YDB reports them at each point of an
+// initial scan, and whether each asked for one.
+var initialScanRows = []struct {
+	name     string
+	state    native.ChangefeedDescription_State
+	progress *native.ChangefeedDescription_InitialScanProgress
+	want     bool
+}{
+	// 25.1.4.7 reports this right after CREATE ASYNC REPLICATION adds its
+	// changefeed to the source table.
+	{"scanning before the first progress", native.ChangefeedDescription_STATE_INITIAL_SCAN, nil, true},
+	{"scanning with progress", native.ChangefeedDescription_STATE_INITIAL_SCAN, &native.ChangefeedDescription_InitialScanProgress{PartsTotal: 3, PartsCompleted: 1}, true},
+	{"enabled after the scan", native.ChangefeedDescription_STATE_ENABLED, &native.ChangefeedDescription_InitialScanProgress{PartsTotal: 3, PartsCompleted: 3}, true},
+	{"disabled after the scan", native.ChangefeedDescription_STATE_DISABLED, &native.ChangefeedDescription_InitialScanProgress{PartsTotal: 3, PartsCompleted: 3}, true},
+	{"enabled without a scan", native.ChangefeedDescription_STATE_ENABLED, nil, false},
+	{"disabled without a scan", native.ChangefeedDescription_STATE_DISABLED, nil, false},
+}
+
+// TestChangefeedInitialScan_HappyPath reads whether a changefeed asked for an
+// initial scan from its scan state or its progress, through both the capture
+// inspection makes and the projection a write confirms with, and keeps the
+// progress counters out of either.
+func TestChangefeedInitialScan_HappyPath(t *testing.T) {
+	for _, test := range initialScanRows {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			observed := nativeFeed("f")
+			observed.Description.State = test.state
+			observed.Description.InitialScanProgress = test.progress
+
+			captured, err := schema.CaptureChangefeeds(tableOwner(), &native.ChangefeedObservations{Changefeeds: []*native.ObservedChangefeed{observed}})
+			c.Assert(err, qt.IsNil)
+			var decoded native.ChangefeedObservations
+			c.Assert(protojson.Unmarshal(captured.Payload, &decoded), qt.IsNil)
+			c.Assert(decoded.Changefeeds, qt.HasLen, 1)
+			c.Assert(decoded.Changefeeds[0].InitialScan, qt.Equals, test.want)
+			c.Assert(decoded.Changefeeds[0].Description.State, qt.Equals, test.state)
+			c.Assert(decoded.Changefeeds[0].Description.InitialScanProgress, qt.IsNil)
+
+			projected, err := schema.ProjectChangefeed(observed)
+			c.Assert(err, qt.IsNil)
+			c.Assert(projected.InitialScan, qt.Equals, test.want)
+			c.Assert(projected.Description.InitialScanProgress, qt.IsNil)
+		})
+	}
+}
+
+// TestChangefeedInitialScan_ReadMatchesTheDeclaration compares the read of each
+// changefeed with a declaration that states the scan it asked for: a read made
+// before YDB reports any progress is no reason to drop and add the changefeed
+// again.
+func TestChangefeedInitialScan_ReadMatchesTheDeclaration(t *testing.T) {
+	for _, test := range initialScanRows {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			observed := &native.ObservedChangefeed{Description: &native.ChangefeedDescription{Name: "f", Mode: Ydb_Table.ChangefeedMode_MODE_UPDATES,
+				Format: Ydb_Table.ChangefeedFormat_FORMAT_JSON, State: test.state, InitialScanProgress: test.progress},
+				Topic: &native.DescribeTopicResult{RetentionPeriod: durationpb.New(24 * time.Hour), PartitioningSettings: &Ydb_Topic.PartitioningSettings{MinActivePartitions: 1}}}
+			projected, err := schema.ProjectChangefeed(observed)
+			c.Assert(err, qt.IsNil)
+			current, err := changefeeds.FromObserved(projected)
+			c.Assert(err, qt.IsNil)
+			desired := changefeeds.Feed{Changefeed: ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON", InitialScan: test.want},
+				Disabled: test.state == native.ChangefeedDescription_STATE_DISABLED}
+			c.Assert(changefeeds.Recreated(desired, current), qt.IsFalse)
+			c.Assert(changefeeds.Equal(desired, current), qt.IsTrue)
+		})
+	}
 }

@@ -86,10 +86,22 @@ func projectChangefeed(feed *native.ObservedChangefeed) error {
 	if feed.Description == nil || feed.Topic == nil {
 		return fmt.Errorf("incomplete YDB changefeed observation")
 	}
-	feed.InitialScan = feed.Description.InitialScanProgress != nil
+	feed.InitialScan = askedForInitialScan(feed.Description)
 	feed.Description.InitialScanProgress = nil
 	projectTopic(feed.Topic)
 	return nil
+}
+
+// askedForInitialScan reports whether a changefeed asked for an initial scan.
+// Either of two traces proves it. The progress stays on the changefeed once
+// the scan ends, measured on 25.1.4.7 and 26.2.1.14, and a changefeed that
+// asked for none never carries it. The scan state comes first: right after
+// CREATE ASYNC REPLICATION adds its changefeed to the source table, 25.1.4.7
+// reports STATE_INITIAL_SCAN with no progress yet. Reading the progress alone
+// would report that changefeed as one that asked for no scan.
+func askedForInitialScan(description *native.ChangefeedDescription) bool {
+	return description.InitialScanProgress != nil ||
+		description.State == native.ChangefeedDescription_STATE_INITIAL_SCAN
 }
 
 func normalizeChangefeeds(observed *native.ChangefeedObservations) error {

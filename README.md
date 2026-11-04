@@ -823,8 +823,14 @@ Unknown native fields and enum values are refused before JSON conversion.
 Shared topic consumers and unextracted native object kinds refuse inspection.
 A table an async replication writes is left out of the tables, and the
 replication's items name it (see [Async replications and
-transfers](#async-replications-and-transfers)). A failed traversal returns no
-snapshot.
+transfers](#async-replications-and-transfers)). Right after `CREATE ASYNC
+REPLICATION`, YDB can list the replica while DescribeTable still answers
+SCHEME_ERROR. So a row table a listing names and the table service answers
+SCHEME_ERROR for is described again for up to 10 seconds, and the directory is
+listed again before each wait. The read fails if the listing stops naming the
+table, if that listing fails, or if the table is still not described when the
+time runs out; it never reads such a table as absent. A failed traversal
+returns no snapshot.
 These limitations preserve data for the remaining extraction work.
 
 Observed property models use YDB's typed protocol definitions inside this
@@ -842,7 +848,10 @@ Changefeed observations combine the table API description with a topic API
 read for each child stream. They retain modes, formats, state, retention,
 consumers, access metadata, and attributes, including replication bindings.
 Initial scan presence is retained after completion; progress counters are
-excluded. An empty changefeed facet records absence on its inspected table.
+excluded. A changefeed in `STATE_INITIAL_SCAN` asked for a scan even before YDB
+reports its first progress, as for the changefeed `CREATE ASYNC REPLICATION`
+adds to a source table. An empty changefeed facet records absence on its
+inspected table.
 Standalone topics use the same reader and normalization rules, with their own
 object identities.
 

@@ -144,7 +144,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 					schemas = append(schemas, path.Join(selected, name))
 				}
 			case Ydb_Scheme.Entry_TABLE:
-				description, err := source.describeTable(ctx, path.Join(database, selected, name))
+				description, err := source.describeListedTable(ctx, path.Join(database, selected), name)
 				if err != nil {
 					return nil, err
 				}
