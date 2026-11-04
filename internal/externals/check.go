@@ -1,11 +1,13 @@
 package externals
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
@@ -27,8 +29,15 @@ const (
 // external object its read finds unmanaged, the host's words.
 const UnsupportedReason = "target capability external_data_sources is unavailable, so Ptah leaves the object unmanaged"
 
+// capabilityRefusal refuses subject on a target without the capability key,
+// in the host's words. subject names an object and never a value, so the
+// refusal is a reason a host that negotiates errors.reasons prints.
 func capabilityRefusal(subject, key string) error {
-	return fmt.Errorf("%s, which requires target capability %s, unavailable on this ydb target", subject, key)
+	return authored.New(capabilityText(subject, key))
+}
+
+func capabilityText(subject, key string) string {
+	return fmt.Sprintf("%s, which requires target capability %s, unavailable on this ydb target", subject, key)
 }
 
 // CheckDataSource reports why the data source display names cannot be
@@ -39,9 +48,9 @@ func CheckDataSource(display string, source ydbdecl.ExternalDataSource, capabili
 	case !capabilities[CapabilityExternalDataSources]:
 		return capabilityRefusal(subject, CapabilityExternalDataSources)
 	case strings.TrimSpace(source.SourceType) == "":
-		return fmt.Errorf("%s: it needs a source_type, such as ObjectStorage or PostgreSQL", subject)
+		return authored.New(subject + ": it needs a source_type, such as ObjectStorage or PostgreSQL")
 	case strings.TrimSpace(source.AuthMethod) == "":
-		return fmt.Errorf("%s: it needs an auth_method, such as NONE or BASIC (`AUTH_METHOD requires key`)", subject)
+		return authored.New(subject + ": it needs an auth_method, such as NONE or BASIC (`AUTH_METHOD requires key`)")
 	}
 	for _, option := range slices.Sorted(maps.Keys(source.Options)) {
 		if externalpath.IsSecretOption(option) && !capabilities[CapabilitySecretPaths] {
@@ -59,20 +68,21 @@ func CheckTable(display string, table ydbdecl.ExternalTable, capabilities map[st
 	case !capabilities[CapabilityExternalDataSources]:
 		return capabilityRefusal(subject, CapabilityExternalDataSources)
 	case strings.TrimSpace(table.DataSource) == "":
-		return fmt.Errorf("%s: it needs a data_source, the path of the data source it reads", subject)
+		return authored.New(subject + ": it needs a data_source, the path of the data source it reads")
 	case strings.TrimSpace(table.Location) == "":
-		return fmt.Errorf("%s: it needs a location (`LOCATION requires key`)", subject)
+		return authored.New(subject + ": it needs a location (`LOCATION requires key`)")
 	case len(table.Columns) == 0:
-		return fmt.Errorf("%s: it needs a column", subject)
+		return authored.New(subject + ": it needs a column")
 	}
 	return nil
 }
 
 // CheckDrop reports why statement, which drops an external object, cannot
-// run on a target holding capabilities, or nil.
+// run on a target holding capabilities, or nil. The refusal quotes the
+// statement, so it is no reason a host prints.
 func CheckDrop(statement string, capabilities map[string]bool) error {
 	if !capabilities[CapabilityExternalDataSources] {
-		return capabilityRefusal(statement, CapabilityExternalDataSources)
+		return errors.New(capabilityText(statement, CapabilityExternalDataSources))
 	}
 	return nil
 }

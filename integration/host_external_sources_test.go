@@ -154,3 +154,21 @@ func TestHostAppliesAPostgreSQLSourceAndANestedBucket_HappyPath(t *testing.T) {
 		})
 	}
 }
+
+// Ported from the host's TestYDBExternal_FailurePath_RefusedWithTheFlagOff: a
+// declared external data source on a server whose EnableExternalDataSources
+// flag is off is refused before anything is created, by the capability it
+// needs. The flag this test turns off is restored when it ends.
+func TestHostRefusesExternalObjectsWithTheFlagOff_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	newClusterFlags(c, opened).set(c, map[string]bool{"EnableExternalDataSources": false})
+
+	output, err := hostApplySource(c, directory, "yaml", strings.ReplaceAll(
+		"external_data_sources:\n  bucket:\n    schema: {dir}\n    source_type: ObjectStorage\n    location: https://storage.invalid/\n    auth_method: NONE\n",
+		"{dir}", directory))
+
+	c.Assert(err, qt.IsNotNil, qt.Commentf("%s", output))
+	c.Assert(output, qt.Contains, "external data source "+directory+"/bucket, which requires target capability external_data_sources, unavailable on this ydb target")
+	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.HasLen, 0)
+}
