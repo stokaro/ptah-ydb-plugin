@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"testing"
 	"time"
 
@@ -24,6 +25,9 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+	"github.com/ydb-platform/ydb-go-sdk/v3/scheme"
+	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -145,6 +149,34 @@ func (f *replicationFixture) await(what string, ready func(*protocol.Schema) boo
 	}
 }
 
+// replicaWritten reports whether the fixture's directory lists name as a row
+// table an async replication writes, read through the test's own connection
+// rather than the provider's. The replication controller creates the replica
+// after CREATE ASYNC REPLICATION returns, and the replication reports itself
+// running with its item before that: measured on 26.2.1.14, a forced failover
+// sent then left the replication running for the two minutes a test waits,
+// and the replica, created a moment later, read-only. A SCHEME_ERROR for a listed name is a replica
+// still being created, which the next call asks about again.
+func (f *replicationFixture) replicaWritten(name string) bool {
+	f.c.Helper()
+	listing, err := f.opened.Driver.Scheme().ListDirectory(f.ctx, path.Join(f.database, f.directory))
+	f.c.Assert(err, qt.IsNil)
+	if !slices.ContainsFunc(listing.Children, func(entry scheme.Entry) bool { return entry.Name == name && entry.IsTable() }) {
+		return false
+	}
+	var attributes map[string]string
+	err = f.opened.Driver.Table().Do(f.ctx, func(ctx context.Context, session table.Session) error {
+		described, err := session.DescribeTable(ctx, f.absolute(name))
+		attributes = described.Attributes
+		return err
+	})
+	if ydb.IsOperationErrorSchemeError(err) {
+		return false
+	}
+	f.c.Assert(err, qt.IsNil)
+	return replication.IsReplica(attributes)
+}
+
 // plan compares the declaration of kind at name, nil for none, with what the
 // fixture's directory holds, and plans and renders the one change that
 // follows. A refused plan returns its diagnostic's message and no unit.
@@ -224,6 +256,8 @@ func TestReplicationLifecycleSubprocess(t *testing.T) {
 		c.Helper()
 		return f.plan(schema.ReplicationProperties, replicationcompare.ReplicationServiceID, replicationplan.ReplicationServiceID, "mirror", declared)
 	}
+	// The replica must exist before the read is asked to leave it out, and
+	// before the replication is paused.
 	running := func(state string) func(*protocol.Schema) bool {
 		return func(snapshot *protocol.Schema) bool {
 			value := object(snapshot, schema.ReplicationProperties, "mirror")
@@ -231,7 +265,7 @@ func TestReplicationLifecycleSubprocess(t *testing.T) {
 				return false
 			}
 			spec, held, err := schema.ObservedReplication(value)
-			return err == nil && held == state && len(spec.Items) == 1
+			return err == nil && held == state && len(spec.Items) == 1 && f.replicaWritten("rep")
 		}
 	}
 
@@ -296,7 +330,7 @@ func TestReplicationFailedOverSubprocess(t *testing.T) {
 			return false
 		}
 		spec, state, err := schema.ObservedReplication(value)
-		return err == nil && state == replication.StateRunning && len(spec.Items) == 1
+		return err == nil && state == replication.StateRunning && len(spec.Items) == 1 && f.replicaWritten("rep")
 	})
 	f.exec("ALTER ASYNC REPLICATION `" + f.absolute("mirror") + "` SET (STATE = 'DONE', FAILOVER_MODE = 'FORCE')")
 	snapshot := f.await("the replication failed over", func(snapshot *protocol.Schema) bool {
