@@ -135,8 +135,9 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.ColumnProperties, "count",
 				`{"literal":{"type":{"typeId":"UINT64"},"value":{"uint64Value":"7"}}}`))
 		}, wantErr: `column tables do not support defaults or Serial columns`},
-		{name: "no key", storage: `{}`, modify: func(_ *qt.C, table *protocol.DeclaredTable) { table.PrimaryKey = nil },
-			wantErr: `YDB table creation requires an ordered primary key`},
+		{name: "no key", storage: `{}`, modify: func(_ *qt.C, table *protocol.DeclaredTable) {
+			table.PrimaryKey, table.Columns[0].Primary, table.Columns[1].Primary = nil, false, false
+		}, wantErr: `YDB table creation requires an ordered primary key`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -400,4 +401,18 @@ func TestColumnTablePreparationAndProjection(t *testing.T) {
 	c.Assert(projected.Tables[0].ColumnPrimaryKeys, qt.DeepEquals, []string{"ts", "id"})
 	c.Assert(projected.Tables[0].DesiredFacets, qt.HasLen, 0)
 	c.Assert(projected.Tables[0].ObservedFacets, qt.HasLen, 0)
+}
+
+// TestCompileColumnTableKeysTheMarkedColumnsInOrder keys a column table whose
+// declaration orders no key by the columns it marks primary, in the order it
+// declares them, as the host's embedded engine keys one.
+func TestCompileColumnTableKeysTheMarkedColumnsInOrder(t *testing.T) {
+	c := testcheck.New(t)
+	table := columnDeclaration(c, `{}`)
+	table.PrimaryKey = nil
+
+	created, err := tablecreate.CompileColumnTable(owner(), table, nil)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(created.PrimaryKey, qt.DeepEquals, []string{"ts", "id"})
 }

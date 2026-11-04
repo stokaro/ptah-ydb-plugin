@@ -2322,7 +2322,10 @@ storage settings, column families, attributes, partitioning settings, starting
 layouts, bloom filters, read replicas, and tiering. Column families and typed
 literal defaults come from native column facets. Missing creation settings
 request server defaults. The common and native primary key declarations must
-agree on order.
+agree on order. A declaration that orders no key, such as a YAML table with
+two columns marked `primary: true`, is keyed by the columns it marks primary in
+the order it declares them, as the host's embedded engine keys it; one that
+marks none is refused.
 
 A starting layout becomes the `partitions` of the CreateTable request, checked
 against the key columns: `uniform_partitions` needs a Uint32 or Uint64 first key

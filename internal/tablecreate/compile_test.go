@@ -93,7 +93,10 @@ func TestCompilePrimaryKeySources(t *testing.T) {
 		{"native order", func(d *protocol.DeclaredTable) { d.PrimaryKey = nil }, []string{"second", "first"}, false},
 		{"conflicting order", func(d *protocol.DeclaredTable) { d.PrimaryKey = []string{"first", "second"} }, nil, true},
 		{"single flag", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = nil; d.Columns[1].Primary = false }, []string{"first"}, false},
-		{"ambiguous flags", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = nil }, nil, true},
+		{"several flags in declaration order", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = nil }, []string{"first", "second"}, false},
+		{"no flag and no order", func(d *protocol.DeclaredTable) {
+			d.Features, d.PrimaryKey, d.Columns[0].Primary, d.Columns[1].Primary = nil, nil, false, false
+		}, nil, true},
 		{"missing key column", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = []string{"absent"} }, nil, true},
 		{"repeated key column", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = []string{"first", "first"} }, nil, true},
 		{"extra key membership", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = []string{"first"} }, nil, true},
