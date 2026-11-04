@@ -217,12 +217,13 @@ func compileColumn(table string, column *protocol.DeclaredColumn, settings *nati
 	if !validName(column.Name) {
 		return nil, fmt.Errorf("invalid YDB column name")
 	}
+	// A detail YDB's type does not keep, such as the length of VARCHAR(80),
+	// is left out, and the column takes the type that holds the values, as
+	// the host's built-in engine creates it: YDB has no length-limited string,
+	// so Utf8 is the only column a VARCHAR declaration can have.
 	mapping, err := ydbtype.Map(column.Type, ydbtype.Capabilities(caps))
 	if err != nil {
 		return nil, unsupported("%s", err)
-	}
-	if mapping.Dropped != "" {
-		return nil, unsupported("YDB column type does not preserve %s", mapping.Dropped)
 	}
 	stored, sequence, err := serialColumn(fmt.Sprintf("column %q of table %q", column.Name, table), column, mapping, caps)
 	if err != nil {
