@@ -80,9 +80,9 @@ func TestHostSetsTheCommentsOfACreatedTable_HappyPath(t *testing.T) {
 	}
 }
 
-// A Go index directive's comment is set on the index of a table the host
-// creates, as a YAML one is.
-func TestHostSetsTheIndexCommentOfACreatedTableFromGo_HappyPath(t *testing.T) {
+// The comments of a Go source's table, field and index directives are set on
+// the table the host creates, as YAML ones are.
+func TestHostSetsTheCommentsOfACreatedTableFromGo_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	absolute := path.Join(database, directory, "users")
@@ -91,8 +91,8 @@ func TestHostSetsTheIndexCommentOfACreatedTableFromGo_HappyPath(t *testing.T) {
 		defer cancel()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	source := "package entities\n\n//ptah:schema:table name=\"users\" schema=\"" + directory + "\"\ntype User struct {\n" +
-		"\t//ptah:schema:field name=\"id\" type=\"BIGINT\" primary=\"true\"\n\tID int64\n" +
+	source := "package entities\n\n//ptah:schema:table name=\"users\" schema=\"" + directory + "\" comment=\"People who sign in\"\ntype User struct {\n" +
+		"\t//ptah:schema:field name=\"id\" type=\"BIGINT\" primary=\"true\" comment=\"Key\"\n\tID int64\n" +
 		"\t//ptah:schema:field name=\"label\" type=\"TEXT\"\n\t//ptah:schema:index name=\"users_by_label\" fields=\"label\" comment=\"Lookup by name\"\n\tLabel string\n}\n"
 	for _, run := range []struct{ name, want string }{
 		{"creation", `(?s).*Schema apply completed successfully.*`},
@@ -101,6 +101,7 @@ func TestHostSetsTheIndexCommentOfACreatedTableFromGo_HappyPath(t *testing.T) {
 		output, err := hostApply(c, directory, source)
 		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", run.name, output))
 		c.Assert(output, qt.Matches, run.want, qt.Commentf("%s", run.name))
-		c.Assert(heldAttributes(c, opened, absolute), qt.DeepEquals, map[string]string{"ptah.comment.index.users_by_label": "Lookup by name"}, qt.Commentf("%s", run.name))
+		c.Assert(heldAttributes(c, opened, absolute), qt.DeepEquals, map[string]string{"ptah.comment": "People who sign in",
+			"ptah.comment.column.id": "Key", "ptah.comment.index.users_by_label": "Lookup by name"}, qt.Commentf("%s", run.name))
 	}
 }
