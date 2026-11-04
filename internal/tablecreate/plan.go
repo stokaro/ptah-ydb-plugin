@@ -534,6 +534,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 						{Subject: indexSubject(subject, settings.change.held.GetName()), Action: protocol.PlanningEffect_ALTER}}}})
 			ordered = append(ordered, settings.id)
 		}
+		contribution.Dependencies = append(contribution.Dependencies, settingsAfterAdditions(item.indexes, item.indexSettings)...)
 		if item.feeds != nil {
 			step, dependencies := item.feeds.planningStep(feedNumber, subject, nil)
 			feedNumber++
