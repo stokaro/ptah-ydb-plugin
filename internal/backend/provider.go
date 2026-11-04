@@ -97,6 +97,7 @@ func providerFeatures() []string {
 		provider.IndexMethodsFeature,
 		provider.ScopeSelectionsFeature,
 		provider.StatementsFeature,
+		provider.TypedArgumentsFeature,
 		provider.ValidateSchemaFeature,
 		provider.ProjectTableCreationsFeature,
 		provider.PrepareTablesFeature,
