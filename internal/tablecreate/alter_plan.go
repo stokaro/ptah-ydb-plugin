@@ -223,9 +223,13 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	keyType := firstKeyType(table.Desired)
 	var droppedIndexes, addedIndexes []string
 	for _, index := range indexes {
-		if index.add != nil {
+		switch {
+		case index.rename != nil:
+			droppedIndexes = append(droppedIndexes, index.rename.held.Name)
+			addedIndexes = append(addedIndexes, index.rename.to)
+		case index.add != nil:
 			addedIndexes = append(addedIndexes, index.name())
-		} else {
+		default:
 			droppedIndexes = append(droppedIndexes, index.name())
 		}
 	}

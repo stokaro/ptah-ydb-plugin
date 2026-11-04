@@ -22,6 +22,13 @@ const (
 	// partitioning of the table that implements it.
 	partitionedByLabel = `{"name":"by_label","indexColumns":["label"],"status":"STATUS_READY","globalIndex":{"settings":{"partitioningSettings":{"minPartitionsCount":"4"}}}}`
 
+	// oldLabelIndex is by_label under the name a rename starts from, and
+	// partitionedOldLabel the same with the partitioning of its table.
+	oldLabelIndex       = `{"name":"old_label","indexColumns":["label"],"status":"STATUS_READY","globalIndex":{}}`
+	partitionedOldLabel = `{"name":"old_label","indexColumns":["label"],"status":"STATUS_READY","globalIndex":{"settings":{"partitioningSettings":{"minPartitionsCount":"4"}}}}`
+	otherOldLabel       = `{"name":"old_label","indexColumns":["extra"],"status":"STATUS_READY","globalIndex":{}}`
+	renameOldLabel      = `{"request":{"renameIndexes":[{"sourceName":"old_label","destinationName":"by_label"}]},"held_indexes":[` + oldLabelIndex + `]}`
+
 	addByLabel = `{"request":{"addIndexes":[{"name":"by_label","indexColumns":["label"],"globalIndex":{}}]}}`
 	addByExtra = `{"request":{"addIndexes":[{"name":"by_extra","indexColumns":["extra"],"dataColumns":["label"],"globalAsyncIndex":{}}]}}`
 	addUnique  = `{"request":{"addIndexes":[{"name":"by_label","indexColumns":["label"],"globalUniqueIndex":{}}]}}`
@@ -74,6 +81,10 @@ func TestNativeTableAlteration_IndexHappyPath(t *testing.T) {
 		// settings, and the drop does not depend on them.
 		{"drops a global index whatever its partitioning", indexedTable(partitionedByLabel), indexedTable(), nil, dropIndex("by_label", byLabelIndex), "", []string{"by_label"},
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}},
+		// A rename keeps the index, its partitioning included, and waits for
+		// no build.
+		{"renames an index and keeps its settings", indexedTable(partitionedOldLabel, byExtraIndex), indexedTable(byExtraIndex, partitionedByLabel), nil, renameOldLabel,
+			"by_label", nil, []string{"open", "describe", "guard", "alter", "describe", "close"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -121,6 +132,15 @@ func TestNativeTableAlteration_IndexFailurePath(t *testing.T) {
 		{"an unrelated index appeared", alterFixture{before: indexedTable(), after: indexedTable(byLabelIndex, byExtraIndex)}, addByLabel, true, unconfirmed,
 			"YDB altered table holds unexpected indexes"},
 		{"lost reply", alterFixture{before: indexedTable(), alterFailure: true}, addByLabel, true, []string{"open", "describe", "guard", "alter", "close"}, "lost native reply"},
+		{"the index to rename is gone", alterFixture{before: indexedTable()}, renameOldLabel, false, refused, "YDB index to rename is absent"},
+		{"the index to rename changed since planning", alterFixture{before: indexedTable(otherOldLabel)}, renameOldLabel, false, refused, "YDB index differs from the plan"},
+		{"the new name is taken", alterFixture{before: indexedTable(oldLabelIndex, byLabelIndex)}, renameOldLabel, false, refused, "YDB index name to rename to is taken"},
+		{"the renamed index lost its settings", alterFixture{before: indexedTable(partitionedOldLabel), after: indexedTable(byLabelIndex)}, renameOldLabel, true, unconfirmed,
+			"YDB renamed index differs from the index it renames"},
+		{"the old name is still present", alterFixture{before: indexedTable(oldLabelIndex), after: indexedTable(oldLabelIndex, byLabelIndex)}, renameOldLabel, true, unconfirmed,
+			"YDB renamed index differs from the index it renames"},
+		{"the index is not renamed", alterFixture{before: indexedTable(oldLabelIndex), after: indexedTable(oldLabelIndex)}, renameOldLabel, true, unconfirmed,
+			"YDB renamed index differs from the index it renames"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
