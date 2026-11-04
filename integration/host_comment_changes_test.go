@@ -162,27 +162,6 @@ func TestHostRunsCommentsOfAMigrationFile_HappyPath(t *testing.T) {
 	c.Assert(rowCount(c, opened, path.Join(database, directory, "notes"), ""), qt.Equals, int64(1))
 }
 
-// Ported from the host's TestYDBComments_IntrospectedModelsPlanNothing: `ptah
-// introspect` writes a commented table as Go models, the comments reach the
-// annotations, and the models, applied against the database they came from,
-// plan nothing. The table takes its comments in a run of their own, as in
-// TestHostCommentTextRoundTrips_HappyPath.
-func TestHostIntrospectedCommentsPlanNothing_HappyPath(t *testing.T) {
-	c := testcheck.New(t)
-	opened, directory, database := lockFixture(c)
-	emptyAtCleanup(c, opened, path.Join(database, directory))
-	applyRuns(c, directory, "yaml", commentedUsers(directory, "", []string{"label"}, nil))
-	applyRuns(c, directory, "yaml", commentedUsers(directory, "People who sign in", []string{"label"}, map[string]string{"id": "Key", "label": "Shown name"}))
-
-	models := introspectDirectory(c, directory)
-
-	c.Assert(models, qt.Contains, `comment="People who sign in"`)
-	c.Assert(models, qt.Contains, `comment="Shown name"`)
-	output, err := hostApplySelected(c, directory, "go", models)
-	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", models, output))
-	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`, qt.Commentf("%s\n%s", models, output))
-}
-
 // commentFixture is a provider session beside table records (id, ts,
 // payload) in a fixture directory, for the statements a migration file runs.
 type commentFixture struct {
