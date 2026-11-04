@@ -13,6 +13,10 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	topicspec "github.com/stokaro/ptah-ydb-plugin/internal/topics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // topicShape is what the server holds of a topic: the settings the fixtures
@@ -106,4 +110,143 @@ func TestHostAppliesATopic_HappyPath(t *testing.T) {
 			c.Assert(found, qt.IsFalse)
 		})
 	}
+}
+
+// hostTopics is a lock fixture for the host-driven topic ports: the test's
+// connection, its directory and database, and a provider session that reads
+// the directory's topics back.
+type hostTopics struct {
+	*hostChangefeeds
+}
+
+func newHostTopics(c *qt.C) *hostTopics {
+	c.Helper()
+	h := &hostTopics{newHostChangefeeds(c)}
+	c.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		for _, name := range []string{"orders", "plain", "swap"} {
+			_ = execFixtureSchema(cleanup, h.opened.DB, "DROP TOPIC `"+path.Join(h.database, h.directory, name)+"`")
+		}
+		for _, name := range []string{"notes", "swap"} {
+			c.Check(execFixtureSchema(cleanup, h.opened.DB, "DROP TABLE IF EXISTS `"+path.Join(h.database, h.directory, name)+"`"), qt.IsNil)
+		}
+	})
+	return h
+}
+
+// declared is the YAML of table notes beside the topics block given, so a
+// read of the directory is not empty for the topics alone.
+func (h *hostTopics) declared(topics string) string {
+	return "tables:\n  notes:\n    schema: " + h.directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\ntopics:\n" + topics
+}
+
+// topic reads topic name back through the provider.
+func (h *hostTopics) topic(name string) ydbdecl.Topic {
+	h.c.Helper()
+	snapshot, err := h.client.Inspect(h.c.Context(), &protocol.InspectRequest{SessionId: h.session.Id, Schemas: []string{h.directory}})
+	h.c.Assert(err, qt.IsNil)
+	value := object(snapshot, schema.TopicProperties, name)
+	h.c.Assert(value, qt.IsNotNil, qt.Commentf("topic %s is not in the read", name))
+	observed, err := schema.ObservedTopic(value)
+	h.c.Assert(err, qt.IsNil)
+	read, err := topicspec.FromObserved(observed)
+	h.c.Assert(err, qt.IsNil)
+	return read
+}
+
+// fullTopic declares a topic naming every setting and two consumers, one
+// with an availability period on a line that takes one, as YAML and as the
+// read takes it, with the consumers by name.
+func fullTopic(capabilities map[string]bool) (string, ydbdecl.Topic) {
+	audit := ydbdecl.Consumer{Name: "audit", ReadFrom: "2026-01-01T00:00:00Z", SupportedCodecs: []string{"raw", "gzip"}}
+	auditText := "        audit: {read_from: \"2026-01-01T00:00:00Z\", supported_codecs: \"raw,gzip\"}\n"
+	if capabilities["topic_consumer_availability_period"] {
+		audit.AvailabilityPeriod = "PT2H"
+		auditText = "        audit: {read_from: \"2026-01-01T00:00:00Z\", supported_codecs: \"raw,gzip\", availability_period: PT2H}\n"
+	}
+	text := "  orders:\n    schema: {dir}\n    min_active_partitions: 2\n    max_active_partitions: 6\n    auto_partitioning_strategy: scale_up\n" +
+		"    auto_partitioning_up_utilization_percent: 70\n    auto_partitioning_down_utilization_percent: 10\n    auto_partitioning_stabilization_window: PT2M\n" +
+		"    retention_period: PT36H\n    partition_write_speed_bytes_per_second: 2097152\n    partition_write_burst_bytes: 3145728\n    supported_codecs: \"raw,gzip\"\n" +
+		"    consumers:\n      billing: {important: true}\n" + strings.ReplaceAll(auditText, "        ", "      ")
+	return text, ydbdecl.Topic{MinActivePartitions: 2, MaxActivePartitions: 6, AutoPartitioningStrategy: "scale_up",
+		AutoPartitioningUpUtilizationPercent: 70, AutoPartitioningDownUtilizationPercent: 10, AutoPartitioningStabilizationWindow: "PT2M", RetentionPeriod: "P1DT12H",
+		PartitionWriteSpeedBytesPerSecond: 2097152, PartitionWriteBurstBytes: 3145728, SupportedCodecs: []string{"raw", "gzip"},
+		Consumers: []ydbdecl.Consumer{audit, {Name: "billing", Important: true}}}
+}
+
+// Ported from the host's TestYDBTopics_RoundTrip: a topic naming every setting
+// and a topic naming none are created, read back with the settings declared
+// and, for the plain one, the ones YDB gives a new topic, and the runs after
+// the first plan nothing. The CREATE TOPIC statement is pinned by
+// TestStatements in internal/topics.
+func TestHostAppliesEveryTopicSetting_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	h := newHostTopics(c)
+	text, want := fullTopic(h.session.Capabilities)
+	declared := h.declared(strings.ReplaceAll(text, "{dir}", h.directory) + "  plain:\n    schema: " + h.directory + "\n")
+
+	h.apply("creation", declared, "Schema apply completed successfully")
+	h.apply("a second run", declared, "Schema is synced, no changes to be made")
+	h.apply("a third run", declared, "Schema is synced, no changes to be made")
+
+	c.Assert(h.topic("orders"), qt.DeepEquals, want)
+	c.Assert(h.topic("plain"), qt.DeepEquals, ydbdecl.Topic{MinActivePartitions: 1, AutoPartitioningStrategy: "disabled", RetentionPeriod: "P1D",
+		PartitionWriteSpeedBytesPerSecond: 1048576, PartitionWriteBurstBytes: 1048576})
+}
+
+// Ported from the host's TestYDBTopics_ChangesConverge: a topic's settings and
+// consumers change in one plan, and one apply leaves nothing to plan. The
+// changes are the ones whose naive statement would leave the topic short of
+// its declaration: a write speed changed alone, which leaves the burst where
+// the topic was created with it; auto-partitioning enabled on a topic created
+// without it, which takes thresholds of 80% and 20% rather than the 90% and
+// 30% a topic created with it gets; a consumer whose codec list is emptied,
+// which YDB changes only by dropping the consumer and adding it again; and
+// consumers added, changed and dropped together.
+func TestHostConvergesTopicChanges_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	h := newHostTopics(c)
+	before := "  orders:\n    schema: " + h.directory + "\n    partition_write_speed_bytes_per_second: 2097152\n" +
+		"    consumers:\n      gone: {}\n      kept: {important: true}\n      narrowed: {supported_codecs: raw}\n"
+	after := "  orders:\n    schema: " + h.directory + "\n    min_active_partitions: 2\n    max_active_partitions: 4\n    auto_partitioning_strategy: scale_up\n" +
+		"    retention_period: PT2H\n    partition_write_speed_bytes_per_second: 4194304\n" +
+		"    consumers:\n      kept: {read_from: \"2026-01-01T00:00:00Z\"}\n      narrowed: {}\n      fresh: {important: true}\n"
+	h.apply("the topic", h.declared(before), "Schema apply completed successfully")
+
+	h.apply("the changes", h.declared(after), "Schema apply completed successfully")
+
+	h.apply("a run after the changes", h.declared(after), "Schema is synced, no changes to be made")
+	c.Assert(h.topic("orders"), qt.DeepEquals, ydbdecl.Topic{MinActivePartitions: 2, MaxActivePartitions: 4, AutoPartitioningStrategy: "scale_up",
+		AutoPartitioningUpUtilizationPercent: 90, AutoPartitioningDownUtilizationPercent: 30, AutoPartitioningStabilizationWindow: "PT5M", RetentionPeriod: "PT2H",
+		PartitionWriteSpeedBytesPerSecond: 4194304, PartitionWriteBurstBytes: 4194304,
+		Consumers: []ydbdecl.Consumer{{Name: "fresh", Important: true}, {Name: "kept", ReadFrom: "2026-01-01T00:00:00Z"}, {Name: "narrowed"}}})
+}
+
+// Ported from the host's TestYDBTopics_ATopicAndATableTradeAPath: a table is
+// planned into the path a dropped topic held, and a topic into the path a
+// dropped table held. YDB keeps one object at a path (`unexpected path
+// type`), so a plan that created before it dropped would fail at the create;
+// each plan drops first, and nothing is left to plan after it.
+func TestHostTradesAPathBetweenATopicAndATable_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	h := newHostTopics(c)
+	asTopic := h.declared("  swap:\n    schema: " + h.directory + "\n")
+	asTable := "tables:\n  notes:\n    schema: " + h.directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n" +
+		"  swap:\n    schema: " + h.directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\ntopics: {}\n"
+	swap := h.directory + ".swap"
+	h.apply("the topic", asTopic, "Schema apply completed successfully")
+
+	toTable := h.apply("the table", asTable, "Schema apply completed successfully")
+	tableSettled := h.apply("a run after the table", asTable, "Schema is synced, no changes to be made")
+	toTopic := h.apply("the topic again", asTopic, "Schema apply completed successfully")
+	topicSettled := h.apply("a run after the topic", asTopic, "Schema is synced, no changes to be made")
+
+	c.Assert(operations(toTable), qt.DeepEquals, []string{"topic-operation " + swap, "row-table-create-operation " + swap}, qt.Commentf("%s", toTable))
+	c.Assert(toTable, qt.Contains, swap+": DROP TOPIC removes the topic")
+	c.Assert(tableSettled, qt.Not(qt.Contains), "Native operation")
+	c.Assert(operations(toTopic), qt.DeepEquals, []string{"table-drop-operation " + swap, "topic-operation " + swap}, qt.Commentf("%s", toTopic))
+	c.Assert(toTopic, qt.Contains, swap+": Drops a table and its rows")
+	c.Assert(topicSettled, qt.Not(qt.Contains), "Native operation")
+	h.topic("swap")
 }

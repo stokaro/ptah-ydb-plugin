@@ -360,7 +360,9 @@ refused (`UNSUPPORTED`), and a missing command or an unreachable daemon is
 Execution sends native SQL units through YDB's query service. A batch is checked
 before its first unit runs. Unsupported native envelopes refuse the whole batch.
 SQL units use a pinned connection; native coordination, table creation and table alteration units
-use their native services. Dispatched writes are not retried.
+use their native services. Dispatched writes are not retried, except a
+changefeed statement YDB refused because another schema operation held the
+table's path (see [Changefeeds](#changefeeds)).
 Request IDs correlate calls and do not provide exactly-once execution.
 
 Results distinguish a confirmed prefix from an uncertain remainder. A
@@ -593,7 +595,12 @@ entry a new secret gets for every subject whose effective permissions on the
 secret's directory carry that permission.
 
 Mixed plans check captured native state before changing its access. A native
-alteration precedes grants, revocations, and principal changes. A final native
+alteration precedes grants, revocations, and principal changes. A grant or a
+revocation on a directory changes the directory's access list and occupies no
+path, so the native planners leave it out of their path checks; a native
+creation in that directory, or below it, comes first, because creating the
+object creates a missing directory and YDB grants nothing on a path that holds
+nothing. A final native
 drop accounts for matching revocations by removing the object's access; a
 temporary external-table drop keeps revocations after restoration. These plans
 require the negotiated `planning.lifecycle` feature. Workload operations retain
@@ -977,9 +984,24 @@ coordination_node "app" "limits" {
 ```
 
 A `ptah:not-described coordination_node` header entry, with a node's path or
-none, is the one header kind the engine declares; the host applies it to the
-document's claim, and the provider refuses a name no node can take with the
-host's words. A host that does not list the feature reads no such block.
+none, is the one header kind the engine declares, and the provider refuses a
+name no node can take with the host's words. With `source.limits` negotiated,
+the document's claim leaves the node it names, or every node, unmanaged. A host
+that does not list `source.hcl` reads no such block.
+
+A Go source carries the same entries as `ptah:schema:notdescribed`
+declarations, under `source.limits`, of the kinds the engine lists in
+`go_header_kinds`: `coordination_node`, `streaming_query`, `resource_pool`,
+`resource_pool_classifier`, `secret`, `topic`, `external_data_source`,
+`external_table`, `replication` and `transfer`. An entry without a name leaves
+the kind unmanaged; one with a name, written as a YQL header names it, leaves
+that object unmanaged. A source that declares an object it also leaves
+unmanaged is refused.
+
+```go
+//ptah:schema:notdescribed kind="topic" reason="not-inspected" provenance="observed"
+type PtahSchemaObjects struct{}
+```
 
 `EncodeSource` (`source.encode`, ADR 0037, and `source.encode-groups`, ADR
 0040) writes desired values back as the keys, directives and blocks this
@@ -1019,8 +1041,25 @@ host's embedded engine does; its other YDB settings are losses. The parts are
 decoded again before they are returned, and a value they do not give back is a
 loss. A value that needs several declarations is a loss for a host that does not
 negotiate `source.encode-groups`. `struct_name` is written in YAML alone.
-Incomplete kind or subject coverage refuses the export, because these fragments
-cannot preserve that knowledge.
+
+A source claims every model its format lists, completely. An export of a read
+is complete for the selection it is applied to, as the host's embedded YDB
+engine writes it: a host that writes a read narrowed by `--schemas` sends each
+kind the read knew in every directory it listed as complete. Applied back over
+that directory, the export plans nothing, and an object whose declaration is
+removed from it is dropped; applied over more directories, it drops their
+objects too. What the request does not know is written as not-described
+entries, so that the source read back claims no more than that: a kind no
+directory of the read knew, or one the read knew less in some directory, is
+left unmanaged as a whole, since a header cannot name a directory, with
+`reason="not-inspected" provenance="observed"`. An object whose own knowledge
+is not complete gets an entry that names it. A facet is known where its table
+is, so a table the export declares carries its facets as the read holds them,
+and a declared table whose facet knowledge is not complete refuses the export.
+Knowledge left unmanaged by a source's own entry is passed on with
+`provenance="declared"`. YAML writes no header, and neither does a format for a
+host that does not negotiate `source.limits`, so there such knowledge refuses
+the export, as does a kind no entry names.
 
 The subprocess tests exercise decoding, encoding, normalization, and
 representation conversion without a database address; a YQL schema declares
@@ -1805,9 +1844,23 @@ assesses every replication the plan keeps, and refuses a table the plan
 creates at the path of a live replica, and a failed-over replica the plan drops
 while the schema keeps the replication. A creation names its replica paths as created and a drop of a running
 replication with `CASCADE` names them as dropped, so each step is ordered
-against the common steps at those paths; a transfer reads its table and a local
-topic. A drop of a failed-over replication runs without `CASCADE` and keeps its
-tables. The provider never pauses, resumes or fails over an object.
+against the common steps at those paths. A replication of this database also
+reads its source tables, so it is created after a table the plan creates and
+dropped before one the plan drops: a replication created before its source
+creates no replica. A transfer reads its table and, at a local source, the
+topic or the changefeed of a table. It names the changefeed as the changefeed
+planner does, so the host creates it after a changefeed the plan adds; a
+dropped transfer names the topic by the topic's identity rather than its path,
+so the drop comes before the topic's even where the plan creates another object
+at that path. A drop of a failed-over replication runs without `CASCADE` and
+keeps its tables. The provider never pauses, resumes or fails over an object.
+
+A grant names a replication or a transfer by its directory and name
+(`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
+path. The planner puts a GRANT or a REVOKE after the creation or the change of
+its object, and a drop replaces the REVOKE the host planned, since YDB drops an
+object's access list with it and a REVOKE after the drop would name a path that
+is gone. A change in place, such as a new lambda, keeps the entries.
 
 Execution reads the object before the statement and refuses one that changed
 since the plan read it, runs the statement once, and reads the object back. The
@@ -1838,7 +1891,10 @@ changefeed into a table, moves a row through it, changes its lambda and drops
 it, and `TestTransferRefusedWithoutTheCapabilitySubprocess` checks the refusal on
 a line without transfers. `TestHostAppliesAnAsyncReplication_HappyPath` and
 `TestHostAppliesATransfer_HappyPath` drive `ptah schema apply` from YAML through
-the same steps. Each needs a server whose gRPC services include replication.
+the same steps. `TestHostGrantsOnAnAsyncReplication_HappyPath` and
+`TestHostGrantsOnATransfer_HappyPath` grant a user a permission in the plan that
+creates the object, keep it through a change in place and drop the object
+without a REVOKE. Each needs a server whose gRPC services include replication.
 
 ## Resource pools and classifiers
 
@@ -2007,7 +2063,13 @@ Execution reads the table and each changefeed's topic before the first
 statement and refuses a changefeed that changed since the plan read it; it runs
 each statement once and reads the table back, requiring each declared
 changefeed with its topic's retention and consumers, or a removed one's
-absence. An unconfirmed result is UNKNOWN and is never retried. A changefeed
+absence. The one statement that runs again is one YDB refuses because another
+schema operation holds the table's path (OVERLOADED, `path ... has been locked
+by tx` or `path is under operation`), which changed nothing: a changefeed added
+with an initial scan holds the path until the scan has read every row, so the
+next statement waits, 50 ms at first and up to a second between attempts,
+until it runs or the request's context ends. Any other unconfirmed result is
+UNKNOWN and is never retried. A changefeed
 operation has no TEXT form yet, so a host that writes a migration file is
 refused with `NO_TEXT_FORM`.
 
@@ -2616,9 +2678,12 @@ partitioning, the filter, or the replicas. The settings are `AUTO_PARTITIONING_B
   witness and is not compared. The comparison reports the refused layout as a
   difference, so that the plan reaches the planner.
 - A minimum count above a nonzero maximum is refused, checked against the value
-  the table holds for a bound the declaration leaves out. A partition size beside
-  disabled partitioning by size is refused too: the server turns partitioning by
-  size on when a size is set, so the declaration has to state both.
+  the table holds for a bound the declaration leaves out.
+- A partition size declared without `partitioningBySize` turns partitioning by
+  size on, as the server does when a size is set and as the host's embedded
+  engine reads the declaration (measured on 25.1.4.7 and 26.2.1.14 for a table
+  and an index that did not split by size). A size beside a declared
+  `partitioningBySize` of `DISABLED` is refused.
 - When the step switches partitioning by size on, it names every setting the
   table keeps: the ones the declaration states and the held value of the others.
   The server resets the size and the minimum count the call leaves out, so a
@@ -3214,12 +3279,16 @@ and an untyped null as `Void`, as a plain null binds. So a Go `int32` writes an
 null into an `Optional<Utf8>` one. A typed timestamp outside the `Timestamp`
 range is refused rather than bound as a `Timestamp64`.
 
-The negotiated `scope.selections` declaration makes coordination nodes, topics,
-external data sources and external tables selectable by their directory and
-name. Resource pools and classifiers use database-wide names, including literal
-dots. A kept classifier keeps the pool it requires when the input contains that
-pool; an explicit exclusion of the pool still wins. Grants follow the object
-their target names.
+The negotiated `scope.selections` declaration makes secrets, streaming queries,
+coordination nodes, topics, external data sources, external tables, async
+replications and transfers selectable by their directory and name. Resource
+pools and classifiers use database-wide names, including literal dots. A kept
+classifier keeps the pool it requires when the input contains that pool; an
+explicit exclusion of the pool still wins. Grants follow the object their
+target names: each kind except the classifier declares the grant object type
+the host's embedded engine names it with, such as `ASYNC REPLICATION` or
+`TRANSFER`. A grant on a type no selection declares is read as a grant on a
+table of the same name, so a scoped plan would leave it out.
 
 ## Extraction still required
 

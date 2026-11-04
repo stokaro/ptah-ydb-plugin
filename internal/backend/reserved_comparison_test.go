@@ -16,7 +16,7 @@ import (
 // with the reason given.
 func unrepresentableSubject(reason string) *protocol.ComparisonSubjectCoverage {
 	return &protocol.ComparisonSubjectCoverage{Kind: schema.CoordinationProperties,
-		Subject: &protocol.ComparisonIdentity{Kind: schema.CoordinationProperties, Database: testcomparison.Part("/local"), Schema: testcomparison.Part("app"), Name: testcomparison.Part("node")},
+		Subject:   &protocol.ComparisonIdentity{Kind: schema.CoordinationProperties, Database: testcomparison.Part("/local"), Schema: testcomparison.Part("app"), Name: testcomparison.Part("node")},
 		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE, Reason: reason}}
 }
 

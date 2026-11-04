@@ -42,9 +42,10 @@ import (
 // A value that needs several parts is written through a group when the host
 // negotiated source.encode-groups, and is a loss otherwise. A value no source
 // spells, or one whose parts do not decode back to it, is a loss with one line
-// that names it and never its content. Coverage that is not complete is
-// refused: these fragments cannot preserve the captured knowledge when the
-// host reads them back.
+// that names it and never its content. Knowledge the request lacks is written
+// as the source's not-described entries, so that reading the source back
+// claims no more than the request knew; knowledge no entry can say is refused
+// (see encodeCoverage).
 func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourceRequest) (*protocol.EncodedSource, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
@@ -53,11 +54,12 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	if err := provider.ValidateEncodeSourceRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if err := encodeCoverage(request.GetCoverage()); err != nil {
+	limits, err := encodeCoverage(request, description.GetEngines()[0], sourceLimitsNegotiated(description.GetEngines()[0]))
+	if err != nil {
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	format := request.GetFormat()
-	result := &protocol.EncodedSource{Complete: true}
+	result := &protocol.EncodedSource{Complete: true, Limits: limits}
 	var units []encodedUnit
 	var nodes []encodedNode
 	// subjects names each value as a loss line names it.
@@ -245,23 +247,6 @@ type encodedNode struct {
 	// structName is where a YAML source declared the node.
 	structName string
 	access     bool
-}
-
-// encodeCoverage refuses knowledge these source fragments would strengthen.
-// A not-described marker cannot reproduce every captured reason or state.
-func encodeCoverage(coverage *protocol.ModelCoverage) error {
-	for _, kind := range coverage.GetKinds() {
-		if kind.GetKnowledge().GetState() != protocol.ModelKnowledge_COMPLETE {
-			return fmt.Errorf("YDB source encoding cannot preserve incomplete coverage of %s", kind.GetModel().GetKind())
-		}
-	}
-	for _, subject := range coverage.GetSubjects() {
-		if subject.GetKnowledge().GetState() != protocol.ModelKnowledge_COMPLETE {
-			return fmt.Errorf("YDB source encoding cannot preserve incomplete coverage of %s %s", subject.GetKind(),
-				path.Join(subject.GetSubject().GetSchema(), subject.GetSubject().GetName()))
-		}
-	}
-	return nil
 }
 
 // nodeOf reads a node's settings out of its desired value, spelled as a
