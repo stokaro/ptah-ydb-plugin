@@ -2713,11 +2713,14 @@ partitioning, the filter, or the replicas. The settings are `AUTO_PARTITIONING_B
   engine reads the declaration (measured on 25.1.4.7 and 26.2.1.14 for a table
   and an index that did not split by size). A size beside a declared
   `partitioningBySize` of `DISABLED` is refused.
-- When the step switches partitioning by size on, it names every setting the
-  table keeps: the ones the declaration states and the held value of the others.
-  The server resets the size and the minimum count the call leaves out, so a
-  minimum nobody declared would otherwise drop to 1. The size the table takes is
-  2048 MB unless the declaration states one, and the TEXT form names it.
+- When the step switches partitioning by size or by load on, it names every
+  setting the table keeps: the ones the declaration states and the held value
+  of the others. Switching either on resets the minimum count the call leaves
+  out to 1, and switching partitioning by size on resets the size too
+  (measured on 26.2.1.14 through the table service for partitioning by load),
+  so a minimum nobody declared would otherwise drop to 1. The size the table
+  takes is 2048 MB unless the declaration states one, and the TEXT form names
+  it. An index's settings follow the same rule.
 - `keyBloomFilter` takes `ENABLED` or `DISABLED`. A table that reports the filter
   as unspecified keeps none, so a declared `DISABLED` matches it (measured on
   25.1.4.7 and 26.2.1.14 by the host's embedded engine).
