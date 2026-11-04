@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	qt "github.com/frankban/quicktest"
@@ -37,7 +38,15 @@ type feedServer struct {
 	statements []string
 	ignore     bool
 	fail       bool
+	// busy is how many statements in a row it refuses with errBusy, as YDB
+	// refuses a statement on a path another schema operation holds, before
+	// it runs one; a negative busy refuses every statement.
+	busy int
 }
+
+// errBusy stands for YDB's refusal of a statement on a path another schema
+// operation holds, which [nativeapi.Changefeed.Busy] reports.
+var errBusy = errors.New("path is under operation")
 
 func (s *feedServer) Describe(_ context.Context, table string) (*native.DescribeTableResult, error) {
 	if table != "/local/app/records" {
@@ -86,6 +95,10 @@ func quoted(statement, marker string) string {
 // retention.
 func (s *feedServer) execute(_ context.Context, statement string) error {
 	s.statements = append(s.statements, statement)
+	if s.busy != 0 {
+		s.busy--
+		return errBusy
+	}
 	if s.fail {
 		return errors.New("statement failed")
 	}
@@ -129,7 +142,7 @@ func withFeed() *feedServer {
 
 func changefeedApplier(server *feedServer) *nativeapi.Changefeed {
 	return &nativeapi.Changefeed{Open: func(context.Context) (nativeapi.ChangefeedTable, error) { return server, nil },
-		Topics: Ydb_Topic_V1.NewTopicServiceClient(server), Execute: server.execute}
+		Topics: Ydb_Topic_V1.NewTopicServiceClient(server), Execute: server.execute, Busy: func(err error) bool { return errors.Is(err, errBusy) }}
 }
 
 // operation captures one changefeed step of app.records.
@@ -279,4 +292,49 @@ func TestChangefeedApply_RefusesAnOwnerOfAnotherDatabase(t *testing.T) {
 	c.Assert(err, qt.ErrorMatches, `changefeed operation targets another database`)
 	c.Assert(dispatched, qt.IsFalse)
 	c.Assert(server.statements, qt.HasLen, 0)
+}
+
+// TestChangefeedApply_WaitsOutABusyPath runs a statement YDB refuses
+// because another schema operation holds the table's path again, until it
+// runs: the initial scan of a changefeed holds the path until it has read
+// every row, and the next ALTER TABLE meets the refusal. The waits double
+// from 50 ms.
+func TestChangefeedApply_WaitsOutABusyPath(t *testing.T) {
+	addition := "ALTER TABLE `/local/app/records` ADD CHANGEFEED `f` WITH (MODE = 'UPDATES', FORMAT = 'JSON');"
+	synctest.Test(t, func(t *testing.T) {
+		c := testcheck.New(t)
+		server := &feedServer{topics: map[string]*native.DescribeTopicResult{}, busy: 3}
+		started := time.Now()
+
+		dispatched, err := changefeedApplier(server).Apply(c.Context(), "/local",
+			feedOperation(c, changefeeds.Change{Name: "f", After: declaredFeed(c, ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON"})}), allowed)
+
+		c.Assert(err, qt.IsNil)
+		c.Assert(dispatched, qt.IsTrue)
+		c.Assert(server.statements, qt.DeepEquals, []string{addition, addition, addition, addition})
+		c.Assert(server.feeds, qt.HasLen, 1)
+		c.Assert(time.Since(started), qt.Equals, 350*time.Millisecond)
+	})
+}
+
+// TestChangefeedApply_FailurePath_ABusyPathOutlastsTheContext stops waiting
+// for a path that stays busy once the context ends, and returns the refusal
+// with the context's error; nothing was applied.
+func TestChangefeedApply_FailurePath_ABusyPathOutlastsTheContext(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := testcheck.New(t)
+		server := &feedServer{topics: map[string]*native.DescribeTopicResult{}, busy: -1}
+		ctx, cancel := context.WithTimeout(c.Context(), 2*time.Second)
+		defer cancel()
+
+		dispatched, err := changefeedApplier(server).Apply(ctx, "/local",
+			feedOperation(c, changefeeds.Change{Name: "f", After: declaredFeed(c, ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON"})}), allowed)
+
+		c.Assert(err, qt.ErrorIs, errBusy)
+		c.Assert(err, qt.ErrorIs, context.DeadlineExceeded)
+		c.Assert(dispatched, qt.IsTrue)
+		c.Assert(server.feeds, qt.HasLen, 0)
+		// 50, 100, 200, 400 and 800 ms, then a second at a time.
+		c.Assert(server.statements, qt.HasLen, 6)
+	})
 }
