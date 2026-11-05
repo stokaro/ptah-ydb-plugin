@@ -7,6 +7,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -122,6 +123,11 @@ func TestIndexObservationsKeepTheSettingsOfCommonIndexes(t *testing.T) {
 	normalized, err := schema.Normalize(captured)
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(normalized, captured), qt.IsTrue)
+	// A declaration of the native index set states no common index, so the
+	// declaration a read converts to holds none of the descriptions.
+	declared, err := schema.ConvertNative(captured, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(declared.Payload), qt.Equals, `{}`)
 }
 
 // Field 9 is returned by YDB for the vector-prefix implementation sequence,
