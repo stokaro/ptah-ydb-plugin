@@ -24,6 +24,11 @@ const sessionTimeout = 10 * time.Second
 const freshness = sessionTimeout / 2
 const checkInterval = time.Second
 
+// ErrRelaxedNode marks a lock node that does not read and attach with strict
+// consistency. Nothing was asked of its semaphores, so nothing is held. The
+// message names the node and the settings it needs.
+var ErrRelaxedNode = errors.New("YDB lock node is not strict")
+
 // ErrRefused marks an acquisition the server refused this user before any
 // lock was taken. The message names the step that failed and the right the
 // user lacks.
@@ -134,10 +139,33 @@ func validateNode(ctx context.Context, driver *ydb.Driver, node string) error {
 	if err := nativeapi.Operation(response.GetOperation(), &description); err != nil {
 		return err
 	}
-	if description.GetSelf().GetName() != NodeName || description.GetSelf().GetType() != Ydb_Scheme.Entry_COORDINATION_NODE ||
-		description.GetConfig().GetReadConsistencyMode() != Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT ||
+	if description.GetSelf().GetName() != NodeName || description.GetSelf().GetType() != Ydb_Scheme.Entry_COORDINATION_NODE {
+		return fmt.Errorf("YDB lock path is not a coordination node")
+	}
+	if description.GetConfig().GetReadConsistencyMode() != Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT ||
 		description.GetConfig().GetAttachConsistencyMode() != Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT {
-		return fmt.Errorf("YDB lock node requires strict read and attach consistency")
+		// Ptah's built-in YDB engine creates the node with neither mode set,
+		// which YDB reads as relaxed reads and strict attachment.
+		return authored.Wrap(ErrRelaxedNode, fmt.Sprintf("the YDB coordination node %s, which holds Ptah's locks, reads with "+
+			"read consistency %s and attach consistency %s, and a lock taken there cannot be shown to be still held. Set both "+
+			"to strict, or drop the node while no run holds a lock on it, which lets the provider create it strict. Ptah's "+
+			"built-in YDB engine creates the node without either setting", node,
+			consistencyName(description.GetConfig().GetReadConsistencyMode()), consistencyName(description.GetConfig().GetAttachConsistencyMode())))
 	}
 	return nil
+}
+
+// consistencyName is how a refusal names a consistency mode: unset, relaxed
+// or strict.
+func consistencyName(mode Ydb_Coordination.ConsistencyMode) string {
+	switch mode {
+	case Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT:
+		return "strict"
+	case Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_RELAXED:
+		return "relaxed"
+	case Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_UNSET:
+		return "unset"
+	default:
+		return mode.String()
+	}
 }

@@ -745,7 +745,11 @@ The lock service uses exclusive ephemeral semaphores on the database-root
 `ptah_locks` coordination node. Each acquisition has its own native session.
 The provider creates a missing node with strict read and attach consistency.
 An existing node must have both settings explicitly strict; the provider refuses
-an incompatible configuration without changing it. YDB's default read mode can
+an incompatible configuration without changing it. The refusal is a
+`NOT_ACQUIRED` receipt that holds nothing, and its reason names the node and its
+two settings. Ptah's built-in YDB engine creates the node with neither setting,
+so a database that engine locked holds a node this provider refuses until it is
+made strict or dropped. YDB's default read mode can
 return stale state during leader changes; see the
 [YDB coordination documentation](https://ydb.tech/docs/en/reference/ydb-sdk/coordination).
 This changes the requirements for an older Ptah lock node; pre-v1, so no
