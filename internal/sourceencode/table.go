@@ -52,14 +52,26 @@ type tableFacets struct {
 	feedsID string
 	// columns are the columns a family holds, in the order of the request.
 	columns []placedColumn
+	// indexes are the global indexes whose own facet states settings, in the
+	// order of the request.
+	indexes []indexSettings
 	// neutral are the facets a source states by writing nothing: an empty
-	// native index set, and a column the key's family holds.
+	// native index set, a column the key's family holds, and an index that
+	// holds the settings YDB gives a new one.
 	neutral []string
 	losses  []*protocol.EncodeLoss
 }
 
 // placedColumn is a column a declared family holds.
 type placedColumn struct{ id, name, family string }
+
+// indexSettings are the partitioning and read replicas an index's own facet
+// states, written as attributes of its index directive or keys of its entry.
+type indexSettings struct {
+	id     string
+	owner  *protocol.Reference
+	intent *native.IndexSettingsIntent
+}
 
 // EncodeTable writes the facets of one table, in YAML or Go, as the table
 // declaration the provider's table decoders read: the row table's
@@ -75,6 +87,11 @@ type placedColumn struct{ id, name, family string }
 // part: the table directive in Go, the column_families key in YAML. That is an
 // empty native index set, an empty changefeed set and a column that sits in
 // the default family.
+//
+// A global index's own facet is written as attributes of its ptah:schema:index
+// directive in Go, or as keys of its index entry in YAML, with the settings the
+// host's embedded engine writes there: those that differ from the ones YDB
+// gives a new index, which a read's conversion keeps.
 //
 // What no declaration states is a loss for its facet: an access requirement,
 // table attributes, storage settings, tiering, a temporary table, a family
@@ -186,6 +203,16 @@ func (f *tableFacets) add(value *protocol.EncodeSourceValue) error {
 			names = append(names, index.GetSpecification().GetName())
 		}
 		f.lose(id, "table %s: its native indexes (%s) have no source spelling the provider writes", tableSubject(f.binding), strings.Join(names, ", "))
+	case schema.IndexSettingsProperties:
+		var intent native.IndexSettingsIntent
+		if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
+			return err
+		}
+		if proto.Size(&intent) == 0 {
+			f.neutral = append(f.neutral, id)
+			return nil
+		}
+		f.indexes = append(f.indexes, indexSettings{id: id, owner: proto.CloneOf(envelope.GetOwner()), intent: &intent})
 	default:
 		f.lose(id, "table %s: its %s have no source spelling", tableSubject(f.binding), strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/"), "-", " "))
 	}
@@ -254,6 +281,7 @@ func (f *tableFacets) lose(id, format string, arguments ...any) {
 		f.feeds, f.feedsID = nil, ""
 	}
 	f.columns = slices.DeleteFunc(f.columns, func(column placedColumn) bool { return column.id == id })
+	f.indexes = slices.DeleteFunc(f.indexes, func(index indexSettings) bool { return index.id == id })
 	f.neutral = slices.DeleteFunc(f.neutral, func(neutral string) bool { return neutral == id })
 }
 
@@ -277,6 +305,9 @@ func (f *tableFacets) written() []string {
 	}
 	for _, column := range f.columns {
 		ids = append(ids, column.id)
+	}
+	for _, index := range f.indexes {
+		ids = append(ids, index.id)
 	}
 	return append(ids, f.neutral...)
 }
@@ -502,6 +533,11 @@ func (f *tableFacets) goParts() []*protocol.EncodedSourcePart {
 		}
 		parts = append(parts, part("family."+strconv.Itoa(i), claims[tablesource.DirectiveColumnFamily], entries))
 	}
+	for i, index := range f.indexes {
+		written := part("index."+strconv.Itoa(i), claims[tablesource.DirectiveIndex], index.attributes())
+		written.Fragment.Subject = index.subject()
+		parts = append(parts, written)
+	}
 	for i, feed := range f.feeds {
 		parts = append(parts, part("changefeed."+strconv.Itoa(i), claims[changefeedsource.DirectiveChangefeed], sortedFields(changefeedValues(feed.Changefeed))))
 		for j, consumer := range feed.Consumers {
@@ -608,8 +644,41 @@ func (f *tableFacets) yamlParts() []*protocol.EncodedSourcePart {
 		}
 		parts = append(parts, part(changefeedsource.KeyChangefeeds, mapping(feeds...)))
 	}
+	indexClaims := make(map[string]*protocol.YAMLSourceKey)
+	for _, claim := range tablesource.IndexYAMLKeys() {
+		indexClaims[claim.GetKey()] = claim
+	}
+	for i, index := range f.indexes {
+		for _, entry := range index.attributes() {
+			claim := indexClaims[entry.GetKey()]
+			parts = append(parts, &protocol.EncodedSourcePart{Fragment: &protocol.SourceFragment{Id: f.fragmentID("index." + strconv.Itoa(i) + "." + entry.GetKey()),
+				Selector: claim.GetSelector(), YamlKey: proto.CloneOf(claim), BindingId: f.binding.GetId(), Subject: index.subject(),
+				Content: &protocol.SourceFragment_Value{Value: entry.GetValue()}}})
+		}
+	}
 	return parts
 }
+
+// attributes are the settings in the order the host's embedded engine writes
+// them: partitioning by size, the partition size, partitioning by load, the
+// minimum and maximum partition counts, and the read replicas.
+func (i indexSettings) attributes() []*protocol.SourceEntry {
+	var entries []*protocol.SourceEntry
+	add := func(key, value string) { entries = append(entries, field(key, value)) }
+	partitioning := i.intent.GetPartitioningSettings()
+	addSwitch(add, tablesource.AttributeBySize, partitioning.GetPartitioningBySize())
+	addCount(add, tablesource.AttributePartitionSizeMB, partitioning.GetPartitionSizeMb())
+	addSwitch(add, tablesource.AttributeByLoad, partitioning.GetPartitioningByLoad())
+	addCount(add, tablesource.AttributeMinPartitions, partitioning.GetMinPartitionsCount())
+	addCount(add, tablesource.AttributeMaxPartitions, partitioning.GetMaxPartitionsCount())
+	if replicas := i.intent.GetReadReplicasSettings(); replicas != nil {
+		add(tablesource.AttributeReadReplicas, readReplicas(replicas))
+	}
+	return entries
+}
+
+// subject is the index the parts declare for: the facet's owner.
+func (i indexSettings) subject() *protocol.Reference { return proto.CloneOf(i.owner) }
 
 // yamlColumnStore writes a column table's storage as the column_store key
 // reads it. A TTL that only deletes is written with the row_deletion keys.
@@ -708,7 +777,35 @@ func (f *tableFacets) verify(format protocol.SourceDocument_Format, parts []*pro
 	if f.feedsID != "" && !slices.Contains(lost, f.feedsID) && !sameFeeds(f.feeds, feeds) {
 		lost = append(lost, f.feedsID)
 	}
-	return lost, nil
+	return append(lost, f.lostIndexes(document)...), nil
+}
+
+// lostIndexes decodes the index parts with the index decoder and returns the
+// IDs of the index facets they do not give back unchanged.
+func (f *tableFacets) lostIndexes(document *protocol.SourceDocument) []string {
+	var ids []string
+	for _, index := range f.indexes {
+		ids = append(ids, index.id)
+	}
+	decoded, err := tablesource.DecodeIndexes(context.Background(), document)
+	if err != nil {
+		return ids
+	}
+	got := map[string]*native.IndexSettingsIntent{}
+	for _, index := range decoded {
+		intent := &native.IndexSettingsIntent{}
+		if err := protojson.Unmarshal(index.Value.GetValue().GetPayload(), intent); err != nil {
+			return ids
+		}
+		got[index.Value.GetValue().GetOwner().GetName()] = intent
+	}
+	var lost []string
+	for _, index := range f.indexes {
+		if !proto.Equal(index.intent, got[index.owner.GetName()]) {
+			lost = append(lost, index.id)
+		}
+	}
+	return lost
 }
 
 // sameIntent reports a decoded intent equal to the wanted one, an absent one

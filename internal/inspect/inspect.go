@@ -173,7 +173,10 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				if common.Indexes {
 					// The host holds what the common model describes; the
 					// native facet keeps only the rest.
-					table.Indexes = commonIndexes(table.Identity, indexes)
+					table.Indexes, err = commonIndexes(table.Identity, indexes, common.IndexFacets)
+					if err != nil {
+						return nil, err
+					}
 					indexes = nativeIndexes(indexes)
 				}
 				facet, err := schema.CaptureIndexes(table.Identity, indexes)
@@ -194,6 +197,9 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				observe(result, table.Facets)
 				for _, column := range table.Columns {
 					observe(result, column.Facets)
+				}
+				for _, index := range table.Indexes {
+					observe(result, index.Facets)
 				}
 			case Ydb_Scheme.Entry_COLUMN_TABLE:
 				table, err := source.readColumnTable(ctx, columns, database, selected, name)
@@ -275,9 +281,15 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		}
 		// A successful list and complete child reads prove native-object
 		// absence only in this exact directory, never in skipped descendants.
+		// They prove too that the read stated the settings of every global
+		// index of every row table in it: as the index's own facet where the
+		// host negotiated schema.observed-index-facets, and, where it did not,
+		// the host has no place for an index's facet, so none is missing. A
+		// host that writes HCL then needs no not-described entry for them.
 		for _, record := range result.Coverage.Kinds {
 			// Views the common wire carries are not read as native objects.
-			if schema.IsNativeObject(record.Model.Kind) && (record.Model.Kind != schema.ViewProperties || !common.Views) {
+			if schema.IsNativeObject(record.Model.Kind) && (record.Model.Kind != schema.ViewProperties || !common.Views) ||
+				record.Model.Kind == schema.IndexSettingsProperties {
 				record.Regions = append(record.Regions, &protocol.ModelNamespaceKnowledge{
 					Scope:     &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: database, Normalized: database}, Catalog: &protocol.NamespaceComponent{}, Schema: &protocol.NamespaceComponent{Source: selected, Normalized: selected}},
 					Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},

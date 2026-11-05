@@ -285,3 +285,11 @@ message RowTableIntent {
     uint64 uniform_partitions = 12;
     repeated SplitPoint partition_at_keys = 13;
 }
+
+// IndexSettingsObservation is what a read finds a global sync, async or
+// unique index holds: its automatic partitioning, without the partition
+// columns, and its read replicas, defaults included.
+message IndexSettingsObservation {
+  Ydb.Table.PartitioningSettings partitioning_settings = 1;
+  Ydb.Table.ReadReplicasSettings read_replicas_settings = 2;
+}

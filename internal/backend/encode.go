@@ -77,6 +77,12 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 			subjects[id] = sourceencode.Noun(envelope.GetKind()) + " " + sourceencode.Subject(envelope.GetOwner())
 		}
 		switch {
+		case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL && envelope.GetKind() == schema.IndexSettingsProperties:
+			parts, err := sourceencode.EncodeIndexHCL(value)
+			if err != nil {
+				return nil, authored.Status(codes.InvalidArgument, err)
+			}
+			units = append(units, encodedUnit{ids: []string{id}, parts: parts})
 		case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL:
 			result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: id, Message: lossMessage(format, envelope)})
 		case value.GetPlacement() == protocol.SourceModelValue_FACET:

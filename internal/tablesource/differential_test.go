@@ -220,6 +220,8 @@ var elsewhere = map[string]string{
 	"yaml-deferred-changefeeds":       schema.ChangefeedProperties,
 	"go-deferred-changefeed":          schema.ChangefeedProperties,
 	"go-deferred-changefeed-consumer": schema.ChangefeedProperties,
+	"go-deferred-index-partitioning":  schema.IndexSettingsProperties,
+	"go-deferred-index-replicas":      schema.IndexSettingsProperties,
 }
 
 // refusals names the inputs whose key or attribute the provider claims and
@@ -229,8 +231,6 @@ var refusals = map[string]string{
 	"go-deferred-family-cache-mode":             "cache_mode is not supported by the YDB provider yet",
 	"go-deferred-family-fields-other-table":     "fields is not supported by the YDB provider yet",
 	"yaml-deferred-ttl-platform-other-property": "platform.ydb.some_other_setting is not supported by the YDB provider yet",
-	"go-deferred-index-partitioning":            "auto_partitioning_by_load is not supported by the YDB provider yet",
-	"go-deferred-index-replicas":                "read_replicas_settings is not supported by the YDB provider yet",
 	"go-deferred-index-vector":                  "clusters is not supported by the YDB provider yet",
 	"go-deferred-index-fulltext":                "tokenizer is not supported by the YDB provider yet",
 	"go-deferred-index-bloom":                   "false_positive_probability is not supported by the YDB provider yet",
@@ -360,7 +360,7 @@ func TestDeferred_DecodedElsewhere(t *testing.T) {
 			c := testcheck.New(t)
 			rows := corpus(c, func(candidate string) bool { return candidate == name })
 			c.Assert(len(rows), qt.Equals, 1)
-			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
+			decoded, err := backend.New().DecodeSource(indexFacetsContext(c), request(c, rows[0]))
 			c.Assert(err, qt.IsNil)
 			c.Assert(pluginMeaning(c, decoded), qt.DeepEquals, hostMeaning(c, rows[0].golden))
 			var kinds []string

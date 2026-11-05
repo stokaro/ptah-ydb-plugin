@@ -92,9 +92,34 @@ func FacetDiffers(desired, observed *protocol.Envelope) (bool, error) {
 			return false, err
 		}
 		return indexDiffers(&want, &held), nil
+	case schema.IndexSettingsProperties:
+		var want native.IndexSettingsIntent
+		if err := protojson.Unmarshal(desired.Payload, &want); err != nil {
+			return false, err
+		}
+		var held native.IndexSettingsObservation
+		if err := protojson.Unmarshal(observed.Payload, &held); err != nil {
+			return false, err
+		}
+		change, reason := planIndexSettings(desired.GetOwner().GetName(), declaredIndexSettings(&want), settingsIndex(desired.GetOwner().GetName(), &held))
+		return change != nil || reason != "", nil
 	default:
 		return false, fmt.Errorf("YDB facet comparison does not support %s", desired.GetKind())
 	}
+}
+
+// declaredIndexSettings is an index facet as the settings rule reads a
+// declared index's settings.
+func declaredIndexSettings(intent *native.IndexSettingsIntent) *native.GlobalIndexSettings {
+	return &native.GlobalIndexSettings{PartitioningSettings: proto.CloneOf(intent.GetPartitioningSettings()), ReadReplicasSettings: proto.CloneOf(intent.GetReadReplicasSettings())}
+}
+
+// settingsIndex is a global index named name that holds the settings held reports,
+// as the settings rule reads the index a table holds. Its kind and keys do not
+// take part in the rule.
+func settingsIndex(name string, held *native.IndexSettingsObservation) *native.TableIndexDescription {
+	settings := &native.GlobalIndexSettings{PartitioningSettings: proto.CloneOf(held.GetPartitioningSettings()), ReadReplicasSettings: proto.CloneOf(held.GetReadReplicasSettings())}
+	return &native.TableIndexDescription{Name: name, Type: &native.TableIndexDescription_GlobalIndex{GlobalIndex: &native.GlobalIndex{Settings: settings}}}
 }
 
 // tableDiffers applies the TTL, partitioning, read replica, key bloom filter

@@ -32,6 +32,9 @@ type Common struct {
 	// asynchronous and unique, as the table's common indexes; see
 	// commonIndexes.
 	Indexes bool
+	// IndexFacets reports each common index's partitioning and read replicas
+	// as a facet the index owns (schema.observed-index-facets).
+	IndexFacets bool
 }
 
 // coverage is the common-object part of a reply before anything is read: one
