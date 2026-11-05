@@ -594,29 +594,12 @@ func refused(change lowered, err error) *protocol.PlannedFeatures {
 func keepTieredTTLs(request *protocol.PlanFeaturesRequest, root string, steps []step, ids []*protocol.StepIdentity, changes []lowered,
 	contribution *protocol.PlanningContribution, byInput map[int][]*protocol.StepIdentity,
 ) (*protocol.PlannedFeatures, error) {
-	replaced, dropped := make(map[ydbdecl.Path]int), make(map[ydbdecl.Path]int)
-	for index, planned := range steps {
-		switch {
-		case planned.source() && planned.action == protocol.PlanningEffect_ALTER:
-			replaced[planned.path()] = index
-		case planned.source() && planned.action == protocol.PlanningEffect_DROP:
-			dropped[planned.path()] = index
-		}
-	}
+	replaced, dropped := sourceSteps(steps)
 	if len(replaced)+len(dropped) == 0 {
 		return nil, nil
 	}
-	for _, table := range request.GetTables() {
-		ttl, err := tablecreate.PlannedColumnTTL(table)
-		if err != nil {
-			return nil, err
-		}
-		for _, source := range tablecreate.TTLSources(root, ttl) {
-			if index, found := dropped[source]; found {
-				return refused(changes[steps[index].input], fmt.Errorf("table %s: its TTL reads external data source %s, which the plan drops",
-					ydbdecl.ExternalDisplay(table.GetSubject().GetSchema().GetSource(), table.GetSubject().GetName().GetSource()), display(steps[index].subject))), nil
-			}
-		}
+	if refusal, err := refuseDroppedTTLSources(request, root, steps, changes, dropped); refusal != nil || err != nil {
+		return refusal, err
 	}
 	number := 0
 	for _, table := range request.GetTables() {
@@ -624,15 +607,7 @@ func keepTieredTTLs(request *protocol.PlanFeaturesRequest, root string, steps []
 		if err != nil {
 			return nil, err
 		}
-		if kept == nil {
-			continue
-		}
-		var around []int
-		for _, source := range kept.Sources {
-			if index, found := replaced[source]; found {
-				around = append(around, index)
-			}
-		}
+		around := replacedSources(kept, replaced)
 		if len(around) == 0 {
 			continue
 		}
@@ -648,13 +623,60 @@ func keepTieredTTLs(request *protocol.PlanFeaturesRequest, root string, steps []
 			contribution.Dependencies = append(contribution.Dependencies,
 				&protocol.PlanningDependency{Before: proto.CloneOf(kept.Reset.Id), After: proto.CloneOf(ids[index])},
 				&protocol.PlanningDependency{Before: proto.CloneOf(ids[index]), After: proto.CloneOf(kept.Set.Id)})
-		}
-		input := steps[around[0]].input
-		byInput[input] = append(byInput[input], proto.CloneOf(kept.Reset.Id), proto.CloneOf(kept.Set.Id))
-		for _, index := range around {
 			change := &changes[steps[index].input]
 			if !strings.Contains(change.strategy, keptTTLStrategy) {
 				change.strategy += keptTTLStrategy
+			}
+		}
+		input := steps[around[0]].input
+		byInput[input] = append(byInput[input], proto.CloneOf(kept.Reset.Id), proto.CloneOf(kept.Set.Id))
+	}
+	return nil, nil
+}
+
+// sourceSteps are the data sources the batch replaces and the ones it drops,
+// each by the position of its step.
+func sourceSteps(steps []step) (replaced, dropped map[ydbdecl.Path]int) {
+	replaced, dropped = make(map[ydbdecl.Path]int), make(map[ydbdecl.Path]int)
+	for index, planned := range steps {
+		switch {
+		case planned.source() && planned.action == protocol.PlanningEffect_ALTER:
+			replaced[planned.path()] = index
+		case planned.source() && planned.action == protocol.PlanningEffect_DROP:
+			dropped[planned.path()] = index
+		}
+	}
+	return replaced, dropped
+}
+
+// replacedSources are the positions of the steps that replace a data source
+// kept, the TTL of a table the plan keeps, names, in the order the TTL names
+// them. A nil kept names none.
+func replacedSources(kept *tablecreate.KeptTTL, replaced map[ydbdecl.Path]int) []int {
+	if kept == nil {
+		return nil
+	}
+	var around []int
+	for _, source := range kept.Sources {
+		if index, found := replaced[source]; found {
+			around = append(around, index)
+		}
+	}
+	return around
+}
+
+// refuseDroppedTTLSources refuses the drop of a data source that a TTL the
+// plan leaves a table with names, in the embedded engine's words.
+func refuseDroppedTTLSources(request *protocol.PlanFeaturesRequest, root string, steps []step, changes []lowered, dropped map[ydbdecl.Path]int) (*protocol.PlannedFeatures, error) {
+	for _, table := range request.GetTables() {
+		ttl, err := tablecreate.PlannedColumnTTL(table)
+		if err != nil {
+			return nil, err
+		}
+		for _, source := range tablecreate.TTLSources(root, ttl) {
+			if index, found := dropped[source]; found {
+				return refused(changes[steps[index].input], fmt.Errorf("table %s: its TTL reads external data source %s, which the plan drops",
+					ydbdecl.ExternalDisplay(table.GetSubject().GetSchema().GetSource(), table.GetSubject().GetName().GetSource()), display(steps[index].subject))), nil
 			}
 		}
 	}

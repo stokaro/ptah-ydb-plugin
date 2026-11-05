@@ -90,22 +90,18 @@ func heldTiers(ttl *native.ColumnTTLPolicy) string {
 }
 
 // document declares, in the fixture directory, the data source archive at
-// location and records, a column table keyed by (ts, id) hashed by id in one
-// shard. ttl is the further YAML of records: the TTL of its column_store key,
-// or its platform group.
+// location and the table tables declares.
 func (f tieredFixture) document(location, ttl string) string {
-	return f.documentWithout(false, location, ttl)
+	return "external_data_sources:\n  archive:\n    schema: " + f.directory + "\n    source_type: ObjectStorage\n    location: " + location + "\n" +
+		"    auth_method: AWS\n    options:\n      AWS_REGION: us-east-1\n      AWS_ACCESS_KEY_ID_SECRET_NAME: " + f.access + "\n" +
+		"      AWS_SECRET_ACCESS_KEY_SECRET_NAME: " + f.secret + "\n" + f.tables(ttl)
 }
 
-// documentWithout is document, without the data source when dropped is true.
-func (f tieredFixture) documentWithout(dropped bool, location, ttl string) string {
-	source := "external_data_sources:\n  archive:\n    schema: " + f.directory + "\n    source_type: ObjectStorage\n    location: " + location + "\n" +
-		"    auth_method: AWS\n    options:\n      AWS_REGION: us-east-1\n      AWS_ACCESS_KEY_ID_SECRET_NAME: " + f.access + "\n" +
-		"      AWS_SECRET_ACCESS_KEY_SECRET_NAME: " + f.secret + "\n"
-	if dropped {
-		source = ""
-	}
-	return source + "tables:\n  records:\n    schema: " + f.directory + "\n" + strings.ReplaceAll(ttl, "{archive}", f.archive()) +
+// tables declares records, a column table keyed by (ts, id) hashed by id in
+// one shard, in the fixture directory. ttl is the further YAML of records: the
+// TTL of its column_store key, or its platform group.
+func (f tieredFixture) tables(ttl string) string {
+	return "tables:\n  records:\n    schema: " + f.directory + "\n" + strings.ReplaceAll(ttl, "{archive}", f.archive()) +
 		"    columns:\n      ts: {type: Timestamp, primary: true, not_null: true}\n      id: {type: Uint64, primary: true, not_null: true}\n      body: {type: Utf8}\n"
 }
 
@@ -190,7 +186,7 @@ func TestHostRefusesDroppingASourceATieredTTLNames_FailurePath(t *testing.T) {
 	const location = "https://column.invalid/archive/"
 	applyUntilSynced(c, fixture.directory, "yaml", fixture.document(location, tieredTTL))
 
-	output, err := hostApplySelected(c, fixture.directory, "yaml", fixture.documentWithout(true, location, tieredTTL))
+	output, err := hostApplySelected(c, fixture.directory, "yaml", fixture.tables(tieredTTL))
 
 	c.Assert(err, qt.IsNotNil, qt.Commentf("%s", output))
 	c.Assert(output, qt.Contains, "table "+fixture.directory+"/records: its TTL reads external data source "+fixture.directory+"/archive, which the plan drops")

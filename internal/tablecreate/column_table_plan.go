@@ -325,7 +325,9 @@ func (s columnTableStep) plan(number int, numbers *localIndexNumbers) ([]*protoc
 // ttlSteps are the steps of a TTL change, as plan describes them.
 func (s columnTableStep) ttlSteps(number int, change columnTTLChange) ([]*protocol.PlanningStep, []*protocol.PlanningDependency, error) {
 	name := fmt.Sprintf("column-table-ttl/%06d", number)
-	id := func(suffix string) *protocol.StepIdentity { return &protocol.StepIdentity{Owner: schema.ProviderID, Name: name + suffix} }
+	id := func(suffix string) *protocol.StepIdentity {
+		return &protocol.StepIdentity{Owner: schema.ProviderID, Name: name + suffix}
+	}
 	held, set := change.held, change.set
 	if held != nil && set != nil && !MovesRows(held) {
 		step, err := ttlStep(id("/set"), s.owner, s.table.Subject, &native.ColumnTableTTLAlteration{Held: held, Set: set}, protocol.PlanningEffect_ALTER,
