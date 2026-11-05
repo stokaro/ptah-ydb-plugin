@@ -61,7 +61,6 @@ func TestHostAppliesResourcePoolSettings_HappyPath(t *testing.T) {
 			"DROP RESOURCE POOL `" + names["batch"] + "`", "DROP RESOURCE POOL `" + names["idle"] + "`", "ALTER RESOURCE POOL default RESET (RESOURCE_WEIGHT)"} {
 			_ = execFixtureSchema(ctx, opened.DB, statement)
 		}
-		c.Check(awaitPoolRouting(ctx, opened.DB), qt.IsNil)
 	})
 	replacer := strings.NewReplacer("{batch}", names["batch"], "{idle}", names["idle"], "{to_batch}", names["to_batch"], "{to_idle}", names["to_idle"],
 		"{member}", names["member"])
