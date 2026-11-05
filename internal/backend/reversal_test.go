@@ -13,6 +13,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/reversal"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -201,4 +202,55 @@ func TestReverseChanges_ReversesABatch(t *testing.T) {
 	c.Assert(reversed.Changes[0].Strategy, qt.Equals, "drop the created coordination node")
 	c.Assert(reversed.Changes[1].Strategy, qt.Equals, "drop the created secret")
 	c.Assert(reversed.Changes[0].ForwardState[0].Value.Id, qt.Not(qt.Equals), reversed.Changes[1].ForwardState[0].Value.Id)
+}
+
+// indexSettingsChange is the change of index by_label of app.records, which
+// holds the settings YDB gives a new index, into the settings declared states.
+func indexSettingsChange(c *qt.C, declared string) *protocol.PlanningChange {
+	c.Helper()
+	owner := &protocol.Reference{Engine: "ydb", Database: "/local", Schema: "app", Kind: "index", Path: []string{"records"}, Name: "by_label"}
+	held, err := schema.CaptureIndexSettings(owner, &native.GlobalIndexSettings{PartitioningSettings: schema.NewIndexSettings().GetPartitioningSettings()})
+	c.Assert(err, qt.IsNil)
+	model := schema.NativeDesiredModel(schema.IndexSettingsProperties)
+	desired := &protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: 1, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256,
+		Owner: proto.CloneOf(owner), Payload: []byte(declared)}
+	change, err := schema.CaptureTablePropertiesChange("change", owner, held, desired)
+	c.Assert(err, qt.IsNil)
+	return &protocol.PlanningChange{Value: change, Subject: &protocol.ComparisonIdentity{Kind: "index", Database: testcomparison.Part("/local"), Catalog: testcomparison.Part(""),
+		Schema: testcomparison.Part("app"), Parent: testcomparison.Part("records"), Name: testcomparison.Part("by_label")}}
+}
+
+// A change of a global index's settings reverses to every setting the index
+// held, in the host's embedded engine's words, and a maximum partition count
+// the forward change gives an index that held none is what the reverse cannot
+// undo, since YDB removes none. The forward state is the index's own facet as
+// the forward change leaves it.
+func TestReverseChanges_RestoresAnIndexsSettings(t *testing.T) {
+	for _, test := range []struct {
+		name, declared string
+		limitations    []string
+	}{
+		{name: "a minimum partition count", declared: `{"partitioningSettings":{"minPartitionsCount":"3"}}`},
+		{name: "a maximum partition count", declared: `{"partitioningSettings":{"maxPartitionsCount":"9"}}`,
+			limitations: []string{"YDB cannot remove a maximum partition count, so the rollback keeps AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9, which the forward change set."}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			reverse := &protocol.ReverseChangesRequest{Engine: "ydb", ReversalId: reversal.ServiceID, TargetFeatures: backend.Description().Engines[0].Features,
+				Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
+				Changes:     []*protocol.PlanningChange{indexSettingsChange(c, test.declared)}}
+
+			reversed, err := backend.New().ReverseChanges(c.Context(), reverse)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateReversedChanges(backend.Description(), reverse, reversed), qt.IsNil)
+			c.Assert(reversed.Changes, qt.HasLen, 1)
+			c.Assert(reversed.Changes[0].Strategy, qt.Equals, "restore every setting the index held in place")
+			c.Assert(reversed.Changes[0].Limitations, qt.DeepEquals, test.limitations)
+			c.Assert(reversed.Changes[0].ForwardState, qt.HasLen, 1)
+			c.Assert(reversed.Changes[0].ForwardState[0].Placement, qt.Equals, protocol.ForwardState_FACET)
+			c.Assert(reversed.Changes[0].ForwardState[0].Kind, qt.Equals, schema.IndexSettingsProperties)
+			c.Assert(reversed.Changes[0].ForwardState[0].Value.Value.Owner.Name, qt.Equals, "by_label")
+		})
+	}
 }

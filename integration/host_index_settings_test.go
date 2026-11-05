@@ -24,11 +24,16 @@ import (
 // on its index directive, the name of the index on n, and the further members
 // given, such as a holder field of another index directive.
 func indexSettingsItems(directory, bodySettings, nIndex, nSettings, members string) string {
+	return typedIndexSettingsItems(directory, "Int64", bodySettings, nIndex, nSettings, members)
+}
+
+// typedIndexSettingsItems is indexSettingsItems with n of type nType.
+func typedIndexSettingsItems(directory, nType, bodySettings, nIndex, nSettings, members string) string {
 	return "package entities\n\n//ptah:schema:table name=\"items\" schema=\"" + directory + "\"\ntype Item struct {\n" +
 		"\t//ptah:schema:field name=\"id\" type=\"Uint64\" primary=\"true\" not_null=\"true\"\n\tID uint64\n" +
 		"\t//ptah:schema:field name=\"body\" type=\"Utf8\"\n" +
 		"\t//ptah:schema:index name=\"by_body\" fields=\"body\" include=\"n\"" + bodySettings + "\n\tBody string\n" +
-		"\t//ptah:schema:field name=\"n\" type=\"Int64\"\n" +
+		"\t//ptah:schema:field name=\"n\" type=\"" + nType + "\"\n" +
 		"\t//ptah:schema:index name=\"" + nIndex + "\" fields=\"n\" type=\"async\"" + nSettings + "\n\tN int64\n" + members + "}\n"
 }
 

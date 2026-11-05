@@ -165,18 +165,13 @@ func ReversibleTableChanges() []string { return []string{ColumnStorageChange, Ta
 // change are present, and the reverse swaps them as ReverseObjectChange does:
 // what the forward change leaves, as a read would report it, and what it
 // found, as a declaration. A column's change, its move to another family,
-// reverses the same way under the column.
-//
-// A change of a global index's settings is refused. Its declaration states
-// only the settings it changes and keeps every other, so the restored
-// declaration would have to state each setting the index held, including the
-// ones the forward change turned away from what YDB gives a new index, and no
-// reverse planned that way has been measured against a server.
+// reverses the same way under the column, and a change of a global index's
+// partitioning and read replicas under the index (see reverseIndexSettings).
 func ReverseTableChange(id string, change *protocol.Envelope, access AccessWire) (Reversed, error) {
 	var before, after *protocol.Envelope
 	var err error
 	if change.GetKind() == TablePropertiesChange && change.GetOwner().GetKind() == "index" {
-		return Reversed{}, fmt.Errorf("a change of a global index's settings has no reversal yet")
+		return reverseIndexSettings(id, change)
 	}
 	switch change.GetKind() {
 	case TablePropertiesChange:
@@ -224,6 +219,52 @@ func ReverseTableChange(id string, change *protocol.Envelope, access AccessWire)
 		return Reversed{}, err
 	}
 	return Reversed{Value: value, Kind: before.Kind, Before: before, After: after, Left: left, Restored: restored}, nil
+}
+
+// reverseIndexSettings returns the change that undoes change, a change of a
+// global index's partitioning and read replicas, under id. The declaration
+// states only the settings it changes and keeps every other, so what the
+// forward change leaves is what the index held with the declared settings in
+// place of its own, and the reverse declares every setting the index held, as
+// the host's embedded engine restores them: a reverse that stated only the
+// settings that differ from a new index's would keep each setting the forward
+// change moved away from one.
+func reverseIndexSettings(id string, change *protocol.Envelope) (Reversed, error) {
+	before, after, err := tablePropertiesOperands(change)
+	if err != nil {
+		return Reversed{}, err
+	}
+	held, declared := &native.IndexSettingsObservation{}, &native.IndexSettingsIntent{}
+	if err := protojson.Unmarshal(before.GetPayload(), held); err != nil {
+		return Reversed{}, err
+	}
+	if err := protojson.Unmarshal(after.GetPayload(), declared); err != nil {
+		return Reversed{}, err
+	}
+	left, err := convertedEnvelope(before, model(IndexSettingsProperties), alteredIndexSettings(held, declared), Normalize)
+	if err != nil {
+		return Reversed{}, err
+	}
+	left.Context = proto.CloneOf(after.GetContext())
+	restored, err := convertedEnvelope(after, NativeDesiredModel(IndexSettingsProperties), explicitIndexSettings(held), NormalizeDesired)
+	if err != nil {
+		return Reversed{}, err
+	}
+	restored.Context = proto.CloneOf(before.GetContext())
+	value, err := CaptureTablePropertiesChange(id, change.GetOwner(), left, restored)
+	if err != nil {
+		return Reversed{}, err
+	}
+	return Reversed{Value: value, Kind: IndexSettingsProperties, Before: before, After: after, Left: left, Restored: restored}, nil
+}
+
+// TablePropertiesOperands returns the normalized operands of a table
+// properties change: what the owner held, as a read reports it, and what the
+// change asks it to hold, as a declaration. They are a table's properties, its
+// index set or its changefeed set, a column's properties, or a global index's
+// partitioning and read replicas, each under the change's owner.
+func TablePropertiesOperands(change *protocol.Envelope) (before, after *protocol.Envelope, err error) {
+	return tablePropertiesOperands(change)
 }
 
 // tablePropertiesOperands returns the normalized operands of a table

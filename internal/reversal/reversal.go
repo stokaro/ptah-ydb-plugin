@@ -125,6 +125,14 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 	case schema.TransferChange:
 		describeTransfer(result, created, dropped, name)
 	case schema.TablePropertiesChange, schema.ColumnStorageChange:
+		if reversed.Kind == schema.IndexSettingsProperties {
+			limitations, err := indexSettingsLimitations(reversed)
+			if err != nil {
+				return nil, err
+			}
+			result.Strategy, result.Limitations = "restore every setting the index held in place", limitations
+			break
+		}
 		ttl, err := ttlTransition(reversed)
 		if err != nil {
 			return nil, err
@@ -243,6 +251,26 @@ func streamingTextChanged(reversed schema.Reversed) (bool, error) {
 		return false, err
 	}
 	return held.GetText() != wanted.GetText(), nil
+}
+
+// indexSettingsLimitations is what the reverse of a change of a global index's
+// settings cannot undo, in the words of the host's engine: YDB removes no
+// maximum partition count, so the maximum the forward change gives an index
+// that held none stays.
+func indexSettingsLimitations(reversed schema.Reversed) ([]string, error) {
+	held, left := &native.IndexSettingsObservation{}, &native.IndexSettingsObservation{}
+	if err := protojson.Unmarshal(reversed.Before.GetPayload(), held); err != nil {
+		return nil, err
+	}
+	if err := protojson.Unmarshal(reversed.Left.GetPayload(), left); err != nil {
+		return nil, err
+	}
+	maximum := left.GetPartitioningSettings().GetMaxPartitionsCount()
+	if held.GetPartitioningSettings().GetMaxPartitionsCount() != 0 || maximum == 0 {
+		return nil, nil
+	}
+	return []string{fmt.Sprintf("YDB cannot remove a maximum partition count, so the rollback keeps AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = %d, "+
+		"which the forward change set.", maximum)}, nil
 }
 
 // ttlChange is what a change of a table's own settings does to its TTL.

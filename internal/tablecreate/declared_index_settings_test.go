@@ -169,3 +169,45 @@ func withoutKind(records []*protocol.ComparisonRecord, kind string) []*protocol.
 	}
 	return kept
 }
+
+// indexSettingsChangeOf is the change of by_label's settings from what held
+// reports into what declared states, as the host passes it to the planner.
+func indexSettingsChangeOf(c *qt.C, held, declared string) *protocol.PlanningChange {
+	c.Helper()
+	before := indexFacetRecord(c, protocol.ValueInput_OBSERVED, "by_label", held)
+	after := indexFacetRecord(c, protocol.ValueInput_DESIRED, "by_label", declared)
+	change, err := schema.CaptureTablePropertiesChange("change", before.Value.Value.Owner, before.Value.Value, after.Value.Value)
+	c.Assert(err, qt.IsNil)
+	return &protocol.PlanningChange{Subject: proto.CloneOf(before.Subject), Value: change}
+}
+
+// The host plans the reverse of a change of an index's settings with the
+// declaration the forward change started from, which states only some of the
+// settings, and with the index's own facet as the forward change leaves it,
+// while the table's index read stays as it was read. The plan gives the index
+// what the reverse change asks for, every setting it held, against the facet:
+// planned from the declaration alone, the partitioning by load the forward
+// change turned on would stay, and planned against the table's index read,
+// nothing would change.
+func TestDeclaredIndexSettings_PlansTheReverseOfAChange(t *testing.T) {
+	c := testcheck.New(t)
+	const (
+		forward  = `{"partitioningSettings":{"minPartitionsCount":"3","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","partitioningBySize":"ENABLED"}}`
+		restored = `{"partitioningSettings":{"minPartitionsCount":"2","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","partitioningBySize":"ENABLED"},` +
+			`"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`
+	)
+	request := indexSettingsRequest(c, `{"partitioningSettings":{"minPartitionsCount":"2"}}`, forward)
+	request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records, observedFacet(c, schema.IndexProperties, "",
+		`{"commonIndexes":[{"name":"by_label","indexColumns":["label"],"globalIndex":{"settings":{"partitioningSettings":{"partitioningBySize":"ENABLED",`+
+			`"partitionSizeMb":"2048","partitioningByLoad":"DISABLED","minPartitionsCount":"2"}}}}]}`))
+	request.Changes = []*protocol.PlanningChange{indexSettingsChangeOf(c, forward, restored)}
+
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(indexSettingsStatements(c, plan), qt.DeepEquals, []string{
+		"ALTER TABLE `/local/app/records` ALTER INDEX `by_label` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, " +
+			"AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2);"})
+	c.Assert(plan.Changes, qt.HasLen, 1)
+}

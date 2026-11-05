@@ -143,6 +143,71 @@ func indexSettingsObservation(intent *native.IndexSettingsIntent) *native.IndexS
 	return result
 }
 
+// alteredIndexSettings predicts what an index holding held reads back with
+// once a change gives it the settings declared states: each setting declared
+// in place of the held one, as the change names every partitioning setting the
+// index ends with. A size declared without partitioning by size turns it on,
+// partitioning by size turned on without a size takes the 2048 MB YDB gives
+// it, an index that ends without it reports no size, and replicas declared as
+// none are none, as YDB does.
+func alteredIndexSettings(held *native.IndexSettingsObservation, declared *native.IndexSettingsIntent) *native.IndexSettingsObservation {
+	result := &native.IndexSettingsObservation{PartitioningSettings: proto.CloneOf(held.GetPartitioningSettings()), ReadReplicasSettings: proto.CloneOf(held.GetReadReplicasSettings())}
+	if result.PartitioningSettings == nil {
+		result.PartitioningSettings = &Ydb_Table.PartitioningSettings{}
+	}
+	partitioning, stated := result.PartitioningSettings, declared.GetPartitioningSettings()
+	switch {
+	case stated.GetPartitioningBySize() != Ydb.FeatureFlag_STATUS_UNSPECIFIED:
+		partitioning.PartitioningBySize = stated.GetPartitioningBySize()
+	case stated.GetPartitionSizeMb() != 0:
+		partitioning.PartitioningBySize = Ydb.FeatureFlag_ENABLED
+	}
+	switch {
+	case partitioning.GetPartitioningBySize() != Ydb.FeatureFlag_ENABLED:
+		partitioning.PartitionSizeMb = 0
+	case stated.GetPartitionSizeMb() != 0:
+		partitioning.PartitionSizeMb = stated.GetPartitionSizeMb()
+	case partitioning.GetPartitionSizeMb() == 0:
+		partitioning.PartitionSizeMb = NewIndexSettings().GetPartitioningSettings().GetPartitionSizeMb()
+	}
+	if stated.GetPartitioningByLoad() != Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+		partitioning.PartitioningByLoad = stated.GetPartitioningByLoad()
+	}
+	if stated.GetMinPartitionsCount() != 0 {
+		partitioning.MinPartitionsCount = stated.GetMinPartitionsCount()
+	}
+	if stated.GetMaxPartitionsCount() != 0 {
+		partitioning.MaxPartitionsCount = stated.GetMaxPartitionsCount()
+	}
+	if replicas := declared.GetReadReplicasSettings(); replicas.GetSettings() != nil {
+		result.ReadReplicasSettings = nil
+		if replicaCount(replicas) != 0 {
+			result.ReadReplicasSettings = proto.CloneOf(replicas)
+		}
+	}
+	return result
+}
+
+// explicitIndexSettings writes what an index holds as a declaration that
+// names every setting, so it resolves to them over whatever the index holds,
+// as the host's embedded engine restores an index's settings: the partition
+// size only where the index splits by size, and read replicas held as none
+// declared as none. No declaration removes a maximum partition count, which
+// YDB cannot remove, so an index that holds none declares none.
+func explicitIndexSettings(held *native.IndexSettingsObservation) *native.IndexSettingsIntent {
+	partitioning := held.GetPartitioningSettings()
+	result := &native.IndexSettingsIntent{PartitioningSettings: &Ydb_Table.PartitioningSettings{PartitioningBySize: partitioning.GetPartitioningBySize(),
+		PartitioningByLoad: partitioning.GetPartitioningByLoad(), MinPartitionsCount: partitioning.GetMinPartitionsCount(), MaxPartitionsCount: partitioning.GetMaxPartitionsCount()}}
+	if partitioning.GetPartitioningBySize() == Ydb.FeatureFlag_ENABLED {
+		result.PartitioningSettings.PartitionSizeMb = partitioning.GetPartitionSizeMb()
+	}
+	result.ReadReplicasSettings = proto.CloneOf(held.GetReadReplicasSettings())
+	if replicaCount(result.ReadReplicasSettings) == 0 {
+		result.ReadReplicasSettings = &Ydb_Table.ReadReplicasSettings{Settings: &Ydb_Table.ReadReplicasSettings_PerAzReadReplicasCount{}}
+	}
+	return result
+}
+
 // indexSettingsDefinition and indexSettingsDeclaration describe the two
 // representations in the negotiated models, so a change of either rule
 // changes the model's digest.
