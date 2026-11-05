@@ -84,6 +84,11 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 	}
 	visited := map[string]bool{}
 	skippedRealm := false
+	// replicas are the replica tables the read leaves out of its tables, and
+	// replicationsUnread reports a replication it left uninspected, whose
+	// replicas it cannot name.
+	var replicas []*protocol.Reference
+	replicationsUnread := false
 	for len(schemas) != 0 {
 		selected := schemas[0]
 		schemas = schemas[1:]
@@ -159,6 +164,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				// The replication's items name it; the read leaves it out
 				// of the tables, as the host's embedded engine does.
 				if replication.IsReplica(description.table.GetAttributes()) {
+					replicas = append(replicas, &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: "table", Name: name})
 					break
 				}
 				table, err := readTable(database, selected, name, description.table)
@@ -230,6 +236,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				if reason := unreadReplication(err); reason != "" {
 					result.Coverage.Subjects = append(result.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner),
 						Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: reason}})
+					replicationsUnread = replicationsUnread || kind == schema.ReplicationProperties
 					break
 				}
 				if err != nil {
@@ -311,6 +318,18 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 	}
 	if err := markTransferReaders(result); err != nil {
 		return nil, err
+	}
+	if common.UnreadTables && len(replicas) != 0 {
+		targets, complete := []string(nil), !replicationsUnread
+		if len(selectors) == 0 {
+			targets, err = snapshotTargets(result)
+		} else {
+			targets, complete, err = source.databaseTargets(ctx, database, leaveOut)
+		}
+		if err != nil {
+			return nil, err
+		}
+		result.UnreadTables = unreadReplicas(replicas, targets, complete)
 	}
 	slices.SortFunc(result.Tables, func(a, b *protocol.Table) int {
 		if compared := strings.Compare(a.Identity.Schema, b.Identity.Schema); compared != 0 {

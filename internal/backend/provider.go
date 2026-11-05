@@ -150,7 +150,11 @@ func providerFeatures() []string {
 		// The host sends an index it pairs with one declared under another
 		// name as one rename step, which the table service claims with
 		// RENAME INDEX; see indexRenames.
-		provider.IndexRenamesFeature}
+		provider.IndexRenamesFeature,
+		// A read names each replica table no replication it describes
+		// writes, which YDB keeps read-only, so the host refuses a table
+		// declared there at planning; see inspect.unreadReplicas.
+		provider.UnreadTablesFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
