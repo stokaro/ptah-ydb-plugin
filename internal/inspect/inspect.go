@@ -171,11 +171,22 @@ type traversal struct {
 
 // directory reads every entry of the listed directory selected into the
 // schema, in name order, and returns the subdirectories a traversal of the
-// whole database descends into. A hidden directory, and a directory at the
-// root that leaveOut names, is neither read nor returned. Once every entry is
-// read, the directory's native objects are known completely. A selected path
-// that an object holds is a directory with no entries.
+// whole database descends into. A directory at the root that leaveOut names
+// is neither read nor returned. Once every entry is read, the directory's
+// native objects are known completely. A selected path that an object holds is
+// a directory with no entries.
+//
+// A directory whose name starts with a dot holds nothing the read describes,
+// as the host's embedded engine read one: it walked past every such
+// directory, .sys and .metadata among them, and so planned the creation of
+// an object a declaration places there and the drop of none it holds. A
+// selected path below one is such a directory too. The walk neither lists
+// nor returns one, and the root's claim covers it (see dotted).
 func (t *traversal) directory(ctx context.Context, selected string) ([]string, error) {
+	if dotted(selected) {
+		t.completeDirectory(selected)
+		return nil, nil
+	}
 	listed, err := nativeapi.ListDirectory(ctx, t.source.directory, t.database, selected)
 	if err != nil {
 		return nil, err
@@ -204,8 +215,7 @@ func (t *traversal) directory(ctx context.Context, selected string) ([]string, e
 			return nil, fmt.Errorf("invalid or duplicate YDB directory entry")
 		}
 		names[name] = true
-		if strings.HasPrefix(name, ".") && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
-			t.skipped = append(t.skipped, path.Join(selected, name))
+		if dotted(name) && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
 			continue
 		}
 		if selected == "" && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY && slices.Contains(t.leaveOut, name) {
@@ -536,6 +546,16 @@ func (t *traversal) streamingInventory(ctx context.Context, selectors []string) 
 	return nil
 }
 
+// dotted reports a directory path one of whose names starts with a dot. The
+// walk describes nothing below such a name, as the host's embedded engine
+// described nothing there, and claims the path as an empty directory; only
+// the streaming inventory, which runs on its own, looks inside. Reading one
+// would also plan the drop of each object there that no declaration names,
+// which that engine never planned.
+func dotted(directory string) bool {
+	return slices.ContainsFunc(strings.Split(directory, "/"), func(name string) bool { return strings.HasPrefix(name, ".") })
+}
+
 func component(value string) bool {
 	return utf8.ValidString(value) && value != "" && value != "." && value != ".." && !strings.ContainsAny(value, "/\\\x00")
 }
@@ -551,7 +571,7 @@ func scopes(database string, selectors, leaveOut []string) ([]string, []*protoco
 		selected := strings.Trim(selector, "/")
 		if selected != "" {
 			for part := range strings.SplitSeq(selected, "/") {
-				if !component(part) || strings.HasPrefix(part, ".") {
+				if !component(part) {
 					return nil, nil, fmt.Errorf("invalid YDB schema selector")
 				}
 			}
