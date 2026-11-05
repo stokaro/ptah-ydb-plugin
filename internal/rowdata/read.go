@@ -189,58 +189,82 @@ func Scanned(ydbType string, value any) (*protocol.DataValue, error) {
 	if value == nil {
 		return Null(), nil
 	}
-	switch Kind(ydbType) {
+	kind := Kind(ydbType)
+	scanned, ok := scannedNumberOrFlag(kind, value)
+	if !ok {
+		scanned, ok = scannedTextOrTime(ydbType, kind, value)
+	}
+	if ok {
+		return scanned, nil
+	}
+	return nil, fmt.Errorf("the driver returned a Go %T for a %s column", value, ydbType)
+}
+
+// scannedNumberOrFlag is the neutral value of a scanned integer, flag, double
+// or decimal, and false when kind is none of them or the driver handed a Go
+// value the kind does not take.
+func scannedNumberOrFlag(kind protocol.DataKind, value any) (*protocol.DataValue, bool) {
+	switch kind {
 	case protocol.DataKind_DATA_KIND_INT64:
 		if number, ok := integerValue(value); ok && number.IsInt64() {
-			return &protocol.DataValue{Value: &protocol.DataValue_Int64Value{Int64Value: number.Int64()}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_Int64Value{Int64Value: number.Int64()}}, true
 		}
 	case protocol.DataKind_DATA_KIND_UINT64:
 		if number, ok := integerValue(value); ok && number.IsUint64() {
-			return &protocol.DataValue{Value: &protocol.DataValue_Uint64Value{Uint64Value: number.Uint64()}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_Uint64Value{Uint64Value: number.Uint64()}}, true
 		}
 	case protocol.DataKind_DATA_KIND_BOOL:
 		if flag, ok := value.(bool); ok {
-			return &protocol.DataValue{Value: &protocol.DataValue_BoolValue{BoolValue: flag}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_BoolValue{BoolValue: flag}}, true
 		}
 	case protocol.DataKind_DATA_KIND_DOUBLE:
 		switch number := value.(type) {
 		case float32:
-			return &protocol.DataValue{Value: &protocol.DataValue_DoubleValue{DoubleValue: float64(number)}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_DoubleValue{DoubleValue: float64(number)}}, true
 		case float64:
-			return &protocol.DataValue{Value: &protocol.DataValue_DoubleValue{DoubleValue: number}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_DoubleValue{DoubleValue: number}}, true
 		}
 	case protocol.DataKind_DATA_KIND_DECIMAL:
 		if decimal, ok := value.(scannedDecimal); ok {
 			bytes, precision, scale := decimal.Decimal()
 			return &protocol.DataValue{Value: &protocol.DataValue_DecimalValue{DecimalValue: &protocol.DecimalValue{
 				Digits: twosComplement(bytes).String(), Precision: precision, Scale: scale,
-			}}}, nil
+			}}}, true
 		}
+	}
+	return nil, false
+}
+
+// scannedTextOrTime is the neutral value of a scanned string, JSON document,
+// byte string, moment or interval of a column of ydbType, and false when kind
+// is none of them or the driver handed a Go value the kind does not take.
+func scannedTextOrTime(ydbType string, kind protocol.DataKind, value any) (*protocol.DataValue, bool) {
+	switch kind {
 	case protocol.DataKind_DATA_KIND_STRING:
 		if text, ok := textOf(value); ok {
-			return &protocol.DataValue{Value: &protocol.DataValue_StringValue{StringValue: text}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_StringValue{StringValue: text}}, true
 		}
 	case protocol.DataKind_DATA_KIND_JSON:
 		if text, ok := textOf(value); ok {
-			return &protocol.DataValue{Value: &protocol.DataValue_JsonValue{JsonValue: text}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_JsonValue{JsonValue: text}}, true
 		}
 	case protocol.DataKind_DATA_KIND_BYTES:
 		switch bytes := value.(type) {
 		case []byte:
-			return &protocol.DataValue{Value: &protocol.DataValue_BytesValue{BytesValue: slices.Clone(bytes)}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_BytesValue{BytesValue: slices.Clone(bytes)}}, true
 		case string:
-			return &protocol.DataValue{Value: &protocol.DataValue_BytesValue{BytesValue: []byte(bytes)}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_BytesValue{BytesValue: []byte(bytes)}}, true
 		}
 	case protocol.DataKind_DATA_KIND_DATE, protocol.DataKind_DATA_KIND_TIMESTAMP:
 		if instant, ok := value.(time.Time); ok {
-			return moment(ydbType, instant), nil
+			return moment(ydbType, instant), true
 		}
 	case protocol.DataKind_DATA_KIND_INTERVAL:
 		if duration, ok := value.(time.Duration); ok {
-			return &protocol.DataValue{Value: &protocol.DataValue_IntervalValue{IntervalValue: &protocol.IntervalValue{Nanoseconds: int64(duration)}}}, nil
+			return &protocol.DataValue{Value: &protocol.DataValue_IntervalValue{IntervalValue: &protocol.IntervalValue{Nanoseconds: int64(duration)}}}, true
 		}
 	}
-	return nil, fmt.Errorf("the driver returned a Go %T for a %s column", value, ydbType)
+	return nil, false
 }
 
 // textOf is the text of a value the driver returns as a string or as bytes.
