@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 
@@ -285,6 +286,12 @@ func Intent(spec ydbdecl.Changefeed) (*native.ChangefeedIntent, error) {
 		if intent.ResolvedTimestampsInterval, err = durationOf(spec.ResolvedTimestamps); err != nil {
 			return nil, fmt.Errorf("changefeed %q: resolved_timestamps: %w", spec.Name, err)
 		}
+	}
+	// A topic counts its partitions in a signed 64-bit field, so a larger
+	// count would wrap negative and read back as none.
+	if spec.TopicMinActivePartitions > math.MaxInt64 {
+		return nil, fmt.Errorf("changefeed %q: %s takes a count of at most %d, the most a YDB topic holds",
+			spec.Name, ydbdecl.AttributeTopicMinActivePartitions, int64(math.MaxInt64))
 	}
 	// The topic states what the changefeed's options set on it and its
 	// consumers; YDB gives it every other setting.
