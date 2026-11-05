@@ -104,7 +104,48 @@ func ensureNode(ctx context.Context, driver *ydb.Driver, node string) error {
 	if described.GetSelf().GetName() != NodeName || described.GetSelf().GetType() != Ydb_Scheme.Entry_COORDINATION_NODE {
 		return fmt.Errorf("YDB lock path is not a coordination node")
 	}
+	if err := adoptNode(ctx, driver, node); err != nil {
+		return err
+	}
 	return validateNode(ctx, driver, node)
+}
+
+// adoptNode makes strict a lock node that sets neither consistency mode,
+// which is the node Ptah's built-in YDB engine creates: every database that
+// engine locked holds one, and its runs took their locks there without
+// reading the modes. YDB reads an unset mode as relaxed reads, so the node
+// is altered to strict reads and attachment before a lock is taken there; a
+// session of that engine that still holds a lock on it keeps it. A node with
+// a mode someone set is left as it is, and validateNode refuses it unless it
+// is strict.
+func adoptNode(ctx context.Context, driver *ydb.Driver, node string) error {
+	service := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(driver))
+	response, err := service.DescribeNode(ctx, &Ydb_Coordination.DescribeNodeRequest{Path: node})
+	if err != nil {
+		return fmt.Errorf("describe YDB lock node failed")
+	}
+	var description Ydb_Coordination.DescribeNodeResult
+	if err := nativeapi.Operation(response.GetOperation(), &description); err != nil {
+		return err
+	}
+	if description.GetConfig().GetReadConsistencyMode() != Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_UNSET ||
+		description.GetConfig().GetAttachConsistencyMode() != Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_UNSET {
+		return nil
+	}
+	altered, err := service.AlterNode(ctx, &Ydb_Coordination.AlterNodeRequest{Path: node, Config: &Ydb_Coordination.Config{
+		ReadConsistencyMode:   Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT,
+		AttachConsistencyMode: Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT,
+	}})
+	if err != nil {
+		return fmt.Errorf("alter YDB lock node failed")
+	}
+	operation := altered.GetOperation()
+	if operation.GetReady() && operation.GetStatus() == Ydb.StatusIds_UNAUTHORIZED {
+		return refused("the YDB coordination node %s, which holds Ptah's locks, was created by Ptah's built-in YDB engine with "+
+			"neither consistency mode set, and this user may not alter it to strict reads and attachment (UNAUTHORIZED). "+
+			"Run once as a user who may alter the node, which makes it strict, or grant this user that right", node)
+	}
+	return nativeapi.Status(operation)
 }
 
 // createNode creates the lock node a description found missing. A node made
@@ -126,6 +167,13 @@ func createNode(ctx context.Context, driver *ydb.Driver, node string) error {
 	}
 	if err := nativeapi.Status(operation); err != nil && operation.GetStatus() != Ydb.StatusIds_ALREADY_EXISTS {
 		return err
+	}
+	if operation.GetStatus() == Ydb.StatusIds_ALREADY_EXISTS {
+		// Another run made the node in between, which may be one of the
+		// built-in engine's.
+		if err := adoptNode(ctx, driver, node); err != nil {
+			return err
+		}
 	}
 	return validateNode(ctx, driver, node)
 }
@@ -152,11 +200,12 @@ func validateNode(ctx context.Context, driver *ydb.Driver, node string) error {
 	}
 	if description.GetConfig().GetReadConsistencyMode() != Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT ||
 		description.GetConfig().GetAttachConsistencyMode() != Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT {
-		// Ptah's built-in YDB engine creates the node with neither mode set,
-		// which YDB reads as relaxed reads and strict attachment.
+		// A node that sets neither mode, as Ptah's built-in YDB engine
+		// creates it, was made strict before the lock (adoptNode); one that
+		// still is not was set so by someone, or was changed since.
 		return authored.Wrap(ErrRelaxedNode, fmt.Sprintf("the YDB coordination node %s, which holds Ptah's locks, reads with "+
-			"read consistency %s and attach consistency %s, and a lock taken there cannot be shown to be still held. Ptah's "+
-			"built-in YDB engine creates the node without either setting. YDB's CLI and YQL have no command for a coordination "+
+			"read consistency %s and attach consistency %s, and a lock taken there cannot be shown to be still held. "+
+			"YDB's CLI and YQL have no command for a coordination "+
 			"node: set both modes to strict with the coordination service's AlterNode call, or remove the node with its DropNode "+
 			"call while no run holds a lock on it, and the provider creates it strict", node,
 			consistencyName(description.GetConfig().GetReadConsistencyMode()), consistencyName(description.GetConfig().GetAttachConsistencyMode())))

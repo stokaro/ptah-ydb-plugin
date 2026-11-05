@@ -141,8 +141,9 @@ YQL has no advisory lock, so the provider takes Ptah's migration lock as a
 semaphore on the coordination node `ptah_locks` at the database root, one
 semaphore per lock name. It is exclusive and ephemeral: the server releases it
 when the session that holds it ends, whether the run released it or died. The
-provider creates a missing node with strict consistency and refuses a node that
-is not strict, as [Coordination locks](../README.md#coordination-locks)
+provider creates a missing node with strict consistency, makes strict the node
+Ptah's built-in YDB engine created with neither mode set, and refuses a node
+someone set otherwise, as [Coordination locks](../README.md#coordination-locks)
 describes. The node holds no data, so dropping it while no run is active is
 safe, and the next run creates it again. The provider's read leaves it out, so a
 plan never drops it. Like every advisory lock, it keeps Ptah runs apart; it does
