@@ -24,7 +24,7 @@ func (*Provider) ValidateSchema(ctx context.Context, request *protocol.ValidateS
 	if err := provider.ValidateSchemaRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if !rulesMatch(ctx, request.Identifiers.GetRules()) {
+	if !rulesMatch(request.Identifiers.GetRules()) {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB validation requires its negotiated identifier rules")
 	}
 	result, err := schemavalidation.Validate(ctx, request)

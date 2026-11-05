@@ -61,7 +61,7 @@ func columnsContext(ctx context.Context, request columnsRequest) (*protocol.Desc
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	if !rulesMatch(ctx, request.GetIdentifiers().GetRules()) {
+	if !rulesMatch(request.GetIdentifiers().GetRules()) {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB column semantics require its negotiated identifier rules")
 	}
 	return provider.NegotiatedDescription(Description(), request.GetTargetFeatures()), nil

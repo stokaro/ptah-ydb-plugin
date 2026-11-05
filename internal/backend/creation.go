@@ -22,7 +22,7 @@ func (*Provider) ProjectTableCreations(ctx context.Context, request *protocol.Pr
 	if err := provider.ValidateCreationRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if !rulesMatch(ctx, request.Identifiers.GetRules()) {
+	if !rulesMatch(request.Identifiers.GetRules()) {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB creation prediction requires its negotiated identifier rules")
 	}
 	stripped, err := creationsWithoutComments(request)

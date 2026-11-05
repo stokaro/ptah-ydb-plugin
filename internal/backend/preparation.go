@@ -22,7 +22,7 @@ func (*Provider) PrepareTables(ctx context.Context, request *protocol.PrepareTab
 	if err := provider.ValidatePreparationRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if !rulesMatch(ctx, request.Identifiers.GetRules()) {
+	if !rulesMatch(request.Identifiers.GetRules()) {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB preparation requires its negotiated identifier rules")
 	}
 	stripped, err := preparationWithoutComments(request)

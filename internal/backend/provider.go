@@ -380,20 +380,21 @@ func negotiatedRules(ctx context.Context) *protocol.IdentifierRules {
 	return rules
 }
 
-// rulesMatch reports whether rules a host sent are the engine's. A host that
-// lists schema.subtree-coverage sends the separator, and one that does not
-// sends none; the separator decides only subtree regions, which the SDK
-// refuses where the feature was not negotiated, so it is compared only where
-// it was.
-func rulesMatch(ctx context.Context, rules *protocol.IdentifierRules) bool {
-	if slices.Contains(provider.HostFeatures(ctx), provider.SchemaSubtreeCoverageFeature) {
-		return proto.Equal(rules, identifierRules())
+// rulesMatch reports whether rules a host sent are the engine's. The
+// separator may be absent: a host that does not list schema.subtree-coverage
+// sends none, and a host that does may still build a request's rules from an
+// identity that does not carry it. It decides only subtree regions, which the
+// SDK refuses in a comparison whose rules carry no separator, so an absent
+// separator is accepted and a different one is not.
+func rulesMatch(rules *protocol.IdentifierRules) bool {
+	sent, want := proto.CloneOf(rules), identifierRules()
+	if sent == nil {
+		return false
 	}
-	sent := proto.CloneOf(rules)
-	if sent != nil {
-		sent.SchemaSeparator = ""
+	if sent.SchemaSeparator == "" {
+		want.SchemaSeparator = ""
 	}
-	return proto.Equal(sent, negotiatedRules(ctx))
+	return proto.Equal(sent, want)
 }
 
 // Open verifies a native connection and server version before publishing its

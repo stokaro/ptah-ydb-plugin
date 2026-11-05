@@ -76,7 +76,7 @@ func TestHostLeavesASecretBelowASkippedDirectoryUnplanned_HappyPath(t *testing.T
 	written, globErr := filepath.Glob(filepath.Join(migrations, "*.sql"))
 
 	c.Assert(err, qt.IsNil, qt.Commentf("migrations generate:\n%s", generated))
-	c.Assert(generated, qt.Contains, "secret .hidden.pw could not be compared between the database and the desired schema: The current secret or its absence was not established")
+	c.Assert(generated, qt.Contains, `secret ".hidden".pw could not be compared between the database and the desired schema: The current secret or its absence was not established`)
 	c.Assert(globErr, qt.IsNil)
 	c.Assert(written, qt.HasLen, 0)
 }
