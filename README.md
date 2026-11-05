@@ -376,9 +376,18 @@ first, with the host's statements. A coordination node is dropped through the
 coordination service. An object there is no statement for, such as a resource
 pool, refuses the cleanup before anything is dropped, and the reply names it. A
 cleanup that stops after its first step is `UNKNOWN`, and the host treats the
-database as not clean. One difference from the host is deliberate: the host
-drops the lock node at the root of a realm, and the provider keeps it, because a
-provider session holds its locks there.
+database as not clean.
+
+A session on a dev realm takes its locks on a `ptah_locks` node at the realm's
+root, and the cleanup of the realm keeps that node, where the host's embedded
+engine dropped a node there. That engine took a realm session's locks on the
+node at the database root instead (`path.Join(driver.Name(), "ptah_locks")` in
+its `internal/dblockext/ydb`; measured on 25.1.4.7, a realm run creates the
+root's node), so the realm's node was no lock of its, and it created the root's
+node from inside a realm, which the realm's guard refuses for every other
+write. The provider keeps a realm session inside its realm: its lock node is
+there, and the read and the cleanup leave it alone as they leave the database
+root's node alone.
 
 `internal/devclean/testdata` holds scheme trees and what the host's embedded
 engine listed, dropped and removed for each, recorded by an oracle program; the
