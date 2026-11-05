@@ -263,7 +263,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 		return nil, subject + ": " + err.Error(), nil
 	}
 	request := proto.CloneOf(desired)
-	keepHeldSettings(request, current, table.GetDesired())
+	keepHeldSettings(request, table)
 	keepHeldComments(request, owner, common)
 	heldColumns := make([]string, 0, len(current.GetColumns()))
 	for _, column := range current.GetColumns() {
@@ -404,15 +404,20 @@ func copiedColumns(request *Ydb_Table.CreateTableRequest, current *protocol.Obse
 // keepHeldSettings gives the new table of a rebuild every setting the
 // declaration leaves out as the old table holds it: every family the old
 // table holds, the default one included, with each setting the declaration
-// does not state, the family each column sits in, the automatic
-// partitioning, read replicas, key bloom filter and user attributes, and the
-// TTL where the declaration states no table properties at all. A cluster's
+// does not state, the family each column sits in where the declaration does
+// not say, the automatic partitioning, read replicas, key bloom filter and
+// user attributes, and the TTL where the declaration states no table
+// properties at all. A declaration says where a column sits with a column
+// property record, and a source that describes where every column sits says
+// it of a column it places in no family too: that column sits in the default
+// family (see PlacedInDefault). A cluster's
 // table profile may have given the old table a family or a setting no
 // declaration names, and YQL drops neither, so a rebuild that left one out
 // would change the table where nobody asked. Storage settings nobody declared
 // are the server's, which a new table takes too: YDB reports its defaults,
 // and YQL has no setting to write them with.
-func keepHeldSettings(request *Ydb_Table.CreateTableRequest, current *protocol.ObservedTable, desired *protocol.DeclaredTable) {
+func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.PlanningTable) {
+	current, desired := table.GetCurrent(), table.GetDesired()
 	held := heldProperties(current)
 	stated := slices.ContainsFunc(desired.GetFeatures().GetFacets().GetRecords(), func(record *protocol.ComparisonRecord) bool {
 		return record.GetKind() == schema.TableProperties
@@ -478,8 +483,15 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, current *protocol.O
 			Compression: family.GetCompression()})
 		families[familyKey(family.GetName())] = true
 	}
+	placed := map[string]bool{}
+	for _, record := range desired.GetFeatures().GetFacets().GetRecords() {
+		if record.GetKind() == schema.ColumnProperties && record.GetValue() != nil {
+			placed[record.GetSubject().GetName().GetNormalized()] = true
+		}
+	}
 	for _, column := range request.GetColumns() {
-		if column.GetFamily() != "" {
+		if column.GetFamily() != "" || placed[column.GetName()] ||
+			PlacedInDefault(desired.GetFeatures().GetFacets().GetCoverage(), ColumnSubject(table.GetSubject(), column.GetName())) {
 			continue
 		}
 		place := placements[column.GetName()].GetFamily()

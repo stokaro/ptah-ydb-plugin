@@ -122,3 +122,39 @@ func TestCompareStorage_ReportsAChange(t *testing.T) {
 		})
 	}
 }
+
+// The family a column of a column table sits in is the column table's
+// storage, which the storage comparison owns: a column the declaration places
+// in no family is not reported to move, whatever the source describes, on a
+// table read as a column table and on one the declaration states as one.
+func TestCompareStorage_LeavesTheColumnsOfAColumnTable(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		desired, current storageSide
+		// changes are the kinds of the changes reported, in order.
+		changes []string
+	}{
+		{name: "a table read as a column table", current: storageSide{storage: heldColumnStorage}},
+		{name: "a table the declaration states as a column table", desired: storageSide{storage: `{"ttl":` + dailyColumnTTL + `}`},
+			current: storageSide{table: heldRowTable}, changes: []string{schema.ColumnStorageProperties}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := storageRequest(c, test.desired, test.current)
+			for _, candidate := range schema.Models() {
+				if candidate.Kind == schema.ColumnProperties && candidate.Representation == protocol.ValueInput_DESIRED {
+					request.Desired.Coverage.Kinds = append(request.Desired.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: candidate,
+						Sources: []*protocol.ComparisonKnowledgeSource{{Outside: testcomparison.Knowledge(protocol.ModelKnowledge_COMPLETE)}}})
+				}
+			}
+			request.Current.Records = append(request.Current.Records, record(c, protocol.ValueInput_OBSERVED, schema.ColumnProperties, "note", `{"family":"archive"}`))
+			request.Parents = append(request.Parents, &protocol.ComparisonParent{Subject: subject("column", "note"), Desired: true, Current: true})
+			result := compare(c, request)
+			var changes []string
+			for _, change := range result.Changes {
+				changes = append(changes, change.Kind)
+			}
+			c.Assert(changes, qt.DeepEquals, test.changes)
+		})
+	}
+}

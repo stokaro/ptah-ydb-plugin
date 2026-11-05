@@ -2525,7 +2525,8 @@ The new table keeps the old table's attributes, and with them the comments Ptah
 keeps there, and each storage setting the declaration does not state, as the
 old table holds it: every column family, the default one and one no column
 sits in included, with the settings the declaration leaves out, the family each
-column sits in, the automatic partitioning, the read replicas, the key bloom
+column sits in where the declaration does not say (see
+[Column families](#column-families)), the automatic partitioning, the read replicas, the key bloom
 filter, and the TTL where the declaration states no table properties. A
 cluster's table profile may have given the old table any of them, and YQL
 drops neither a family nor a setting, so a rebuild changes none that nobody
@@ -2625,8 +2626,14 @@ rules:
   A declared `COMPRESSION_NONE` matches a family that reads back unspecified.
 - A family only the table holds stays. No family is dropped, because YDB has no
   way to drop one.
-- A column moves only when a column property record names it. A column with no
-  record keeps its family. An empty family in a record means the default family.
+- A column sits where the declaration places it. A column property record
+  names its family, and an empty family in a record means the default family.
+  A source that describes the column properties of every column it declares (a
+  Go, YAML or YQL source) places a column it names in no family in the default
+  family, so a column the table holds elsewhere moves back, as the host's
+  embedded engine moves it. A source that could not describe them, such as
+  HCL, says nothing of where a column sits, and the column keeps its family. A
+  rebuild places the columns of the new table by the same rule.
 - A key column stays in the default family. A column that names a family
   neither the declaration nor the table has is refused. So is a `keep_in_memory`
   that only one side sets, and a declaration that states families when the
