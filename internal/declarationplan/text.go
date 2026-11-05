@@ -5,6 +5,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -29,7 +30,7 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 	switch desired.Kind {
 	case schema.SecretProperties:
 		if !capabilities[secrets.Capability] {
-			return "", fmt.Errorf("secret creation requires capability secrets")
+			return "", fmt.Errorf("secret creation requires capability secrets%s", featureflags.Clause(secrets.Capability))
 		}
 		intent, err := schema.DesiredSecret(desired)
 		if err != nil {

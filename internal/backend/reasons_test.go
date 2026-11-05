@@ -74,7 +74,8 @@ func TestComparisonRefusesAMissingCapabilityWithAReason(t *testing.T) {
 
 	c.Assert(result, qt.IsNil)
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-	c.Assert(statusReasons(c, err), qt.DeepEquals, []string{"changing transfers requires transfers"})
+	c.Assert(statusReasons(c, err), qt.DeepEquals, []string{"changing transfers requires transfers; YDB keeps it behind feature flag EnableTopicTransfer: " +
+		"turn the flag on, and name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans"})
 }
 
 // A refusal of a request the provider cannot read keeps its text out of the
@@ -99,5 +100,5 @@ func TestComparisonRefusesAnExternalObjectWithAReason(t *testing.T) {
 
 	c.Assert(result, qt.IsNil)
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-	c.Assert(statusReasons(c, err), qt.DeepEquals, []string{"external data source app/bucket, which requires target capability external_data_sources, unavailable on this ydb target"})
+	c.Assert(statusReasons(c, err), qt.DeepEquals, []string{"external data source app/bucket, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: turn the flag on, and name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans"})
 }

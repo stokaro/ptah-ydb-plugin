@@ -219,7 +219,7 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 		// YDB refuses a unique index on a table that exists after the call
 		// unless the session establishes that it adds one.
 		{"a unique index on a target without unique additions", indexCase(declaredIndexes(indexJSON("globalUniqueIndex", "by_both", labelAndData, nil)), heldIndexes(), "label", "extra"),
-			`adding unique index "by_both" to table "app.records", which exists already, which requires target capability unique_index_on_existing_table, unavailable on this ydb target`},
+			`adding unique index "by_both" to table "app.records", which exists already, which requires target capability unique_index_on_existing_table, unavailable on this ydb target; YDB keeps it behind feature flag EnableAddUniqueIndex: .*`},
 		{"a declared index reads an undeclared column", indexCase(declaredIndexes(indexJSON("globalIndex", "by_other", []string{"other"}, nil)), heldIndexes(), "label"),
 			`index "by_other" reads column "other", which the declaration does not state`},
 		{"a kept index reads a column the declaration drops", indexCase(

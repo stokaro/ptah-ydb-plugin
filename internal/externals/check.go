@@ -9,6 +9,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
@@ -37,7 +38,7 @@ func capabilityRefusal(subject, key string) error {
 }
 
 func capabilityText(subject, key string) string {
-	return fmt.Sprintf("%s, which requires target capability %s, unavailable on this ydb target", subject, key)
+	return fmt.Sprintf("%s, which requires target capability %s, unavailable on this ydb target%s", subject, key, featureflags.Clause(key))
 }
 
 // CheckDataSource reports why the data source display names cannot be

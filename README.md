@@ -243,6 +243,13 @@ holds the pages the mapping is checked against, and a live test turns the
 flag on and off through the server's dynamic configuration and reads the
 capability each new session reports.
 
+A plan refused for want of a capability a flag decides names the flag, after
+the host's words for the capability: `...; YDB keeps it behind feature flag
+<Flag>: turn the flag on, and name the cluster's monitoring endpoint in the
+URL (monitoring=http://host:8765) so Ptah reads the flags before it plans`. A
+session without the endpoint takes its release line's default, so the flag
+alone does not change the answer.
+
 Session close releases both the SQL pool and its parent native driver, even
 when the RPC context is canceled. Cleanup results are retained for repeated
 closes. A process accepts at most 1,024 lifetime session handles; start a new
@@ -814,8 +821,10 @@ Confirmed history, journal, and tag stores are returned as SDK reservations
 instead of managed tables. A reservation occupies the name for every supported native scheme-object
 kind and for common tables. Exact UNREPRESENTABLE subject coverage overrides
 directory completeness at these occupied names, so omission does not assert
-absence. Filtered reads return reservations only from the exact directories
-they inspect. Names or layout alone never establish ownership.
+absence. A comparison leaves a reserved name out. When a plan changes an object
+a streaming query could read, it counts no query at a reserved name. Filtered
+reads return reservations only from the exact directories they inspect. Names
+or layout alone never establish ownership.
 
 The coordination node `ptah_locks` at the root of the session's database is
 reserved with purpose LOCK by its name alone. The lock service takes whatever

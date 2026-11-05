@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -263,8 +264,9 @@ func uniqueAdditionRefusal(table *protocol.ComparisonIdentity, changes []indexCh
 	}
 	for _, change := range changes {
 		if change.add.GetGlobalUniqueIndex() != nil {
-			return fmt.Sprintf("adding unique index %q to table %q, which exists already, which requires target capability %s, unavailable on this ydb target",
-				change.add.GetName(), table.GetSchema().GetSource()+"."+table.GetName().GetSource(), UniqueIndexOnExistingTableCapability)
+			return fmt.Sprintf("adding unique index %q to table %q, which exists already, which requires target capability %s, unavailable on this ydb target%s",
+				change.add.GetName(), table.GetSchema().GetSource()+"."+table.GetName().GetSource(), UniqueIndexOnExistingTableCapability,
+				featureflags.Clause(UniqueIndexOnExistingTableCapability))
 		}
 	}
 	return ""

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
@@ -37,7 +38,8 @@ func planDefaults(owner *protocol.Reference, table *protocol.PlanningTable, caps
 			continue
 		}
 		if !caps["alter_column_default"] {
-			return nil, fmt.Sprintf("Changing the default of column %q requires alter_column_default, unavailable on this YDB target", column.Name), nil
+			return nil, fmt.Sprintf("Changing the default of column %q requires alter_column_default, unavailable on this YDB target%s", column.Name,
+				featureflags.Clause("alter_column_default")), nil
 		}
 		captured := observed.columns[column.Name]
 		if captured == nil {
