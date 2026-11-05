@@ -154,6 +154,13 @@ func CaptureTopicIntent(owner *protocol.Reference, intent *native.TopicIntent) (
 	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: TopicProperties, Owner: proto.CloneOf(owner)}, definition, intent, NormalizeDesired)
 }
 
+// CaptureChangefeedIntent writes the changefeeds a table declares as the
+// provider's desired facet of that table.
+func CaptureChangefeedIntent(owner *protocol.Reference, intent *native.ChangefeedSetIntent) (*protocol.Envelope, error) {
+	definition := NativeDesiredModel(ChangefeedProperties)
+	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: ChangefeedProperties, Owner: proto.CloneOf(owner)}, definition, intent, NormalizeDesired)
+}
+
 func topicSemantics(before, after *protocol.Envelope) (*protocol.ChangeSemantics, error) {
 	current, desired, err := topicOperandSpecs(before, after)
 	if err != nil {
@@ -162,7 +169,8 @@ func topicSemantics(before, after *protocol.Envelope) (*protocol.ChangeSemantics
 	semantics := &protocol.ChangeSemantics{ReplacesOwner: new(false), RemovesState: new(false), Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: "Altering a topic preserves its access metadata"}
 	switch {
 	case current == nil:
-		semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ADDITIVE, "CREATE TOPIC adds a topic", protocol.ChangeSemantics_ACCESS_UNKNOWN, "Creation inherits server access policy"
+		semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ADDITIVE, "CREATE TOPIC adds a topic", protocol.ChangeSemantics_UNCHANGED,
+			"The topic is created by this plan, so no role could read it before; it takes its directory's permissions"
 	case desired == nil:
 		semantics.RemovesState, semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = new(true), protocol.ChangeSemantics_DESTRUCTIVE, dropTopicReason, protocol.ChangeSemantics_NARROWS, "Dropping the topic removes access to it"
 	case topics.Equal(*desired, *current):

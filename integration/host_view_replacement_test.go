@@ -27,6 +27,13 @@ func viewAccess(directory string, names accessNames, query string) string {
 		"grants:\n  view:\n    role: " + names.group + "\n    privileges: [SELECT ROW]\n    on_table: " + directory + ".active\n"
 }
 
+// viewlessAccess is viewAccess without the view and its grant: the table src
+// and the group alone.
+func viewlessAccess(directory string, names accessNames) string {
+	return "tables:\n  src:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n" +
+		"views: {}\nroles:\n  " + names.group + ":\n    group: true\n"
+}
+
 // heldView is the query the server keeps for the view at absolute, and the
 // view's direct access entries.
 func heldView(c *qt.C, opened *connection.Connection, absolute string) (string, []string) {
@@ -39,15 +46,20 @@ func heldView(c *qt.C, opened *connection.Connection, absolute string) (string, 
 	return described.GetQueryText(), accessEntries(described.GetSelf())
 }
 
-// Ported from the host's TestYDBViews_ChangedQueryIsDroppedAndCreated and the
-// recreation in TestYDBObjectAccess_AView. YDB has neither CREATE OR REPLACE
-// VIEW nor ALTER VIEW, so a changed query drops the view and creates it
-// again. The drop takes the view's access entries with it, and the plan
-// grants the entry again after the new view. The view then holds the new
-// query and the entry, and the next run is synced.
+// Ported from the host's TestYDBViews_ChangedQueryIsDroppedAndCreated and
+// TestYDBObjectAccess_AView. The run after the creation is synced. YDB has
+// neither CREATE OR REPLACE VIEW nor ALTER VIEW, so a changed query drops the
+// view and creates it again. The drop takes the view's access entries with
+// it, and the plan grants the entry again after the new view. The view then
+// holds the new query and the entry, and the next run is synced. A source
+// that leaves the view out drops it; nothing is left to plan, and no entry on
+// the view is left. The host's engine drops the view in one statement, since
+// the drop takes the entry; the host plans a REVOKE of the entry before the
+// DROP VIEW on the provider path, which the server takes (G127).
 func TestHostReplacesAChangedView_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
+	client, session := accessSession(c)
 	names := newAccessNames()
 	removeAccess(c, opened, database, names)
 	c.Cleanup(func() {
@@ -59,6 +71,7 @@ func TestHostReplacesAChangedView_HappyPath(t *testing.T) {
 	source := "SELECT id FROM `" + directory + "/src`"
 	for _, run := range []struct{ name, query, want string }{
 		{"the creation", source, "(?s).*\nGRANT 'ydb.granular.select_row' ON `[^`]*active` TO `" + names.group + "`;\n.*Schema apply completed successfully.*"},
+		{"a run after the creation", source, `(?s).*Schema is synced, no changes to be made.*`},
 		{"the change", source + " WHERE id > 0",
 			"(?s).*\nDROP VIEW `[^`]*active`;\nCREATE VIEW `[^`]*active` WITH \\(security_invoker = TRUE\\) AS\n[^\n]*WHERE id > 0\n;\n" +
 				"GRANT 'ydb.granular.select_row' ON `[^`]*active` TO `" + names.group + "`;\n.*Schema apply completed successfully.*"},
@@ -69,6 +82,19 @@ func TestHostReplacesAChangedView_HappyPath(t *testing.T) {
 		c.Assert(output, qt.Matches, run.want, qt.Commentf("%s: %s", run.name, output))
 	}
 	query, entries := heldView(c, opened, path.Join(database, directory, "active"))
+	dropped := viewlessAccess(directory, names)
+	drop := hostPlanned(c, directory, "yaml", dropped)
+	output, err := hostApplySelected(c, directory, "yaml", dropped)
+
 	c.Assert(query, qt.Equals, source+" WHERE id > 0")
 	c.Assert(entries, qt.DeepEquals, []string{names.group + " ydb.granular.select_row"})
+	c.Assert(err, qt.IsNil, qt.Commentf("the drop: %s", output))
+	c.Assert(drop, qt.DeepEquals, []string{
+		// G127: the host's engine plans no REVOKE of an entry the drop takes.
+		"REVOKE 'ydb.granular.select_row' ON `" + directory + "/active` FROM `" + names.group + "`",
+		"DROP VIEW `" + directory + "/active`",
+	})
+	c.Assert(hostPlanned(c, directory, "yaml", dropped), qt.HasLen, 0)
+	c.Assert(grantsIn(c, client, session, directory, []string{"table"}, []string{names.group}), qt.HasLen, 0)
+	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.DeepEquals, []string{"src"})
 }

@@ -133,3 +133,70 @@ func TestNativeConnectionReleasesBothOwners(t *testing.T) {
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(opened.Close(), qt.IsNil)
 }
+
+// lineCapabilities are the capabilities a session reports on each line the
+// test servers run, for a host that lists index renames: the line's preset
+// with the keys the servers' feature flags turn on, which the session reads
+// from the monitoring endpoint the test URL names. Both servers start with
+// enable_vector_index and enable_external_data_sources, and 26.2 also with
+// enable_add_unique_index and enable_streaming_queries.
+var lineCapabilities = map[string]map[string]bool{
+	"26.2": {
+		"transactional_ddl": false, "ddl_inside_transaction": false, "secrets": true, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true, "relative_grant_paths": true,
+		"topics": true, "topic_consumer_availability_period": true,
+		"changefeeds": true, "changefeed_user_sids": true, "changefeed_schema_changes": true, "changefeed_topic_auto_partitioning": true,
+		// enable_external_data_sources.
+		"external_data_sources": true, "external_object_replace": false, "external_data_source_secret_paths": true,
+		// enable_streaming_queries, with enable_external_data_sources.
+		"resource_pools": false, "streaming_queries": true,
+		"async_replication": true, "transfers": true, "replication_secret_paths": true,
+		"wide_date_time_types": true, "parameterized_decimal": true, "alter_column_default": true, "add_column_with_default": true, "small_integer_defaults": true, "document_type_defaults": true,
+		"vector_indexes": true, "vector_index_maintained_on_write": true, "vector_bit_type": true, "full_text_indexes": true,
+		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false,
+		// enable_add_unique_index.
+		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_constraints": false, "unique_index_on_existing_table": true, "index_rename": true,
+		"returning_clause": true, "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
+		"column_family_cache_mode": true,
+	},
+	"25.1": {
+		"transactional_ddl": false, "ddl_inside_transaction": false, "secrets": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
+		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true, "relative_grant_paths": false,
+		"topics": true, "topic_consumer_availability_period": false,
+		"changefeeds": true, "changefeed_user_sids": false, "changefeed_schema_changes": false, "changefeed_topic_auto_partitioning": false,
+		// enable_external_data_sources.
+		"external_data_sources": true, "external_object_replace": false, "external_data_source_secret_paths": false,
+		"resource_pools": false, "streaming_queries": false,
+		"async_replication": true, "transfers": false, "replication_secret_paths": false,
+		"wide_date_time_types": false, "parameterized_decimal": false, "alter_column_default": false, "add_column_with_default": false, "small_integer_defaults": false, "document_type_defaults": false,
+		// enable_vector_index.
+		"vector_indexes": true, "vector_index_maintained_on_write": false, "vector_bit_type": false, "full_text_indexes": false,
+		"local_bloom_indexes": false, "local_ngram_indexes": false, "local_min_max_indexes": false,
+		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_constraints": false, "unique_index_on_existing_table": false, "index_rename": true,
+		"returning_clause": false, "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
+		"column_family_cache_mode": false,
+	},
+}
+
+// Ported from the host's TestYDBConnection_DescribesTheServer: a session
+// reports the server it reached, the version Version() answers, the database
+// root and no default schema, and the whole capability map of the line that
+// version is on. A test URL that reaches a server on another line, or a
+// server started with other flags, fails here rather than letting the rest of
+// the suite measure that line under this one's name.
+func TestNativeSessionDescribesTheServer_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, _, _ := inspectionFixture(c)
+	client := startProviderFor(c, provider.ObservedIndexesFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature,
+		provider.IndexRenamesFeature)
+
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.GetId()), qt.IsNil) })
+	version := serverVersion(c, opened)
+	c.Assert(session.GetServerVersion(), qt.Equals, version)
+	c.Assert(session.GetDatabase(), qt.Equals, "/local")
+	c.Assert(session.GetDefaultSchema(), qt.Equals, "")
+	c.Assert(session.GetCapabilities(), qt.DeepEquals, lineCapabilities[serverLine(c, version)])
+}
