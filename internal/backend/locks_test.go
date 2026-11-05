@@ -4,7 +4,11 @@ package backend
 // The production native hold is exercised separately against both YDB versions.
 import (
 	"context"
+	"errors"
+	"fmt"
+
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -146,4 +150,56 @@ func TestCanceledReleaseStillClosesOwnedNativeSession(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Outcome, qt.Equals, protocol.LockResult_RELEASED)
 	c.Assert(hold.closes.Load(), qt.Equals, int32(1))
+}
+
+// A refusal locking.Try reports before it asked for the semaphore is a
+// confirmed NOT_ACQUIRED receipt with the refusal's own text as its reason,
+// never a driver's text an outer error wraps around it.
+func TestRefusedLockIsAConfirmedReceipt_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{"a right the user lacks", authored.Wrap(locking.ErrRefused, "this user may not use the YDB coordination node /local/ptah_locks")},
+		{"a node that is not strict", authored.Wrap(locking.ErrRelaxedNode, "this user may not use the YDB coordination node /local/ptah_locks")},
+		{"a refusal an outer error wraps", fmt.Errorf("dial grpc://admin:hunter2@db:2136: %w", // #nosec G101 -- a fake credential the reason must not carry
+			authored.Wrap(locking.ErrRefused, "this user may not use the YDB coordination node /local/ptah_locks"))},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			record := &lockRecord{name: "migration", outcome: protocol.LockResult_UNKNOWN}
+
+			result, refused := refusedLock(lockRequest(), record, test.err)
+
+			c.Assert(refused, qt.IsTrue)
+			c.Assert(result.GetOutcome(), qt.Equals, protocol.LockResult_NOT_ACQUIRED)
+			c.Assert(result.GetDiagnostic().GetReason(), qt.Equals, "this user may not use the YDB coordination node /local/ptah_locks")
+			c.Assert(result.GetScope().GetLockId(), qt.Equals, "lock")
+			c.Assert(record.outcome, qt.Equals, protocol.LockResult_NOT_ACQUIRED)
+		})
+	}
+}
+
+// Any other failure of locking.Try is not a refusal: the caller keeps the
+// handle's outcome UNKNOWN and fences the session.
+func TestRefusedLockIsAConfirmedReceipt_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{"no failure", nil},
+		{"a failure after the semaphore was asked for", errors.New("acquire YDB semaphore or close its session failed")},
+		{"a lost lock", locking.ErrLost},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			record := &lockRecord{name: "migration", outcome: protocol.LockResult_UNKNOWN}
+
+			result, refused := refusedLock(lockRequest(), record, test.err)
+
+			c.Assert(refused, qt.IsFalse)
+			c.Assert(result, qt.IsNil)
+			c.Assert(record.outcome, qt.Equals, protocol.LockResult_UNKNOWN)
+		})
+	}
 }

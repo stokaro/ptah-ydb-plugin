@@ -776,18 +776,21 @@ compatibility is owed. Configure that reserved node explicitly before using it.
 
 The provider finds the node by describing its path rather than by listing the
 database root, so a user granted the node takes the lock without the right to
-list the root. A server that refuses the user the lock is answered with
-PermissionDenied, and the reason names the step and the right: the node is
+list the root. A server that refuses the user the lock is answered with a
+`NOT_ACQUIRED` receipt, and its reason names the step and the right: the node is
 missing and the user may not create it, the user may not use the node, or the
 server refused the session on the node. The first two are the host's embedded
 engine's words. For the third that engine reports a timeout, because its SDK
 retries a refused session without saying why, while the server answers at once
-with UNAUTHORIZED. A host that lists `errors.reasons` prints the reason after
-the code; see [Error reasons](#error-reasons).
+with UNAUTHORIZED. The receipt confirms that nothing was acquired, so the host
+neither fences the session nor sends a cleanup release, and the session takes
+the lock once the user is granted the node. A host that lists `errors.reasons`
+prints the reason after the outcome; see [Error reasons](#error-reasons).
 
 A `TryLock` that takes no lock says why in its receipt: another session holds
-the lock, the session has an active transaction, it lost a lock guarantee, or
-it already holds 16 locks.
+the lock, the session has an active transaction, it lost a lock guarantee, it
+already holds 16 locks, the server refused this user the lock, or the node is
+not strict.
 
 Acquisition is nonblocking. Only a confirmed BUSY permits the host to try a new
 handle under its wait policy. Handles are single-use and bound to the exact

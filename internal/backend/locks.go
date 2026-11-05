@@ -81,10 +81,30 @@ func failedLock(request *protocol.LockRequest, outcome protocol.LockResult_Outco
 	return result
 }
 
+// refusedLock is the receipt for an acquisition locking.Try refused before it
+// asked for the semaphore, and reports whether err is one: the server refused
+// this user the lock node or a session on it (locking.ErrRefused), or the node
+// is not strict (locking.ErrRelaxedNode). The handle holds nothing and the
+// session keeps no uncertainty, so the receipt is a confirmed NOT_ACQUIRED with
+// the refusal's reason. An error status instead would reach the host as an
+// unknown outcome, which fences its session and sends a cleanup release.
+func refusedLock(request *protocol.LockRequest, record *lockRecord, err error) (*protocol.LockResult, bool) {
+	if !errors.Is(err, locking.ErrRefused) && !errors.Is(err, locking.ErrRelaxedNode) {
+		return nil, false
+	}
+	record.outcome = protocol.LockResult_NOT_ACQUIRED
+	var reason string
+	if refusal, ok := errors.AsType[*authored.Error](err); ok {
+		reason = refusal.Error()
+	}
+	return failedLock(request, record.outcome, reason), true
+}
+
 // TryLock reserves a single-use handle before creating or contacting native
 // coordination storage. Only a confirmed busy result permits another attempt.
-// A server that refuses this user the lock node or its session answers
-// PermissionDenied, with a reason that names the missing right.
+// A server that refuses this user the lock node or its session, and a node
+// that is not strict, are answered NOT_ACQUIRED with a reason that names the
+// missing right or the node's settings (see refusedLock).
 func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (*protocol.LockResult, error) {
 	s, unlock, err := p.lockSession(request)
 	if err != nil {
@@ -120,12 +140,8 @@ func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (
 	defer stop()
 	record.outcome = protocol.LockResult_UNKNOWN
 	hold, busy, err := locking.Try(guarded, s.connection.Driver, s.database, request.Scope.Name)
-	if errors.Is(err, locking.ErrRefused) {
-		// The server refused this user before anything was acquired, so the
-		// handle holds nothing and the session keeps no uncertainty. The
-		// reason names the right the user lacks.
-		record.outcome = protocol.LockResult_NOT_ACQUIRED
-		return nil, authored.Status(codes.PermissionDenied, err)
+	if refused, ok := refusedLock(request, record, err); ok {
+		return refused, nil
 	}
 	if errors.Is(err, locking.ErrRelaxedNode) {
 		// The node's settings were read before any session opened on it, so
