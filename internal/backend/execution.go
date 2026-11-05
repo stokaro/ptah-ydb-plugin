@@ -100,7 +100,7 @@ func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest
 	}
 	if !s.capabilities["secrets"] {
 		for _, unit := range request.Units {
-			if unit.GetNative().GetKind() == schema.SecretOperation || len(bindings) != 0 {
+			if unit.GetNative().GetKind() == schema.SecretOperation || definesSecret(unit.GetSql()) {
 				return &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.secrets-unsupported"}, nil
 			}
 		}
@@ -529,7 +529,7 @@ func (s *session) runInputPiece(ctx context.Context, runner sqlExecutor, piece s
 	if err != nil {
 		return false, err
 	}
-	if expansion.Defines() && !s.capabilities["secrets"] {
+	if expansion.DefinesSecrets() && !s.capabilities["secrets"] {
 		return false, fmt.Errorf("the target does not support scheme secrets")
 	}
 	piece.text = expansion.Text

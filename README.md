@@ -699,10 +699,20 @@ membership, including edges whose principals are outside the managed role list.
 
 A user's password is set when the user is created, from a YAML or Go
 declaration, and is never read back: a declaration that names another password
-plans nothing, as the host's embedded engine plans it. The statement holds the
-password in plain text below a warning, as the host's engine writes it; a
-declared password hash (`CREATE USER ... HASH`) keeps the password out of the
-plan.
+plans nothing, as the host's embedded engine plans it.
+
+The password never enters a plan. Under `schema.password-inputs` (contract
+25.22, ADR 0071) the host sends a declared password, or a password hash, as an
+execution input, and the statement names the input where the password stands:
+``CREATE USER `app` PASSWORD $PTAH_SECRET_PASSWORD_APP;``. YDB refuses that
+statement as written. `DescribeExecutionInputs` reports the input, and the
+provider writes the bound value in as a string literal only when it runs the
+statement, with `HASH` for a password hash, and keeps it out of any error the
+server answers with. The host binds the declared password when it plans from
+the schema and applies in one run, and the variable's value for a saved plan
+or a migration file. A host that does not negotiate the feature sends the
+password itself, and the provider refuses the user rather than write the
+password into the plan.
 
 `schema.common-access` (contract 25.5) carries independently covered owners and
 memberships. An owner's login state is optional: unknown remains unknown,

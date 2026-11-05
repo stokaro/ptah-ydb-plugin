@@ -41,15 +41,34 @@ func TestRenderAccess_HappyPath(t *testing.T) {
 	}
 }
 
-func TestRenderPasswordEscapesTheValue(t *testing.T) {
-	c := testcheck.New(t)
-	secret := "quote'\\newline\n"
-	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{
-		Role: &protocol.SQLRole{Name: "app", Login: true, PasswordDeclared: true}, Password: secret,
-	}}}
-	got, err := commonobject.Render(change, accessCapabilities())
-	c.Assert(err, qt.IsNil)
-	c.Assert(got, qt.Equals, "-- WARNING: the password is written in plain text; declare its hash to keep it out of the file\nCREATE USER `app` PASSWORD 'quote\\'\\\\newline\\n';")
+func passwordInput(name string) *protocol.ExecutionInput {
+	return &protocol.ExecutionInput{Source: protocol.ExecutionInput_ENVIRONMENT, Name: name}
+}
+
+// A password reaches the provider as an execution input, and the statement
+// names the input where the password stands; the value is written there only
+// when the statement runs (ADR 0071).
+func TestRenderPasswordNamesItsInput_HappyPath(t *testing.T) {
+	tests := []struct {
+		name   string
+		change *protocol.CommonObjectChange
+		want   string
+	}{
+		{name: "a created user", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{
+			Role: &protocol.SQLRole{Name: "app", Login: true, PasswordDeclared: true}, PasswordInput: passwordInput("PTAH_SECRET_PASSWORD_APP")}}},
+			want: "CREATE USER `app` PASSWORD $PTAH_SECRET_PASSWORD_APP;"},
+		{name: "a changed password beside the login", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_AlterRole{AlterRole: &protocol.RoleAlteration{
+			Desired: &protocol.SQLRole{Name: "app", PasswordDeclared: true}, Changed: []string{"password", "login"}, PasswordInput: passwordInput("PTAH_SECRET_PASSWORD_APP")}}},
+			want: "ALTER USER `app` PASSWORD $PTAH_SECRET_PASSWORD_APP NOLOGIN;"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			got, err := commonobject.Render(test.change, accessCapabilities())
+			c.Assert(err, qt.IsNil)
+			c.Assert(got, qt.Equals, test.want)
+		})
+	}
 }
 
 func TestRenderAccess_FailurePath(t *testing.T) {
@@ -62,6 +81,17 @@ func TestRenderAccess_FailurePath(t *testing.T) {
 		{name: "unsupported user attribute", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{Role: &protocol.SQLRole{Name: "app", Superuser: true}}}}, want: "superuser"},
 		{name: "group password", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{Role: &protocol.SQLRole{Name: "team", Group: true}, Password: "must-not-leak"}}}, want: "cannot have a password"},
 		{name: "unsupported alteration", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_AlterRole{AlterRole: &protocol.RoleAlteration{Desired: &protocol.SQLRole{Name: "app"}, Changed: []string{"inherit"}, Password: "must-not-leak"}}}, want: "changes inherit"},
+		{name: "a password value from a host without password inputs", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{
+			Role: &protocol.SQLRole{Name: "app", Login: true, PasswordDeclared: true}, Password: "must-not-leak"}}},
+			want: `user "app" declares a password, and the host sends the password itself, which would write it into the plan; use a Ptah release that lists schema.password-inputs`},
+		{name: "a changed password value from such a host", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_AlterRole{AlterRole: &protocol.RoleAlteration{
+			Desired: &protocol.SQLRole{Name: "app", PasswordDeclared: true}, Changed: []string{"password"}, Password: "must-not-leak"}}}, want: "the host sends the password itself"},
+		{name: "a password hash value from such a host", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{
+			Role: &protocol.SQLRole{Name: "app", PasswordDeclared: true}, Password: `{"hash":"must-not-leak","salt":"s","type":"argon2id"}`}}}, want: "the host sends the password itself"},
+		{name: "an input outside the secret prefix", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{
+			Role: &protocol.SQLRole{Name: "app", PasswordDeclared: true}, PasswordInput: passwordInput("HOME")}}}, want: `the password input of user "app"`},
+		{name: "a group's password input", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateRole{CreateRole: &protocol.RoleCreation{
+			Role: &protocol.SQLRole{Name: "team", Group: true}, PasswordInput: passwordInput("PTAH_SECRET_PASSWORD_TEAM")}}}, want: "cannot have a password"},
 		{name: "empty membership", change: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_AddMember{AddMember: &protocol.RoleMembership{Group: "team"}}}, want: "names a group and a member"},
 	}
 	for _, test := range tests {
