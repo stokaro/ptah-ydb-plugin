@@ -136,38 +136,12 @@ func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowere
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		kind := input.GetSubject().GetKind()
-		owner, err := schema.NativeBoundOwner(kind, input.Subject)
+		item, next, err := readInput(input, inputs, root)
 		if err != nil {
 			return nil, err
 		}
-		if (kind == schema.ExternalSourceProperties) != (input.GetValue().GetValue().GetKind() == schema.ExternalSourceChange) || !slices.Contains([]string{schema.ExternalSourceProperties, schema.ExternalTableProperties}, kind) {
-			return nil, fmt.Errorf("external object change names another kind of object")
-		}
-		captured, err := schema.NormalizeExternalChange(&protocol.ValueInput{Id: input.Value.Id, Representation: protocol.ValueInput_CHANGE, Value: input.Value.Value})
-		if err != nil {
-			return nil, err
-		}
-		if !proto.Equal(captured, input.Value) || !proto.Equal(owner, captured.NormalizedOwner) {
-			return nil, fmt.Errorf("planning change has a forged normalization receipt or identity")
-		}
-		if slices.ContainsFunc(inputs, func(other read) bool { return provider.CompareIdentities(other.subject, input.Subject) == 0 }) {
-			return nil, fmt.Errorf("duplicate external object change")
-		}
-		_, _, database, err := schema.ExternalOperands(captured.Value)
-		if err != nil {
-			return nil, err
-		}
-		if database != "" {
-			if root != "" && database != root {
-				return nil, fmt.Errorf("external object change targets another database")
-			}
-			root = database
-		}
-		if owner.Database != "" && root != "" && owner.Database != root {
-			return nil, fmt.Errorf("external object change has a foreign database identity")
-		}
-		inputs = append(inputs, read{subject: input.Subject, change: captured.Value})
+		root = next
+		inputs = append(inputs, item)
 	}
 	for i := range inputs {
 		// Each change is read against the database the batch runs in, which
@@ -199,6 +173,47 @@ func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowere
 		result = append(result, lowerTable(index, input, replace, displaced, root))
 	}
 	return result, nil
+}
+
+// readInput checks input, one change of the request, against its normalization
+// receipt and the changes read before it, and returns it read without its
+// specs. root is the database the batch runs in as far as the request and the
+// earlier changes name it; a change that names its database sets it, and
+// readInput returns the root the next change is read against.
+func readInput(input *protocol.PlanningChange, inputs []read, root string) (read, string, error) {
+	kind := input.GetSubject().GetKind()
+	owner, err := schema.NativeBoundOwner(kind, input.Subject)
+	if err != nil {
+		return read{}, root, err
+	}
+	if (kind == schema.ExternalSourceProperties) != (input.GetValue().GetValue().GetKind() == schema.ExternalSourceChange) ||
+		!slices.Contains([]string{schema.ExternalSourceProperties, schema.ExternalTableProperties}, kind) {
+		return read{}, root, fmt.Errorf("external object change names another kind of object")
+	}
+	captured, err := schema.NormalizeExternalChange(&protocol.ValueInput{Id: input.Value.Id, Representation: protocol.ValueInput_CHANGE, Value: input.Value.Value})
+	if err != nil {
+		return read{}, root, err
+	}
+	if !proto.Equal(captured, input.Value) || !proto.Equal(owner, captured.NormalizedOwner) {
+		return read{}, root, fmt.Errorf("planning change has a forged normalization receipt or identity")
+	}
+	if slices.ContainsFunc(inputs, func(other read) bool { return provider.CompareIdentities(other.subject, input.Subject) == 0 }) {
+		return read{}, root, fmt.Errorf("duplicate external object change")
+	}
+	_, _, database, err := schema.ExternalOperands(captured.Value)
+	if err != nil {
+		return read{}, root, err
+	}
+	if database != "" {
+		if root != "" && database != root {
+			return read{}, root, fmt.Errorf("external object change targets another database")
+		}
+		root = database
+	}
+	if owner.Database != "" && root != "" && owner.Database != root {
+		return read{}, root, fmt.Errorf("external object change has a foreign database identity")
+	}
+	return read{subject: input.Subject, change: captured.Value}, root, nil
 }
 
 func readAgainst(change *protocol.Envelope, root string) (externals.ChangeSpecs, error) {
@@ -443,70 +458,9 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 		}
 		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d/%s", strings.ReplaceAll(noun(planned.subject), " ", "-"), index, strings.ToLower(planned.action.String()))}
 		ids[index] = id
-		value, err := schema.ExternalOperation(id.Name, planned.change, planned.operation)
-		if err != nil {
-			return nil, err
+		if refusal, err := contributeStep(request, changes, planned, id, result, contribution); refusal != nil || err != nil {
+			return refusal, err
 		}
-		pathRequest, err := objectplan.PathContext(request)
-		if err != nil {
-			return refused(changes[planned.input], err), nil
-		}
-		edges, err := objectplan.PathDependencies(pathRequest, family(planned.subject.GetKind()), planned.subject, planned.action, id)
-		if err != nil {
-			return refused(changes[planned.input], err), nil
-		}
-		accessAction := planned.action
-		if len(changes[planned.input].steps) > 1 {
-			// A temporary drop must preserve a revoke until the replacement
-			// object exists and its captured access has been restored.
-			accessAction = protocol.PlanningEffect_ALTER
-		}
-		access, err := objectplan.OrderAccess(request, family(planned.subject.GetKind()), planned.subject, accessAction, id)
-		if err != nil {
-			return refused(changes[planned.input], err), nil
-		}
-		access.Dependencies = append(access.Dependencies, objectplan.BeforePrincipalChanges(request, accessAction, id)...)
-		below, err := objectplan.AfterCreationBelowDirectoryAccess(request, planned.action, planned.subject, id)
-		if err != nil {
-			return refused(changes[planned.input], err), nil
-		}
-		access.Dependencies = append(access.Dependencies, below...)
-		contribution.Dependencies = append(contribution.Dependencies, edges...)
-		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(planned.subject), Action: planned.action}, {Subject: objectplan.Slot(planned.subject), Action: planned.action}}
-		for _, path := range planned.secrets {
-			secret := sourceSubject(path)
-			secret.Kind = schema.SecretProperties
-			effects = append(effects, &protocol.PlanningEffect{Subject: secret, Action: protocol.PlanningEffect_READ},
-				&protocol.PlanningEffect{Subject: objectplan.Slot(secret), Action: protocol.PlanningEffect_READ})
-		}
-		if !planned.source() && planned.action != protocol.PlanningEffect_DROP {
-			for _, source := range planned.sources {
-				effects = append(effects, &protocol.PlanningEffect{Subject: sourceSubject(source), Action: protocol.PlanningEffect_READ})
-			}
-		}
-		facts := value.OperationSemantics
-		// Every statement of the batch asks for the lifecycle phase, which
-		// orders operations around common changes: a table dropped
-		// before the data source it reads is created again after it, and the
-		// batch orders its own steps there.
-		step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_LIFECYCLE},
-			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Placement: protocol.PlanningMetadata_EARLY, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}}
-		if len(access.Dependencies)+len(access.Sources)+len(planned.secrets) != 0 {
-			if !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
-				return refused(changes[planned.input], fmt.Errorf("native dependency ordering requires planning.lifecycle")), nil
-			}
-			step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
-			step.Metadata.Placement = protocol.PlanningMetadata_DEFAULT
-			if planned.action == protocol.PlanningEffect_DROP {
-				step.Metadata.Placement = protocol.PlanningMetadata_EARLY
-			}
-			step.Metadata.Effects = append(step.Metadata.Effects, access.Effects...)
-			contribution.Dependencies = append(contribution.Dependencies, access.Dependencies...)
-			if len(access.Sources) != 0 {
-				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: access.Sources, Replacement: proto.CloneOf(id)})
-			}
-		}
-		contribution.Steps = append(contribution.Steps, step)
 		byInput[planned.input] = append(byInput[planned.input], proto.CloneOf(id))
 	}
 	contribution.Dependencies = append(contribution.Dependencies, order(steps, ids)...)
@@ -520,6 +474,94 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 		return nil, err
 	}
 	return result, nil
+}
+
+// contributeStep adds planned, a step of the change it carries out, to
+// contribution as the step id, with its dependencies on the common steps and
+// captured tables of request, and records a rewrite of the revokes it
+// accounts for in result. A step ordered against access or secrets needs the
+// planning.lifecycle target feature. A failure to order the step returns a
+// refusal of its change.
+func contributeStep(
+	request *protocol.PlanFeaturesRequest,
+	changes []lowered,
+	planned step,
+	id *protocol.StepIdentity,
+	result *protocol.PlannedFeatures,
+	contribution *protocol.PlanningContribution,
+) (*protocol.PlannedFeatures, error) {
+	value, err := schema.ExternalOperation(id.Name, planned.change, planned.operation)
+	if err != nil {
+		return nil, err
+	}
+	pathRequest, err := objectplan.PathContext(request)
+	if err != nil {
+		return refused(changes[planned.input], err), nil
+	}
+	edges, err := objectplan.PathDependencies(pathRequest, family(planned.subject.GetKind()), planned.subject, planned.action, id)
+	if err != nil {
+		return refused(changes[planned.input], err), nil
+	}
+	accessAction := planned.action
+	if len(changes[planned.input].steps) > 1 {
+		// A temporary drop must preserve a revoke until the replacement
+		// object exists and its captured access has been restored.
+		accessAction = protocol.PlanningEffect_ALTER
+	}
+	access, err := objectplan.OrderAccess(request, family(planned.subject.GetKind()), planned.subject, accessAction, id)
+	if err != nil {
+		return refused(changes[planned.input], err), nil
+	}
+	access.Dependencies = append(access.Dependencies, objectplan.BeforePrincipalChanges(request, accessAction, id)...)
+	below, err := objectplan.AfterCreationBelowDirectoryAccess(request, planned.action, planned.subject, id)
+	if err != nil {
+		return refused(changes[planned.input], err), nil
+	}
+	access.Dependencies = append(access.Dependencies, below...)
+	contribution.Dependencies = append(contribution.Dependencies, edges...)
+	facts := value.OperationSemantics
+	// Every statement of the batch asks for the lifecycle phase, which
+	// orders operations around common changes: a table dropped
+	// before the data source it reads is created again after it, and the
+	// batch orders its own steps there.
+	step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_LIFECYCLE},
+		Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Placement: protocol.PlanningMetadata_EARLY, Impact: facts.Impact, Reason: facts.Reason, Effects: stepEffects(planned)}}
+	if len(access.Dependencies)+len(access.Sources)+len(planned.secrets) != 0 {
+		if !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
+			return refused(changes[planned.input], fmt.Errorf("native dependency ordering requires planning.lifecycle")), nil
+		}
+		step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
+		step.Metadata.Placement = protocol.PlanningMetadata_DEFAULT
+		if planned.action == protocol.PlanningEffect_DROP {
+			step.Metadata.Placement = protocol.PlanningMetadata_EARLY
+		}
+		step.Metadata.Effects = append(step.Metadata.Effects, access.Effects...)
+		contribution.Dependencies = append(contribution.Dependencies, access.Dependencies...)
+		if len(access.Sources) != 0 {
+			result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: access.Sources, Replacement: proto.CloneOf(id)})
+		}
+	}
+	contribution.Steps = append(contribution.Steps, step)
+	return nil, nil
+}
+
+// stepEffects returns the effects of planned: on its object and the object's
+// slot; a read of each secret it names and of the secret's slot; and, for a
+// table step other than a drop, a read of each data source it reads.
+func stepEffects(planned step) []*protocol.PlanningEffect {
+	effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(planned.subject), Action: planned.action}, {Subject: objectplan.Slot(planned.subject), Action: planned.action}}
+	for _, path := range planned.secrets {
+		secret := sourceSubject(path)
+		secret.Kind = schema.SecretProperties
+		effects = append(effects, &protocol.PlanningEffect{Subject: secret, Action: protocol.PlanningEffect_READ},
+			&protocol.PlanningEffect{Subject: objectplan.Slot(secret), Action: protocol.PlanningEffect_READ})
+	}
+	if !planned.source() && planned.action != protocol.PlanningEffect_DROP {
+		for _, source := range planned.sources {
+			effects = append(effects, &protocol.PlanningEffect{Subject: sourceSubject(source), Action: protocol.PlanningEffect_READ})
+		}
+	}
+	return effects
 }
 
 func refused(change lowered, err error) *protocol.PlannedFeatures {
