@@ -41,7 +41,7 @@ func unitsNaming(output string, names ...string) []string {
 // without the index. Through the provider the host dropped every index first.
 func TestHostCreatesATableBeforeItDropsAnIndex_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	opened, directory, database := inspectionFixture(c)
+	opened, directory, database := lockFixture(c)
 	kept, created := path.Join(database, directory, "p"), path.Join(database, directory, "n")
 	c.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
