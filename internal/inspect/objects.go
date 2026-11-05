@@ -28,28 +28,7 @@ func (s *source) readObject(ctx context.Context, absolute string, kind Ydb_Schem
 	case Ydb_Scheme.Entry_SECRET:
 		return schema.SecretProperties, &native.SecretPresence{}, nil
 	case Ydb_Scheme.Entry_VIEW:
-		response, err := s.view.DescribeView(ctx, &Ydb_View.DescribeViewRequest{Path: absolute})
-		if err != nil {
-			return "", nil, fmt.Errorf("describe YDB view: transport failed")
-		}
-		var view Ydb_View.DescribeViewResult
-		if err := nativeapi.Operation(response.GetOperation(), &view); err != nil {
-			return "", nil, err
-		}
-		if err := objectIdentity(view.Self, absolute, kind); err != nil {
-			return "", nil, err
-		}
-		properties, err := s.describeTable(ctx, absolute)
-		if err != nil {
-			return "", nil, err
-		}
-		if len(properties.indexes)+len(properties.changefeeds) != 0 {
-			return "", nil, fmt.Errorf("unexpected child objects on YDB view")
-		}
-		if err := objectIdentity(properties.table.Self, absolute, kind); err != nil {
-			return "", nil, err
-		}
-		return schema.ViewProperties, &native.ViewObservation{View: &view, Properties: properties.table}, nil
+		return s.readView(ctx, absolute)
 	case Ydb_Scheme.Entry_COORDINATION_NODE:
 		response, err := s.coordination.DescribeNode(ctx, &Ydb_Coordination.DescribeNodeRequest{Path: absolute})
 		if err != nil {
@@ -80,29 +59,62 @@ func (s *source) readObject(ctx context.Context, absolute string, kind Ydb_Schem
 		}
 		return schema.ExternalSourceProperties, &source, nil
 	case Ydb_Scheme.Entry_EXTERNAL_TABLE:
-		response, err := s.table.DescribeExternalTable(ctx, &Ydb_Table.DescribeExternalTableRequest{Path: absolute})
-		if err != nil {
-			return "", nil, fmt.Errorf("describe YDB external table: transport failed")
-		}
-		if err := nativeapi.Status(response.GetOperation()); err != nil {
-			return "", nil, err
-		}
-		payload := response.GetOperation().GetResult()
-		if !payload.MessageIs(&Ydb_Table.DescribeExternalTableResult{}) {
-			return "", nil, fmt.Errorf("invalid YDB external table response type")
-		}
-		var table native.DescribeExternalTableResult
-		if err := proto.Unmarshal(payload.GetValue(), &table); err != nil {
-			return "", nil, fmt.Errorf("invalid YDB external table response")
-		}
-		if err := schema.Known(&table); err != nil {
-			return "", nil, err
-		}
-		if err := objectIdentity(table.Self, absolute, kind); err != nil {
-			return "", nil, err
-		}
-		return schema.ExternalTableProperties, &table, nil
+		return s.readExternalTable(ctx, absolute)
 	default:
 		return "", nil, fmt.Errorf("unsupported native YDB object reader")
 	}
+}
+
+// readView describes the view at absolute, together with the table service's
+// description of it, which must name no index or changefeed.
+func (s *source) readView(ctx context.Context, absolute string) (string, proto.Message, error) {
+	response, err := s.view.DescribeView(ctx, &Ydb_View.DescribeViewRequest{Path: absolute})
+	if err != nil {
+		return "", nil, fmt.Errorf("describe YDB view: transport failed")
+	}
+	var view Ydb_View.DescribeViewResult
+	if err := nativeapi.Operation(response.GetOperation(), &view); err != nil {
+		return "", nil, err
+	}
+	if err := objectIdentity(view.Self, absolute, Ydb_Scheme.Entry_VIEW); err != nil {
+		return "", nil, err
+	}
+	properties, err := s.describeTable(ctx, absolute)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(properties.indexes)+len(properties.changefeeds) != 0 {
+		return "", nil, fmt.Errorf("unexpected child objects on YDB view")
+	}
+	if err := objectIdentity(properties.table.Self, absolute, Ydb_Scheme.Entry_VIEW); err != nil {
+		return "", nil, err
+	}
+	return schema.ViewProperties, &native.ViewObservation{View: &view, Properties: properties.table}, nil
+}
+
+// readExternalTable describes the external table at absolute, refusing a
+// description that carries a field the pinned protocol does not know.
+func (s *source) readExternalTable(ctx context.Context, absolute string) (string, proto.Message, error) {
+	response, err := s.table.DescribeExternalTable(ctx, &Ydb_Table.DescribeExternalTableRequest{Path: absolute})
+	if err != nil {
+		return "", nil, fmt.Errorf("describe YDB external table: transport failed")
+	}
+	if err := nativeapi.Status(response.GetOperation()); err != nil {
+		return "", nil, err
+	}
+	payload := response.GetOperation().GetResult()
+	if !payload.MessageIs(&Ydb_Table.DescribeExternalTableResult{}) {
+		return "", nil, fmt.Errorf("invalid YDB external table response type")
+	}
+	var table native.DescribeExternalTableResult
+	if err := proto.Unmarshal(payload.GetValue(), &table); err != nil {
+		return "", nil, fmt.Errorf("invalid YDB external table response")
+	}
+	if err := schema.Known(&table); err != nil {
+		return "", nil, err
+	}
+	if err := objectIdentity(table.Self, absolute, Ydb_Scheme.Entry_EXTERNAL_TABLE); err != nil {
+		return "", nil, err
+	}
+	return schema.ExternalTableProperties, &table, nil
 }

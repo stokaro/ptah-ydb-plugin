@@ -21,6 +21,22 @@ import (
 // description names no consumer yet, and a topic or a changefeed outside the
 // read mark nothing.
 func markTransferReaders(snapshot *protocol.Schema) error {
+	readers, err := transferReaders(snapshot)
+	if err != nil {
+		return err
+	}
+	if len(readers) == 0 {
+		return nil
+	}
+	if err := markTopicReaders(snapshot, readers); err != nil {
+		return err
+	}
+	return markChangefeedReaders(snapshot, readers)
+}
+
+// transferReaders maps the cleaned source path of each local transfer the
+// snapshot holds to its consumer and the transfer's path below the database.
+func transferReaders(snapshot *protocol.Schema) (map[string]map[string]string, error) {
 	readers := make(map[string]map[string]string)
 	for _, value := range snapshot.GetNativeObjects() {
 		if value.GetKind() != schema.TransferProperties {
@@ -28,7 +44,7 @@ func markTransferReaders(snapshot *protocol.Schema) error {
 		}
 		spec, _, err := schema.ObservedTransfer(value)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !replication.LocalSource(spec) || spec.Consumer == "" || strings.HasPrefix(spec.Source, "/") {
 			continue
@@ -39,9 +55,12 @@ func markTransferReaders(snapshot *protocol.Schema) error {
 		}
 		readers[source][spec.Consumer] = replication.TablePath(value.GetOwner().GetSchema(), value.GetOwner().GetName())
 	}
-	if len(readers) == 0 {
-		return nil
-	}
+	return readers, nil
+}
+
+// markTopicReaders marks the consumers of the snapshot's topics that readers
+// names, and captures again each topic it marked.
+func markTopicReaders(snapshot *protocol.Schema, readers map[string]map[string]string) error {
 	for i, value := range snapshot.GetNativeObjects() {
 		if value.GetKind() != schema.TopicProperties {
 			continue
@@ -64,6 +83,13 @@ func markTransferReaders(snapshot *protocol.Schema) error {
 		marked.Context = value.GetContext()
 		snapshot.NativeObjects[i] = marked
 	}
+	return nil
+}
+
+// markChangefeedReaders marks the consumers of the changefeeds of the
+// snapshot's tables that readers names, and captures again each changefeed
+// facet it marked.
+func markChangefeedReaders(snapshot *protocol.Schema, readers map[string]map[string]string) error {
 	for _, table := range snapshot.GetTables() {
 		for i, facet := range table.GetFacets() {
 			if facet.GetKind() != schema.ChangefeedProperties {
