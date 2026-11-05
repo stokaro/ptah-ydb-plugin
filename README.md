@@ -2720,10 +2720,11 @@ sits in included, with the settings the declaration leaves out (its cache mode
 among them, which a target without `column_family_cache_mode` refuses to
 write), the family each column sits in where the declaration does not say (see
 [Column families](#column-families)), the automatic partitioning, the read replicas, the key bloom
-filter, and the TTL where the declaration states no table properties. A
-cluster's table profile may have given the old table any of them, and YQL
-drops neither a family nor a setting, so a rebuild changes none that nobody
-declared. Each index of the new table keeps the automatic partitioning and the
+filter, the TTL where the declaration states no table properties, and the run
+interval of the TTL it holds where the declaration states a TTL, which names
+none since YQL has no setting for one. A cluster's table profile may have
+given the old table any of them, and YQL drops neither a family nor a setting,
+so a rebuild changes none that nobody declared. Each index of the new table keeps the automatic partitioning and the
 read replicas the old index under its name holds, or the old index the host
 renames it from. The call that creates a table takes no index settings, so a
 `table-rebuild/N/index-settings/M` step after the creation and before the copy
@@ -2735,9 +2736,9 @@ in the embedded engine's words, naming the request the host passes, such as
 `--allow-table-rebuild`.
 
 Every step writes as a YQL statement in the TEXT form, so a migration file
-holds the rebuild, unless the old table holds user attributes: YQL's CREATE
-TABLE sets none, so such a rebuild has no TEXT form (`NO_TEXT_FORM`) and runs
-natively. A native execution checks each step's precondition first:
+holds the rebuild, unless the old table holds user attributes or a TTL run
+interval other than YDB's own: YQL's CREATE TABLE sets neither, so such a
+rebuild has no TEXT form (`NO_TEXT_FORM`) and runs natively. A native execution checks each step's precondition first:
 the copy needs the new table empty and the source holding every copied column,
 a rename needs the table holding the captured columns and key, and a free
 target. YDB renames no table that carries a changefeed, so a rebuild of a
