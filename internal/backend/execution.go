@@ -32,8 +32,14 @@ type sqlExecutor interface {
 
 // Execute dispatches SQL and native units once. SQL uses a pinned connection
 // to avoid database/sql retries. Native calls validate captured preconditions
-// and cannot join a SQL transaction. Unknown outcomes are never retried.
+// and cannot join a SQL transaction. Unknown outcomes are never retried. A
+// result that did not apply every unit gives its reason in its diagnostic.
 func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest) (*protocol.Execution, error) {
+	result, err := p.execute(ctx, request)
+	return withReason(result), err
+}
+
+func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest) (*protocol.Execution, error) {
 	if request.GetSessionId() == "" || request.GetRequestId() == "" || len(request.GetUnits()) == 0 {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "session, request ID, and units are required")
 	}
@@ -171,7 +177,11 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 				}
 			}
 		}
-		result := ydbfailure.Failed(ydbfailure.Read(err), failure, applied)
+		answer := ydbfailure.Read(err)
+		if s.realm {
+			answer = answer.WithoutLines(realmPrefixLines)
+		}
+		result := ydbfailure.Failed(answer, failure, applied)
 		if result.GetOutcome() != protocol.Execution_UNKNOWN && request.TransactionId != "" {
 			s.abandonTransaction(ctx, request.TransactionId)
 		}
@@ -260,6 +270,9 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	if s.verifyLocks(ctx) != nil && (result.AppliedCount > 0 || result.Outcome == protocol.Execution_UNKNOWN) {
 		result.Outcome = protocol.Execution_UNKNOWN
 		result.DiagnosticCode = "ydb.lock-guarantee-lost"
+		// The loss decides the outcome, so the reason YDB's answer gave for
+		// the unit no longer explains it.
+		result.Diagnostic = nil
 	}
 	return result, nil
 }
