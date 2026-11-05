@@ -56,6 +56,13 @@ func heldEntries(c *qt.C, opened *connection.Connection, absolute string) map[st
 // removes the directories, deepest first. It removes only what a test
 // created there.
 func removeTree(ctx context.Context, opened *connection.Connection, absolute string) {
+	emptyTree(ctx, opened, absolute)
+	_ = opened.Driver.Scheme().RemoveDirectory(ctx, absolute)
+}
+
+// emptyTree is removeTree that keeps absolute itself, for a fixture
+// directory whose own cleanup removes it.
+func emptyTree(ctx context.Context, opened *connection.Connection, absolute string) {
 	scheme := nativeapi.SchemeLister(Ydb_Scheme_V1.NewSchemeServiceClient(ydb.GRPCConn(opened.Driver)))
 	nodes := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(opened.Driver))
 	drops := []struct {
@@ -89,7 +96,7 @@ func removeTree(ctx context.Context, opened *connection.Connection, absolute str
 		}
 	}
 	slices.Reverse(directories)
-	for _, directory := range directories {
+	for _, directory := range directories[:len(directories)-1] {
 		_ = opened.Driver.Scheme().RemoveDirectory(ctx, directory)
 	}
 }
