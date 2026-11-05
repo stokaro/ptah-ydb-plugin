@@ -18,6 +18,13 @@ on:
         default: ''
 permissions:
   contents: read
+# A pull request's push supersedes its earlier run, so that run is canceled
+# and the pull request does not wait behind its own old heads. A push to
+# master, the nightly run and a manual run each get a group of their own, so
+# none of them cancels another and every master commit keeps its result.
+concurrency:
+  group: provider-checks-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   unit:
     runs-on: ubuntu-latest
