@@ -22,6 +22,12 @@ import (
 // comment ordered after it closes a cycle; and neither needs it, since what a
 // removal drops is no longer declared, so no view the plan creates reads it and
 // no comment the plan sets names it.
+//
+// A comment on the table or on one of its columns does not wait for a step
+// that changes only an index of the table either. The host places the comment
+// of a column it adds right after the column, before the index additions, so
+// the edge closes a cycle; and the comment does not need it, since the step
+// changes nothing the comment names. A comment on an index still waits.
 func commonObjectDependencies(common []*protocol.CommonPlanningStep, steps []*protocol.PlanningStep) []*protocol.PlanningDependency {
 	var result []*protocol.PlanningDependency
 	for _, host := range common {
@@ -38,7 +44,9 @@ func commonObjectDependencies(common []*protocol.CommonPlanningStep, steps []*pr
 					result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(step.Id), After: proto.CloneOf(host.Id)})
 				}
 			case *protocol.CommonObjectChange_SetComment:
-				if schema, table, onTable := commentedTable(operation.SetComment.GetObject()); onTable && names(step, schema, table) && !removalOnly(step) {
+				object := operation.SetComment.GetObject()
+				schema, table, onTable := commentedTable(object)
+				if onTable && names(step, schema, table) && !removalOnly(step) && (object.GetKind() == "index" || !indexOnly(step)) {
 					result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(step.Id), After: proto.CloneOf(host.Id)})
 				}
 			}
@@ -88,4 +96,20 @@ func removalOnly(step *protocol.PlanningStep) bool {
 		}
 	}
 	return dropped
+}
+
+// indexOnly reports a step that changes only indexes of its table: each of its
+// effects reads or names an index, and at least one names an index, as an
+// index's addition reads its table and creates the index.
+func indexOnly(step *protocol.PlanningStep) bool {
+	changed := false
+	for _, effect := range step.GetMetadata().GetEffects() {
+		switch {
+		case effect.GetSubject().GetKind() == "index":
+			changed = true
+		case effect.GetAction() != protocol.PlanningEffect_READ:
+			return false
+		}
+	}
+	return changed
 }

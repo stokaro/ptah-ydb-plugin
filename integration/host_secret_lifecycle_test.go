@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -68,6 +69,22 @@ func dropSecretsBelow(c *qt.C, opened *connection.Connection, absolute string) {
 			_ = execFixtureSchema(ctx, opened.DB, "DROP SECRET `"+child+"`;")
 		}
 	}
+}
+
+// hostApplyAt runs the host's `schema apply` with args, with this provider
+// selected for ydb, against address, and returns the planned units as
+// appliedUnits lists them and how it exited.
+func hostApplyAt(c *qt.C, address string, args ...string) (string, error) {
+	c.Helper()
+	host, manifest := hostManifest(c)
+	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
+	defer cancel()
+	arguments := slices.Concat([]string{"schema", "apply", "--json"}, args, []string{"--provider-config", manifest, "--provider-engine", "ydb", "--db-url", address})
+	cmd := exec.CommandContext(ctx, host, arguments...)
+	var report, printed bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &report, &printed
+	err := cmd.Run()
+	return appliedUnits(report.Bytes(), printed.String()), err
 }
 
 // hostRunAt runs one host command line with this provider selected for ydb
@@ -142,10 +159,10 @@ func TestHostKeepsASecretsValueOutOfEveryOutput_HappyPath(t *testing.T) {
 	address := os.Getenv("PTAH_YDB_TEST_URL")
 	scope := []string{"--schemas", directory, "--tx-mode", "none"}
 
-	applied, applyErr := hostRunAt(c, address, append([]string{"schema", "apply", "--root-dir", entities, "--auto-approve"}, scope...)...)
+	applied, applyErr := hostApplyAt(c, address, append([]string{"--root-dir", entities, "--auto-approve"}, scope...)...)
 	compared, compareErr := hostRunAt(c, address, "schema", "compare", "--root-dir", entities, "--exit-code", "--schemas", directory)
 	t.Setenv(variable, second)
-	previewed, previewErr := hostRunAt(c, address, append([]string{"schema", "apply", "--root-dir", entities, "--dry-run",
+	previewed, previewErr := hostApplyAt(c, address, append([]string{"--root-dir", entities, "--dry-run",
 		"--rotate-secret", directory + "/pg_password"}, scope...)...)
 	refused, refusedErr := hostRunAt(c, address, append([]string{"schema", "apply", "--root-dir", refusing, "--auto-approve"}, scope...)...)
 
@@ -226,7 +243,7 @@ func TestHostConvergesYQLSecretsInADevRealm_HappyPath(t *testing.T) {
 		"",
 	} {
 		c.Assert(os.WriteFile(schemaFile, []byte(source), 0o600), qt.IsNil)
-		planned, planErr := hostRunAt(c, address, "schema", "apply", "--dry-run", "--tx-mode", "none", "--schema-file", schemaFile)
+		planned, planErr := hostApplyAt(c, address, "--dry-run", "--tx-mode", "none", "--schema-file", schemaFile)
 		applied, applyErr := hostRunAt(c, address, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--schema-file", schemaFile)
 		settled, settleErr := hostRunAt(c, address, "schema", "apply", "--dry-run", "--tx-mode", "none", "--schema-file", schemaFile)
 

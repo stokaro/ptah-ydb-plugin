@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -71,6 +72,42 @@ func TestHostDevDatabaseIsARealm_HappyPath(t *testing.T) {
 		})
 	}
 	c.Assert(heldEntries(c, opened, path.Join(database, directory)), qt.DeepEquals, map[string]Ydb_Scheme.Entry_Type{"t": Ydb_Scheme.Entry_TABLE})
+}
+
+// parallelCases are two declarative test cases marked parallel over the users
+// table: each writes its own rows and counts them, so a case that saw the
+// other's rows would fail its count.
+const parallelCases = "cases:\n" +
+	"  - name: one row\n    parallel: true\n    steps:\n      - migrate_to: latest\n" +
+	"      - exec: \"UPSERT INTO `users` (id, name) VALUES (1, 'a'u)\"\n" +
+	"      - assert:\n          query: \"SELECT COUNT(*) FROM `users`\"\n          scalar: \"1\"\n" +
+	"  - name: two rows\n    parallel: true\n    steps:\n      - migrate_to: latest\n" +
+	"      - exec: \"UPSERT INTO `users` (id, name) VALUES (2, 'b'u)\"\n" +
+	"      - exec: \"UPSERT INTO `users` (id, name) VALUES (3, 'c'u)\"\n" +
+	"      - assert:\n          query: \"SELECT COUNT(*) FROM `users`\"\n          scalar: \"2\"\n"
+
+// Ported from the host's TestYDBBinary_DevDatabaseIsARealm, its parallel test
+// cases: `migrations test` runs two cases marked parallel against the test
+// database, each in a dev realm of its own, so neither sees the rows the other
+// writes and both pass. The table the migration creates is not at the
+// database root, and no realm is left there.
+func TestHostRunsParallelTestCasesInRealms_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, _, database := lockFixture(c)
+	root := c.TempDir()
+	migrations := writeFiles(c, filepath.Join(root, "migrations"), map[string]string{
+		"0000000001_users.up.sql":   "CREATE TABLE `users` (`id` Int64 NOT NULL, `name` Utf8, PRIMARY KEY (`id`));\n",
+		"0000000001_users.down.sql": "DROP TABLE `users`;\n",
+	})
+	tests := writeFiles(c, filepath.Join(root, "tests"), map[string]string{"cases.yaml": parallelCases})
+
+	tested, err := hostCommand(c, "migrations", "test", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--dir", tests, "--migrations-dir", migrations)
+
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", tested))
+	c.Assert(tested, qt.Contains, `PASS  case "one row"`)
+	c.Assert(tested, qt.Contains, `PASS  case "two rows"`)
+	c.Assert(entryNames(heldEntries(c, opened, database)), qt.Not(qt.Contains), "users")
+	c.Assert(entryNames(heldEntries(c, opened, database)), qt.Not(qt.Contains), connection.RealmDirectory)
 }
 
 // A statement of a replay that reaches the whole database is refused as one its

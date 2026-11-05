@@ -112,10 +112,11 @@ func Normalize(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	}
 	result := proto.CloneOf(value)
 	result.Payload = payload
+	access, accessReason := createdAccess(result.GetOwner().GetName())
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner),
 		CanonicalFormat: definition.CanonicalFormat, CanonicalProjection: bytes.Clone(payload),
 		OperationSemantics: &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Creates a row table",
-			Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Creation inherits server access policy"}}, nil
+			Access: access, AccessReason: accessReason}}, nil
 }
 
 // Request returns independent native operands after validating the envelope.

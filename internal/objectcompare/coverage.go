@@ -115,10 +115,17 @@ func namespaceMatches(scope *protocol.ComparisonNamespace, subject *protocol.Com
 	if !selected(scope.Targets) || (len(scope.SubjectKinds) > 0 && !slices.Contains(scope.SubjectKinds, subject.Kind)) {
 		return false
 	}
-	for _, pair := range [][2]*protocol.ComparisonPart{{scope.Database, subject.Database}, {scope.Catalog, subject.Catalog}, {scope.Schema, subject.Schema}, {scope.Parent, subject.Parent}} {
+	for _, pair := range [][2]*protocol.ComparisonPart{{scope.Database, subject.Database}, {scope.Catalog, subject.Catalog}, {scope.Parent, subject.Parent}} {
 		if pair[0] != nil && pair[0].GetNormalized() != pair[1].GetNormalized() {
 			return false
 		}
+	}
+	// A subtree region covers its directory and every directory below it.
+	if scope.Schema != nil && !scope.SchemaSubtree && scope.Schema.GetNormalized() != subject.Schema.GetNormalized() {
+		return false
+	}
+	if scope.Schema != nil && scope.SchemaSubtree && !provider.SchemaWithin(scope.Schema.GetNormalized(), subject.Schema.GetNormalized(), schema.SchemaSeparator) {
+		return false
 	}
 	if len(scope.PathPrefix) > len(subject.Path) || (scope.PathExact && len(scope.PathPrefix) != len(subject.Path)) {
 		return false

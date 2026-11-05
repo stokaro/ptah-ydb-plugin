@@ -84,7 +84,7 @@ func objectAccessDocument(directory string, names objectAccessNames, objects []a
 			text.WriteString(" {}\n")
 		}
 	}
-	fmt.Fprintf(&text, "roles:\n  %s:\n    login: true\n    password: \"Secret1!\"\n  %s:\n    group: true\n", names.user, names.group)
+	fmt.Fprintf(&text, "roles:\n  %s:\n    login: true\n  %s:\n    group: true\n", names.user, names.group)
 	fmt.Fprintf(&text, "grants:\n  lister:\n    role: %s\n    privileges: [LIST]\n    on_schema: %s\n", names.group, directory)
 	for _, object := range objects {
 		fmt.Fprintf(&text, "  %s:\n    role: %s\n    privileges: [%s]\n    %s: %s.%s\n", object.name(), names.user, cmp.Or(permission, object.permission),
