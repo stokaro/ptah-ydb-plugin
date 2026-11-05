@@ -61,18 +61,18 @@ func TestHostShadowVerifiesARotation_HappyPath(t *testing.T) {
 
 // Ported from the host's "a shadow database that is the target is a realm in
 // it": `migrations generate --shadow-db`, with the target's own address as the
-// shadow, writes the migration of a table in a new directory after verifying
-// it in a dev realm of the target, and leaves the target without the table
-// and without the realm.
+// shadow, writes the migration of a table in the directory it selects after
+// verifying it in a dev realm of the target, where the replay creates the
+// directory, and leaves the target without the table and without the realm.
 func TestHostShadowDatabaseThatIsTheTargetIsARealmInIt_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
-	declared := "tables:\n  items:\n    schema: " + directory + "/fresh\n    columns:\n      id: {type: Uint64, primary: true, not_null: true}\n      label: {type: Utf8}\n"
+	declared := "tables:\n  items:\n    schema: " + directory + "\n    columns:\n      id: {type: Uint64, primary: true, not_null: true}\n      label: {type: Utf8}\n"
 
 	_, up, _ := hostGenerate(c, directory, "yaml", declared, "--shadow-db", os.Getenv("PTAH_YDB_TEST_URL"))
 
-	c.Assert(up, qt.Contains, "CREATE TABLE `"+directory+"/fresh/items`")
-	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.Not(qt.Contains), "fresh")
+	c.Assert(up, qt.Contains, "CREATE TABLE `"+directory+"/items`")
+	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.Not(qt.Contains), "items")
 	c.Assert(listedNames(c, opened, database), qt.Not(qt.Contains), connection.RealmDirectory)
 }
