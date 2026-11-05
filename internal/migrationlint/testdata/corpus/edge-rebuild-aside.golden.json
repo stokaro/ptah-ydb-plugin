@@ -1,0 +1,676 @@
+{
+ "host": "74de0b65b3a167bdf9597eb41a399fb2c643a7b1",
+ "runs": [
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0002_t.down.sql",
+      "source": 1,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:18:BC101", "0002_t.up.sql:20:BC103", "0002_t.up.sql:20:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0002_t.down.sql",
+      "source": 1,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": "25.1.4.7"
+   },
+   "compatibility": "",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:18:BC101", "0002_t.up.sql:20:BC103", "0002_t.up.sql:20:DS101"],
+   "server_version": "25.1.4.7",
+   "split": 0
+  },
+  {
+   "check": {
+    "codes": ["YD101", "YD102", "YD103", "YD104", "YD105", "YD106", "YD107", "YD108", "YD109", "YD110", "YD111", "YD113", "YD114", "YD115", "YD116", "YD118", "YD119", "YD120", "YD121", "YD122", "YD130", "YD131", "YD140", "YD141", "YD150", "YD160"],
+    "compatibility": "atlas",
+    "files": [
+     {
+      "has_pair": true,
+      "name": "0001_t.up.sql",
+      "source": 0,
+      "up": true,
+      "version": 1
+     },
+     {
+      "down": true,
+      "has_pair": true,
+      "name": "0002_t.down.sql",
+      "source": 1,
+      "version": 2
+     },
+     {
+      "has_pair": true,
+      "name": "0002_t.up.sql",
+      "source": 2,
+      "up": true,
+      "version": 2
+     }
+    ],
+    "findings": [],
+    "server_version": ""
+   },
+   "compatibility": "atlas",
+   "dialect": "ydb",
+   "report": ["0002_t.up.sql:4:DS101", "0002_t.up.sql:8:DS101", "0002_t.up.sql:12:DS101", "0002_t.up.sql:14:DS101", "0002_t.up.sql:18:DS101", "0002_t.up.sql:20:DS101"],
+   "server_version": "",
+   "split": 0
+  },
+  {
+   "annotate": {
+    "answer": [
+     [
+      {},
+      {},
+      {},
+      {}
+     ],
+     [
+      {}
+     ],
+     [
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    ],
+    "facts": ["stateful-drop"],
+    "files": [
+     [
+      {
+       "canonical": "CREATE TABLE F (ID UINT64 NOT NULL, N INT32, PRIMARY KEY (ID))",
+       "end": 62,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "f", "(", "id", "Uint64", "NOT", "NULL", ",", "n", "Int32", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE f (id Uint64 NOT NULL, n Int32, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "F", "(", "ID", "UINT64", "NOT", "NULL", ",", "N", "INT32", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE F ADD CHANGEFEED UPDATES WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+       "end": 141,
+       "line": 2,
+       "source_words": ["ALTER", "TABLE", "f", "ADD", "CHANGEFEED", "updates", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"],
+       "sql": "ALTER TABLE f ADD CHANGEFEED updates WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+       "start": 64,
+       "words": ["ALTER", "TABLE", "F", "ADD", "CHANGEFEED", "UPDATES", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE G (ID UINT64 NOT NULL, V UTF8, PRIMARY KEY (ID), INDEX BY_V GLOBAL ON (V))",
+       "end": 230,
+       "line": 3,
+       "source_words": ["CREATE", "TABLE", "g", "(", "id", "Uint64", "NOT", "NULL", ",", "v", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "by_v", "GLOBAL", "ON", "(", "v", ")", ")"],
+       "sql": "CREATE TABLE g (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX by_v GLOBAL ON (v))",
+       "start": 143,
+       "words": ["CREATE", "TABLE", "G", "(", "ID", "UINT64", "NOT", "NULL", ",", "V", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "BY_V", "GLOBAL", "ON", "(", "V", ")", ")"]
+      },
+      {
+       "canonical": "CREATE TABLE H (ID UINT64 NOT NULL, V UTF8, PRIMARY KEY (ID))",
+       "end": 293,
+       "line": 4,
+       "source_words": ["CREATE", "TABLE", "h", "(", "id", "Uint64", "NOT", "NULL", ",", "v", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE h (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))",
+       "start": 232,
+       "words": ["CREATE", "TABLE", "H", "(", "ID", "UINT64", "NOT", "NULL", ",", "V", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      }
+     ],
+     [
+      {
+       "canonical": "ALTER TABLE F DROP CHANGEFEED UPDATES",
+       "end": 37,
+       "line": 1,
+       "source_words": ["ALTER", "TABLE", "f", "DROP", "CHANGEFEED", "updates"],
+       "sql": "ALTER TABLE f DROP CHANGEFEED updates",
+       "start": 0,
+       "words": ["ALTER", "TABLE", "F", "DROP", "CHANGEFEED", "UPDATES"]
+      }
+     ],
+     [
+      {
+       "canonical": "CREATE TABLE F_NEW (ID UINT64 NOT NULL, N INT64, PRIMARY KEY (ID))",
+       "end": 66,
+       "line": 1,
+       "source_words": ["CREATE", "TABLE", "f_new", "(", "id", "Uint64", "NOT", "NULL", ",", "n", "Int64", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE f_new (id Uint64 NOT NULL, n Int64, PRIMARY KEY (id))",
+       "start": 0,
+       "words": ["CREATE", "TABLE", "F_NEW", "(", "ID", "UINT64", "NOT", "NULL", ",", "N", "INT64", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO F_NEW (ID, N) SELECT ID, CAST(N AS INT64) AS N FROM F",
+       "end": 133,
+       "line": 2,
+       "source_words": ["INSERT", "INTO", "f_new", "(", "id", ",", "n", ")", "SELECT", "id", ",", "CAST", "(", "n", "AS", "Int64", ")", "AS", "n", "FROM", "f"],
+       "sql": "INSERT INTO f_new (id, n) SELECT id, CAST(n AS Int64) AS n FROM f",
+       "start": 68,
+       "words": ["INSERT", "INTO", "F_NEW", "(", "ID", ",", "N", ")", "SELECT", "ID", ",", "CAST", "(", "N", "AS", "INT64", ")", "AS", "N", "FROM", "F"]
+      },
+      {
+       "canonical": "ALTER TABLE F DROP CHANGEFEED UPDATES",
+       "end": 172,
+       "line": 3,
+       "source_words": ["ALTER", "TABLE", "f", "DROP", "CHANGEFEED", "updates"],
+       "sql": "ALTER TABLE f DROP CHANGEFEED updates",
+       "start": 135,
+       "words": ["ALTER", "TABLE", "F", "DROP", "CHANGEFEED", "UPDATES"]
+      },
+      {
+       "canonical": "ALTER TABLE F RENAME TO F_OLD",
+       "end": 203,
+       "line": 4,
+       "source_words": ["ALTER", "TABLE", "f", "RENAME", "TO", "f_old"],
+       "sql": "ALTER TABLE f RENAME TO f_old",
+       "start": 174,
+       "words": ["ALTER", "TABLE", "F", "RENAME", "TO", "F_OLD"]
+      },
+      {
+       "canonical": "ALTER TABLE F_NEW RENAME TO F",
+       "end": 234,
+       "line": 5,
+       "source_words": ["ALTER", "TABLE", "f_new", "RENAME", "TO", "f"],
+       "sql": "ALTER TABLE f_new RENAME TO f",
+       "start": 205,
+       "words": ["ALTER", "TABLE", "F_NEW", "RENAME", "TO", "F"]
+      },
+      {
+       "canonical": "ALTER TABLE F ADD CHANGEFEED UPDATES WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+       "end": 313,
+       "line": 6,
+       "source_words": ["ALTER", "TABLE", "f", "ADD", "CHANGEFEED", "updates", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"],
+       "sql": "ALTER TABLE f ADD CHANGEFEED updates WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+       "start": 236,
+       "words": ["ALTER", "TABLE", "F", "ADD", "CHANGEFEED", "UPDATES", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"]
+      },
+      {
+       "canonical": "ALTER TOPIC `f/updates` ADD CONSUMER AUDIT WITH (IMPORTANT = TRUE)",
+       "end": 381,
+       "line": 7,
+       "source_words": ["ALTER", "TOPIC", "`f/updates`", "ADD", "CONSUMER", "audit", "WITH", "(", "important", "=", "TRUE", ")"],
+       "sql": "ALTER TOPIC `f/updates` ADD CONSUMER audit WITH (important = TRUE)",
+       "start": 315,
+       "words": ["ALTER", "TOPIC", "`f/updates`", "ADD", "CONSUMER", "AUDIT", "WITH", "(", "IMPORTANT", "=", "TRUE", ")"]
+      },
+      {
+       "canonical": "DROP TABLE F_OLD",
+       "end": 399,
+       "line": 8,
+       "source_words": ["DROP", "TABLE", "f_old"],
+       "sql": "DROP TABLE f_old",
+       "start": 383,
+       "words": ["DROP", "TABLE", "F_OLD"]
+      },
+      {
+       "canonical": "CREATE TABLE G_NEW (ID UINT64 NOT NULL, V UTF8, PRIMARY KEY (ID), INDEX BY_V GLOBAL ON (V))",
+       "end": 492,
+       "line": 9,
+       "source_words": ["CREATE", "TABLE", "g_new", "(", "id", "Uint64", "NOT", "NULL", ",", "v", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "by_v", "GLOBAL", "ON", "(", "v", ")", ")"],
+       "sql": "CREATE TABLE g_new (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX by_v GLOBAL ON (v))",
+       "start": 401,
+       "words": ["CREATE", "TABLE", "G_NEW", "(", "ID", "UINT64", "NOT", "NULL", ",", "V", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "BY_V", "GLOBAL", "ON", "(", "V", ")", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE G_NEW ALTER INDEX BY_V SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2)",
+       "end": 577,
+       "line": 10,
+       "source_words": ["ALTER", "TABLE", "g_new", "ALTER", "INDEX", "by_v", "SET", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "2", ")"],
+       "sql": "ALTER TABLE g_new ALTER INDEX by_v SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2)",
+       "start": 494,
+       "words": ["ALTER", "TABLE", "G_NEW", "ALTER", "INDEX", "BY_V", "SET", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "2", ")"]
+      },
+      {
+       "canonical": "INSERT INTO G_NEW (ID, V) SELECT ID, V FROM G",
+       "end": 624,
+       "line": 11,
+       "source_words": ["INSERT", "INTO", "g_new", "(", "id", ",", "v", ")", "SELECT", "id", ",", "v", "FROM", "g"],
+       "sql": "INSERT INTO g_new (id, v) SELECT id, v FROM g",
+       "start": 579,
+       "words": ["INSERT", "INTO", "G_NEW", "(", "ID", ",", "V", ")", "SELECT", "ID", ",", "V", "FROM", "G"]
+      },
+      {
+       "canonical": "ALTER TABLE G RENAME TO G_OLD",
+       "end": 655,
+       "line": 12,
+       "source_words": ["ALTER", "TABLE", "g", "RENAME", "TO", "g_old"],
+       "sql": "ALTER TABLE g RENAME TO g_old",
+       "start": 626,
+       "words": ["ALTER", "TABLE", "G", "RENAME", "TO", "G_OLD"]
+      },
+      {
+       "canonical": "ALTER TABLE G_NEW RENAME TO G",
+       "end": 686,
+       "line": 13,
+       "source_words": ["ALTER", "TABLE", "g_new", "RENAME", "TO", "g"],
+       "sql": "ALTER TABLE g_new RENAME TO g",
+       "start": 657,
+       "words": ["ALTER", "TABLE", "G_NEW", "RENAME", "TO", "G"]
+      },
+      {
+       "canonical": "DROP TABLE G_OLD",
+       "end": 704,
+       "line": 14,
+       "source_words": ["DROP", "TABLE", "g_old"],
+       "sql": "DROP TABLE g_old",
+       "start": 688,
+       "words": ["DROP", "TABLE", "G_OLD"]
+      },
+      {
+       "canonical": "CREATE TABLE H_NEW (ID UINT64 NOT NULL, V UTF8, PRIMARY KEY (ID))",
+       "end": 771,
+       "line": 15,
+       "source_words": ["CREATE", "TABLE", "h_new", "(", "id", "Uint64", "NOT", "NULL", ",", "v", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+       "sql": "CREATE TABLE h_new (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))",
+       "start": 706,
+       "words": ["CREATE", "TABLE", "H_NEW", "(", "ID", "UINT64", "NOT", "NULL", ",", "V", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+      },
+      {
+       "canonical": "INSERT INTO H_NEW (ID, V) SELECT ID, V FROM H",
+       "end": 818,
+       "line": 16,
+       "source_words": ["INSERT", "INTO", "h_new", "(", "id", ",", "v", ")", "SELECT", "id", ",", "v", "FROM", "h"],
+       "sql": "INSERT INTO h_new (id, v) SELECT id, v FROM h",
+       "start": 773,
+       "words": ["INSERT", "INTO", "H_NEW", "(", "ID", ",", "V", ")", "SELECT", "ID", ",", "V", "FROM", "H"]
+      },
+      {
+       "canonical": "UPSERT INTO H (ID, V) VALUES (1, 'late')",
+       "end": 860,
+       "line": 17,
+       "source_words": ["UPSERT", "INTO", "h", "(", "id", ",", "v", ")", "VALUES", "(", "1", ",", "'late'", ")"],
+       "sql": "UPSERT INTO h (id, v) VALUES (1, 'late')",
+       "start": 820,
+       "words": ["UPSERT", "INTO", "H", "(", "ID", ",", "V", ")", "VALUES", "(", "1", ",", "'late'", ")"]
+      },
+      {
+       "canonical": "ALTER TABLE H RENAME TO H_OLD",
+       "end": 891,
+       "line": 18,
+       "source_words": ["ALTER", "TABLE", "h", "RENAME", "TO", "h_old"],
+       "sql": "ALTER TABLE h RENAME TO h_old",
+       "start": 862,
+       "words": ["ALTER", "TABLE", "H", "RENAME", "TO", "H_OLD"]
+      },
+      {
+       "canonical": "ALTER TABLE H_NEW RENAME TO H",
+       "end": 922,
+       "line": 19,
+       "source_words": ["ALTER", "TABLE", "h_new", "RENAME", "TO", "h"],
+       "sql": "ALTER TABLE h_new RENAME TO h",
+       "start": 893,
+       "words": ["ALTER", "TABLE", "H_NEW", "RENAME", "TO", "H"]
+      },
+      {
+       "canonical": "DROP TABLE H_OLD",
+       "end": 940,
+       "line": 20,
+       "source_words": ["DROP", "TABLE", "h_old"],
+       "sql": "DROP TABLE h_old",
+       "start": 924,
+       "words": ["DROP", "TABLE", "H_OLD"]
+      }
+     ]
+    ],
+    "sources_of": 0
+   },
+   "compatibility": "",
+   "dialect": "",
+   "report": ["0002_t.up.sql:18:BC101", "0002_t.up.sql:20:BC103", "0002_t.up.sql:20:DS101"],
+   "server_version": "",
+   "split": -1
+  }
+ ],
+ "splits": [
+  {
+   "files": [
+    [
+     {
+      "canonical": "CREATE TABLE F (ID UINT64 NOT NULL, N INT32, PRIMARY KEY (ID))",
+      "end": 62,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "f", "(", "id", "Uint64", "NOT", "NULL", ",", "n", "Int32", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE f (id Uint64 NOT NULL, n Int32, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "F", "(", "ID", "UINT64", "NOT", "NULL", ",", "N", "INT32", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE F ADD CHANGEFEED UPDATES WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+      "end": 141,
+      "line": 2,
+      "source_words": ["ALTER", "TABLE", "f", "ADD", "CHANGEFEED", "updates", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"],
+      "sql": "ALTER TABLE f ADD CHANGEFEED updates WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+      "start": 64,
+      "words": ["ALTER", "TABLE", "F", "ADD", "CHANGEFEED", "UPDATES", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE G (ID UINT64 NOT NULL, V UTF8, PRIMARY KEY (ID), INDEX BY_V GLOBAL ON (V))",
+      "end": 230,
+      "line": 3,
+      "source_words": ["CREATE", "TABLE", "g", "(", "id", "Uint64", "NOT", "NULL", ",", "v", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "by_v", "GLOBAL", "ON", "(", "v", ")", ")"],
+      "sql": "CREATE TABLE g (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX by_v GLOBAL ON (v))",
+      "start": 143,
+      "words": ["CREATE", "TABLE", "G", "(", "ID", "UINT64", "NOT", "NULL", ",", "V", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "BY_V", "GLOBAL", "ON", "(", "V", ")", ")"]
+     },
+     {
+      "canonical": "CREATE TABLE H (ID UINT64 NOT NULL, V UTF8, PRIMARY KEY (ID))",
+      "end": 293,
+      "line": 4,
+      "source_words": ["CREATE", "TABLE", "h", "(", "id", "Uint64", "NOT", "NULL", ",", "v", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE h (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))",
+      "start": 232,
+      "words": ["CREATE", "TABLE", "H", "(", "ID", "UINT64", "NOT", "NULL", ",", "V", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     }
+    ],
+    [
+     {
+      "canonical": "ALTER TABLE F DROP CHANGEFEED UPDATES",
+      "end": 37,
+      "line": 1,
+      "source_words": ["ALTER", "TABLE", "f", "DROP", "CHANGEFEED", "updates"],
+      "sql": "ALTER TABLE f DROP CHANGEFEED updates",
+      "start": 0,
+      "words": ["ALTER", "TABLE", "F", "DROP", "CHANGEFEED", "UPDATES"]
+     }
+    ],
+    [
+     {
+      "canonical": "CREATE TABLE F_NEW (ID UINT64 NOT NULL, N INT64, PRIMARY KEY (ID))",
+      "end": 66,
+      "line": 1,
+      "source_words": ["CREATE", "TABLE", "f_new", "(", "id", "Uint64", "NOT", "NULL", ",", "n", "Int64", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE f_new (id Uint64 NOT NULL, n Int64, PRIMARY KEY (id))",
+      "start": 0,
+      "words": ["CREATE", "TABLE", "F_NEW", "(", "ID", "UINT64", "NOT", "NULL", ",", "N", "INT64", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO F_NEW (ID, N) SELECT ID, CAST(N AS INT64) AS N FROM F",
+      "end": 133,
+      "line": 2,
+      "source_words": ["INSERT", "INTO", "f_new", "(", "id", ",", "n", ")", "SELECT", "id", ",", "CAST", "(", "n", "AS", "Int64", ")", "AS", "n", "FROM", "f"],
+      "sql": "INSERT INTO f_new (id, n) SELECT id, CAST(n AS Int64) AS n FROM f",
+      "start": 68,
+      "words": ["INSERT", "INTO", "F_NEW", "(", "ID", ",", "N", ")", "SELECT", "ID", ",", "CAST", "(", "N", "AS", "INT64", ")", "AS", "N", "FROM", "F"]
+     },
+     {
+      "canonical": "ALTER TABLE F DROP CHANGEFEED UPDATES",
+      "end": 172,
+      "line": 3,
+      "source_words": ["ALTER", "TABLE", "f", "DROP", "CHANGEFEED", "updates"],
+      "sql": "ALTER TABLE f DROP CHANGEFEED updates",
+      "start": 135,
+      "words": ["ALTER", "TABLE", "F", "DROP", "CHANGEFEED", "UPDATES"]
+     },
+     {
+      "canonical": "ALTER TABLE F RENAME TO F_OLD",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 203,
+      "line": 4,
+      "source_words": ["ALTER", "TABLE", "f", "RENAME", "TO", "f_old"],
+      "sql": "ALTER TABLE f RENAME TO f_old",
+      "start": 174,
+      "words": ["ALTER", "TABLE", "F", "RENAME", "TO", "F_OLD"]
+     },
+     {
+      "canonical": "ALTER TABLE F_NEW RENAME TO F",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 234,
+      "line": 5,
+      "source_words": ["ALTER", "TABLE", "f_new", "RENAME", "TO", "f"],
+      "sql": "ALTER TABLE f_new RENAME TO f",
+      "start": 205,
+      "words": ["ALTER", "TABLE", "F_NEW", "RENAME", "TO", "F"]
+     },
+     {
+      "canonical": "ALTER TABLE F ADD CHANGEFEED UPDATES WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+      "end": 313,
+      "line": 6,
+      "source_words": ["ALTER", "TABLE", "f", "ADD", "CHANGEFEED", "updates", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"],
+      "sql": "ALTER TABLE f ADD CHANGEFEED updates WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+      "start": 236,
+      "words": ["ALTER", "TABLE", "F", "ADD", "CHANGEFEED", "UPDATES", "WITH", "(", "MODE", "=", "'UPDATES'", ",", "FORMAT", "=", "'JSON'", ")"]
+     },
+     {
+      "canonical": "ALTER TOPIC `f/updates` ADD CONSUMER AUDIT WITH (IMPORTANT = TRUE)",
+      "end": 381,
+      "line": 7,
+      "source_words": ["ALTER", "TOPIC", "`f/updates`", "ADD", "CONSUMER", "audit", "WITH", "(", "important", "=", "TRUE", ")"],
+      "sql": "ALTER TOPIC `f/updates` ADD CONSUMER audit WITH (important = TRUE)",
+      "start": 315,
+      "words": ["ALTER", "TOPIC", "`f/updates`", "ADD", "CONSUMER", "AUDIT", "WITH", "(", "IMPORTANT", "=", "TRUE", ")"]
+     },
+     {
+      "canonical": "DROP TABLE F_OLD",
+      "effects": [
+       {
+        "fact": "rebuild-drop"
+       }
+      ],
+      "end": 399,
+      "line": 8,
+      "source_words": ["DROP", "TABLE", "f_old"],
+      "sql": "DROP TABLE f_old",
+      "start": 383,
+      "words": ["DROP", "TABLE", "F_OLD"]
+     },
+     {
+      "canonical": "CREATE TABLE G_NEW (ID UINT64 NOT NULL, V UTF8, PRIMARY KEY (ID), INDEX BY_V GLOBAL ON (V))",
+      "end": 492,
+      "line": 9,
+      "source_words": ["CREATE", "TABLE", "g_new", "(", "id", "Uint64", "NOT", "NULL", ",", "v", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ",", "INDEX", "by_v", "GLOBAL", "ON", "(", "v", ")", ")"],
+      "sql": "CREATE TABLE g_new (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX by_v GLOBAL ON (v))",
+      "start": 401,
+      "words": ["CREATE", "TABLE", "G_NEW", "(", "ID", "UINT64", "NOT", "NULL", ",", "V", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ",", "INDEX", "BY_V", "GLOBAL", "ON", "(", "V", ")", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE G_NEW ALTER INDEX BY_V SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2)",
+      "end": 577,
+      "line": 10,
+      "source_words": ["ALTER", "TABLE", "g_new", "ALTER", "INDEX", "by_v", "SET", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "2", ")"],
+      "sql": "ALTER TABLE g_new ALTER INDEX by_v SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2)",
+      "start": 494,
+      "words": ["ALTER", "TABLE", "G_NEW", "ALTER", "INDEX", "BY_V", "SET", "(", "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT", "=", "2", ")"]
+     },
+     {
+      "canonical": "INSERT INTO G_NEW (ID, V) SELECT ID, V FROM G",
+      "end": 624,
+      "line": 11,
+      "source_words": ["INSERT", "INTO", "g_new", "(", "id", ",", "v", ")", "SELECT", "id", ",", "v", "FROM", "g"],
+      "sql": "INSERT INTO g_new (id, v) SELECT id, v FROM g",
+      "start": 579,
+      "words": ["INSERT", "INTO", "G_NEW", "(", "ID", ",", "V", ")", "SELECT", "ID", ",", "V", "FROM", "G"]
+     },
+     {
+      "canonical": "ALTER TABLE G RENAME TO G_OLD",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 655,
+      "line": 12,
+      "source_words": ["ALTER", "TABLE", "g", "RENAME", "TO", "g_old"],
+      "sql": "ALTER TABLE g RENAME TO g_old",
+      "start": 626,
+      "words": ["ALTER", "TABLE", "G", "RENAME", "TO", "G_OLD"]
+     },
+     {
+      "canonical": "ALTER TABLE G_NEW RENAME TO G",
+      "effects": [
+       {
+        "fact": "rebuild-rename"
+       }
+      ],
+      "end": 686,
+      "line": 13,
+      "source_words": ["ALTER", "TABLE", "g_new", "RENAME", "TO", "g"],
+      "sql": "ALTER TABLE g_new RENAME TO g",
+      "start": 657,
+      "words": ["ALTER", "TABLE", "G_NEW", "RENAME", "TO", "G"]
+     },
+     {
+      "canonical": "DROP TABLE G_OLD",
+      "effects": [
+       {
+        "fact": "rebuild-drop"
+       }
+      ],
+      "end": 704,
+      "line": 14,
+      "source_words": ["DROP", "TABLE", "g_old"],
+      "sql": "DROP TABLE g_old",
+      "start": 688,
+      "words": ["DROP", "TABLE", "G_OLD"]
+     },
+     {
+      "canonical": "CREATE TABLE H_NEW (ID UINT64 NOT NULL, V UTF8, PRIMARY KEY (ID))",
+      "end": 771,
+      "line": 15,
+      "source_words": ["CREATE", "TABLE", "h_new", "(", "id", "Uint64", "NOT", "NULL", ",", "v", "Utf8", ",", "PRIMARY", "KEY", "(", "id", ")", ")"],
+      "sql": "CREATE TABLE h_new (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))",
+      "start": 706,
+      "words": ["CREATE", "TABLE", "H_NEW", "(", "ID", "UINT64", "NOT", "NULL", ",", "V", "UTF8", ",", "PRIMARY", "KEY", "(", "ID", ")", ")"]
+     },
+     {
+      "canonical": "INSERT INTO H_NEW (ID, V) SELECT ID, V FROM H",
+      "end": 818,
+      "line": 16,
+      "source_words": ["INSERT", "INTO", "h_new", "(", "id", ",", "v", ")", "SELECT", "id", ",", "v", "FROM", "h"],
+      "sql": "INSERT INTO h_new (id, v) SELECT id, v FROM h",
+      "start": 773,
+      "words": ["INSERT", "INTO", "H_NEW", "(", "ID", ",", "V", ")", "SELECT", "ID", ",", "V", "FROM", "H"]
+     },
+     {
+      "canonical": "UPSERT INTO H (ID, V) VALUES (1, 'late')",
+      "end": 860,
+      "line": 17,
+      "source_words": ["UPSERT", "INTO", "h", "(", "id", ",", "v", ")", "VALUES", "(", "1", ",", "'late'", ")"],
+      "sql": "UPSERT INTO h (id, v) VALUES (1, 'late')",
+      "start": 820,
+      "words": ["UPSERT", "INTO", "H", "(", "ID", ",", "V", ")", "VALUES", "(", "1", ",", "'late'", ")"]
+     },
+     {
+      "canonical": "ALTER TABLE H RENAME TO H_OLD",
+      "end": 891,
+      "line": 18,
+      "source_words": ["ALTER", "TABLE", "h", "RENAME", "TO", "h_old"],
+      "sql": "ALTER TABLE h RENAME TO h_old",
+      "start": 862,
+      "words": ["ALTER", "TABLE", "H", "RENAME", "TO", "H_OLD"]
+     },
+     {
+      "canonical": "ALTER TABLE H_NEW RENAME TO H",
+      "end": 922,
+      "line": 19,
+      "source_words": ["ALTER", "TABLE", "h_new", "RENAME", "TO", "h"],
+      "sql": "ALTER TABLE h_new RENAME TO h",
+      "start": 893,
+      "words": ["ALTER", "TABLE", "H_NEW", "RENAME", "TO", "H"]
+     },
+     {
+      "canonical": "DROP TABLE H_OLD",
+      "end": 940,
+      "line": 20,
+      "source_words": ["DROP", "TABLE", "h_old"],
+      "sql": "DROP TABLE h_old",
+      "start": 924,
+      "words": ["DROP", "TABLE", "H_OLD"]
+     }
+    ]
+   ],
+   "judged": ["stateful-drop", "unique-index", "rebuild-drop", "rebuild-rename", "safety-effect"],
+   "sources": [
+    {
+     "name": "0001_t.up.sql",
+     "sql": "CREATE TABLE f (id Uint64 NOT NULL, n Int32, PRIMARY KEY (id));\nALTER TABLE f ADD CHANGEFEED updates WITH (MODE = 'UPDATES', FORMAT = 'JSON');\nCREATE TABLE g (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX by_v GLOBAL ON (v));\nCREATE TABLE h (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id));\n",
+     "up": true,
+     "version": 1
+    },
+    {
+     "down": true,
+     "name": "0002_t.down.sql",
+     "sql": "ALTER TABLE f DROP CHANGEFEED updates;\n",
+     "version": 2
+    },
+    {
+     "name": "0002_t.up.sql",
+     "sql": "CREATE TABLE f_new (id Uint64 NOT NULL, n Int64, PRIMARY KEY (id));\nINSERT INTO f_new (id, n) SELECT id, CAST(n AS Int64) AS n FROM f;\nALTER TABLE f DROP CHANGEFEED updates;\nALTER TABLE f RENAME TO f_old;\nALTER TABLE f_new RENAME TO f;\nALTER TABLE f ADD CHANGEFEED updates WITH (MODE = 'UPDATES', FORMAT = 'JSON');\nALTER TOPIC `f/updates` ADD CONSUMER audit WITH (important = TRUE);\nDROP TABLE f_old;\nCREATE TABLE g_new (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id), INDEX by_v GLOBAL ON (v));\nALTER TABLE g_new ALTER INDEX by_v SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2);\nINSERT INTO g_new (id, v) SELECT id, v FROM g;\nALTER TABLE g RENAME TO g_old;\nALTER TABLE g_new RENAME TO g;\nDROP TABLE g_old;\nCREATE TABLE h_new (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id));\nINSERT INTO h_new (id, v) SELECT id, v FROM h;\nUPSERT INTO h (id, v) VALUES (1, 'late');\nALTER TABLE h RENAME TO h_old;\nALTER TABLE h_new RENAME TO h;\nDROP TABLE h_old;\n",
+     "up": true,
+     "version": 2
+    }
+   ]
+  }
+ ]
+}
