@@ -1957,7 +1957,9 @@ filtered read lists the database's replications to tell the two apart when its
 directories hold a replica, and a replication left uninspected makes the
 reason say only that the read cannot describe the replication that writes it.
 Without the feature, such a table is left out silently, and a declared table
-there is refused when its creation runs (`NOT_STARTED`).
+there is refused when its creation runs (`NOT_STARTED`). Either way the replica
+stays until an operator drops it by hand with `DROP TABLE`, which YDB accepts;
+a schema that leaves it out plans nothing for it.
 
 The comparison resolves both sides as YDB keeps them: the connection string in
 its canonical form, the consistency level `row` and a global commit interval of
