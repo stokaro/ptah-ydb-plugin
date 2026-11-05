@@ -70,9 +70,29 @@ func Observed(column *native.ColumnMeta, position int, primary bool) (*protocol.
 	return result, nil
 }
 
-func validateObservedSequence(column *protocol.ObservedColumn, sequence *native.SequenceDescription) error {
+// SerialSettings is the start and increment of sequence, read as the owned
+// sequence of the Serial column named column that stores columnType. It
+// refuses a sequence such a column does not own: another name, a minimum or a
+// cache other than 1, cycling, a maximum other than the column type's or
+// Int64's, or values other than Int64. The reader holds an observed sequence
+// to the same rules.
+func SerialSettings(column, columnType string, sequence *native.SequenceDescription) (ydbsequence.Settings, error) {
+	if err := validateSerialSequence(column, columnType, sequence); err != nil {
+		return ydbsequence.Settings{}, err
+	}
+	settings := ydbsequence.Default
+	if sequence.StartValue != nil {
+		settings.Start = sequence.GetStartValue()
+	}
+	if sequence.Increment != nil {
+		settings.Increment = sequence.GetIncrement()
+	}
+	return settings, nil
+}
+
+func validateSerialSequence(column, columnType string, sequence *native.SequenceDescription) error {
 	maximum := int64(math.MaxInt64)
-	switch column.ColumnType {
+	switch columnType {
 	case ydbtype.Int16:
 		maximum = math.MaxInt16
 	case ydbtype.Int32:
@@ -81,7 +101,7 @@ func validateObservedSequence(column *protocol.ObservedColumn, sequence *native.
 	default:
 		return fmt.Errorf("a Serial sequence requires a signed integer column")
 	}
-	if sequence.Name != nil && sequence.GetName() != ydbsequence.Name(column.Name) {
+	if sequence.Name != nil && sequence.GetName() != ydbsequence.Name(column) {
 		return fmt.Errorf("sequence name differs from the column's owned sequence")
 	}
 	if sequence.MinValue != nil && sequence.GetMinValue() != 1 || sequence.Cache != nil && sequence.GetCache() != 1 || sequence.GetCycle() {
@@ -97,15 +117,16 @@ func validateObservedSequence(column *protocol.ObservedColumn, sequence *native.
 }
 
 func observeSequence(column *protocol.ObservedColumn, sequence *native.SequenceDescription) error {
-	if err := validateObservedSequence(column, sequence); err != nil {
+	settings, err := SerialSettings(column.Name, column.ColumnType, sequence)
+	if err != nil {
 		return err
 	}
 	column.AutoIncrement = true
-	if sequence.StartValue != nil && sequence.GetStartValue() != 1 {
-		column.IdentityStart = strconv.FormatInt(sequence.GetStartValue(), 10)
+	if settings.Start != ydbsequence.Default.Start {
+		column.IdentityStart = strconv.FormatInt(settings.Start, 10)
 	}
-	if sequence.Increment != nil && sequence.GetIncrement() != 1 {
-		column.IdentityIncrement = strconv.FormatInt(sequence.GetIncrement(), 10)
+	if settings.Increment != ydbsequence.Default.Increment {
+		column.IdentityIncrement = strconv.FormatInt(settings.Increment, 10)
 	}
 	if restart := sequence.GetSetVal(); restart != nil {
 		column.SequenceRestart = strconv.FormatInt(restart.GetNextValue(), 10)
