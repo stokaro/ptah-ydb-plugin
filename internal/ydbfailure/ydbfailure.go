@@ -52,6 +52,11 @@ type Answer struct {
 	// those of the last issue, in the order of Issues, that names one. They
 	// are 0 when no issue does.
 	Row, Column uint32
+	// FlagsRead reports a session that read the cluster's feature flags from
+	// the monitoring endpoint its address names, rather than taking its
+	// release line's default. Read leaves it false; the caller that knows
+	// the session sets it.
+	FlagsRead bool
 	// Repeats reports an answer one of whose issues has a code a new attempt
 	// of the transaction answers again (see [RepeatedAbort]): YDB aborted it
 	// for its size, not for a conflict.
@@ -116,6 +121,30 @@ func Read(err error) Answer {
 // (TIssuesIds::CORE_EXEC), which holds what a query reported while it ran.
 const executionIssueCode = 1060
 
+// unproposed are the measured messages of an issue in which YDB refused a
+// schema statement while it turned the statement into a schema operation,
+// before it proposed one, with what each says the statement asked for. The
+// issue stands inside the execution stage's, so the answer is not one YDB
+// gave while compiling the text, but no schema operation started, so nothing
+// of the statement applied. 25.1.4.7 answers a unique secondary index this
+// way, GENERIC_ERROR with `Unknown index type: syncGlobalUnique`; 26.2 knows
+// the index type.
+var unproposed = map[string]string{
+	"Unknown index type: syncGlobalUnique": "the YDB release the cluster runs has no unique secondary index",
+}
+
+// refusedUnproposed is the meaning of the answer's issue that refused a
+// schema statement before YDB proposed its operation, or "" for an answer
+// with no such issue.
+func (a Answer) refusedUnproposed() string {
+	for _, issue := range a.Issues {
+		if meaning, known := unproposed[strings.TrimSpace(issue)]; known {
+			return meaning
+		}
+	}
+	return ""
+}
+
 // executionIssue reports an issue of the stage that executes a query: the
 // execution stage's own, or a schema operation's, which YDB words as
 // `Executing ESchemeOp...`. Measured on 25.1.4.7 and 26.2.1.14, such an issue
@@ -144,7 +173,8 @@ var refusals = []Ydb.StatusIds_StatusCode{
 // those it establishes nothing unless YDB refused the text before any of it
 // ran.
 func (a Answer) Confirmed(text string) bool {
-	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || statisticsStatement(text) || a.Compiled)
+	return slices.Contains(refusals, a.Status) ||
+		a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || statisticsStatement(text) || a.Compiled || a.refusedUnproposed() != "")
 }
 
 // Rejected reports an answer that proves nothing of a unit of text was
@@ -256,6 +286,8 @@ func (a Answer) refusedReason(reason string) string {
 	}
 	if meaning, known := issueMeanings[a.Code]; known {
 		reason += ": " + meaning
+	} else if meaning := a.refusedUnproposed(); meaning != "" {
+		reason += ": " + meaning
 	}
 	return a.flagged(reason + " (" + a.detail() + ")")
 }
@@ -263,19 +295,21 @@ func (a Answer) refusedReason(reason string) string {
 // flagged is reason for an answer whose issues say a feature flag YDB keeps a
 // capability behind is off, in the words the host's embedded engine writes
 // for such a refusal: the capability, the flag, then reason where the host's
-// engine quotes YDB's text, and how to have the session report the
-// capability. The plan took the capability from the release line's
-// default, and this cluster runs with the flag off. A session reads the
-// flags only when the address names the monitoring endpoint. reason is
-// returned as it is for any other answer.
+// engine quotes YDB's text, and what to do. A session reads the flags only
+// when its address names the monitoring endpoint. One that took its release
+// line's default planned with the capability on, and is told to name the
+// endpoint as well; one that read the flags names it already, so turning the
+// flag on is what remains. reason is returned as it is for any other answer.
 func (a Answer) flagged(reason string) string {
 	gate, off := featureflags.Refused(a.Issues)
 	if !off {
 		return reason
 	}
-	return fmt.Sprintf("capability %s is off on this YDB cluster, which runs with feature flag %s off: %s. "+
-		"Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans",
-		gate.Key, gate.Flag, reason)
+	refused := fmt.Sprintf("capability %s is off on this YDB cluster, which runs with feature flag %s off: %s. Turn the flag on", gate.Key, gate.Flag, reason)
+	if a.FlagsRead {
+		return refused
+	}
+	return refused + ", or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans"
 }
 
 // AbortedReason is the reason of a reply to a unit or a commit whose
