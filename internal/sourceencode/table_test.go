@@ -123,9 +123,10 @@ const (
 		`"partitioningSettings":{"autoPartitioningSettings":{"partitionWriteSpeed":{"downUtilizationPercent":20,"stabilizationWindow":"300s","upUtilizationPercent":80},` +
 		`"strategy":"AUTO_PARTITIONING_STRATEGY_DISABLED"},"maxActivePartitions":"1","minActivePartitions":"1"},` +
 		`"consumers":[{"name":"audit","important":true,"attributes":{"_service_type":"data-streams"}}]}}]}`
-	// declaredRow is readRow without its primary key, which the common
-	// columns carry.
-	declaredRow = `{"columnFamilies":[{"name":"default","compression":"COMPRESSION_NONE"},{"name":"cold","compression":"COMPRESSION_LZ4","data":{"media":"ssd"}}],` +
+	// declaredRow is readRow as the host's embedded engine exports it:
+	// without its primary key, which the common columns carry, and without a
+	// default family that holds nothing of its own.
+	declaredRow = `{"columnFamilies":[{"name":"cold","compression":"COMPRESSION_LZ4","data":{"media":"ssd"}}],` +
 		`"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"2","maxPartitionsCount":"16"},` +
 		`"keyBloomFilter":"ENABLED","readReplicasSettings":{"anyAzReadReplicasCount":"1"},"ttlSettings":{"dateTypeColumn":{"columnName":"created_at","expireAfterSeconds":86400}}}`
 )
@@ -218,16 +219,17 @@ func TestEncodeTable_HappyPath(t *testing.T) {
 }
 
 // A Go export writes the row settings as attributes of the table's own
-// directive, a family as a directive of its own, and a changefeed and its
-// consumer as two directives; YAML writes each setting as a key of the table
-// entry and the TTL in its ydb platform group.
+// directive, after the TTL, as the host's embedded engine writes them, a
+// family as a directive of its own, and a changefeed and its consumer as two
+// directives; YAML writes each setting as a key of the table entry and the
+// TTL in its ydb platform group.
 func TestEncodeTable_WritesTheProvidersGrammar(t *testing.T) {
 	for _, test := range []struct {
 		format protocol.SourceDocument_Format
 		want   []string
 	}{
 		{protocol.SourceDocument_GO_ANNOTATIONS, []string{
-			"ptah:schema:table auto_partitioning_by_load=ENABLED key_bloom_filter=ENABLED platform.ydb.row_deletion_column=created_at platform.ydb.row_deletion_interval=P1D",
+			"ptah:schema:table platform.ydb.row_deletion_column=created_at platform.ydb.row_deletion_interval=P1D auto_partitioning_by_load=ENABLED key_bloom_filter=ENABLED",
 			"ptah:schema:columnfamily name=cold compression=lz4 fields=payload",
 			"ptah:schema:changefeed format=JSON mode=UPDATES name=updates retention_period=P2D virtual_timestamps=true",
 			"ptah:schema:changefeed:consumer changefeed=updates important=true name=audit",
@@ -243,6 +245,52 @@ func TestEncodeTable_WritesTheProvidersGrammar(t *testing.T) {
 				facet{"row", schema.TableProperties, "", `{"columnFamilies":[{"name":"cold","compression":"COMPRESSION_LZ4"}],"partitioningSettings":{"partitioningByLoad":"ENABLED"},` +
 					`"keyBloomFilter":"ENABLED","ttlSettings":{"dateTypeColumn":{"columnName":"created_at","expireAfterSeconds":86400}}}`},
 				facet{"payload", schema.ColumnProperties, "payload", `{"family":"cold"}`}, facet{"feeds", schema.ChangefeedProperties, "", readFeeds}))
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Losses, qt.HasLen, 0)
+			var written []string
+			for _, part := range result.Parts {
+				written = append(written, spelled(part.Fragment))
+			}
+			c.Assert(written, qt.DeepEquals, test.want)
+		})
+	}
+}
+
+// A Go export writes the table directive the host's embedded engine writes
+// (recorded from 74de0b65b on 25.1.4.7 and 26.2.1.14): no default family that
+// holds nothing of its own, which a read reports for every row table, the
+// settings after the TTL, and a column table as store="column".
+func TestEncodeTable_WritesWhatTheEmbeddedEngineWrites(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		facets []facet
+		want   []string
+	}{
+		{"a default family with nothing of its own",
+			[]facet{{"row", schema.TableProperties, "", `{"primaryKey":["id"],"columnFamilies":[{"name":"default","compression":"COMPRESSION_NONE"}]}`}},
+			[]string{"ptah:schema:table "}},
+		{"a default family with no setting",
+			[]facet{{"row", schema.TableProperties, "", `{"columnFamilies":[{"name":"default","cacheMode":"CACHE_MODE_REGULAR"}]}`}},
+			[]string{"ptah:schema:table "}},
+		{"a default family with settings of its own",
+			[]facet{{"row", schema.TableProperties, "", `{"columnFamilies":[{"name":"default","compression":"COMPRESSION_LZ4"}]}`}},
+			[]string{"ptah:schema:table ", "ptah:schema:columnfamily name=default compression=lz4"}},
+		{"settings after the TTL, beside a family of another name",
+			[]facet{{"row", schema.TableProperties, "", `{"primaryKey":["id"],"columnFamilies":[{"name":"default","compression":"COMPRESSION_NONE"},{"name":"cold","compression":"COMPRESSION_LZ4"}],` +
+				`"partitioningSettings":{"partitioningByLoad":"ENABLED","minPartitionsCount":"2"},"keyBloomFilter":"ENABLED",` +
+				`"readReplicasSettings":{"anyAzReadReplicasCount":"1"},"ttlSettings":{"dateTypeColumn":{"columnName":"created_at","expireAfterSeconds":2592000}}}`}},
+			[]string{"ptah:schema:table platform.ydb.row_deletion_column=created_at platform.ydb.row_deletion_interval=P30D auto_partitioning_by_load=ENABLED " +
+				"auto_partitioning_min_partitions_count=2 read_replicas_settings=ANY_AZ:1 key_bloom_filter=ENABLED", "ptah:schema:columnfamily name=cold compression=lz4"}},
+		{"a column table",
+			[]facet{{"storage", schema.ColumnStorageProperties, "", `{"hashColumns":["id"],"partitions":"2","dataChannelCount":"64"}`}},
+			[]string{"ptah:schema:table store=column partition_by_hash=id column_shards=2"}},
+		{"a column table with a TTL that only deletes",
+			[]facet{{"storage", schema.ColumnStorageProperties, "", `{"hashColumns":["id"],"partitions":"64","ttl":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}}}`}},
+			[]string{"ptah:schema:table store=column partition_by_hash=id column_shards=64 platform.ydb.row_deletion_column=ts platform.ydb.row_deletion_interval=P1D"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			result, err := sourceencode.EncodeTable(protocol.SourceDocument_GO_ANNOTATIONS, table(c, test.facets...))
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Losses, qt.HasLen, 0)
 			var written []string
