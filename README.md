@@ -155,7 +155,19 @@ The host and provider are built against the published SDK pin with
 run builds the newest published Ptah release whose provider contract this
 provider can run on (`scripts/resolve-host.sh`); it is skipped with a notice
 while no release speaks that contract. A second, non-blocking run builds Ptah's
-master branch, so a host change that breaks this provider shows up early. This
+master branch, so a host change that breaks this provider shows up early. A
+third run, on each image, builds a host a run names: a branch, tag or commit of
+stokaro/ptah, given as the `host_ref` input of a manual run or as the first line
+of `.github/host-ref` in a pull request whose tests need a host change master
+does not have yet (`scripts/live-lines.sh`). It blocks, because the run asked
+for that host, and a ref that names no commit fails it. Each run also builds
+the host's `ptah-compat` from the same checkout and names it in
+`PTAH_HOST_COMPAT_TEST_BIN`. The `TestHostCompat` tests run it with
+`PTAH_PROVIDER_CONFIG` naming this provider's manifest, which is how
+ptah-compat takes one. They skip, with the binary's answer, where ptah-compat
+still builds in a YDB engine of its own, which claims `ydb` and refuses this
+provider's registration; a host without the built-in engine
+(stokaro/ptah#5298) runs them. This
 repository owns the YDB end-to-end, live and parity tests; Ptah's own CI checks
 the provider contract only on its in-tree fixture provider. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
@@ -2539,6 +2551,18 @@ table's key, a covered key column. A vector, full-text or local index is
 refused as a common index, since the pinned table protocol builds none of them
 with a table. Execution confirms each index by reading it back. In the TEXT
 form each index is an INDEX clause of the CREATE TABLE.
+
+YDB has no UNIQUE constraint: it refuses one as a parse error and holds the
+same rows with a global unique index, a second row with the same value refused
+and rows whose value is NULL not. A session reports `unique_constraints` as
+`false`, and a host that reads it so turns a declared UNIQUE constraint, and a
+column's UNIQUE, into that index before it compares and plans, under the name
+its YDB renderer gives it: the constraint's name, or `<table>_<columns>_key`.
+A UNIQUE over the key folds into the key. The provider then creates and reads
+an index, never a constraint. Schema validation and the creation projection
+read the source the operator wrote past its UNIQUE, since the index changes no
+column of the table; a UNIQUE the host does not turn into an index, such as a
+deferrable one, is refused when it is planned.
 
 The vector and full-text indexes of the table's native index set are built
 after the creation, one step each (`row-table-create-index/N`, ordered after

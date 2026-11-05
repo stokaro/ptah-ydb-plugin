@@ -221,6 +221,10 @@ func negotiatedFeatures(ctx context.Context) []string {
 // which 25.4 and later take and 25.1 to 25.3 read as a missing name
 // (`PASSWORD_SECRET_NAME requires key`).
 //
+// unique_constraints is false on every line: YDB refuses a UNIQUE constraint
+// as a parse error and holds the same rows with a global unique index. The
+// host then reads a declared UNIQUE as that index, which this service creates
+// with the table and the inspection reports.
 // unique_index_on_existing_table is false on every line: 25.1 and 25.2 add
 // no unique index to a table that exists, and later lines keep it behind
 // EnableAddUniqueIndex, off by default, which the flags decide where the
@@ -271,7 +275,7 @@ func sessionCapabilities(version string) map[string]bool {
 		tablecreate.LocalBloomIndexesCapability: releaseline.AtLeast(version, 26, 2), tablecreate.LocalNgramIndexesCapability: releaseline.AtLeast(version, 26, 2),
 		tablecreate.LocalMinMaxIndexesCapability: false,
 		replication.CapabilityReplication:        true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
-		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, tablecreate.UniqueIndexOnExistingTableCapability: false, tablecreate.IndexRenameCapability: true,
+		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, "unique_constraints": false, tablecreate.UniqueIndexOnExistingTableCapability: false, tablecreate.IndexRenameCapability: true,
 		"returning_clause": releaseline.AtLeast(version, 25, 3), "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
 		tablecreate.CacheModeCapability: releaseline.AtLeast(version, 25, 4)}
 }
