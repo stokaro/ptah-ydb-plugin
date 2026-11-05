@@ -127,6 +127,12 @@ func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (
 		record.outcome = protocol.LockResult_NOT_ACQUIRED
 		return nil, authored.Status(codes.PermissionDenied, err)
 	}
+	if errors.Is(err, locking.ErrRelaxedNode) {
+		// The node's settings were read before any session opened on it, so
+		// the handle holds nothing and the session keeps no uncertainty.
+		record.outcome = protocol.LockResult_NOT_ACQUIRED
+		return failedLock(request, record.outcome, err.Error()), nil
+	}
 	if err != nil {
 		s.fenced = true
 		return lockResult(request, record.outcome), nil
