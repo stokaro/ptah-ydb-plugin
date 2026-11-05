@@ -202,6 +202,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				}
 				result.Tables = append(result.Tables, table)
 				observe(result, table.Facets)
+				absentRowProperties(result, table.Facets)
 				for _, column := range table.Columns {
 					observe(result, column.Facets)
 				}
@@ -407,6 +408,22 @@ func readTable(database, directory, name string, described *nativeprotocol.Descr
 		return nil, fmt.Errorf("incomplete YDB row table description")
 	}
 	return table, nil
+}
+
+// absentRowProperties records that a column table holds no row-table
+// properties: a declaration that states a TTL alone, as an HCL platform block
+// does, is compared with such a table as its column storage's TTL, and the
+// change answers the row-table properties the declaration states (see
+// tablecompare.Compare).
+func absentRowProperties(snapshot *protocol.Schema, facets []*protocol.Envelope) {
+	for _, facet := range facets {
+		if facet.GetKind() == schema.ColumnStorageProperties {
+			snapshot.Coverage.Subjects = append(snapshot.Coverage.Subjects, &protocol.ModelSubjectCoverage{
+				Kind: schema.TableProperties, Subject: proto.CloneOf(facet.GetOwner()), NormalizedSubject: proto.CloneOf(facet.GetOwner()),
+				Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_ABSENT},
+			})
+		}
+	}
 }
 
 func observe(snapshot *protocol.Schema, values []*protocol.Envelope) {
