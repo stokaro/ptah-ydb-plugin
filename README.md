@@ -1173,9 +1173,10 @@ provider's decoders read, which decode to the same declarations:
 | External data source and external table | entries of their keys | their directives | loss |
 | Resource pool and classifier | entries of their keys | their directives | loss |
 | Streaming query | entry of `streaming_queries` | `ptah:schema:streamingquery` | loss |
-| Row-table partitioning, read replicas, key Bloom filter, starting layout, TTL | table keys, TTL in `platform.ydb` | attributes of `ptah:schema:table` | loss |
+| Row-table TTL | `platform.ydb` | attributes of `ptah:schema:table` | the table's `platform "ydb"` block |
+| Row-table partitioning, read replicas, key Bloom filter, starting layout | table keys | attributes of `ptah:schema:table` | loss |
 | Column families and the columns they hold | `column_families` | `ptah:schema:columnfamily` | loss |
-| Column-table storage, hash key, shards, TTL | `column_store` | attributes of `ptah:schema:table` | loss |
+| Column-table storage, hash key, shards, TTL | `column_store` | attributes of `ptah:schema:table` | a TTL that only deletes in the table's `platform "ydb"` block; the rest is a loss |
 | Changefeeds and their consumers | `changefeeds` | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` | loss |
 
 A value is written as the declaration the provider compares it as: a topic or a
@@ -1197,8 +1198,14 @@ table, a family kept in memory, a TTL run interval, a disabled changefeed or the
 stream of an async replication, a native index, a column's compression or
 encoding, a native view (the host writes views from the common
 wire), and an object of another database than the one it was read in. A
-secret's value is never written. HCL declares coordination nodes only, as the
-host's embedded engine does; its other YDB settings are losses. The parts are
+secret's value is never written. HCL declares coordination nodes, and a
+table's TTL in its `platform "ydb"` block, as the host's embedded engine does;
+its other YDB settings are losses, which the host reports at the table in the
+embedded engine's words, such as `YDB table settings
+(AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3) are not represented in HCL`. A
+facet whose TTL the block writes and that holds such a setting too is written in
+part, and the loss names the setting. The settings a read reports for every
+table, YDB's documented defaults, are no loss. The parts are
 decoded again before they are returned, and a value they do not give back is a
 loss. A value that needs several declarations is a loss for a host that does not
 negotiate `source.encode-groups`. `struct_name` is written in YAML alone.
@@ -1300,6 +1307,43 @@ one: YDB 25.4 and later, or a cluster that turned `EnableTableCacheModes` on
 (see [Feature flags](#feature-flags)). A plan that declares one for any other
 target is refused with the flag's name, `regular` included, as the host's
 embedded engine refuses it.
+
+In HCL, the TTL is the `platform "ydb"` block of the table, with the same
+three properties as `override` blocks, as the host's embedded engine reads and
+writes it:
+
+```hcl
+table "events" {
+  schema = schema.app
+  platform "ydb" {
+    override "row_deletion_column" {
+      value = "created_at"
+    }
+    override "row_deletion_interval" {
+      value = "P30D"
+    }
+  }
+  column "id" {
+    type = Uint64
+  }
+  column "created_at" {
+    type = Timestamp
+    null = true
+  }
+  primary_key {
+    columns = [column.id]
+  }
+}
+```
+
+The provider claims the block (`source.hcl-platform`, ADR 0072), so it needs a
+host that reads it; a host that does not refuses the document. The host refuses
+an override other than the three, naming them. The block's label may be the
+alias `ydbs`. A table that writes no block states nothing about its TTL, and
+keeps the TTL it holds, where a YAML or Go source that states no TTL asks for
+none. HCL cannot say a table is a column table, so the block states the TTL of
+a column table the database holds, which keeps its storage and takes the TTL as
+one tier that deletes.
 
 A TTL needs `row_deletion_column` and `row_deletion_interval`. The interval is an
 ISO 8601 duration of weeks, days, hours, minutes and seconds (`P30D`,
