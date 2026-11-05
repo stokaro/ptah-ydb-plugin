@@ -26,5 +26,18 @@ func YAMLDocument(source string, key *protocol.YAMLSourceKey, model *protocol.Va
 		return nil, fmt.Errorf("fixture requires its declared document key")
 	}
 	value := entries[0].Value
-	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{{Id: "doc", File: "captured.yaml", ByteLength: uint64(len(source)), Format: protocol.SourceDocument_YAML, Models: []*protocol.ValueModel{proto.CloneOf(model)}, Fragments: []*protocol.SourceFragment{{Id: "objects", Selector: key.Selector, YamlKey: proto.CloneOf(key), Span: proto.CloneOf(value.Span), Content: &protocol.SourceFragment_Value{Value: value}}}}}}, nil
+	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{{
+		Id:         "doc",
+		File:       "captured.yaml",
+		ByteLength: uint64(len(source)),
+		Format:     protocol.SourceDocument_YAML,
+		Models:     []*protocol.ValueModel{proto.CloneOf(model)},
+		Fragments: []*protocol.SourceFragment{{
+			Id:       "objects",
+			Selector: key.Selector,
+			YamlKey:  proto.CloneOf(key),
+			Span:     proto.CloneOf(value.Span),
+			Content:  &protocol.SourceFragment_Value{Value: value},
+		}},
+	}}}, nil
 }

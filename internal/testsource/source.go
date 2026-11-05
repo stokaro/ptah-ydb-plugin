@@ -28,8 +28,19 @@ func Request(source string) (*protocol.DecodeSourceRequest, error) {
 		return nil, fmt.Errorf("fixture requires coordination_nodes")
 	}
 	value = value.GetMapping().Entries[0].Value
-	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{{Id: "doc", File: "captured.yaml", ByteLength: uint64(len(source)), Format: protocol.SourceDocument_YAML,
-		Models: []*protocol.ValueModel{schema.CoordinationDesiredModel()}, Fragments: []*protocol.SourceFragment{{Id: "nodes", Selector: "coordination_nodes", YamlKey: schema.CoordinationYAMLKey(), Span: value.Span, Content: &protocol.SourceFragment_Value{Value: value}}},
+	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{{
+		Id:         "doc",
+		File:       "captured.yaml",
+		ByteLength: uint64(len(source)),
+		Format:     protocol.SourceDocument_YAML,
+		Models:     []*protocol.ValueModel{schema.CoordinationDesiredModel()},
+		Fragments: []*protocol.SourceFragment{{
+			Id:       "nodes",
+			Selector: "coordination_nodes",
+			YamlKey:  schema.CoordinationYAMLKey(),
+			Span:     value.Span,
+			Content:  &protocol.SourceFragment_Value{Value: value},
+		}},
 	}}}, nil
 }
 
