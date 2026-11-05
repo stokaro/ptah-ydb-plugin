@@ -3,6 +3,7 @@ package backend_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -215,6 +216,44 @@ func TestAuthoredStreamingQuery_FailurePath(t *testing.T) {
 			c.Assert(result.Contributions, qt.HasLen, 0)
 			c.Assert(result.Diagnostics, qt.HasLen, 1)
 			c.Assert(result.Diagnostics[0].Problem.Message, qt.Matches, test.want)
+		})
+	}
+}
+
+// Every authored creation asks for the lifecycle span where the host
+// negotiated it, so a schema render writes it as soon as what it reads
+// exists, as the host's embedded engine at 74de0b65b wrote a topic ahead of
+// the tables, and for the default window, after the tables, otherwise.
+func TestAuthoredDeclarationsAskForTheLifecycleSpan_HappyPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		lifecycle bool
+		want      protocol.PlanningOperation_Phase
+	}{
+		{name: "the host negotiated planning.lifecycle", lifecycle: true, want: protocol.PlanningOperation_LIFECYCLE},
+		{name: "the host did not", lifecycle: false, want: protocol.PlanningOperation_DEFAULT},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			topicIntent, err := topics.Intent(ydbdecl.Topic{RetentionPeriod: "P1D"})
+			c.Assert(err, qt.IsNil)
+			topic, err := schema.CaptureTopicIntent(&protocol.Reference{Engine: "ydb", Kind: schema.TopicProperties, Schema: "app", Name: "events"}, topicIntent)
+			c.Assert(err, qt.IsNil)
+			request := declarationRequest(c, declaredNode(c, "node", nil), topic)
+			request.TargetFeatures = slices.DeleteFunc(slices.Clone(request.TargetFeatures), func(feature string) bool {
+				return !test.lifecycle && feature == provider.PlanningLifecycleFeature
+			})
+
+			result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
+			var phases []protocol.PlanningOperation_Phase
+			for _, step := range result.Contributions[0].Steps {
+				phases = append(phases, step.Operation.Phase)
+			}
+			c.Assert(phases, qt.DeepEquals, []protocol.PlanningOperation_Phase{test.want, test.want})
 		})
 	}
 }

@@ -502,8 +502,17 @@ func (p *planner) contributeCreations() (*protocol.PlannedFeatures, error) {
 		}
 		p.contribution.Steps = append(p.contribution.Steps, step)
 		p.receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
+		// The vector and full-text indexes and the changefeeds of a new
+		// table follow its creation directly, in the lifecycle span, where
+		// the default window would put them after every table the plan
+		// creates. The host's embedded engine at 74de0b65b wrote a new
+		// table's changefeed right after its CREATE TABLE, in a plan and in
+		// a schema render alike, on 25.1.4.7 and 26.2.1.14. Each step reads
+		// its table, which orders it after the creation, and nothing else
+		// of the plan.
 		for _, index := range item.indexes {
 			step, dependency := index.creationStep(creationIndexNumber, item.table.Subject, item.id)
+			step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
 			creationIndexNumber++
 			p.contribution.Steps = append(p.contribution.Steps, step)
 			p.contribution.Dependencies = append(p.contribution.Dependencies, dependency)
@@ -518,6 +527,7 @@ func (p *planner) contributeCreations() (*protocol.PlannedFeatures, error) {
 		}
 		if item.feeds != nil {
 			step, dependencies := item.feeds.planningStep(p.feedNumber, item.table.Subject, []*protocol.StepIdentity{item.id})
+			step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
 			p.feedNumber++
 			p.contribution.Steps = append(p.contribution.Steps, step)
 			p.contribution.Dependencies = append(p.contribution.Dependencies, dependencies...)

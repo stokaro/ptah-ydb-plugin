@@ -38,7 +38,9 @@ func documentsCreation(c *qt.C, indexes string, common ...*protocol.DeclaredInde
 
 // A new table's vector and full-text indexes are added after its creation,
 // one step each: the native creation call of the pinned bindings carries
-// neither kind. Its global indexes stay in the CREATE TABLE.
+// neither kind. Its global indexes stay in the CREATE TABLE. Each step asks
+// for the lifecycle span, so a plan adds the index right after its table and
+// not after every table it creates.
 func TestNativeIndexCreation_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	request := documentsCreation(c, indexSet(nativeDeclared(docsEmb, prefixedTables), nativeDeclared(standardBody, relevanceTables)),
@@ -54,6 +56,8 @@ func TestNativeIndexCreation_HappyPath(t *testing.T) {
 	c.Assert(steps[1].Metadata.Effects[1].Subject.Kind, qt.Equals, "index")
 	c.Assert(steps[1].Metadata.Effects[1].Subject.Name.Source, qt.Equals, "docs_emb")
 	c.Assert(steps[1].Metadata.Effects[1].Action, qt.Equals, protocol.PlanningEffect_CREATE)
+	c.Assert([]protocol.PlanningOperation_Phase{steps[1].Operation.Phase, steps[2].Operation.Phase}, qt.DeepEquals,
+		[]protocol.PlanningOperation_Phase{protocol.PlanningOperation_LIFECYCLE, protocol.PlanningOperation_LIFECYCLE})
 	for _, parent := range plan.Parents {
 		c.Assert(parent.Receipt.Steps, qt.HasLen, 3)
 	}

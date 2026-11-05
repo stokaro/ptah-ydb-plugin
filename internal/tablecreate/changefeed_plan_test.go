@@ -223,7 +223,9 @@ func TestChangefeedPlan_RefusesANameAnIndexFrees(t *testing.T) {
 }
 
 // TestChangefeedPlan_NewTable adds the changefeeds of a new table once the
-// table exists: CREATE TABLE takes no changefeed.
+// table exists: CREATE TABLE takes no changefeed. The step asks for the
+// lifecycle span, so a plan adds them right after the table, as the host's
+// embedded engine at 74de0b65b did, and not after every table it creates.
 func TestChangefeedPlan_NewTable(t *testing.T) {
 	c := testcheck.New(t)
 	request := creationPlan(c)
@@ -240,6 +242,7 @@ func TestChangefeedPlan_NewTable(t *testing.T) {
 			Impact: protocol.ChangeSemantics_ADDITIVE},
 	})
 	c.Assert(dependencies(plan), qt.DeepEquals, [][2]string{{"row-table-create/000000", "row-table-changefeeds/000000"}})
+	c.Assert(plan.Contributions[0].Steps[1].Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
 	for _, parent := range plan.Parents {
 		c.Assert(parent.Receipt.Steps, qt.HasLen, 2)
 	}

@@ -34,6 +34,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 	})
 	result := &protocol.PlannedDeclarations{Complete: true, Declarations: make([]*protocol.DeclarationReceipt, len(indices))}
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
+	phase := authoredPhase(request)
 	ranks := make(map[int64]bool)
 	for position, index := range indices {
 		if err := ctx.Err(); err != nil {
@@ -69,7 +70,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 		facts := operation.OperationSemantics
 		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{
 			Id:        id,
-			Operation: &protocol.PlanningOperation{Value: operation, Role: protocol.NativeOperation_STATEMENT},
+			Operation: &protocol.PlanningOperation{Value: operation, Role: protocol.NativeOperation_STATEMENT, Phase: phase},
 			Metadata:  &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects},
 		})
 		result.Declarations[index] = &protocol.DeclarationReceipt{
@@ -80,6 +81,22 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 		result.Contributions = []*protocol.PlanningContribution{contribution}
 	}
 	return result, ctx.Err()
+}
+
+// authoredPhase is the phase of every authored creation: the lifecycle span
+// where the host negotiated it, and the default window otherwise. The default
+// window lies after the tables, so a schema render wrote a topic after every
+// CREATE TABLE. The host's embedded engine at 74de0b65b wrote it first, ahead
+// of the users and the tables, on 25.1.4.7 and 26.2.1.14: its creations were
+// ordered by what they read alone. In the span a creation runs once the
+// objects its effects read exist, which places it the same way. Every kind
+// this service plans states what it reads as an effect (see kindReads and
+// sourceSecretEffects), which is what makes the span safe for it.
+func authoredPhase(request *protocol.PlanDeclarationsRequest) protocol.PlanningOperation_Phase {
+	if slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
+		return protocol.PlanningOperation_LIFECYCLE
+	}
+	return protocol.PlanningOperation_DEFAULT
 }
 
 // kindReads returns the effects that make a declaration of object, the
