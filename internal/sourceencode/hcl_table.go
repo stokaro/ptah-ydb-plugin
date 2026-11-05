@@ -98,9 +98,23 @@ func hclTableValue(envelope *protocol.Envelope) ([]*protocol.SourceEntry, []stri
 			return nil, nil, err
 		}
 		return ttlEntries(nil, &intent), []string{"YDB column storage, hash partitioning and tiered TTL are not represented in HCL"}, nil
-	case schema.ChangefeedProperties:
+	case schema.ChangefeedProperties, schema.IndexProperties:
+		return hclSetValue(envelope.GetKind(), normalized.GetPayload())
+	case schema.ColumnProperties:
+		return hclColumnValue(normalized.GetPayload())
+	default:
+		return nil, []string{fmt.Sprintf("%s of %s %s has no HCL spelling", strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/"), "-", " "),
+			owner.GetKind(), Subject(owner))}, nil
+	}
+}
+
+// hclSetValue is what the platform block writes of a table's changefeed set
+// or native index set, kind, whose normalized payload is payload: an empty
+// set by writing nothing, and any other as a loss that names its objects.
+func hclSetValue(kind string, payload []byte) ([]*protocol.SourceEntry, []string, error) {
+	if kind == schema.ChangefeedProperties {
 		var intent native.ChangefeedSetIntent
-		if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
+		if err := protojson.Unmarshal(payload, &intent); err != nil {
 			return nil, nil, err
 		}
 		names := make([]string, 0, len(intent.GetChangefeeds()))
@@ -108,35 +122,35 @@ func hclTableValue(envelope *protocol.Envelope) ([]*protocol.SourceEntry, []stri
 			names = append(names, feed.GetName())
 		}
 		return neutralOrLost(names, "changefeed", "changefeeds")
-	case schema.IndexProperties:
-		var intent native.IndexSetIntent
-		if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
-			return nil, nil, err
-		}
-		names := make([]string, 0, len(intent.GetIndexes()))
-		for _, index := range intent.GetIndexes() {
-			names = append(names, index.GetSpecification().GetName())
-		}
-		return neutralOrLost(names, "native index", "native indexes")
-	case schema.ColumnProperties:
-		var intent native.ColumnIntent
-		if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
-			return nil, nil, err
-		}
-		switch {
-		case intent.GetCompression() != nil || len(intent.GetEncoding()) != 0:
-			return nil, []string{"its compression or encoding is not represented in HCL"}, nil
-		case intent.GetFamily() != "" && intent.GetFamily() != defaultFamily:
-			return nil, []string{fmt.Sprintf("its column family %s is not represented in HCL", intent.GetFamily())}, nil
-		}
-		// A column of the default family states nothing, and a literal
-		// default and a Serial's sequence are the common column's, which the
-		// host writes.
-		return make([]*protocol.SourceEntry, 0), nil, nil
-	default:
-		return nil, []string{fmt.Sprintf("%s of %s %s has no HCL spelling", strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/"), "-", " "),
-			owner.GetKind(), Subject(owner))}, nil
 	}
+	var intent native.IndexSetIntent
+	if err := protojson.Unmarshal(payload, &intent); err != nil {
+		return nil, nil, err
+	}
+	names := make([]string, 0, len(intent.GetIndexes()))
+	for _, index := range intent.GetIndexes() {
+		names = append(names, index.GetSpecification().GetName())
+	}
+	return neutralOrLost(names, "native index", "native indexes")
+}
+
+// hclColumnValue is what the platform block writes of a column's facet,
+// whose normalized payload is payload. A column of the default family states
+// nothing, and a literal default and a Serial's sequence are the common
+// column's, which the host writes; a family, a compression or an encoding is a
+// loss at the column.
+func hclColumnValue(payload []byte) ([]*protocol.SourceEntry, []string, error) {
+	var intent native.ColumnIntent
+	if err := protojson.Unmarshal(payload, &intent); err != nil {
+		return nil, nil, err
+	}
+	switch {
+	case intent.GetCompression() != nil || len(intent.GetEncoding()) != 0:
+		return nil, []string{"its compression or encoding is not represented in HCL"}, nil
+	case intent.GetFamily() != "" && intent.GetFamily() != defaultFamily:
+		return nil, []string{fmt.Sprintf("its column family %s is not represented in HCL", intent.GetFamily())}, nil
+	}
+	return make([]*protocol.SourceEntry, 0), nil, nil
 }
 
 // neutralOrLost is how HCL writes a set of named objects of one kind: an empty
