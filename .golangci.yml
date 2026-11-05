@@ -33,7 +33,7 @@ linters:
     # - nestif # enabled with the complexity changes
     - nolintlint
     - revive
-    # - rowserrcheck # enabled with the rows.Err changes
+    - rowserrcheck
     - staticcheck
     - unused
     - whitespace
@@ -120,7 +120,7 @@ linters:
         - name: bool-literal-in-expr
           disabled: false
         - name: confusing-results
-          disabled: true # enabled with the remaining revive changes
+          disabled: false
         - name: constant-logical-expr
           disabled: false
         - name: context-keys-type
@@ -164,11 +164,11 @@ linters:
             - '^[_a-z][_a-z0-9]*.go$'
           disabled: false
         - name: flag-parameter
-          disabled: true # enabled with the remaining revive changes
+          disabled: false
         - name: function-result-limit
           arguments:
             - 3
-          disabled: true # enabled with the remaining revive changes
+          disabled: false
         - name: get-return
           disabled: false
         - name: identical-branches
@@ -213,7 +213,7 @@ linters:
         - name: unchecked-type-assertion
           arguments:
             - acceptIgnoredAssertionResult: true
-          disabled: true # enabled with the remaining revive changes
+          disabled: false
         - name: unconditional-recursion
           disabled: false
         - name: unexported-naming
