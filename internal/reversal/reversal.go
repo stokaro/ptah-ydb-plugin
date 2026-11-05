@@ -129,20 +129,8 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 			result.Limitations = []string{"Recreating the configuration cannot recover semaphores or rate limiter resources lost when the node was dropped."}
 		}
 	case schema.TopicChange:
-		result.Strategy, _ = lifecycle(created, dropped, "drop the created topic", "create the dropped topic again with its settings and consumers", "restore the topic's settings and consumers in place")
-		switch {
-		case created:
-			result.Limitations = []string{fmt.Sprintf("dropping topic %s discards every message written to it and every consumer's position", name)}
-		case dropped:
-			result.Limitations = []string{fmt.Sprintf("the messages topic %s held and its consumers' positions were dropped; the rollback creates it empty", name)}
-		default:
-			current, desired, err := schema.TopicSpecs(change)
-			if err != nil {
-				return nil, err
-			}
-			if current != nil && desired != nil {
-				result.Limitations = topicChangeLimitations(name, *current, *desired)
-			}
+		if err := describeTopic(result, change, created, dropped, name); err != nil {
+			return nil, err
 		}
 	case schema.StreamingQueryChange:
 		if err := describeStreamingQuery(result, reversed); err != nil {
@@ -180,6 +168,28 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 		return nil, authored.New("YDB change " + change.GetKind() + " has no reversal")
 	}
 	return result, nil
+}
+
+// describeTopic describes the reversal of a topic change: a created topic is
+// dropped with its messages, a dropped one is created again empty, and an
+// in-place change names what its rollback cannot restore.
+func describeTopic(result *protocol.ReversedChange, change *protocol.Envelope, created, dropped bool, name string) error {
+	result.Strategy, _ = lifecycle(created, dropped, "drop the created topic", "create the dropped topic again with its settings and consumers", "restore the topic's settings and consumers in place")
+	switch {
+	case created:
+		result.Limitations = []string{fmt.Sprintf("dropping topic %s discards every message written to it and every consumer's position", name)}
+	case dropped:
+		result.Limitations = []string{fmt.Sprintf("the messages topic %s held and its consumers' positions were dropped; the rollback creates it empty", name)}
+	default:
+		current, desired, err := schema.TopicSpecs(change)
+		if err != nil {
+			return err
+		}
+		if current != nil && desired != nil {
+			result.Limitations = topicChangeLimitations(name, *current, *desired)
+		}
+	}
+	return nil
 }
 
 // describeReplication describes the reversal of an async replication change:
