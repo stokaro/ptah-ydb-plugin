@@ -1123,13 +1123,14 @@ declared in `app/holder` is planned after the table's drop.
 A read with no selector claims more than the directories it lists. With a
 host that lists `schema.subtree-coverage` (contract 25.22, ADR 0064 in Ptah),
 the provider declares `/` as its schema separator, and the read sends one
-complete region over the root and every directory below it, and an unknown
-region over the directory the walk leaves out, the dev realm directory, with
-everything below it. A native object in a
+complete region over the root and every directory below it. The directories
+the walk does not list, a dot-prefixed one and at the database root the dev
+realm directory, are covered by it as holding nothing, as the host's embedded
+engine read them, so an export of the whole database claims every native kind
+and writes no `ptah:schema:notdescribed` entry for them. A native object in a
 directory that does not exist yet is then absent, and `schema apply` or
 `migrations generate` with no `--schemas` creates it, as the host's embedded
-engine does. One declared below a directory the walk leaves out stays
-unplanned. A filtered read keeps one exact region per directory, since a
+engine does. A filtered read keeps one exact region per directory, since a
 selector names one directory. With an older host, the read claims each
 directory it lists alone, and a native object in a new directory is left
 unplanned with a warning, as for a topic in `fresh/nested`:

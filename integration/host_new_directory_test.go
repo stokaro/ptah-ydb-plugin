@@ -280,10 +280,11 @@ func TestHostLeavesWhatADotPrefixedDirectoryHoldsAlone_FailurePath(t *testing.T)
 
 // dotPrefixedRealm is a dev realm of its own whose root holds the directory
 // .hidden, and the connection that made it. The cleanup removes the
-// directory, what it holds and the run's lock node.
+// directory, what it holds and the run's lock node, which a session on a
+// realm keeps at the realm's root.
 func dotPrefixedRealm(c *qt.C) (address, root string, opened *connection.Connection) {
 	c.Helper()
-	opened, _, _ = lockFixture(c)
+	opened, _, _ = inspectionFixture(c)
 	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
 	address, root = realmFixture(c, opened, base)

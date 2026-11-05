@@ -118,7 +118,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		}
 	}
 	if len(selectors) == 0 && slices.Contains(provider.HostFeatures(ctx), provider.SchemaSubtreeCoverageFeature) {
-		common.subtreeRegions(result, database, read.skipped)
+		common.subtreeRegions(result, database)
 	}
 	if err := read.streamingInventory(ctx, selectors); err != nil {
 		return nil, err
@@ -164,9 +164,6 @@ type traversal struct {
 	// replicas it cannot name.
 	replicas           []*protocol.Reference
 	replicationsUnread bool
-	// skipped are the directories an unscoped walk leaves out, below which a
-	// subtree claim of the root must stay unknown.
-	skipped []string
 }
 
 // directory reads every entry of the listed directory selected into the
@@ -219,8 +216,10 @@ func (t *traversal) directory(ctx context.Context, selected string) ([]string, e
 			continue
 		}
 		if selected == "" && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY && slices.Contains(t.leaveOut, name) {
+			// The dev realms other runs keep here are no part of the
+			// database's schema, as the host's embedded engine left them out,
+			// so the root's claim covers the directory as holding nothing.
 			t.skippedRealm = true
-			t.skipped = append(t.skipped, name)
 			continue
 		}
 		if entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
