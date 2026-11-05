@@ -252,6 +252,13 @@ func negotiatedFeatures(ctx context.Context) []string {
 // returning expr type`, and none of the others on any line. The builder reads
 // a key the session leaves out as unknown and refuses the clause it gates,
 // on every line alike.
+//
+// column_family_cache_mode is a column family's CACHE_MODE, which 25.4 and
+// later take with default flags; 25.3 keeps it behind EnableTableCacheModes,
+// off by default (`Setting cache_mode is not allowed`), and the lines before
+// it do not know it (`Unknown table setting: CACHE_MODE`), as the host
+// measured. The flag decides it where the address names the monitoring
+// endpoint.
 func sessionCapabilities(version string) map[string]bool {
 	return map[string]bool{"wide_date_time_types": releaseline.AtLeast(version, 25, 2), "parameterized_decimal": releaseline.AtLeast(version, 25, 2),
 		"alter_column_default":    releaseline.AtLeast(version, 26, 2),
@@ -269,7 +276,8 @@ func sessionCapabilities(version string) map[string]bool {
 		tablecreate.LocalMinMaxIndexesCapability: false,
 		replication.CapabilityReplication:        true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
 		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, "unique_constraints": false, tablecreate.UniqueIndexOnExistingTableCapability: false, tablecreate.IndexRenameCapability: true,
-		"returning_clause": releaseline.AtLeast(version, 25, 3), "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false}
+		"returning_clause": releaseline.AtLeast(version, 25, 3), "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
+		tablecreate.CacheModeCapability: releaseline.AtLeast(version, 25, 4)}
 }
 
 // indexRenames returns capabilities with index_rename true only for a host

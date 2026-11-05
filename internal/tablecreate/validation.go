@@ -58,7 +58,7 @@ func ValidateDeclaration(subject *protocol.ComparisonIdentity, table *protocol.D
 	if err != nil {
 		return err
 	}
-	return serialSettingsRefusal(request, tableLabel(owner), caps)
+	return targetRefusal(owner, request, caps)
 }
 
 // TablePath returns the database and the slash-separated scheme path a table

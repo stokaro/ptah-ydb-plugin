@@ -45,7 +45,7 @@ func TestIndexDeclarationsPreserveEveryKindAndImplementation(t *testing.T) {
 			template := index.Tables[0].Description
 			template.Attributes = map[string]string{"comment": "Implementation requirements"}
 			template.Self = &Ydb_Scheme.Entry{Owner: "owner", EffectivePermissions: []*Ydb_Scheme.Permissions{{Subject: "reader", PermissionNames: []string{"read"}}}}
-			template.ColumnFamilies = []*Ydb_Table.ColumnFamily{{Name: "cold", Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4}}
+			template.ColumnFamilies = []*native.ColumnFamily{{Name: "cold", Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4}}
 			template.Columns[0].Family = "cold"
 			template.Columns[0].NotNull = proto.Bool(false)
 			index.Tables = nil
