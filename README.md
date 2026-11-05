@@ -752,6 +752,14 @@ can name a cluster-managed group, but cannot declare self-membership or make a
 principal a member of a declared user. Inspection preserves every observed
 membership, including edges whose principals are outside the managed role list.
 
+A read leaves out of the description the users and groups the cluster made for
+itself, the database's owner, and every user and group of a dev realm, and
+names them as roles the server holds outside its scope. Under
+`schema.role-scope-reasons` (contract 25.26, ADR 0076) the read also says why,
+and the host's note gives the reason the host's embedded engine gave: `because
+the cluster made them or they own the database, or the read was of a dev realm,
+which shares its database's users and groups`.
+
 A user's password is set when the user is created, from a YAML or Go
 declaration, and is never read back: a declaration that names another password
 plans nothing, as the host's embedded engine plans it.
@@ -1415,6 +1423,15 @@ or a column of the default family, is written by the table's own part. A Go
 export also gives each column the Go type of its YDB type, as the host's
 embedded engine does, and refuses a nullable key column, which no declaration
 can ask for.
+
+A Go export writes the directives of the standalone objects in the order the
+host's embedded engine wrote them, each with its attributes in the order its
+claim lists them: topics and their consumers, secrets, external data sources,
+external tables and streaming queries after the views, then resource pools,
+their classifiers and coordination nodes. Under `source.go-placements`
+(contract 25.26, ADR 0077) those last three stand after the default
+privileges, below the grants, where the embedded engine wrote them; a host
+that does not list the feature writes them after the views.
 
 What no declaration states is a loss for its value, in one line that names it:
 an access requirement, table attributes, storage settings, tiering, a temporary

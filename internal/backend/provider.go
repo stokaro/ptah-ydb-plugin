@@ -208,6 +208,14 @@ func providerFeatures() []string {
 		// whole, which reads it into the table's native index set or its
 		// column storage and writes it back; see tablesource.IndexKinds.
 		provider.IndexKindsFeature,
+		// The note that counts the roles a read leaves out of the
+		// description gives the reason this read does; see
+		// inspect.RolesOutOfScopeReason.
+		provider.RoleScopeReasonsFeature,
+		// A Go export writes resource pools, their classifiers and
+		// coordination nodes after the default privileges, where the host's
+		// embedded engine wrote them; see goGroups.
+		provider.GoPlacementsFeature,
 	}
 }
 

@@ -107,6 +107,9 @@ func (s *session) inspectAccess(ctx context.Context, result *protocol.Schema) er
 	if err := inspect.Access(ctx, result, s.database, s.scope(), nativeapi.AccessReader(s.connection.Driver), principals); err != nil {
 		return inspectError(ctx, err)
 	}
+	if len(result.GetCommonObjects().GetRolesOutOfScope()) > 0 && slices.Contains(negotiatedFeatures(ctx), provider.RoleScopeReasonsFeature) {
+		result.CommonObjects.RolesOutOfScopeReason = inspect.RolesOutOfScopeReason
+	}
 	return nil
 }
 

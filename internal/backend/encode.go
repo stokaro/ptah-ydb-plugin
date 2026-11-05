@@ -110,6 +110,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	}
 	if format == protocol.SourceDocument_GO_ANNOTATIONS {
 		result.FieldTypes = fieldTypes(request)
+		arrangeGo(encoding.units, slices.Contains(description.GetEngines()[0].GetFeatures(), provider.GoPlacementsFeature))
 	}
 	encoding.place(description.GetEngines()[0], subjects)
 	if err := ctx.Err(); err != nil {

@@ -347,6 +347,11 @@ func defaultPoolEntry(names []string) bool {
 	return len(names) == 2 && slices.Contains(names, "ydb.granular.select_row") && slices.Contains(names, "ydb.granular.describe_schema")
 }
 
+// RolesOutOfScopeReason is why a read leaves the users and groups
+// recordPrincipals names out of scope out of the description, in the words
+// of the host's embedded engine, which the host prints after "because".
+const RolesOutOfScopeReason = "the cluster made them or they own the database, or the read was of a dev realm, which shares its database's users and groups"
+
 func recordPrincipals(objects *protocol.ObservedCommonObjects, held nativeapi.Principals, scope Scope) {
 	owner := ""
 	for _, entry := range objects.ObjectOwners {
