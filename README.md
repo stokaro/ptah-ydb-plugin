@@ -621,11 +621,19 @@ embedded engine writes it from its own:
 - A changed streaming query text keeps `allow_state_reset` in the reverse,
   which resets the query's checkpoint again.
 
-A change of a table's own settings has no reversal yet: for a change of a row
-table's TTL, partitioning, families, indexes or changefeeds, or of a column
-table's storage, `migrations generate` writes no migration, and the host
-names the change kind that has no reversal. A host that does not list the
-feature gets no reversal service and refuses every such change the same way.
+The service also undoes a change of a table's own settings: a row table's
+properties, such as its TTL and its partitioning, and a column table's
+storage. What the forward change leaves is the description the table held
+with the declared settings in place of its own; a setting the declaration
+leaves unset stays as the table held it, except the TTL, which a table the
+declaration gives none loses. A column's move to another family reverses to
+a move back: what the forward change leaves is the column in the declared
+family, with a default or storage setting the declaration does not state
+kept as the column held it. A host that does not project a reverse's state
+onto a column cannot plan that reverse and refuses it. A host that does not
+list the feature gets no reversal service and refuses
+every such change, naming the change kind that has no reversal.
+
 A topic reverses like any other object, but no migration file holds a topic
 (see [Text units](#text-units)).
 
@@ -1144,6 +1152,43 @@ counter configuration; the envelope owns the node path. External data sources
 retain source type, location, authentication references, and native properties.
 External tables retain source references, location, ordered typed columns, and
 content options without rewriting their native keys or JSON values.
+
+## Object counts
+
+For a host that lists `models.report-counts`, the provider reports count
+metrics for its topic, changefeed, coordination node, streaming query, external
+data source, external table, async replication, transfer, secret, resource pool
+and resource pool classifier models, and for its row-table properties, column
+storage and index set models, desired and observed, under the metric names and
+help texts of the host's built-in YDB engine. It counts each value offline: a
+topic is one topic and its consumers, a table's changefeed set its feeds and
+the consumers across them, an external table one table and its columns, and
+every other object one. `ptah schema stats` then writes these lines through the
+provider as through the built-in engine.
+
+The table setting families count as the built-in engine counted them:
+
+| Metric | Counts |
+| --- | --- |
+| `ydb_ttl_tables` | Row tables with a TTL, and column tables whose TTL is one tier that deletes rows. |
+| `ydb_column_families` | The column families of each row table, without a `default` family that has no storage pool of its own, no compression, the regular cache and `keep_in_memory` off. |
+| `ydb_table_partitioning` | Row tables whose partitioning, read replicas or key bloom filter differ from what YDB gives a new table, and declarations that state a starting layout. |
+| `ydb_index_partitioning` | Global sync, async and unique indexes whose partitioning or read replicas differ from what YDB gives a new index. |
+| `ydb_column_tables` | Column tables. |
+| `ydb_tiered_ttl_tables` | Column tables whose TTL has any other tiers, such as one that moves rows to an external data source. |
+| `ydb_vector_indexes` | Vector indexes. |
+
+What YDB gives a new table or global index is automatic partitioning by size
+at 2048 MB, none by load, at least one partition, no maximum, no read replicas
+and no key bloom filter; an unspecified setting is that value. A read holds
+every setting the server describes and is counted against these values, as is
+the declaration the host converts it to before it counts.
+
+A host that reads global indexes as common indexes (`schema.observed-indexes`)
+counts the declaration it converts a read to, and that declaration holds none
+of their settings. Through such a host `ydb_index_partitioning` counts no
+global index, where the built-in engine counted each one with settings; the
+observed index set counts them.
 
 ## Offline coordination declarations
 
@@ -1848,8 +1893,10 @@ transaction requirement. The path effect names no database, as the host names
 a path of the session's database. Table-to-node and node-to-table replacements
 require an explicit common path handoff. A view the host creates or drops
 occupies its path as a table does: a node beside it needs no order, and a node
-that takes the path of a dropped view comes after the drop. Unsupported common
-footprints and overlapping parent/descendant paths are refused until a
+that takes the path of a dropped view comes after the drop. A grant or a revoke
+on a table or a view, and a comment, change a resource of the object's own and
+occupy no path; the step's read of the object carries the path. Unsupported
+common footprints and overlapping parent/descendant paths are refused until a
 directory lifecycle is captured. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
@@ -2096,6 +2143,21 @@ the reason, and the rest of the snapshot is read. A table an async replication
 writes (attribute `__async_replica`) is left out of the tables: YDB refuses
 every write and ALTER on it, and a plan that read it as an ordinary table would
 drop or alter it.
+
+A replica no replication writes any more, left behind by a replication dropped
+without `CASCADE`, stays read-only for good, and YDB takes no table at its
+path. Where the host lists `schema.unread-tables`, the read names each such
+table in `unread_tables` with the reason the host's embedded engine gives, so
+the host refuses a schema that declares a table there before any step and
+prints a note on `db read` and `schema inspect`. A replica that a replication
+of the read writes is not named; the planner refuses a table declared there. A
+filtered read lists the database's replications to tell the two apart when its
+directories hold a replica, and a replication left uninspected makes the
+reason say only that the read cannot describe the replication that writes it.
+Without the feature, such a table is left out silently, and a declared table
+there is refused when its creation runs (`NOT_STARTED`). Either way the replica
+stays until an operator drops it by hand with `DROP TABLE`, which YDB accepts;
+a schema that leaves it out plans nothing for it.
 
 The comparison resolves both sides as YDB keeps them: the connection string in
 its canonical form, the consistency level `row` and a global commit interval of
@@ -3794,7 +3856,7 @@ settings other than column families, planning, rendering and operation models fo
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
 rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object, resource pool, streaming query, async replication, transfer and secret lifecycles, approved execution inputs, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, offline SQL analysis, SQL schema reading, migration lint, migration splits, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
+lock, offline SQL analysis, SQL schema reading, migration lint, migration splits, row and seed services, dev database cleanup, replay guard, embedding store and object count services. The remaining
 capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

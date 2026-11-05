@@ -60,7 +60,9 @@ func main() {
 		CommonObjects:   owner,
 		SourceEncoder:   owner,
 		MigrationSplits: owner,
-		ChangeReverser:  owner})
+		ChangeReverser:  owner,
+		ValueReporter:   owner,
+	})
 	if closeErr := dev.Close(); closeErr != nil {
 		fmt.Fprintln(os.Stderr, closeErr)
 	}

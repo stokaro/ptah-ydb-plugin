@@ -5,11 +5,25 @@ name: Documentation
 # repository keeps no copy of them; docs/README.md says how a page reaches the
 # site. A page removed or renamed here is reported, not failed: only Ptah can
 # add the redirect its old address needs.
+#
+# The job reads docs/ and nothing else here, and it builds the whole site, so it
+# runs when docs/ or this file changes. A change on Ptah's side is checked by
+# Ptah's own Docs workflow, which imports the declared pages on every run. A
+# newer push to the same pull request or branch cancels the run it replaces.
 on:
   push:
     branches: [master]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
   pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
+concurrency:
+  group: docs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
