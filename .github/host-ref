@@ -1,0 +1,6 @@
+# The host the live job's host ref legs build (scripts/live-lines.sh): the
+# branch of stokaro/ptah#5298, which removes the built-in YDB engine, so
+# ptah-compat hands ydb:// to this provider and the TestHostCompat tests run.
+# This pull request is a draft and is closed, not merged, once that change
+# merges and the master leg runs them.
+feat/4204-remove-builtin-ydb
