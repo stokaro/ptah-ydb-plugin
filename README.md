@@ -589,6 +589,12 @@ YDB does, and writes each change as the host's embedded engine writes it. A
 host that does not list it gets none of this: views stay native objects, and a
 declared comment is refused as a table setting no creation states.
 
+The comments of a table the host creates, of its columns and of its indexes,
+and of a column or an index it adds to a table, reach the provider as comment
+steps after the step that creates the object, as for any comment change. The
+provider takes them off the declaration it creates the table from, and runs
+the steps after its own steps on that table.
+
 Views and comments use these shared stages:
 
 | Step | Views | Comments |
@@ -622,7 +628,9 @@ file is split into, one statement after another. A comment statement in a
 transaction, or one that cannot be read, refuses the batch before any unit
 runs. A comment is never a table property: the table facet leaves Ptah's
 comment keys out, a declared attribute under one of them is refused, and the
-new table of a rebuild takes the comments the read reported.
+new table of a rebuild takes the comments the read reported, which the host
+carries on the observed table, its columns and its indexes of a planning
+request.
 
 Users and groups share YDB's principal namespace. Creation accepts lower-case
 ASCII letters and digits. Groups have no login or password settings. Membership
@@ -2610,14 +2618,18 @@ below), where a table the native call creates can change them.
 The planner refuses, in the embedded engine's words, an auto-increment column
 of a type YDB has no Serial for, `GENERATED ALWAYS`, identity options other than
 the start and the increment, a default on a Serial, a start or an increment
-below 1 or not a whole number, and a start or an increment on a 16-bit or
-32-bit Serial. Every line reports `serial_sequence_keeps_range` false: any
-`ALTER SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the
-column then stores the value after its own maximum as a negative number without
-an error. The native call could create such a sequence with its range kept,
-but no later change and no migration file could, so it is refused at creation
-too. A column table takes no Serial, and YDB adds no Serial column to a table
-that exists (`Column addition with serial data type is unsupported`).
+below 1 or not a whole number, and a start or an increment a creation or a
+change would give a 16-bit or 32-bit Serial, a change back to the defaults
+included. Every line reports `serial_sequence_keeps_range` false: any `ALTER
+SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the column
+then stores the value after its own maximum as a negative number without an
+error. The native call could create such a sequence with its range kept, but no
+later change and no migration file could, so it is refused at creation too. A
+table whose 16-bit or 32-bit Serial already holds the declared start and
+increment needs no statement and plans nothing, and validation, which cannot
+tell, takes the declaration, as the host's embedded engine does. A column table
+takes no Serial, and YDB adds no Serial column to a table that exists (`Column
+addition with serial data type is unsupported`).
 
 When the declared start or increment of an existing Serial differs from what
 the read reports, the planner writes one step, `serial-sequence/N`: one YQL

@@ -40,6 +40,13 @@ func targetRefusal(owner *protocol.Reference, request *Ydb_Table.CreateTableRequ
 	if err := serialSettingsRefusal(request, tableLabel(owner), caps); err != nil {
 		return err
 	}
+	return creationCacheModeError(owner, request, caps)
+}
+
+// creationCacheModeError refuses a family's cache mode on a target that does not
+// take one. Unlike the settings of a Serial's sequence, a declaration can be
+// checked for it alone: a target without the capability holds no cache mode.
+func creationCacheModeError(owner *protocol.Reference, request *Ydb_Table.CreateTableRequest, caps map[string]bool) error {
 	if reason := creationCacheModeRefusal(fmt.Sprintf("table %q declares column family cache mode", tableLabel(owner)), request, caps); reason != "" {
 		return unsupported("%s", reason)
 	}

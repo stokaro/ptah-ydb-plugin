@@ -69,7 +69,10 @@ func compileDefinitionColumns(owner *protocol.Reference, table *protocol.Declare
 		}
 		return compiled.Columns, nil
 	}
-	compiled, err := Compile(owner, table, caps)
+	// The columns of a table that exists: the settings of a Serial's
+	// sequence are refused where a step would change them (planSequences),
+	// not where the table already holds them.
+	compiled, err := predictedCreation(owner, table, caps)
 	if err != nil {
 		return nil, err
 	}

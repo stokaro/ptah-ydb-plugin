@@ -253,24 +253,20 @@ func TestRebuildPlanCarriesChangefeeds_FailurePath(t *testing.T) {
 	}
 }
 
-// On the common wire a read reports the table's comments apart from its
-// properties. The new table of a rebuild keeps them, the comments of the
-// columns it has, and a migration file writes them after its CREATE TABLE.
+// The read reports the table's comments on the observed table, its columns
+// and its indexes, apart from its properties. The new table of a rebuild keeps
+// them, those of the columns it has, and a migration file writes them after its
+// CREATE TABLE. The comment of a column the new table leaves out is not
+// written. The host fills no observed common objects for a table, so a rebuild
+// that read its comments there kept none.
 func TestRebuildPlanKeepsTheComments(t *testing.T) {
 	check := testcheck.New(t)
 	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
 	request.TargetFeatures = append(request.TargetFeatures, provider.CommonObjectsFeature)
-	comment := func(kind, name, text string, path ...string) *protocol.ObjectComment {
-		return &protocol.ObjectComment{Object: &protocol.Reference{Engine: "ydb", Kind: kind, Schema: "app", Name: name, Path: path}, Text: text}
-	}
-	request.CurrentCommon = &protocol.ObservedCommonObjects{
-		Coverage: []*protocol.CommonObjectCoverage{{Kind: protocol.CommonObjectSupport_VIEW, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}},
-			{Kind: protocol.CommonObjectSupport_COMMENT, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}},
-			{Kind: protocol.CommonObjectSupport_ROLE, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "The fixture did not inspect principals"}},
-			{Kind: protocol.CommonObjectSupport_GRANT, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "The fixture did not inspect grants"}}},
-		Comments: []*protocol.ObjectComment{comment("table", "records", "rows"), comment("column", "payload", "the text", "records"),
-			comment("column", "gone", "dropped", "records"), comment("table", "other", "another table")},
-	}
+	current := request.Tables[0].Current
+	current.Comment = "rows"
+	current.Columns[1].Comment = "the text"
+	current.Columns = append(current.Columns, &protocol.ObservedColumn{Name: "gone", DataType: "Utf8", IsNullable: "YES", Comment: "dropped"})
 	plan, err := backend.New().PlanFeatures(check.Context(), request)
 	check.Assert(err, qt.IsNil)
 	check.Assert(plan.Diagnostics, qt.HasLen, 0)
