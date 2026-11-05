@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -32,14 +33,19 @@ func buildOperationModel() *protocol.ValueModel {
 	if err != nil {
 		panic(err)
 	}
+	family, err := protojson.Marshal(protodesc.ToDescriptorProto((&native.ColumnFamily{}).ProtoReflect().Descriptor()))
+	if err != nil {
+		panic(err)
+	}
 	raw, err := json.Marshal(map[string]any{
 		"kind": OperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
-		"request": json.RawMessage(descriptor), "allowed_request_fields": nativeFields,
+		"request": json.RawMessage(descriptor), "allowed_request_fields": nativeFields, "column_family": json.RawMessage(family),
 		"column_model": json.RawMessage(schema.ColumnDesiredModel().DefinitionJson),
 		"table_model":  json.RawMessage(schema.TableDesiredModel().DefinitionJson),
 		"columns":      "distinct names, exact native storage types, explicit matching notNull, optional typed literal or Serial sequence; compression and encoding refused",
 		"sequences":    "a Serial column is a NOT NULL Int16, Int32 or Int64 whose sequence is named _serial_column_<column> and states min 1, the maximum of the column's type, a start from 1 to that maximum, cache 1, an increment of at least 1 and no cycle; confirmation reads the same sequence back with no restart",
 		"keys":         "ordered nonempty distinct existing columns",
+		"families":     "each column family is written as column_family describes it, Ydb.Table.ColumnFamily with the cache mode at its upstream field 6, which the request carries to the table service; a cache mode requires the column_family_cache_mode capability",
 		"settings":     "row storage only; no access changes, temporary lifetime, changefeeds, profiles or compaction policy; a starting layout is either a count of uniform partitions over a Uint32 or Uint64 first key column, or split points of optional tuples over the leading key columns",
 		"indexes":      "global indexes, sync, async or unique, each with its ordered key columns and covered columns over declared columns and no settings of its own, built with the table",
 		"omission":     "omitted creation settings request server defaults; explicit settings are confirmed after creation",
@@ -72,7 +78,7 @@ func Capture(id string, owner *protocol.Reference, table *protocol.DeclaredTable
 // CaptureRequest builds the creation of a compiled native request at owner,
 // which a rebuild names with the scratch table's name.
 func CaptureRequest(id string, owner *protocol.Reference, request *Ydb_Table.CreateTableRequest) (*protocol.NormalizedValue, error) {
-	payload, err := protojson.Marshal(request)
+	payload, err := marshalRequest(request)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +102,7 @@ func Normalize(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	payload, err := protojson.Marshal(request)
+	payload, err := marshalRequest(request)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +140,7 @@ func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {
 		return nil, fmt.Errorf("YDB creation settings cannot be null")
 	}
 	var request Ydb_Table.CreateTableRequest
-	if err := protojson.Unmarshal(canonical, &request); err != nil {
+	if err := unmarshalRequest(canonical, &request); err != nil {
 		return nil, fmt.Errorf("invalid YDB table creation JSON")
 	}
 	if err := only(&request, nativeFields...); err != nil {
@@ -184,7 +190,7 @@ func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {
 	if err := validateRequestLayout(&request); err != nil {
 		return nil, err
 	}
-	settings, err := protojson.Marshal(&request)
+	settings, err := marshalRequest(&request)
 	if err != nil {
 		return nil, err
 	}

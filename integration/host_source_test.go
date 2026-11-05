@@ -160,8 +160,6 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 	for _, test := range []struct{ name, flag, file, content, want string }{
 		{"a changefeed without its mode in YAML", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    changefeeds:\n      updates: {format: JSON}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
-		{"a family cache mode", "--schema-file", "schema.yaml",
-			"tables:\n  host_source_items:\n    column_families:\n      cold: {cache_mode: regular}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a zstd family", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    column_families:\n      cold: {compression: zstd}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a consumer of a changefeed the table does not declare in Go", "--root-dir", "entities.go",

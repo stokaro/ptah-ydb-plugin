@@ -157,6 +157,12 @@ func TestEncodeTable_HappyPath(t *testing.T) {
 		row:     `{"uniformPartitions":"4","ttlSettings":{"valueSinceUnixEpoch":{"columnName":"at","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":3600}}}`,
 		columns: map[string]string{}, written: []string{"row"},
 	}, {
+		name: "family cache modes",
+		facets: []facet{{"row", schema.TableProperties, "", `{"columnFamilies":[{"name":"hot","cacheMode":"CACHE_MODE_IN_MEMORY"},` +
+			`{"name":"warm","compression":"COMPRESSION_LZ4","cacheMode":"CACHE_MODE_REGULAR"}]}`}, {"payload", schema.ColumnProperties, "payload", `{"family":"hot"}`}},
+		row:     `{"columnFamilies":[{"name":"hot","cacheMode":"CACHE_MODE_IN_MEMORY"},{"name":"warm","compression":"COMPRESSION_LZ4","cacheMode":"CACHE_MODE_REGULAR"}]}`,
+		columns: map[string]string{"payload": "hot"}, written: []string{"row", "payload"},
+	}, {
 		name:    "split points",
 		facets:  []facet{{"row", schema.TableProperties, "", `{"partitionAtKeys":[{"values":["10"]},{"values":["it's","a,b"]}],"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`}},
 		row:     `{"partitionAtKeys":[{"values":["10"]},{"values":["it's","a,b"]}],"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`,
@@ -285,7 +291,7 @@ func TestEncodeTable_FailurePath(t *testing.T) {
 		{"temporary", facet{"lost", schema.TableProperties, "", `{"temporary":true}`}, "table app/events: its temporary lifetime has no source spelling"},
 		{"partition columns", facet{"lost", schema.TableProperties, "", `{"partitioningSettings":{"partitionBy":["id"]}}`}, "table app/events: its partition columns have no source spelling"},
 		{"TTL run interval", facet{"lost", schema.TableProperties, "", `{"ttlSettings":{"dateTypeColumn":{"columnName":"at"},"runIntervalSeconds":60}}`}, "table app/events: its TTL run interval has no source spelling"},
-		{"cache mode", facet{"lost", schema.TableProperties, "", `{"columnFamilies":[{"name":"hot","keepInMemory":"ENABLED"}]}`}, "table app/events: the cache mode of its column family hot has no source spelling"},
+		{"keep_in_memory", facet{"lost", schema.TableProperties, "", `{"columnFamilies":[{"name":"hot","keepInMemory":"ENABLED"}]}`}, "table app/events: the keep_in_memory of its column family hot has no source spelling"},
 		{"TTL past what an interval spells", facet{"lost", schema.TableProperties, "", `{"ttlSettings":{"dateTypeColumn":{"columnName":"at","expireAfterSeconds":4294967295}}}`},
 			"table app/events: its YDB settings cannot be written so that a source reads them back unchanged"},
 		{"column table data channels", facet{"lost", schema.ColumnStorageProperties, "", `{"dataChannelCount":"4"}`},
