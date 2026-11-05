@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -47,7 +46,7 @@ func hostApplySelected(c *qt.C, selectors, format, text string, flags ...string)
 	defer cancel()
 	arguments := append([]string{"schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", selectors}, slices.Concat(flags, source)...)
-	cmd := exec.CommandContext(ctx, host, arguments...)
+	cmd := testCommand(ctx, host, arguments...)
 	var report, printed bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &report, &printed
 	err := cmd.Run()

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -162,7 +161,7 @@ func hostInferenceCommand(c *qt.C, host string, args ...string) (string, error) 
 	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, append([]string{"inference"}, args...)...)
+	cmd := testCommand(ctx, host, append([]string{"inference"}, args...)...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	err := cmd.Run()
@@ -370,7 +369,7 @@ func (f *embeddingFixture) tables(c *qt.C) []string {
 // columns lists a table's columns.
 func (f *embeddingFixture) columns(c *qt.C, table string) []string {
 	c.Helper()
-	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT * FROM `"+path.Join(f.root, table)+"` LIMIT 1")
+	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT * FROM `"+path.Join(f.root, table)+"` LIMIT 1") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	defer func() { c.Check(rows.Close(), qt.IsNil) }()
 	names, err := rows.Columns()

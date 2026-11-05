@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 
@@ -286,6 +287,12 @@ func Intent(spec ydbdecl.Changefeed) (*native.ChangefeedIntent, error) {
 			return nil, fmt.Errorf("changefeed %q: resolved_timestamps: %w", spec.Name, err)
 		}
 	}
+	// A topic counts its partitions in a signed 64-bit field, so a larger
+	// count would wrap negative and read back as none.
+	if spec.TopicMinActivePartitions > math.MaxInt64 {
+		return nil, fmt.Errorf("changefeed %q: %s takes a count of at most %d, the most a YDB topic holds",
+			spec.Name, ydbdecl.AttributeTopicMinActivePartitions, int64(math.MaxInt64))
+	}
 	// The topic states what the changefeed's options set on it and its
 	// consumers; YDB gives it every other setting.
 	intent.Topic = &native.TopicIntent{PartitioningSettings: &Ydb_Topic.PartitioningSettings{MinActivePartitions: int64(spec.TopicMinActivePartitions)}}
@@ -325,7 +332,7 @@ func durationOf(text string) (*durationpb.Duration, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &durationpb.Duration{Seconds: int64(value)}, nil
+	return &durationpb.Duration{Seconds: int64(value)}, nil // #nosec G115 -- FeedSeconds refuses an interval longer than YDB's Interval holds, which is below 2^32 seconds
 }
 
 // seconds reads a duration as whole seconds, zero for none, and refuses a
@@ -337,7 +344,7 @@ func seconds(subject string, duration *durationpb.Duration) (uint64, error) {
 	if duration.GetSeconds() < 0 || duration.GetNanos() != 0 {
 		return 0, fmt.Errorf("%s is %s, which is not a whole number of seconds a declaration can hold", subject, duration.AsDuration())
 	}
-	return uint64(duration.GetSeconds()), nil
+	return uint64(duration.GetSeconds()), nil // #nosec G115 -- a negative count is refused above
 }
 
 // interval writes a duration as the interval a declaration takes, empty for

@@ -185,7 +185,7 @@ func TestNativeHistorySharesExecutionTransaction(t *testing.T) {
 	}
 	// A malformed stored row refuses the entire read and prevents committing
 	// application writes made before that history failure.
-	_, err = opened.DB.ExecContext(c.Context(), "DECLARE $payload AS String; UPSERT INTO `"+historyPath+"` (version,revision) VALUES (99,$payload)", sql.Named("payload", []byte("corrupt")))
+	_, err = opened.DB.ExecContext(c.Context(), "DECLARE $payload AS String; UPSERT INTO `"+historyPath+"` (version,revision) VALUES (99,$payload)", sql.Named("payload", []byte("corrupt"))) // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	tx, err := client.BeginTransaction(c.Context(), &protocol.BeginTransactionRequest{SessionId: id, TransactionId: "corrupt", Isolation: protocol.TransactionIsolation_SERIALIZABLE})
 	c.Assert(err, qt.IsNil)
@@ -211,7 +211,7 @@ func TestNativeHistoryRefusesForeignAndChangedStorage(t *testing.T) {
 		_, err := opened.DB.ExecContext(context.Background(), "DROP TABLE `"+table+"`")
 		c.Check(err, qt.IsNil)
 	})
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+table+"` (version,description) VALUES (1,\"preserve\")")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+table+"` (version,description) VALUES (1,\"preserve\")") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client, id, _ := historySession(c, binary, digest)

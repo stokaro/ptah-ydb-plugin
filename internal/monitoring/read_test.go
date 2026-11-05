@@ -123,7 +123,7 @@ func TestRead_RefusalRepeatsNeitherTheTicketNorTheEndpoint(t *testing.T) {
 	c := testcheck.New(t)
 	endpoint := serve(c, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte("Failed to resolve database for " + r.Header.Get("Authorization")))
+		_, _ = w.Write([]byte("Failed to resolve database for " + r.Header.Get("Authorization"))) // #nosec G705 -- the test server echoes the header on purpose: the test holds Read to redacting it
 	})
 	_, err := monitoring.Read(c.Context(), endpoint, "feature flags", "/viewer/json/feature_flags", "/local", "ticket-value", nil)
 	c.Assert(err, qt.ErrorMatches, `read the YDB feature flags from the monitoring endpoint: 400 Bad Request; `+

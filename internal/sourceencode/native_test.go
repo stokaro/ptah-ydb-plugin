@@ -36,7 +36,7 @@ func normalized(c *qt.C, kind string, intent proto.Message) *protocol.Normalized
 func sourceIntent(c *qt.C) *native.ExternalSourceIntent {
 	c.Helper()
 	value, err := externals.SourceIntent(ydbdecl.ExternalDataSource{SourceType: "PostgreSQL", Location: "pg:5432", AuthMethod: "BASIC",
-		Options: map[string]string{"LOGIN": "reader", "PASSWORD_SECRET_PATH": "/local/app/pw", "DATABASE_NAME": `a;b\c=d`}})
+		Options: map[string]string{"LOGIN": "reader", "PASSWORD_SECRET_PATH": "/local/app/pw", "DATABASE_NAME": `a;b\c=d`}}) // #nosec G101 -- the options name a login and a secret's path, not a password
 	c.Assert(err, qt.IsNil)
 	return value
 }

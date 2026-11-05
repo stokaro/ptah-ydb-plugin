@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -168,7 +167,7 @@ func mcpCall(c *qt.C, tool string, arguments map[string]any) string {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "mcp", "--database-url", os.Getenv("PTAH_YDB_TEST_URL"), "--database-class", "ephemeral",
+	cmd := testCommand(ctx, host, "mcp", "--database-url", os.Getenv("PTAH_YDB_TEST_URL"), "--database-class", "ephemeral",
 		"--allow-database-inspect", "allow", "--provider-config", manifest, "--provider-engine", "ydb")
 	stdin, err := cmd.StdinPipe()
 	c.Assert(err, qt.IsNil)

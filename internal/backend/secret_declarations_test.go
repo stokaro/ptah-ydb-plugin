@@ -88,7 +88,7 @@ func TestAuthoredSecretRefusalsDiscardAllOutput(t *testing.T) {
 		secretPath string
 		capability bool
 	}{
-		{name: "disabled secrets", secretPath: "app/z.pw"},
+		{name: "disabled secrets", secretPath: "app/z.pw"}, // #nosec G101 -- a secret's path, not its value
 
 		{name: "self reference", secretPath: "app/a.source", capability: true},
 	} {

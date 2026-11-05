@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -42,7 +41,7 @@ func assertHostSchemaExport(t *testing.T, binary, digest string, schemas []strin
 	c.Assert(err, qt.IsNil)
 	manifest := filepath.Join(t.TempDir(), "providers.json")
 	c.Assert(os.WriteFile(manifest, encoded, 0o600), qt.IsNil)
-	cmd := exec.CommandContext(ctx, host, "schema", "inspect", "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", strings.Join(schemas, ","), "--format", "json")
+	cmd := testCommand(ctx, host, "schema", "inspect", "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", strings.Join(schemas, ","), "--format", "json")
 	var diagnostics bytes.Buffer
 	cmd.Stderr = &diagnostics
 	output, err := cmd.Output()

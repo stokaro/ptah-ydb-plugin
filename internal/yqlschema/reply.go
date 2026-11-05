@@ -152,6 +152,7 @@ func sourcePosition(text string, offset int) *protocol.SourcePosition {
 	before := text[:offset]
 	line := strings.Count(before, "\n") + 1
 	column := offset - (strings.LastIndexByte(before, '\n') + 1) + 1
+	// #nosec G115 -- the offset is within a request document, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.SourcePosition{ByteOffset: uint64(offset), Line: uint32(line), Column: uint32(column)}
 }
 
@@ -164,6 +165,7 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool)
 	documents := request.GetDocuments()
 	trace := func(collection protocol.SQLObjectTrace_Collection, index int, document int, text span) {
 		source := documents[document]
+		// #nosec G115 -- index counts the objects read from the request's documents, which runtime.MaxMessageBytes bounds to 4 MiB
 		reply.Traces = append(reply.Traces, &protocol.SQLObjectTrace{Collection: collection, Index: uint32(index),
 			Source: &protocol.SourceTrace{DocumentId: source.GetId(), Span: sourceSpan(source.GetText(), text.start, text.end)}})
 	}

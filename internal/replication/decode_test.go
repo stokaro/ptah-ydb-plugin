@@ -22,7 +22,7 @@ func connectionParams() *Ydb_Replication.ConnectionParams {
 func items(pairs ...string) []*Ydb_Replication.DescribeReplicationResult_Item {
 	var result []*Ydb_Replication.DescribeReplicationResult_Item
 	for i := 0; i < len(pairs); i += 2 {
-		result = append(result, &Ydb_Replication.DescribeReplicationResult_Item{SourcePath: pairs[i], DestinationPath: pairs[i+1], Id: uint64(i)})
+		result = append(result, &Ydb_Replication.DescribeReplicationResult_Item{SourcePath: pairs[i], DestinationPath: pairs[i+1], Id: uint64(i)}) // #nosec G602 -- every caller passes source and destination paths in pairs
 	}
 	return result
 }

@@ -30,6 +30,7 @@ type HeldWorkload struct {
 // establishes absence only on a target that keeps resource pools.
 func ReadWorkload(ctx context.Context, db *sql.DB, database string) (held HeldWorkload, err error) {
 	held = HeldWorkload{Pools: make(map[string]workload.PoolSpec), Classifiers: make(map[string]workload.ClassifierSpec)}
+	// #nosec G202 -- the only concatenated part is the system view's path, quoted by ydbtype.QuoteIdentifier
 	pools, err := db.QueryContext(ctx, "SELECT Name, ConcurrentQueryLimit, QueueSize, DatabaseLoadCpuThreshold, QueryMemoryLimitPercentPerNode, "+
 		"QueryCpuLimitPercentPerNode, TotalCpuLimitPercentPerNode, ResourceWeight FROM "+ydbtype.QuoteIdentifier(path.Join(database, ".sys/resource_pools")))
 	if err != nil {
@@ -55,6 +56,7 @@ func ReadWorkload(ctx context.Context, db *sql.DB, database string) (held HeldWo
 	if err := pools.Err(); err != nil {
 		return HeldWorkload{}, fmt.Errorf("read YDB resource pools: %w", err)
 	}
+	// #nosec G202 -- the only concatenated part is the system view's path, quoted by ydbtype.QuoteIdentifier
 	classifiers, err := db.QueryContext(ctx, "SELECT Name, Rank, MemberName, ResourcePool FROM "+ydbtype.QuoteIdentifier(path.Join(database, ".sys/resource_pool_classifiers")))
 	if err != nil {
 		return HeldWorkload{}, fmt.Errorf("read YDB resource pool classifiers: %w", err)

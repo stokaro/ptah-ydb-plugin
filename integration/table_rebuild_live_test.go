@@ -47,7 +47,7 @@ func newRebuildFixture(c *qt.C, columns, rows string) *rebuildFixture {
 			c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+path.Join(database, directory, name)+"`"), qt.IsNil)
 		}
 	})
-	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` "+rows)
+	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` "+rows) // #nosec G202 -- the path is a table under a directory this test generated, and rows is a VALUES clause its tests write
 	c.Assert(err, qt.IsNil)
 	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature, provider.PlanningPolicyFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
@@ -106,6 +106,7 @@ func (f *rebuildFixture) held(c *qt.C) []any {
 	for _, column := range snapshot.Tables[0].Columns {
 		columns = append(columns, column.Name+" "+column.Observed.ColumnType+map[bool]string{true: "?", false: ""}[column.Observed.IsNullable == "YES"])
 	}
+	// #nosec G202 -- the path is a table under a directory this test generated
 	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT CAST(id AS Utf8) || ':' || CAST(n AS Utf8) || ':' || payload FROM `"+
 		path.Join(f.database, f.directory, "records")+"` ORDER BY id")
 	c.Assert(err, qt.IsNil)
