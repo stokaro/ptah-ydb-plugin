@@ -1436,10 +1436,14 @@ them: the read reports a sequence's start and increment as the column's
 `identity_start` and `identity_increment` beside `auto_increment`, and refuses a
 sequence with any other setting. A facet a source states
 by writing nothing, such as an empty changefeed set, an empty native index set
-or a column of the default family, is written by the table's own part. A Go
-export also gives each column the Go type of its YDB type, as the host's
-embedded engine does, and refuses a nullable key column, which no declaration
-can ask for.
+or a column of the default family, is written by the table's own part. The
+default family every row table holds is written only when it has a setting of
+its own, such as a compression or a storage pool, and a declaration that leaves
+it out keeps what the table holds. A Go export writes the table directive's
+attributes in the host's embedded engine's order: a column table's storage,
+with `store="column"`, then the TTL, then the partitioning and the starting
+layout. It also gives each column the Go type of its YDB type, as that engine
+does, and refuses a nullable key column, which no declaration can ask for.
 
 What no declaration states is a loss for its value, in one line that names it:
 an access requirement, table attributes, storage settings, tiering, a temporary
@@ -1658,7 +1662,9 @@ properties were not read, leaves the TTL alone.
 
 ### Column tables
 
-A column table is declared with `store="COLUMN"` in the Go table directive, or
+A column table is declared with `store="COLUMN"` in the Go table directive (in
+either case; an export writes `store="column"`, as the host's embedded engine
+did), or
 with the `column_store` mapping in YAML. The Go attributes `partition_by_hash`
 (a comma separated list of key columns), `column_shards` (a positive 32-bit
 count) and `column_ttl`, and the YAML keys `hash_columns`, `partitions` and
