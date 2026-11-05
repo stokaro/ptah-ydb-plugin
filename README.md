@@ -2555,8 +2555,14 @@ TABLE sets none, so such a rebuild has no TEXT form (`NO_TEXT_FORM`) and runs
 natively. A native execution checks each step's precondition first:
 the copy needs the new table empty and the source holding every copied column,
 a rename needs the table holding the captured columns and key, and a free
-target. A table holding a changefeed is refused, since YDB renames no such
-table; so is a column table, whose rebuild needs an explicit data migration.
+target. YDB renames no table that carries a changefeed, so a rebuild of a
+table that holds changefeeds drops them in a step before the old table moves
+and gives the new table its changefeeds in a step after it is in place: the
+ones the declaration states, or the ones the old table held where the
+declaration does not state them, with their consumers. Each stream restarts,
+and the plan's note says so. A changefeed an asynchronous replication
+controls refuses the rebuild, as does a column table, whose rebuild needs an
+explicit data migration.
 The live tests rebuild a table natively and by text on both release lines,
 read the copied rows back, and fail a copy whose value does not convert.
 
