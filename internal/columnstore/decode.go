@@ -45,6 +45,63 @@ const consistentHash = 2
 // no partial result on disagreement. Native IDs, versions and shard addresses
 // are checked and never become schema state.
 func Decode(body []byte, fullPath string, table *native.ColumnTableDescribeResult) (*native.ColumnStorageObservation, error) {
+	source, err := monitoringSource(body, fullPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkTable(source, table, fullPath); err != nil {
+		return nil, err
+	}
+	ids, names, err := checkColumns(source.GetSchema(), table)
+	if err != nil {
+		return nil, err
+	}
+	hash := source.GetSharding().GetHashSharding()
+	if hash.GetFunction() != consistentHash || !referencesKnown(hash.GetColumns(), names) {
+		return nil, fmt.Errorf("invalid or unsupported YDB column hash sharding")
+	}
+	if !slices.Equal(table.GetPartitioningSettings().GetPartitionBy(), hash.Columns) {
+		return nil, fmt.Errorf("YDB hash columns disagree across descriptions")
+	}
+	// A live table always has a shard count and data channels; the model
+	// leaves them out only for a prediction from a declaration.
+	if source.ColumnShardCount == 0 || source.GetStorageConfig().GetDataChannelCount() == 0 {
+		return nil, fmt.Errorf("YDB column table description has no shard count or data channels")
+	}
+	result := &native.ColumnStorageObservation{
+		HashColumns: slices.Clone(hash.Columns), Partitions: source.ColumnShardCount,
+		DataChannelCount: source.GetStorageConfig().GetDataChannelCount(),
+	}
+	result.LocalIndexes, err = convertIndexes(source.GetSchema().GetIndexes(), ids)
+	if err != nil {
+		return nil, err
+	}
+	if source.TtlSettings != nil {
+		result.Ttl, err = convertTTL(source.TtlSettings, names)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := checkTTL(table.GetTtlSettings(), result.Ttl); err != nil {
+		return nil, err
+	}
+	// Apply the same semantic validation and ordering as offline normalization.
+	owner := &protocol.Reference{Engine: "ydb", Database: "/", Kind: "table", Name: source.Name}
+	envelope, err := schema.CaptureColumnStorage(owner, result)
+	if err != nil {
+		return nil, err
+	}
+	normalized := &native.ColumnStorageObservation{}
+	if err := protojson.Unmarshal(envelope.Payload, normalized); err != nil {
+		return nil, err
+	}
+	return normalized, nil
+}
+
+// monitoringSource reads the column table's own description out of the
+// monitoring page, and refuses a page that is too large, malformed, or does not
+// describe fullPath successfully.
+func monitoringSource(body []byte, fullPath string) (*native.MonitoringColumnTable, error) {
 	if len(body) > 4<<20 {
 		return nil, fmt.Errorf("YDB column description exceeds size limit")
 	}
@@ -68,75 +125,50 @@ func Decode(body []byte, fullPath string, table *native.ColumnTableDescribeResul
 	if err != nil {
 		return nil, fmt.Errorf("invalid YDB column description JSON")
 	}
-	var source native.MonitoringColumnTable
-	if err := protojson.Unmarshal(canonical, &source); err != nil {
+	source := &native.MonitoringColumnTable{}
+	if err := protojson.Unmarshal(canonical, source); err != nil {
 		return nil, fmt.Errorf("invalid or unsupported YDB column description")
 	}
+	return source, nil
+}
+
+// checkTable refuses a table-service description with unknown fields or
+// settings the model has no place for, two descriptions that name different
+// column tables, and a table whose schema is still being restored or updated.
+func checkTable(source *native.MonitoringColumnTable, table *native.ColumnTableDescribeResult, fullPath string) error {
 	if err := schema.Known(table); err != nil {
-		return nil, err
+		return err
 	}
 	if table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_COLUMN || table.GetSelf().GetType() != Ydb_Scheme.Entry_COLUMN_TABLE ||
 		table.GetSelf().GetName() != path.Base(fullPath) || source.Name != path.Base(fullPath) {
-		return nil, fmt.Errorf("YDB column table identity disagrees across descriptions")
+		return fmt.Errorf("YDB column table identity disagrees across descriptions")
 	}
 	if err := unmodeled(table); err != nil {
-		return nil, err
+		return err
 	}
 	if source.IsRestore || source.GetSchema().GetOptions().GetSchemeNeedActualization() {
-		return nil, fmt.Errorf("YDB column table schema is not ready")
+		return fmt.Errorf("YDB column table schema is not ready")
 	}
-	ids, names, err := checkColumns(source.GetSchema(), table)
-	if err != nil {
-		return nil, err
-	}
-	hash := source.GetSharding().GetHashSharding()
-	if hash.GetFunction() != consistentHash || !referencesKnown(hash.GetColumns(), names) {
-		return nil, fmt.Errorf("invalid or unsupported YDB column hash sharding")
-	}
-	if !slices.Equal(table.GetPartitioningSettings().GetPartitionBy(), hash.Columns) {
-		return nil, fmt.Errorf("YDB hash columns disagree across descriptions")
-	}
-	// A live table always has a shard count and data channels; the model
-	// leaves them out only for a prediction from a declaration.
-	if source.ColumnShardCount == 0 || source.GetStorageConfig().GetDataChannelCount() == 0 {
-		return nil, fmt.Errorf("YDB column table description has no shard count or data channels")
-	}
-	result := &native.ColumnStorageObservation{
-		HashColumns: slices.Clone(hash.Columns), Partitions: source.ColumnShardCount,
-		DataChannelCount: source.GetStorageConfig().GetDataChannelCount(),
-	}
+	return nil
+}
+
+// convertIndexes converts the monitoring description's local indexes in their
+// order, and refuses an index whose ID is zero or repeated.
+func convertIndexes(indexes []*native.MonitoringLocalIndex, ids map[uint64]string) ([]*native.LocalIndexObservation, error) {
+	var converted []*native.LocalIndexObservation
 	indexIDs := make(map[uint64]bool)
-	for _, index := range source.GetSchema().GetIndexes() {
+	for _, index := range indexes {
 		if index.Id == 0 || indexIDs[index.Id] {
 			return nil, fmt.Errorf("invalid or duplicate YDB local index ID")
 		}
 		indexIDs[index.Id] = true
-		converted, err := convertIndex(index, ids)
+		observation, err := convertIndex(index, ids)
 		if err != nil {
 			return nil, err
 		}
-		result.LocalIndexes = append(result.LocalIndexes, converted)
+		converted = append(converted, observation)
 	}
-	if source.TtlSettings != nil {
-		result.Ttl, err = convertTTL(source.TtlSettings, names)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if err := checkTTL(table.GetTtlSettings(), result.Ttl); err != nil {
-		return nil, err
-	}
-	// Apply the same semantic validation and ordering as offline normalization.
-	owner := &protocol.Reference{Engine: "ydb", Database: "/", Kind: "table", Name: source.Name}
-	envelope, err := schema.CaptureColumnStorage(owner, result)
-	if err != nil {
-		return nil, err
-	}
-	normalized := &native.ColumnStorageObservation{}
-	if err := protojson.Unmarshal(envelope.Payload, normalized); err != nil {
-		return nil, err
-	}
-	return normalized, nil
+	return converted, nil
 }
 
 // object reads one JSON object into its members and refuses a member written
@@ -199,15 +231,9 @@ func checkColumns(source *native.MonitoringColumnSchema, table *native.ColumnTab
 	}
 	ids, names := make(map[uint64]string), make(map[string]bool)
 	for i, column := range source.Columns {
-		if column.Id == 0 || ids[column.Id] != "" || column.Name == "" || names[column.Name] {
-			return nil, nil, fmt.Errorf("invalid or duplicate YDB column identity")
-		}
-		if column.ColumnFamilyId != 0 || column.StorageId != "" {
-			return nil, nil, fmt.Errorf("configured YDB column storage is not modeled")
-		}
 		nativeColumn := table.Columns[i]
-		if nativeColumn.GetFamily() != "" || nativeColumn.GetDefaultValue() != nil || nativeColumn.Compression != nil || len(nativeColumn.Encoding) != 0 {
-			return nil, nil, fmt.Errorf("configured YDB column storage is not modeled")
+		if err := checkColumnStorage(column, nativeColumn, ids, names); err != nil {
+			return nil, nil, err
 		}
 		spelling, nullable, err := schema.ColumnType(nativeColumn.Type)
 		if nativeColumn.GetNotNull() {
@@ -227,15 +253,39 @@ func checkColumns(source *native.MonitoringColumnSchema, table *native.ColumnTab
 	if !referencesKnown(source.KeyColumnNames, names) {
 		return nil, nil, fmt.Errorf("invalid YDB column primary key")
 	}
-	for _, family := range source.ColumnFamilies {
-		if family.Id != 0 || family.Name != "default" {
-			return nil, nil, fmt.Errorf("configured YDB column families are not modeled")
-		}
-	}
-	if len(source.ColumnFamilies) > 1 {
-		return nil, nil, fmt.Errorf("duplicate YDB column family")
+	if err := checkColumnFamilies(source.ColumnFamilies); err != nil {
+		return nil, nil, err
 	}
 	return ids, names, nil
+}
+
+// checkColumnStorage refuses a column whose ID or name is empty or already
+// taken by an earlier column, and a column either description configures
+// storage for: a family, a storage ID, a default, compression or an encoding.
+func checkColumnStorage(column *native.MonitoringColumn, nativeColumn *native.ColumnMeta, ids map[uint64]string, names map[string]bool) error {
+	if column.Id == 0 || ids[column.Id] != "" || column.Name == "" || names[column.Name] {
+		return fmt.Errorf("invalid or duplicate YDB column identity")
+	}
+	if column.ColumnFamilyId != 0 || column.StorageId != "" {
+		return fmt.Errorf("configured YDB column storage is not modeled")
+	}
+	if nativeColumn.GetFamily() != "" || nativeColumn.GetDefaultValue() != nil || nativeColumn.Compression != nil || len(nativeColumn.Encoding) != 0 {
+		return fmt.Errorf("configured YDB column storage is not modeled")
+	}
+	return nil
+}
+
+// checkColumnFamilies refuses any column family but the one default family.
+func checkColumnFamilies(families []*native.MonitoringFamily) error {
+	for _, family := range families {
+		if family.Id != 0 || family.Name != "default" {
+			return fmt.Errorf("configured YDB column families are not modeled")
+		}
+	}
+	if len(families) > 1 {
+		return fmt.Errorf("duplicate YDB column family")
+	}
+	return nil
 }
 
 func referencesKnown(columns []string, known map[string]bool) bool {

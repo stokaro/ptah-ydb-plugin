@@ -36,7 +36,13 @@ func Resolve(database string, scope *protocol.MetadataScope) (Store, error) {
 	return definition(identity, scope.Kind), nil
 }
 func definition(identity ownedtable.Identity, kind protocol.MetadataScope_Kind) Store {
-	d := ownedtable.Definition{Identity: identity, Attribute: ownershipAttribute, Marker: "stokaro/ptah-ydb-plugin/metadata-v1/" + strings.ToLower(kind.String()), Columns: []ownedtable.Column{{Name: "name", Type: Ydb.Type_UTF8}, {Name: "record", Type: Ydb.Type_STRING}}, PrimaryKey: []string{"name"}}
+	d := ownedtable.Definition{
+		Identity:   identity,
+		Attribute:  ownershipAttribute,
+		Marker:     "stokaro/ptah-ydb-plugin/metadata-v1/" + strings.ToLower(kind.String()),
+		Columns:    []ownedtable.Column{{Name: "name", Type: Ydb.Type_UTF8}, {Name: "record", Type: Ydb.Type_STRING}},
+		PrimaryKey: []string{"name"},
+	}
 	if kind == protocol.MetadataScope_LOG {
 		d.Columns = []ownedtable.Column{{Name: "run_id", Type: Ydb.Type_UTF8}, {Name: "sequence", Type: Ydb.Type_INT64}, {Name: "record", Type: Ydb.Type_STRING}}
 		d.PrimaryKey = []string{"run_id", "sequence"}
