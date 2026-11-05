@@ -38,3 +38,21 @@ func TestDescriptionStatesTheOfflineCapabilities(t *testing.T) {
 	c.Assert(unlisted.GetEngines()[0].GetDefaultCapabilities(), qt.IsNil)
 	c.Assert(unlisted.GetEngines()[0].GetReleaseLines()[0].GetCapabilities(), qt.IsNil)
 }
+
+// The offline facts carry the facts only the host reads, on every line: it
+// compares an index's covered columns under index_covering_columns, so an
+// unchanged index with a COVER list plans no change, and it refuses
+// --lock-timeout offline under migration_lock_timeout established false.
+func TestDescriptionStatesTheFactsOnlyTheHostReads(t *testing.T) {
+	c := testcheck.New(t)
+	listed := provider.NegotiatedDescription(backend.Description(), []string{provider.DefaultCapabilitiesFeature, provider.CommonObjectsFeature})
+	engine := listed.GetEngines()[0]
+	c.Assert(engine.GetDefaultCapabilities()["index_covering_columns"], qt.IsTrue)
+	lockTimeout, established := engine.GetDefaultCapabilities()["migration_lock_timeout"]
+	c.Assert(established, qt.IsTrue)
+	c.Assert(lockTimeout, qt.IsFalse)
+	for _, line := range engine.GetReleaseLines() {
+		c.Assert(line.GetCapabilities()["index_covering_columns"], qt.IsTrue, qt.Commentf("line %s", line.GetLine()))
+		c.Assert(line.GetCapabilities()["rename_table"], qt.IsTrue, qt.Commentf("line %s", line.GetLine()))
+	}
+}
