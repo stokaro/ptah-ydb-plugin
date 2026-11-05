@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -81,6 +83,31 @@ func serialColumn(subject string, column *protocol.DeclaredColumn, mapping ydbty
 		return "", nil, unsupported("%s: %v", subject, err)
 	}
 	return ydbtype.StorageType(serialType), serialSequence(column.Name, serialType, settings), nil
+}
+
+// sameSerial checks intent, the native sequence a declaration states for the
+// column that subject names, against compiled, the sequence the column's
+// common declaration gives it. A read states a Serial twice: as the common
+// column's auto_increment, start and increment, and as the native sequence
+// its default fills from. So a declaration converted from a read carries both,
+// and the native one adds nothing to the creation. It has to be the owned
+// sequence of a Serial column that stores stored, with the start and the
+// increment the common column declares.
+func sameSerial(subject, column, stored string, compiled *Ydb_Table.SequenceDescription, intent *native.SequenceIntent) error {
+	if compiled == nil {
+		return unsupported("%s takes its default from a sequence, and only a Serial column has one", subject)
+	}
+	held, err := columnsemantics.SerialSettings(column, stored, &native.SequenceDescription{Name: intent.Name, MinValue: intent.MinValue,
+		MaxValue: intent.MaxValue, StartValue: intent.StartValue, Cache: intent.Cache, Increment: intent.Increment, Cycle: intent.Cycle,
+		DataType: intent.DataType})
+	if err != nil {
+		return unsupported("%s: %v", subject, err)
+	}
+	if declared := requestedSettings(compiled); held != declared {
+		return unsupported("%s: its native sequence starts at %d and steps by %d, and the column declares a start of %d and an increment of %d",
+			subject, held.Start, held.Increment, declared.Start, declared.Increment)
+	}
+	return nil
 }
 
 // serialSettingsRefusal refuses a creation whose Serial sequences state
