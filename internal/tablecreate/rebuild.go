@@ -89,8 +89,7 @@ func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps
 	label := tableLabel(owner)
 	var needs []rebuildNeed
 	if held := heldKey(table.GetCurrent()); len(held) != 0 && !slices.Equal(held, desired.GetPrimaryKey()) {
-		needs = append(needs, rebuildNeed{capability: "primary_key_alterable",
-			subject: fmt.Sprintf("changing the primary key of table %q (%s -> %s)", label, strings.Join(held, ", "), strings.Join(desired.GetPrimaryKey(), ", "))})
+		needs = append(needs, rebuildNeed{capability: "primary_key_alterable", subject: keyChange(label, table.GetCurrent(), held, desired.GetPrimaryKey())})
 	}
 	current := table.GetCurrent().GetColumns()
 	for _, column := range desired.GetColumns() {
@@ -128,6 +127,24 @@ func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps
 		}
 	}
 	return needs, desired
+}
+
+// keyChange names the change of a table's primary key from held to declared.
+// A key over the same columns in another order is the change the host hands
+// over from a read that reports keys, and is named as the host's embedded
+// engine named it: the addition of the key under the name the read gives the
+// held one. Any other key change names both keys.
+func keyChange(label string, current *protocol.ObservedTable, held, declared []string) string {
+	if slices.Equal(slices.Sorted(slices.Values(held)), slices.Sorted(slices.Values(declared))) {
+		name := current.GetName() + "_pkey"
+		for _, constraint := range current.GetConstraints() {
+			if strings.EqualFold(constraint.GetType(), "PRIMARY KEY") && constraint.GetName() != "" {
+				name = constraint.GetName()
+			}
+		}
+		return fmt.Sprintf("adding constraint %s, the primary key", name)
+	}
+	return fmt.Sprintf("changing the primary key of table %q (%s -> %s)", label, strings.Join(held, ", "), strings.Join(declared, ", "))
 }
 
 // rebuildRefusal is the refusal of a change only a rebuild makes, when the
@@ -179,9 +196,19 @@ func keepHeldComments(request *Ydb_Table.CreateTableRequest, current *protocol.O
 	}
 }
 
-// heldKey is the key of an observed table, in key order where the read of its
-// properties states it and in column order otherwise.
+// heldKey is the key of an observed table: the host's PRIMARY KEY constraint
+// of it, else the key the read of its properties states, else its key
+// columns in column order.
 func heldKey(observed *protocol.ObservedTable) []string {
+	// The host's PRIMARY KEY constraint is the key the plan starts from: a
+	// read reports it in key order, and the reverse plan of a key change
+	// projects the forward change onto it, where the read of the table's
+	// properties still holds the key the forward plan found.
+	for _, constraint := range observed.GetConstraints() {
+		if strings.EqualFold(constraint.GetType(), "PRIMARY KEY") && len(constraint.GetColumnNames()) != 0 {
+			return slices.Clone(constraint.GetColumnNames())
+		}
+	}
 	var key []string
 	for _, column := range observed.GetColumns() {
 		if column.GetPrimaryKey() {

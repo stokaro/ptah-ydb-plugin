@@ -1109,7 +1109,10 @@ are storage-format identifiers, not an access-control mechanism against a databa
 ## Schema observations
 
 Inspection reads the native scheme, table, topic, view, and coordination APIs. Common columns preserve
-YDB type spelling, Decimal precision/scale, nullability, and key membership.
+YDB type spelling, Decimal precision/scale, nullability, and key membership,
+and with `schema.observed-primary-keys` each table's key in key order, so a Go
+export writes `primary_key="b,a"` for a table keyed in an order other than its
+columns'.
 Provider-owned table properties retain key order, TTL, column families,
 partitioning, storage settings, attributes, and access metadata. Column
 properties retain family assignment and typed literal or sequence defaults.
@@ -3101,6 +3104,17 @@ renames the new one into its place, and drops the old one. The host's steps for 
 are rewritten to the rename that puts the new table in place. A REBUILD the
 host proposes is planned the same way, and refused like any other rebuild
 without the policy.
+
+A key change reaches the planner from a host that lists
+`schema.observed-primary-keys` and `planning.primary-key-changes` (contract
+25.26): the read reports each table's key in key order, under the name
+`<table>_pkey` the host's embedded engine gave it, so a declaration that orders
+the same columns otherwise is a key change. The host hands it over as an
+alteration of the table, and the planner rebuilds the table with the declared
+key, or without the policy refuses it as the embedded engine did:
+`adding constraint <table>_pkey, the primary key, which requires target
+capability primary_key_alterable, unavailable on this ydb target`. The reverse
+plan rebuilds the table with the key it held.
 
 The copy reads each column as the new table declares it. A changed type is
 converted with `CAST` and unwrapped, so a value that does not convert fails the

@@ -277,10 +277,11 @@ func (t *traversal) entry(ctx context.Context, selected, name string, kind Ydb_S
 	case Ydb_Scheme.Entry_TABLE:
 		return t.readRowTable(ctx, selected, name)
 	case Ydb_Scheme.Entry_COLUMN_TABLE:
-		table, err := t.source.readColumnTable(ctx, t.columns, t.database, selected, name)
+		table, key, err := t.source.readColumnTable(ctx, t.columns, t.database, selected, name)
 		if err != nil {
 			return err
 		}
+		t.common.primaryKey(table, key)
 		t.addColumnTable(table)
 	case Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP:
 		return t.readTopic(ctx, selected, name)
@@ -357,6 +358,7 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 	if err != nil {
 		return err
 	}
+	t.common.primaryKey(table, description.table.GetPrimaryKey())
 	t.common.tableComments(t.result.CommonObjects, table.Identity, description)
 	indexes, err := t.source.readIndexes(ctx, path.Join(t.database, selected, name), description)
 	if err != nil {
