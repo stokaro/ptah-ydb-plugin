@@ -85,8 +85,16 @@ func ReadPrincipals(ctx context.Context, db *sql.DB, database string) (result Pr
 	if err != nil {
 		return Principals{}, err
 	}
+	result.Memberships, err = readMemberships(ctx, db, "SELECT GroupSid, MemberSid FROM "+view("auth_group_members"))
+	return result, err
+}
+
+// readMemberships reads the group memberships query selects, in the order it
+// returns them, and refuses an incomplete or repeated membership.
+func readMemberships(ctx context.Context, db *sql.DB, query string) ([]Membership, error) {
+	var memberships []Membership
 	members := make(map[Membership]bool)
-	err = principalRows(ctx, db, "SELECT GroupSid, MemberSid FROM "+view("auth_group_members"), func(rows *sql.Rows) error {
+	err := principalRows(ctx, db, query, func(rows *sql.Rows) error {
 		var group, member sql.NullString
 		if err := rows.Scan(&group, &member); err != nil {
 			return err
@@ -96,10 +104,10 @@ func ReadPrincipals(ctx context.Context, db *sql.DB, database string) (result Pr
 			return fmt.Errorf("YDB reports an incomplete or duplicate membership")
 		}
 		members[edge] = true
-		result.Memberships = append(result.Memberships, edge)
+		memberships = append(memberships, edge)
 		return nil
 	})
-	return result, err
+	return memberships, err
 }
 
 func principalRows(ctx context.Context, db *sql.DB, query string, scan func(*sql.Rows) error) (err error) {

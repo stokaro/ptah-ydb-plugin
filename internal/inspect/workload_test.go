@@ -41,7 +41,7 @@ func workloadKnowledge(read *protocol.Schema) map[string]*protocol.ModelKnowledg
 func TestWorkload_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	read := snapshot()
-	err := inspect.Workload(c.Context(), read, "/local", nil, func(context.Context) (nativeapi.HeldWorkload, error) {
+	err := inspect.Workload(c.Context(), read, "/local", nil, false, func(context.Context) (nativeapi.HeldWorkload, error) {
 		return nativeapi.HeldWorkload{Pools: map[string]workload.PoolSpec{"default": {}, "batch": {ConcurrentQueryLimit: new(int32(2))}},
 			Classifiers: map[string]workload.ClassifierSpec{"etl": {ResourcePool: "batch", Rank: 1}}}, nil
 	}, "")
@@ -75,7 +75,7 @@ func TestWorkload_EmptyReadEstablishesOnlyDatabaseRootAbsence(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			read := snapshot()
-			c.Assert(inspect.Workload(c.Context(), read, "/tenant", test.selectors, func(context.Context) (nativeapi.HeldWorkload, error) {
+			c.Assert(inspect.Workload(c.Context(), read, "/tenant", test.selectors, false, func(context.Context) (nativeapi.HeldWorkload, error) {
 				return nativeapi.HeldWorkload{}, nil
 			}, ""), qt.IsNil)
 			c.Assert(read.NativeObjects, qt.HasLen, 0)
@@ -96,7 +96,7 @@ func TestWorkload_EmptyReadEstablishesOnlyDatabaseRootAbsence(t *testing.T) {
 func TestWorkload_Unread(t *testing.T) {
 	c := testcheck.New(t)
 	read := snapshot()
-	c.Assert(inspect.Workload(c.Context(), read, "/local", nil, nil, "the flag is off"), qt.IsNil)
+	c.Assert(inspect.Workload(c.Context(), read, "/local", nil, false, nil, "the flag is off"), qt.IsNil)
 	c.Assert(read.NativeObjects, qt.HasLen, 0)
 	knowledge := workloadKnowledge(read)
 	c.Assert(knowledge, qt.HasLen, 2)
@@ -109,7 +109,7 @@ func TestWorkload_Unread(t *testing.T) {
 func TestWorkload_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	read := snapshot()
-	err := inspect.Workload(c.Context(), read, "/local", nil, func(context.Context) (nativeapi.HeldWorkload, error) {
+	err := inspect.Workload(c.Context(), read, "/local", nil, false, func(context.Context) (nativeapi.HeldWorkload, error) {
 		return nativeapi.HeldWorkload{}, errors.New("read YDB resource pools: refused")
 	}, "")
 	c.Assert(err, qt.ErrorMatches, "read YDB resource pools: refused")
@@ -125,7 +125,7 @@ func TestWorkload_Selectors(t *testing.T) {
 		return nativeapi.HeldWorkload{Pools: map[string]workload.PoolSpec{"default": {}}}, nil
 	}
 	directory := snapshot()
-	c.Assert(inspect.Workload(c.Context(), directory, "/local", []string{"app"}, func(context.Context) (nativeapi.HeldWorkload, error) {
+	c.Assert(inspect.Workload(c.Context(), directory, "/local", []string{"app"}, false, func(context.Context) (nativeapi.HeldWorkload, error) {
 		return nativeapi.HeldWorkload{}, errors.New("the views are not read")
 	}, ""), qt.IsNil)
 	c.Assert(directory.NativeObjects, qt.HasLen, 0)
@@ -134,11 +134,35 @@ func TestWorkload_Selectors(t *testing.T) {
 		c.Assert(record.Reason, qt.Matches, `A read of selected directories does not report .*; select / to read them`)
 	}
 	root := snapshot()
-	c.Assert(inspect.Workload(c.Context(), root, "/local", []string{"app", "/"}, read, ""), qt.IsNil)
+	c.Assert(inspect.Workload(c.Context(), root, "/local", []string{"app", "/"}, false, read, ""), qt.IsNil)
 	c.Assert(root.NativeObjects, qt.HasLen, 1)
 	for kind, record := range workloadRecords(root) {
 		c.Assert(record.Knowledge.State, qt.Equals, protocol.ModelKnowledge_UNINSPECTED, qt.Commentf(kind))
 		c.Assert(record.Regions, qt.HasLen, 1)
+		c.Assert(record.Regions[0].Scope.Schema.Normalized, qt.Equals, "")
+		c.Assert(record.Regions[0].Knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
+	}
+}
+
+// A read of selected directories in a session that negotiated
+// schema.database-kinds reports the pools and classifiers beside its scope,
+// named at the database, with the database namespace complete, as a read of
+// the root does.
+func TestWorkload_BesideTheScope(t *testing.T) {
+	c := testcheck.New(t)
+	directory := snapshot()
+	c.Assert(inspect.Workload(c.Context(), directory, "/local", []string{"app"}, true, func(context.Context) (nativeapi.HeldWorkload, error) {
+		return nativeapi.HeldWorkload{Pools: map[string]workload.PoolSpec{"default": {}}}, nil
+	}, ""), qt.IsNil)
+	c.Assert(directory.NativeObjects, qt.HasLen, 1)
+	owner := directory.NativeObjects[0].Owner
+	c.Assert(owner.Database, qt.Equals, "/local")
+	c.Assert(owner.Schema, qt.Equals, "")
+	c.Assert(owner.Name, qt.Equals, "default")
+	for kind, record := range workloadRecords(directory) {
+		c.Assert(record.Knowledge.State, qt.Equals, protocol.ModelKnowledge_UNINSPECTED, qt.Commentf(kind))
+		c.Assert(record.Regions, qt.HasLen, 1)
+		c.Assert(record.Regions[0].Scope.Database.Normalized, qt.Equals, "/local")
 		c.Assert(record.Regions[0].Scope.Schema.Normalized, qt.Equals, "")
 		c.Assert(record.Regions[0].Knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
 	}

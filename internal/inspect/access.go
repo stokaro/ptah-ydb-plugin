@@ -54,34 +54,7 @@ func Access(ctx context.Context, snapshot *protocol.Schema, database string, sco
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		entry, err := describe(ctx, target.absolute)
-		// A default pool can be listed before YDB creates its scheme object.
-		// This exception describes no owner or grant for that path.
-		if target.reference.Kind == "resource pool" && target.reference.Name == "default" && errors.Is(err, nativeapi.ErrAccessPathNotVisible) {
-			continue
-		}
-		// A selected directory the listing proved absent (see
-		// nativeapi.ListDirectory) has no owner and no grant to describe.
-		if target.reference.Kind == "schema" && errors.Is(err, nativeapi.ErrAccessPathNotVisible) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if entry.GetName() != path.Base(target.absolute) || !slices.Contains(target.types, entry.GetType()) {
-			return fmt.Errorf("YDB access description disagrees with the captured object")
-		}
-		var implicit func(subject, permission string) bool
-		if target.reference.Kind == "secret" {
-			subjects, err := secretDescribers(ctx, describe, path.Dir(target.absolute), describers)
-			if err != nil {
-				return err
-			}
-			implicit = func(subject, permission string) bool {
-				return permission == ydbacl.DescribeSchemaPermission && subjects[subject]
-			}
-		}
-		if err := recordAccess(objects, target.reference, entry, implicit); err != nil {
+		if err := targetAccess(ctx, objects, target, describe, describers); err != nil {
 			return err
 		}
 	}
@@ -115,6 +88,42 @@ func Access(ctx context.Context, snapshot *protocol.Schema, database string, sco
 	return nil
 }
 
+// targetAccess describes one target and records its owner and grants in
+// objects. describers holds the subjects each directory of a secret grants
+// describe access to, and is filled as the read meets those directories.
+func targetAccess(ctx context.Context, objects *protocol.ObservedCommonObjects, target accessTarget,
+	describe func(context.Context, string) (*Ydb_Scheme.Entry, error), describers map[string]map[string]bool,
+) error {
+	entry, err := describe(ctx, target.absolute)
+	// A default pool can be listed before YDB creates its scheme object.
+	// This exception describes no owner or grant for that path.
+	if target.reference.Kind == "resource pool" && target.reference.Name == "default" && errors.Is(err, nativeapi.ErrAccessPathNotVisible) {
+		return nil
+	}
+	// A selected directory the listing proved absent (see
+	// nativeapi.ListDirectory) has no owner and no grant to describe.
+	if target.reference.Kind == "schema" && errors.Is(err, nativeapi.ErrAccessPathNotVisible) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if entry.GetName() != path.Base(target.absolute) || !slices.Contains(target.types, entry.GetType()) {
+		return fmt.Errorf("YDB access description disagrees with the captured object")
+	}
+	var implicit func(subject, permission string) bool
+	if target.reference.Kind == "secret" {
+		subjects, err := secretDescribers(ctx, describe, path.Dir(target.absolute), describers)
+		if err != nil {
+			return err
+		}
+		implicit = func(subject, permission string) bool {
+			return permission == ydbacl.DescribeSchemaPermission && subjects[subject]
+		}
+	}
+	return recordAccess(objects, target.reference, entry, implicit)
+}
+
 func accessCoverage(kind protocol.CommonObjectSupport_Kind, reason string) *protocol.CommonObjectCoverage {
 	knowledge := &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}
 	if reason != "" {
@@ -133,34 +142,86 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 	if !path.IsAbs(database) || path.Clean(database) != database {
 		return nil, fmt.Errorf("YDB access database is not an exact absolute path")
 	}
-	var result []accessTarget
-	seen := make(map[string]*protocol.Reference)
-	add := func(reference *protocol.Reference, absolute string, types ...Ydb_Scheme.Entry_Type) error {
-		if reference.GetEngine() != "ydb" || reference.GetDatabase() != database || reference.GetCatalog() != "" || len(reference.GetPath())+len(reference.GetOverload()) != 0 {
-			return fmt.Errorf("YDB access target is outside the captured database")
-		}
-		for _, component := range []string{reference.GetSchema(), reference.GetName()} {
-			if component != "" && (path.IsAbs(component) || path.Clean(component) != component || component == "." || component == ".." || strings.HasPrefix(component, "../")) {
-				return fmt.Errorf("YDB access target has an inexact path")
-			}
-		}
-		if path.Clean(absolute) != absolute || (absolute != database && !strings.HasPrefix(absolute, strings.TrimRight(database, "/")+"/")) {
-			return fmt.Errorf("YDB access target escapes the captured database")
-		}
-		if previous, exists := seen[absolute]; exists {
-			if !proto.Equal(previous, reference) {
-				return fmt.Errorf("YDB access targets disagree about one physical path")
-			}
-			return nil
-		}
-		seen[absolute] = proto.CloneOf(reference)
-		result = append(result, accessTarget{stripped(reference), absolute, types})
-		return nil
-	}
-	if err := add(&protocol.Reference{Engine: "ydb", Database: database, Kind: "database"}, database, Ydb_Scheme.Entry_DATABASE, Ydb_Scheme.Entry_DIRECTORY); err != nil {
+	targets := &accessTargetSet{database: database, seen: make(map[string]*protocol.Reference)}
+	if err := targets.add(&protocol.Reference{Engine: "ydb", Database: database, Kind: "database"}, database, Ydb_Scheme.Entry_DATABASE, Ydb_Scheme.Entry_DIRECTORY); err != nil {
 		return nil, err
 	}
-	for _, kind := range snapshot.GetCoverage().GetKinds() {
+	if err := targets.addDirectories(snapshot.GetCoverage().GetKinds()); err != nil {
+		return nil, err
+	}
+	for _, table := range snapshot.GetTables() {
+		ref := table.GetIdentity()
+		if err := targets.add(ref, path.Join(database, ref.GetSchema(), ref.GetName()), Ydb_Scheme.Entry_TABLE, Ydb_Scheme.Entry_COLUMN_TABLE); err != nil {
+			return nil, err
+		}
+	}
+	for _, view := range snapshot.GetCommonObjects().GetViews() {
+		ref := view.GetIdentity()
+		if err := targets.add(ref, path.Join(database, ref.GetSchema(), ref.GetName()), Ydb_Scheme.Entry_VIEW); err != nil {
+			return nil, err
+		}
+	}
+	for _, object := range snapshot.GetNativeObjects() {
+		if object.GetKind() == schema.ResourcePoolClassifierProperties {
+			continue
+		}
+		kind, types, err := nativeAccessKind(object.GetKind())
+		if err != nil {
+			return nil, err
+		}
+		ref := proto.CloneOf(object.GetOwner())
+		ref.Kind = kind
+		absolute := path.Join(database, ref.Schema, ref.Name)
+		if ref.Kind == "resource pool" {
+			absolute = path.Join(database, poolAccessDirectory, ref.Name)
+		}
+		if err := targets.add(ref, absolute, types...); err != nil {
+			return nil, err
+		}
+	}
+	slices.SortFunc(targets.result, func(a, b accessTarget) int { return strings.Compare(a.absolute, b.absolute) })
+	return targets.result, nil
+}
+
+// accessTargetSet collects the access targets of one database, one per
+// physical path, in the order they are first added.
+type accessTargetSet struct {
+	database string
+	result   []accessTarget
+	seen     map[string]*protocol.Reference
+}
+
+// add records reference at the absolute path, which YDB describes as one of
+// types. It refuses a reference outside the database or with an inexact path,
+// and a path two references name differently; a path added again with the
+// same reference is recorded once.
+func (s *accessTargetSet) add(reference *protocol.Reference, absolute string, types ...Ydb_Scheme.Entry_Type) error {
+	if reference.GetEngine() != "ydb" || reference.GetDatabase() != s.database || reference.GetCatalog() != "" || len(reference.GetPath())+len(reference.GetOverload()) != 0 {
+		return fmt.Errorf("YDB access target is outside the captured database")
+	}
+	for _, component := range []string{reference.GetSchema(), reference.GetName()} {
+		if component != "" && (path.IsAbs(component) || path.Clean(component) != component || component == "." || component == ".." || strings.HasPrefix(component, "../")) {
+			return fmt.Errorf("YDB access target has an inexact path")
+		}
+	}
+	if path.Clean(absolute) != absolute || (absolute != s.database && !strings.HasPrefix(absolute, strings.TrimRight(s.database, "/")+"/")) {
+		return fmt.Errorf("YDB access target escapes the captured database")
+	}
+	if previous, exists := s.seen[absolute]; exists {
+		if !proto.Equal(previous, reference) {
+			return fmt.Errorf("YDB access targets disagree about one physical path")
+		}
+		return nil
+	}
+	s.seen[absolute] = proto.CloneOf(reference)
+	s.result = append(s.result, accessTarget{stripped(reference), absolute, types})
+	return nil
+}
+
+// addDirectories adds every directory below the root that a kind's coverage
+// knows completely, in the order the coverage lists them.
+func (s *accessTargetSet) addDirectories(kinds []*protocol.ModelKindCoverage) error {
+	for _, kind := range kinds {
 		for _, region := range kind.GetRegions() {
 			if region.GetKnowledge().GetState() != protocol.ModelKnowledge_COMPLETE {
 				continue
@@ -169,66 +230,44 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 			if directory == "" {
 				continue
 			}
-			if region.GetScope().GetDatabase().GetSource() != database {
-				return nil, fmt.Errorf("YDB directory knowledge is outside the captured database")
+			if region.GetScope().GetDatabase().GetSource() != s.database {
+				return fmt.Errorf("YDB directory knowledge is outside the captured database")
 			}
-			if err := add(&protocol.Reference{Engine: "ydb", Database: database, Kind: "schema", Name: directory}, path.Join(database, directory), Ydb_Scheme.Entry_DIRECTORY); err != nil {
-				return nil, err
+			if err := s.add(&protocol.Reference{Engine: "ydb", Database: s.database, Kind: "schema", Name: directory}, path.Join(s.database, directory), Ydb_Scheme.Entry_DIRECTORY); err != nil {
+				return err
 			}
 		}
 	}
-	for _, table := range snapshot.GetTables() {
-		ref := table.GetIdentity()
-		if err := add(ref, path.Join(database, ref.GetSchema(), ref.GetName()), Ydb_Scheme.Entry_TABLE, Ydb_Scheme.Entry_COLUMN_TABLE); err != nil {
-			return nil, err
-		}
+	return nil
+}
+
+// nativeAccessKind returns the access kind of a native object kind and the
+// entry types YDB describes it as.
+func nativeAccessKind(kind string) (string, []Ydb_Scheme.Entry_Type, error) {
+	switch kind {
+	case schema.SecretProperties:
+		return "secret", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_SECRET}, nil
+	case schema.TopicProperties:
+		return "topic", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP}, nil
+	case schema.StreamingQueryProperties:
+		return "streaming query", []Ydb_Scheme.Entry_Type{streamingQueryEntry}, nil
+	case schema.ReplicationProperties:
+		return "async replication", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_REPLICATION}, nil
+	case schema.TransferProperties:
+		return "transfer", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TRANSFER}, nil
+	case schema.CoordinationProperties:
+		return "coordination node", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_COORDINATION_NODE}, nil
+	case schema.ExternalSourceProperties:
+		return "external data source", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE}, nil
+	case schema.ExternalTableProperties:
+		return "external table", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_EXTERNAL_TABLE}, nil
+	case schema.ViewProperties:
+		return "view", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_VIEW}, nil
+	case schema.ResourcePoolProperties:
+		return "resource pool", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_RESOURCE_POOL}, nil
+	default:
+		return "", nil, fmt.Errorf("YDB access reader does not recognize native object kind %q", kind)
 	}
-	for _, view := range snapshot.GetCommonObjects().GetViews() {
-		ref := view.GetIdentity()
-		if err := add(ref, path.Join(database, ref.GetSchema(), ref.GetName()), Ydb_Scheme.Entry_VIEW); err != nil {
-			return nil, err
-		}
-	}
-	for _, object := range snapshot.GetNativeObjects() {
-		if object.GetKind() == schema.ResourcePoolClassifierProperties {
-			continue
-		}
-		ref := proto.CloneOf(object.GetOwner())
-		var types []Ydb_Scheme.Entry_Type
-		switch object.GetKind() {
-		case schema.SecretProperties:
-			ref.Kind, types = "secret", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_SECRET}
-		case schema.TopicProperties:
-			ref.Kind, types = "topic", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP}
-		case schema.StreamingQueryProperties:
-			ref.Kind, types = "streaming query", []Ydb_Scheme.Entry_Type{streamingQueryEntry}
-		case schema.ReplicationProperties:
-			ref.Kind, types = "async replication", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_REPLICATION}
-		case schema.TransferProperties:
-			ref.Kind, types = "transfer", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_TRANSFER}
-		case schema.CoordinationProperties:
-			ref.Kind, types = "coordination node", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_COORDINATION_NODE}
-		case schema.ExternalSourceProperties:
-			ref.Kind, types = "external data source", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE}
-		case schema.ExternalTableProperties:
-			ref.Kind, types = "external table", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_EXTERNAL_TABLE}
-		case schema.ViewProperties:
-			ref.Kind, types = "view", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_VIEW}
-		case schema.ResourcePoolProperties:
-			ref.Kind, types = "resource pool", []Ydb_Scheme.Entry_Type{Ydb_Scheme.Entry_RESOURCE_POOL}
-		default:
-			return nil, fmt.Errorf("YDB access reader does not recognize native object kind %q", object.GetKind())
-		}
-		absolute := path.Join(database, ref.Schema, ref.Name)
-		if ref.Kind == "resource pool" {
-			absolute = path.Join(database, poolAccessDirectory, ref.Name)
-		}
-		if err := add(ref, absolute, types...); err != nil {
-			return nil, err
-		}
-	}
-	slices.SortFunc(result, func(a, b accessTarget) int { return strings.Compare(a.absolute, b.absolute) })
-	return result, nil
 }
 
 // secretDescribers returns the subjects whose effective permissions on the

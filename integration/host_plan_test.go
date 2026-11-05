@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -159,7 +158,7 @@ func hostPlannedUnitsAt(c *qt.C, address, selectors, format, text string, flags 
 		arguments = append(arguments, "--schemas", selectors)
 	}
 	arguments = append(arguments, slices.Concat(flags, source)...)
-	cmd := exec.CommandContext(ctx, host, arguments...)
+	cmd := testCommand(ctx, host, arguments...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	c.Assert(cmd.Run(), qt.IsNil, qt.Commentf("%s\n%s", stdout.String(), stderr.String()))

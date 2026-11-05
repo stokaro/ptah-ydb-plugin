@@ -44,7 +44,10 @@ func assessObjects(ctx context.Context, request *protocol.PlanFeaturesRequest, r
 		if !matched {
 			steps, err := assessUnchanged(request, builder, index, subject)
 			if err != nil {
-				result.Diagnostics = []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: schema.StreamingQueryProperties, Message: err.Error(), Input: &protocol.PlanningDiagnostic_ContextObject{ContextObject: uint32(index)}}}
+				result.Diagnostics = []*protocol.PlanningDiagnostic{{
+					Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: schema.StreamingQueryProperties, Message: err.Error(),
+					Input: &protocol.PlanningDiagnostic_ContextObject{ContextObject: uint32(index)},
+				}}
 				return nil
 			}
 			receipt.Steps = steps
@@ -66,16 +69,7 @@ func assessUnchanged(request *protocol.PlanFeaturesRequest, builder *lifecycleBu
 		if !dependencyWrites(request, builder.paths) {
 			return nil, nil
 		}
-		// A name the provider's own storage occupies, such as the lock node
-		// at the root, holds no streaming query, so no query there reads an
-		// input the plan writes.
-		for _, state := range []*protocol.ComparisonState{request.CurrentObjects, request.DesiredObjects} {
-			known := objectcompare.Knowledge(state.GetCoverage(), subject.Kind, subject, request.DatabasePath)
-			if known.GetState() != protocol.ModelKnowledge_COMPLETE && known.GetState() != protocol.ModelKnowledge_ABSENT && !objectcompare.ReservedName(known) {
-				return nil, fmt.Errorf("streaming query %q has no complete captured definition: %s", subject.GetName().GetSource(), known.GetReason())
-			}
-		}
-		return nil, nil
+		return nil, uncapturedDefinition(request, subject)
 	}
 	if current == nil || desired == nil {
 		return nil, fmt.Errorf("streaming query %q needs an accepted create or drop change", subject.GetName().GetSource())
@@ -118,6 +112,21 @@ func assessUnchanged(request *protocol.PlanFeaturesRequest, builder *lifecycleBu
 		{Schema: owner.Schema, Name: owner.Name, Before: &stopped, After: &after},
 	}
 	return builder.add(fmt.Sprintf("streaming-context/%06d", index), subject, owner, current.Value.Value.GetContext(), parts)
+}
+
+// uncapturedDefinition refuses a query subject neither side of the context
+// records, unless the coverage of each side knows the subject complete, absent
+// or a reserved name. A name the provider's own storage occupies, such as the
+// lock node at the root, holds no streaming query, so no query there reads an
+// input the plan writes.
+func uncapturedDefinition(request *protocol.PlanFeaturesRequest, subject *protocol.ComparisonIdentity) error {
+	for _, state := range []*protocol.ComparisonState{request.CurrentObjects, request.DesiredObjects} {
+		known := objectcompare.Knowledge(state.GetCoverage(), subject.Kind, subject, request.DatabasePath)
+		if known.GetState() != protocol.ModelKnowledge_COMPLETE && known.GetState() != protocol.ModelKnowledge_ABSENT && !objectcompare.ReservedName(known) {
+			return fmt.Errorf("streaming query %q has no complete captured definition: %s", subject.GetName().GetSource(), known.GetReason())
+		}
+	}
+	return nil
 }
 
 func cloneSteps(values []*protocol.StepIdentity) []*protocol.StepIdentity {

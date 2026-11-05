@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -59,8 +60,9 @@ func (s *source) readIndexes(ctx context.Context, tablePath string, table *descr
 // its kind's common spelling ([ydbdecl.IndexKind.CommonMethod]), the one table
 // preparation states for a declared index: "async" for an asynchronous index
 // and none for a synchronous one. The comment travels on the common-object
-// wire.
-func commonIndexes(table *protocol.Reference, observed *native.IndexObservations) []*protocol.ObservedIndex {
+// wire. With IndexFacets, each index carries its partitioning and read
+// replicas as the facet it owns.
+func (c Common) commonIndexes(table *protocol.Reference, observed *native.IndexObservations) ([]*protocol.ObservedIndex, error) {
 	var result []*protocol.ObservedIndex
 	for _, index := range observed.GetIndexes() {
 		description := index.GetDescription()
@@ -77,9 +79,30 @@ func commonIndexes(table *protocol.Reference, observed *native.IndexObservations
 		// kind has a common spelling.
 		common.Method, _ = kind.CommonMethod()
 		common.Unique = description.GetGlobalUniqueIndex() != nil
+		if c.IndexFacets {
+			facet, err := schema.CaptureIndexSettings(provider.IndexReference(table, description.GetName()), heldSettings(description))
+			if err != nil {
+				return nil, err
+			}
+			common.Facets = []*protocol.Envelope{facet}
+		}
 		result = append(result, common)
 	}
-	return result
+	return result, nil
+}
+
+// heldSettings are the partitioning and read replicas the server describes on
+// a global sync, async or unique index.
+func heldSettings(index *native.TableIndexDescription) *native.GlobalIndexSettings {
+	switch kind := index.GetType().(type) {
+	case *native.TableIndexDescription_GlobalIndex:
+		return kind.GlobalIndex.GetSettings()
+	case *native.TableIndexDescription_GlobalAsyncIndex:
+		return kind.GlobalAsyncIndex.GetSettings()
+	case *native.TableIndexDescription_GlobalUniqueIndex:
+		return kind.GlobalUniqueIndex.GetSettings()
+	}
+	return nil
 }
 
 // nativeIndexes are the indexes of observed the common model cannot describe,

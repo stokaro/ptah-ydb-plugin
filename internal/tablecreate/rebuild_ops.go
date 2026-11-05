@@ -28,7 +28,8 @@ const (
 
 var (
 	copyModel = buildStatementModel(CopyOperationKind, map[string]any{
-		"payload":      "source: the table rows are read from, in the owner's directory; columns: each column the new table takes from it, with the type it is converted to and the message a row that does not convert or is NULL for a NOT NULL column fails the copy with",
+		"payload": "source: the table rows are read from, in the owner's directory; columns: each column the new table takes from it, with the type " +
+			"it is converted to and the message a row that does not convert or is NULL for a NOT NULL column fails the copy with",
 		"execution":    "one YQL INSERT ... SELECT through the query service, outside SQL transactions, which commits whole or not at all; no retries",
 		"precondition": "the source must hold every copied column and the owner must exist and hold no row",
 		"confirmation": "the statement commits; rows written to the source after it ran are not in the owner",

@@ -1,0 +1,33 @@
+name: Documentation
+# The pages in docs/ are published on docs.ptah.run with Ptah's own pages.
+# Ptah's provider-docs.yml workflow imports this checkout into the site and runs
+# the checks the site holds every page to, from Ptah's scripts, so this
+# repository keeps no copy of them; docs/README.md says how a page reaches the
+# site. A page removed or renamed here is reported, not failed: only Ptah can
+# add the redirect its old address needs.
+#
+# The job reads docs/ and nothing else here, and it builds the whole site, so it
+# runs when docs/ or this file changes. A change on Ptah's side is checked by
+# Ptah's own Docs workflow, which imports the declared pages on every run. A
+# newer push to the same pull request or branch cancels the run it replaces.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+concurrency:
+  group: docs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  pages:
+    uses: stokaro/ptah/.github/workflows/provider-docs.yml@master
+    with:
+      engine: ydb

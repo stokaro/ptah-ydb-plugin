@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -162,7 +161,7 @@ func hostInferenceCommand(c *qt.C, host string, args ...string) (string, error) 
 	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, append([]string{"inference"}, args...)...)
+	cmd := testCommand(ctx, host, append([]string{"inference"}, args...)...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	err := cmd.Run()

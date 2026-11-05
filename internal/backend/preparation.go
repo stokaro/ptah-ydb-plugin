@@ -8,7 +8,6 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -24,7 +23,7 @@ func (*Provider) PrepareTables(ctx context.Context, request *protocol.PrepareTab
 	if err := provider.ValidatePreparationRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) {
+	if !rulesMatch(request.Identifiers.GetRules()) {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB preparation requires its negotiated identifier rules")
 	}
 	stripped, err := preparationWithoutComments(request)

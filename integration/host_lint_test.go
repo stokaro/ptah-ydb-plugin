@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -44,7 +43,7 @@ func hostSQLLint(c *qt.C, file, version string) ([]string, int) {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "sql", "lint", "--provider-config", manifest, "--dialect", "ydb", "--server-version", version, "--format", "json", file)
+	cmd := testCommand(ctx, host, "sql", "lint", "--provider-config", manifest, "--dialect", "ydb", "--server-version", version, "--format", "json", file)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()

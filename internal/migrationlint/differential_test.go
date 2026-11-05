@@ -243,6 +243,7 @@ func wireSources(sources []source) []*protocol.LintSource {
 func wireStatements(statements []statement) []*protocol.LintStatement {
 	result := make([]*protocol.LintStatement, 0, len(statements))
 	for _, s := range statements {
+		// #nosec G115 -- offsets and lines of a golden statement in a test file of a few kilobytes
 		wire := &protocol.LintStatement{Start: uint32(s.Start), End: uint32(s.End), Line: uint32(s.Line), Sql: s.SQL, Canonical: s.Canonical,
 			Words: s.Words, SourceWords: s.SourceWords, Comments: s.Comments}
 		for _, e := range s.Effects {

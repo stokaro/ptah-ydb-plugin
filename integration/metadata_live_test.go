@@ -258,7 +258,7 @@ func TestNativeMetadataOwnershipInspectionAndCorruption(t *testing.T) {
 	putTag(c, client, tags, tagRecord("release", 0))
 	store, err := metadata.Resolve(database, tags)
 	c.Assert(err, qt.IsNil)
-	_, err = opened.DB.ExecContext(c.Context(), "DECLARE $payload AS String; UPSERT INTO "+store.QuotedPath()+" (name, record) VALUES (\"release\", $payload)", sql.Named("payload", []byte("corrupt")))
+	_, err = opened.DB.ExecContext(c.Context(), "DECLARE $payload AS String; UPSERT INTO "+store.QuotedPath()+" (name, record) VALUES (\"release\", $payload)", sql.Named("payload", []byte("corrupt"))) // #nosec G202 -- the metadata store quotes its own path
 	c.Assert(err, qt.IsNil)
 	_, err = client.LookupMetadataTag(c.Context(), &protocol.LookupMetadataTagRequest{Scope: tags, RequestId: "corrupt", Name: "release"})
 	c.Assert(err, qt.IsNotNil)

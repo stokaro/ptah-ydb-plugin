@@ -132,7 +132,7 @@ func TestCapturedTTLRetainsUnitsActionsAndPresence(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			ttl := result.Ttl.GetEnabled()
 			c.Assert(ttl.Column, qt.Equals, "at")
-			c.Assert(ttl.ColumnUnit, qt.Equals, uint64(test.unit))
+			c.Assert(ttl.ColumnUnit, qt.Equals, uint64(test.unit)) // #nosec G115 -- the rows name YDB's units, which are 0 to 4
 			c.Assert(ttl.ExpireAfterSeconds != nil, qt.Equals, test.hasExpiration)
 			c.Assert(ttl.Tiers, qt.HasLen, 2)
 			c.Assert(ttl.Tiers[0].ApplyAfterSeconds, qt.Equals, uint64(86400))

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -354,7 +353,7 @@ func hostReplanSource(c *qt.C, directory, format, text string) (string, error) {
 	defer cancel()
 	arguments := append([]string{"schema", "apply", "--dry-run", "--json", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", directory}, source...)
-	cmd := exec.CommandContext(ctx, host, arguments...)
+	cmd := testCommand(ctx, host, arguments...)
 	var report, printed bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &report, &printed
 	err := cmd.Run()
@@ -435,7 +434,7 @@ func hostExportHCL(c *qt.C, goSource string) (exported, reported string) {
 	c.Assert(os.WriteFile(filepath.Join(root, "entities.go"), []byte(goSource), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "export", "--to", "hcl", "--root-dir", root, "--out", out, "--provider-config", manifest, "--provider-engine", "ydb")
+	cmd := testCommand(ctx, host, "schema", "export", "--to", "hcl", "--root-dir", root, "--out", out, "--provider-config", manifest, "--provider-engine", "ydb")
 	var notes bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &notes, &notes
 	c.Assert(cmd.Run(), qt.IsNil, qt.Commentf("%s", notes.String()))
@@ -452,13 +451,15 @@ const exportedGo = "package entities\n\n" +
 	"\t//ptah:schema:field name=\"created_at\" type=\"Timestamp\"\n\tCreatedAt int64\n}\n\n" +
 	"//ptah:schema:coordinationnode name=\"workers\" schema=\"{dir}\" self_check_period=\"PT2S\"\ntype Workers struct{}\n"
 
-// The host exports a Go source as HCL through this provider: the
-// coordination node becomes its coordination_node block, the host warns that
-// the table's YDB settings are not in the document, and the document applied
-// back to the database the Go source made plans nothing, since a setting HCL
-// leaves out keeps what the table holds.
+// A host that does not read a table's platform "ydb" block exports a Go
+// source as HCL through this provider: the coordination node becomes its
+// coordination_node block, the host warns that the table's YDB settings are
+// not in the document, and the document applied back to the database the Go
+// source made plans nothing, since a setting HCL leaves out keeps what the
+// table holds.
 func TestHostExportsAGoSourceAsHCLSubprocess(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostLacks(c, provider.HCLPlatformFeature)
 	opened, directory, database := lockFixture(c)
 	c.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)

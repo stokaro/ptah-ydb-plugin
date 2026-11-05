@@ -5,10 +5,8 @@ import (
 	"slices"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // sequenceStep is the change of the sequence of one Serial column of a table
@@ -97,15 +95,5 @@ func planSequences(owner *protocol.Reference, table *protocol.PlanningTable, cap
 // plan is the step that changes the sequence: it reads the table and alters
 // the column.
 func (s sequenceStep) plan(table *protocol.ComparisonIdentity, number int) *protocol.PlanningStep {
-	id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("serial-sequence/%06d", number)}
-	s.operation.Id = id.Name
-	subject := proto.CloneOf(table)
-	subject.Kind = "column"
-	subject.Parent = proto.CloneOf(table.Name)
-	subject.Name = &protocol.ComparisonPart{Source: s.name, Normalized: s.name}
-	facts := s.operation.OperationSemantics
-	return &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: s.operation},
-		Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: []*protocol.PlanningEffect{
-			{Subject: proto.CloneOf(table), Action: protocol.PlanningEffect_READ}, {Subject: subject, Action: protocol.PlanningEffect_ALTER},
-		}}}
+	return columnAlterStep(fmt.Sprintf("serial-sequence/%06d", number), table, s.name, s.operation)
 }

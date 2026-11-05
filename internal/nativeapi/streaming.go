@@ -18,6 +18,7 @@ import (
 // system view. A nil result establishes absence only when the capability is on.
 // Runtime status, checkpoints and offsets are not declaration settings.
 func ReadStreamingQuery(ctx context.Context, db *sql.DB, database, absolute string) (result *streaming.Spec, err error) {
+	// #nosec G202 -- the only concatenated part is the system view's path, quoted by ydbtype.QuoteIdentifier
 	rows, err := db.QueryContext(ctx, "SELECT Path, Text, Run, ResourcePool FROM "+ydbtype.QuoteIdentifier(path.Join(database, ".sys/streaming_queries"))+" WHERE Path = $path", sql.Named("path", absolute))
 	if err != nil {
 		return nil, fmt.Errorf("read streaming query %q: %w", absolute, err)

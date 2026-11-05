@@ -23,7 +23,7 @@ func (p *Provider) PlanDeclarations(ctx context.Context, request *protocol.PlanD
 	if err := provider.ValidateDeclarationsRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) || request.Identifiers.GetDefaultSchema() != "" || request.Identifiers.GetCatalogCollation() != "" {
+	if !rulesMatch(request.Identifiers.GetRules()) || request.Identifiers.GetDefaultSchema() != "" || request.Identifiers.GetCatalogCollation() != "" {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB authored declarations require exact identifier rules")
 	}
 	for _, name := range request.Identifiers.GetResolvedNames() {

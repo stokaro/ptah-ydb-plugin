@@ -160,6 +160,7 @@ func splitValue(text, ydbType string) (*Ydb.Type, *Ydb.Value, error) {
 // integerValue wraps a parsed non-negative integer in the value field its type
 // uses.
 func integerValue(ydbType string, parsed uint64) *Ydb.Value {
+	// #nosec G115 -- splitValue parses the value at its type's width and caps a signed type at its largest value
 	switch ydbType {
 	case "Int8", "Int16", "Int32":
 		return &Ydb.Value{Value: &Ydb.Value_Int32Value{Int32Value: int32(parsed)}}

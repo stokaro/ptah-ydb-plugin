@@ -110,23 +110,7 @@ type declaredTable struct {
 // declare for its table is refused rather than dropped, as the host refuses it:
 // a reader nobody creates is a declaration with no effect.
 func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, error) {
-	var order []string
-	tables := make(map[string]*declaredTable)
-	type pendingConsumer struct {
-		binding    *protocol.SourceBinding
-		changefeed string
-		consumer   ydbdecl.Consumer
-	}
-	var consumers []pendingConsumer
-	tableOf := func(binding *protocol.SourceBinding, fragment int) *declaredTable {
-		target, seen := tables[binding.GetId()]
-		if !seen {
-			target = &declaredTable{binding: binding, fragment: fragment}
-			tables[binding.GetId()] = target
-			order = append(order, binding.GetId())
-		}
-		return target
-	}
+	collected := &declarations{tables: make(map[string]*declaredTable)}
 	for index, fragment := range document.GetFragments() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -134,90 +118,154 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 		if !Owns(fragment) {
 			continue
 		}
-		mapping := fragment.GetValue().GetMapping()
-		switch {
-		case document.GetFormat() == protocol.SourceDocument_YAML && fragment.GetSelector() == KeyChangefeeds:
-			binding, err := tablesource.Binding(document, fragment, "a changefeed")
-			if err != nil {
-				return nil, fmt.Errorf("fragment %q: %w", fragment.GetId(), err)
-			}
-			label := tableLabel(binding.GetObject())
-			if mapping == nil {
-				if fragment.GetValue().GetNull() != nil {
-					continue
-				}
-				return nil, fmt.Errorf("table %q: %s requires a mapping", label, KeyChangefeeds)
-			}
-			target := tableOf(binding, index)
-			for _, entry := range mapping.GetEntries() {
-				feed, err := yamlChangefeed(entry)
-				if err != nil {
-					return nil, fmt.Errorf("table %q: changefeed %q: %w", label, entry.GetKey(), err)
-				}
-				if err := target.add(feed); err != nil {
-					return nil, err
-				}
-			}
-		case document.GetFormat() == protocol.SourceDocument_GO_ANNOTATIONS && fragment.GetSelector() == DirectiveChangefeed:
-			values, err := attributes(mapping)
-			if err != nil {
-				return nil, err
-			}
-			feed, err := ydbdecl.ParseChangefeed(values)
-			if err != nil {
-				return nil, err
-			}
-			binding, err := tablesource.Binding(document, fragment, "a changefeed")
-			if err != nil {
-				return nil, err
-			}
-			if err := tableOf(binding, index).add(feed); err != nil {
-				return nil, err
-			}
-		case document.GetFormat() == protocol.SourceDocument_GO_ANNOTATIONS && fragment.GetSelector() == DirectiveConsumer:
-			values, err := attributes(mapping)
-			if err != nil {
-				return nil, err
-			}
-			consumer, err := ydbdecl.ParseConsumer(values)
-			if err != nil {
-				return nil, err
-			}
-			changefeed := strings.TrimSpace(values[attributeChangefeed])
-			if changefeed == "" {
-				return nil, fmt.Errorf("%s needs the changefeed whose topic it reads", DirectiveConsumer)
-			}
-			binding, err := tablesource.Binding(document, fragment, "a changefeed")
-			if err != nil {
-				return nil, err
-			}
-			consumers = append(consumers, pendingConsumer{binding: binding, changefeed: changefeed, consumer: consumer})
-		default:
-			return nil, fmt.Errorf("unsupported YDB changefeed source format")
+		if err := collected.read(document, fragment, index); err != nil {
+			return nil, err
 		}
 	}
-	for _, pending := range consumers {
-		target := tables[pending.binding.GetId()]
+	if err := collected.attachConsumers(); err != nil {
+		return nil, err
+	}
+	return collected.facets(ctx, document)
+}
+
+// pendingConsumer is a consumer directive held until every changefeed of the
+// document is known, since the changefeed it reads may come later in the file.
+type pendingConsumer struct {
+	binding    *protocol.SourceBinding
+	changefeed string
+	consumer   ydbdecl.Consumer
+}
+
+// declarations collects what a document declares: the tables in the order of
+// their first declaring fragment, and the consumers still to attach.
+type declarations struct {
+	order     []string
+	tables    map[string]*declaredTable
+	consumers []pendingConsumer
+}
+
+// tableOf returns the collected table of binding, recording it with fragment
+// as its first declaring fragment when this is the first time it is seen.
+func (c *declarations) tableOf(binding *protocol.SourceBinding, fragment int) *declaredTable {
+	target, seen := c.tables[binding.GetId()]
+	if !seen {
+		target = &declaredTable{binding: binding, fragment: fragment}
+		c.tables[binding.GetId()] = target
+		c.order = append(c.order, binding.GetId())
+	}
+	return target
+}
+
+// read collects the declarations of the claimed fragment at index, by the
+// document's format and the fragment's selector.
+func (c *declarations) read(document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int) error {
+	switch {
+	case document.GetFormat() == protocol.SourceDocument_YAML && fragment.GetSelector() == KeyChangefeeds:
+		return c.readYAML(document, fragment, index)
+	case document.GetFormat() == protocol.SourceDocument_GO_ANNOTATIONS && fragment.GetSelector() == DirectiveChangefeed:
+		values, err := attributes(fragment.GetValue().GetMapping())
+		if err != nil {
+			return err
+		}
+		feed, err := ydbdecl.ParseChangefeed(values)
+		if err != nil {
+			return err
+		}
+		binding, err := tablesource.Binding(document, fragment, "a changefeed")
+		if err != nil {
+			return err
+		}
+		return c.tableOf(binding, index).add(feed)
+	case document.GetFormat() == protocol.SourceDocument_GO_ANNOTATIONS && fragment.GetSelector() == DirectiveConsumer:
+		return c.readConsumer(document, fragment)
+	default:
+		return fmt.Errorf("unsupported YDB changefeed source format")
+	}
+}
+
+// readYAML collects the changefeeds of a YAML table's changefeeds mapping. A
+// null value declares none and records no table.
+func (c *declarations) readYAML(document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int) error {
+	mapping := fragment.GetValue().GetMapping()
+	binding, err := tablesource.Binding(document, fragment, "a changefeed")
+	if err != nil {
+		return fmt.Errorf("fragment %q: %w", fragment.GetId(), err)
+	}
+	label := tableLabel(binding.GetObject())
+	if mapping == nil {
+		if fragment.GetValue().GetNull() != nil {
+			return nil
+		}
+		return fmt.Errorf("table %q: %s requires a mapping", label, KeyChangefeeds)
+	}
+	target := c.tableOf(binding, index)
+	for _, entry := range mapping.GetEntries() {
+		feed, err := yamlChangefeed(entry)
+		if err != nil {
+			return fmt.Errorf("table %q: changefeed %q: %w", label, entry.GetKey(), err)
+		}
+		if err := target.add(feed); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// readConsumer holds the consumer a Go consumer directive declares until the
+// changefeeds of the document are known.
+func (c *declarations) readConsumer(document *protocol.SourceDocument, fragment *protocol.SourceFragment) error {
+	values, err := attributes(fragment.GetValue().GetMapping())
+	if err != nil {
+		return err
+	}
+	consumer, err := ydbdecl.ParseConsumer(values)
+	if err != nil {
+		return err
+	}
+	changefeed := strings.TrimSpace(values[attributeChangefeed])
+	if changefeed == "" {
+		return fmt.Errorf("%s needs the changefeed whose topic it reads", DirectiveConsumer)
+	}
+	binding, err := tablesource.Binding(document, fragment, "a changefeed")
+	if err != nil {
+		return err
+	}
+	c.consumers = append(c.consumers, pendingConsumer{binding: binding, changefeed: changefeed, consumer: consumer})
+	return nil
+}
+
+// attachConsumers adds each held consumer to the changefeed it reads, in
+// declaration order. A consumer of a changefeed its table does not declare,
+// or a second consumer of one name, refuses the document.
+func (c *declarations) attachConsumers() error {
+	for _, pending := range c.consumers {
+		target := c.tables[pending.binding.GetId()]
 		label := tableLabel(pending.binding.GetObject())
 		index := -1
 		if target != nil {
 			index = slices.IndexFunc(target.feeds, func(feed ydbdecl.Changefeed) bool { return feed.Name == pending.changefeed })
 		}
 		if index < 0 {
-			return nil, fmt.Errorf("table %q declares no changefeed %q for consumer %q", label, pending.changefeed, pending.consumer.Name)
+			return fmt.Errorf("table %q declares no changefeed %q for consumer %q", label, pending.changefeed, pending.consumer.Name)
 		}
 		feed := &target.feeds[index]
 		if slices.ContainsFunc(feed.Consumers, func(have ydbdecl.Consumer) bool { return have.Name == pending.consumer.Name }) {
-			return nil, fmt.Errorf("table %q: changefeed %q declares consumer %q twice", label, feed.Name, pending.consumer.Name)
+			return fmt.Errorf("table %q: changefeed %q declares consumer %q twice", label, feed.Name, pending.consumer.Name)
 		}
 		feed.Consumers = append(feed.Consumers, pending.consumer)
 	}
+	return nil
+}
+
+// facets returns the facet of each collected table that declares a
+// changefeed, in table order.
+func (c *declarations) facets(ctx context.Context, document *protocol.SourceDocument) ([]Table, error) {
 	var result []Table
-	for _, id := range order {
+	for _, id := range c.order {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		target := tables[id]
+		target := c.tables[id]
 		if len(target.feeds) == 0 {
 			continue
 		}

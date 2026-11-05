@@ -159,16 +159,8 @@ func (p *Provider) MutateMetadata(ctx context.Context, request *protocol.MutateM
 	defer stop()
 	ctx = guarded
 	// Record validation precedes storage checks and SQL transaction acquisition.
-	var row proto.Message
-	if request.GetAppendLog() != nil {
-		row = request.GetAppendLog()
-	} else if request.GetPutTag() != nil {
-		row = request.GetPutTag()
-	}
-	if row != nil {
-		if _, err := store.Encode(row); err != nil {
-			return metadataResult(request.Scope, request.RequestId, protocol.MetadataResult_REJECTED), nil
-		}
+	if !recordEncodes(store, request) {
+		return metadataResult(request.Scope, request.RequestId, protocol.MetadataResult_REJECTED), nil
 	}
 	exists, err := store.Check(ctx, s.connection.Driver)
 	if err != nil {
@@ -194,13 +186,7 @@ func (p *Provider) MutateMetadata(ctx context.Context, request *protocol.MutateM
 		_ = metadataFailure(s, request.Scope, err)
 	}
 	if outcome == protocol.MetadataResult_APPLIED && err == nil {
-		if err = s.verifyLocks(ctx); err == nil && work.tx != nil {
-			err = work.tx.Commit()
-		}
-		if err != nil {
-			outcome = protocol.MetadataResult_UNKNOWN
-			_ = metadataFailure(s, request.Scope, err)
-		}
+		outcome = s.commitMetadata(ctx, work, request.Scope)
 	}
 	if s.verifyLocks(ctx) != nil && (outcome == protocol.MetadataResult_APPLIED || outcome == protocol.MetadataResult_UNKNOWN) {
 		outcome = protocol.MetadataResult_UNKNOWN
@@ -209,6 +195,36 @@ func (p *Provider) MutateMetadata(ctx context.Context, request *protocol.MutateM
 	result := metadataResult(request.Scope, request.RequestId, outcome)
 	result.Deleted = deleted && outcome == protocol.MetadataResult_APPLIED
 	return result, nil
+}
+
+// recordEncodes reports whether the record a request appends or puts encodes
+// in store's format. A request that deletes a tag carries no record.
+func recordEncodes(store metadata.Store, request *protocol.MutateMetadataRequest) bool {
+	var row proto.Message
+	if request.GetAppendLog() != nil {
+		row = request.GetAppendLog()
+	} else if request.GetPutTag() != nil {
+		row = request.GetPutTag()
+	}
+	if row == nil {
+		return true
+	}
+	_, err := store.Encode(row)
+	return err == nil
+}
+
+// commitMetadata commits an applied mutation once the session's locks are
+// confirmed. It returns APPLIED, or UNKNOWN when the check or the commit fails.
+func (s *session) commitMetadata(ctx context.Context, work *metadataWork, scope *protocol.MetadataScope) protocol.MetadataResult_Outcome {
+	err := s.verifyLocks(ctx)
+	if err == nil && work.tx != nil {
+		err = work.tx.Commit()
+	}
+	if err != nil {
+		_ = metadataFailure(s, scope, err)
+		return protocol.MetadataResult_UNKNOWN
+	}
+	return protocol.MetadataResult_APPLIED
 }
 
 // LookupMetadataTag preserves absence and exact signed versions without creating a store.

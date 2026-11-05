@@ -217,29 +217,13 @@ func (c *objectChanges) parts(value *protocol.Envelope) (ChangeParts, error) {
 	if err := json.Unmarshal(canonical, &payload); err != nil || payload["before"] == nil || payload["after"] == nil {
 		return ChangeParts{}, fmt.Errorf("%s change requires exact before and after operands", c.noun)
 	}
-	var database string
-	if encoded, found := payload["database"]; found && c.database {
-		if err := json.Unmarshal(encoded, &database); err != nil || database == "" {
-			return ChangeParts{}, fmt.Errorf("%s change names its database as a nonempty string", c.noun)
-		}
-		if err := ValidateNativeOwner(&protocol.Reference{Engine: "ydb", Kind: c.kind, Database: database, Name: "x"}); err != nil {
-			return ChangeParts{}, fmt.Errorf("%s change names an invalid database", c.noun)
-		}
-		delete(payload, "database")
+	database, err := c.payloadDatabase(payload)
+	if err != nil {
+		return ChangeParts{}, err
 	}
-	contexts := make(map[string]*protocol.DatabaseContext)
-	for _, key := range []string{"before", "after"} {
-		if encoded, found := payload[key+"_context"]; found {
-			bound := &protocol.DatabaseContext{}
-			if bytes.Equal(payload[key], []byte("null")) || protojson.Unmarshal(encoded, bound) != nil || ValidateDatabaseContext(bound) != nil {
-				return ChangeParts{}, fmt.Errorf("%s change has invalid operand context", c.noun)
-			}
-			if database != "" && bound.Database != database {
-				return ChangeParts{}, fmt.Errorf("%s change context differs from its selected database", c.noun)
-			}
-			contexts[key] = bound
-			delete(payload, key+"_context")
-		}
+	contexts, err := c.operandContexts(payload, database)
+	if err != nil {
+		return ChangeParts{}, err
 	}
 	if len(payload) != 2 {
 		return ChangeParts{}, fmt.Errorf("%s change requires exact before and after operands", c.noun)
@@ -281,6 +265,46 @@ func (c *objectChanges) parts(value *protocol.Envelope) (ChangeParts, error) {
 		return ChangeParts{}, fmt.Errorf("%s change context differs from its operands", c.noun)
 	}
 	return ChangeParts{Before: before, After: after, Database: database}, nil
+}
+
+// payloadDatabase returns the database a change payload names, "" for none,
+// and removes its key from payload. Only a change whose model takes a
+// database reads the key; for any other the key stays and fails the exact
+// key count.
+func (c *objectChanges) payloadDatabase(payload map[string]json.RawMessage) (string, error) {
+	var database string
+	if encoded, found := payload["database"]; found && c.database {
+		if err := json.Unmarshal(encoded, &database); err != nil || database == "" {
+			return "", fmt.Errorf("%s change names its database as a nonempty string", c.noun)
+		}
+		if err := ValidateNativeOwner(&protocol.Reference{Engine: "ydb", Kind: c.kind, Database: database, Name: "x"}); err != nil {
+			return "", fmt.Errorf("%s change names an invalid database", c.noun)
+		}
+		delete(payload, "database")
+	}
+	return database, nil
+}
+
+// operandContexts returns the database context each operand of a change
+// payload is bound to, keyed "before" and "after", and removes their keys
+// from payload. A context needs a present operand and must name database
+// when the change names one.
+func (c *objectChanges) operandContexts(payload map[string]json.RawMessage, database string) (map[string]*protocol.DatabaseContext, error) {
+	contexts := make(map[string]*protocol.DatabaseContext)
+	for _, key := range []string{"before", "after"} {
+		if encoded, found := payload[key+"_context"]; found {
+			bound := &protocol.DatabaseContext{}
+			if bytes.Equal(payload[key], []byte("null")) || protojson.Unmarshal(encoded, bound) != nil || ValidateDatabaseContext(bound) != nil {
+				return nil, fmt.Errorf("%s change has invalid operand context", c.noun)
+			}
+			if database != "" && bound.Database != database {
+				return nil, fmt.Errorf("%s change context differs from its selected database", c.noun)
+			}
+			contexts[key] = bound
+			delete(payload, key+"_context")
+		}
+	}
+	return contexts, nil
 }
 
 // The outer receipt lets the host check the dispatch target without reading

@@ -79,22 +79,9 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 		var read []declared
 		switch {
 		case document.Format == protocol.SourceDocument_YAML && fragment.GetYamlKey() != nil && fragment.Selector == KeyQueries:
-			mapping := fragment.GetValue().GetMapping()
-			if mapping == nil && fragment.GetValue().GetNull() == nil {
-				return nil, fmt.Errorf("%s requires a mapping", KeyQueries)
-			}
-			entries := slices.Clone(mapping.GetEntries())
-			slices.SortFunc(entries, func(a, b *protocol.SourceEntry) int { return strings.Compare(a.GetKey(), b.GetKey()) })
-			for position, entry := range entries {
-				if position > 0 && entry.Key == entries[position-1].Key {
-					return nil, fmt.Errorf("%s: duplicate key %q", KeyQueries, entry.Key)
-				}
-				object, err := query(entry.Key, entry.GetValue().GetMapping(), document.Format)
-				if err != nil {
-					return nil, fmt.Errorf("streaming query %q: %w", entry.Key, err)
-				}
-				object.path = []*protocol.SourcePathStep{{Step: &protocol.SourcePathStep_Key{Key: entry.Key}}}
-				read = append(read, object)
+			var err error
+			if read, err = yamlQueries(fragment, document.Format); err != nil {
+				return nil, err
 			}
 		case document.Format == protocol.SourceDocument_GO_ANNOTATIONS && fragment.GetGoDirective() != nil && fragment.Selector == DirectiveQuery:
 			object, err := query("", fragment.GetValue().GetMapping(), document.Format)
@@ -111,20 +98,30 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			objects = append(objects, object)
 		}
 	}
+	if err := addQueryValues(ctx, document, objects, result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// addQueryValues captures each declared query and appends its value to the
+// values of its fragment in result, in declaration order. A second
+// declaration of one identity refuses the document.
+func addQueryValues(ctx context.Context, document *protocol.SourceDocument, objects []declared, result map[int][]*protocol.SourceModelValue) error {
 	seen := make(map[string]bool)
 	for position, object := range objects {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
 		identity := streaming.Display(object.directory, object.name)
 		if seen[identity] {
-			return nil, fmt.Errorf("streaming query %q is declared twice", identity)
+			return fmt.Errorf("streaming query %q is declared twice", identity)
 		}
 		seen[identity] = true
 		owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: object.directory, Name: object.name}
 		value, err := schema.CaptureStreamingQueryIntent(owner, object.spec, object.allowStateReset)
 		if err != nil {
-			return nil, fmt.Errorf("streaming query %q: %w", identity, err)
+			return fmt.Errorf("streaming query %q: %w", identity, err)
 		}
 		fragment := document.Fragments[object.fragment]
 		result[object.fragment] = append(result[object.fragment], &protocol.SourceModelValue{Placement: protocol.SourceModelValue_NATIVE_OBJECT,
@@ -132,7 +129,32 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 				CanonicalFormat: schema.NativeDesiredModel(schema.StreamingQueryProperties).CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)},
 			Source: &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT, Path: object.path}})
 	}
-	return result, nil
+	return nil
+}
+
+// yamlQueries reads the queries of a YAML queries mapping in key order, each
+// with its key as its source path. A null value declares none; a duplicate key
+// refuses the fragment.
+func yamlQueries(fragment *protocol.SourceFragment, format protocol.SourceDocument_Format) ([]declared, error) {
+	var read []declared
+	mapping := fragment.GetValue().GetMapping()
+	if mapping == nil && fragment.GetValue().GetNull() == nil {
+		return nil, fmt.Errorf("%s requires a mapping", KeyQueries)
+	}
+	entries := slices.Clone(mapping.GetEntries())
+	slices.SortFunc(entries, func(a, b *protocol.SourceEntry) int { return strings.Compare(a.GetKey(), b.GetKey()) })
+	for position, entry := range entries {
+		if position > 0 && entry.Key == entries[position-1].Key {
+			return nil, fmt.Errorf("%s: duplicate key %q", KeyQueries, entry.Key)
+		}
+		object, err := query(entry.Key, entry.GetValue().GetMapping(), format)
+		if err != nil {
+			return nil, fmt.Errorf("streaming query %q: %w", entry.Key, err)
+		}
+		object.path = []*protocol.SourcePathStep{{Step: &protocol.SourcePathStep_Key{Key: entry.Key}}}
+		read = append(read, object)
+	}
+	return read, nil
 }
 
 func query(name string, mapping *protocol.SourceMapping, format protocol.SourceDocument_Format) (declared, error) {
@@ -171,18 +193,7 @@ func query(name string, mapping *protocol.SourceMapping, format protocol.SourceD
 		if err != nil {
 			return declared{}, fmt.Errorf("%s: %w", entry.Key, err)
 		}
-		switch entry.Key {
-		case "name":
-			if text != "" {
-				object.name = text
-			}
-		case "schema":
-			object.directory = text
-		case "text":
-			object.spec.Text = text
-		case "resource_pool":
-			object.spec.ResourcePool = text
-		}
+		assignScalar(&object, entry.Key, text)
 	}
 	if err := streaming.Validate(object.spec); err != nil {
 		return declared{}, err
@@ -191,6 +202,23 @@ func query(name string, mapping *protocol.SourceMapping, format protocol.SourceD
 		return declared{}, err
 	}
 	return object, nil
+}
+
+// assignScalar stores the text of the scalar attribute key on object. An empty
+// name keeps the name object already has.
+func assignScalar(object *declared, key, text string) {
+	switch key {
+	case "name":
+		if text != "" {
+			object.name = text
+		}
+	case "schema":
+		object.directory = text
+	case "text":
+		object.spec.Text = text
+	case "resource_pool":
+		object.spec.ResourcePool = text
+	}
 }
 
 // scalar follows the host's yamlvalue.Scalar grammar, including null as empty.

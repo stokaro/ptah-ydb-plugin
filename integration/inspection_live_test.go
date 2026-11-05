@@ -83,7 +83,7 @@ func createFixtureTable(c *qt.C, opened *connection.Connection, database, direct
 // and uncertain outcomes must not replay DDL, even during fixture setup.
 func execFixtureSchema(ctx context.Context, db *sql.DB, statement string) error {
 	for {
-		_, err := db.ExecContext(ctx, statement)
+		_, err := db.ExecContext(ctx, statement) // #nosec G701 -- the statement is fixture DDL a test wrote for a directory it generated
 		// YDB answers a schema statement on a path a schema operation still
 		// holds with OVERLOADED, naming the path as under operation or as
 		// locked by the operation's transaction.

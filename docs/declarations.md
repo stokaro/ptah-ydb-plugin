@@ -1,3 +1,29 @@
+---
+title: Declaring YDB objects
+description: The Go annotation directives and YAML keys that declare an object or a setting only YDB has.
+type: reference
+audience:
+  - schema-author
+  - database-engineer
+readerQuestion: "Which directives and YAML keys declare YDB objects such as column families, changefeeds and topics?"
+goal: "Declare a YDB-only object in a Go or YAML schema source."
+sourceOfTruth:
+  - internal/declaration
+  - internal/ydbdecl
+  - internal/sourceencode
+  - schema
+  - stokaro/ptah#4204
+generated: false
+searchAliases:
+  - "YDB column family"
+  - "YDB changefeed"
+  - "YDB topic"
+overlaps: []
+disposition: keep
+sidebar:
+  order: 2
+---
+
 # Declaring YDB objects
 
 Ptah's source formats carry the YDB objects and settings this provider claims.
@@ -52,7 +78,7 @@ refuses a table that declares one. See
 | `initial_scan` | No | The stream opens with a record for every row. `true`/`false`; bare form allowed. |
 | `user_sids` | No | Each record names its change's user. Needs `changefeed_user_sids`. |
 | `schema_changes` | No | The stream carries schema change records. Needs `changefeed_schema_changes`. |
-| `topic_min_active_partitions` | No | Partitions the topic starts with, at least 1. |
+| `topic_min_active_partitions` | No | Partitions the topic starts with, from 1 to 9223372036854775807. |
 | `topic_auto_partitioning` | No | The topic gains partitions as writes grow. Needs `changefeed_topic_auto_partitioning`. |
 
 ### `//ptah:schema:changefeed:consumer`

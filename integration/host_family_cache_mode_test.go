@@ -109,7 +109,7 @@ func TestHostChangesAFamilyCacheModeInPlace_HappyPath(t *testing.T) {
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	created, err := hostApplySource(c, directory, "go", replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"hot\" fields=\"title\"\n", ""), directory))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u), (2l, 'b'u, NULL)")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u), (2l, 'b'u, NULL)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 
 	for _, step := range []struct {

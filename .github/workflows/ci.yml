@@ -18,6 +18,13 @@ on:
         default: ''
 permissions:
   contents: read
+# A pull request's push supersedes its earlier run, so that run is canceled
+# and the pull request does not wait behind its own old heads. A push to
+# master, the nightly run and a manual run each get a group of their own, so
+# none of them cancels another and every master commit keeps its result.
+concurrency:
+  group: provider-checks-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   unit:
     runs-on: ubuntu-latest
@@ -45,7 +52,7 @@ jobs:
       # a hosted runner, so the default per-package timeout is too tight.
       - run: go test -race -timeout 30m ./...
       - run: go vet -tags integration ./...
-      - run: go test -race -tags integration ./integration -run 'TestRowTableCreationOfflineSubprocess|TestSchemaValidationOfflineSubprocess|TestNativeObjectConversionOfflineSubprocess|TestChildConversionOfflineSubprocess|TestTableConversionOfflineSubprocess|TestColumnConversionOfflineSubprocess|TestColumnStorageOfflineSubprocess|TestCoordinationSourceOfflineSubprocess|TestCoordinationComparisonOfflineSubprocess|TestYQLAnalysisOfflineSubprocess|TestMigrationLintOfflineSubprocess|TestRowServicesOfflineSubprocess|TestStatementFactsOfflineSubprocess|TestStatementFactsAnnotationOfflineSubprocess|TestEmbeddingStoreNeedsTheHostsFeatureSubprocess|TestSQLSchemaOfflineSubprocess|TestTextUnitsOfflineSubprocess|TestStatementStyleOfflineSubprocess|TestCommonObjectsOfflineSubprocess|TestSourceClaimsOfflineSubprocess|TestDeclarationsOfflineSubprocess' -count=1
+      - run: go test -race -tags integration ./integration -run 'TestRowTableCreationOfflineSubprocess|TestSchemaValidationOfflineSubprocess|TestNativeObjectConversionOfflineSubprocess|TestChildConversionOfflineSubprocess|TestTableConversionOfflineSubprocess|TestColumnConversionOfflineSubprocess|TestColumnStorageOfflineSubprocess|TestCoordinationSourceOfflineSubprocess|TestCoordinationComparisonOfflineSubprocess|TestComparisonCountsOfflineSubprocess|TestYQLAnalysisOfflineSubprocess|TestMigrationLintOfflineSubprocess|TestRowServicesOfflineSubprocess|TestStatementFactsOfflineSubprocess|TestStatementFactsAnnotationOfflineSubprocess|TestEmbeddingStoreNeedsTheHostsFeatureSubprocess|TestSQLSchemaOfflineSubprocess|TestTextUnitsOfflineSubprocess|TestStatementStyleOfflineSubprocess|TestCommonObjectsOfflineSubprocess|TestSourceClaimsOfflineSubprocess|TestDeclarationsOfflineSubprocess' -count=1
       - run: CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
   # The host's lint contract: qtlint, nolintguard and golangci-lint over both
   # build contours, and the declarative-test baseline. A file behind the
@@ -77,6 +84,45 @@ jobs:
         with:
           args: --timeout=30m --build-tags=integration
           version: v2.15.0
+  # .golangci.yml keeps the host's lint contract: the linters and settings of
+  # the host's .golangci.yml, which internal/cmd/lintcontract compares. The
+  # release leg reads the newest Ptah release this provider runs on and
+  # blocks. The master leg reads Ptah's master to show a change of the host's
+  # contract early; it does not block, because the provider follows a host
+  # change in a change of its own.
+  lint-contract:
+    name: lint contract (${{ matrix.host }})
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.host == 'master' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [release, master]
+    env:
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Resolve the host
+        id: host
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOST: ${{ matrix.host }}
+        run: scripts/resolve-host.sh "$HOST"
+      - name: Check out the host's lint configuration
+        if: steps.host.outputs.skip != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: stokaro/ptah
+          ref: ${{ steps.host.outputs.ref }}
+          path: .host-contract
+          sparse-checkout: .golangci.yml
+          sparse-checkout-cone-mode: false
+      - name: Compare with the host's lint contract
+        if: steps.host.outputs.skip != 'true'
+        run: go run ./internal/cmd/lintcontract -host .host-contract/.golangci.yml
   windows-unit:
     runs-on: windows-latest
     env:

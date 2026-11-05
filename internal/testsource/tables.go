@@ -55,38 +55,53 @@ func YAMLTables(source string) (*protocol.DecodeSourceRequest, error) {
 			continue
 		}
 		for _, entry := range section.Value.GetMapping().GetEntries() {
-			binding := &protocol.SourceBinding{Id: entry.Key, EntryKey: entry.Key, Object: &protocol.Reference{Engine: "ydb", Kind: "table", Name: entry.Key}}
-			var written []*protocol.SourceEntry
-			// The host hands a claimed platform group as a fragment of its own:
-			// the key is platform. and the group's name, and the value is the
-			// group's mapping.
-			var groups []*protocol.SourceEntry
-			for _, field := range entry.Value.GetMapping().GetEntries() {
-				switch field.Key {
-				case "name":
-					binding.Object.Name = field.Value.GetText()
-				case "schema":
-					binding.Object.Schema = field.Value.GetText()
-				}
-				if _, claimed := claims[field.Key]; claimed {
-					written = append(written, field)
-				}
-				if field.Key == "platform" {
-					for _, group := range field.Value.GetMapping().GetEntries() {
-						if _, claimed := claims["platform."+group.Key]; claimed {
-							groups = append(groups, &protocol.SourceEntry{Key: "platform." + group.Key, KeySpan: group.KeySpan, Value: group.Value})
-						}
-					}
-				}
-			}
-			document.Bindings = append(document.Bindings, binding)
-			for _, field := range append(written, groups...) {
-				document.Fragments = append(document.Fragments, &protocol.SourceFragment{Id: entry.Key + "/" + field.Key, Selector: field.Key,
-					YamlKey: proto.CloneOf(claims[field.Key]), BindingId: entry.Key, Span: field.Value.Span, Content: &protocol.SourceFragment_Value{Value: field.Value}})
-			}
+			appendYAMLTable(document, claims, entry)
 		}
 	}
 	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{document}}, nil
+}
+
+// appendYAMLTable adds the binding of one entry of the tables mapping to the
+// document, then one fragment for each claimed key the table writes: the
+// claimed table keys in the order the table writes them, then the claimed
+// platform groups.
+func appendYAMLTable(document *protocol.SourceDocument, claims map[string]*protocol.YAMLSourceKey, entry *protocol.SourceEntry) {
+	binding := &protocol.SourceBinding{Id: entry.Key, EntryKey: entry.Key, Object: &protocol.Reference{Engine: "ydb", Kind: "table", Name: entry.Key}}
+	var written []*protocol.SourceEntry
+	var groups []*protocol.SourceEntry
+	for _, field := range entry.Value.GetMapping().GetEntries() {
+		switch field.Key {
+		case "name":
+			binding.Object.Name = field.Value.GetText()
+		case "schema":
+			binding.Object.Schema = field.Value.GetText()
+		}
+		if _, claimed := claims[field.Key]; claimed {
+			written = append(written, field)
+		}
+		if field.Key == "platform" {
+			groups = append(groups, claimedPlatformGroups(claims, field)...)
+		}
+	}
+	document.Bindings = append(document.Bindings, binding)
+	for _, field := range append(written, groups...) {
+		document.Fragments = append(document.Fragments, &protocol.SourceFragment{Id: entry.Key + "/" + field.Key, Selector: field.Key,
+			YamlKey: proto.CloneOf(claims[field.Key]), BindingId: entry.Key, Span: field.Value.Span, Content: &protocol.SourceFragment_Value{Value: field.Value}})
+	}
+}
+
+// claimedPlatformGroups returns the groups of a table's platform mapping that
+// the provider claims. The host hands a claimed platform group as a fragment of
+// its own: the key is platform. and the group's name, and the value is the
+// group's mapping.
+func claimedPlatformGroups(claims map[string]*protocol.YAMLSourceKey, platform *protocol.SourceEntry) []*protocol.SourceEntry {
+	var groups []*protocol.SourceEntry
+	for _, group := range platform.Value.GetMapping().GetEntries() {
+		if _, claimed := claims["platform."+group.Key]; claimed {
+			groups = append(groups, &protocol.SourceEntry{Key: "platform." + group.Key, KeySpan: group.KeySpan, Value: group.Value})
+		}
+	}
+	return groups
 }
 
 // GoPosition is a place in a Go source file.
@@ -133,7 +148,7 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 	}
 	for i, declaration := range declarations {
 		if i == 0 {
-			document.File, document.ByteLength = declaration.File, uint64(declaration.FileSize)
+			document.File, document.ByteLength = declaration.File, uint64(declaration.FileSize) // #nosec G115 -- a test fixture file of a few kilobytes
 		}
 		claims := slices.Concat(tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{schema.CoordinationGoDirective()}, externalsource.GoDirectives())
 		claim := slices.IndexFunc(claims, func(claim *protocol.GoSourceDirective) bool { return claim.Directive == declaration.Directive })
@@ -150,6 +165,7 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 		if owning < 0 && directive.Scope != protocol.GoSourceDirective_DOCUMENT {
 			return nil, fmt.Errorf("struct %s maps to no table in this file", declaration.Struct)
 		}
+		// #nosec G115 -- the positions are within a test fixture file of a few kilobytes
 		span := &protocol.SourceSpan{
 			Start: &protocol.SourcePosition{ByteOffset: uint64(declaration.Start.Offset), Line: uint32(declaration.Start.Line), Column: uint32(declaration.Start.Column)},
 			End:   &protocol.SourcePosition{ByteOffset: uint64(declaration.End.Offset), Line: uint32(declaration.End.Line), Column: uint32(declaration.End.Column)},

@@ -158,12 +158,13 @@ func indexIntentOf(index *Ydb_Table.TableIndex) *native.IndexIntent {
 	return result
 }
 
-// settingsAfterAdditions orders the addition of an index before the change
-// that gives it its declared settings, which needs the index to exist.
+// settingsAfterAdditions orders the addition of an index, or its rename,
+// before the change that gives it its declared settings, which needs the index
+// to exist under the name the change names.
 func settingsAfterAdditions(steps []*indexStep, settings []*indexSettingsStep) []*protocol.PlanningDependency {
 	var result []*protocol.PlanningDependency
 	for _, add := range steps {
-		if add.change.add == nil {
+		if add.change.add == nil && add.change.rename == nil {
 			continue
 		}
 		for _, change := range settings {

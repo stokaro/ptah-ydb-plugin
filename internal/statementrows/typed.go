@@ -167,6 +167,7 @@ func timestampValue(timestamp *protocol.TimestampValue) (types.Value, error) {
 	if timestamp.GetSeconds() < 0 || timestamp.GetSeconds() >= maxTimestampSeconds {
 		return nil, fmt.Errorf("YDB timestamp is outside its range")
 	}
+	// #nosec G115 -- the seconds are checked above, and the SDK's request validation holds the nanoseconds in [0, 1e9)
 	return types.TimestampValue(uint64(timestamp.GetSeconds())*1000000 + uint64(timestamp.GetNanos()/1000)), nil
 }
 

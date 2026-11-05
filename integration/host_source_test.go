@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -40,7 +39,7 @@ func hostSource(c *qt.C, flag, name, content string) string {
 	}
 	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "plan", "--dry-run", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := testCommand(ctx, host, "schema", "plan", "--dry-run", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), flag, target)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
@@ -192,8 +191,8 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 			"tables:\n  host_source_items:\n    column_store: {}\n    auto_partitioning_by_load: ENABLED\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a TTL interval in months in Go", "--root-dir", "entities.go",
 			goTable("//ptah:schema:table name=\"host_source_items\" platform.ydb.row_deletion_column=\"created_at\" platform.ydb.row_deletion_interval=\"P1M\"", ""), `decode Go directives of engine "ydb"`},
-		{"an index option in Go", "--root-dir", "entities.go",
-			goTable("//ptah:schema:table name=\"host_source_items\"", "//ptah:schema:index name=\"by_body\" fields=\"body\" auto_partitioning_by_load=\"ENABLED\""), `decode Go directives of engine "ydb"`},
+		{"a local index option in Go", "--root-dir", "entities.go",
+			goTable("//ptah:schema:table name=\"host_source_items\"", "//ptah:schema:index name=\"by_body\" fields=\"body\" false_positive_probability=\"0.1\""), `decode Go directives of engine "ydb"`},
 		{"a YAML family names a missing column", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    column_families:\n      cold: {fields: [missing]}\n    columns:\n      id: {type: Uint64, primary: true}\n", `missing`},
 		{"a platform property of the ydb group the provider does not read", "--schema-file", "schema.yaml",

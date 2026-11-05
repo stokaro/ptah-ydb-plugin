@@ -32,20 +32,13 @@ func NamedPaths(text string) ([]string, error) {
 		if token.IsWord("USE") {
 			return nil, fmt.Errorf("streaming query USE requires an explicitly bound data source")
 		}
-		if (index == 0 || tokens[index-1].Type == yql.TokenSemicolon) && strings.HasPrefix(token.Value, "$") && index+1 < len(tokens) && tokens[index+1].IsOperator("=") {
-			end := index + 2
-			for end < len(tokens) && tokens[end].Type != yql.TokenSemicolon {
-				end++
-			}
-			bindings[token.Value] = bindPath(tokens[index+2:end], bindings)
+		if startsBinding(tokens, index) {
+			bindings[token.Value] = bindPath(tokens[index+2:statementEnd(tokens, index+2)], bindings)
 		}
 		if token.IsWord("PRAGMA") && index+1 < len(tokens) && tokens[index+1].IsWord("TablePathPrefix") {
-			if index+4 >= len(tokens) || !tokens[index+2].IsOperator("=") || tokens[index+4].Type != yql.TokenSemicolon {
-				return nil, fmt.Errorf("streaming query TablePathPrefix requires one constant string")
-			}
-			value, ok := yql.StringValue(tokens[index+3].Value)
-			if !ok || !validPath(value, true) {
-				return nil, fmt.Errorf("streaming query TablePathPrefix requires a clean path string")
+			value, err := tablePathPrefix(tokens, index)
+			if err != nil {
+				return nil, err
 			}
 			prefix = value
 		}
@@ -61,16 +54,57 @@ func NamedPaths(text string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, name := range names {
-			if !validPath(name, false) {
-				return nil, fmt.Errorf("streaming query contains an invalid scheme path")
-			}
-			if prefix != "" && !path.IsAbs(name) {
-				name = path.Join(prefix, name)
-			}
-			if !slices.Contains(paths, name) {
-				paths = append(paths, name)
-			}
+		paths, err = appendPrefixedPaths(paths, names, prefix)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return paths, nil
+}
+
+// startsBinding reports whether the token at index opens a named binding: a
+// $name at the start of a statement followed by "=".
+func startsBinding(tokens []yql.Token, index int) bool {
+	return (index == 0 || tokens[index-1].Type == yql.TokenSemicolon) && strings.HasPrefix(tokens[index].Value, "$") &&
+		index+1 < len(tokens) && tokens[index+1].IsOperator("=")
+}
+
+// statementEnd returns the index of the first semicolon at or after start, or
+// len(tokens) when the statement runs to the end of the body.
+func statementEnd(tokens []yql.Token, start int) int {
+	end := start
+	for end < len(tokens) && tokens[end].Type != yql.TokenSemicolon {
+		end++
+	}
+	return end
+}
+
+// tablePathPrefix reads the value of the PRAGMA TablePathPrefix statement at
+// index. It refuses anything but one constant string holding a clean path.
+func tablePathPrefix(tokens []yql.Token, index int) (string, error) {
+	if index+4 >= len(tokens) || !tokens[index+2].IsOperator("=") || tokens[index+4].Type != yql.TokenSemicolon {
+		return "", fmt.Errorf("streaming query TablePathPrefix requires one constant string")
+	}
+	value, ok := yql.StringValue(tokens[index+3].Value)
+	if !ok || !validPath(value, true) {
+		return "", fmt.Errorf("streaming query TablePathPrefix requires a clean path string")
+	}
+	return value, nil
+}
+
+// appendPrefixedPaths validates each name, joins a relative one to the
+// TablePathPrefix when one is set, and appends the names paths does not hold
+// yet, in order.
+func appendPrefixedPaths(paths, names []string, prefix string) ([]string, error) {
+	for _, name := range names {
+		if !validPath(name, false) {
+			return nil, fmt.Errorf("streaming query contains an invalid scheme path")
+		}
+		if prefix != "" && !path.IsAbs(name) {
+			name = path.Join(prefix, name)
+		}
+		if !slices.Contains(paths, name) {
+			paths = append(paths, name)
 		}
 	}
 	return paths, nil
@@ -189,44 +223,53 @@ func sourcePaths(tokens []yql.Token, bindings map[string]pathBinding, use pathUs
 		if use == writePath {
 			return nil, fmt.Errorf("streaming query target must name one static path")
 		}
-		end := closingParen(tokens[1:])
-		if end < 0 {
-			return nil, fmt.Errorf("streaming query contains an incomplete table function")
-		}
-		if name.IsWord("AS_TABLE") {
-			return nil, nil // AS_TABLE consumes values; it does not open scheme paths.
-		}
-		arguments := pathArguments(tokens[2 : end+1])
-		if name.IsWord("EACH") && len(arguments) == 1 {
-			value := bindPath(arguments[0], bindings)
-			if value.list != nil {
-				return value.list, nil
-			}
-		}
-		if name.IsWord("CONCAT") || name.IsWord("CONCAT_STRICT") {
-			var result []string
-			for _, argument := range arguments {
-				if bound := bindPath(argument, bindings); bound.constant {
-					result = append(result, bound.scalar)
-					continue
-				}
-				if len(argument) != 1 {
-					return nil, fmt.Errorf("streaming query CONCAT requires static table paths")
-				}
-				paths, err := literalPath(argument[0], bindings)
-				if err != nil {
-					return nil, err
-				}
-				result = append(result, paths...)
-			}
-			return result, nil
-		}
-		return nil, fmt.Errorf("streaming query table function %q has unresolved physical inputs", name.Value)
+		return functionPaths(tokens, bindings)
 	}
 	if use == readPath {
 		return readLiteralPath(name, bindings)
 	}
 	return literalPath(name, bindings)
+}
+
+// functionPaths returns the scheme paths of the table function call that opens
+// tokens: none for AS_TABLE, the bound list for EACH over one list binding, and
+// the static arguments of CONCAT and CONCAT_STRICT. Any other function refuses,
+// because its physical inputs are unknown.
+func functionPaths(tokens []yql.Token, bindings map[string]pathBinding) ([]string, error) {
+	name := tokens[0]
+	end := closingParen(tokens[1:])
+	if end < 0 {
+		return nil, fmt.Errorf("streaming query contains an incomplete table function")
+	}
+	if name.IsWord("AS_TABLE") {
+		return nil, nil // AS_TABLE consumes values; it does not open scheme paths.
+	}
+	arguments := pathArguments(tokens[2 : end+1])
+	if name.IsWord("EACH") && len(arguments) == 1 {
+		value := bindPath(arguments[0], bindings)
+		if value.list != nil {
+			return value.list, nil
+		}
+	}
+	if name.IsWord("CONCAT") || name.IsWord("CONCAT_STRICT") {
+		var result []string
+		for _, argument := range arguments {
+			if bound := bindPath(argument, bindings); bound.constant {
+				result = append(result, bound.scalar)
+				continue
+			}
+			if len(argument) != 1 {
+				return nil, fmt.Errorf("streaming query CONCAT requires static table paths")
+			}
+			paths, err := literalPath(argument[0], bindings)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, paths...)
+		}
+		return result, nil
+	}
+	return nil, fmt.Errorf("streaming query table function %q has unresolved physical inputs", name.Value)
 }
 
 // readLiteralPath is [literalPath] for a path a statement reads, where a name

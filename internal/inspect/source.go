@@ -36,7 +36,14 @@ type source struct {
 
 func open(ctx context.Context, driver *ydb.Driver) (*source, error) {
 	conn := ydb.GRPCConn(driver)
-	s := &source{scheme: Ydb_Scheme_V1.NewSchemeServiceClient(conn), table: Ydb_Table_V1.NewTableServiceClient(conn), topic: Ydb_Topic_V1.NewTopicServiceClient(conn), view: Ydb_View_V1.NewViewServiceClient(conn), coordination: Ydb_Coordination_V1.NewCoordinationServiceClient(conn), replications: nativeapi.NewReplications(driver, nil)}
+	s := &source{
+		scheme:       Ydb_Scheme_V1.NewSchemeServiceClient(conn),
+		table:        Ydb_Table_V1.NewTableServiceClient(conn),
+		topic:        Ydb_Topic_V1.NewTopicServiceClient(conn),
+		view:         Ydb_View_V1.NewViewServiceClient(conn),
+		coordination: Ydb_Coordination_V1.NewCoordinationServiceClient(conn),
+		replications: nativeapi.NewReplications(driver, nil),
+	}
 	owner, err := nativeapi.OpenTable(ctx, driver)
 	if err != nil {
 		return nil, err

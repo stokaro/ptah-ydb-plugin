@@ -2,6 +2,7 @@ package objectplan
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -25,17 +26,14 @@ type accessStep struct {
 // host's typed operand and both effects must agree before this distinction is
 // allowed to remove a step from physical-path conflict detection.
 func accessContext(common *protocol.CommonPlanningStep) (accessStep, error) {
-	change := common.GetCommonObject()
-	switch change.GetOperation().(type) {
-	case *protocol.CommonObjectChange_CreateRole, *protocol.CommonObjectChange_AlterRole, *protocol.CommonObjectChange_DropRole,
-		*protocol.CommonObjectChange_AddMember, *protocol.CommonObjectChange_RemoveMember:
-		for _, effect := range common.GetMetadata().GetEffects() {
-			if effect.GetSubject().GetKind() != "role" {
-				return accessStep{}, fmt.Errorf("principal step claims a scheme object effect")
-			}
-		}
+	principal, err := principalStep(common)
+	if err != nil {
+		return accessStep{}, err
+	}
+	if principal {
 		return accessStep{principal: true}, nil
 	}
+	change := common.GetCommonObject()
 	grant, revoke := change.GetGrant(), false
 	if grant == nil {
 		grant, revoke = change.GetRevoke(), true
@@ -43,19 +41,9 @@ func accessContext(common *protocol.CommonPlanningStep) (accessStep, error) {
 	if grant == nil {
 		return accessStep{}, nil
 	}
-	var object, access *protocol.ComparisonIdentity
-	for _, effect := range common.GetMetadata().GetEffects() {
-		if effect.GetSubject().GetKind() == "object_access" {
-			if access != nil || effect.GetAction() != protocol.PlanningEffect_ALTER {
-				return accessStep{}, fmt.Errorf("access step has an invalid access effect")
-			}
-			access = effect.GetSubject()
-		} else if effect.GetAction() == protocol.PlanningEffect_READ && (schema.IsNativeObject(effect.GetSubject().GetKind()) || schema.IsWorkloadObject(effect.GetSubject().GetKind())) {
-			if object != nil {
-				return accessStep{}, fmt.Errorf("access step reads several native objects")
-			}
-			object = effect.GetSubject()
-		}
+	object, access, err := accessEffects(common)
+	if err != nil {
+		return accessStep{}, err
 	}
 	if access == nil && object == nil {
 		return accessStep{}, nil
@@ -63,18 +51,67 @@ func accessContext(common *protocol.CommonPlanningStep) (accessStep, error) {
 	if access == nil || object == nil || len(common.GetMetadata().GetEffects()) != 2 {
 		return accessStep{}, fmt.Errorf("access step needs its native object and access resource")
 	}
+	if err := checkAccessOperand(grant.GetTarget(), object, access); err != nil {
+		return accessStep{}, err
+	}
+	return accessStep{object: object, access: access, revoke: revoke}, nil
+}
+
+// principalStep reports whether common changes a principal: it creates,
+// alters or drops a role, or adds or removes a member. Every effect of such a
+// step must name a role.
+func principalStep(common *protocol.CommonPlanningStep) (bool, error) {
+	switch common.GetCommonObject().GetOperation().(type) {
+	case *protocol.CommonObjectChange_CreateRole, *protocol.CommonObjectChange_AlterRole, *protocol.CommonObjectChange_DropRole,
+		*protocol.CommonObjectChange_AddMember, *protocol.CommonObjectChange_RemoveMember:
+		for _, effect := range common.GetMetadata().GetEffects() {
+			if effect.GetSubject().GetKind() != "role" {
+				return false, fmt.Errorf("principal step claims a scheme object effect")
+			}
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// accessEffects returns the access resource a grant or a revoke step alters
+// and the native or workload object it reads, either nil when the step has
+// none. A second access effect, an access effect other than an alteration and
+// a second object read are refused.
+func accessEffects(common *protocol.CommonPlanningStep) (object, access *protocol.ComparisonIdentity, err error) {
+	for _, effect := range common.GetMetadata().GetEffects() {
+		if effect.GetSubject().GetKind() == "object_access" {
+			if access != nil || effect.GetAction() != protocol.PlanningEffect_ALTER {
+				return nil, nil, fmt.Errorf("access step has an invalid access effect")
+			}
+			access = effect.GetSubject()
+		} else if effect.GetAction() == protocol.PlanningEffect_READ &&
+			(schema.IsNativeObject(effect.GetSubject().GetKind()) || schema.IsWorkloadObject(effect.GetSubject().GetKind())) {
+			if object != nil {
+				return nil, nil, fmt.Errorf("access step reads several native objects")
+			}
+			object = effect.GetSubject()
+		}
+	}
+	return object, access, nil
+}
+
+// checkAccessOperand refuses a grant's target that is not the object its step
+// reads, or an access resource that is not that object's: the target must
+// name the object's YDB name and schema with no catalog, path or overload,
+// and a database both name must be the same.
+func checkAccessOperand(target *protocol.Reference, object, access *protocol.ComparisonIdentity) error {
 	expected := proto.CloneOf(object)
 	expected.Kind = "object_access"
 	expected.Path = []*protocol.ComparisonPart{{Source: object.Kind, Normalized: object.Kind}}
-	target := grant.GetTarget()
 	if !proto.Equal(expected, access) || target.GetEngine() != "ydb" || target.GetName() != object.GetName().GetSource() ||
 		target.GetSchema() != object.GetSchema().GetSource() || target.GetCatalog() != "" || len(target.GetPath())+len(target.GetOverload()) != 0 {
-		return accessStep{}, fmt.Errorf("access operand differs from its structural footprint")
+		return fmt.Errorf("access operand differs from its structural footprint")
 	}
 	if target.GetDatabase() != "" && object.GetDatabase().GetSource() != "" && target.GetDatabase() != object.GetDatabase().GetSource() {
-		return accessStep{}, fmt.Errorf("access operand names another database")
+		return fmt.Errorf("access operand names another database")
 	}
-	return accessStep{object: object, access: access, revoke: revoke}, nil
+	return nil
 }
 
 // AccessOrdering carries the graph changes needed to preserve captured access.
@@ -160,9 +197,6 @@ func AfterCreationBelowDirectoryAccess(request *protocol.PlanFeaturesRequest, ac
 // the generic graph still checks every effect of the replaced common step.
 func OrderAccess(request *protocol.PlanFeaturesRequest, family Family, subject *protocol.ComparisonIdentity, action protocol.PlanningEffect_Action, id *protocol.StepIdentity) (AccessOrdering, error) {
 	var result AccessOrdering
-	addEdge := func(after *protocol.StepIdentity) {
-		result.Dependencies = append(result.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(id), After: proto.CloneOf(after)})
-	}
 	var seen []*protocol.ComparisonIdentity
 	for _, common := range request.GetCommonSteps() {
 		step, err := accessContext(common)
@@ -179,15 +213,8 @@ func OrderAccess(request *protocol.PlanFeaturesRequest, family Family, subject *
 		if step.revoke {
 			grant = common.GetCommonObject().GetRevoke()
 		}
-		if strings.Join(strings.Fields(strings.ToLower(grant.GetTarget().GetKind())), " ") != family.Noun {
-			return result, fmt.Errorf("access operand kind differs from its native object")
-		}
-		bound := request.GetDatabasePath()
-		if bound == "" {
-			bound = subject.GetDatabase().GetSource()
-		}
-		if db := grant.GetTarget().GetDatabase(); db != "" && bound != "" && db != bound {
-			return result, fmt.Errorf("access operand names another session database")
+		if err = checkAccessTarget(request, family, subject, grant); err != nil {
+			return result, err
 		}
 		if action == protocol.PlanningEffect_DROP {
 			if !step.revoke {
@@ -198,22 +225,44 @@ func OrderAccess(request *protocol.PlanFeaturesRequest, family Family, subject *
 			if action == protocol.PlanningEffect_CREATE && step.revoke {
 				return result, fmt.Errorf("a revoke targets a native object whose captured state is absent")
 			}
-			addEdge(common.Id)
+			result.Dependencies = append(result.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(id), After: proto.CloneOf(common.Id)})
 		}
-		duplicate := false
-		for _, known := range seen {
-			duplicate = duplicate || provider.CompareIdentities(known, step.access) == 0
-		}
-		if !duplicate {
+		if !slices.ContainsFunc(seen, func(known *protocol.ComparisonIdentity) bool {
+			return provider.CompareIdentities(known, step.access) == 0
+		}) {
 			seen = append(seen, step.access)
-			accessAction := protocol.PlanningEffect_READ
-			if action == protocol.PlanningEffect_DROP {
-				accessAction = protocol.PlanningEffect_ALTER
-			}
-			result.Effects = append(result.Effects, &protocol.PlanningEffect{Subject: proto.CloneOf(step.access), Action: accessAction})
+			result.Effects = append(result.Effects, &protocol.PlanningEffect{Subject: proto.CloneOf(step.access), Action: accessEffectAction(action)})
 		}
 	}
 	return result, nil
+}
+
+// checkAccessTarget refuses an access operand whose target kind, with its
+// words lowered and single-spaced, is not the family's noun, and one that
+// names a database other than the session's: the request's database path, or
+// the subject's database when the request names none.
+func checkAccessTarget(request *protocol.PlanFeaturesRequest, family Family, subject *protocol.ComparisonIdentity, grant *protocol.SQLGrant) error {
+	if strings.Join(strings.Fields(strings.ToLower(grant.GetTarget().GetKind())), " ") != family.Noun {
+		return fmt.Errorf("access operand kind differs from its native object")
+	}
+	bound := request.GetDatabasePath()
+	if bound == "" {
+		bound = subject.GetDatabase().GetSource()
+	}
+	if db := grant.GetTarget().GetDatabase(); db != "" && bound != "" && db != bound {
+		return fmt.Errorf("access operand names another session database")
+	}
+	return nil
+}
+
+// accessEffectAction is what an operation of action does to the object's
+// access resource: a drop alters it by clearing the object's ACL, and any
+// other operation reads it.
+func accessEffectAction(action protocol.PlanningEffect_Action) protocol.PlanningEffect_Action {
+	if action == protocol.PlanningEffect_DROP {
+		return protocol.PlanningEffect_ALTER
+	}
+	return protocol.PlanningEffect_READ
 }
 
 // Native scheme entries and workload catalog entries both carry access. Their

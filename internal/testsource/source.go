@@ -28,8 +28,19 @@ func Request(source string) (*protocol.DecodeSourceRequest, error) {
 		return nil, fmt.Errorf("fixture requires coordination_nodes")
 	}
 	value = value.GetMapping().Entries[0].Value
-	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{{Id: "doc", File: "captured.yaml", ByteLength: uint64(len(source)), Format: protocol.SourceDocument_YAML,
-		Models: []*protocol.ValueModel{schema.CoordinationDesiredModel()}, Fragments: []*protocol.SourceFragment{{Id: "nodes", Selector: "coordination_nodes", YamlKey: schema.CoordinationYAMLKey(), Span: value.Span, Content: &protocol.SourceFragment_Value{Value: value}}},
+	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{{
+		Id:         "doc",
+		File:       "captured.yaml",
+		ByteLength: uint64(len(source)),
+		Format:     protocol.SourceDocument_YAML,
+		Models:     []*protocol.ValueModel{schema.CoordinationDesiredModel()},
+		Fragments: []*protocol.SourceFragment{{
+			Id:       "nodes",
+			Selector: "coordination_nodes",
+			YamlKey:  schema.CoordinationYAMLKey(),
+			Span:     value.Span,
+			Content:  &protocol.SourceFragment_Value{Value: value},
+		}},
 	}}}, nil
 }
 
@@ -47,6 +58,7 @@ func (r *capture) start() int {
 }
 func (r *capture) position(index int) *protocol.SourcePosition {
 	prefix := r.source[:index]
+	// #nosec G115 -- the position is within a test fixture of a few kilobytes
 	return &protocol.SourcePosition{ByteOffset: uint64(index), Line: uint32(strings.Count(prefix, "\n") + 1), Column: uint32(index - strings.LastIndex(prefix, "\n"))}
 }
 func (r *capture) span(start int) *protocol.SourceSpan {

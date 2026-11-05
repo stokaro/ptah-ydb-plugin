@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -38,7 +37,7 @@ func hostApplySelected(c *qt.C, selectors, format, text string, flags ...string)
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
 	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql", "hcl": "schema.hcl"}[format]
-	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil)
+	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil) // #nosec G703 -- a fixed file name under the test's c.TempDir()
 	source := []string{"--schema-file", filepath.Join(root, name)}
 	if format == "go" {
 		source = []string{"--root-dir", root}
@@ -47,7 +46,7 @@ func hostApplySelected(c *qt.C, selectors, format, text string, flags ...string)
 	defer cancel()
 	arguments := append([]string{"schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", selectors}, slices.Concat(flags, source)...)
-	cmd := exec.CommandContext(ctx, host, arguments...)
+	cmd := testCommand(ctx, host, arguments...)
 	var report, printed bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &report, &printed
 	err := cmd.Run()

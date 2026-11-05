@@ -53,14 +53,26 @@ type tableFacets struct {
 	feedsID string
 	// columns are the columns a family holds, in the order of the request.
 	columns []placedColumn
+	// indexes are the global indexes whose own facet states settings, in the
+	// order of the request.
+	indexes []indexSettings
 	// neutral are the facets a source states by writing nothing: an empty
-	// native index set, and a column the key's family holds.
+	// native index set, a column the key's family holds, and an index that
+	// holds the settings YDB gives a new one.
 	neutral []string
 	losses  []*protocol.EncodeLoss
 }
 
 // placedColumn is a column a declared family holds.
 type placedColumn struct{ id, name, family string }
+
+// indexSettings are the partitioning and read replicas an index's own facet
+// states, written as attributes of its index directive or keys of its entry.
+type indexSettings struct {
+	id     string
+	owner  *protocol.Reference
+	intent *native.IndexSettingsIntent
+}
 
 // EncodeTable writes the facets of one table, in YAML or Go, as the table
 // declaration the provider's table decoders read: the row table's
@@ -76,6 +88,11 @@ type placedColumn struct{ id, name, family string }
 // part: the table directive in Go, the column_families key in YAML. That is an
 // empty native index set, an empty changefeed set and a column that sits in
 // the default family.
+//
+// A global index's own facet is written as attributes of its ptah:schema:index
+// directive in Go, or as keys of its index entry in YAML, with the settings the
+// host's embedded engine writes there: those that differ from the ones YDB
+// gives a new index, which a read's conversion keeps.
 //
 // What no declaration states is a loss for its facet: an access requirement,
 // table attributes, storage settings, tiering, a temporary table, a family
@@ -174,22 +191,48 @@ func (f *tableFacets) add(value *protocol.EncodeSourceValue) error {
 		}
 		f.feeds, f.feedsID = feeds, id
 	case schema.IndexProperties:
-		var intent native.IndexSetIntent
-		if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
-			return err
-		}
-		if len(intent.GetIndexes()) == 0 {
-			f.neutral = append(f.neutral, id)
-			return nil
-		}
-		names := make([]string, 0, len(intent.GetIndexes()))
-		for _, index := range intent.GetIndexes() {
-			names = append(names, index.GetSpecification().GetName())
-		}
-		f.losef(id, "table %s: its native indexes (%s) have no source spelling the provider writes", tableSubject(f.binding), strings.Join(names, ", "))
+		return f.addIndexSet(id, normalized)
+	case schema.IndexSettingsProperties:
+		return f.addIndexSettings(id, envelope, normalized)
 	default:
 		f.losef(id, "table %s: its %s have no source spelling", tableSubject(f.binding), strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/"), "-", " "))
 	}
+	return nil
+}
+
+// addIndexSet records a native index set facet: an empty one, which a read of
+// a table with only global indexes converts to, adds nothing, and any other is
+// lost, since the provider writes no source spelling of a native index.
+func (f *tableFacets) addIndexSet(id string, normalized *protocol.Envelope) error {
+	var intent native.IndexSetIntent
+	if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
+		return err
+	}
+	if len(intent.GetIndexes()) == 0 {
+		f.neutral = append(f.neutral, id)
+		return nil
+	}
+	names := make([]string, 0, len(intent.GetIndexes()))
+	for _, index := range intent.GetIndexes() {
+		names = append(names, index.GetSpecification().GetName())
+	}
+	f.losef(id, "table %s: its native indexes (%s) have no source spelling the provider writes", tableSubject(f.binding), strings.Join(names, ", "))
+	return nil
+}
+
+// addIndexSettings records the settings an index's own facet states: an empty
+// facet adds nothing, and any other is written with the index's directive or
+// entry.
+func (f *tableFacets) addIndexSettings(id string, envelope, normalized *protocol.Envelope) error {
+	var intent native.IndexSettingsIntent
+	if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
+		return err
+	}
+	if proto.Size(&intent) == 0 {
+		f.neutral = append(f.neutral, id)
+		return nil
+	}
+	f.indexes = append(f.indexes, indexSettings{id: id, owner: proto.CloneOf(envelope.GetOwner()), intent: &intent})
 	return nil
 }
 
@@ -255,6 +298,7 @@ func (f *tableFacets) losef(id, format string, arguments ...any) {
 		f.feeds, f.feedsID = nil, ""
 	}
 	f.columns = slices.DeleteFunc(f.columns, func(column placedColumn) bool { return column.id == id })
+	f.indexes = slices.DeleteFunc(f.indexes, func(index indexSettings) bool { return index.id == id })
 	f.neutral = slices.DeleteFunc(f.neutral, func(neutral string) bool { return neutral == id })
 }
 
@@ -278,6 +322,9 @@ func (f *tableFacets) written() []string {
 	}
 	for _, column := range f.columns {
 		ids = append(ids, column.id)
+	}
+	for _, index := range f.indexes {
+		ids = append(ids, index.id)
 	}
 	return append(ids, f.neutral...)
 }
@@ -395,20 +442,26 @@ var unitNames = map[uint64]string{1: ttlgrammar.Seconds, 2: ttlgrammar.Milliseco
 
 // ttl is the TTL that only deletes, as the row_deletion properties spell it:
 // a row table's TTL, or a column table's TTL of one deleting tier.
-func (f *tableFacets) ttl() []*protocol.SourceEntry {
+func (f *tableFacets) ttl() []*protocol.SourceEntry { return ttlEntries(f.row, f.storage) }
+
+// ttlEntries is the TTL that only deletes, as the row_deletion properties
+// spell it: the TTL of row, or the column table's TTL of storage when it is one
+// deleting tier, and nil for none.
+func ttlEntries(row *native.RowTableIntent, storage *native.ColumnStorageIntent) []*protocol.SourceEntry {
 	var column, unit string
 	var seconds uint64
 	switch {
-	case f.row.GetTtlSettings() != nil:
-		settings := f.row.GetTtlSettings()
+	case row.GetTtlSettings() != nil:
+		settings := row.GetTtlSettings()
 		if mode := settings.GetDateTypeColumn(); mode != nil {
 			column, seconds = mode.GetColumnName(), uint64(mode.GetExpireAfterSeconds())
 		} else {
 			mode := settings.GetValueSinceUnixEpoch()
+			// #nosec G115 -- a column unit is one of YDB's enum numbers, 0 to 4
 			column, seconds, unit = mode.GetColumnName(), uint64(mode.GetExpireAfterSeconds()), unitNames[uint64(mode.GetColumnUnit())]
 		}
-	case f.storage != nil && deletesOnly(f.storage):
-		enabled := f.storage.GetTtl().GetEnabled()
+	case storage != nil && deletesOnly(storage):
+		enabled := storage.GetTtl().GetEnabled()
 		column, seconds, unit = enabled.GetColumn(), enabled.GetTiers()[0].GetApplyAfterSeconds(), unitNames[enabled.GetColumnUnit()]
 	default:
 		return nil
@@ -512,6 +565,11 @@ func (f *tableFacets) goParts() []*protocol.EncodedSourcePart {
 		}
 		parts = append(parts, part("family."+strconv.Itoa(i), claims[tablesource.DirectiveColumnFamily], entries))
 	}
+	for i, index := range f.indexes {
+		written := part("index."+strconv.Itoa(i), claims[tablesource.DirectiveIndex], index.attributes())
+		written.Fragment.Subject = index.subject()
+		parts = append(parts, written)
+	}
 	for i, feed := range f.feeds {
 		parts = append(parts, part("changefeed."+strconv.Itoa(i), claims[changefeedsource.DirectiveChangefeed], sortedFields(changefeedValues(feed.Changefeed))))
 		for j, consumer := range feed.Consumers {
@@ -578,51 +636,98 @@ func (f *tableFacets) yamlParts() []*protocol.EncodedSourcePart {
 	// The families key declares the families, and it is where a column of the
 	// default family and an empty native index set are stated.
 	if declared := f.families(); len(declared) != 0 || len(f.neutral) != 0 {
-		var families []*protocol.SourceEntry
-		for _, declared := range declared {
-			var settings []*protocol.SourceEntry
-			if declared.data != "" {
-				settings = append(settings, field(tablesource.AttributeData, declared.data))
-			}
-			if declared.compression != "" {
-				settings = append(settings, field(tablesource.AttributeCompression, declared.compression))
-			}
-			if declared.cacheMode != "" {
-				settings = append(settings, field(tablesource.AttributeCacheMode, declared.cacheMode))
-			}
-			if len(declared.fields) != 0 {
-				var names []*protocol.SourceValue
-				for _, name := range declared.fields {
-					names = append(names, text(name))
-				}
-				settings = append(settings, &protocol.SourceEntry{Key: tablesource.AttributeFields,
-					Value: &protocol.SourceValue{Value: &protocol.SourceValue_Sequence{Sequence: &protocol.SourceSequence{Values: names}}}})
-			}
-			families = append(families, &protocol.SourceEntry{Key: declared.name, Value: mapping(settings...)})
-		}
-		parts = append(parts, part(tablesource.KeyColumnFamilies, mapping(families...)))
+		parts = append(parts, part(tablesource.KeyColumnFamilies, yamlFamilies(declared)))
 	}
 	if f.feedsID != "" {
-		var feeds []*protocol.SourceEntry
-		for _, feed := range f.feeds {
-			values := changefeedValues(feed.Changefeed)
-			delete(values, ydbdecl.ChangefeedName)
-			options := sortedFields(values)
-			if len(feed.Consumers) != 0 {
-				var consumers []*protocol.SourceEntry
-				for _, consumer := range feed.Consumers {
-					settings := ydbdecl.ConsumerValues(consumer)
-					delete(settings, ydbdecl.TopicName)
-					consumers = append(consumers, &protocol.SourceEntry{Key: consumer.Name, Value: mapping(sortedFields(settings)...)})
-				}
-				options = append(options, &protocol.SourceEntry{Key: "consumers", Value: mapping(consumers...)})
-			}
-			feeds = append(feeds, &protocol.SourceEntry{Key: feed.Name, Value: mapping(options...)})
+		parts = append(parts, part(changefeedsource.KeyChangefeeds, yamlChangefeeds(f.feeds)))
+	}
+	indexClaims := make(map[string]*protocol.YAMLSourceKey)
+	for _, claim := range tablesource.IndexYAMLKeys() {
+		indexClaims[claim.GetKey()] = claim
+	}
+	for i, index := range f.indexes {
+		for _, entry := range index.attributes() {
+			claim := indexClaims[entry.GetKey()]
+			parts = append(parts, &protocol.EncodedSourcePart{Fragment: &protocol.SourceFragment{Id: f.fragmentID("index." + strconv.Itoa(i) + "." + entry.GetKey()),
+				Selector: claim.GetSelector(), YamlKey: proto.CloneOf(claim), BindingId: f.binding.GetId(), Subject: index.subject(),
+				Content: &protocol.SourceFragment_Value{Value: entry.GetValue()}}})
 		}
-		parts = append(parts, part(changefeedsource.KeyChangefeeds, mapping(feeds...)))
 	}
 	return parts
 }
+
+// yamlFamilies writes the declared column families as the column_families key
+// reads them: a mapping of family names to the settings each one states, with
+// its fields as a sequence of column names.
+func yamlFamilies(families []family) *protocol.SourceValue {
+	var entries []*protocol.SourceEntry
+	for _, declared := range families {
+		var settings []*protocol.SourceEntry
+		if declared.data != "" {
+			settings = append(settings, field(tablesource.AttributeData, declared.data))
+		}
+		if declared.compression != "" {
+			settings = append(settings, field(tablesource.AttributeCompression, declared.compression))
+		}
+		if declared.cacheMode != "" {
+			settings = append(settings, field(tablesource.AttributeCacheMode, declared.cacheMode))
+		}
+		if len(declared.fields) != 0 {
+			var names []*protocol.SourceValue
+			for _, name := range declared.fields {
+				names = append(names, text(name))
+			}
+			settings = append(settings, &protocol.SourceEntry{Key: tablesource.AttributeFields,
+				Value: &protocol.SourceValue{Value: &protocol.SourceValue_Sequence{Sequence: &protocol.SourceSequence{Values: names}}}})
+		}
+		entries = append(entries, &protocol.SourceEntry{Key: declared.name, Value: mapping(settings...)})
+	}
+	return mapping(entries...)
+}
+
+// yamlChangefeeds writes the table's changefeeds as the changefeeds key reads
+// them: a mapping of feed names to their options, each feed's consumers as a
+// mapping of consumer names to their settings.
+func yamlChangefeeds(declared []changefeeds.Feed) *protocol.SourceValue {
+	var feeds []*protocol.SourceEntry
+	for _, feed := range declared {
+		values := changefeedValues(feed.Changefeed)
+		delete(values, ydbdecl.ChangefeedName)
+		options := sortedFields(values)
+		if len(feed.Consumers) != 0 {
+			var consumers []*protocol.SourceEntry
+			for _, consumer := range feed.Consumers {
+				settings := ydbdecl.ConsumerValues(consumer)
+				delete(settings, ydbdecl.TopicName)
+				consumers = append(consumers, &protocol.SourceEntry{Key: consumer.Name, Value: mapping(sortedFields(settings)...)})
+			}
+			options = append(options, &protocol.SourceEntry{Key: "consumers", Value: mapping(consumers...)})
+		}
+		feeds = append(feeds, &protocol.SourceEntry{Key: feed.Name, Value: mapping(options...)})
+	}
+	return mapping(feeds...)
+}
+
+// attributes are the settings in the order the host's embedded engine writes
+// them: partitioning by size, the partition size, partitioning by load, the
+// minimum and maximum partition counts, and the read replicas.
+func (i indexSettings) attributes() []*protocol.SourceEntry {
+	var entries []*protocol.SourceEntry
+	add := func(key, value string) { entries = append(entries, field(key, value)) }
+	partitioning := i.intent.GetPartitioningSettings()
+	addSwitch(add, tablesource.AttributeBySize, partitioning.GetPartitioningBySize())
+	addCount(add, tablesource.AttributePartitionSizeMB, partitioning.GetPartitionSizeMb())
+	addSwitch(add, tablesource.AttributeByLoad, partitioning.GetPartitioningByLoad())
+	addCount(add, tablesource.AttributeMinPartitions, partitioning.GetMinPartitionsCount())
+	addCount(add, tablesource.AttributeMaxPartitions, partitioning.GetMaxPartitionsCount())
+	if replicas := i.intent.GetReadReplicasSettings(); replicas != nil {
+		add(tablesource.AttributeReadReplicas, readReplicas(replicas))
+	}
+	return entries
+}
+
+// subject is the index the parts declare for: the facet's owner.
+func (i indexSettings) subject() *protocol.Reference { return proto.CloneOf(i.owner) }
 
 // yamlColumnStore writes a column table's storage as the column_store key
 // reads it. A TTL that only deletes is written with the row_deletion keys.
@@ -679,49 +784,95 @@ func (f *tableFacets) verify(format protocol.SourceDocument_Format, parts []*pro
 	if err != nil {
 		return append(lost, f.tableSourceIDs()...), nil
 	}
-	var decodedRow *native.RowTableIntent
-	var decodedStorage *native.ColumnStorageIntent
-	placed := make(map[string]string)
-	for _, table := range tables {
-		switch table.Value.GetValue().GetKind() {
-		case schema.TableProperties:
-			decodedRow = &native.RowTableIntent{}
-			if err := protojson.Unmarshal(table.Value.GetValue().GetPayload(), decodedRow); err != nil {
-				return nil, err
-			}
-		case schema.ColumnStorageProperties:
-			decodedStorage = &native.ColumnStorageIntent{}
-			if err := protojson.Unmarshal(table.Value.GetValue().GetPayload(), decodedStorage); err != nil {
-				return nil, err
-			}
-		}
-		for _, column := range table.Columns {
-			var intent native.ColumnIntent
-			if err := protojson.Unmarshal(column.GetValue().GetPayload(), &intent); err != nil {
-				return nil, err
-			}
-			placed[column.GetValue().GetOwner().GetName()] = intent.GetFamily()
-		}
+	decoded, err := readDecodedTables(tables)
+	if err != nil {
+		return nil, err
 	}
 	if f.row != nil {
 		want := proto.CloneOf(f.row)
 		want.PrimaryKey = nil
-		if !sameIntent(want, decodedRow, &native.RowTableIntent{}) {
+		if !sameIntent(want, decoded.row, &native.RowTableIntent{}) {
 			lost = append(lost, f.rowID)
 		}
 	}
-	if f.storage != nil && !proto.Equal(f.storage, decodedStorage) {
+	if f.storage != nil && !proto.Equal(f.storage, decoded.storage) {
 		lost = append(lost, f.storageID)
 	}
 	for _, column := range f.columns {
-		if placed[column.name] != column.family {
+		if decoded.placed[column.name] != column.family {
 			lost = append(lost, column.id)
 		}
 	}
 	if f.feedsID != "" && !slices.Contains(lost, f.feedsID) && !sameFeeds(f.feeds, feeds) {
 		lost = append(lost, f.feedsID)
 	}
-	return lost, nil
+	return append(lost, f.lostIndexes(document)...), nil
+}
+
+// lostIndexes decodes the index parts with the index decoder and returns the
+// IDs of the index facets they do not give back unchanged.
+func (f *tableFacets) lostIndexes(document *protocol.SourceDocument) []string {
+	var ids []string
+	for _, index := range f.indexes {
+		ids = append(ids, index.id)
+	}
+	decoded, err := tablesource.DecodeIndexes(context.Background(), document)
+	if err != nil {
+		return ids
+	}
+	got := make(map[string]*native.IndexSettingsIntent)
+	for _, index := range decoded {
+		intent := &native.IndexSettingsIntent{}
+		if err := protojson.Unmarshal(index.Value.GetValue().GetPayload(), intent); err != nil {
+			return ids
+		}
+		got[index.Value.GetValue().GetOwner().GetName()] = intent
+	}
+	var lost []string
+	for _, index := range f.indexes {
+		if !proto.Equal(index.intent, got[index.owner.GetName()]) {
+			lost = append(lost, index.id)
+		}
+	}
+	return lost
+}
+
+// decodedTable is what the table decoder gave back for the table: its row
+// intent and its column storage, each nil when no value carries it, and the
+// family of each decoded column, by column name.
+type decodedTable struct {
+	row     *native.RowTableIntent
+	storage *native.ColumnStorageIntent
+	placed  map[string]string
+}
+
+// readDecodedTables reads the row intent, the column storage and the column
+// families out of the values the table decoder returned. A later value of the
+// same kind replaces an earlier one.
+func readDecodedTables(tables []tablesource.Table) (decodedTable, error) {
+	decoded := decodedTable{placed: make(map[string]string)}
+	for _, table := range tables {
+		switch table.Value.GetValue().GetKind() {
+		case schema.TableProperties:
+			decoded.row = &native.RowTableIntent{}
+			if err := protojson.Unmarshal(table.Value.GetValue().GetPayload(), decoded.row); err != nil {
+				return decodedTable{}, err
+			}
+		case schema.ColumnStorageProperties:
+			decoded.storage = &native.ColumnStorageIntent{}
+			if err := protojson.Unmarshal(table.Value.GetValue().GetPayload(), decoded.storage); err != nil {
+				return decodedTable{}, err
+			}
+		}
+		for _, column := range table.Columns {
+			var intent native.ColumnIntent
+			if err := protojson.Unmarshal(column.GetValue().GetPayload(), &intent); err != nil {
+				return decodedTable{}, err
+			}
+			decoded.placed[column.GetValue().GetOwner().GetName()] = intent.GetFamily()
+		}
+	}
+	return decoded, nil
 }
 
 // sameIntent reports a decoded intent equal to the wanted one, an absent one

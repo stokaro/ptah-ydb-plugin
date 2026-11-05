@@ -97,8 +97,46 @@ func confirmTableCreation(owner *protocol.Reference, wanted *Ydb_Table.CreateTab
 	if err := confirmCreatedIndexes(wanted.Indexes, observed.Indexes); err != nil {
 		return err
 	}
-	for i, column := range wanted.Columns {
-		actual := observed.Columns[i]
+	if err := confirmCreatedColumns(wanted.Columns, observed.Columns); err != nil {
+		return err
+	}
+	if err := confirmCreatedTTL(wanted.TtlSettings, observed.TtlSettings); err != nil {
+		return err
+	}
+	if err := confirmCreatedSettings(wanted, observed); err != nil {
+		return err
+	}
+	return confirmCreatedFamilies(wanted.ColumnFamilies, observed.ColumnFamilies)
+}
+
+// confirmCreatedSettings requires the created table to hold at least the
+// storage, partitioning, read replica and bloom filter settings the request
+// names, its tiering and attributes exactly, no temporary flag, and the
+// minimum partition count a requested starting layout sets.
+func confirmCreatedSettings(wanted *Ydb_Table.CreateTableRequest, observed *native.DescribeTableResult) error {
+	if !messageContains(wanted.StorageSettings, observed.StorageSettings) ||
+		!messageContains(wanted.PartitioningSettings, observed.PartitioningSettings) ||
+		!messageContains(wanted.ReadReplicasSettings, observed.ReadReplicasSettings) ||
+		(wanted.KeyBloomFilter != 0 && wanted.KeyBloomFilter != observed.KeyBloomFilter) ||
+		wanted.Tiering != observed.Tiering || observed.Temporary ||
+		!maps.Equal(wanted.Attributes, observed.Attributes) {
+		return fmt.Errorf("YDB created table settings differ from the request")
+	}
+	// YDB keeps no record of a starting layout beyond the minimum partition
+	// count it sets from it, unless the request names a minimum of its own.
+	if started := tablecreate.StartingPartitions(wanted); started != 0 && wanted.GetPartitioningSettings().GetMinPartitionsCount() == 0 &&
+		observed.GetPartitioningSettings().GetMinPartitionsCount() != started {
+		return fmt.Errorf("YDB created table starting layout differs from the request")
+	}
+	return nil
+}
+
+// confirmCreatedColumns requires each created column, in the request's order,
+// to hold the requested name, type, nullability, family, default and sequence,
+// and no compression or encoding. The two lists have the same length.
+func confirmCreatedColumns(wanted []*Ydb_Table.ColumnMeta, observed []*native.ColumnMeta) error {
+	for i, column := range wanted {
+		actual := observed[i]
 		expectedType, expectedNullable, err := schema.ColumnType(column.Type)
 		if err != nil {
 			return err
@@ -122,37 +160,36 @@ func confirmTableCreation(owner *protocol.Reference, wanted *Ydb_Table.CreateTab
 			return fmt.Errorf("YDB created column differs from the request")
 		}
 	}
-	if wanted.TtlSettings == nil {
-		if observed.TtlSettings != nil {
+	return nil
+}
+
+// confirmCreatedTTL requires the created table to hold the requested TTL, or
+// none when the request names none. A run interval the request leaves unset
+// takes the server's default.
+func confirmCreatedTTL(wanted, observed *Ydb_Table.TtlSettings) error {
+	if wanted == nil {
+		if observed != nil {
 			return fmt.Errorf("YDB created table has unexpected TTL")
 		}
-	} else if observed.TtlSettings == nil ||
-		!proto.Equal(wanted.TtlSettings.GetDateTypeColumn(), observed.TtlSettings.GetDateTypeColumn()) ||
-		!proto.Equal(wanted.TtlSettings.GetValueSinceUnixEpoch(), observed.TtlSettings.GetValueSinceUnixEpoch()) ||
-		(wanted.TtlSettings.RunIntervalSeconds != 0 && wanted.TtlSettings.RunIntervalSeconds != observed.TtlSettings.RunIntervalSeconds) {
+	} else if observed == nil ||
+		!proto.Equal(wanted.GetDateTypeColumn(), observed.GetDateTypeColumn()) ||
+		!proto.Equal(wanted.GetValueSinceUnixEpoch(), observed.GetValueSinceUnixEpoch()) ||
+		(wanted.RunIntervalSeconds != 0 && wanted.RunIntervalSeconds != observed.RunIntervalSeconds) {
 		return fmt.Errorf("YDB created table TTL differs from the request")
 	}
-	if !messageContains(wanted.StorageSettings, observed.StorageSettings) ||
-		!messageContains(wanted.PartitioningSettings, observed.PartitioningSettings) ||
-		!messageContains(wanted.ReadReplicasSettings, observed.ReadReplicasSettings) ||
-		(wanted.KeyBloomFilter != 0 && wanted.KeyBloomFilter != observed.KeyBloomFilter) ||
-		wanted.Tiering != observed.Tiering || observed.Temporary ||
-		!maps.Equal(wanted.Attributes, observed.Attributes) {
-		return fmt.Errorf("YDB created table settings differ from the request")
-	}
-	// YDB keeps no record of a starting layout beyond the minimum partition
-	// count it sets from it, unless the request names a minimum of its own.
-	if started := tablecreate.StartingPartitions(wanted); started != 0 && wanted.GetPartitioningSettings().GetMinPartitionsCount() == 0 &&
-		observed.GetPartitioningSettings().GetMinPartitionsCount() != started {
-		return fmt.Errorf("YDB created table starting layout differs from the request")
-	}
-	families, err := requestFamilies(wanted.ColumnFamilies)
+	return nil
+}
+
+// confirmCreatedFamilies requires each requested column family to be created
+// once, holding at least the settings the request names.
+func confirmCreatedFamilies(wanted []*Ydb_Table.ColumnFamily, observed []*native.ColumnFamily) error {
+	families, err := requestFamilies(wanted)
 	if err != nil {
 		return err
 	}
 	for _, family := range families {
 		var actual *native.ColumnFamily
-		for _, candidate := range observed.ColumnFamilies {
+		for _, candidate := range observed {
 			if candidate.Name == family.Name {
 				if actual != nil {
 					return fmt.Errorf("YDB returned duplicate column families")

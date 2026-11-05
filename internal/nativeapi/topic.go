@@ -48,12 +48,8 @@ func (t *Topic) Apply(ctx context.Context, database string, value *protocol.Enve
 	if err != nil {
 		return false, err
 	}
-	owner := proto.CloneOf(normalized.NormalizedOwner)
-	if owner.Database != "" && owner.Database != database {
-		return false, fmt.Errorf("topic operation targets another database")
-	}
-	owner.Database = database
-	if err := schema.ValidateNativeOwner(owner); err != nil {
+	owner, err := boundOwner(normalized.NormalizedOwner, database, "topic")
+	if err != nil {
 		return false, err
 	}
 	change := schema.TopicOperationChange(normalized.Value)
@@ -64,16 +60,9 @@ func (t *Topic) Apply(ctx context.Context, database string, value *protocol.Enve
 	// The consumers a transfer reads the topic through are the transfer's,
 	// and the operation neither checks nor confirms them: the transfer's drop,
 	// which the plan may run first, takes the one YDB made for it.
-	var transfers []string
-	if before != nil {
-		observed, err := schema.ObservedTopic(before)
-		if err != nil {
-			return false, err
-		}
-		transfers = topics.TransferConsumers(observed)
-		if before, err = withoutConsumers(before, database, transfers); err != nil {
-			return false, err
-		}
+	transfers, before, err := transferConsumers(before, database)
+	if err != nil {
+		return false, err
 	}
 	previous, desired, err := schema.TopicSpecs(change)
 	if err != nil {
@@ -115,6 +104,24 @@ func (t *Topic) Apply(ctx context.Context, database string, value *protocol.Enve
 		desired = &kept
 	}
 	return true, confirmTopic(before, desired, observed)
+}
+
+// transferConsumers returns the consumers a transfer reads the topic before
+// through, and before without them. A topic that is absent before has none.
+func transferConsumers(before *protocol.Envelope, database string) ([]string, *protocol.Envelope, error) {
+	if before == nil {
+		return nil, nil, nil
+	}
+	observed, err := schema.ObservedTopic(before)
+	if err != nil {
+		return nil, nil, err
+	}
+	transfers := topics.TransferConsumers(observed)
+	without, err := withoutConsumers(before, database, transfers)
+	if err != nil {
+		return nil, nil, err
+	}
+	return transfers, without, nil
 }
 
 // withoutConsumers is value, a topic read in database or nil for none,

@@ -138,19 +138,29 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 	for index := range owned {
 		result[index] = nil
 	}
+	if err := addObjectValues(ctx, document, objects, result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// addObjectValues captures each declared object and appends its value to the
+// values of its fragment in result, in declaration order. A second
+// declaration of one kind and path refuses the document.
+func addObjectValues(ctx context.Context, document *protocol.SourceDocument, objects []declared, result map[int][]*protocol.SourceModelValue) error {
 	seen := make(map[string]bool)
 	for position, object := range objects {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
 		display := ydbdecl.ExternalDisplay(object.schema, object.name)
 		if key := object.kind + "\x00" + display; seen[key] {
-			return nil, fmt.Errorf("%s %s is declared twice", object.noun(), display)
+			return fmt.Errorf("%s %s is declared twice", object.noun(), display)
 		}
 		seen[object.kind+"\x00"+display] = true
 		value, err := capture(object)
 		if err != nil {
-			return nil, fmt.Errorf("%s %s: %w", object.noun(), display, err)
+			return fmt.Errorf("%s %s: %w", object.noun(), display, err)
 		}
 		fragment := document.Fragments[object.fragment]
 		result[object.fragment] = append(result[object.fragment], &protocol.SourceModelValue{Placement: protocol.SourceModelValue_NATIVE_OBJECT,
@@ -158,7 +168,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 				CanonicalFormat: schema.NativeDesiredModel(object.kind).CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)},
 			Source: &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT, Path: object.path}})
 	}
-	return result, nil
+	return nil
 }
 
 func capture(object declared) (*protocol.Envelope, error) {
@@ -364,35 +374,45 @@ func yamlColumns(entry *protocol.SourceEntry) ([]ydbdecl.ExternalColumn, error) 
 			if mapping == nil {
 				return nil, fmt.Errorf("%s[%d] requires a mapping", field.Key, position)
 			}
-			var column ydbdecl.ExternalColumn
-			for _, part := range mapping.GetEntries() {
-				switch part.Key {
-				case columnName, columnType:
-					text, err := scalar(part.GetValue())
-					if err != nil {
-						return nil, fmt.Errorf("%s[%d] %s: %w", field.Key, position, part.Key, err)
-					}
-					if part.Key == columnName {
-						column.Name = strings.TrimSpace(text)
-					} else {
-						column.Type = strings.TrimSpace(text)
-					}
-				case columnNotNull:
-					switch value := part.GetValue().GetValue().(type) {
-					case *protocol.SourceValue_Boolean:
-						column.NotNull = value.Boolean
-					case *protocol.SourceValue_Null:
-					default:
-						return nil, fmt.Errorf("%s[%d] %s requires true or false", field.Key, position, part.Key)
-					}
-				default:
-					return nil, fmt.Errorf("%s[%d]: unknown key %q", field.Key, position, part.Key)
-				}
+			column, err := yamlColumn(field.Key, position, mapping)
+			if err != nil {
+				return nil, err
 			}
 			columns = append(columns, column)
 		}
 	}
 	return columns, nil
+}
+
+// yamlColumn reads the column mapping at position of the columns field key:
+// its name, its type and not_null, which takes true, false or null.
+func yamlColumn(key string, position int, mapping *protocol.SourceMapping) (ydbdecl.ExternalColumn, error) {
+	var column ydbdecl.ExternalColumn
+	for _, part := range mapping.GetEntries() {
+		switch part.Key {
+		case columnName, columnType:
+			text, err := scalar(part.GetValue())
+			if err != nil {
+				return ydbdecl.ExternalColumn{}, fmt.Errorf("%s[%d] %s: %w", key, position, part.Key, err)
+			}
+			if part.Key == columnName {
+				column.Name = strings.TrimSpace(text)
+			} else {
+				column.Type = strings.TrimSpace(text)
+			}
+		case columnNotNull:
+			switch value := part.GetValue().GetValue().(type) {
+			case *protocol.SourceValue_Boolean:
+				column.NotNull = value.Boolean
+			case *protocol.SourceValue_Null:
+			default:
+				return ydbdecl.ExternalColumn{}, fmt.Errorf("%s[%d] %s requires true or false", key, position, part.Key)
+			}
+		default:
+			return ydbdecl.ExternalColumn{}, fmt.Errorf("%s[%d]: unknown key %q", key, position, part.Key)
+		}
+	}
+	return column, nil
 }
 
 // attributes reads a Go directive's attributes, which the host lexed as text.

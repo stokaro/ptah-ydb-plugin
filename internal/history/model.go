@@ -115,7 +115,13 @@ func (s Store) nativeKeyType() Ydb.Type_PrimitiveTypeId {
 	return Ydb.Type_UTF8
 }
 func (s Store) definition() ownedtable.Definition {
-	return ownedtable.Definition{Identity: s.Identity, Attribute: ownershipAttribute, Marker: s.marker(), Columns: []ownedtable.Column{{Name: "version", Type: s.nativeKeyType()}, {Name: "revision", Type: Ydb.Type_STRING}}, PrimaryKey: []string{"version"}}
+	return ownedtable.Definition{
+		Identity:   s.Identity,
+		Attribute:  ownershipAttribute,
+		Marker:     s.marker(),
+		Columns:    []ownedtable.Column{{Name: "version", Type: s.nativeKeyType()}, {Name: "revision", Type: Ydb.Type_STRING}},
+		PrimaryKey: []string{"version"},
+	}
 }
 
 // CreateRequest installs the history marker and native layout together.

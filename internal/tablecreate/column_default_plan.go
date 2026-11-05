@@ -60,14 +60,17 @@ func planDefaults(owner *protocol.Reference, table *protocol.PlanningTable, caps
 }
 
 func (d defaultStep) plan(table *protocol.ComparisonIdentity, number int) *protocol.PlanningStep {
-	id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("column-default/%06d", number)}
-	d.operation.Id = id.Name
-	subject := proto.CloneOf(table)
-	subject.Kind = "column"
-	subject.Parent = proto.CloneOf(table.Name)
-	subject.Name = &protocol.ComparisonPart{Source: d.name, Normalized: d.name}
-	facts := d.operation.OperationSemantics
-	return &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: d.operation},
+	return columnAlterStep(fmt.Sprintf("column-default/%06d", number), table, d.name, d.operation)
+}
+
+// columnAlterStep is the step named name that carries out operation on the
+// column called column of table: it reads the table and alters the column.
+func columnAlterStep(name string, table *protocol.ComparisonIdentity, column string, operation *protocol.NormalizedValue) *protocol.PlanningStep {
+	id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: name}
+	operation.Id = id.Name
+	subject := ColumnSubject(table, column)
+	facts := operation.OperationSemantics
+	return &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: operation},
 		Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: []*protocol.PlanningEffect{
 			{Subject: proto.CloneOf(table), Action: protocol.PlanningEffect_READ}, {Subject: subject, Action: protocol.PlanningEffect_ALTER},
 		}}}

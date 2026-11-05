@@ -97,13 +97,19 @@ func (h *Hold) Check(ctx context.Context) error {
 	if h.lease.Context().Err() != nil {
 		return h.fail(ErrLost)
 	}
-	if description == nil || description.Name != h.name || !description.Ephemeral || description.Limit != coordination.Exclusive ||
-		description.Count != coordination.Exclusive || len(description.Owners) != 1 || description.Owners[0] == nil ||
-		description.Owners[0].SessionID != h.session.SessionID() || description.Owners[0].Count != coordination.Exclusive {
+	if !h.ownedBySession(description) {
 		return h.fail(ErrLost)
 	}
 	h.confirmed = asked
 	return nil
+}
+
+// ownedBySession reports whether description shows the hold's semaphore as an
+// ephemeral exclusive one whose only owner is this session, holding all of it.
+func (h *Hold) ownedBySession(description *coordination.SemaphoreDescription) bool {
+	return description != nil && description.Name == h.name && description.Ephemeral && description.Limit == coordination.Exclusive &&
+		description.Count == coordination.Exclusive && len(description.Owners) == 1 && description.Owners[0] != nil &&
+		description.Owners[0].SessionID == h.session.SessionID() && description.Owners[0].Count == coordination.Exclusive
 }
 func (h *Hold) fail(err error) error { h.failure = err; h.cancel(); return err }
 

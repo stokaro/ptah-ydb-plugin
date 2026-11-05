@@ -65,47 +65,13 @@ func Parse(raw string) (Address, error) {
 			return Address{}, authored.New("unsupported YDB URL parameter; supported parameters: " + strings.Join(acceptedParameters, ", "))
 		}
 	}
-	database := strings.Trim(u.Path, "/")
-	if q.Has("database") {
-		value := strings.Trim(q.Get("database"), "/")
-		if value == "" || (database != "" && database != value) {
-			return Address{}, authored.New("YDB URL database path and parameter must identify the same nonempty database")
-		}
-		database = value
+	database, err := databasePath(u.Path, q)
+	if err != nil {
+		return Address{}, err
 	}
-	if database == "" {
-		return Address{}, authored.New("YDB URL must name a database")
-	}
-	for part := range strings.SplitSeq(database, "/") {
-		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "\\\x00\r\n") {
-			return Address{}, authored.New("invalid YDB database path")
-		}
-	}
-	token := q.Get("token")
-	if q.Has("token") && (strings.TrimSpace(token) == "" || u.User != nil) {
-		return Address{}, authored.New("provide exactly one nonempty YDB credential source")
-	}
-	useEnv := false
-	if q.Has("use_env_credentials") {
-		// A bare parameter is on, the way ydb-go-sdk-auth-environ reads it; a
-		// value is a strict boolean.
-		useEnv = true
-		if raw := strings.TrimSpace(q.Get("use_env_credentials")); raw != "" {
-			enabled, err := strconv.ParseBool(raw)
-			if err != nil {
-				return Address{}, authored.New("use_env_credentials must be a boolean")
-			}
-			useEnv = enabled
-		}
-		if useEnv && (u.User != nil || q.Has("token")) {
-			return Address{}, authored.New("provide exactly one nonempty YDB credential source")
-		}
-	}
-	if u.User != nil {
-		password, ok := u.User.Password()
-		if u.User.Username() == "" || !ok || password == "" {
-			return Address{}, authored.New("YDB static credentials require a user and password")
-		}
+	token, useEnv, err := credentialSource(u.User, q)
+	if err != nil {
+		return Address{}, err
 	}
 	passed, err := sdkParameters(q)
 	if err != nil {
@@ -122,6 +88,62 @@ func Parse(raw string) (Address, error) {
 	database = "/" + database
 	dsn := url.URL{Scheme: scheme, Host: net.JoinHostPort(u.Hostname(), port), Path: database, RawQuery: passed.Encode()}
 	return Address{dsn: dsn.String(), database: database, user: u.User, token: token, useEnv: useEnv, monitoring: monitoring, realm: realm, secure: scheme == "grpcs"}, nil
+}
+
+// databasePath returns the database the URL names, without its surrounding
+// slashes, from its path or its database parameter. The two must agree when
+// both are present, and every segment must be a plain name.
+func databasePath(urlPath string, q url.Values) (string, error) {
+	database := strings.Trim(urlPath, "/")
+	if q.Has("database") {
+		value := strings.Trim(q.Get("database"), "/")
+		if value == "" || (database != "" && database != value) {
+			return "", authored.New("YDB URL database path and parameter must identify the same nonempty database")
+		}
+		database = value
+	}
+	if database == "" {
+		return "", authored.New("YDB URL must name a database")
+	}
+	for part := range strings.SplitSeq(database, "/") {
+		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "\\\x00\r\n") {
+			return "", authored.New("invalid YDB database path")
+		}
+	}
+	return database, nil
+}
+
+// credentialSource returns the token and the environment switch the URL
+// names, and refuses a URL that names more than one credential source, an
+// empty token, or static credentials without both a user and a password.
+func credentialSource(user *url.Userinfo, q url.Values) (string, bool, error) {
+	token := q.Get("token")
+	if q.Has("token") && (strings.TrimSpace(token) == "" || user != nil) {
+		return "", false, authored.New("provide exactly one nonempty YDB credential source")
+	}
+	useEnv := false
+	if q.Has("use_env_credentials") {
+		// A bare parameter is on, the way ydb-go-sdk-auth-environ reads it; a
+		// value is a strict boolean.
+		useEnv = true
+		if raw := strings.TrimSpace(q.Get("use_env_credentials")); raw != "" {
+			enabled, err := strconv.ParseBool(raw)
+			if err != nil {
+				return "", false, authored.New("use_env_credentials must be a boolean")
+			}
+			useEnv = enabled
+		}
+		if useEnv && (user != nil || q.Has("token")) {
+			return "", false, authored.New("provide exactly one nonempty YDB credential source")
+		}
+	}
+	if user != nil {
+		password, ok := user.Password()
+		if user.Username() == "" || !ok || password == "" {
+			return "", false, authored.New("YDB static credentials require a user and password")
+		}
+	}
+	return token, useEnv, nil
 }
 
 // Monitoring returns the cluster's monitoring endpoint the URL names, an http://

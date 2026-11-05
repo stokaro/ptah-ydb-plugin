@@ -95,26 +95,12 @@ func (c *Cursor) Page(limit uint32) ([]*protocol.Row, bool, error) {
 	var result []*protocol.Row
 	size := 0
 	for {
-		row := c.pending
-		c.pending = nil
+		row, err := c.next()
+		if err != nil {
+			return nil, false, err
+		}
 		if row == nil {
-			if !c.rows.Next() {
-				if err := c.rows.Err(); err != nil {
-					return nil, false, err
-				}
-				if c.rows.NextResultSet() {
-					return nil, false, errors.New("statement returned more than one result set")
-				}
-				if err := c.rows.Err(); err != nil {
-					return nil, false, err
-				}
-				return result, false, c.Close()
-			}
-			var err error
-			row, err = c.scan()
-			if err != nil {
-				return nil, false, err
-			}
+			return result, false, c.Close()
 		}
 		rowSize := proto.Size(row) + 8
 		if rowSize > pageBytes {
@@ -127,6 +113,27 @@ func (c *Cursor) Page(limit uint32) ([]*protocol.Row, bool, error) {
 		result = append(result, row)
 		size += rowSize
 	}
+}
+
+// next takes the row reserved by the previous page, or scans the next one. At
+// the end of the result it returns no row, after checking that the driver
+// reported no error and that no second result set follows.
+func (c *Cursor) next() (*protocol.Row, error) {
+	row := c.pending
+	c.pending = nil
+	if row != nil {
+		return row, nil
+	}
+	if c.rows.Next() {
+		return c.scan()
+	}
+	if err := c.rows.Err(); err != nil {
+		return nil, err
+	}
+	if c.rows.NextResultSet() {
+		return nil, errors.New("statement returned more than one result set")
+	}
+	return nil, c.rows.Err()
 }
 
 func (c *Cursor) scan() (*protocol.Row, error) {

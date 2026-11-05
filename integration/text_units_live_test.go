@@ -270,7 +270,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 	c.Assert(held["by_text"], qt.DeepEquals, held["by_call"])
 	c.Assert(len(held["by_call"]) > 2, qt.IsTrue)
 	var hits uint64
-	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+path.Join(database, directory, "by_text")+"` (first, second) VALUES (1u, 'a'u)")
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+path.Join(database, directory, "by_text")+"` (first, second) VALUES (1u, 'a'u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	c.Assert(opened.DB.QueryRowContext(ctx, "SELECT hits FROM `"+path.Join(database, directory, "by_text")+"`").Scan(&hits), qt.IsNil)
 	c.Assert(hits, qt.Equals, uint64(7))

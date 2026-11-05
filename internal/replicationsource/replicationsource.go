@@ -335,15 +335,7 @@ type pendingReplication struct {
 func decodeGo(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	result := make(map[int][]*protocol.SourceModelValue)
 	var replications []pendingReplication
-	type pendingItem struct {
-		schema, replication string
-		item                replication.Item
-	}
 	var items []pendingItem
-	type pendingTransfer struct {
-		fragment int
-		values   map[string]string
-	}
 	var transfers []pendingTransfer
 	for index, fragment := range document.GetFragments() {
 		if err := ctx.Err(); err != nil {
@@ -381,21 +373,56 @@ func decodeGo(ctx context.Context, document *protocol.SourceDocument) (map[int][
 			return nil, fmt.Errorf("unsupported YDB replication source directive")
 		}
 	}
+	if err := attachItems(replications, items); err != nil {
+		return nil, err
+	}
+	if err := addGoValues(document, result, replications, transfers); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// pendingItem is an item directive held until every replication of the file
+// is known, since the replication it joins may come later in the file.
+type pendingItem struct {
+	schema, replication string
+	item                replication.Item
+}
+
+// pendingTransfer is a transfer directive, parsed once the replications of the
+// file are captured.
+type pendingTransfer struct {
+	fragment int
+	values   map[string]string
+}
+
+// attachItems adds each held item to the replication of its name and
+// directory, in declaration order. An item of a replication the file does not
+// declare, or a second item with one target, refuses the file.
+func attachItems(replications []pendingReplication, items []pendingItem) error {
 	for _, pending := range items {
 		index := slices.IndexFunc(replications, func(declared pendingReplication) bool {
 			return declared.name == pending.replication && declared.schema == pending.schema
 		})
 		if index < 0 {
-			return nil, fmt.Errorf("the file declares no async replication %q for the item replicating %q", display(pending.schema, pending.replication), pending.item.Source)
+			return fmt.Errorf("the file declares no async replication %q for the item replicating %q", display(pending.schema, pending.replication), pending.item.Source)
 		}
 		declared := &replications[index]
 		if slices.ContainsFunc(declared.spec.Items, func(have replication.Item) bool {
 			return strings.Trim(have.Target, "/") == strings.Trim(pending.item.Target, "/")
 		}) {
-			return nil, fmt.Errorf("async replication %q declares two items with target %q", display(declared.schema, declared.name), pending.item.Target)
+			return fmt.Errorf("async replication %q declares two items with target %q", display(declared.schema, declared.name), pending.item.Target)
 		}
 		declared.spec.Items = append(declared.spec.Items, pending.item)
 	}
+	return nil
+}
+
+// addGoValues captures the replications, then the transfers, of a Go file and
+// appends each value to the values of its fragment in result, numbering them
+// in that order. A replication with no item, or a second declaration of one
+// kind and path, refuses the file.
+func addGoValues(document *protocol.SourceDocument, result map[int][]*protocol.SourceModelValue, replications []pendingReplication, transfers []pendingTransfer) error {
 	seen := make(map[string]bool)
 	position := 0
 	add := func(fragment int, value *protocol.Envelope, family, path string) error {
@@ -412,41 +439,41 @@ func decodeGo(ctx context.Context, document *protocol.SourceDocument) (map[int][
 	}
 	for _, declared := range replications {
 		if len(declared.spec.Items) == 0 {
-			return nil, fmt.Errorf("async replication %q declares no item; declare the tables it replicates with //%s in the same file", display(declared.schema, declared.name), DirectiveItem)
+			return fmt.Errorf("async replication %q declares no item; declare the tables it replicates with //%s in the same file", display(declared.schema, declared.name), DirectiveItem)
 		}
 		owner, path, err := declaredOwner(schema.ReplicationProperties, declared.values, "")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if err := replication.ValidateReplication(declared.spec); err != nil {
-			return nil, err
+			return err
 		}
 		value, err := schema.CaptureReplicationIntent(owner, declared.spec)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if err := add(declared.fragment, value, "async replication", path); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	for _, declared := range transfers {
 		spec, err := replication.ParseTransfer(declared.values)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		owner, path, err := declaredOwner(schema.TransferProperties, declared.values, "")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		value, err := schema.CaptureTransferIntent(owner, spec)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if err := add(declared.fragment, value, "transfer", path); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return result, nil
+	return nil
 }
 
 // attributes reads a Go directive's attributes, which the host lexed as

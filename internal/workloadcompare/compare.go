@@ -35,7 +35,7 @@ func CompareClassifiers(ctx context.Context, request *protocol.CompareModelsRequ
 
 // PoolFamily is the resource pool's part of a comparison.
 func PoolFamily() objectcompare.Family {
-	family := base(PoolServiceID, schema.ResourcePoolProperties, "resource pool")
+	family := base(PoolServiceID, schema.ResourcePoolProperties, schema.ResourcePoolChange, "resource pool")
 	family.Unsettled = unsettledPool
 	family.Equal = func(current, desired *protocol.Envelope) (bool, error) {
 		before, err := schema.WorkloadPool(current)
@@ -54,7 +54,7 @@ func PoolFamily() objectcompare.Family {
 
 // ClassifierFamily is the classifier's part of a comparison.
 func ClassifierFamily() objectcompare.Family {
-	family := base(ClassifierServiceID, schema.ResourcePoolClassifierProperties, "resource pool classifier")
+	family := base(ClassifierServiceID, schema.ResourcePoolClassifierProperties, schema.ResourcePoolClassifierChange, "resource pool classifier")
 	family.Unsettled = func(*protocol.Envelope, *protocol.Envelope) error { return nil }
 	family.Equal = func(current, desired *protocol.Envelope) (bool, error) {
 		before, err := schema.WorkloadClassifier(current)
@@ -72,9 +72,9 @@ func ClassifierFamily() objectcompare.Family {
 	return family
 }
 
-func base(service, kind, noun string) objectcompare.Family {
+func base(service, kind, changeKind, noun string) objectcompare.Family {
 	return objectcompare.Family{
-		ServiceID: service, Kind: kind, Capability: workload.CapabilityResourcePools, Noun: noun,
+		ServiceID: service, Kind: kind, ChangeKind: changeKind, Capability: workload.CapabilityResourcePools, Noun: noun,
 		ChangeCapability: true, KeepOmitted: true, OmittedRemoval: schema.ExplicitWorkloadRemoval(), DatabaseWide: true,
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(kind) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {

@@ -68,7 +68,7 @@ func TestCoordinationCapturePreservesConfigurationWithoutDuplicatePath(t *testin
 
 func TestExternalCapturePreservesNativeOptionsAndOrderedColumns(t *testing.T) {
 	c := testcheck.New(t)
-	source := &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: new("PostgreSQL"), Location: new("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "BASIC", "PASSWORD_SECRET_PATH": "/local/auth/credential", "LOGIN": "reader"}}
+	source := &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: new("PostgreSQL"), Location: new("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "BASIC", "PASSWORD_SECRET_PATH": "/local/auth/credential", "LOGIN": "reader"}} // #nosec G101 -- the properties name a login and a secret's path, not a password
 	sourceEnvelope, err := schema.CaptureObject(objectOwner(schema.ExternalSourceProperties), source)
 	c.Assert(err, qt.IsNil)
 	var decodedSource Ydb_Table.DescribeExternalDataSourceResult

@@ -51,7 +51,6 @@ func (e *External) Apply(ctx context.Context, database string, value *protocol.E
 	if err != nil {
 		return false, err
 	}
-	owner := proto.CloneOf(normalized.NormalizedOwner)
 	change, operation, err := schema.ExternalOperationChange(normalized.Value)
 	if err != nil {
 		return false, err
@@ -61,11 +60,11 @@ func (e *External) Apply(ctx context.Context, database string, value *protocol.E
 		return false, err
 	}
 	before, after := parts.Before, parts.After
-	if (owner.Database != "" && owner.Database != database) || (parts.Database != "" && parts.Database != database) {
+	if parts.Database != "" && parts.Database != database {
 		return false, fmt.Errorf("external object operation targets another database")
 	}
-	owner.Database = database
-	if err := schema.ValidateNativeOwner(owner); err != nil {
+	owner, err := boundOwner(normalized.NormalizedOwner, database, "external object")
+	if err != nil {
 		return false, err
 	}
 	display := externals.Display(owner)
@@ -73,8 +72,7 @@ func (e *External) Apply(ctx context.Context, database string, value *protocol.E
 	if err != nil {
 		return false, refused("read "+noun(owner.Kind)+" "+display, err)
 	}
-	absent := before == nil || operation == schema.ExternalRestore
-	if absent != (current == nil) || (!absent && !sameObservation(before, current)) {
+	if !asPlanned(operation, before, current) {
 		return false, &Refusal{Err: fmt.Errorf("%s %s changed since the plan read it", noun(owner.Kind), display)}
 	}
 	statements, err := externalStatements(owner, database, operation, after)
@@ -102,6 +100,13 @@ func (e *External) Apply(ctx context.Context, database string, value *protocol.E
 		}
 	}
 	return true, confirmExternal(owner, database, operation, before, after, observed)
+}
+
+// asPlanned reports whether the object read now, current, is as the plan read
+// it: absent for a creation and a restore, and otherwise the object before.
+func asPlanned(operation string, before, current *protocol.Envelope) bool {
+	absent := before == nil || operation == schema.ExternalRestore
+	return absent == (current == nil) && (absent || sameObservation(before, current))
 }
 
 func noun(kind string) string {
@@ -219,36 +224,13 @@ func (e *External) read(ctx context.Context, owner *protocol.Reference) (*protoc
 	if !found {
 		return nil, nil
 	}
-	absolute := path.Join(directory, owner.Name)
-	var described proto.Message
-	var self *Ydb_Scheme.Entry
+	describe := e.describeTable
 	if owner.Kind == schema.ExternalSourceProperties {
-		response, err := e.Table.DescribeExternalDataSource(ctx, &Ydb_Table.DescribeExternalDataSourceRequest{Path: absolute})
-		if err != nil {
-			return nil, fmt.Errorf("describe YDB external data source: transport failed")
-		}
-		var result Ydb_Table.DescribeExternalDataSourceResult
-		if err := Operation(response.GetOperation(), &result); err != nil {
-			return nil, err
-		}
-		described, self = &result, result.GetSelf()
-	} else {
-		response, err := e.Table.DescribeExternalTable(ctx, &Ydb_Table.DescribeExternalTableRequest{Path: absolute})
-		if err != nil {
-			return nil, fmt.Errorf("describe YDB external table: transport failed")
-		}
-		if err := Status(response.GetOperation()); err != nil {
-			return nil, err
-		}
-		payload := response.GetOperation().GetResult()
-		if !payload.MessageIs(&Ydb_Table.DescribeExternalTableResult{}) {
-			return nil, fmt.Errorf("invalid YDB external table response type")
-		}
-		var result native.DescribeExternalTableResult
-		if err := proto.Unmarshal(payload.GetValue(), &result); err != nil {
-			return nil, fmt.Errorf("invalid YDB external table response")
-		}
-		described, self = &result, result.GetSelf()
+		describe = e.describeSource
+	}
+	described, self, err := describe(ctx, path.Join(directory, owner.Name))
+	if err != nil {
+		return nil, err
 	}
 	if self.GetName() != owner.Name || self.GetType() != expected {
 		return nil, fmt.Errorf("YDB external object observation has a different identity")
@@ -259,6 +241,41 @@ func (e *External) read(ctx context.Context, owner *protocol.Reference) (*protoc
 	}
 	value.Context = &protocol.DatabaseContext{Database: owner.Database, SourceDatabase: owner.Database}
 	return value, nil
+}
+
+// describeSource describes the external data source at absolute, and returns
+// the description with the entry it names itself by.
+func (e *External) describeSource(ctx context.Context, absolute string) (proto.Message, *Ydb_Scheme.Entry, error) {
+	response, err := e.Table.DescribeExternalDataSource(ctx, &Ydb_Table.DescribeExternalDataSourceRequest{Path: absolute})
+	if err != nil {
+		return nil, nil, fmt.Errorf("describe YDB external data source: transport failed")
+	}
+	var result Ydb_Table.DescribeExternalDataSourceResult
+	if err := Operation(response.GetOperation(), &result); err != nil {
+		return nil, nil, err
+	}
+	return &result, result.GetSelf(), nil
+}
+
+// describeTable describes the external table at absolute, and returns the
+// description with the entry it names itself by.
+func (e *External) describeTable(ctx context.Context, absolute string) (proto.Message, *Ydb_Scheme.Entry, error) {
+	response, err := e.Table.DescribeExternalTable(ctx, &Ydb_Table.DescribeExternalTableRequest{Path: absolute})
+	if err != nil {
+		return nil, nil, fmt.Errorf("describe YDB external table: transport failed")
+	}
+	if err := Status(response.GetOperation()); err != nil {
+		return nil, nil, err
+	}
+	payload := response.GetOperation().GetResult()
+	if !payload.MessageIs(&Ydb_Table.DescribeExternalTableResult{}) {
+		return nil, nil, fmt.Errorf("invalid YDB external table response type")
+	}
+	var result native.DescribeExternalTableResult
+	if err := proto.Unmarshal(payload.GetValue(), &result); err != nil {
+		return nil, nil, fmt.Errorf("invalid YDB external table response")
+	}
+	return &result, result.GetSelf(), nil
 }
 
 // sameObservation reports whether the object read now is the one the plan
