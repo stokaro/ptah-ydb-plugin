@@ -57,6 +57,13 @@ func buildTableDesiredModel() *protocol.ValueModel {
 		SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}}
 }
 
+// CaptureTableIntent writes the settings a source declares for a row table as
+// the provider's desired facet of that table, normalized as a YAML or Go
+// source's facet is.
+func CaptureTableIntent(owner *protocol.Reference, intent *native.RowTableIntent) (*protocol.Envelope, error) {
+	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: TableProperties, Owner: proto.CloneOf(owner)}, TableDesiredModel(), intent, NormalizeDesired)
+}
+
 func normalizeTableIntent(value *protocol.Envelope) (*protocol.Envelope, error) {
 	definition := TableDesiredModel()
 	if value.GetProviderId() != ProviderID || value.GetKind() != definition.Kind || value.GetSchemaVersion() != definition.SchemaVersion ||

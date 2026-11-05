@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -28,15 +29,16 @@ func sqlSchemaRequest(description *protocol.Description, documents ...string) *p
 
 // The executable reads a load of two YQL documents without a session: the
 // second alters what the first declared, each document answers what it
-// declares, and the coordination node arrives as the provider's own model.
+// declares, the coordination node arrives as the provider's own model, and
+// the table's TTL, for a host that takes the facets of a reading, as the
+// row-table facet of the table.
 func TestSQLSchemaOfflineSubprocess(t *testing.T) {
 	c := testcheck.New(t)
-	binary, digest := providerBinary(c)
-	client := startProvider(c, binary, digest)
+	client := startProviderFor(c, provider.SQLFacetsFeature)
 	engine := client.Description().GetEngines()[0]
 	c.Assert(engine.GetSqlSchema().GetMode(), qt.Equals, protocol.SQLSchemaDeclaration_DOCUMENT)
 	request := sqlSchemaRequest(client.Description(),
-		"CREATE TABLE `app/items` (id Uint64 NOT NULL, name Utf8, PRIMARY KEY (id));\nCREATE COORDINATION NODE `app/locks`;",
+		"CREATE TABLE `app/items` (id Uint64 NOT NULL, name Utf8, ts Timestamp, PRIMARY KEY (id)) WITH (TTL = Interval('PT1H') ON ts);\nCREATE COORDINATION NODE `app/locks`;",
 		"COMMENT ON COLUMN `app/items`.`name` IS 'the name';\nCREATE USER reader;\nGRANT SELECT ON `app/items` TO reader;")
 	// No session or database URL is supplied anywhere in this process test.
 	reply, err := client.ReadSQLSchema(c.Context(), request)
@@ -47,13 +49,16 @@ func TestSQLSchemaOfflineSubprocess(t *testing.T) {
 	c.Assert(reply.GetTables()[0].GetColumns()[1].GetComment(), qt.Equals, "the name")
 	c.Assert(reply.GetNativeObjects(), qt.HasLen, 1)
 	c.Assert(reply.GetNativeObjects()[0].GetKind(), qt.Equals, schema.CoordinationProperties)
+	c.Assert(reply.GetFacets(), qt.HasLen, 1)
+	c.Assert(reply.GetFacets()[0].GetKind(), qt.Equals, schema.TableProperties)
+	c.Assert(reply.GetFacets()[0].GetOwner().GetName(), qt.Equals, "items")
 	c.Assert(reply.GetGrants()[0].GetTarget().GetKind(), qt.Equals, "table")
 	c.Assert(reply.GetDeclarations(), qt.HasLen, 2)
 	c.Assert(reply.GetDeclarations()[1].GetObjects()[0].GetName(), qt.Equals, "reader")
 }
 
 // A refused load comes back incomplete, with the refusal at the position the
-// host's own reader names, and with nothing else: a syntax error, and a table
+// host's own reader names, and with nothing else: a syntax error, and an index
 // setting a SQL schema reading has no home for.
 func TestSQLSchemaOfflineSubprocess_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
@@ -66,9 +71,10 @@ func TestSQLSchemaOfflineSubprocess_FailurePath(t *testing.T) {
 	}{
 		{name: "syntax", text: "CREATE TABLE t (id Uint64, PRIMARY KEY (id));", code: protocol.SQLDiagnostic_SYNTAX, offset: 44,
 			message: `YQL schema: nullable primary key column "id" cannot be represented by a desired schema; declare NOT NULL (got ";")`},
-		{name: "table settings", text: "CREATE TABLE t (id Uint64 NOT NULL, ts Timestamp, PRIMARY KEY (id)) WITH (TTL = Interval('PT1H') ON ts);",
+		{name: "index settings", text: "CREATE TABLE t (id Uint64 NOT NULL, a Utf8, PRIMARY KEY (id), INDEX i GLOBAL SYNC ON (a) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2));",
 			code: protocol.SQLDiagnostic_UNSUPPORTED, offset: 0,
-			message: "table `t` declares a TTL, which a SQL schema reading has no home for: the host refuses the settings of a table in a SQL schema reading"},
+			message: "index `i` of table `t` declares partitioning settings, which a SQL schema reading has no home for: " +
+				"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
