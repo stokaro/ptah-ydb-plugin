@@ -1,6 +1,7 @@
 package secretvalue_test
 
 import (
+	"strconv"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -210,4 +211,116 @@ func TestClearValue_HappyPath(t *testing.T) {
 			c.Assert(writes, qt.Equals, tc.writes)
 		})
 	}
+}
+
+// A password input is written where its reference stands, as the string
+// literal YDB takes there, and a hash with HASH; ADR 0071.
+func TestExpandPassword_HappyPath(t *testing.T) {
+	env := environment(map[string]string{
+		"PTAH_SECRET_PASSWORD_APP": `a'b\c`,
+		"PTAH_SECRET_PASSWORD_OPS": ` {"hash":"h","salt":"s","type":"argon2id"} `,
+		"PTAH_SECRET_KEY":          "k",
+	})
+	tests := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{
+			name:  "the password of CREATE USER, escaped as a String literal",
+			query: "CREATE USER `app` PASSWORD $PTAH_SECRET_PASSWORD_APP;",
+			want:  "CREATE USER `app` PASSWORD 'a\\'b\\\\c';",
+		},
+		{
+			name:  "the password of ALTER USER beside another option, in any case",
+			query: "alter user app with password $PTAH_SECRET_PASSWORD_APP NOLOGIN",
+			want:  "alter user app with password 'a\\'b\\\\c' NOLOGIN",
+		},
+		{
+			name:  "a hash in the variable is sent with HASH",
+			query: "CREATE USER `ops` PASSWORD $PTAH_SECRET_PASSWORD_OPS;",
+			want:  "CREATE USER `ops` HASH '{\"hash\":\"h\",\"salt\":\"s\",\"type\":\"argon2id\"}';",
+		},
+		{
+			name:  "a password and a secret in one query, each in its own place",
+			query: "CREATE USER `app` PASSWORD $PTAH_SECRET_PASSWORD_APP;\nCREATE SECRET s WITH (value = $PTAH_SECRET_KEY);",
+			want: "CREATE USER `app` PASSWORD 'a\\'b\\\\c';\n$PTAH_SECRET_KEY = 'k';\n" +
+				"CREATE SECRET s WITH (value = $PTAH_SECRET_KEY);",
+		},
+		{
+			name:  "a user named password",
+			query: "CREATE USER password PASSWORD $PTAH_SECRET_PASSWORD_APP",
+			want:  "CREATE USER password PASSWORD 'a\\'b\\\\c'",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			got, err := secretvalue.Expand(tc.query, env)
+			c.Assert(err, qt.IsNil)
+			c.Assert(got.Text, qt.Equals, tc.want)
+			c.Assert(got.Defines(), qt.IsTrue)
+		})
+	}
+}
+
+func TestExpandPassword_FailurePath(t *testing.T) {
+	env := environment(map[string]string{"PTAH_SECRET_PASSWORD_APP": "pw-SENTINEL"})
+	references := []struct {
+		name  string
+		query string
+	}{
+		{name: "the name of the user", query: "CREATE USER $PTAH_SECRET_PASSWORD_APP PASSWORD 'x';"},
+		{name: "a group", query: "CREATE GROUP g PASSWORD $PTAH_SECRET_PASSWORD_APP;"},
+		{name: "a password not after PASSWORD", query: "CREATE USER app LOGIN $PTAH_SECRET_PASSWORD_APP;"},
+		{name: "a read of the variable beside a user", query: "CREATE USER app PASSWORD $PTAH_SECRET_PASSWORD_APP; SELECT $PTAH_SECRET_PASSWORD_APP;"},
+	}
+	for _, tc := range references {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			got, err := secretvalue.Expand(tc.query, env)
+			c.Assert(err, qt.ErrorIs, secretvalue.ErrReference)
+			c.Assert(err, qt.Not(qt.ErrorMatches), ".*SENTINEL.*")
+			c.Assert(got.Text, qt.Equals, "")
+		})
+	}
+
+	t.Run("a variable that is not set", func(t *testing.T) {
+		c := testcheck.New(t)
+		got, err := secretvalue.Expand("CREATE USER app PASSWORD $PTAH_SECRET_PASSWORD_OTHER;", env)
+		c.Assert(err, qt.ErrorMatches,
+			"a user's password requires approved input PTAH_SECRET_PASSWORD_OTHER, which was not supplied")
+		c.Assert(got.Text, qt.Equals, "")
+	})
+}
+
+// A refusal the server answers a CREATE USER with loses the password in every
+// form the query held it in, the hash's escaped one included.
+func TestExpandPassword_Redact_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	hash := `{"hash":"h-SENTINEL","salt":"s","type":"argon2id"}`
+	env := environment(map[string]string{"PTAH_SECRET_PASSWORD_APP": `pw'SENTINEL`, "PTAH_SECRET_PASSWORD_OPS": hash})
+	expanded, err := secretvalue.Expand(
+		"CREATE USER app PASSWORD $PTAH_SECRET_PASSWORD_APP; CREATE USER ops PASSWORD $PTAH_SECRET_PASSWORD_OPS;", env)
+	c.Assert(err, qt.IsNil)
+
+	redacted := expanded.Redact("refused: " + expanded.Text + " " + strconv.Quote(expanded.Text) + " " + hash)
+
+	c.Assert(redacted, qt.Not(qt.Contains), "SENTINEL")
+	c.Assert(redacted, qt.Contains, "[secret]")
+}
+
+// A query that writes in only a user's password defines no secret, so it needs
+// no target that keeps schema secrets; one that defines a secret's value does.
+func TestExpandDefinesSecrets_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	env := environment(map[string]string{"PTAH_SECRET_PASSWORD_APP": "pw", "PTAH_SECRET_KEY": "k"})
+
+	password, passwordErr := secretvalue.Expand("CREATE USER app PASSWORD $PTAH_SECRET_PASSWORD_APP;", env)
+	secret, secretErr := secretvalue.Expand("CREATE SECRET s WITH (value = $PTAH_SECRET_KEY);", env)
+
+	c.Assert(passwordErr, qt.IsNil)
+	c.Assert(secretErr, qt.IsNil)
+	c.Assert([]bool{password.Defines(), password.DefinesSecrets()}, qt.DeepEquals, []bool{true, false})
+	c.Assert([]bool{secret.Defines(), secret.DefinesSecrets()}, qt.DeepEquals, []bool{true, true})
 }

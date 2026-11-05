@@ -143,6 +143,10 @@ func providerFeatures() []string {
 		provider.PlanningStatementStyleFeature,
 		provider.CommonObjectsFeature,
 		provider.CommonAccessFeature,
+		// A user's password arrives as an execution input the statement names
+		// and the execution binds; see commonobject.passwordClause and
+		// secretvalue.Expand.
+		provider.PasswordInputsFeature,
 		provider.PlanningLifecycleFeature,
 		provider.PlanningObjectContextFeature,
 		provider.PlanningContextInventoryFeature,

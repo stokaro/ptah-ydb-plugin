@@ -1,0 +1,3 @@
+# The host branch the live legs build: stokaro/ptah#5324 adds the host half
+# of schema.password-inputs. Remove this file once a Ptah release lists it.
+fix/4204-g64-password-input
