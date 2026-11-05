@@ -74,7 +74,7 @@ func hostCapabilities() map[string]bool {
 		"procedure_comments": false, "procedures": false, "range_types": false, "rename_column_clause": false,
 		"routine_replacement_resets_definer": false, "row_level_security": false, "row_level_ttl": false,
 		"sequence_start_counter_only": false, "sequences": false, "show_routine_privilege": false,
-		"trigger_comments": false, "triggers": false, "type_comments": false, "unique_constraints": false,
+		"trigger_comments": false, "triggers": false, "type_comments": false,
 		"unique_nulls_distinct_clause": false, "xml_type": false,
 	}
 }

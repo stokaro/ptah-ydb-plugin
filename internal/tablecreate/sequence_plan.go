@@ -62,12 +62,20 @@ func planSequences(owner *protocol.Reference, table *protocol.PlanningTable, cap
 			return nil, fmt.Sprintf("%s: the sequence was restarted at %s, and YDB replays that restart on every later ALTER SEQUENCE, "+
 				"so the next insert would take that value again and fail on a key a row may hold (measured: `Conflict with existing key`)", subject, restart), nil
 		}
-		// The declaration compiled, so settings other than the default passed
-		// the creation rules, the range of a 16-bit or 32-bit Serial included.
-		// What is left is a sequence moved back to the defaults, which takes
-		// an ALTER SEQUENCE all the same.
 		if !caps[ydbsequence.Options] {
 			return nil, keyRefusal(ydbsequence.Options, "giving "+subject+" a start or an increment"), nil
+		}
+		// Any ALTER SEQUENCE raises the maximum of a 16-bit or 32-bit
+		// Serial's sequence, a move back to the defaults included, so a
+		// change is refused where the target does not keep it. A table that
+		// already holds the declared settings needs no statement and is not
+		// refused.
+		settings := wanted
+		if settings.IsDefault() {
+			settings = held
+		}
+		if reason := ydbsequence.RangeRefusal(SerialTypeOf(column), settings, caps[ydbsequence.KeepsRange]); reason != "" {
+			return nil, keyRefusal(ydbsequence.KeepsRange, "giving "+subject+" a start or an increment ("+reason+")"), nil
 		}
 		captured, err := capturedColumn(current, observed.columns[column.GetName()])
 		if err != nil {
