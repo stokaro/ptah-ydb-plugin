@@ -20,6 +20,9 @@ type Runner interface {
 
 // Read returns one consistent bounded query result, never a truncated prefix.
 func (s Store) Read(ctx context.Context, runner Runner, limit uint32) (result []*protocol.HistoryRevision, err error) {
+	if s.builtin {
+		return s.readBuiltin(ctx, runner, limit)
+	}
 	rows, err := runner.QueryContext(ctx, "SELECT version, revision FROM "+s.QuotedPath()+" ORDER BY version LIMIT "+strconv.FormatUint(uint64(limit)+1, 10))
 	if err != nil {
 		return nil, fmt.Errorf("read YDB history: query failed")
@@ -73,6 +76,9 @@ func (s Store) Mutate(ctx context.Context, runner Runner, request *protocol.Muta
 	key, err := s.Key(version)
 	if err != nil {
 		return protocol.HistoryResult_REFUSED, err
+	}
+	if s.builtin {
+		return s.mutateBuiltin(ctx, runner, request, version, key)
 	}
 	declaration := "DECLARE $version AS " + s.KeyType() + "; "
 	var payload []byte

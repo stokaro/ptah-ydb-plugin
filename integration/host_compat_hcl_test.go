@@ -208,12 +208,44 @@ table "cf" {
 `
 }
 
+// compatChangefeedRebuildPlan is what ptah-compat schema apply prints for the
+// rebuild of table cf of directory that widens column v, as the host's
+// embedded engine at 74de0b65b printed it on 25.1.4.7 and 26.2.1.14: the
+// rebuild's notes with the changefeed's among them, every setting of the new
+// table, and the changefeed dropped before the swap and added after it with
+// its consumer.
+func compatChangefeedRebuildPlan(directory string) string {
+	// A raw string cannot hold a backquote, so ~ stands for one.
+	plan := `Planned schema changes:
+-- Rebuild of table DIR/cf: YDB cannot make this change in place, so the table is created anew, the rows are copied, and the two tables are swapped.
+-- The steps are not atomic. Rows written to DIR/cf between the copy and the swap are lost, and YDB has no lock to stop them: stop writing to the table until the last step has run.
+-- The copy is one query. YDB refuses one that carries more than about 48 MiB on 25.1 or 64 MiB on 26.2; nothing is then copied, and the old table keeps serving.
+-- Changefeed feed of table DIR/cf is dropped before the swap and added again after it, because YDB moves no table that carries a changefeed. Its stream restarts: the records nobody read are lost, and its consumers start again from the beginning of the new stream.
+CREATE TABLE ~DIR/__ptah_rebuild_cf~ (
+    ~id~ Int64 NOT NULL,
+    ~v~ Int64,
+    PRIMARY KEY (~id~),
+    FAMILY ~default~ (COMPRESSION = 'off')
+) WITH (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1, KEY_BLOOM_FILTER = DISABLED);
+INSERT INTO ~DIR/__ptah_rebuild_cf~ (~id~, ~v~) SELECT Unwrap(~id~, 'rebuilding table DIR.cf: column id holds NULL, and the new table declares it NOT NULL'u) AS ~id~, IF(~v~ IS NULL, NULL, Unwrap(CAST(~v~ AS Int64), 'rebuilding table DIR.cf: column v holds a value that does not convert to its new type'u)) AS ~v~ FROM ~DIR/cf~;
+ALTER TABLE ~DIR/cf~ DROP CHANGEFEED ~feed~;
+ALTER TABLE ~DIR/cf~ RENAME TO ~DIR/__ptah_replaced_cf~;
+ALTER TABLE ~DIR/__ptah_rebuild_cf~ RENAME TO ~DIR/cf~;
+ALTER TABLE ~DIR/cf~ ADD CHANGEFEED ~feed~ WITH (MODE = 'UPDATES', FORMAT = 'JSON');
+ALTER TOPIC ~DIR/cf/feed~ ADD CONSUMER ~reader~;
+DROP TABLE ~DIR/__ptah_replaced_cf~;
+Auto-approval enabled; applying schema changes.
+Schema apply completed successfully.
+`
+	return strings.ReplaceAll(strings.ReplaceAll(plan, "~", "`"), "DIR", directory)
+}
+
 // Ported from the host's TestYDBCompatBinary_HCLKeepsTheChangefeedsItCannotSpell:
 // an HCL document cannot spell a changefeed, so its silence about one is not
 // a request to drop it. Applying the document leaves the table's changefeed
 // as it is, and a rebuild the document asks for drops the changefeed before
 // the swap and adds it back after, with its consumer, rather than losing it
-// with the old table.
+// with the old table. The plan reads as the host's embedded engine printed it.
 func TestHostCompatHCLKeepsTheChangefeedsItCannotSpell_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	hostCompat(c)
@@ -242,7 +274,7 @@ func TestHostCompatHCLKeepsTheChangefeedsItCannotSpell_HappyPath(t *testing.T) {
 	c.Assert(syncedExit, qt.Equals, 0, qt.Commentf("schema apply:\n%s\n%s", synced, syncedNotes))
 	c.Assert(synced, qt.Equals, "Schema is synced, no changes to be made\n")
 	c.Assert(rebuildExit, qt.Equals, 0, qt.Commentf("schema apply:\n%s\n%s", rebuilt, rebuildNotes))
-	c.Assert(rebuilt, qt.Contains, "Changefeed feed of table "+directory+"/cf is dropped before the swap")
+	c.Assert(rebuilt, qt.Equals, compatChangefeedRebuildPlan(directory))
 	c.Assert(heldColumnTypes(c, opened, absolute)["v"], qt.Equals, "Optional<Int64>")
 	after, found := describedChangefeeds(c, opened, absolute)
 	c.Assert(found, qt.IsTrue)

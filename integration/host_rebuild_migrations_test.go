@@ -116,12 +116,13 @@ func TestHostResumesARebuildAfterAFailedConversion_HappyPath(t *testing.T) {
 	resumed, resumeErr := hostMigrate(c, directory, migrations, "migrations", "up", "--allow-dirty")
 
 	c.Assert(failErr, qt.IsNotNil, qt.Commentf("up:\n%s", failure))
-	// The built-in engine prints YDB's answer, the Unwrap message that names
+	// The built-in engine printed YDB's answer, the Unwrap message that names
 	// the column. Through a provider the host prints the outcome and the
-	// provider's reason, and the statement after them, which quotes the
-	// message.
+	// provider's reason, which carries the same message, and the statement
+	// after them.
 	c.Assert(failure, qt.Contains, "failed to execute migration SQL: provider execution failed (0 of 1 units confirmed): "+
-		"provider execution: NOT_APPLIED (0 units confirmed applied)")
+		"provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the statement: "+
+		"rebuilding table "+directory+".items: column n holds a value that does not convert to its new type (PRECONDITION_FAILED)")
 	c.Assert(failure, qt.Contains, "\nSQL: INSERT INTO `"+directory+"/__ptah_rebuild_items` (`id`, `n`) SELECT ")
 	c.Assert(stopped, qt.HasLen, 1)
 	c.Assert(stopped[0].State, qt.Equals, failed)

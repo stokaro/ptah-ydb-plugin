@@ -272,7 +272,7 @@ func TestRebuildPlan_CacheMode_HappyPath(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(renderedText(c, plan, request.Capabilities)[0], qt.Equals, "CREATE TABLE `app/__ptah_rebuild_records` (\n    `id` Uint64 NOT NULL,\n"+
-				"    `payload` Utf8 FAMILY `cold`,\n    `n` Int64,\n    PRIMARY KEY (`id`),\n    "+test.wantEntry+"\n);")
+				"    `payload` Utf8 FAMILY `cold`,\n    `n` Int64,\n    PRIMARY KEY (`id`),\n    "+test.wantEntry+"\n) WITH (KEY_BLOOM_FILTER = DISABLED);")
 		})
 	}
 }
