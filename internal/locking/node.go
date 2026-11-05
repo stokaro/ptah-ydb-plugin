@@ -147,9 +147,10 @@ func validateNode(ctx context.Context, driver *ydb.Driver, node string) error {
 		// Ptah's built-in YDB engine creates the node with neither mode set,
 		// which YDB reads as relaxed reads and strict attachment.
 		return authored.Wrap(ErrRelaxedNode, fmt.Sprintf("the YDB coordination node %s, which holds Ptah's locks, reads with "+
-			"read consistency %s and attach consistency %s, and a lock taken there cannot be shown to be still held. Set both "+
-			"to strict, or drop the node while no run holds a lock on it, which lets the provider create it strict. Ptah's "+
-			"built-in YDB engine creates the node without either setting", node,
+			"read consistency %s and attach consistency %s, and a lock taken there cannot be shown to be still held. Ptah's "+
+			"built-in YDB engine creates the node without either setting. YDB's CLI and YQL have no command for a coordination "+
+			"node: set both modes to strict with the coordination service's AlterNode call, or remove the node with its DropNode "+
+			"call while no run holds a lock on it, and the provider creates it strict", node,
 			consistencyName(description.GetConfig().GetReadConsistencyMode()), consistencyName(description.GetConfig().GetAttachConsistencyMode())))
 	}
 	return nil

@@ -749,7 +749,23 @@ an incompatible configuration without changing it. The refusal is a
 `NOT_ACQUIRED` receipt that holds nothing, and its reason names the node and its
 two settings. Ptah's built-in YDB engine creates the node with neither setting,
 so a database that engine locked holds a node this provider refuses until it is
-made strict or dropped. YDB's default read mode can
+made strict or removed.
+
+YDB's CLI (2.25.0 and 2.29.0, bundled with 25.1.4.7 and 26.2.1.14) and YQL have
+no command for a coordination node, so the fix goes through the coordination
+service. With [ydb-go-sdk](https://github.com/ydb-platform/ydb-go-sdk), alter
+the node in place:
+
+```go
+err := driver.Coordination().AlterNode(ctx, path.Join(driver.Name(), "ptah_locks"), coordination.NodeConfig{
+	ReadConsistencyMode:   coordination.ConsistencyModeStrict,
+	AttachConsistencyMode: coordination.ConsistencyModeStrict,
+})
+```
+
+`DropNode` on the same path removes the node instead, and the next lock creates
+it strict. Remove it only while no run holds a lock there: dropping the node ends
+every lock session on it. YDB's default read mode can
 return stale state during leader changes; see the
 [YDB coordination documentation](https://ydb.tech/docs/en/reference/ydb-sdk/coordination).
 This changes the requirements for an older Ptah lock node; pre-v1, so no

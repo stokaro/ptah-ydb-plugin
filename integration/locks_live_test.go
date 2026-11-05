@@ -222,9 +222,10 @@ func TestNativeLocksRefuseRelaxedNodeWithoutChangingIt(t *testing.T) {
 			c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 			c.Assert(err, qt.Not(qt.ErrorIs), provider.ErrOutcomeUnknown)
 			c.Assert(err, qt.ErrorMatches, regexp.QuoteMeta("provider lock outcome is NOT_ACQUIRED: the YDB coordination node "+node+
-				", which holds Ptah's locks, reads with "+test.settings+", and a lock taken there cannot be shown to be still held. Set both "+
-				"to strict, or drop the node while no run holds a lock on it, which lets the provider create it strict. Ptah's built-in YDB "+
-				"engine creates the node without either setting"))
+				", which holds Ptah's locks, reads with "+test.settings+", and a lock taken there cannot be shown to be still held. Ptah's "+
+				"built-in YDB engine creates the node without either setting. YDB's CLI and YQL have no command for a coordination node: set "+
+				"both modes to strict with the coordination service's AlterNode call, or remove the node with its DropNode call while no "+
+				"run holds a lock on it, and the provider creates it strict"))
 			c.Assert(result.GetOutcome(), qt.Equals, protocol.LockResult_NOT_ACQUIRED)
 			_, config, err := opened.Driver.Coordination().DescribeNode(c.Context(), node)
 			c.Assert(err, qt.IsNil)
