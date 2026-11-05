@@ -29,7 +29,7 @@ func feedEvents(directory, retention, indexes string) string {
 // migration that renames index old_name to new_name with a new comment and
 // shortens the changefeed's retention, and leaves index retained, which the
 // declaration no longer names, in place with its comment. `migrations up`
-// applies it and nothing is left to plan; `migrations down` takes the
+// applies it and the next generation finds nothing; `migrations down` takes the
 // rename, the comment and the retention back, the first declaration then
 // plans nothing, and retained keeps its comment throughout.
 func TestHostRollsBackAnIndexAndAFeatureKeepingASkippedIndex_HappyPath(t *testing.T) {
@@ -49,7 +49,10 @@ func TestHostRollsBackAnIndexAndAFeatureKeepingASkippedIndex_HappyPath(t *testin
 	migrations, up, down := hostGenerate(c, directory, "yaml", after, "--config", config)
 	applied, upErr := hostMigrate(c, directory, migrations, "migrations", "up")
 	forwardIndexes, forwardAttributes := describedItems(c, opened, absolute)
-	settled := hostPlanned(c, directory, "yaml", after, "--config", config)
+	// `schema apply` honors no index-drop skip, so the next generation, which
+	// does, is what says nothing is left.
+	again, againErr := hostCommand(c, "migrations", "generate", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", writeYAML(c, after),
+		"--schemas", directory, "--migrations-dir", migrations, "--name", "again", "--config", config)
 	rolledBack, downErr := hostMigrate(c, directory, migrations, "migrations", "down", "--target", "0", "--confirm")
 	indexes, attributes := describedItems(c, opened, absolute)
 
@@ -58,7 +61,8 @@ func TestHostRollsBackAnIndexAndAFeatureKeepingASkippedIndex_HappyPath(t *testin
 	c.Assert(slices.Sorted(maps.Keys(forwardIndexes)), qt.DeepEquals, []string{"new_name", "retained"})
 	c.Assert(forwardAttributes["ptah.comment.index.retained"], qt.Equals, "retained comment")
 	c.Assert(forwardAttributes["ptah.comment.index.new_name"], qt.Equals, "new comment")
-	c.Assert(settled, qt.HasLen, 0)
+	c.Assert(againErr, qt.IsNil, qt.Commentf("migrations generate:\n%s", again))
+	c.Assert(again, qt.Contains, "no migration files generated")
 	c.Assert(downErr, qt.IsNil, qt.Commentf("down:\n%s\n%s", rolledBack, down))
 	c.Assert(slices.Sorted(maps.Keys(indexes)), qt.DeepEquals, []string{"old_name", "retained"})
 	c.Assert(attributes["ptah.comment.index.retained"], qt.Equals, "retained comment")
