@@ -81,6 +81,18 @@ func pluginUnits(output string) []string {
 	return listed
 }
 
+// unitsSaying counts the units appliedUnits listed whose line holds text,
+// such as the reason of an operation's assessment.
+func unitsSaying(output, text string) int {
+	count := 0
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, unitPrefix) && strings.Contains(line, text) {
+			count++
+		}
+	}
+	return count
+}
+
 // unitCount counts the native operations of kind appliedUnits listed.
 func unitCount(output, kind string) int {
 	return strings.Count(output, unitPrefix+kind+" ")
