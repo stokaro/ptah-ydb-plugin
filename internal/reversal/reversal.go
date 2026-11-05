@@ -21,6 +21,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -77,6 +79,34 @@ func Reverse(ctx context.Context, request *protocol.ReverseChangesRequest, obser
 	return result, nil
 }
 
+// topicChangeLimitations names what undoing an in-place change of the topic at
+// name from before to after cannot restore, in the words of the host's
+// embedded engine: the partitions YDB never removes, the auto-partitioning it
+// does not disable again, and the positions of the consumers the change or
+// its rollback drops.
+func topicChangeLimitations(name string, before, after ydbdecl.Topic) []string {
+	var limitations []string
+	from, to := topics.Resolve(before), topics.Resolve(after)
+	if to.MinActivePartitions > from.MinActivePartitions {
+		limitations = append(limitations, fmt.Sprintf("topic %s keeps the %d partitions the change gave it, since YDB never removes a partition",
+			name, to.MinActivePartitions))
+	}
+	if to.AutoPartitioned() && !from.AutoPartitioned() {
+		limitations = append(limitations, fmt.Sprintf("topic %s keeps auto-partitioning, paused, since YDB does not disable it once it is on", name))
+	}
+	consumers := topics.Compare(after, before)
+	for _, consumer := range consumers.Removed {
+		limitations = append(limitations, fmt.Sprintf("consumer %q of topic %s was dropped; the rollback adds it again without its position", consumer, name))
+	}
+	for _, consumer := range consumers.Added {
+		limitations = append(limitations, fmt.Sprintf("consumer %q the change added to topic %s is dropped by the rollback, with its position", consumer, name))
+	}
+	for _, consumer := range consumers.Restarted {
+		limitations = append(limitations, fmt.Sprintf("consumer %q of topic %s was dropped and added again; its earlier position is lost", consumer, name))
+	}
+	return limitations
+}
+
 // describe names the strategy and the limitations of one reverse, and sets
 // its change. A secret's rotation has no reverse statement: the value it
 // replaced was never read.
@@ -105,6 +135,14 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 			result.Limitations = []string{fmt.Sprintf("dropping topic %s discards every message written to it and every consumer's position", name)}
 		case dropped:
 			result.Limitations = []string{fmt.Sprintf("the messages topic %s held and its consumers' positions were dropped; the rollback creates it empty", name)}
+		default:
+			current, desired, err := schema.TopicSpecs(change)
+			if err != nil {
+				return nil, err
+			}
+			if current != nil && desired != nil {
+				result.Limitations = topicChangeLimitations(name, *current, *desired)
+			}
 		}
 	case schema.StreamingQueryChange:
 		if err := describeStreamingQuery(result, reversed); err != nil {

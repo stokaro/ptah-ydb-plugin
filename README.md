@@ -519,10 +519,10 @@ receipts explicitly report `transactional_ddl=false`. Live tests verify that
 DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
-Coordination, external object, row-table creation, row-table alteration and changefeed operations use native envelopes, or
-YQL statements in the TEXT form; see [Text units](#text-units). Topic
-operations have native envelopes only. Other operation
-models remain to be extracted. A SQL unit that runs one of the host's
+Coordination, external object, row-table creation, row-table alteration,
+changefeed and topic operations use native envelopes, or YQL statements in the
+TEXT form; see [Text units](#text-units). Other operation models remain to be
+extracted. A SQL unit that runs one of the host's
 coordination node statements is run through the coordination service; the
 host's extended comment statements are not implemented here.
 
@@ -589,6 +589,7 @@ this provider's `Execute` does with it what the native call does:
 | Column table | The `CREATE TABLE ... STORE = COLUMN` and TTL statements the provider runs |
 | Coordination node | `CREATE COORDINATION NODE ... WITH (...)`, `ALTER ... SET (...)` naming the settings that change, `DROP COORDINATION NODE` |
 | External data source or external table | `CREATE`, `CREATE OR REPLACE` or `DROP EXTERNAL DATA SOURCE` or `EXTERNAL TABLE`, with the paths and options as the declaration writes them |
+| Topic | `CREATE TOPIC` with its consumers and the settings the declaration states, `DROP TOPIC`, or the `ALTER TOPIC` statements of an alteration, one to a line: the statements `Execute` runs natively for the change |
 | Changefeed change | One statement to a line: `ALTER TABLE ... DROP CHANGEFEED` for each removal, then `ALTER TABLE ... ADD CHANGEFEED` for each addition with one `ALTER TOPIC ... ADD CONSUMER` per consumer, then the `ALTER TOPIC` statements that change a topic in place |
 
 YQL has no coordination node statement, so `Execute` reads one as the host's
@@ -664,8 +665,8 @@ than what that declaration states. A host that does not list the feature gets
 no reversal service and refuses every such change, naming the change kind
 that has no reversal.
 
-A topic reverses like any other object, but no migration file holds a topic
-(see [Text units](#text-units)).
+A topic reverses like any other object, and a migration file holds its
+statements (see [Text units](#text-units)).
 
 ## Common objects
 
