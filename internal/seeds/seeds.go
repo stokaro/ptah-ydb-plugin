@@ -29,6 +29,7 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -278,11 +279,6 @@ func KeyConflict(err error) bool {
 	return conflict
 }
 
-// deterministicAborts are the issue codes of an ABORTED answer that running
-// the transaction again would repeat: a data query too large for one shard
-// program answers ABORTED with issue 200509 every time.
-var deterministicAborts = map[Ydb.StatusIds_StatusCode]bool{200509: true}
-
 // Retryable reports an abort YDB answered for a conflicting transaction,
 // after which nothing of the transaction stayed and running it again may
 // succeed.
@@ -292,7 +288,7 @@ func Retryable(err error) bool {
 	}
 	deterministic := false
 	ydb.IterateByIssues(err, func(_ string, code Ydb.StatusIds_StatusCode, _ uint32) {
-		deterministic = deterministic || deterministicAborts[code]
+		deterministic = deterministic || ydbfailure.RepeatedAbort(uint32(code))
 	})
 	return !deterministic
 }

@@ -1,0 +1,19 @@
+name: Documentation
+# The pages in docs/ are published on docs.ptah.run with Ptah's own pages.
+# Ptah's provider-docs.yml workflow imports this checkout into the site and runs
+# the checks the site holds every page to, from Ptah's scripts, so this
+# repository keeps no copy of them; docs/README.md says how a page reaches the
+# site. A page removed or renamed here is reported, not failed: only Ptah can
+# add the redirect its old address needs.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pages:
+    uses: stokaro/ptah/.github/workflows/provider-docs.yml@docs/4204-provider-docs-import
+    with:
+      engine: ydb

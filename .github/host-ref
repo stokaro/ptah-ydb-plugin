@@ -1,0 +1,5 @@
+# The host the live job's host ref legs build (scripts/live-lines.sh): the
+# branch of stokaro/ptah#5335, which plans a provider engine with its
+# session's facts when the provider states none offline. This draft is a
+# measurement and is closed, not merged.
+fix/4204-plan-with-session-capabilities

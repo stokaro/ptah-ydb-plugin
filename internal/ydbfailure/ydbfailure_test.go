@@ -95,12 +95,49 @@ func TestReadPlacesARefusalBeforeExecution(t *testing.T) {
 	}
 }
 
+// sizeAbort is the answer 25.1.4.7 gives the commit of a transaction whose
+// writes do not fit one datashard program, measured: ABORTED, as a conflict is
+// answered, with issue 200509.
+var sizeAbort = ydbfailure.Answer{Status: Ydb.StatusIds_ABORTED, Issues: []string{"Datashard program size limit exceeded (56281509 > 50331648)"},
+	Code: 200509, Repeats: true}
+
+// An ABORTED answer whose issue says the transaction does not fit one
+// datashard program repeats on every attempt, nested or not, so it is not an
+// abort for a conflict; one for a lock conflict is.
+func TestReadNamesAnAbortThatRepeats(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		issues  []*Ydb_Issue.IssueMessage
+		repeats bool
+		aborted bool
+	}{
+		{name: "too large for one program", issues: []*Ydb_Issue.IssueMessage{issue(200509, 0, 0, "Datashard program size limit exceeded (56281509 > 50331648)")},
+			repeats: true},
+		{name: "too large, nested", issues: []*Ydb_Issue.IssueMessage{issue(1060, 0, 0, "Execution", issue(200509, 0, 0, "Datashard program size limit exceeded (56281509 > 50331648)"))},
+			repeats: true},
+		{name: "a lock conflict", issues: []*Ydb_Issue.IssueMessage{issue(2001, 0, 0, "Transaction locks invalidated. Table: `/local/t`.")}, aborted: true},
+		{name: "no issues", aborted: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			read := ydbfailure.Read(fmt.Errorf("commit: %w", &answered{status: Ydb.StatusIds_ABORTED, issues: test.issues}))
+			c.Assert(read.Repeats, qt.Equals, test.repeats)
+			c.Assert(read.Aborted(), qt.Equals, test.aborted)
+		})
+	}
+}
+
 func TestReadKnowsNoStatusOfAnErrorYDBDidNotReturn(t *testing.T) {
 	c := testcheck.New(t)
 	for _, err := range []error{nil, errors.New("PRECONDITION_FAILED"), context.Canceled} {
 		c.Assert(ydbfailure.Read(err), qt.DeepEquals, ydbfailure.Answer{})
 	}
 }
+
+// uniqueIndexOn251 is 25.1.4.7's answer to a unique secondary index, as
+// Read reads it: YDB refuses the index type inside the execution stage,
+// before it proposes a schema operation.
+var uniqueIndexOn251 = located(answer(Ydb.StatusIds_GENERIC_ERROR, "Execution", "Unknown index type: syncGlobalUnique"), 1060, 1, 56)
 
 func TestConfirmed(t *testing.T) {
 	for _, test := range []struct {
@@ -119,6 +156,7 @@ func TestConfirmed(t *testing.T) {
 		{"generic data", answer(Ydb.StatusIds_GENERIC_ERROR), "UPSERT INTO t (id) VALUES (\"x\")", true},
 		{"generic scheme", answer(Ydb.StatusIds_GENERIC_ERROR), "CREATE TABLE t (id Int64, PRIMARY KEY (id))", false},
 		{"generic scheme refused while compiling", compiled(Ydb.StatusIds_GENERIC_ERROR), "CREATE TABLE t (id NoSuchType, PRIMARY KEY (id))", true},
+		{"generic scheme refused before its operation", uniqueIndexOn251, "ALTER TABLE t ADD INDEX u GLOBAL UNIQUE SYNC ON (v)", true},
 		{"generic block refused while compiling", compiled(Ydb.StatusIds_GENERIC_ERROR), "SELECT 1; DO BEGIN SELECT 1; END DO", true},
 		{"generic batch", answer(Ydb.StatusIds_GENERIC_ERROR), "BATCH UPDATE t SET v = 1", false},
 		{"generic statistics", answer(Ydb.StatusIds_GENERIC_ERROR), "ANALYZE `t` (v)", true},
@@ -153,6 +191,8 @@ func TestRejected(t *testing.T) {
 		{"scheme statement refused while compiling", compiled(Ydb.StatusIds_GENERIC_ERROR), "$id = 1l; CREATE TABLE t (id NoSuchType NOT NULL, PRIMARY KEY (id))", false, true},
 		{"scheme block refused while compiling", compiled(Ydb.StatusIds_GENERIC_ERROR), "DO BEGIN CREATE TABLE t (id NoSuchType, PRIMARY KEY (id)); END DO", false, false},
 		{"scheme statement refused while running", answer(Ydb.StatusIds_GENERIC_ERROR), "CREATE TOPIC t", false, false},
+		{"scheme statement refused before its operation", uniqueIndexOn251, "ALTER TABLE t ADD INDEX u GLOBAL UNIQUE SYNC ON (v)", false, true},
+		{"scheme block refused before its operation", uniqueIndexOn251, "DO BEGIN ALTER TABLE t ADD INDEX u GLOBAL UNIQUE SYNC ON (v); END DO", false, false},
 		{"scheme loop", answer(Ydb.StatusIds_ALREADY_EXISTS), "DEFINE ACTION $m($n) AS CREATE TABLE $n (id Int64, PRIMARY KEY (id)); END DEFINE; EVALUATE FOR $t IN AsList('a', 'b') DO $m($t)", false, false},
 		{"batch", answer(Ydb.StatusIds_PRECONDITION_FAILED), "BATCH DELETE FROM t WHERE id > 0", false, false},
 		{"two scheme statements", answer(Ydb.StatusIds_ALREADY_EXISTS), "CREATE TABLE a (id Int64, PRIMARY KEY (id)); CREATE TABLE b (id Int64, PRIMARY KEY (id))", false, false},
@@ -214,6 +254,9 @@ func TestFailed(t *testing.T) {
 			ydbfailure.Unit{Text: "CREATE TABLE t (id NoSuchType NOT NULL, PRIMARY KEY (id))"}, 2,
 			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 2, DiagnosticCode: "ydb.statement-rejected", Message: "Unknown simple type 'NoSuchType'"},
 			"YDB refused the statement while compiling it (GENERIC_ERROR, line 1, column 27)"},
+		{"refused before its operation", uniqueIndexOn251, ydbfailure.Unit{Text: "ALTER TABLE t ADD INDEX u GLOBAL UNIQUE SYNC ON (v)"}, 1,
+			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 1, DiagnosticCode: "ydb.statement-rejected", Message: "Execution; Unknown index type: syncGlobalUnique"},
+			"YDB refused the statement: the YDB release the cluster runs has no unique secondary index (GENERIC_ERROR, issue 1060, line 1, column 56)"},
 		{"refused while running", answer(Ydb.StatusIds_GENERIC_ERROR, "Scheme operation failed"), ydbfailure.Unit{Text: "CREATE TOPIC t"}, 0, unknown,
 			"the unit's outcome is unknown: YDB answered GENERIC_ERROR, which does not show whether the unit applied"},
 		// 26.2.1.14 refuses ANALYZE in its execution stage with default flags.
@@ -237,6 +280,9 @@ func TestFailed(t *testing.T) {
 		{"aborted without issues", answer(Ydb.StatusIds_ABORTED), ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0,
 			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "YDB aborted the transaction for a conflict", TransactionAborted: true},
 			aborted},
+		{"aborted for its size", sizeAbort, ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Datashard program size limit exceeded (56281509 > 50331648)"},
+			"YDB refused the statement: its writes do not fit one datashard program, which holds about 48 MiB; write the rows in smaller transactions (ABORTED, issue 200509)"},
 		{"aborted outside a transaction", conflict, ydbfailure.Unit{Text: insert, Aborts: true}, 0,
 			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Transaction locks invalidated. Table: `/local/t`."},
 			"YDB refused the statement (ABORTED)"},
@@ -286,6 +332,17 @@ func TestCommitOfAnAbortedTransactionIsRolledBack(t *testing.T) {
 			c.Assert(ydbfailure.Commit(answer(Ydb.StatusIds_ABORTED, "Transaction locks invalidated."), test.aborts), qt.CmpEquals(protocmp.Transform()), test.want)
 		})
 	}
+}
+
+// A commit YDB aborted for the transaction's size applied nothing either, so
+// it is rolled back, but it is not aborted for a conflict: a host that runs
+// aborted transactions again would get the same answer each time.
+func TestCommitOfATransactionTooLargeIsRefused(t *testing.T) {
+	c := testcheck.New(t)
+	c.Assert(ydbfailure.Commit(sizeAbort, true), qt.CmpEquals(protocmp.Transform()), &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK,
+		DiagnosticCode: "ydb.transaction-rejected", Message: "Datashard program size limit exceeded (56281509 > 50331648)",
+		Diagnostic: &protocol.ProviderDiagnostic{Reason: "YDB refused the transaction at its commit: its writes do not fit one datashard program, which holds about 48 MiB; " +
+			"write the rows in smaller transactions (ABORTED, issue 200509)"}})
 }
 
 func TestCommitOfAnotherFailureIsUnknown(t *testing.T) {
@@ -425,6 +482,10 @@ func TestRefusedReasonNamesTheFlag_HappyPath(t *testing.T) {
 		{name: "a statement refused while YDB compiled it", answer: ydbfailure.Answer{Status: Ydb.StatusIds_GENERIC_ERROR, Compiled: true, Code: 1030, Row: 1, Column: 1,
 			Issues: []string{"Resource pools are disabled. Please contact your system administrator"}},
 			want: flagSentence("resource_pools", "EnableResourcePools", "YDB refused the statement while compiling it (GENERIC_ERROR, issue 1030, line 1, column 1)")},
+		// A session that read the cluster's flags names the monitoring
+		// endpoint already, so the sentence does not ask for it.
+		{name: "a session that read the flags", answer: ydbfailure.Answer{Status: Ydb.StatusIds_PRECONDITION_FAILED, Issues: []string{"Execution failed", "Move index is not supported yet"}, FlagsRead: true},
+			want: "capability index_rename is off on this YDB cluster, which runs with feature flag EnableMoveIndex off: YDB refused the statement (PRECONDITION_FAILED). Turn the flag on"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

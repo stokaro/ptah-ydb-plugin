@@ -4,7 +4,6 @@ package integration_test
 
 import (
 	"path"
-	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -102,7 +101,7 @@ func TestHostChangesTheCommentsOfIndexesInPlace_HappyPath(t *testing.T) {
 	c.Assert(output, qt.Matches, `(?s).*Schema apply completed successfully.*`)
 	// The one index the plan drops is users_by_legacy: users_by_label is
 	// renamed, where a removal and an addition would print a second removal.
-	c.Assert(strings.Count(output, "Drops a secondary index"), qt.Equals, 1, qt.Commentf("%s", output))
+	c.Assert(unitsSaying(output, "Drops a secondary index"), qt.Equals, 1, qt.Commentf("%s", output))
 	output, err = hostApply(c, directory, changedModels(directory))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
 	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`)

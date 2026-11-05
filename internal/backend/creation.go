@@ -10,7 +10,6 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 // ProjectTableCreations resolves CREATE-dependent intent from captured tables.
@@ -23,7 +22,7 @@ func (*Provider) ProjectTableCreations(ctx context.Context, request *protocol.Pr
 	if err := provider.ValidateCreationRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) {
+	if !rulesMatch(request.Identifiers.GetRules()) {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB creation prediction requires its negotiated identifier rules")
 	}
 	stripped, err := creationsWithoutComments(request)
