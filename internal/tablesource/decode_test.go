@@ -2,7 +2,10 @@ package tablesource_test
 
 import (
 	"context"
+	"errors"
+	"regexp"
 	"slices"
+	"strconv"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -12,6 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -370,4 +374,62 @@ func TestDecodeSource_DoesNotChangeItsInput(t *testing.T) {
 	_, err := backend.New().DecodeSource(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(before, request), qt.IsTrue)
+}
+
+// A TTL interval or unit YDB does not take is refused with a reason a host
+// prints: the table, the setting and why, in the words of the host's embedded
+// engine, without the value the source wrote, which a reason never quotes.
+func TestDecode_TTLRefusalReasons(t *testing.T) {
+	platform := func(group string) string {
+		return `{"tables":{"items":{"platform":{"ydb":` + group + `},"columns":{"id":{"type":"Uint64","primary":true},"ts":{"type":"Timestamp"}}}}}`
+	}
+	tests := []struct{ name, source, value, reason string }{
+		{"words", platform(`{"row_deletion_column":"ts","row_deletion_interval":"30 days"}`), "30 days",
+			`table "items": platform.ydb.row_deletion_interval: the interval is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): it does not begin with P`},
+		{"a negative interval", platform(`{"row_deletion_column":"ts","row_deletion_interval":"-P1D"}`), "-P1D",
+			`table "items": platform.ydb.row_deletion_interval: the interval is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): it does not begin with P`},
+		{"months", platform(`{"row_deletion_column":"ts","row_deletion_interval":"P1M"}`), "P1M",
+			`table "items": platform.ydb.row_deletion_interval: the interval is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): ` +
+				`a designator is out of place or not one YDB takes (weeks, days, hours, minutes, seconds)`},
+		{"a fraction of a day", platform(`{"row_deletion_column":"ts","row_deletion_interval":"P1.5D"}`), "P1.5D",
+			`table "items": platform.ydb.row_deletion_interval: the interval is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): ` +
+				`a number has a fraction where YDB takes a whole number`},
+		{"less than a second", platform(`{"row_deletion_column":"ts","row_deletion_interval":"PT0.5S"}`), "PT0.5S",
+			`table "items": platform.ydb.row_deletion_interval: the interval has a fraction of a second, and YDB keeps whole seconds only (PT1.5S reads back as PT1S)`},
+		{"longer than an Interval holds", platform(`{"row_deletion_column":"ts","row_deletion_interval":"P49673D"}`), "P49673D",
+			`table "items": platform.ydb.row_deletion_interval: the interval is longer than YDB's Interval type holds (P49672DT23H59M59S)`},
+		{"a unit YDB does not take", platform(`{"row_deletion_column":"ts","row_deletion_interval":"PT1H","row_deletion_unit":"fortnights"}`), "fortnights",
+			`table "items": platform.ydb.row_deletion_unit: the unit is not one YDB takes: use SECONDS, MILLISECONDS, MICROSECONDS, NANOSECONDS`},
+		{"a tier's interval", `{"tables":{"items":{"column_store":{"ttl":{"column":"ts","tiers":[{"interval":"1 day","external_source":"/local/ext"}]}}}}}`, "1 day",
+			`table "items": TTL tier 1: the interval is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): it does not begin with P`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := yamlRequest(c, test.source)
+
+			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
+
+			c.Assert(tables, qt.IsNil)
+			c.Assert(err, qt.ErrorMatches, `table "items": .*`+regexp.QuoteMeta(strconv.Quote(test.value))+`.*`)
+			reason, given := errors.AsType[*authored.Error](err)
+			c.Assert(given, qt.IsTrue, qt.Commentf("%v", err))
+			c.Assert(reason.Error(), qt.Equals, test.reason)
+			c.Assert(reason.Error(), qt.Not(qt.Contains), test.value)
+		})
+	}
+}
+
+// A refusal the grammar of a TTL does not write carries no reason, so a host
+// prints the failure's code alone rather than text that may quote the source.
+func TestDecode_OtherRefusalsCarryNoReason(t *testing.T) {
+	c := testcheck.New(t)
+	request := yamlRequest(c, `{"tables":{"items":{"column_store":{"shards":4}}}}`)
+
+	tables, err := tablesource.Decode(c.Context(), request.Documents[0])
+
+	c.Assert(tables, qt.IsNil)
+	c.Assert(err, qt.ErrorMatches, `table "items": column_store: shards: unknown key`)
+	_, given := errors.AsType[*authored.Error](err)
+	c.Assert(given, qt.IsFalse)
 }

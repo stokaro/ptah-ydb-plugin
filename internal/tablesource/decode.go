@@ -3,6 +3,7 @@ package tablesource
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,7 +12,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -67,11 +70,11 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 			order = append(order, binding.GetId())
 		}
 		if err := refuseOtherTableColumns(binding, fragment); err != nil {
-			return nil, fmt.Errorf("table %q: %w", tableLabel(binding.GetObject()), err)
+			return nil, tableError(tableLabel(binding.GetObject()), err)
 		}
 		hadColumns := len(target.settings.placements) != 0
 		if err := apply(&target.settings, fragment); err != nil {
-			return nil, fmt.Errorf("table %q: %w", tableLabel(binding.GetObject()), err)
+			return nil, tableError(tableLabel(binding.GetObject()), err)
 		}
 		if !hadColumns && len(target.settings.placements) != 0 {
 			target.columnFragment = index
@@ -81,18 +84,18 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 	for _, id := range order {
 		target := byBinding[id]
 		if err := target.settings.finish(); err != nil {
-			return nil, fmt.Errorf("table %q: %w", tableLabel(target.binding.GetObject()), err)
+			return nil, tableError(tableLabel(target.binding.GetObject()), err)
 		}
 		if target.settings.empty() {
 			continue
 		}
 		value, err := normalized(document, target)
 		if err != nil {
-			return nil, fmt.Errorf("table %q: %w", tableLabel(target.binding.GetObject()), err)
+			return nil, tableError(tableLabel(target.binding.GetObject()), err)
 		}
 		columns, err := placedColumns(document, target)
 		if err != nil {
-			return nil, fmt.Errorf("table %q: %w", tableLabel(target.binding.GetObject()), err)
+			return nil, tableError(tableLabel(target.binding.GetObject()), err)
 		}
 		tables = append(tables, Table{Binding: target.binding, Fragment: target.fragment, Value: value, ColumnFragment: target.columnFragment, Columns: columns})
 	}
@@ -271,3 +274,34 @@ func splitTable(written string) (schemaName, name string, err error) {
 // too, and the provider would drop them.
 const indexReason = "an index directive or entry declares the partitioning and read replicas of a global index here; " +
 	"a local index's options and a full-text or vector index's settings are declared through the native index facet"
+
+// tableError is err, the refusal of what a source declares for the table label
+// names, with the table in front. A TTL interval or unit YDB does not take
+// also carries the reason a host prints after the provider's failure: the
+// table, the attribute and why, in the words of the host's embedded engine
+// without the declared value, which a reason never quotes (see authored).
+// Without it the host prints the failure's code alone.
+func tableError(label string, err error) error {
+	wrapped := fmt.Errorf("table %q: %w", label, err)
+	refused, grammar := errors.AsType[*ttlgrammar.Error](err)
+	if !grammar {
+		return wrapped
+	}
+	attribute := ""
+	if declaration, declared := errors.AsType[*DeclarationError](err); declared {
+		attribute = declaration.Attribute + ": "
+	}
+	return &reasonedError{err: wrapped, reason: authored.New(fmt.Sprintf("table %q: %s%s", label, attribute, refused.Reason()))}
+}
+
+// reasonedError is a refusal whose text quotes the declaration, joined to the
+// reason a host prints in its place.
+type reasonedError struct {
+	err, reason error
+}
+
+func (e *reasonedError) Error() string { return e.err.Error() }
+
+// Unwrap returns the refusal and its reason, so that errors.Is and errors.As
+// find what either holds.
+func (e *reasonedError) Unwrap() []error { return []error{e.err, e.reason} }

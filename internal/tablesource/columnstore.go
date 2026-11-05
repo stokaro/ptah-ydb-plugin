@@ -144,6 +144,9 @@ func tieredTTL(column, unit string, tiers []tierText) (*native.ColumnTTLPolicy, 
 	moves := false
 	for position, tier := range tiers {
 		seconds, err := ttlgrammar.IntervalSeconds(tier.interval)
+		if refused, grammar := errors.AsType[*ttlgrammar.Error](err); grammar {
+			return nil, refused.Within(fmt.Sprintf("TTL tier %d: ", position+1))
+		}
 		if err != nil {
 			return nil, fmt.Errorf("TTL tier %d: %w", position+1, err)
 		}
