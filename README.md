@@ -615,6 +615,11 @@ A step that only removes, such as a column's removal, is ordered after the
 views and comments of the plan, not before them: the host places a removal
 after its views and comments, and what a removal drops is no longer declared,
 so no view the plan creates reads it and no comment the plan sets names it.
+The one comment step that names a dropped column removes its comment: YDB
+keeps the attribute once the column is gone and would give it to a column
+added later under that name. The host sends that step for each dropped column
+that held a comment (stokaro/ptah#5280), in its comment window, so it runs
+before the removal.
 
 YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table
