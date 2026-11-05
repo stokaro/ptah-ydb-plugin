@@ -2,7 +2,7 @@ package backend_test
 
 import (
 	"bytes"
-	"context"
+	"slices"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -44,11 +44,6 @@ func settledTopic(c *qt.C) *protocol.EncodeSourceValue {
 		NormalizedOwner: proto.CloneOf(owner), CanonicalFormat: schema.NativeDesiredModel(schema.TopicProperties).CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)}}
 }
 
-// placedContext is groupingContext from a host that reads Go placements.
-func placedContext(c *qt.C) context.Context {
-	return provider.ContextWithHostFeatures(c.Context(), append(provider.HostFeatures(groupingContext(c)), provider.GoPlacementsFeature))
-}
-
 // goLine is a written directive as the export's comment shows it: its name,
 // where it stands, and its attributes in order.
 type goLine struct {
@@ -84,13 +79,14 @@ func TestEncodeSource_GoDirectivesOfTheDocument_HappyPath(t *testing.T) {
 		"retention_period=PT18H", "partition_write_burst_bytes=1048576"}
 	consumerWritten := []string{"name=audit", "topic=events", "schema=app", "important=true", "read_from=2026-01-01T00:00:00Z"}
 	nodeWritten := []string{"name=queue", "schema=app"}
+	grouping := []string{provider.EntryKeysFeature, provider.HCLSourceFeature, provider.EncodeGroupsFeature}
 	for _, test := range []struct {
-		name  string
-		ctx   func(*qt.C) context.Context
-		after protocol.EncodedFragment_Placement
+		name     string
+		features []string
+		after    protocol.EncodedFragment_Placement
 	}{
-		{"a host that reads placements", placedContext, protocol.EncodedFragment_GO_AFTER_PRIVILEGES},
-		{"a host that does not", groupingContext, protocol.EncodedFragment_PLACEMENT_UNSPECIFIED},
+		{"a host that reads placements", append(slices.Clone(grouping), provider.GoPlacementsFeature), protocol.EncodedFragment_GO_AFTER_PRIVILEGES},
+		{"a host that does not", grouping, protocol.EncodedFragment_PLACEMENT_UNSPECIFIED},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -102,7 +98,7 @@ func TestEncodeSource_GoDirectivesOfTheDocument_HappyPath(t *testing.T) {
 					schema.PoolSettings(workload.PoolSpec{ConcurrentQueryLimit: new(int32(5)), QueueSize: new(int32(10)), ResourceWeight: new(float64(3))})),
 				settledTopic(c))
 
-			encoded, err := backend.New().EncodeSource(test.ctx(c), request)
+			encoded, err := backend.New().EncodeSource(provider.ContextWithHostFeatures(c.Context(), test.features), request)
 
 			c.Assert(err, qt.IsNil)
 			c.Assert(encoded.Losses, qt.HasLen, 0)
