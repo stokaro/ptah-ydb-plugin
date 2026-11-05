@@ -11,6 +11,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // The host plans resource pools and classifiers through this provider from
@@ -94,4 +95,50 @@ func TestHostAppliesResourcePools_HappyPath(t *testing.T) {
 			c.Assert(classifiers, qt.HasLen, 2)
 		})
 	}
+}
+
+// The host's TestYDBResourcePools_RoundTrip planned its pools in a run scoped
+// to its directory. A pool belongs to the database rather than to a
+// directory, and a read of the directory alone reports the database's pools
+// beside its scope where the host lists schema.database-kinds (ADR 0065), so
+// a run that selects the fixture directory and not the root creates a
+// declared pool, reads it as synced next time, keeps it once the source
+// leaves it out, and changes it in place, as the host's built-in engine does.
+func TestHostAppliesAResourcePoolInARunOfADirectory_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.DatabaseKindsFeature)
+	opened, directory, database := lockFixture(c)
+	enableResourcePools(c, opened)
+	poolName := directory + "_pool"
+	c.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+database+"/"+directory+"/items`"), qt.IsNil)
+		_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL `"+poolName+"`")
+	})
+	items := "tables:\n  items:\n    schema: " + directory + "\n    columns:\n      id: {type: Uint64, primary: true, not_null: true}\n"
+	pool := func(limit int) string {
+		return items + "resource_pools:\n  " + poolName + ":\n    concurrent_query_limit: " + strconv.Itoa(limit) + "\n"
+	}
+	apply := func(name, text, want string) {
+		c.Helper()
+		output, err := hostApplySource(c, directory, "yaml", text)
+		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", name, output))
+		c.Assert(output, qt.Matches, want, qt.Commentf("%s: %s", name, output))
+		c.Assert(output, qt.Not(qt.Contains), "comparison limit", qt.Commentf("%s", name))
+	}
+	held := func() map[string]heldPool {
+		c.Helper()
+		pools, _ := readHeldWorkload(c, c.Context(), opened.DB, database, []string{poolName}, nil)
+		return pools
+	}
+
+	apply("creation", pool(2), `(?s).*Schema apply completed successfully.*`)
+	c.Assert(held(), qt.DeepEquals, map[string]heldPool{poolName: {ConcurrentQueryLimit: 2, QueueSize: -1, ResourceWeight: -1}})
+	apply("a second run", pool(2), `(?s).*Schema is synced, no changes to be made.*`)
+	apply("a source that leaves it out", items, `(?s).*Schema is synced, no changes to be made.*`)
+	c.Assert(held(), qt.HasLen, 1)
+	apply("a change", pool(5), `(?s).*Schema apply completed successfully.*`)
+	c.Assert(held(), qt.DeepEquals, map[string]heldPool{poolName: {ConcurrentQueryLimit: 5, QueueSize: -1, ResourceWeight: -1}})
+	apply("a run after the change", pool(5), `(?s).*Schema is synced, no changes to be made.*`)
 }

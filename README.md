@@ -620,11 +620,21 @@ embedded engine writes it from its own:
 - A changed streaming query text keeps `allow_state_reset` in the reverse,
   which resets the query's checkpoint again.
 
-A change of a table's own settings has no reversal yet: for a change of a row
-table's TTL, partitioning, families, indexes or changefeeds, or of a column
-table's storage, `migrations generate` writes no migration, and the host
-names the change kind that has no reversal. A host that does not list the
-feature gets no reversal service and refuses every such change the same way.
+The service also undoes a change of a table's own settings: a row table's
+properties, such as its TTL and its partitioning, and a column table's
+storage. What the forward change leaves is the description the table held
+with the declared settings in place of its own; a setting the declaration
+leaves unset stays as the table held it, except the TTL, which a table the
+declaration gives none loses. A column's move to another family reverses to
+a move back: what the forward change leaves is the column in the declared
+family, with a default or storage setting the declaration does not state
+kept as the column held it. A host that does not project a reverse's state
+onto a column cannot plan that reverse and refuses it. A change of a global
+index's settings is refused: its declaration keeps every setting it leaves
+out, so a reverse would have to state each setting the index held. A host
+that does not list the feature gets no reversal service and refuses every
+such change, naming the change kind that has no reversal.
+
 A topic reverses like any other object, but no migration file holds a topic
 (see [Text units](#text-units)).
 
@@ -1047,7 +1057,15 @@ exact database, empty catalog, and exact schema directory; an unfiltered read
 sends subtree regions instead where the host negotiates them (see below). An
 empty directory therefore establishes native-object absence there. Unread
 descendants, excluded system directories, and other namespaces remain unknown.
-Table and column facets keep subject-only coverage.
+The table and column facet kinds (a row table's settings, indexes and
+changefeeds, a column table's storage, a column's properties) get the same
+complete region for each such directory, since the read describes every table
+there with each facet its kind of table has. Without it those kinds stay
+narrowed in an export the read otherwise knows completely, and a Go or HCL
+source has no not-described entry for a facet kind, so `ptah introspect` of
+such a read, of the whole database or of a directory beside the database's
+pools, is refused before it writes (`provider encode source failed
+(Internal)`).
 
 A selected directory YDB does not show (it answers SCHEME_ERROR) reads as
 empty when its parent's listing, proved the same way up to the database root,
@@ -1135,6 +1153,43 @@ counter configuration; the envelope owns the node path. External data sources
 retain source type, location, authentication references, and native properties.
 External tables retain source references, location, ordered typed columns, and
 content options without rewriting their native keys or JSON values.
+
+## Object counts
+
+For a host that lists `models.report-counts`, the provider reports count
+metrics for its topic, changefeed, coordination node, streaming query, external
+data source, external table, async replication, transfer, secret, resource pool
+and resource pool classifier models, and for its row-table properties, column
+storage and index set models, desired and observed, under the metric names and
+help texts of the host's built-in YDB engine. It counts each value offline: a
+topic is one topic and its consumers, a table's changefeed set its feeds and
+the consumers across them, an external table one table and its columns, and
+every other object one. `ptah schema stats` then writes these lines through the
+provider as through the built-in engine.
+
+The table setting families count as the built-in engine counted them:
+
+| Metric | Counts |
+| --- | --- |
+| `ydb_ttl_tables` | Row tables with a TTL, and column tables whose TTL is one tier that deletes rows. |
+| `ydb_column_families` | The column families of each row table, without a `default` family that has no storage pool of its own, no compression, the regular cache and `keep_in_memory` off. |
+| `ydb_table_partitioning` | Row tables whose partitioning, read replicas or key bloom filter differ from what YDB gives a new table, and declarations that state a starting layout. |
+| `ydb_index_partitioning` | Global sync, async and unique indexes whose partitioning or read replicas differ from what YDB gives a new index. |
+| `ydb_column_tables` | Column tables. |
+| `ydb_tiered_ttl_tables` | Column tables whose TTL has any other tiers, such as one that moves rows to an external data source. |
+| `ydb_vector_indexes` | Vector indexes. |
+
+What YDB gives a new table or global index is automatic partitioning by size
+at 2048 MB, none by load, at least one partition, no maximum, no read replicas
+and no key bloom filter; an unspecified setting is that value. A read holds
+every setting the server describes and is counted against these values, as is
+the declaration the host converts it to before it counts.
+
+A host that reads global indexes as common indexes (`schema.observed-indexes`)
+counts the declaration it converts a read to, and that declaration holds none
+of their settings. Through such a host `ydb_index_partitioning` counts no
+global index, where the built-in engine counted each one with settings; the
+observed index set counts them.
 
 ## Offline coordination declarations
 
@@ -1267,9 +1322,10 @@ provider's decoders read, which decode to the same declarations:
 | External data source and external table | entries of their keys | their directives | loss |
 | Resource pool and classifier | entries of their keys | their directives | loss |
 | Streaming query | entry of `streaming_queries` | `ptah:schema:streamingquery` | loss |
-| Row-table partitioning, read replicas, key Bloom filter, starting layout, TTL | table keys, TTL in `platform.ydb` | attributes of `ptah:schema:table` | loss |
+| Row-table TTL | `platform.ydb` | attributes of `ptah:schema:table` | the table's `platform "ydb"` block |
+| Row-table partitioning, read replicas, key Bloom filter, starting layout | table keys | attributes of `ptah:schema:table` | loss |
 | Column families and the columns they hold | `column_families` | `ptah:schema:columnfamily` | loss |
-| Column-table storage, hash key, shards, TTL | `column_store` | attributes of `ptah:schema:table` | loss |
+| Column-table storage, hash key, shards, TTL | `column_store` | attributes of `ptah:schema:table` | a TTL that only deletes in the table's `platform "ydb"` block; the rest is a loss |
 | Changefeeds and their consumers | `changefeeds` | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` | loss |
 | A global index's partitioning and read replicas | keys of its index entry | attributes of `ptah:schema:index` | attributes of its `index` block |
 
@@ -1292,9 +1348,14 @@ table, a family kept in memory, a TTL run interval, a disabled changefeed or the
 stream of an async replication, a native index, a column's compression or
 encoding, a native view (the host writes views from the common
 wire), and an object of another database than the one it was read in. A
-secret's value is never written. HCL declares coordination nodes and a global
-index's settings only, as the host's embedded engine does; its other YDB
-settings are losses. The parts are
+secret's value is never written. HCL declares coordination nodes, a global
+index's settings, and a table's TTL in its `platform "ydb"` block, as the host's
+embedded engine does; its other YDB settings are losses, which the host reports
+at the table in the embedded engine's words, such as `YDB table settings
+(AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3) are not represented in HCL`. A
+facet whose TTL the block writes and that holds such a setting too is written in
+part, and the loss names the setting. The settings a read reports for every
+table, YDB's documented defaults, are no loss. The parts are
 decoded again before they are returned, and a value they do not give back is a
 loss. A value that needs several declarations is a loss for a host that does not
 negotiate `source.encode-groups`. `struct_name` is written in YAML alone.
@@ -1398,6 +1459,43 @@ one: YDB 25.4 and later, or a cluster that turned `EnableTableCacheModes` on
 (see [Feature flags](#feature-flags)). A plan that declares one for any other
 target is refused with the flag's name, `regular` included, as the host's
 embedded engine refuses it.
+
+In HCL, the TTL is the `platform "ydb"` block of the table, with the same
+three properties as `override` blocks. `ptah` and `ptah-compat` read it and
+`schema inspect` writes it:
+
+```hcl
+table "events" {
+  schema = schema.app
+  platform "ydb" {
+    override "row_deletion_column" {
+      value = "created_at"
+    }
+    override "row_deletion_interval" {
+      value = "P30D"
+    }
+  }
+  column "id" {
+    type = Uint64
+  }
+  column "created_at" {
+    type = Timestamp
+    null = true
+  }
+  primary_key {
+    columns = [column.id]
+  }
+}
+```
+
+The provider claims the block (`source.hcl-platform`, ADR 0072), so it needs a
+host that reads it; a host that does not refuses the document. The host refuses
+an override other than the three, naming them. The block's label may be the
+alias `ydbs`. A table that writes no block states nothing about its TTL, and
+keeps the TTL it holds, where a YAML or Go source that states no TTL asks for
+none. HCL cannot say a table is a column table, so the block states the TTL of
+a column table the database holds, which keeps its storage and takes the TTL as
+one tier that deletes.
 
 A TTL needs `row_deletion_column` and `row_deletion_interval`. The interval is an
 ISO 8601 duration of weeks, days, hours, minutes and seconds (`P30D`,
@@ -2105,6 +2203,21 @@ writes (attribute `__async_replica`) is left out of the tables: YDB refuses
 every write and ALTER on it, and a plan that read it as an ordinary table would
 drop or alter it.
 
+A replica no replication writes any more, left behind by a replication dropped
+without `CASCADE`, stays read-only for good, and YDB takes no table at its
+path. Where the host lists `schema.unread-tables`, the read names each such
+table in `unread_tables` with the reason the host's embedded engine gives, so
+the host refuses a schema that declares a table there before any step and
+prints a note on `db read` and `schema inspect`. A replica that a replication
+of the read writes is not named; the planner refuses a table declared there. A
+filtered read lists the database's replications to tell the two apart when its
+directories hold a replica, and a replication left uninspected makes the
+reason say only that the read cannot describe the replication that writes it.
+Without the feature, such a table is left out silently, and a declared table
+there is refused when its creation runs (`NOT_STARTED`). Either way the replica
+stays until an operator drops it by hand with `DROP TABLE`, which YDB accepts;
+a schema that leaves it out plans nothing for it.
+
 The comparison resolves both sides as YDB keeps them: the connection string in
 its canonical form, the consistency level `row` and a global commit interval of
 ten seconds where none is named, the batch size 8 MiB and the flush interval a
@@ -2270,15 +2383,25 @@ the server's own included. Measured on 25.1.4.7: while such a classifier
 routed every query to a pool that admits none, a read of
 `.sys/resource_pool_classifiers` sent to the `default` pool ended in
 `System view: timeout`. Inspection reads
-the views on a target with resource pools, for a read of the whole database or
-one that selects the root, `/`: a read filtered to other directories cannot
-report what belongs to the database, so it leaves both kinds uninspected. A dev
-realm holds none of its own.
+the views on a target with resource pools, for a read of the whole database,
+one that selects the root, `/`, and one filtered to other directories where the
+host lists `schema.database-kinds`: the engine names both kinds database
+kinds, so a filtered read reports them beside its scope, named at the database
+(ADR 0065). So `schema apply --schemas app` creates a pool its source
+declares, and keeps the database's pools when the source declares none, as a
+run of the whole database does. With a host that does not list the feature, a
+read filtered to other directories cannot report what belongs to the database,
+so it leaves both kinds uninspected; selecting the root as well (`--schemas
+app,/`) reads them. A dev realm holds none of its own.
 
 A complete workload read records absence inside the opened database's root
 namespace, including when no pools or classifiers were returned. It establishes
 no absence in another database or a directory namespace. The host preserves
 that boundary when it compares a new declaration against the inspection.
+
+`TestHostAppliesAResourcePoolInARunOfADirectory_HappyPath` drives `ptah schema
+apply --schemas` the fixture directory alone: it creates a declared pool, reads
+it as synced, keeps it when the source leaves it out, and changes it in place.
 
 `TestWorkloadLifecycleSubprocess` creates a pool and two classifiers, swaps
 their ranks from the text of a migration file, refuses a change planned before
@@ -3834,7 +3957,7 @@ settings other than column families, planning, rendering and operation models fo
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
 rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object, resource pool, streaming query, async replication, transfer and secret lifecycles, approved execution inputs, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, offline SQL analysis, SQL schema reading, migration lint, migration splits, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
+lock, offline SQL analysis, SQL schema reading, migration lint, migration splits, row and seed services, dev database cleanup, replay guard, embedding store and object count services. The remaining
 capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

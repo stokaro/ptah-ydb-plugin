@@ -164,6 +164,9 @@ func providerFeatures() []string {
 		provider.PlanningContextInventoryFeature,
 		provider.EntryKeysFeature,
 		provider.HCLSourceFeature,
+		// A table's TTL is read from and written to its platform "ydb"
+		// block in HCL; see tablesource.HCLPlatformBlock.
+		provider.HCLPlatformFeature,
 		provider.EncodeSourceFeature,
 		// A Go or HCL source leaves a native kind unmanaged with a
 		// not-described entry; see EncodeSource and DecodeSource.
@@ -182,7 +185,20 @@ func providerFeatures() []string {
 		provider.SQLFacetsFeature,
 		// The reverse migration of a standalone object's change is the
 		// change that undoes it; see ReverseChanges.
-		provider.ReverseChangesFeature}
+		provider.ReverseChangesFeature,
+		// Resource pools and their classifiers belong to the database, so a
+		// read of directories reports them beside its scope; see
+		// inspect.Workload.
+		provider.DatabaseKindsFeature,
+		// A read names each replica table no replication it describes
+		// writes, which YDB keeps read-only, so the host refuses a table
+		// declared there at planning; see inspect.unreadReplicas.
+		provider.UnreadTablesFeature,
+		// `ptah schema stats` counts topics, changefeeds, the other native
+		// objects and the table settings with the provider's counts; see
+		// ReportValues.
+		provider.ReportCountsFeature,
+	}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -292,24 +308,58 @@ func negotiatedFeatures(ctx context.Context) []string {
 // measured. The flag decides it where the address names the monitoring
 // endpoint.
 func sessionCapabilities(version string) map[string]bool {
-	return map[string]bool{"wide_date_time_types": releaseline.AtLeast(version, 25, 2), "parameterized_decimal": releaseline.AtLeast(version, 25, 2),
-		"alter_column_default":    releaseline.AtLeast(version, 26, 2),
-		"add_column_with_default": releaseline.AtLeast(version, 26, 1),
-		"small_integer_defaults":  releaseline.AtLeast(version, 25, 2), "document_type_defaults": releaseline.AtLeast(version, 25, 3),
-		"transactional_ddl": false, "ddl_inside_transaction": false, "secrets": releaseline.AtLeast(version, 25, 4), "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
-		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true,
-		"relative_grant_paths": releaseline.AtLeast(version, 26, 1), "topics": true, "topic_consumer_availability_period": releaseline.AtLeast(version, 25, 4), workload.CapabilityResourcePools: false, streaming.Capability: false,
-		changefeeds.CapabilityChangefeeds: true, changefeeds.CapabilityUserSIDs: releaseline.AtLeast(version, 26, 1),
-		changefeeds.CapabilitySchemaChanges: releaseline.AtLeast(version, 25, 3), changefeeds.CapabilityTopicAutoPartitioning: releaseline.AtLeast(version, 25, 2),
-		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": releaseline.AtLeast(version, 25, 4),
-		tablecreate.VectorIndexesCapability: releaseline.AtLeast(version, 25, 2), tablecreate.VectorMaintainedOnWriteCapability: releaseline.AtLeast(version, 25, 3),
-		tablecreate.VectorBitTypeCapability: releaseline.AtLeast(version, 26, 1), tablecreate.FullTextIndexesCapability: releaseline.AtLeast(version, 26, 2),
-		tablecreate.LocalBloomIndexesCapability: releaseline.AtLeast(version, 26, 2), tablecreate.LocalNgramIndexesCapability: releaseline.AtLeast(version, 26, 2),
-		tablecreate.LocalMinMaxIndexesCapability: false,
-		replication.CapabilityReplication:        true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
-		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, "unique_constraints": false, tablecreate.UniqueIndexOnExistingTableCapability: false, tablecreate.IndexRenameCapability: true,
-		"returning_clause": releaseline.AtLeast(version, 25, 3), "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
-		tablecreate.CacheModeCapability: releaseline.AtLeast(version, 25, 4)}
+	return map[string]bool{
+		"wide_date_time_types":                           releaseline.AtLeast(version, 25, 2),
+		"parameterized_decimal":                          releaseline.AtLeast(version, 25, 2),
+		"alter_column_default":                           releaseline.AtLeast(version, 26, 2),
+		"add_column_with_default":                        releaseline.AtLeast(version, 26, 1),
+		"small_integer_defaults":                         releaseline.AtLeast(version, 25, 2),
+		"document_type_defaults":                         releaseline.AtLeast(version, 25, 3),
+		"transactional_ddl":                              false,
+		"ddl_inside_transaction":                         false,
+		"secrets":                                        releaseline.AtLeast(version, 25, 4),
+		"coordination_nodes":                             true,
+		"migration_statement_timeout":                    true,
+		"tiered_ttl":                                     false,
+		"role_management":                                true,
+		"role_membership":                                true,
+		"group_principals":                               true,
+		"database_grants":                                true,
+		"relative_grant_paths":                           releaseline.AtLeast(version, 26, 1),
+		"topics":                                         true,
+		"topic_consumer_availability_period":             releaseline.AtLeast(version, 25, 4),
+		workload.CapabilityResourcePools:                 false,
+		streaming.Capability:                             false,
+		changefeeds.CapabilityChangefeeds:                true,
+		changefeeds.CapabilityUserSIDs:                   releaseline.AtLeast(version, 26, 1),
+		changefeeds.CapabilitySchemaChanges:              releaseline.AtLeast(version, 25, 3),
+		changefeeds.CapabilityTopicAutoPartitioning:      releaseline.AtLeast(version, 25, 2),
+		"external_data_sources":                          false,
+		"external_object_replace":                        false,
+		"external_data_source_secret_paths":              releaseline.AtLeast(version, 25, 4),
+		tablecreate.VectorIndexesCapability:              releaseline.AtLeast(version, 25, 2),
+		tablecreate.VectorMaintainedOnWriteCapability:    releaseline.AtLeast(version, 25, 3),
+		tablecreate.VectorBitTypeCapability:              releaseline.AtLeast(version, 26, 1),
+		tablecreate.FullTextIndexesCapability:            releaseline.AtLeast(version, 26, 2),
+		tablecreate.LocalBloomIndexesCapability:          releaseline.AtLeast(version, 26, 2),
+		tablecreate.LocalNgramIndexesCapability:          releaseline.AtLeast(version, 26, 2),
+		tablecreate.LocalMinMaxIndexesCapability:         false,
+		replication.CapabilityReplication:                true,
+		replication.CapabilityTransfers:                  releaseline.AtLeast(version, 25, 2),
+		replication.CapabilitySecretPaths:                releaseline.AtLeast(version, 25, 4),
+		ydbtype.SerialColumns:                            true,
+		ydbsequence.Options:                              true,
+		ydbsequence.KeepsRange:                           false,
+		"unique_constraints":                             false,
+		tablecreate.UniqueIndexOnExistingTableCapability: false,
+		tablecreate.IndexRenameCapability:                true,
+		"returning_clause":                               releaseline.AtLeast(version, 25, 3),
+		"common_table_expressions":                       false,
+		"correlated_subqueries":                          false,
+		"non_equi_joins":                                 false,
+		"offset_without_limit":                           false,
+		tablecreate.CacheModeCapability:                  releaseline.AtLeast(version, 25, 4),
+	}
 }
 
 // indexRenames returns capabilities with index_rename true only for a host
@@ -555,16 +605,25 @@ func Description() *protocol.Description {
 				Embeddings:          &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes},
 				CommonObjects:       commonobject.Support(),
 				ScopeSelections:     scopeSelections(),
+				DatabaseKinds:       databaseKinds(),
 				HclSource: &protocol.HCLSourceDeclaration{
-					Blocks:      []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock(), tablesource.HCLIndexBlock()},
+					Blocks:      []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock(), tablesource.HCLIndexBlock(), tablesource.HCLPlatformBlock()},
 					HeaderKinds: []string{"coordination_node"},
 				},
 				GoHeaderKinds: yqlschema.HeaderKinds(),
+				Reports:       schema.Reports(),
 			},
 		},
 	}
 	withSerialSequences(description.Engines[0])
 	return description
+}
+
+// databaseKinds are the kinds whose objects belong to the database rather
+// than to a directory of it: resource pools and their classifiers, which
+// YDB names by name alone.
+func databaseKinds() []string {
+	return []string{schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties}
 }
 
 // withSerialSequences adds the change of a Serial column's sequence to the

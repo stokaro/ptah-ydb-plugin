@@ -23,6 +23,7 @@ page installs and selects this provider.
 | Views, comments, users, groups and permissions | [Common objects](../README.md#common-objects) |
 | Row tables, keys, types and Serial columns | [Native row-table creation](../README.md#native-row-table-creation), [Serial columns](../README.md#serial-columns) |
 | Column families, TTL, partitioning, read replicas and key bloom filter | [Native table alteration](../README.md#native-table-alteration) |
+| A table's TTL in HCL, its `platform "ydb"` block | [Offline row-table declarations](../README.md#offline-row-table-declarations) |
 | Indexes, index partitioning, vector and full-text indexes | [Index alteration](../README.md#index-alteration), [Vector and full-text indexes](../README.md#vector-and-full-text-indexes) |
 | Table rebuilds | [Native table rebuild](../README.md#native-table-rebuild) |
 | Column tables | [Column tables](../README.md#column-tables) |

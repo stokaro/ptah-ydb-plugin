@@ -18,20 +18,26 @@ import (
 // every other one.
 //
 // A read of the whole database reports them, and so does one whose selectors
-// include the root, `/`, whose namespace they take: the provider contract
-// binds every subject of a filtered read to a selected namespace, so a read
-// of other directories alone leaves them uninspected. A nil read leaves them
-// uninspected too, for the reason unread gives: a target whose
-// EnableResourcePools flag is off lists nothing in its system views, which
-// proves no absence, and a dev realm holds none of its own.
-func Workload(ctx context.Context, snapshot *protocol.Schema, database string, selectors []string, read func(context.Context) (nativeapi.HeldWorkload, error), unread string) error {
+// include the root, `/`, whose namespace they take. A read of other
+// directories reports them too where the session negotiated
+// schema.database-kinds (databaseKinds): the engine names both kinds database
+// kinds, so their subjects and the database namespace stand beside the
+// selected ones (ADR 0065). Without it the contract binds every subject of a
+// filtered read to a selected namespace, and such a read leaves them
+// uninspected. A nil read leaves them uninspected too, for the reason unread
+// gives: a target whose EnableResourcePools flag is off lists nothing in its
+// system views, which proves no absence, and a dev realm holds none of its
+// own.
+func Workload(ctx context.Context, snapshot *protocol.Schema, database string, selectors []string, databaseKinds bool,
+	read func(context.Context) (nativeapi.HeldWorkload, error), unread string,
+) error {
 	var records []*protocol.ModelKindCoverage
 	for _, record := range snapshot.GetCoverage().GetKinds() {
 		if schema.IsWorkloadObject(record.GetModel().GetKind()) {
 			records = append(records, record)
 		}
 	}
-	root := len(selectors) == 0 || slices.ContainsFunc(selectors, func(selector string) bool { return strings.Trim(selector, "/") == "" })
+	root := databaseKinds || len(selectors) == 0 || slices.ContainsFunc(selectors, func(selector string) bool { return strings.Trim(selector, "/") == "" })
 	if read != nil && !root {
 		read, unread = nil, "A read of selected directories does not report the resource pools and classifiers of the whole database; select / to read them"
 	}

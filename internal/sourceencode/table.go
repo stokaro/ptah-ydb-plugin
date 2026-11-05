@@ -425,20 +425,25 @@ var unitNames = map[uint64]string{1: ttlgrammar.Seconds, 2: ttlgrammar.Milliseco
 
 // ttl is the TTL that only deletes, as the row_deletion properties spell it:
 // a row table's TTL, or a column table's TTL of one deleting tier.
-func (f *tableFacets) ttl() []*protocol.SourceEntry {
+func (f *tableFacets) ttl() []*protocol.SourceEntry { return ttlEntries(f.row, f.storage) }
+
+// ttlEntries is the TTL that only deletes, as the row_deletion properties
+// spell it: the TTL of row, or the column table's TTL of storage when it is one
+// deleting tier, and nil for none.
+func ttlEntries(row *native.RowTableIntent, storage *native.ColumnStorageIntent) []*protocol.SourceEntry {
 	var column, unit string
 	var seconds uint64
 	switch {
-	case f.row.GetTtlSettings() != nil:
-		settings := f.row.GetTtlSettings()
+	case row.GetTtlSettings() != nil:
+		settings := row.GetTtlSettings()
 		if mode := settings.GetDateTypeColumn(); mode != nil {
 			column, seconds = mode.GetColumnName(), uint64(mode.GetExpireAfterSeconds())
 		} else {
 			mode := settings.GetValueSinceUnixEpoch()
 			column, seconds, unit = mode.GetColumnName(), uint64(mode.GetExpireAfterSeconds()), unitNames[uint64(mode.GetColumnUnit())]
 		}
-	case f.storage != nil && deletesOnly(f.storage):
-		enabled := f.storage.GetTtl().GetEnabled()
+	case storage != nil && deletesOnly(storage):
+		enabled := storage.GetTtl().GetEnabled()
 		column, seconds, unit = enabled.GetColumn(), enabled.GetTiers()[0].GetApplyAfterSeconds(), unitNames[enabled.GetColumnUnit()]
 	default:
 		return nil

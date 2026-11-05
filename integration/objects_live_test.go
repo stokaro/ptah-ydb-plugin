@@ -6,12 +6,14 @@ import (
 	"context"
 	"os"
 	"path"
+	"slices"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -158,15 +160,16 @@ func TestNativeObjectsAndNamespaceCoverageSubprocess(t *testing.T) {
 }
 
 // assertExactObjectRegions asserts that a read claims each native object kind,
-// and the settings of the indexes, complete in exactly the listed directories
-// and nowhere else, and claims no region for any other kind. A directory read
-// in full states every global index's settings, so an HCL export of it needs
-// no not-described entry for them.
+// and each table facet kind, the settings of a global index among them,
+// complete in exactly the listed directories and nowhere else, and claims no
+// region for any other kind.
 func assertExactObjectRegions(c *qt.C, snapshot *protocol.Schema, database string, schemas []string) {
 	c.Helper()
 	for _, record := range snapshot.Coverage.Kinds {
 		c.Assert(record.Knowledge.State, qt.Equals, protocol.ModelKnowledge_UNINSPECTED)
-		if !schema.IsNativeObject(record.Model.Kind) && record.Model.Kind != schema.IndexSettingsProperties {
+		// The table facet kinds are known in each listed directory too, as
+		// the read describes every table there with its facets.
+		if !schema.IsNativeObject(record.Model.Kind) && !slices.Contains(tablecompare.Kinds(), record.Model.Kind) {
 			c.Assert(record.Regions, qt.HasLen, 0)
 			continue
 		}

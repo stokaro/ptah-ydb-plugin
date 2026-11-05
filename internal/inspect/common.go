@@ -35,6 +35,10 @@ type Common struct {
 	// IndexFacets reports each common index's partitioning and read replicas
 	// as a facet the index owns (schema.observed-index-facets).
 	IndexFacets bool
+	// UnreadTables names each replica table no replication the read
+	// describes writes as a table the read does not describe; see
+	// unreadReplicas. Without it such a table is left out silently.
+	UnreadTables bool
 }
 
 // coverage is the common-object part of a reply before anything is read: one

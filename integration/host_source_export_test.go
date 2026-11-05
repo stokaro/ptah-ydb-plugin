@@ -451,13 +451,15 @@ const exportedGo = "package entities\n\n" +
 	"\t//ptah:schema:field name=\"created_at\" type=\"Timestamp\"\n\tCreatedAt int64\n}\n\n" +
 	"//ptah:schema:coordinationnode name=\"workers\" schema=\"{dir}\" self_check_period=\"PT2S\"\ntype Workers struct{}\n"
 
-// The host exports a Go source as HCL through this provider: the
-// coordination node becomes its coordination_node block, the host warns that
-// the table's YDB settings are not in the document, and the document applied
-// back to the database the Go source made plans nothing, since a setting HCL
-// leaves out keeps what the table holds.
+// A host that does not read a table's platform "ydb" block exports a Go
+// source as HCL through this provider: the coordination node becomes its
+// coordination_node block, the host warns that the table's YDB settings are
+// not in the document, and the document applied back to the database the Go
+// source made plans nothing, since a setting HCL leaves out keeps what the
+// table holds.
 func TestHostExportsAGoSourceAsHCLSubprocess(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostLacks(c, provider.HCLPlatformFeature)
 	opened, directory, database := lockFixture(c)
 	c.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)

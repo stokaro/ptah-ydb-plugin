@@ -24,6 +24,7 @@ package tablesource
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -82,6 +83,23 @@ const PlatformPrefix = "platform.ydb."
 // declares the same TTL as the three Go attributes above. The host keeps no copy
 // of the group, so every key the provider does not read is refused by name.
 const KeyPlatformYDB = "platform.ydb"
+
+// HCLPlatformBlock returns the claim of a table's platform "ydb" block in HCL
+// (contract 25.22, source.hcl-platform): its row_deletion_column,
+// row_deletion_interval and row_deletion_unit overrides, which declare the
+// same TTL as the Go attributes and the YAML group above. The host refuses an
+// override the claim does not list, so the provider reads every override the
+// group holds. The row-table and column-storage models list no HCL: a table
+// that writes no block states nothing about its TTL, and the TTL it holds
+// stays, as on the host's embedded engine.
+func HCLPlatformBlock() *protocol.HCLSourceBlock {
+	attributes := make([]*protocol.HCLSourceAttribute, 0, len(ttlAttributes()))
+	for _, name := range ttlAttributes() {
+		attributes = append(attributes, &protocol.HCLSourceAttribute{Name: strings.TrimPrefix(name, PlatformPrefix), Kind: protocol.HCLSourceAttribute_STRING})
+	}
+	return &protocol.HCLSourceBlock{Site: protocol.HCLSourceBlock_TABLE_PLATFORM, Type: "ydb", Selector: KeyPlatformYDB, Attributes: attributes,
+		Models: []string{schema.TableProperties, schema.ColumnStorageProperties}}
+}
 
 // DirectiveIndex is the host's directive that declares an index. The bundled
 // decoder reads partitioning, vector and full-text options on it.
@@ -242,9 +260,6 @@ func HCLIndexBlock() *protocol.HCLSourceBlock {
 
 // Owns reports whether the fragment carries one of the claims of this package.
 func Owns(fragment *protocol.SourceFragment) bool {
-	if block := fragment.GetHclBlock(); block != nil {
-		return block.GetSite() == protocol.HCLSourceBlock_INDEX_ATTRIBUTES && block.GetType() == "index"
-	}
 	if key := fragment.GetYamlKey(); key != nil {
 		return slices.ContainsFunc(slices.Concat(YAMLKeys(), IndexYAMLKeys()), func(claim *protocol.YAMLSourceKey) bool {
 			return claim.GetScope() == key.GetScope() && claim.GetKey() == key.GetKey()
@@ -253,6 +268,15 @@ func Owns(fragment *protocol.SourceFragment) bool {
 	if directive := fragment.GetGoDirective(); directive != nil {
 		return slices.ContainsFunc(GoDirectives(), func(claim *protocol.GoSourceDirective) bool {
 			return claim.GetDirective() == directive.GetDirective() && claim.GetScope() == directive.GetScope()
+		})
+	}
+	// An HCL fragment is this package's when it is one of the blocks the
+	// package declares, an index's attributes or a table's platform "ydb"
+	// block. Both are recognized here, so neither reaches the coordination
+	// decoder, which refuses any other block.
+	if block := fragment.GetHclBlock(); block != nil {
+		return slices.ContainsFunc([]*protocol.HCLSourceBlock{HCLIndexBlock(), HCLPlatformBlock()}, func(claim *protocol.HCLSourceBlock) bool {
+			return claim.GetSite() == block.GetSite() && claim.GetType() == block.GetType()
 		})
 	}
 	return false
