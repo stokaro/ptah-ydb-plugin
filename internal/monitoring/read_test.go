@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/monitoring"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -87,7 +88,7 @@ func TestRead_FollowsNoRedirect(t *testing.T) {
 		http.Redirect(w, r, elsewhere.String()+"/viewer/json/feature_flags", http.StatusFound)
 	})
 	body, err := monitoring.Read(c.Context(), endpoint, "feature flags", "/viewer/json/feature_flags", "/local", "ticket-value", nil)
-	c.Assert(err, qt.ErrorMatches, `read the YDB feature flags from the monitoring endpoint: 302 Found: .*`)
+	c.Assert(err, qt.ErrorMatches, `read the YDB feature flags from the monitoring endpoint: 302 Found; the endpoint answered: .*`)
 	c.Assert(body, qt.IsNil)
 	c.Assert(reached.Load(), qt.Equals, int32(0))
 }
@@ -124,8 +125,8 @@ func TestRead_RefusalRepeatsNeitherTheTicketNorTheEndpoint(t *testing.T) {
 		_, _ = w.Write([]byte("Failed to resolve database for " + r.Header.Get("Authorization")))
 	})
 	_, err := monitoring.Read(c.Context(), endpoint, "feature flags", "/viewer/json/feature_flags", "/local", "ticket-value", nil)
-	c.Assert(err, qt.ErrorMatches, `read the YDB feature flags from the monitoring endpoint: 400 Bad Request: Failed to resolve database for <redacted>; `+
-		`the page is read as the connection's user, who needs DESCRIBE SCHEMA on /local`)
+	c.Assert(err, qt.ErrorMatches, `read the YDB feature flags from the monitoring endpoint: 400 Bad Request; `+
+		`the page is read as the connection's user, who needs DESCRIBE SCHEMA on /local; the endpoint answered: Failed to resolve database for <redacted>`)
 	c.Assert(strings.Contains(err.Error(), "ticket-value"), qt.IsFalse)
 	c.Assert(strings.Contains(err.Error(), endpoint.Host), qt.IsFalse)
 }
@@ -148,4 +149,66 @@ func TestRead_RefusesWithoutAnEndpoint(t *testing.T) {
 	body, err := monitoring.Read(c.Context(), nil, "column table", "/viewer/json/describe", "/local", "", nil)
 	c.Assert(err, qt.ErrorMatches, `no monitoring endpoint to read the YDB column table from`)
 	c.Assert(body, qt.IsNil)
+}
+
+// TestRead_RefusalsAreReasons holds every refusal to a reason the host
+// prints, and keeps what the endpoint answered out of it: an endpoint can
+// answer with anything, a redirect with the address it points at.
+func TestRead_RefusalsAreReasons(t *testing.T) {
+	refusing := func(status int, page string) http.HandlerFunc {
+		return func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(page))
+		}
+	}
+	tests := []struct {
+		name, ticket string
+		handler      http.HandlerFunc
+		want         string
+	}{
+		{name: "a user without the right", ticket: "ticket-value", handler: refusing(http.StatusBadRequest, "Failed to resolve database"),
+			want: "read the YDB feature flags from the monitoring endpoint: 400 Bad Request; the page is read as the connection's user, who needs DESCRIBE SCHEMA on /local"},
+		{name: "an anonymous read refused", handler: refusing(http.StatusBadRequest, "Failed to resolve database"),
+			want: "read the YDB feature flags from the monitoring endpoint: 400 Bad Request"},
+		{name: "a page that moved", handler: func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "http://elsewhere.example/viewer/json/feature_flags", http.StatusFound)
+		}, want: "read the YDB feature flags from the monitoring endpoint: 302 Found"},
+		{name: "an oversized page", handler: refusing(http.StatusOK, strings.Repeat("x", monitoring.MaxBody+1)),
+			want: "read the YDB feature flags from the monitoring endpoint: the page exceeds 4194304 bytes"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			_, err := monitoring.Read(c.Context(), serve(c, test.handler), "feature flags", "/viewer/json/feature_flags", "/local", test.ticket, nil)
+			var reason *authored.Error
+			c.Assert(err, qt.ErrorAs, &reason)
+			c.Assert(reason.Error(), qt.Equals, test.want)
+		})
+	}
+}
+
+// TestRead_RefusalWithoutAnAnswerIsAReason covers the refusals no endpoint
+// answers: none named, and one that does not listen.
+func TestRead_RefusalWithoutAnAnswerIsAReason(t *testing.T) {
+	c := testcheck.New(t)
+	server := httptest.NewServer(http.NotFoundHandler())
+	silent, err := url.Parse(server.URL)
+	c.Assert(err, qt.IsNil)
+	server.Close()
+	for _, test := range []struct {
+		name     string
+		endpoint *url.URL
+		want     string
+	}{
+		{name: "no endpoint", want: "no monitoring endpoint to read the YDB feature flags from"},
+		{name: "an endpoint that does not answer", endpoint: silent, want: "read the YDB feature flags from the monitoring endpoint: the endpoint did not answer"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			_, err := monitoring.Read(c.Context(), test.endpoint, "feature flags", "/viewer/json/feature_flags", "/local", "", nil)
+			var reason *authored.Error
+			c.Assert(err, qt.ErrorAs, &reason)
+			c.Assert(reason.Error(), qt.Equals, test.want)
+		})
+	}
 }

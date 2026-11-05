@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replicationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretplan"
@@ -135,7 +136,7 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "native coordination rendering requires established capabilities")
 		}
 		if captured.GetValue().GetKind() == schema.SecretOperation && !request.Capabilities["secrets"] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "secret rendering requires the secrets capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "secret rendering requires the secrets capability"+featureflags.Clause("secrets"))
 		}
 		if captured.GetValue().GetKind() == schema.TopicOperation && !request.Capabilities[topics.CapabilityTopics] {
 			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "topic rendering requires the topics capability")
@@ -144,16 +145,18 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "changefeed rendering requires the changefeeds capability")
 		}
 		if kind := captured.GetValue().GetKind(); (kind == schema.ExternalSourceOperation || kind == schema.ExternalTableOperation) && !request.Capabilities[externals.CapabilityExternalDataSources] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "external object rendering requires the external_data_sources capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "external object rendering requires the external_data_sources capability"+
+				featureflags.Clause(externals.CapabilityExternalDataSources))
 		}
 		if captured.GetValue().GetKind() == schema.StreamingQueryOperation && !request.Capabilities[streaming.Capability] {
 			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, streaming.CapabilityRefusal("streaming query"))
 		}
 		if captured.GetValue().GetKind() == schema.ReplicationOperation && !request.Capabilities[replication.CapabilityReplication] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "async replication rendering requires the async_replication capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "async replication rendering requires the async_replication capability"+
+				featureflags.Clause(replication.CapabilityReplication))
 		}
 		if captured.GetValue().GetKind() == schema.TransferOperation && !request.Capabilities[replication.CapabilityTransfers] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "transfer rendering requires the transfers capability")
+			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "transfer rendering requires the transfers capability"+featureflags.Clause(replication.CapabilityTransfers))
 		}
 		if captured.GetValue().GetKind() == schema.WorkloadOperation && !request.Capabilities[workload.CapabilityResourcePools] {
 			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "resource pools require target capability resource_pools; "+workload.FlagHint)

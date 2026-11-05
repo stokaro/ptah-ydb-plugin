@@ -339,7 +339,9 @@ func TestHostKeepsAChangefeedItCannotModel_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	var created Ydb_Table.CreateSessionResult
 	c.Assert(opened.GetOperation().GetResult().UnmarshalTo(&created), qt.IsNil)
-	c.Cleanup(func() { _, _ = client.DeleteSession(context.Background(), &Ydb_Table.DeleteSessionRequest{SessionId: created.GetSessionId()}) })
+	c.Cleanup(func() {
+		_, _ = client.DeleteSession(context.Background(), &Ydb_Table.DeleteSessionRequest{SessionId: created.GetSessionId()})
+	})
 	altered, err := client.AlterTable(c.Context(), &Ydb_Table.AlterTableRequest{SessionId: created.GetSessionId(), Path: path.Join(h.database, h.directory, "events"),
 		AddChangefeeds: []*Ydb_Table.Changefeed{{Name: "tagged", Mode: Ydb_Table.ChangefeedMode_MODE_UPDATES, Format: Ydb_Table.ChangefeedFormat_FORMAT_JSON,
 			Attributes: map[string]string{"owner": "team"}}}})

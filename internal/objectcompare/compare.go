@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
@@ -401,7 +402,7 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		}
 		return nil, nil
 	}
-	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && reservedName(claim) {
+	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && ReservedName(claim) {
 		// The read reserves the name for the provider's own storage on every
 		// native kind, so it holds no object of this family. It is left out as
 		// Reserved leaves the family's own objects; only a declaration at the
@@ -482,7 +483,7 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		}
 	}
 	if family.ChangeCapability && !request.Capabilities[family.Capability] {
-		return nil, authored.New(fmt.Sprintf("changing %ss requires %s", family.Noun, family.Capability))
+		return nil, authored.New(fmt.Sprintf("changing %ss requires %s%s", family.Noun, family.Capability, featureflags.Clause(family.Capability)))
 	}
 	change, err := family.Change("change-"+id, reported, pair.Current, pair.Desired)
 	if err != nil {

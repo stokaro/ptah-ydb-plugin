@@ -230,7 +230,7 @@ func TestExternalComparison_FailurePath(t *testing.T) {
 		{name: "a table over a dropped data source", declared: []external{events}, read: []external{bucket, events}, capabilities: withSources(),
 			want: "external table app/events reads data source app/bucket, which the plan drops; declare the data source or move the table to one the plan keeps"},
 		{name: "a declaration on a target without external data sources", declared: []external{bucket}, capabilities: map[string]bool{"transactional_ddl": false},
-			want: "external data source app/bucket, which requires target capability external_data_sources, unavailable on this ydb target"},
+			want: "external data source app/bucket, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: .*"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -347,7 +347,7 @@ func TestExternalPlanning_FailurePath(t *testing.T) {
 		{name: "two objects at one path", declared: []external{{name: "events", source: bucketAt("https://a/")}, {name: "events", table: eventsOver("app/bucket")}}, compared: withSources(), capabilities: withSources(),
 			want: "external table app/events has the path of external data source app/events, and YDB keeps one object at a path \\(`unexpected path type`\\)"},
 		{name: "a drop on a target without external data sources", read: []external{{name: "events", table: eventsOver("app/bucket")}}, compared: withSources(), capabilities: map[string]bool{"transactional_ddl": false},
-			want: "DROP EXTERNAL TABLE app/events, which requires target capability external_data_sources, unavailable on this ydb target"},
+			want: "DROP EXTERNAL TABLE app/events, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: .*"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

@@ -38,9 +38,17 @@ func TestPartitioningPlan_HappyPath(t *testing.T) {
 		in   alterCase
 		want string
 	}{
-		{"switches partitioning by load on",
+		{"names every held setting when switching partitioning by load on",
 			partitioningCase(partitionedTable(`{"partitioningByLoad":"ENABLED"}`), partitionedTable(defaultPartitioning)),
-			`{"alterPartitioningSettings":{"partitioningByLoad":"ENABLED"}}`},
+			`{"alterPartitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"1","maxPartitionsCount":"50"}}`},
+		{"keeps the held minimum and size when switching partitioning by load on",
+			partitioningCase(partitionedTable(`{"partitioningByLoad":"ENABLED"}`),
+				partitionedTable(`{"partitionBy":["id"],"partitioningBySize":"ENABLED","partitionSizeMb":"100","partitioningByLoad":"DISABLED","minPartitionsCount":"6","maxPartitionsCount":"20"}`)),
+			`{"alterPartitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"100","partitioningByLoad":"ENABLED","minPartitionsCount":"6","maxPartitionsCount":"20"}}`},
+		{"keeps the held minimum when switching partitioning by load on for a table that does not split by size",
+			partitioningCase(partitionedTable(`{"partitioningByLoad":"ENABLED"}`),
+				partitionedTable(`{"partitionBy":["id"],"partitioningBySize":"DISABLED","partitioningByLoad":"DISABLED","minPartitionsCount":"4"}`)),
+			`{"alterPartitioningSettings":{"partitioningBySize":"DISABLED","partitioningByLoad":"ENABLED","minPartitionsCount":"4"}}`},
 		{"switches partitioning by size off",
 			partitioningCase(partitionedTable(`{"partitioningBySize":"DISABLED"}`), partitionedTable(defaultPartitioning)),
 			`{"alterPartitioningSettings":{"partitioningBySize":"DISABLED"}}`},

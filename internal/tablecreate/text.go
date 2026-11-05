@@ -454,6 +454,9 @@ func AlterationStatement(path string, alteration *Alteration) (string, error) {
 		return prefix + "ADD " + clause + ";", nil
 	case len(request.GetDropIndexes()) != 0:
 		return prefix + "DROP INDEX " + QuoteIdentifier(request.GetDropIndexes()[0]) + ";", nil
+	case len(request.GetRenameIndexes()) != 0:
+		rename := request.GetRenameIndexes()[0]
+		return prefix + "RENAME INDEX " + QuoteIdentifier(rename.GetSourceName()) + " TO " + QuoteIdentifier(rename.GetDestinationName()) + ";", nil
 	default:
 		return "", noTextForm("the alteration changes nothing YQL names")
 	}

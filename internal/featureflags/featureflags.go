@@ -42,9 +42,11 @@ type Gate struct {
 // through the dynamic configuration, the same CREATE TABLE succeeds).
 //
 // The host maps more flags than these. The provider reports only the
-// capabilities it owns, because the host plans the others itself: an
-// index_rename the host read as true would make the host plan a RENAME INDEX
-// that the provider's alteration does not carry out.
+// capabilities it owns, because the host plans the others itself.
+//
+// index_rename follows EnableMoveIndex, on by default on every line from
+// 25.1.4.7 to 26.2.1.14. With it off, YDB refuses a rename with `Move index is
+// not supported yet` and the index keeps its name.
 //
 // external_data_sources follows EnableExternalDataSources and
 // external_object_replace EnableReplaceIfExistsForExternalEntities, as the
@@ -53,6 +55,12 @@ type Gate struct {
 // disabled`), and the second refuses CREATE OR REPLACE of either object.
 var gates = []Gate{
 	{Key: "secrets", Flag: "EnableSchemaSecrets"},
+	// Off by default on every line that lists it, 25.3 and later; 25.1 and
+	// 25.2 do not list it and refuse a unique index on an existing table with
+	// `Adding a unique index to an existing table is disabled`, which keeps
+	// the preset's false.
+	{Key: "unique_index_on_existing_table", Flag: "EnableAddUniqueIndex"},
+	{Key: "index_rename", Flag: "EnableMoveIndex"},
 	{Key: "alter_column_default", Flag: "EnableSetDropDefaultValue"},
 	{Key: "add_column_with_default", Flag: "EnableAddColumsWithDefaults"},
 	{Key: "wide_date_time_types", Flag: "EnableTableDatetime64"},
@@ -96,6 +104,22 @@ var gates = []Gate{
 
 // Gates returns every capability a flag decides, in a fixed order.
 func Gates() []Gate { return slices.Clone(gates) }
+
+// Clause is what a refusal for want of capability key adds when a feature
+// flag decides the key: the flag, and how to have a session report the
+// capability, in the words the host's embedded engine writes for a refusal
+// the flag causes. A session reads the flags only when the address names the
+// monitoring endpoint, and takes its release line's default otherwise, so
+// turning the flag on is not enough without it. Clause is empty for a key no
+// flag decides.
+func Clause(key string) string {
+	at := slices.IndexFunc(gates, func(gate Gate) bool { return gate.Key == key })
+	if at < 0 {
+		return ""
+	}
+	return fmt.Sprintf("; YDB keeps it behind feature flag %s: turn the flag on, and name the cluster's monitoring endpoint in the URL "+
+		"(monitoring=http://host:8765) so Ptah reads the flags before it plans", gates[at].Flag)
+}
 
 // Refine returns caps with every gated capability set from its flag, where the
 // flags list it. A flag the database does not list leaves its capability as

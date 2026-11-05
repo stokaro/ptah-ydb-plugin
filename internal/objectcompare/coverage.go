@@ -99,9 +99,11 @@ func subjectKnowledge(coverage *protocol.ComparisonCoverage, kind string, subjec
 	return nil, false
 }
 
-// reservedName reports the claim a read makes for a name the provider's own
-// storage occupies.
-func reservedName(knowledge *protocol.ModelKnowledge) bool {
+// ReservedName reports the claim a read makes for a name the provider's own
+// storage occupies. The read makes it on every native kind, and the name holds
+// no object of any of them: the comparison leaves it out, and a planner that
+// asks whether an object of a kind is at the name reads the claim as no.
+func ReservedName(knowledge *protocol.ModelKnowledge) bool {
 	return knowledge.GetState() == protocol.ModelKnowledge_UNREPRESENTABLE && knowledge.GetReason() == schema.ReservedNameReason
 }
 

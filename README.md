@@ -92,6 +92,15 @@ GOWORK=off go test -race ./...
 GOWORK=off CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
 ```
 
+Lint both build contours with golangci-lint v2.15.0, as CI does. The
+configuration in `.golangci.yml` enables the gofmt formatter, so an unformatted
+file fails the run:
+
+```sh
+GOWORK=off golangci-lint run ./...
+GOWORK=off golangci-lint run --build-tags integration ./...
+```
+
 The executable requires the SDK's authenticated local subprocess bootstrap.
 Run it through a Ptah SDK client rather than invoking it as a command-line tool.
 The committed module has no `replace` directive or workspace file.
@@ -205,8 +214,11 @@ say. When the address names a monitoring endpoint, opening a session reads
 `/viewer/json/feature_flags?database=<db>` and folds the flags that gate a
 capability the provider owns into the session's capabilities, `false`
 included. A failed read fails the session rather than falling back to the
-defaults, as in the host's embedded engine. Without the endpoint the session
-reports the defaults of every supported line.
+defaults, as in the host's embedded engine. The refusal is a reason the host
+prints, and it names the right a user lacks: on 26.x the page is served only
+to a user with `DESCRIBE SCHEMA` on the database. What the endpoint answered
+stays out of the reason. Without the endpoint the session reports the
+defaults of every supported line.
 
 | Capability | Flag | Default |
 | --- | --- | --- |
@@ -220,6 +232,8 @@ reports the defaults of every supported line.
 | `full_text_indexes` | `EnableFulltextIndex` | `false` through 26.1, `true` from 26.2 |
 | `local_bloom_indexes` | `EnableLocalBloomFilterIndex` | `false` through 26.1, `true` from 26.2 |
 | `local_ngram_indexes` | `EnableLocalBloomNgramFilterIndex` | `false` through 26.1, `true` from 26.2 |
+| `unique_index_on_existing_table` | `EnableAddUniqueIndex` | `false` on every line; 25.1 and 25.2 do not list the flag |
+| `index_rename` | `EnableMoveIndex` | `true` on every line from 25.1 to 26.2, for a host that lists `planning.index-renames` |
 | `local_min_max_indexes` | `EnableLocalMinMaxIndex` | `false` on every line from 25.1 to 26.2 |
 
 The release line alone decides the other vector capabilities, as the host's
@@ -230,12 +244,20 @@ vectors over rows: `bit vector type is not supported`, `Unsupported
 vector_type: VECTOR_TYPE_BIT`).
 
 The host maps more flags than these. The provider reports only the
-capabilities it plans with, because the host plans with the others itself: an
-`index_rename` read as true would make the host plan a `RENAME INDEX` that the
-provider's alteration does not carry out. `internal/featureflags/testdata`
+capabilities it plans with, because the host plans with the others itself.
+`index_rename` is `false` for a host that does not list
+`planning.index-renames`: such a host has no step to send a renamed index
+with, and would refuse the plan. `internal/featureflags/testdata`
 holds the pages the mapping is checked against, and a live test turns the
 flag on and off through the server's dynamic configuration and reads the
 capability each new session reports.
+
+A plan refused for want of a capability a flag decides names the flag, after
+the host's words for the capability: `...; YDB keeps it behind feature flag
+<Flag>: turn the flag on, and name the cluster's monitoring endpoint in the
+URL (monitoring=http://host:8765) so Ptah reads the flags before it plans`. A
+session without the endpoint takes its release line's default, so the flag
+alone does not change the answer.
 
 Session close releases both the SQL pool and its parent native driver, even
 when the RPC context is canceled. Cleanup results are retained for repeated
@@ -370,7 +392,8 @@ dispatched unit YDB refused is `NOT_APPLIED`, or `PARTIAL` after a confirmed
 prefix, when nothing of it can have been applied. That takes a status that
 establishes the refusal (`BAD_REQUEST`, `SCHEME_ERROR`, `PRECONDITION_FAILED`,
 `ALREADY_EXISTS`, `NOT_FOUND`, `UNSUPPORTED`, `ABORTED`, or `GENERIC_ERROR` for
-a plain data statement or for a text YDB refused while compiling it, which its
+a plain data statement, for one `ANALYZE` statement, which changes no schema
+object and no row, or for a text YDB refused while compiling it, which its
 issues show by naming a position in the text and no execution stage) and a
 unit that ran in a caller transaction, which YDB
 applies only by its commit, or that is one query YDB applies whole: a data
@@ -380,8 +403,13 @@ which no host prints; its reason is the provider's (see
 Every other failed dispatched unit reports `UNKNOWN`, even when earlier units
 succeeded: a block or action call that runs scheme statements, a `BATCH`
 statement, a unit of several scheme statements, a native unit, a unit that
-holds a comment or coordination node statement, a unit that expands secret
-inputs, and a failure that carries no server status. Cancellation between
+holds a coordination node statement, a unit that expands secret inputs, and a
+failure that carries no server status. A unit that holds a comment statement
+runs as its statements one after another, and reads by the first one when that
+one fails, since nothing of the unit ran before it: a query by the rules above,
+and a comment statement, one `AlterTable` YDB applies whole, by a status that
+establishes the refusal, such as `BAD_REQUEST` for attributes past YDB's
+budget. A later one failing leaves the unit `UNKNOWN`. Cancellation between
 units reports the confirmed prefix. Diagnostics omit raw driver errors.
 
 A unit YDB refused in a caller transaction ends the transaction: measured on
@@ -551,7 +579,7 @@ Views and comments use these shared stages:
 | PrepareCommonObjects | The query in the server's form: its tokens joined by single spaces, comments and terminators left out | As declared |
 | ValidateSchema | Refuses a view without a query, `WITH CHECK OPTION`, view attributes and materialized views | Refuses what an attribute cannot hold: a key over 100 bytes, a value over 4096 bytes, text that is not UTF-8, more than 10240 bytes on one table |
 | Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
-| PlanFeatures | Dropped before every table step and created after them | After every step on the table that keeps it |
+| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes |
 
 The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
 two- or three-character operator is one token except `>>`, which YDB writes
@@ -559,11 +587,18 @@ two- or three-character operator is one token except `>>`, which YDB writes
 string or name, a multi-line string among them, is kept whole. A read of a view
 applied once therefore equals the preparation of its declaration.
 
+A step that only removes, such as a column's removal, is ordered after the
+views and comments of the plan, not before them: the host places a removal
+after its views and comments, and what a removal drops is no longer declared,
+so no view the plan creates reads it and no comment the plan sets names it.
+
 YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table
 service, after checking that the object is in the session's database or realm,
 is a row table or a view of the kind the statement names, and for a non-empty
-comment has the column or the index. A unit holding a comment statement beside
+comment has the column or the index. A statement whose path holds nothing, or
+one the session may not see, is refused before any write with a message that
+names the path. A unit holding a comment statement beside
 other statements, such as a commented view, runs as the queries a migration
 file is split into, one statement after another. A comment statement in a
 transaction, or one that cannot be read, refuses the batch before any unit
@@ -784,9 +819,15 @@ credential. Package `internal/authored` keeps such sentences apart from the
 errors the provider receives: `authored.New` marks one, and `authored.Status`
 sends it as the reason, with the error's whole text as the status message,
 which no host prints. The reasons the provider gives are its refusals of a
-connection address, of a capability the target lacks, of a lock the server
-refuses this user, and the refusals whose text is a fixed sentence, such as a
-closed session or a reached handle limit. A YDB driver's error is never a
+connection address, of a monitoring page it could not read, of a capability
+the target lacks, a declared external object among them, of a lock the server
+refuses this user, of a streaming query body changed without
+`allow_state_reset`, the refusals whose text is a fixed sentence, such as a
+closed session or a reached handle limit, and the refusal of a table's
+declaration by table preparation or the creation
+projection. That last reason names the table and gives the sentence schema
+validation reports for the same declaration; the compilation behind it reads no
+server. A YDB driver's error is never a
 reason, because YDB can quote a statement and its values, or a credential
 source: the host prints its code alone.
 
@@ -825,8 +866,10 @@ Confirmed history, journal, and tag stores are returned as SDK reservations
 instead of managed tables. A reservation occupies the name for every supported native scheme-object
 kind and for common tables. Exact UNREPRESENTABLE subject coverage overrides
 directory completeness at these occupied names, so omission does not assert
-absence. Filtered reads return reservations only from the exact directories
-they inspect. Names or layout alone never establish ownership.
+absence. A comparison leaves a reserved name out. When a plan changes an object
+a streaming query could read, it counts no query at a reserved name. Filtered
+reads return reservations only from the exact directories they inspect. Names
+or layout alone never establish ownership.
 
 The coordination node `ptah_locks` at the root of the session's database is
 reserved with purpose LOCK by its name alone. The lock service takes whatever
@@ -1337,9 +1380,9 @@ ADD INDEX ... LOCAL USING ...` or `ALTER TABLE ... DROP INDEX ...` through the
 query service. An index whose kind, column or settings differ is dropped and
 added again under its name, the removal first, and a renamed index is dropped
 under its old name and added under its new one, as the host's embedded engine
-plans both on a target without `index_rename`, which this provider never
-reports. 26.2.1.14 also renames a local index (`RENAME INDEX`) and changes its
-probability in place (`ALTER INDEX ... SET (false_positive_probability = ...)`),
+plans both on a target without `index_rename`; the host compares no local
+index, so it pairs none. 26.2.1.14 also renames a local index (`RENAME
+INDEX`) and changes its probability in place (`ALTER INDEX ... SET (false_positive_probability = ...)`),
 which neither engine plans. Only an index a plan adds needs its capability.
 Execution reads the table from the table service and the monitoring endpoint
 and refuses before it writes when the table holds an index of the name to add,
@@ -2010,7 +2053,17 @@ unit, which one query takes.
 
 Execution reads `.sys/resource_pools` and `.sys/resource_pool_classifiers`
 before the first statement and refuses objects that changed since the plan read
-them; it runs each statement once and reads both views back. Inspection reads
+them; it runs each statement once and reads both views back. The workload
+manager reads its classifiers from a cache, so for a while after a classifier
+and its pool are dropped it can still route a query to the pool, and YDB
+refuses that query with `Failed to resolve pool id` before it runs it. A read of
+the views refused so is sent again, for up to 20 seconds, for an inspection and
+for an execution's check and confirmation alike; a statement is never sent
+twice. A classifier with no member name routes every query of the database,
+the server's own included. Measured on 25.1.4.7: while such a classifier
+routed every query to a pool that admits none, a read of
+`.sys/resource_pool_classifiers` sent to the `default` pool ended in
+`System view: timeout`. Inspection reads
 the views on a target with resource pools, for a read of the whole database or
 one that selects the root, `/`: a read filtered to other directories cannot
 report what belongs to the database, so it leaves both kinds uninspected. A dev
@@ -2531,9 +2584,17 @@ converted with `CAST` and unwrapped, so a value that does not convert fails the
 copy with a message naming the table and the column instead of becoming NULL;
 a column made NOT NULL is unwrapped too, which fails the copy on a NULL row.
 The new table keeps the old table's attributes, and with them the comments Ptah
-keeps there, but none of its storage settings: what the declaration states is
-what it gets. Without the policy, the change is refused in the embedded
-engine's words, naming the request the host passes, such as
+keeps there, and each storage setting the declaration does not state, as the
+old table holds it: every column family, the default one and one no column
+sits in included, with the settings the declaration leaves out, the family each
+column sits in where the declaration does not say (see
+[Column families](#column-families)), the automatic partitioning, the read replicas, the key bloom
+filter, and the TTL where the declaration states no table properties. A
+cluster's table profile may have given the old table any of them, and YQL
+drops neither a family nor a setting, so a rebuild changes none that nobody
+declared. The new table's indexes take YDB's defaults rather than the
+partitioning their old indexes hold. Without the policy, the change is refused
+in the embedded engine's words, naming the request the host passes, such as
 `--allow-table-rebuild`.
 
 Every step writes as a YQL statement in the TEXT form, so a migration file
@@ -2627,8 +2688,14 @@ rules:
   A declared `COMPRESSION_NONE` matches a family that reads back unspecified.
 - A family only the table holds stays. No family is dropped, because YDB has no
   way to drop one.
-- A column moves only when a column property record names it. A column with no
-  record keeps its family. An empty family in a record means the default family.
+- A column sits where the declaration places it. A column property record
+  names its family, and an empty family in a record means the default family.
+  A source that describes the column properties of every column it declares (a
+  Go, YAML or YQL source) places a column it names in no family in the default
+  family, so a column the table holds elsewhere moves back, as the host's
+  embedded engine moves it. A source that could not describe them, such as
+  HCL, says nothing of where a column sits, and the column keeps its family. A
+  rebuild places the columns of the new table by the same rule.
 - A key column stays in the default family. A column that names a family
   neither the declaration nor the table has is refused. So is a `keep_in_memory`
   that only one side sets, and a declaration that states families when the
@@ -2742,11 +2809,14 @@ partitioning, the filter, or the replicas. The settings are `AUTO_PARTITIONING_B
   engine reads the declaration (measured on 25.1.4.7 and 26.2.1.14 for a table
   and an index that did not split by size). A size beside a declared
   `partitioningBySize` of `DISABLED` is refused.
-- When the step switches partitioning by size on, it names every setting the
-  table keeps: the ones the declaration states and the held value of the others.
-  The server resets the size and the minimum count the call leaves out, so a
-  minimum nobody declared would otherwise drop to 1. The size the table takes is
-  2048 MB unless the declaration states one, and the TEXT form names it.
+- When the step switches partitioning by size or by load on, it names every
+  setting the table keeps: the ones the declaration states and the held value
+  of the others. Switching either on resets the minimum count the call leaves
+  out to 1, and switching partitioning by size on resets the size too
+  (measured on 26.2.1.14 through the table service for partitioning by load),
+  so a minimum nobody declared would otherwise drop to 1. The size the table
+  takes is 2048 MB unless the declaration states one, and the TEXT form names
+  it. An index's settings follow the same rule.
 - `keyBloomFilter` takes `ENABLED` or `DISABLED`. A table that reports the filter
   as unspecified keeps none, so a declared `DISABLED` matches it (measured on
   25.1.4.7 and 26.2.1.14 by the host's embedded engine).
@@ -2771,6 +2841,24 @@ index and parented by the table, so two index steps of one table never share an
 effect. An addition is `ADD INDEX name GLOBAL [SYNC|ASYNC] [UNIQUE] ON (keys)
 [COVER (columns)]`; a removal is `DROP INDEX name`. Impact is additive for an
 addition and destructive for a removal.
+
+A host that lists `planning.index-renames` pairs an index the table holds with
+one the declaration states under another name and one definition, and sends
+the pair as one rename step. The service claims it with
+`row-table-rename-index/N`, a native `AlterTable` call with `rename_indexes`,
+whose text form is `RENAME INDEX old TO new`. The step reads the table, drops
+the old name and creates the new one. The index keeps its kind, its columns
+and its partitioning settings, and is not built again (measured on 25.1.4.7
+and 26.2.1.14). Impact is
+behavioral: a query that names the old name stops reading through the index.
+The host moves the index's comment to the new name with its own steps.
+Execution refuses before it writes when the table no longer holds the index as
+planned or holds an index under the new name. After the call it requires the
+old name to be gone and the new one to hold the index as it was, settings
+included. YDB renames an index only with `EnableMoveIndex` on, so a rename
+step on a session without `index_rename` is refused when it is planned. A session
+reports the capability only to a host that lists the feature; any other host
+plans a rename as a removal and an addition.
 
 The common indexes a source declares, such as a `ptah:schema:index` directive,
 are compared by the host. Inspection reports a row table's global indexes as
@@ -2804,11 +2892,24 @@ that table itself.
 - The rules above are those of global sync, async and unique indexes. A vector
   or full-text index follows its own (see
   [Vector and full-text indexes](#vector-and-full-text-indexes)). An index to
-  add that states its partitioning or read replicas is refused by name: the step
-  that adds it carries none, so add the index first and declare its settings in
-  a later plan.
-- A unique index needs a server that accepts `ALTER TABLE ... ADD INDEX ...
-  GLOBAL UNIQUE`; YDB 25.1 refuses it unless `enable_add_unique_index` is set.
+  add that states its partitioning or read replicas is added without them,
+  since no call that adds an index takes them, and a
+  `row-table-index-settings/N` step after the addition gives it the declared
+  ones over the settings YDB gives a new index (automatic partitioning by size
+  at 2048 MB, none by load, at least one partition, no read replicas; measured
+  on 25.1.4.7 and 26.2.1.14), as the host's embedded engine writes `ALTER INDEX
+  ... SET` after `ADD INDEX`. Execution of that step requires the new index to
+  hold exactly those settings.
+- A unique index added to a table that exists needs
+  `unique_index_on_existing_table`. YDB 25.1 and 25.2 never add one, and later
+  lines keep it behind `EnableAddUniqueIndex`, off by default; without it the
+  server refuses the call (`Adding a unique index to an existing table is
+  disabled`) with an outcome the provider cannot confirm. So a session without
+  the capability refuses such an addition when it is planned, in the host's
+  embedded engine's words: `adding unique index "<name>" to table
+  "<table>", which exists already, which requires target capability
+  unique_index_on_existing_table, unavailable on this ydb target`. A table
+  the plan creates takes its unique indexes with it and needs nothing.
 - An index reads columns the declaration states. A declared index that reads a
   column the declaration does not state is refused, and so is a kept index whose
   column the declaration drops.
@@ -3305,7 +3406,8 @@ refusals, and the answers an agent reads, which carry no source content.
 ## Offline schema rendering
 
 The provider uses `schema.declarations` to create authored coordination nodes,
-topics, external sources and tables, resource pools, classifiers, and secrets. The host
+topics, external sources and tables, resource pools, classifiers, secrets and
+streaming queries. The host
 validates the whole schema and combines these creations with table and common
 object steps before rendering SQL. Declaration operations retain their desired
 definitions and contain no observed-state claims.
@@ -3315,7 +3417,10 @@ duplicate classifier ranks, and explicit native access requirements refuse the
 whole batch. Use live schema planning for access requirements that a CREATE
 statement cannot express. External tables follow their declared data sources;
 classifiers follow their declared resource pools. External sources follow their
-declared secrets. Secret statements retain approved input references; rendering
+declared secrets. A streaming query follows each topic and table its text reads
+or writes, since YDB compiles a query when it creates it, and a query that
+names a path by its database is refused, since a rendered schema names no
+database. Secret statements retain approved input references; rendering
 opens no session and reads no input value.
 
 ## Operator statements and object scopes

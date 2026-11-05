@@ -72,7 +72,7 @@ func TestCheck_RefusesWhatTheTargetLacks(t *testing.T) {
 			wantErr: `changefeed "f" of table "app/items" takes SCHEMA_CHANGES, which requires target capability changefeed_schema_changes, unavailable on this ydb target`},
 		{name: "an auto-partitioned topic on 25.1", spec: withAuto, caps: line(25, 1),
 			want:    changefeeds.Refusal{Subject: `changefeed "f" of table "app/items" takes TOPIC_AUTO_PARTITIONING`, Key: changefeeds.CapabilityTopicAutoPartitioning},
-			wantErr: `changefeed "f" of table "app/items" takes TOPIC_AUTO_PARTITIONING, which requires target capability changefeed_topic_auto_partitioning, unavailable on this ydb target`},
+			wantErr: `changefeed "f" of table "app/items" takes TOPIC_AUTO_PARTITIONING, which requires target capability changefeed_topic_auto_partitioning, unavailable on this ydb target; YDB keeps it behind feature flag EnableTopicAutopartitioningForCDC: turn the flag on, and name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans`},
 		{name: "an availability period on 25.3", spec: withAvailability, caps: line(25, 3),
 			want: changefeeds.Refusal{Subject: `consumer "c" of changefeed "f" of table "app/items" takes availability_period`, Key: "topic_consumer_availability_period"},
 			wantErr: `consumer "c" of changefeed "f" of table "app/items" takes availability_period, which requires target capability ` +

@@ -46,6 +46,10 @@ type alterCase struct {
 	// changefeedKnowledge is what the declaring source established about the
 	// changefeeds of every table it declares; zero states nothing.
 	changefeedKnowledge protocol.ModelKnowledge_State
+	// columnKnowledge is what the declaring source established about the
+	// column properties of every column it declares, as a Go, YAML or YQL
+	// source states it; zero states nothing.
+	columnKnowledge protocol.ModelKnowledge_State
 	// capabilities are the session's, beside its nontransactional DDL.
 	capabilities map[string]bool
 }
@@ -140,6 +144,10 @@ func alterRequest(c *qt.C, in alterCase) *protocol.PlanFeaturesRequest {
 		desired.Features.Facets.Coverage.Kinds = append(desired.Features.Facets.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: schema.NativeDesiredModel(schema.ChangefeedProperties),
 			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: in.changefeedKnowledge, Reason: "fixture"}}}})
 	}
+	if in.columnKnowledge != protocol.ModelKnowledge_STATE_UNSPECIFIED {
+		desired.Features.Facets.Coverage.Kinds = append(desired.Features.Facets.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: schema.ColumnDesiredModel(),
+			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: in.columnKnowledge, Reason: "fixture"}}}})
+	}
 	capabilities := map[string]bool{"transactional_ddl": false}
 	maps.Copy(capabilities, in.capabilities)
 	if in.heldTable != "" {
@@ -184,6 +192,12 @@ func TestAlterPlan_HappyPath(t *testing.T) {
 			want: `{"alterColumns":[{"name":"payload","family":"archive"}]}`},
 		{name: "moves a column back to the default family",
 			desiredColumns: map[string]string{"payload": `{}`}, declared: []string{"payload"},
+			heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`, heldColumns: map[string]string{"payload": `{"family":"archive"}`}, held: []string{"payload"},
+			want: `{"alterColumns":[{"name":"payload","family":"default"}]}`},
+		// A source that describes where every column sits places a column it
+		// names in no family in the default family.
+		{name: "moves a column the declaration places nowhere back to the default family",
+			declared: []string{"payload"}, columnKnowledge: protocol.ModelKnowledge_COMPLETE,
 			heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`, heldColumns: map[string]string{"payload": `{"family":"archive"}`}, held: []string{"payload"},
 			want: `{"alterColumns":[{"name":"payload","family":"default"}]}`},
 		{name: "adds a family and moves a column into it",
@@ -245,14 +259,17 @@ func TestAlterPlan_NoChange(t *testing.T) {
 		{name: "a family only the table holds stays",
 			desiredTable: plainTable,
 			heldTable:    `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"profile","compression":"COMPRESSION_LZ4"}]}`},
-		{name: "a column without declared placement keeps its family",
+		{name: "a column a source that could not describe the column properties places nowhere keeps its family",
 			declared: []string{"payload"}, heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`,
 			heldColumns: map[string]string{"payload": `{"family":"archive"}`}, held: []string{"payload"}},
+		{name: "a column the declaration places nowhere stays in the default family",
+			declared: []string{"payload"}, columnKnowledge: protocol.ModelKnowledge_COMPLETE, heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`,
+			heldColumns: map[string]string{"payload": `{}`}, held: []string{"payload"}},
 		{name: "a column in the declared family stays",
 			desiredTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`, desiredColumns: map[string]string{"payload": `{"family":"archive"}`}, declared: []string{"payload"},
 			heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`, heldColumns: map[string]string{"payload": `{"family":"archive"}`}, held: []string{"payload"}},
 		{name: "a dropped column is never moved",
-			desiredTable: plainTable, declared: nil,
+			desiredTable: plainTable, declared: nil, columnKnowledge: protocol.ModelKnowledge_COMPLETE,
 			heldTable: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}]}`, heldColumns: map[string]string{"gone": `{"family":"archive"}`}, held: []string{"gone"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

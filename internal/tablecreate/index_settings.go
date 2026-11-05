@@ -12,7 +12,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -122,7 +121,7 @@ func planIndexSettings(name string, want *native.GlobalIndexSettings, held *nati
 		if reason := partitioningRefusal(have.GetPartitioningSettings(), delta); reason != "" {
 			return nil, fmt.Sprintf("index %q: %s", name, reason)
 		}
-		if delta.GetPartitioningBySize() == Ydb.FeatureFlag_ENABLED {
+		if resetsUnnamedSettings(delta) {
 			delta = resolvedPartitioning(partitioning, have.GetPartitioningSettings())
 		}
 	}

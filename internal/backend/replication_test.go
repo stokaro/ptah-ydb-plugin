@@ -306,7 +306,7 @@ func TestTransferPlanning_FailurePath(t *testing.T) {
 	request = objectRequest(c, schema.TransferProperties, replicationcompare.TransferServiceID, "ingest", declaredTransfer(c, new(ingest())), nil)
 	request.Capabilities[replication.CapabilityTransfers] = false
 	result, err = backend.New().CompareModels(t.Context(), request)
-	c.Assert(err, qt.ErrorMatches, `.*changing transfers requires transfers`)
+	c.Assert(err, qt.ErrorMatches, `.*changing transfers requires transfers; YDB keeps it behind feature flag EnableTopicTransfer: .*`)
 	c.Assert(result, qt.IsNil)
 }
 
