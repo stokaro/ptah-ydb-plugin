@@ -1,5 +1,5 @@
 {
- "host": "76e5fcba3b4581d20f231e651e0808f30fa3037e",
+ "host": "74de0b65b3a167bdf9597eb41a399fb2c643a7b1",
  "runs": [
   {
    "check": {
@@ -57,7 +57,7 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:BC101", "0002_t.up.sql:1:YD109", "0003_t.up.sql:1:BC104", "0003_t.up.sql:1:DS102", "0003_t.up.sql:2:BC101", "0003_t.up.sql:2:YD109"],
+   "report": ["0002_t.up.sql:1:BC101", "0002_t.up.sql:1:YD109", "0003_t.up.sql:2:BC101", "0003_t.up.sql:2:YD109"],
    "server_version": "",
    "split": 0
   },
@@ -117,7 +117,7 @@
    },
    "compatibility": "",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:BC101", "0002_t.up.sql:1:YD109", "0003_t.up.sql:1:BC104", "0003_t.up.sql:1:DS102", "0003_t.up.sql:2:BC101", "0003_t.up.sql:2:YD109"],
+   "report": ["0002_t.up.sql:1:BC101", "0002_t.up.sql:1:YD109", "0003_t.up.sql:2:BC101", "0003_t.up.sql:2:YD109"],
    "server_version": "25.1.4.7",
    "split": 0
   },
@@ -178,7 +178,7 @@
    },
    "compatibility": "atlas",
    "dialect": "ydb",
-   "report": ["0002_t.up.sql:1:DS101", "0002_t.up.sql:1:YD109", "0003_t.up.sql:1:DS102", "0003_t.up.sql:2:DS101", "0003_t.up.sql:2:YD109"],
+   "report": ["0002_t.up.sql:1:DS101", "0002_t.up.sql:1:YD109", "0003_t.up.sql:2:DS101", "0003_t.up.sql:2:YD109"],
    "server_version": "",
    "split": 0
   },
@@ -265,7 +265,7 @@
    },
    "compatibility": "",
    "dialect": "",
-   "report": ["0002_t.up.sql:1:BC101", "0003_t.up.sql:1:BC104", "0003_t.up.sql:1:DS102", "0003_t.up.sql:2:BC101"],
+   "report": ["0002_t.up.sql:1:BC101", "0003_t.up.sql:2:BC101"],
    "server_version": "",
    "split": -1
   }

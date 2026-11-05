@@ -1,0 +1,1 @@
+ALTER TABLE f DROP CHANGEFEED updates;

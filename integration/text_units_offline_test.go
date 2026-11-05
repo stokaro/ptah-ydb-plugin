@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"slices"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -20,26 +21,48 @@ import (
 // with the table settings payload states, and returns its render request.
 func offlineCreation(c *qt.C, client *providerruntime.Client, payload string) *protocol.RenderRequest {
 	c.Helper()
-	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Schema: "app", Name: "records"}
-	features := &protocol.CapturedFeatures{
-		Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
-		Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{},
-			Records: []*protocol.ComparisonRecord{desiredFacet(c, client, owner, schema.TableProperties, payload)}},
-	}
-	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(),
-		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)},
-		Capabilities: map[string]bool{"transactional_ddl": false},
-		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE,
-			Desired: &protocol.DeclaredTable{Name: owner.Name, Schema: owner.Schema, PrimaryKey: []string{"id"},
-				Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true}}, Features: features}}}}
-	prepareCapturedCreation(c, client, request)
-	projectCapturedCreation(c, client, request)
+	return offlineCreationUnder(c, client, payload, nil)
+}
+
+// offlineCreationUnder is offlineCreation under a planning policy, nil for
+// none.
+func offlineCreationUnder(c *qt.C, client *providerruntime.Client, payload string, policy *protocol.PlanningPolicy) *protocol.RenderRequest {
+	c.Helper()
+	request := offlineCreationRequest(c, client, payload, policy)
 	plan, err := client.PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
 	rendering := testplanning.RenderRequest(client.Description(), plan, request.Capabilities)
 	rendering.Form = protocol.RenderRequest_TEXT
 	return rendering
+}
+
+// offlineCreationRequest is the planning request of offlineCreationUnder,
+// prepared and projected through client, before it is planned.
+func offlineCreationRequest(c *qt.C, client *providerruntime.Client, payload string, policy *protocol.PlanningPolicy) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Schema: "app", Name: "records"}
+	features := &protocol.CapturedFeatures{
+		Objects: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
+		Facets: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{},
+			Records: []*protocol.ComparisonRecord{desiredFacet(c, client, owner, schema.TableProperties, payload)}},
+	}
+	targets := []string{provider.PlanningLifecycleFeature}
+	if policy != nil {
+		// A host sends a policy with the features it negotiated for the
+		// engine, planning.policy among them.
+		targets = slices.Clone(client.Description().Engines[0].Features)
+	}
+	request := &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: targets, PlanningId: tablecreate.ServiceID, ParentKinds: tablecreate.ParentKinds(),
+		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(client.Description().Engines[0].Identifiers)},
+		Capabilities: map[string]bool{"transactional_ddl": false},
+		Tables: []*protocol.PlanningTable{{Subject: testplanning.Subject(owner), Action: protocol.PlanningTable_CREATE,
+			Desired: &protocol.DeclaredTable{Name: owner.Name, Schema: owner.Schema, PrimaryKey: []string{"id"},
+				Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true}}, Features: features}}},
+		Policy: policy}
+	prepareCapturedCreation(c, client, request)
+	projectCapturedCreation(c, client, request)
+	return request
 }
 
 // The TEXT form is a two-way addition of contract 25.3: a host that lists
