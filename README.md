@@ -51,7 +51,12 @@ minor version at least `min_contract.minor`. The document states the minimum the
 provider declares in its `Describe` reply, so the two cannot disagree. This
 provider requires contract 25.7. It negotiates `database.context` and
 `values.context` to resolve dependency paths, and `planning.lifecycle` to order
-native replacements around common table operations. `ptah providers install`
+native replacements around common table operations. It offers
+`planning.statement-style` (contract 25.8), which ptah-compat's `migrate diff`
+needs, because it plans in the exact statement style: no comment that only
+describes a statement, no guard the plan does not need and no CASCADE. The
+operations the provider plans carry none of these in either style, so an exact
+plan is the plan the annotated style gets. `ptah providers install`
 reads the document to choose the newest release the host can start, without
 downloading an archive. `release-lines.json` lists the release lines the provider declares.
 
