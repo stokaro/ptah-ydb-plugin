@@ -4,15 +4,12 @@ package integration_test
 
 import (
 	"context"
-	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/devdatabase"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
@@ -25,32 +22,6 @@ func requireDocker(c *qt.C) {
 	if output, err := exec.CommandContext(ctx, "docker", "version", "--format", "{{.Server.Version}}").CombinedOutput(); err != nil {
 		c.Skipf("a Docker daemon is required to start a dev database: %v: %s", err, output)
 	}
-}
-
-// dockerManifest is a provider manifest whose provider starts with the
-// variables the docker command needs, as an operator's manifest passes them:
-// the provider sees nothing of the host's environment it is not given.
-func dockerManifest(c *qt.C) string {
-	c.Helper()
-	var environment []string
-	for _, name := range []string{"PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG"} {
-		if value, ok := os.LookupEnv(name); ok {
-			environment = append(environment, name+"="+value)
-		}
-	}
-	return providerManifestWith(c, environment)
-}
-
-// devContainers lists the containers the provider started, by the label it
-// gives each one, as their names and states.
-func devContainers(c *qt.C) []string {
-	c.Helper()
-	ctx, cancel := context.WithTimeout(c.Context(), 30*time.Second)
-	defer cancel()
-	output, err := exec.CommandContext(ctx, "docker", "ps", "--all", "--filter", "label="+devdatabase.ContainerLabel,
-		"--format", "{{.Names}} {{.State}}").Output()
-	c.Assert(err, qt.IsNil)
-	return strings.FieldsFunc(string(output), func(r rune) bool { return r == '\n' })
 }
 
 // devDockerMigrations is the host's migration directory for a dev database:
@@ -85,7 +56,7 @@ func TestHostValidatesMigrationsOnADockerDevDatabase_HappyPath(t *testing.T) {
 			c := testcheck.New(t)
 			host, _ := hostManifest(c)
 			requireDocker(c)
-			manifest := dockerManifest(c)
+			manifest := providerManifestWith(c, dockerEnvironment())
 			before := devContainers(c)
 			dir := hashedMigrations(c, host)
 

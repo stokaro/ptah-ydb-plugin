@@ -67,7 +67,8 @@ func providerManifest(c *qt.C) string {
 }
 
 // providerManifestWith is providerManifest whose provider starts with the
-// name=value entries of environment and nothing else of the host's.
+// NAME=value entries of environment, such as the variables the docker command
+// needs.
 func providerManifestWith(c *qt.C, environment []string) string {
 	c.Helper()
 	binary, digest := providerBinary(c)
