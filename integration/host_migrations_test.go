@@ -9,11 +9,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -518,4 +521,71 @@ func TestHostDryRunRunsNoDataQuery_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", dry))
 	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+f.table("q")+"`"), qt.Equals, int64(0))
 	c.Assert(f.names(c), qt.DeepEquals, []string{"q"})
+}
+
+// gateMigrations writes a directory whose second version adds a unique index to
+// the table its first version created, under the lint policy given.
+func gateMigrations(c *qt.C, f migrationsFixture, policy string) string {
+	c.Helper()
+	users := "`" + f.table("users") + "`"
+	return writeFiles(c, c.TempDir(), map[string]string{
+		".ptah-lint.yaml":            policy,
+		"0000000001_users.up.sql":    "CREATE TABLE " + users + " (id Uint64 NOT NULL, email Utf8, PRIMARY KEY (id));\n",
+		"0000000001_users.down.sql":  "DROP TABLE " + users + ";\n",
+		"0000000002_unique.up.sql":   "ALTER TABLE " + users + " ADD INDEX users_email GLOBAL UNIQUE SYNC ON (email);\n",
+		"0000000002_unique.down.sql": "ALTER TABLE " + users + " DROP INDEX users_email;\n",
+	})
+}
+
+// withoutUniqueIndexOnExistingTables turns EnableAddUniqueIndex off until the
+// test ends on a server whose session establishes
+// unique_index_on_existing_table, as the 26.2 test server's does, so that a
+// unique index added to a table that exists is refused there. A server whose
+// session lacks the capability is left as it is.
+func withoutUniqueIndexOnExistingTables(c *qt.C, opened *connection.Connection) {
+	c.Helper()
+	if !targetCapabilities(c)[tablecreate.UniqueIndexOnExistingTableCapability] {
+		return
+	}
+	newClusterFlags(c, opened).set(c, map[string]bool{"EnableAddUniqueIndex": false})
+}
+
+// Ported from the host's TestYDBBinary_MigrationsUpGatesOnTheYDFamily:
+// `migrations up` lints the pending migrations through this provider before it
+// runs any of them. A policy whose gate section blocks on the YD family refuses
+// the unique index the second version adds to the table the first version
+// creates, in YD101's words, and no migration runs: the directory holds the
+// revision table the host creates first, and no users. Without the gate section
+// the first version runs and the server refuses the second. The host's test
+// quotes the server's words there; the provider keeps YDB's issue text out of
+// the reason it gives (see package ydbfailure), so the refusal is the
+// provider's: on 26.2 the capability and the flag YDB refused for, and on 25.1
+// the status and issue code of an answer that does not show whether the
+// statement applied. The 26.2 test server starts with EnableAddUniqueIndex on,
+// under which it builds the index, so the test turns the flag off there while
+// it runs.
+func TestHostMigrationsUpGatesOnTheYDFamily_FailurePath(t *testing.T) {
+	refusals := map[string]string{
+		"26.2": `capability unique_index_on_existing_table is off on this YDB cluster, which runs with feature flag EnableAddUniqueIndex off: ` +
+			`YDB refused the statement \(BAD_REQUEST\)`,
+		"25.1": `the unit's outcome is unknown: YDB answered GENERIC_ERROR, issue 1060, line 1, column \d+, which does not show whether the unit applied`,
+	}
+	c := testcheck.New(t)
+	f := newMigrationsFixture(c)
+	withoutUniqueIndexOnExistingTables(c, f.opened)
+	refusal, measured := refusals[serverLine(c, serverVersion(c, f.opened))]
+	c.Assert(measured, qt.IsTrue)
+
+	gated, gatedErr := hostCommand(c, append([]string{"migrations", "up"},
+		f.target(gateMigrations(c, f, "dialect: ydb\ngate:\n  families: [YD]\n"))...)...)
+	namesAfterGate := f.names(c)
+	ungated, ungatedErr := hostCommand(c, append([]string{"migrations", "up"}, f.target(gateMigrations(c, f, "dialect: ydb\n"))...)...)
+
+	c.Assert(gatedErr, qt.IsNotNil)
+	c.Assert(gated, qt.Matches, `(?s).*pending migrations carry lint findings the policy's gate section blocks on.*`+
+		`0000000002_unique\.up\.sql:1 YD101 error: ADD INDEX users_email adds a unique index to `+regexp.QuoteMeta(f.table("users"))+`.*`)
+	c.Assert(namesAfterGate, qt.Not(qt.Contains), "users")
+	c.Assert(ungatedErr, qt.IsNotNil)
+	c.Assert(ungated, qt.Matches, `(?s).*failed to apply migration 2: .*`+refusal+`.*`)
+	c.Assert(f.names(c), qt.Contains, "users")
 }
