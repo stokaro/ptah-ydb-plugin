@@ -18,7 +18,8 @@ import (
 // the next run, changes a pool's limits and swaps two classifiers' ranks, and
 // keeps them all once the source leaves them out, since a pool and a
 // classifier belong to the whole database rather than to the directory a
-// source describes.
+// source describes. The classifiers route members no user holds (see
+// workloadMember).
 func TestHostAppliesResourcePools_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		format                  string
@@ -26,47 +27,43 @@ func TestHostAppliesResourcePools_HappyPath(t *testing.T) {
 	}{
 		{format: "yaml",
 			created: "resource_pools:\n  {pool}:\n    concurrent_query_limit: 2\n    queue_size: 4\nresource_pool_classifiers:\n" +
-				"  {a}:\n    resource_pool: {pool}\n    rank: {low}\n  {b}:\n    resource_pool: default\n    member_name: etl\n    rank: {high}\n",
+				"  {a}:\n    resource_pool: {pool}\n    member_name: {member}\n    rank: {low}\n  {b}:\n    resource_pool: default\n    member_name: etl\n    rank: {high}\n",
 			changed: "resource_pools:\n  {pool}:\n    concurrent_query_limit: 5\nresource_pool_classifiers:\n" +
-				"  {a}:\n    resource_pool: {pool}\n    rank: {high}\n  {b}:\n    resource_pool: {pool}\n    rank: {low}\n",
+				"  {a}:\n    resource_pool: {pool}\n    member_name: {member}\n    rank: {high}\n  {b}:\n    resource_pool: {pool}\n    member_name: etl\n    rank: {low}\n",
 			empty: "coordination_nodes: {}\n"},
 		{format: "go",
 			created: "package entities\n\n" + goItems + "\n//ptah:schema:resourcepool name=\"{pool}\" concurrent_query_limit=\"2\" queue_size=\"4\"\n" +
-				"//ptah:schema:resourcepool:classifier name=\"{a}\" resource_pool=\"{pool}\" rank=\"{low}\"\n" +
+				"//ptah:schema:resourcepool:classifier name=\"{a}\" resource_pool=\"{pool}\" member_name=\"{member}\" rank=\"{low}\"\n" +
 				"//ptah:schema:resourcepool:classifier name=\"{b}\" resource_pool=\"default\" member_name=\"etl\" rank=\"{high}\"\ntype Pools struct{}\n",
 			changed: "package entities\n\n" + goItems + "\n//ptah:schema:resourcepool name=\"{pool}\" concurrent_query_limit=\"5\"\n" +
-				"//ptah:schema:resourcepool:classifier name=\"{a}\" resource_pool=\"{pool}\" rank=\"{high}\"\n" +
-				"//ptah:schema:resourcepool:classifier name=\"{b}\" resource_pool=\"{pool}\" rank=\"{low}\"\ntype Pools struct{}\n",
+				"//ptah:schema:resourcepool:classifier name=\"{a}\" resource_pool=\"{pool}\" member_name=\"{member}\" rank=\"{high}\"\n" +
+				"//ptah:schema:resourcepool:classifier name=\"{b}\" resource_pool=\"{pool}\" member_name=\"etl\" rank=\"{low}\"\ntype Pools struct{}\n",
 			empty: "package entities\n\n" + goItems},
 		{format: "sql",
 			created: sqlItems + "CREATE RESOURCE POOL `{pool}` WITH (CONCURRENT_QUERY_LIMIT = 2, QUEUE_SIZE = 4);\n" +
-				"CREATE RESOURCE POOL CLASSIFIER `{a}` WITH (RESOURCE_POOL = '{pool}', RANK = {low});\n" +
+				"CREATE RESOURCE POOL CLASSIFIER `{a}` WITH (RESOURCE_POOL = '{pool}', MEMBER_NAME = '{member}', RANK = {low});\n" +
 				"CREATE RESOURCE POOL CLASSIFIER `{b}` WITH (RESOURCE_POOL = 'default', MEMBER_NAME = 'etl', RANK = {high});\n",
 			changed: sqlItems + "CREATE RESOURCE POOL `{pool}` WITH (CONCURRENT_QUERY_LIMIT = 5);\n" +
-				"CREATE RESOURCE POOL CLASSIFIER `{a}` WITH (RESOURCE_POOL = '{pool}', RANK = {high});\n" +
-				"CREATE RESOURCE POOL CLASSIFIER `{b}` WITH (RESOURCE_POOL = '{pool}', RANK = {low});\n",
+				"CREATE RESOURCE POOL CLASSIFIER `{a}` WITH (RESOURCE_POOL = '{pool}', MEMBER_NAME = '{member}', RANK = {high});\n" +
+				"CREATE RESOURCE POOL CLASSIFIER `{b}` WITH (RESOURCE_POOL = '{pool}', MEMBER_NAME = 'etl', RANK = {low});\n",
 			empty: sqlItems},
 	} {
 		t.Run(test.format, func(t *testing.T) {
 			c := testcheck.New(t)
 			opened, directory, database := lockFixture(c)
 			enableResourcePools(c, opened)
-			poolName, first, second := directory+"_pool", directory+"_a", directory+"_b"
+			poolName, first, second, member := directory+"_pool", directory+"_a", directory+"_b", workloadMember(directory)
 			low, high := workloadRanks(directory)
 			c.Cleanup(func() {
 				cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
 				defer cancel()
-				// The table goes first: classifier a routes every query to the
-				// pool, so once the pool is dropped a query may fail until the
-				// workload manager's cache lets go of the classifier.
 				c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+database+"/"+directory+"/items`"), qt.IsNil)
 				for _, name := range []string{first, second} {
 					_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL CLASSIFIER `"+name+"`")
 				}
 				_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL `"+poolName+"`")
-				c.Check(awaitPoolRouting(cleanup, opened.DB), qt.IsNil)
 			})
-			replacer := strings.NewReplacer("{dir}", directory, "{pool}", poolName, "{a}", first, "{b}", second,
+			replacer := strings.NewReplacer("{dir}", directory, "{pool}", poolName, "{a}", first, "{b}", second, "{member}", member,
 				"{low}", strconv.FormatInt(low, 10), "{high}", strconv.FormatInt(high, 10))
 			apply := func(name, text, want string) {
 				c.Helper()
@@ -84,12 +81,12 @@ func TestHostAppliesResourcePools_HappyPath(t *testing.T) {
 			apply("creation", test.created, `(?s).*Schema apply completed successfully.*`)
 			pools, classifiers := held()
 			c.Assert(pools, qt.DeepEquals, map[string]heldPool{poolName: {ConcurrentQueryLimit: 2, QueueSize: 4, ResourceWeight: -1}})
-			c.Assert(classifiers, qt.DeepEquals, map[string]heldClassifier{first: {Pool: poolName, Rank: low}, second: {Pool: "default", Member: "etl", Rank: high}})
+			c.Assert(classifiers, qt.DeepEquals, map[string]heldClassifier{first: {Pool: poolName, Member: member, Rank: low}, second: {Pool: "default", Member: "etl", Rank: high}})
 			apply("a second run", test.created, `(?s).*Schema is synced, no changes to be made.*`)
 			apply("a change", test.changed, `(?s).*Schema apply completed successfully.*`)
 			pools, classifiers = held()
 			c.Assert(pools, qt.DeepEquals, map[string]heldPool{poolName: {ConcurrentQueryLimit: 5, QueueSize: -1, ResourceWeight: -1}})
-			c.Assert(classifiers, qt.DeepEquals, map[string]heldClassifier{first: {Pool: poolName, Rank: high}, second: {Pool: poolName, Rank: low}})
+			c.Assert(classifiers, qt.DeepEquals, map[string]heldClassifier{first: {Pool: poolName, Member: member, Rank: high}, second: {Pool: poolName, Member: "etl", Rank: low}})
 			apply("a run after the change", test.changed, `(?s).*Schema is synced, no changes to be made.*`)
 			apply("a source that leaves them out", test.empty, `(?s).*Schema apply completed successfully.*|(?s).*Schema is synced, no changes to be made.*`)
 			pools, classifiers = held()

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
@@ -59,6 +60,20 @@ func (t *Topic) Apply(ctx context.Context, database string, value *protocol.Enve
 	if err != nil {
 		return false, err
 	}
+	// The consumers a transfer reads the topic through are the transfer's,
+	// and the operation neither checks nor confirms them: the transfer's drop,
+	// which the plan may run first, takes the one YDB made for it.
+	var transfers []string
+	if before != nil {
+		observed, err := schema.ObservedTopic(before)
+		if err != nil {
+			return false, err
+		}
+		transfers = topics.TransferConsumers(observed)
+		if before, err = withoutConsumers(before, database, transfers); err != nil {
+			return false, err
+		}
+	}
 	previous, desired, err := schema.TopicSpecs(change)
 	if err != nil {
 		return false, err
@@ -67,6 +82,9 @@ func (t *Topic) Apply(ctx context.Context, database string, value *protocol.Enve
 	current, err := t.read(ctx, owner)
 	if err != nil {
 		return false, refused("read topic "+display, err)
+	}
+	if current, err = withoutConsumers(current, database, transfers); err != nil {
+		return false, err
 	}
 	if (before == nil) != (current == nil) || (before != nil && !bytes.Equal(before.Payload, current.Payload)) {
 		return false, &Refusal{Err: fmt.Errorf("topic %s changed since the plan read it", display)}
@@ -87,7 +105,33 @@ func (t *Topic) Apply(ctx context.Context, database string, value *protocol.Enve
 	if err != nil {
 		return true, err
 	}
+	if observed, err = withoutConsumers(observed, database, transfers); err != nil {
+		return true, err
+	}
+	if desired != nil {
+		kept := *desired
+		kept.Consumers = slices.DeleteFunc(slices.Clone(desired.Consumers), func(consumer ydbdecl.Consumer) bool { return slices.Contains(transfers, consumer.Name) })
+		desired = &kept
+	}
 	return true, confirmTopic(before, desired, observed)
+}
+
+// withoutConsumers is value, a topic read in database or nil for none,
+// without the consumers names names and without a transfer's mark on the rest;
+// see [topics.WithoutConsumers]. A plan names the topic without its database.
+func withoutConsumers(value *protocol.Envelope, database string, names []string) (*protocol.Envelope, error) {
+	if value == nil {
+		return nil, nil
+	}
+	observed, err := schema.ObservedTopic(value)
+	if err != nil {
+		return nil, err
+	}
+	owner := proto.CloneOf(value.GetOwner())
+	if owner.Database == "" {
+		owner.Database = database
+	}
+	return schema.CaptureObject(owner, topics.WithoutConsumers(observed, names))
 }
 
 // read lists the topic's directory and describes the topic, or returns nil

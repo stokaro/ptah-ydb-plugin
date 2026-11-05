@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
 )
 
 // ServiceID names the owner of topic comparisons.
@@ -33,6 +34,7 @@ func Family() objectcompare.Family {
 		NormalizeDesired: schema.NormalizeDesired, NormalizeObserved: schema.Normalize,
 		Reserved:  func(*protocol.ComparisonIdentity) string { return "" },
 		Unsettled: schema.ValidateTopicAccess,
+		Adopt:     adopt,
 		Equal:     equal,
 		Change:    schema.CaptureTopicChange,
 		Preserve: func(owner *protocol.Reference, current *protocol.Envelope) (*protocol.Envelope, error) {
@@ -47,6 +49,30 @@ func Family() objectcompare.Family {
 			return schema.CaptureTopicIntent(owner, intent)
 		},
 	}
+}
+
+// adopt gives the declared topic the consumers a transfer of the read reads
+// it through, which the declaration cannot name; see
+// [topics.AdoptTransferConsumers].
+func adopt(current, desired *protocol.Envelope) (*protocol.Envelope, error) {
+	observed, err := schema.ObservedTopic(current)
+	if err != nil {
+		return nil, err
+	}
+	intent, err := schema.DesiredTopic(desired)
+	if err != nil {
+		return nil, err
+	}
+	adopted, changed, err := topics.AdoptTransferConsumers(intent, observed)
+	if err != nil || !changed {
+		return desired, err
+	}
+	value, err := schema.CaptureTopicIntent(desired.GetOwner(), adopted)
+	if err != nil {
+		return nil, err
+	}
+	value.Context = proto.CloneOf(desired.GetContext())
+	return value, nil
 }
 
 func equal(current, desired *protocol.Envelope) (bool, error) {

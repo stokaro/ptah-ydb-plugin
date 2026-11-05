@@ -21,6 +21,8 @@ var grantObjectKinds = []struct {
 	{"EXTERNAL DATA SOURCE", KindExternalSource},
 	{"EXTERNAL TABLE", KindExternalTable},
 	{"RESOURCE POOL", KindResourcePool},
+	{"ASYNC REPLICATION", KindReplication},
+	{"TRANSFER", KindTransfer},
 }
 
 // poolDirectory is where YDB keeps a resource pool's access entries: the

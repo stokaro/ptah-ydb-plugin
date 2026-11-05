@@ -5,7 +5,9 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
@@ -28,7 +30,7 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 	switch desired.Kind {
 	case schema.SecretProperties:
 		if !capabilities[secrets.Capability] {
-			return "", fmt.Errorf("secret creation requires capability secrets")
+			return "", fmt.Errorf("secret creation requires capability secrets%s", featureflags.Clause(secrets.Capability))
 		}
 		intent, err := schema.DesiredSecret(desired)
 		if err != nil {
@@ -111,6 +113,18 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 			return "", err
 		}
 		return externals.CreateTableStatement(path, spec, externals.Create), nil
+	case schema.StreamingQueryProperties:
+		if !capabilities[streaming.Capability] {
+			return "", fmt.Errorf("%s", streaming.CapabilityRefusal(streaming.Display(owner.Schema, owner.Name)))
+		}
+		spec, _, err := schema.DesiredStreamingQuery(desired)
+		if err != nil {
+			return "", err
+		}
+		if err := streaming.Validate(spec); err != nil {
+			return "", err
+		}
+		return streaming.Create(owner.Schema, owner.Name, spec, false), nil
 	case schema.ResourcePoolProperties:
 		if !capabilities[workload.CapabilityResourcePools] {
 			return "", fmt.Errorf("resource pools require target capability resource_pools")

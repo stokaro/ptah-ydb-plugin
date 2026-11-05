@@ -90,6 +90,16 @@ type changefeedInput struct {
 	capabilities map[string]bool
 }
 
+// changefeedsManaged reports whether the declaration of table states its
+// changefeeds: it carries the facet, or its source describes the changefeeds
+// of every table it declares and the read holds the table's. An alteration
+// leaves the changefeeds of a table it does not manage as they are, and a
+// rebuild gives the new table the ones the old table held.
+func changefeedsManaged(table *protocol.PlanningTable, desired, observed capturedFacets) bool {
+	return desired.changefeeds != nil || observed.changefeeds != nil &&
+		FacetKnown(table.GetDesired().GetFeatures().GetFacets().GetCoverage(), schema.ChangefeedProperties, table.GetSubject(), true)
+}
+
 // planChangefeeds returns the changes that give the table the declared
 // changefeeds, or the reason the declaration cannot be written on this
 // target. A move the comparison leaves undecided plans nothing: the

@@ -116,14 +116,12 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 	}{
 		{name: "a hash column outside the key", storage: `{"hashColumns":["body"]}`, modify: keep, wantErr: `hash column "body" must belong to the primary key`},
 		{name: "a TTL column after the first key column", storage: `{"ttl":{"enabled":{"column":"id","columnUnit":"1","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`, modify: keep,
-			wantErr: `TTL column "id" must be first in the primary key or have a LOCAL min_max index`},
+			wantErr: `TTL column "id" must be first in the primary key: YDB refuses one later in the key whatever local index reads it .*`},
 		{name: "a TTL column the table does not declare", storage: `{"ttl":{"enabled":{"column":"gone","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`, modify: keep,
 			wantErr: `the TTL reads column "gone", which the table does not declare`},
 		{name: "a unit on a date column", storage: `{"ttl":{"enabled":{"column":"ts","columnUnit":"1","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`, modify: keep,
 			wantErr: `the TTL column "ts" is Timestamp, a date type, and YDB takes no unit for one`},
 		{name: "a data channel count of its own", storage: `{"dataChannelCount":"32"}`, modify: keep, wantErr: `a column table's data channel count is set by the server.*`},
-		{name: "local indexes", storage: `{"localIndexes":[{"name":"mm","columns":["count"],"storageId":"__LOCAL_METADATA","minMax":{}}]}`, modify: keep,
-			wantErr: `the local indexes of a column table are not created by the provider yet`},
 		{name: "row-table settings beside the storage", storage: `{}`, modify: func(c *qt.C, table *protocol.DeclaredTable) {
 			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.TableProperties, "", `{"keyBloomFilter":"ENABLED"}`))
 		}, wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
@@ -137,8 +135,9 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.ColumnProperties, "count",
 				`{"literal":{"type":{"typeId":"UINT64"},"value":{"uint64Value":"7"}}}`))
 		}, wantErr: `column tables do not support defaults or Serial columns`},
-		{name: "no key", storage: `{}`, modify: func(_ *qt.C, table *protocol.DeclaredTable) { table.PrimaryKey = nil },
-			wantErr: `YDB table creation requires an ordered primary key`},
+		{name: "no key", storage: `{}`, modify: func(_ *qt.C, table *protocol.DeclaredTable) {
+			table.PrimaryKey, table.Columns[0].Primary, table.Columns[1].Primary = nil, false, false
+		}, wantErr: `YDB table creation requires an ordered primary key`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -312,9 +311,9 @@ func TestColumnTablePlan_AlterRefusals(t *testing.T) {
 		{"another hash key", func(c *qt.C) *protocol.PlanFeaturesRequest {
 			return columnAlterRequest(c, desired(c, `{"hashColumns":["ts","id"],"ttl":`+deleteDaily+`}`), held(c))
 		}, `table "app/records": changing a column table's hash key or shard count requires an explicit data migration \(the table is hashed by \["id"\], and the declaration asks for \["ts" "id"\]\)`},
-		{"local indexes the declaration states otherwise", func(c *qt.C) *protocol.PlanFeaturesRequest {
+		{"a local index to add of a kind the target lacks", func(c *qt.C) *protocol.PlanFeaturesRequest {
 			return columnAlterRequest(c, desired(c, `{"ttl":`+deleteDaily+`,"localIndexes":[{"name":"mm","columns":["ts"],"storageId":"__LOCAL_METADATA","minMax":{}}]}`), held(c))
-		}, `table "app/records": the local indexes of a column table are not added or dropped by the provider yet`},
+		}, `local index "mm" is a min_max index, which requires target capability local_min_max_indexes, unavailable on this ydb target .*`},
 		{"a row table declared as a column table", func(c *qt.C) *protocol.PlanFeaturesRequest {
 			return columnAlterRequest(c, desired(c, `{}`), []*protocol.ComparisonRecord{observedFacet(c, schema.TableProperties, "", `{"primaryKey":["ts","id"]}`)})
 		}, `table "app/records": changing between row and column storage requires an explicit data migration`},
@@ -402,4 +401,18 @@ func TestColumnTablePreparationAndProjection(t *testing.T) {
 	c.Assert(projected.Tables[0].ColumnPrimaryKeys, qt.DeepEquals, []string{"ts", "id"})
 	c.Assert(projected.Tables[0].DesiredFacets, qt.HasLen, 0)
 	c.Assert(projected.Tables[0].ObservedFacets, qt.HasLen, 0)
+}
+
+// TestCompileColumnTableKeysTheMarkedColumnsInOrder keys a column table whose
+// declaration orders no key by the columns it marks primary, in the order it
+// declares them, as the host's embedded engine keys one.
+func TestCompileColumnTableKeysTheMarkedColumnsInOrder(t *testing.T) {
+	c := testcheck.New(t)
+	table := columnDeclaration(c, `{}`)
+	table.PrimaryKey = nil
+
+	created, err := tablecreate.CompileColumnTable(owner(), table, nil)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(created.PrimaryKey, qt.DeepEquals, []string{"ts", "id"})
 }

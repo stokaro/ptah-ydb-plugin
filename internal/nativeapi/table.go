@@ -13,6 +13,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Operation_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Operations"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
@@ -62,17 +63,51 @@ func (s *Table) Close() error {
 // Status requires a completed successful operation and omits native diagnostics.
 func Status(op *Ydb_Operations.Operation) error {
 	if !op.GetReady() || op.GetStatus() != Ydb.StatusIds_SUCCESS {
-		return &statusError{ready: op.GetReady(), status: op.GetStatus()}
+		return &statusError{ready: op.GetReady(), status: op.GetStatus(), issues: op.GetIssues()}
 	}
 	return nil
 }
 
 // statusError is an operation YDB did not complete successfully. It keeps the
-// status so that a caller in this package can tell one answer from another;
-// its text names the status and nothing of the server's diagnostics.
+// status so that a caller in this package can tell one answer from another,
+// and the issues YDB attached, which only an [Answered] error passes on; its
+// text names the status and nothing of the server's diagnostics.
 type statusError struct {
 	ready  bool
 	status Ydb.StatusIds_StatusCode
+	issues []*Ydb_Issue.IssueMessage
+}
+
+// Answered is the answer YDB gave the one call a statement writes with, when
+// that call failed: the status and the issues YDB attached. It carries them
+// as the SDK's operation error does, so package ydbfailure reads what the
+// server said and decides what the answer proves, such as BAD_REQUEST for a
+// comment whose attributes pass YDB's budget, which YDB refuses whole. A read
+// after the write, which can fail for its own reasons, never answers this
+// way. Its text names the status alone.
+type Answered struct {
+	status Ydb.StatusIds_StatusCode
+	issues []*Ydb_Issue.IssueMessage
+}
+
+func (a *Answered) Error() string {
+	return fmt.Sprintf("YDB operation failed: ready=true status=%s", a.status)
+}
+
+// Code is the status YDB answered the call with.
+func (a *Answered) Code() int32 { return int32(a.status) }
+
+// Issues are the issues YDB attached to its answer.
+func (a *Answered) Issues() []*Ydb_Issue.IssueMessage { return a.issues }
+
+// answered returns the answer err carries when it is a completed operation's
+// status, or err itself for any other failure, such as a transport failure,
+// whose answer is not YDB's.
+func answered(err error) error {
+	if failed, ok := errors.AsType[*statusError](err); ok && failed.ready {
+		return &Answered{status: failed.status, issues: failed.issues}
+	}
+	return err
 }
 
 func (e *statusError) Error() string {

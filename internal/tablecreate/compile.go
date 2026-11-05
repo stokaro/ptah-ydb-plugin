@@ -160,8 +160,12 @@ func compileRowColumns(result *Ydb_Table.CreateTableRequest, table *protocol.Dec
 			return nil, fmt.Errorf("YDB column properties name no declared column")
 		}
 	}
+	// A declaration that orders no key takes the columns it marks primary
+	// in the order it declares them, as the host's embedded engine does:
+	// measured with host v0.19.0, a YAML table with two such columns is
+	// created with PRIMARY KEY (first, second) in declaration order.
 	if len(result.PrimaryKey) == 0 {
-		if len(marked) != 1 {
+		if len(marked) == 0 {
 			return nil, unsupported("YDB table creation requires an ordered primary key")
 		}
 		result.PrimaryKey = slices.Clone(marked)
@@ -213,14 +217,16 @@ func compileColumn(table string, column *protocol.DeclaredColumn, settings *nati
 	if !validName(column.Name) {
 		return nil, fmt.Errorf("invalid YDB column name")
 	}
+	// A detail YDB's type does not keep, such as the length of VARCHAR(80),
+	// is left out, and the column takes the type that holds the values, as
+	// the host's built-in engine creates it: YDB has no length-limited string,
+	// so Utf8 is the only column a VARCHAR declaration can have.
 	mapping, err := ydbtype.Map(column.Type, ydbtype.Capabilities(caps))
 	if err != nil {
 		return nil, unsupported("%s", err)
 	}
-	if mapping.Dropped != "" {
-		return nil, unsupported("YDB column type does not preserve %s", mapping.Dropped)
-	}
-	stored, sequence, err := serialColumn(fmt.Sprintf("column %q of table %q", column.Name, table), column, mapping, caps)
+	subject := fmt.Sprintf("column %q of table %q", column.Name, table)
+	stored, sequence, err := serialColumn(subject, column, mapping, caps)
 	if err != nil {
 		return nil, err
 	}
@@ -245,10 +251,19 @@ func compileColumn(table string, column *protocol.DeclaredColumn, settings *nati
 	if settings == nil {
 		return result, nil
 	}
-	if err := only(settings, "family", "literal", "drop_default"); err != nil {
+	if err := only(settings, "family", "literal", "sequence", "drop_default"); err != nil {
 		return nil, err
 	}
-	if settings.GetDefaultValue() != nil && (column.DefaultSet || column.DefaultValue != "" || sequence != nil) {
+	// A declaration converted from a read states a column's default twice,
+	// as the common column's default and as the native one, and the two must
+	// agree. Any other declaration states a default once.
+	switch {
+	case settings.GetSequence() != nil:
+		if err := sameSerial(subject, column.Name, stored, sequence, settings.GetSequence()); err != nil {
+			return nil, err
+		}
+	case settings.GetLiteral() != nil && proto.Equal(settings.GetLiteral(), result.GetFromLiteral()):
+	case settings.GetDefaultValue() != nil && (column.DefaultSet || column.DefaultValue != "" || sequence != nil):
 		return nil, unsupported("a column default must have one declaration, common or native")
 	}
 	result.Family = settings.Family

@@ -75,6 +75,13 @@ func indexCase(desired, held string, declared ...string) alterCase {
 	return alterCase{desiredTable: plainTable, heldTable: plainTable, declared: declared, held: declared, desiredIndexes: desired, heldIndexes: held}
 }
 
+// withUniqueAdditions is in on a session that adds a unique index to a table
+// that exists.
+func withUniqueAdditions(in alterCase) alterCase {
+	in.capabilities = map[string]bool{tablecreate.UniqueIndexOnExistingTableCapability: true}
+	return in
+}
+
 var (
 	byLabel      = []string{"label"}
 	extra        = []string{"extra"}
@@ -98,7 +105,7 @@ func TestIndexPlan_HappyPath(t *testing.T) {
 		{"adds an async index that covers a column", indexCase(declaredIndexes(indexJSON("globalAsyncIndex", "by_label", byLabel, extra)), heldIndexes(), "label", "extra"),
 			`{"addIndexes":[{"name":"by_label","indexColumns":["label"],"dataColumns":["extra"],"globalAsyncIndex":{}}]}`,
 			"row-table-add-index/000000", protocol.ChangeSemantics_ADDITIVE, protocol.PlanningEffect_CREATE, "", "by_label"},
-		{"adds a unique index on two columns", indexCase(declaredIndexes(indexJSON("globalUniqueIndex", "by_both", labelAndData, nil)), heldIndexes(), "label", "extra"),
+		{"adds a unique index on two columns", withUniqueAdditions(indexCase(declaredIndexes(indexJSON("globalUniqueIndex", "by_both", labelAndData, nil)), heldIndexes(), "label", "extra")),
 			`{"addIndexes":[{"name":"by_both","indexColumns":["label","extra"],"globalUniqueIndex":{}}]}`,
 			"row-table-add-index/000000", protocol.ChangeSemantics_ADDITIVE, protocol.PlanningEffect_CREATE, "", "by_both"},
 		{"adds one index beside a kept one", indexCase(
@@ -207,10 +214,12 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 			`index "by_label" holds a global index on \(label\), but the declaration states a global async index on \(label\); YDB cannot alter.*`},
 		{"the key order changed", indexCase(declaredIndexes(indexJSON("globalIndex", "by_both", []string{"extra", "label"}, nil)), heldIndexes(indexJSON("globalIndex", "by_both", labelAndData, nil)), "label", "extra"),
 			`index "by_both" holds a global index on \(label, extra\), but the declaration states a global index on \(extra, label\).*`},
-		{"a declared index states settings", indexCase(declaredIndexes(settings), heldIndexes(), "label"),
-			`the declared index "by_label" states its partitioning or read replicas, which this provider changes only on an index the table holds; add the index first, then declare them`},
 		{"a vector index on a target without vector indexes", indexCase(vectorIndexes(false), heldIndexes(), "label"),
 			`index "by_embedding" declares vector settings, which requires target capability vector_indexes, unavailable on this ydb target .*`},
+		// YDB refuses a unique index on a table that exists after the call
+		// unless the session establishes that it adds one.
+		{"a unique index on a target without unique additions", indexCase(declaredIndexes(indexJSON("globalUniqueIndex", "by_both", labelAndData, nil)), heldIndexes(), "label", "extra"),
+			`adding unique index "by_both" to table "app.records", which exists already, which requires target capability unique_index_on_existing_table, unavailable on this ydb target; YDB keeps it behind feature flag EnableAddUniqueIndex: .*`},
 		{"a declared index reads an undeclared column", indexCase(declaredIndexes(indexJSON("globalIndex", "by_other", []string{"other"}, nil)), heldIndexes(), "label"),
 			`index "by_other" reads column "other", which the declaration does not state`},
 		{"a kept index reads a column the declaration drops", indexCase(
@@ -275,4 +284,29 @@ func TestIndexPlan_OrdersAgainstColumnSteps(t *testing.T) {
 			c.Assert(edges(plan), qt.DeepEquals, test.edges)
 		})
 	}
+}
+
+// An index the plan adds with its settings is added without them, since no
+// call that adds an index takes them, and a change after the addition gives
+// it the declared ones over the settings YDB gives a new index, as the host's
+// embedded engine writes ALTER INDEX ... SET after ADD INDEX.
+func TestIndexPlan_AddsAnIndexWithItsSettings(t *testing.T) {
+	c := testcheck.New(t)
+	plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, indexCase(declaredIndexes(settings), heldIndexes(), "label")))
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	steps := plan.Contributions[0].Steps
+	c.Assert(steps, qt.HasLen, 2)
+	c.Assert(steps[0].Id.Name, qt.Equals, "row-table-add-index/000000")
+	c.Assert(alterationJSON(c, steps[0]), qt.JSONEquals, jsonValue(c, `{"addIndexes":[{"name":"by_label","indexColumns":["label"],"globalIndex":{}}]}`))
+	c.Assert(steps[1].Id.Name, qt.Equals, "row-table-index-settings/000000")
+	change, err := tablecreate.DecodeIndexSettings(steps[1].Operation.Value.Value)
+	c.Assert(err, qt.IsNil)
+	set, err := protojson.Marshal(change.Set)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(set), qt.JSONEquals, jsonValue(c, `{"partitioningSettings":{"minPartitionsCount":"4"}}`))
+	held, err := protojson.Marshal(change.Held)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(held), qt.JSONEquals, jsonValue(c, `{"name":"by_label","indexColumns":["label"],"globalIndex":{"settings":{`+heldIndexDefaults+`}}}`))
+	c.Assert(edges(plan), qt.DeepEquals, []string{"row-table-add-index/000000 -> row-table-index-settings/000000"})
 }

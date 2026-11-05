@@ -39,9 +39,15 @@ func TestIndexSettingsPlan_HappyPath(t *testing.T) {
 				"AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3);"},
 		{"switches partitioning by load on",
 			indexSettingsCase(`"partitioningSettings":{"partitioningByLoad":"ENABLED","maxPartitionsCount":"9"}`, heldIndexDefaults),
-			`{"partitioningSettings":{"partitioningByLoad":"ENABLED","maxPartitionsCount":"9"}}`,
+			`{"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"1","maxPartitionsCount":"9"}}`,
 			"ALTER TABLE `app/records` ALTER INDEX `by_label` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, " +
 				"AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1, AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9);"},
+		{"switches partitioning by load on and keeps the minimum the index holds",
+			indexSettingsCase(`"partitioningSettings":{"partitioningByLoad":"ENABLED"}`,
+				`"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","minPartitionsCount":"3"}`),
+			`{"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"3"}}`,
+			"ALTER TABLE `app/records` ALTER INDEX `by_label` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, " +
+				"AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3);"},
 		{"switches partitioning by size on and keeps the minimum the index holds",
 			indexSettingsCase(`"partitioningSettings":{"partitioningBySize":"ENABLED"}`,
 				`"partitioningSettings":{"partitioningBySize":"DISABLED","partitioningByLoad":"ENABLED","minPartitionsCount":"3"}`),

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
@@ -99,6 +100,12 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.ColumnTTLStatement(path, alteration), nil
+	case tablecreate.ColumnLocalIndexOperationKind:
+		alteration, err := tablecreate.ColumnLocalIndexAlteration(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.ColumnLocalIndexStatement(path, alteration), nil
 	case tablecreate.DropOperationKind:
 		if _, err := tablecreate.DecodeDrop(value); err != nil {
 			return "", err
@@ -128,6 +135,8 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.SequenceAlterationStatement(owner.GetDatabase(), path, change)
+	case schema.ChangefeedOperation:
+		return changefeedText(path, value)
 	case schema.SecretOperation:
 		return schema.SecretStatement(value)
 	case schema.CoordinationOperation:
@@ -164,6 +173,25 @@ func textOf(value *protocol.Envelope) (string, error) {
 	default:
 		return "", fmt.Errorf("%w: the native operation %s has no YQL statement", tablecreate.ErrNoTextForm, value.GetKind())
 	}
+}
+
+// changefeedText writes the changefeed changes of the table at path as the
+// statements the host's embedded engine writes into a migration file for
+// them, one to a line: every removal, then every addition with the consumers
+// of its topic, then every change of a topic in place (see
+// [changefeeds.Statements]). A migration runner splits the unit into the
+// statements and runs each alone, so an ALTER TOPIC finds the topic the ADD
+// CHANGEFEED above it created.
+func changefeedText(path string, value *protocol.Envelope) (string, error) {
+	changes, err := schema.DecodeChangefeedOperation(value)
+	if err != nil {
+		return "", err
+	}
+	statements, err := changefeeds.Statements(path, changes)
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(statements, "\n"), nil
 }
 
 // coordinationText writes a coordination node operation as the statement

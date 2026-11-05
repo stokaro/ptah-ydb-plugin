@@ -107,3 +107,35 @@ func TestPlanRefusesACommentYDBCannotHold(t *testing.T) {
 	c.Assert(err, qt.ErrorMatches, `.*the comment on column "first" of table app/records: the comment is not UTF-8 text.*`)
 	c.Assert(plan, qt.IsNil)
 }
+
+// A view and a comment do not wait for a step that only removes, such as a
+// column's removal: the host places the removal after its views and comments,
+// and an edge the other way closed a cycle (`plan dependency cycle`) on a plan
+// that changed a comment, or created a view, beside a column's removal. A view
+// is still dropped before the removal, and a view and a comment still follow
+// a column's addition.
+func TestPlanOrdersCommonObjectStepsBeforeARemoval(t *testing.T) {
+	c := testcheck.New(t)
+	view := &protocol.Reference{Engine: "ydb", Kind: "view", Schema: "app", Name: "v"}
+	tableComment := commonObjectStep("table-comment", commentOn("table", "records"))
+	tableComment.Parent = tableSubject()
+	tableComment.Metadata.Effects = []*protocol.PlanningEffect{{Subject: tableSubject(), Action: protocol.PlanningEffect_ALTER}}
+	request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}, held: []string{"old"}},
+		additionStep("add-payload", "payload", nil), removalStep("drop-old", "old"),
+		commonObjectStep("drop-view", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_DropView{DropView: view}}),
+		commonObjectStep("create-view", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateView{CreateView: &protocol.ViewCreation{
+			View: &protocol.SQLView{Schema: "app", Name: "v", Body: "SELECT 1"}}}}),
+		tableComment, commonObjectStep("column-comment", commentOn("column", "payload", "records")))
+	request.TargetFeatures = append(request.TargetFeatures, provider.CommonObjectsFeature)
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
+	c.Assert(rewrites(plan), qt.DeepEquals, []string{"add-payload => row-table-add-column/000000", "drop-old => row-table-drop-column/000000"})
+	c.Assert(edges(plan), qt.DeepEquals, []string{
+		"drop-view -> row-table-add-column/000000", "drop-view -> row-table-drop-column/000000",
+		"row-table-add-column/000000 -> create-view",
+		"row-table-add-column/000000 -> table-comment",
+		"row-table-add-column/000000 -> column-comment",
+	})
+}

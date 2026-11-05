@@ -16,6 +16,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 )
 
 // timeout bounds one read. The client applies it whatever the caller's context
@@ -48,16 +50,21 @@ var client = &http.Client{
 // and an error repeats at most the start of a refusing page with the ticket
 // taken out. resource names the page in diagnostics. An error never repeats
 // the endpoint or the ticket.
+//
+// A refusal holds a reason (see package authored) the host prints: every
+// refusal but the caller's own cancellation, which is ctx's error. The start
+// of a refusing page is kept out of the reason, since an endpoint can answer
+// with anything, and only the status message repeats it.
 func Read(ctx context.Context, endpoint *url.URL, resource, path, database, ticket string, query url.Values) ([]byte, error) {
 	if endpoint == nil {
-		return nil, fmt.Errorf("no monitoring endpoint to read the YDB %s from", resource)
+		return nil, authored.New(fmt.Sprintf("no monitoring endpoint to read the YDB %s from", resource))
 	}
 	page := *endpoint
 	page.User, page.Path, page.RawPath, page.Fragment = nil, path, "", ""
 	page.RawQuery = query.Encode()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, page.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("read the YDB %s from the monitoring endpoint: the request cannot be built", resource)
+		return nil, authored.New(fmt.Sprintf("read the YDB %s from the monitoring endpoint: the request cannot be built", resource))
 	}
 	request.Header.Set("Accept", "application/json")
 	if ticket != "" {
@@ -68,18 +75,19 @@ func Read(ctx context.Context, endpoint *url.URL, resource, path, database, tick
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
-		return nil, fmt.Errorf("read the YDB %s from the monitoring endpoint: %s", resource, transportReason(err))
+		return nil, authored.New(fmt.Sprintf("read the YDB %s from the monitoring endpoint: %s", resource, transportReason(err)))
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(response.Body, MaxBody+1))
 	if err != nil {
-		return nil, fmt.Errorf("read the YDB %s from the monitoring endpoint: the page was cut off", resource)
+		return nil, authored.New(fmt.Sprintf("read the YDB %s from the monitoring endpoint: the page was cut off", resource))
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("read the YDB %s from the monitoring endpoint: %s: %s%s", resource, response.Status, echo(body, ticket), rightsHint(response.StatusCode, ticket, database))
+		reason := authored.New(fmt.Sprintf("read the YDB %s from the monitoring endpoint: %s%s", resource, response.Status, rightsHint(response.StatusCode, ticket, database)))
+		return nil, fmt.Errorf("%w; the endpoint answered: %s", reason, echo(body, ticket))
 	}
 	if len(body) > MaxBody {
-		return nil, fmt.Errorf("read the YDB %s from the monitoring endpoint: the page exceeds %d bytes", resource, MaxBody)
+		return nil, authored.New(fmt.Sprintf("read the YDB %s from the monitoring endpoint: the page exceeds %d bytes", resource, MaxBody))
 	}
 	return body, nil
 }

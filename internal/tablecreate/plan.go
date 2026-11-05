@@ -73,10 +73,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	names := requestTableNames(request)
 	var alterations []alteration
 	// columnAlterations are the column tables the request alters. Each holds
-	// what the declaration asks for, or differs from it in its TTL alone, since
-	// every other change is refused. columnTTLs are the TTL changes.
+	// what the declaration asks for, or differs from it in its local indexes
+	// and its TTL alone, since every other change is refused. columnChanges
+	// are those changes.
 	var columnAlterations []int
-	var columnTTLs []columnTTLStep
+	var columnChanges []columnTableStep
 	for i, table := range request.Tables {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -108,7 +109,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			if err != nil {
 				return refused(i, fmt.Sprintf("table %q: %v", tableLabel(owner), err)), nil
 			}
-			item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon())
+			item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon(), request.Capabilities, request.CommonSteps)
 			if err != nil {
 				return nil, err
 			}
@@ -153,7 +154,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("YDB table creation targets another database")
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			column, reason, columnTTL, err := planColumnAlteration(owner, table, request.CommonSteps, request.Capabilities)
+			column, reason, columnChange, err := planColumnAlteration(owner, table, request.CommonSteps, request.Capabilities)
 			if err != nil {
 				return nil, err
 			}
@@ -167,8 +168,8 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 					}
 				}
 				columnAlterations = append(columnAlterations, i)
-				if columnTTL != nil {
-					columnTTLs = append(columnTTLs, columnTTLStep{index: i, table: table, owner: owner, change: *columnTTL})
+				if columnChange != nil {
+					columnChanges = append(columnChanges, columnTableStep{index: i, table: table, owner: owner, change: *columnChange})
 				}
 				continue
 			}
@@ -176,7 +177,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				if !request.GetPolicy().GetAllowTableRebuild() {
 					return refused(i, rebuildRefusal(needs[0], request.GetPolicy())), nil
 				}
-				item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon())
+				item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon(), request.Capabilities, request.CommonSteps)
 				if err != nil {
 					return nil, err
 				}
@@ -287,6 +288,11 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			if reason := tieredTTLRefusal(request.Capabilities, fmt.Sprintf("column table %q", tableLabel(owner)), created.Ttl); reason != "" {
 				return refused(i, reason), nil
 			}
+			for _, index := range created.LocalIndexes {
+				if reason := localIndexCapabilityRefusal(index, request.Capabilities); reason != "" {
+					return refused(i, reason), nil
+				}
+			}
 		}
 		feeds, reason, err := plannedCreationChangefeeds(owner, table.Desired, request.Capabilities)
 		if err != nil {
@@ -389,7 +395,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	// sequenceSteps numbers the sequence changes of the altered tables.
 	sequenceSteps := 0
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, indexSettings, defaults, inventories int
+	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, indexRenames, indexSettings, defaults, inventories int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -427,20 +433,21 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				dropped = append(dropped, step.Id)
 			}
 		}
-		var ordered []*protocol.StepIdentity
+		var ordered, kept []*protocol.StepIdentity
 		ordered = append(ordered, added...)
 		for _, change := range item.defaults {
 			step := change.plan(subject, defaults)
 			defaults++
 			contribution.Steps = append(contribution.Steps, step)
-			ordered = append(ordered, step.Id)
+			kept = append(kept, step.Id)
 		}
 		for _, change := range item.sequences {
 			step := change.plan(subject, sequenceSteps)
 			sequenceSteps++
 			contribution.Steps = append(contribution.Steps, step)
-			ordered = append(ordered, step.Id)
+			kept = append(kept, step.Id)
 		}
+		ordered = append(ordered, kept...)
 		if item.operation != nil {
 			item.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-alter/%06d", families)}
 			families++
@@ -487,17 +494,22 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		for _, index := range item.indexes {
 			prefix, number, action := "row-table-drop-index", &indexRemovals, protocol.PlanningEffect_DROP
-			if index.change.add != nil {
+			switch {
+			case index.change.add != nil:
 				prefix, number, action = "row-table-add-index", &indexAdditions, protocol.PlanningEffect_CREATE
+			case index.change.rename != nil:
+				prefix, number = "row-table-rename-index", &indexRenames
 			}
 			index.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", prefix, *number)}
 			*number++
 			index.operation.Id = index.id.Name
 			facts := index.operation.OperationSemantics
-			changed := indexSubject(subject, index.change.name())
+			effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
+				{Subject: indexSubject(subject, index.change.name()), Action: action}}
 			if source := index.change.source; source != nil {
-				// The replacement changes the index the host's step names.
-				changed = proto.CloneOf(source.GetMetadata().GetEffects()[1].GetSubject())
+				// The replacement changes the index the host's step names: a
+				// rename drops the held name and creates the declared one.
+				effects = cloneEffects(source.GetMetadata().GetEffects())
 				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: []*protocol.StepIdentity{proto.CloneOf(source.Id)}, Replacement: proto.CloneOf(index.id)})
 			}
 			// The lifecycle phase lets a removal and the addition that
@@ -505,8 +517,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: index.id,
 				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: index.operation, Phase: protocol.PlanningOperation_LIFECYCLE},
 				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
-					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
-						{Subject: changed, Action: action}}}})
+					Effects: effects}})
 			contribution.Dependencies = append(contribution.Dependencies, indexStepDependencies(*item, index, request.CommonSteps)...)
 			ordered = append(ordered, index.id)
 		}
@@ -523,6 +534,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 						{Subject: indexSubject(subject, settings.change.held.GetName()), Action: protocol.PlanningEffect_ALTER}}}})
 			ordered = append(ordered, settings.id)
 		}
+		contribution.Dependencies = append(contribution.Dependencies, settingsAfterAdditions(item.indexes, item.indexSettings)...)
 		if item.feeds != nil {
 			step, dependencies := item.feeds.planningStep(feedNumber, subject, nil)
 			feedNumber++
@@ -531,16 +543,27 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			ordered = append(ordered, item.feeds.id)
 		}
 		ordered = append(ordered, dropped...)
+		// The column changes run in sequence: the additions, then the default
+		// and sequence changes of the columns the table keeps, then the
+		// removals. The table's other steps stay out of the sequence. Each
+		// carries its own edges to the column steps it depends on, and the
+		// host places it: a step that replaces a host step takes that step's
+		// place in the host's sequence, and any other step joins the window of
+		// its phase. A sequence through them would contradict that order and
+		// close a cycle, since the host drops an index before it adds a
+		// column, and adds a common index before a TTL changes.
 		if len(item.inventory)+len(item.defaults)+len(item.sequences) > 0 {
-			for n := 1; n < len(ordered); n++ {
-				contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(ordered[n-1]), After: proto.CloneOf(ordered[n])})
+			columns := slices.Concat(added, kept, dropped)
+			for n := 1; n < len(columns); n++ {
+				contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(columns[n-1]), After: proto.CloneOf(columns[n])})
 			}
 		}
 		receiptSteps[item.index] = ordered
 	}
-	slices.SortFunc(columnTTLs, func(a, b columnTTLStep) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	for number, item := range columnTTLs {
-		steps, dependencies, err := item.plan(number)
+	slices.SortFunc(columnChanges, func(a, b columnTableStep) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
+	var localIndexes localIndexNumbers
+	for number, item := range columnChanges {
+		steps, dependencies, err := item.plan(number, &localIndexes)
 		if err != nil {
 			return refused(item.index, err.Error()), nil
 		}
@@ -605,7 +628,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	}
 	for _, item := range rebuilds {
 		if len(item.sources) != 0 {
-			result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: item.sources, Replacement: proto.CloneOf(item.steps[3].Id)})
+			result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: item.sources, Replacement: proto.CloneOf(item.steps[item.swap].Id)})
 		}
 	}
 	for _, item := range drops {
@@ -626,9 +649,10 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		strategy := "Create the complete captured row table through the native table service, then add its changefeeds with YQL's ALTER TABLE through the query service"
 		if slices.Contains(columnAlterations, i) {
-			strategy = "The column table already holds the declared storage: its kind, its hash key and its shard count are fixed when YDB creates it, and its TTL is the declared one"
+			strategy = "The column table already holds the declared storage: its kind, its hash key and its shard count are fixed when YDB creates it, and its local indexes and its TTL are the declared ones"
 			if len(receiptSteps[i]) != 0 {
-				strategy = "Reset the column table's TTL and set the declared one with YQL's ALTER TABLE through the query service; its kind, its hash key and its shard count are fixed when YDB creates it and already match"
+				strategy = "Drop and add the column table's local indexes, and reset its TTL and set the declared one, with YQL's ALTER TABLE through the query service; " +
+					"its kind, its hash key and its shard count are fixed when YDB creates it and already match"
 			}
 		}
 		if table.Action == protocol.PlanningTable_DROP {

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
@@ -45,7 +46,7 @@ type Refusal struct {
 // so a nil one never reads as a failure.
 func (r *Refusal) Message() string {
 	if r.Key != "" {
-		return fmt.Sprintf("%s, which requires target capability %s, unavailable on this ydb target", r.Subject, r.Key)
+		return fmt.Sprintf("%s, which requires target capability %s, unavailable on this ydb target%s", r.Subject, r.Key, featureflags.Clause(r.Key))
 	}
 	return fmt.Sprintf("%s: %s", r.Subject, r.Reason)
 }

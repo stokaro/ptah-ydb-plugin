@@ -21,7 +21,7 @@ import (
 // ErrNoMonitoring refuses a column table's creation or TTL change in a session
 // whose address names no monitoring endpoint: the provider reads the table
 // there, since the table service leaves out its shard count and local indexes.
-var ErrNoMonitoring = errors.New("creating a column table or changing its TTL requires monitoring=http(s)://host:port in the YDB address: " +
+var ErrNoMonitoring = errors.New("creating a column table or changing its TTL or local indexes requires monitoring=http(s)://host:port in the YDB address: " +
 	"the table service leaves out the shard count and the local indexes the provider reads the table with")
 
 // ColumnDescriber reads a column table's descriptions from the table service.
@@ -139,7 +139,8 @@ func listedAbsent(ctx context.Context, scheme Ydb_Scheme_V1.SchemeServiceClient,
 // confirmColumnTable requires the table read back to be the one the creation
 // asked for: its columns in order with their types and nullability, its key,
 // the hash key the creation states or, without one, the whole key, the shard
-// count the creation states, its TTL and no local index.
+// count the creation states, its TTL and the local indexes it states, each as
+// stated.
 func confirmColumnTable(wanted *native.ColumnTableCreation, described *native.ColumnTableDescribeResult, observed *native.ColumnStorageObservation) error {
 	if !slices.Equal(wanted.PrimaryKey, described.PrimaryKey) || len(wanted.Columns) != len(described.Columns) {
 		return fmt.Errorf("YDB created column table identity or structure differs from the request")
@@ -171,8 +172,23 @@ func confirmColumnTable(wanted *native.ColumnTableCreation, described *native.Co
 	if !tablecreate.ColumnTTLEqual(wanted.Ttl, observed.Ttl) {
 		return fmt.Errorf("YDB created column table TTL differs from the request")
 	}
-	if len(observed.LocalIndexes) != 0 {
-		return fmt.Errorf("YDB created column table has unexpected local indexes")
+	if !sameLocalIndexes(wanted.LocalIndexes, observed.LocalIndexes) {
+		return fmt.Errorf("YDB created column table local indexes differ from the request")
 	}
 	return nil
+}
+
+// sameLocalIndexes reports whether two lists of a column table's local
+// indexes hold the same indexes, whatever their order.
+func sameLocalIndexes(a, b []*native.LocalIndexObservation) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for _, index := range a {
+		at := slices.IndexFunc(b, func(other *native.LocalIndexObservation) bool { return other.GetName() == index.GetName() })
+		if at < 0 || !tablecreate.LocalIndexEqual(index, b[at]) {
+			return false
+		}
+	}
+	return true
 }

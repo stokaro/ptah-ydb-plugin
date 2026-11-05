@@ -45,6 +45,8 @@ func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, 
 		return tablecreate.NormalizeColumnTable(input)
 	case tablecreate.ColumnTTLOperationKind:
 		return tablecreate.NormalizeColumnTTLAlteration(input)
+	case tablecreate.ColumnLocalIndexOperationKind:
+		return tablecreate.NormalizeColumnLocalIndex(input)
 	case tablecreate.DropOperationKind:
 		return tablecreate.NormalizeDrop(input)
 	case tablecreate.CopyOperationKind:

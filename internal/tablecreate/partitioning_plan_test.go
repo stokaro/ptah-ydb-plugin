@@ -38,9 +38,17 @@ func TestPartitioningPlan_HappyPath(t *testing.T) {
 		in   alterCase
 		want string
 	}{
-		{"switches partitioning by load on",
+		{"names every held setting when switching partitioning by load on",
 			partitioningCase(partitionedTable(`{"partitioningByLoad":"ENABLED"}`), partitionedTable(defaultPartitioning)),
-			`{"alterPartitioningSettings":{"partitioningByLoad":"ENABLED"}}`},
+			`{"alterPartitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"1","maxPartitionsCount":"50"}}`},
+		{"keeps the held minimum and size when switching partitioning by load on",
+			partitioningCase(partitionedTable(`{"partitioningByLoad":"ENABLED"}`),
+				partitionedTable(`{"partitionBy":["id"],"partitioningBySize":"ENABLED","partitionSizeMb":"100","partitioningByLoad":"DISABLED","minPartitionsCount":"6","maxPartitionsCount":"20"}`)),
+			`{"alterPartitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"100","partitioningByLoad":"ENABLED","minPartitionsCount":"6","maxPartitionsCount":"20"}}`},
+		{"keeps the held minimum when switching partitioning by load on for a table that does not split by size",
+			partitioningCase(partitionedTable(`{"partitioningByLoad":"ENABLED"}`),
+				partitionedTable(`{"partitionBy":["id"],"partitioningBySize":"DISABLED","partitioningByLoad":"DISABLED","minPartitionsCount":"4"}`)),
+			`{"alterPartitioningSettings":{"partitioningBySize":"DISABLED","partitioningByLoad":"ENABLED","minPartitionsCount":"4"}}`},
 		{"switches partitioning by size off",
 			partitioningCase(partitionedTable(`{"partitioningBySize":"DISABLED"}`), partitionedTable(defaultPartitioning)),
 			`{"alterPartitioningSettings":{"partitioningBySize":"DISABLED"}}`},
@@ -177,18 +185,19 @@ func TestPartitioningPlan_FailurePath(t *testing.T) {
 			`the partition columns \["id" "ts"\] differ from the \["id"\] the table holds, and YDB sets them only when the table is created`},
 		{"a uniform layout the table was not created with",
 			partitioningCase(layoutTable(`"uniformPartitions":"4"`), partitionedTable(defaultPartitioning)),
-			"it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table .`UNIFORM_PARTITIONS alter is not supported`. and " +
-				"which gives a new table a minimum of 4 partitions, where this table holds 1. Declare auto_partitioning_min_partitions_count to change the minimum in place"},
+			`table "app/records": it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table ..UNIFORM_PARTITIONS alter is not supported.. and ` +
+				`which gives a new table a minimum of 4 partitions, where this table holds 1. Declare auto_partitioning_min_partitions_count to change the minimum in place; ` +
+				`YDB makes it by rebuilding the table, which Ptah plans when asked with a table rebuild request in the host's planning policy \(contract 25\.3\)`},
 		{"a layout by one split point the table was not created with",
 			partitioningCase(layoutTable(`"partitionAtKeys":[{"values":["10"]}]`), partitionedTable(defaultPartitioning)),
-			"it declares PARTITION_AT_KEYS with one split point, which YDB takes only when it creates a table .`PARTITION_AT_KEYS alter is not supported`. and " +
-				"which gives a new table a minimum of 2 partitions, where this table holds 1.*"},
+			`table "app/records": it declares PARTITION_AT_KEYS with one split point, which YDB takes only when it creates a table ..PARTITION_AT_KEYS alter is not supported.. and ` +
+				`which gives a new table a minimum of 2 partitions, where this table holds 1.*; YDB makes it by rebuilding the table.*`},
 		{"a layout by split points the table was not created with",
 			partitioningCase(layoutTable(`"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`), partitionedTable(`{"partitionBy":["id"],"minPartitionsCount":"2"}`)),
-			"it declares PARTITION_AT_KEYS with 2 split points, which YDB takes only when it creates a table .*a minimum of 3 partitions, where this table holds 2.*"},
+			`table "app/records": it declares PARTITION_AT_KEYS with 2 split points, which YDB takes only when it creates a table .*a minimum of 3 partitions, where this table holds 2.*`},
 		{"a layout beside a stated setting that could change",
 			partitioningCase(layoutTable(`"uniformPartitions":"4","partitioningSettings":{"maxPartitionsCount":"8"}`), partitionedTable(defaultPartitioning)),
-			"it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table.*"},
+			`table "app/records": it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table.*`},
 		{"partition columns with a setting that could change",
 			partitioningCase(partitionedTable(`{"partitionBy":["ts"],"maxPartitionsCount":"8"}`), partitionedTable(defaultPartitioning)),
 			`the partition columns \["ts"\] differ from the \["id"\] the table holds.*`},

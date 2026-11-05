@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
@@ -63,6 +64,11 @@ type Family struct {
 	// current one, such as access the plan cannot establish, or nil. Either
 	// side may be nil.
 	Unsettled func(current, desired *protocol.Envelope) error
+	// Adopt returns the desired value with what the current object holds and
+	// the declaration keeps without naming it, such as the consumer YDB made
+	// for a transfer, or desired itself. The comparison and the change read
+	// the result. A nil Adopt adopts nothing.
+	Adopt func(current, desired *protocol.Envelope) (*protocol.Envelope, error)
 	// Equal reports whether the current object already holds the desired one.
 	Equal func(current, desired *protocol.Envelope) (bool, error)
 	// Change captures the change from current to desired, either nil.
@@ -74,6 +80,13 @@ type Family struct {
 	// it, which leaves it undecided rather than preserved, or "". A nil
 	// Unkeepable keeps every object.
 	Unkeepable func(current *protocol.Envelope) (string, error)
+	// RequiredRemoval refuses a comparison that would drop an object a
+	// declared object requires, with this text after the family's noun and
+	// the object's path. It is for a family whose object the server lets go
+	// while a reader still names it, so the drop the source asks for leaves
+	// the reader naming nothing. Empty leaves such an object undecided, and
+	// the current one stays.
+	RequiredRemoval string
 }
 
 type object struct {
@@ -396,7 +409,7 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		}
 		return nil, nil
 	}
-	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && reservedName(claim) {
+	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && ReservedName(claim) {
 		// The read reserves the name for the provider's own storage on every
 		// native kind, so it holds no object of this family. It is left out as
 		// Reserved leaves the family's own objects; only a declaration at the
@@ -448,10 +461,14 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 	}
 	if item.desired == nil {
 		for _, required := range request.Required {
-			if provider.CompareIdentities(required, item.subject) == 0 {
-				undecided(result, family, item, "A declared dependency requires the "+family.Noun)
-				return nil, nil
+			if provider.CompareIdentities(required, item.subject) != 0 {
+				continue
 			}
+			if family.RequiredRemoval != "" {
+				return nil, authored.New(family.Noun + " " + name + " " + family.RequiredRemoval)
+			}
+			undecided(result, family, item, "A declared dependency requires the "+family.Noun)
+			return nil, nil
 		}
 	}
 	if err := family.Unsettled(item.current, item.desired); err != nil {
@@ -459,9 +476,16 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		return nil, nil
 	}
 	reported := owner(family, item.reported)
-	pair := &Decided{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Owner: reported, Desired: rebound(item.desired, reported), Current: rebound(item.current, reported)}
+	desired := item.desired
+	if family.Adopt != nil && item.desired != nil && item.current != nil {
+		var err error
+		if desired, err = family.Adopt(item.current, item.desired); err != nil {
+			return nil, err
+		}
+	}
+	pair := &Decided{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Owner: reported, Desired: rebound(desired, reported), Current: rebound(item.current, reported)}
 	if item.desired != nil && item.current != nil {
-		equal, err := family.Equal(item.current, item.desired)
+		equal, err := family.Equal(item.current, desired)
 		if err != nil {
 			return nil, err
 		}
@@ -470,7 +494,7 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		}
 	}
 	if family.ChangeCapability && !request.Capabilities[family.Capability] {
-		return nil, authored.New(fmt.Sprintf("changing %ss requires %s", family.Noun, family.Capability))
+		return nil, authored.New(fmt.Sprintf("changing %ss requires %s%s", family.Noun, family.Capability, featureflags.Clause(family.Capability)))
 	}
 	change, err := family.Change("change-"+id, reported, pair.Current, pair.Desired)
 	if err != nil {

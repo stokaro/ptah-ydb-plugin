@@ -19,7 +19,6 @@ const (
 	kindChangeRefusal    = "changing between row and column storage requires an explicit data migration"
 	layoutChangeRefusal  = "changing a column table's hash key or shard count requires an explicit data migration"
 	columnRebuildRefusal = "column-table rebuilds require an explicit data migration"
-	localIndexRefusal    = "the local indexes of a column table are not added or dropped by the provider yet"
 	columnStepRefusal    = "A common step is outside the supported column table lifecycle: the provider adds and drops no column of a column table yet"
 )
 
@@ -90,13 +89,20 @@ func readStorage(owner *protocol.Reference, table *protocol.PlanningTable) (stor
 	return result, nil
 }
 
+// columnTableChange is the in-place change of one column table: its local
+// indexes, in the order their steps run, and its TTL, nil when it stays.
+type columnTableChange struct {
+	indexes []localIndexChange
+	ttl     *columnTTLChange
+}
+
 // planColumnAlteration plans the ALTER of a table that is a column table on
 // either side, and reports whether it is one. A column table whose storage
-// already satisfies the declaration needs no step, and one whose TTL differs
-// gets the TTL change. A change of storage kind, hash key or shard count is
-// refused with the reason, and so is any common step of the table: the
-// provider carries out none for a column table.
-func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, capabilities map[string]bool) (bool, string, *columnTTLChange, error) {
+// already satisfies the declaration needs no step, and one whose local indexes
+// or TTL differ gets the changes of each. A change of storage kind, hash key or
+// shard count is refused with the reason, and so is any common step of the
+// table: the provider carries out none for a column table.
+func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, capabilities map[string]bool) (bool, string, *columnTableChange, error) {
 	sides, err := readStorage(owner, table)
 	if err != nil || !sides.columnTable() {
 		return false, "", nil, err
@@ -120,23 +126,31 @@ func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTab
 		// keeps it.
 		return true, "", nil, nil
 	}
-	switch {
-	case !LayoutSatisfied(sides.desired, sides.held):
+	if !LayoutSatisfied(sides.desired, sides.held) {
 		return true, subject + ": " + layoutChangeRefusal + layoutDetail(sides.desired, sides.held), nil, nil
-	case localIndexesDiffer(sides.desired, sides.held):
-		return true, subject + ": " + localIndexRefusal, nil, nil
-	case ColumnTTLEqual(sides.desired.Ttl, sides.held.Ttl):
+	}
+	ttlKept := ColumnTTLEqual(sides.desired.Ttl, sides.held.Ttl)
+	if ttlKept && !localIndexesDiffer(sides.desired, sides.held) {
 		return true, "", nil, nil
 	}
 	// The declaration is held to the rules of a creation, which a TTL the
 	// table takes in place obeys too: its column is declared, first in the
-	// key and of a type the mode reads.
-	if _, err := CompileColumnTable(owner, table.Desired, capabilities); err != nil {
+	// key and of a type the mode reads. Each local index the plan adds needs
+	// its capability; one the table keeps does not.
+	creation, err := CompileColumnTable(owner, table.Desired, capabilities)
+	if err != nil {
 		return true, err.Error(), nil, nil
 	}
-	change := &columnTTLChange{held: enabledTTL(sides.held.Ttl), set: enabledTTL(sides.desired.Ttl)}
-	if reason := tieredTTLRefusal(capabilities, subject, change.set); reason != "" {
+	indexes, reason := planLocalIndexes(sides.desired, sides.held, creationTypes(creation), capabilities)
+	if reason != "" {
 		return true, reason, nil, nil
+	}
+	change := &columnTableChange{indexes: indexes}
+	if !ttlKept {
+		change.ttl = &columnTTLChange{held: enabledTTL(sides.held.Ttl), set: enabledTTL(sides.desired.Ttl)}
+		if reason := tieredTTLRefusal(capabilities, subject, change.ttl.set); reason != "" {
+			return true, reason, nil, nil
+		}
 	}
 	return true, "", change, nil
 }
@@ -184,27 +198,93 @@ func isColumnCreation(value *protocol.NormalizedValue) bool {
 	return value.GetValue().GetKind() == ColumnOperationKind
 }
 
-// columnTTLStep is the TTL change of one altered column table.
-type columnTTLStep struct {
+// columnTableStep is the change of one altered column table.
+type columnTableStep struct {
 	index  int
 	table  *protocol.PlanningTable
 	owner  *protocol.Reference
-	change columnTTLChange
+	change columnTableChange
 }
 
-// plan returns the steps of a TTL change, as the host's embedded engine plans
-// them: a RESET of the TTL the table holds, placed early, and a SET of the
-// declared one after it. YDB keeps no external data source a table's TTL
-// names, so the held TTL lets go of its sources before their owner drops or
-// replaces them, and the declared one is set once its sources exist. A change
-// to a TTL from none is the SET alone, and a change to none the RESET alone.
-// number orders the change among the others of the plan.
+// localIndexNumbers numbers the local-index steps of a plan, the removals,
+// the additions and the renames apart.
+type localIndexNumbers struct {
+	drops, adds, renames int
+}
+
+// plan returns the steps of one column table's change and the dependencies
+// between them. number orders the table among the others of the plan, and
+// numbers numbers its local-index steps among theirs.
 //
-// A lone RESET drops the table's TTL setting and a lone SET creates it. When
-// both run, each alters it: the host refuses a provider step that creates
-// what another provider step drops, since it orders every creation of a
-// phase before every drop, and the dependency here orders the two steps.
-func (s columnTTLStep) plan(number int) ([]*protocol.PlanningStep, []*protocol.PlanningDependency, error) {
+// The TTL changes as the host's embedded engine plans it: a RESET of the TTL
+// the table holds, placed early, and a SET of the declared one after it. YDB
+// keeps no external data source a table's TTL names, so the held TTL lets go
+// of its sources before their owner drops or replaces them, and the declared
+// one is set once its sources exist. A change to a TTL from none is the SET
+// alone, and a change to none the RESET alone. A lone RESET drops the table's
+// TTL setting and a lone SET creates it. When both run, each alters it: the
+// host refuses a provider step that creates what another provider step drops,
+// since it orders every creation of a phase before every drop, and the
+// dependency here orders the two steps.
+//
+// Each local index is one step, in the lifecycle phase, so that a removal and
+// the addition that replaces the index under its name can be ordered in one
+// window: the removal first. No local index decides where a TTL may read,
+// since YDB takes a column table's TTL on the first key column only, so the
+// index steps and the TTL steps are not ordered against each other.
+func (s columnTableStep) plan(number int, numbers *localIndexNumbers) ([]*protocol.PlanningStep, []*protocol.PlanningDependency, error) {
+	var steps []*protocol.PlanningStep
+	var dependencies []*protocol.PlanningDependency
+	if ttl := s.change.ttl; ttl != nil {
+		ttlSteps, ttlDependencies, err := s.ttlSteps(number, *ttl)
+		if err != nil {
+			return nil, nil, err
+		}
+		steps, dependencies = append(steps, ttlSteps...), append(dependencies, ttlDependencies...)
+	}
+	dropped := map[string]*protocol.StepIdentity{}
+	for _, change := range s.change.indexes {
+		prefix, counter, action := "column-table-drop-local-index", &numbers.drops, protocol.PlanningEffect_DROP
+		alteration := &native.ColumnTableLocalIndexAlteration{Drop: change.drop}
+		switch {
+		case change.rename():
+			prefix, counter = "column-table-rename-local-index", &numbers.renames
+			alteration = &native.ColumnTableLocalIndexAlteration{Add: change.add, Drop: change.drop}
+		case change.add != nil:
+			prefix, counter, action = "column-table-add-local-index", &numbers.adds, protocol.PlanningEffect_CREATE
+			alteration = &native.ColumnTableLocalIndexAlteration{Add: change.add}
+		}
+		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", prefix, *counter)}
+		*counter++
+		operation, err := CaptureColumnLocalIndex(id.Name, s.owner, alteration)
+		if err != nil {
+			return nil, nil, err
+		}
+		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(s.table.Subject), Action: protocol.PlanningEffect_READ},
+			{Subject: indexSubject(s.table.Subject, change.name()), Action: action}}
+		if change.rename() {
+			// A rename drops the held name and creates the declared one.
+			effects = []*protocol.PlanningEffect{{Subject: proto.CloneOf(s.table.Subject), Action: protocol.PlanningEffect_READ},
+				{Subject: indexSubject(s.table.Subject, change.drop.GetName()), Action: protocol.PlanningEffect_DROP},
+				{Subject: indexSubject(s.table.Subject, change.add.GetName()), Action: protocol.PlanningEffect_CREATE}}
+		}
+		facts := operation.OperationSemantics
+		steps = append(steps, &protocol.PlanningStep{Id: id,
+			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: operation, Phase: protocol.PlanningOperation_LIFECYCLE},
+			Metadata:  &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}})
+		switch {
+		case change.rename():
+		case change.drop != nil:
+			dropped[change.name()] = id
+		case dropped[change.name()] != nil:
+			dependencies = append(dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(dropped[change.name()]), After: proto.CloneOf(id)})
+		}
+	}
+	return steps, dependencies, nil
+}
+
+// ttlSteps are the steps of a TTL change, as plan describes them.
+func (s columnTableStep) ttlSteps(number int, change columnTTLChange) ([]*protocol.PlanningStep, []*protocol.PlanningDependency, error) {
 	name := fmt.Sprintf("column-table-ttl/%06d", number)
 	slot := proto.CloneOf(s.table.Subject)
 	slot.Kind = "ydb.ttl"
@@ -221,7 +301,7 @@ func (s columnTTLStep) plan(number int) ([]*protocol.PlanningStep, []*protocol.P
 				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(s.table.Subject), Action: protocol.PlanningEffect_READ}, {Subject: proto.CloneOf(slot), Action: action}}}})
 		return nil
 	}
-	held, set := s.change.held, s.change.set
+	held, set := change.held, change.set
 	reset, install := protocol.PlanningEffect_DROP, protocol.PlanningEffect_CREATE
 	if held != nil && set != nil {
 		reset, install = protocol.PlanningEffect_ALTER, protocol.PlanningEffect_ALTER

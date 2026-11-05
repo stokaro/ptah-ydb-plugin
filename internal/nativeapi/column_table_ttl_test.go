@@ -165,7 +165,7 @@ func TestColumnTableTTLStep_FailurePath(t *testing.T) {
 		{"a unit on a date column", `{"held":` + hourlyTTL + `,"set":{"enabled":{"column":"ts","columnUnit":"1","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`,
 			"/local", `YDB TTL column "ts" is Timestamp, a date type, and YDB takes no unit for one`, func(*ttlFixture) {}, nil, false},
 		{"another database", `{"held":` + hourlyTTL + `}`, "/other", `YDB column table TTL change targets another database`, func(*ttlFixture) {}, nil, false},
-		{"no monitoring endpoint", `{"held":` + hourlyTTL + `}`, "/local", `creating a column table or changing its TTL requires monitoring=.*`,
+		{"no monitoring endpoint", `{"held":` + hourlyTTL + `}`, "/local", `creating a column table or changing its TTL or local indexes requires monitoring=.*`,
 			func(f *ttlFixture) { f.monitoringDisabled = true }, nil, false},
 		{"a lost read", `{"held":` + hourlyTTL + `}`, "/local", `lost read`, func(f *ttlFixture) { f.readFailure = true }, nil, false},
 		{"a lost lease", `{"held":` + hourlyTTL + `}`, "/local", `lease lost`, func(*ttlFixture) {}, errors.New("lease lost"), false},

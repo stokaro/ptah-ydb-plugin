@@ -83,6 +83,32 @@ func TestCompileNativeCreation(t *testing.T) {
 	request.PrimaryKey[0] = "mutated"
 	c.Assert(proto.Equal(original, table), qt.IsTrue)
 }
+
+// A declared type whose detail YDB does not keep compiles to the type that
+// holds its values, as the host's built-in engine creates it: the length of a
+// string, the display width of an integer and the precision of a timestamp
+// are left out.
+func TestCompileLeavesOutADetailYDBDoesNotKeep(t *testing.T) {
+	for _, test := range []struct{ declared, want string }{
+		{"VARCHAR(80)", "Utf8"},
+		{"CHAR(2)", "Utf8"},
+		{"INT(11)", "Int32"},
+		{"BIGINT(20)", "Int64"},
+		{"TIMESTAMP(3)", "Timestamp"},
+	} {
+		t.Run(test.declared, func(t *testing.T) {
+			c := testcheck.New(t)
+			table := declaration()
+			table.Columns[2] = &protocol.DeclaredColumn{Name: "value", Type: test.declared, Nullable: true}
+			request, err := tablecreate.Compile(owner(), table, nil)
+			c.Assert(err, qt.IsNil)
+			spelling, nullable, err := schema.ColumnType(request.Columns[2].Type)
+			c.Assert(err, qt.IsNil)
+			c.Assert(spelling, qt.Equals, test.want)
+			c.Assert(nullable, qt.IsTrue)
+		})
+	}
+}
 func TestCompilePrimaryKeySources(t *testing.T) {
 	for _, test := range []struct {
 		name    string
@@ -93,7 +119,10 @@ func TestCompilePrimaryKeySources(t *testing.T) {
 		{"native order", func(d *protocol.DeclaredTable) { d.PrimaryKey = nil }, []string{"second", "first"}, false},
 		{"conflicting order", func(d *protocol.DeclaredTable) { d.PrimaryKey = []string{"first", "second"} }, nil, true},
 		{"single flag", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = nil; d.Columns[1].Primary = false }, []string{"first"}, false},
-		{"ambiguous flags", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = nil }, nil, true},
+		{"several flags in declaration order", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = nil }, []string{"first", "second"}, false},
+		{"no flag and no order", func(d *protocol.DeclaredTable) {
+			d.Features, d.PrimaryKey, d.Columns[0].Primary, d.Columns[1].Primary = nil, nil, false, false
+		}, nil, true},
 		{"missing key column", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = []string{"absent"} }, nil, true},
 		{"repeated key column", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = []string{"first", "first"} }, nil, true},
 		{"extra key membership", func(d *protocol.DeclaredTable) { d.Features = nil; d.PrimaryKey = []string{"first"} }, nil, true},

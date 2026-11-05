@@ -56,6 +56,13 @@ func heldEntries(c *qt.C, opened *connection.Connection, absolute string) map[st
 // removes the directories, deepest first. It removes only what a test
 // created there.
 func removeTree(ctx context.Context, opened *connection.Connection, absolute string) {
+	emptyTree(ctx, opened, absolute)
+	_ = opened.Driver.Scheme().RemoveDirectory(ctx, absolute)
+}
+
+// emptyTree is removeTree that keeps absolute itself, for a fixture
+// directory whose own cleanup removes it.
+func emptyTree(ctx context.Context, opened *connection.Connection, absolute string) {
 	scheme := nativeapi.SchemeLister(Ydb_Scheme_V1.NewSchemeServiceClient(ydb.GRPCConn(opened.Driver)))
 	nodes := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(opened.Driver))
 	drops := []struct {
@@ -89,7 +96,7 @@ func removeTree(ctx context.Context, opened *connection.Connection, absolute str
 		}
 	}
 	slices.Reverse(directories)
-	for _, directory := range directories {
+	for _, directory := range directories[:len(directories)-1] {
 		_ = opened.Driver.Scheme().RemoveDirectory(ctx, directory)
 	}
 }
@@ -217,4 +224,37 @@ func TestHostCannotCreateInANewDirectoryWithoutASelector_FailurePath(t *testing.
 		"The current topic or its absence was not established.")
 	c.Assert(output, qt.Contains, "No changes planned, but 1 comparison limit remains unresolved.")
 	c.Assert(heldEntries(c, opened, path.Join(root, "fresh")), qt.IsNil)
+}
+
+// A run with no schema selector reads the realm's root, which holds the
+// coordination node the run locks on. The provider reserves that name for
+// every native kind, and a reservation is no streaming query. A run that
+// changes a topic, an input a streaming query could read, asks which queries
+// read it, and the reserved name is not one: the change plans and applies
+// with the node at the root, and the next run is synced. The node is the
+// run's own, taken before the plan, so every run meets it.
+func TestHostChangesATopicWithoutASelectorBesideTheLockNode_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, _, _ := lockFixture(c)
+	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
+	c.Assert(err, qt.IsNil)
+	address, root := realmFixture(c, opened, base)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		c.Check(execFixtureSchema(ctx, opened.DB, "DROP TOPIC IF EXISTS `"+path.Join(root, "events")+"`"), qt.IsNil)
+		_ = opened.Driver.Coordination().DropNode(ctx, path.Join(root, locking.NodeName))
+	})
+	for _, run := range []struct{ name, source, want string }{
+		{"the creation", "topics:\n  events:\n    retention_period: PT36H\n", `(?s).*Schema apply completed successfully.*`},
+		{"the change", "topics:\n  events:\n    retention_period: P2D\n", `(?s).*Schema apply completed successfully.*`},
+		{"a run after it", "topics:\n  events:\n    retention_period: P2D\n", `(?s).*Schema is synced, no changes to be made.*`},
+	} {
+		output, err := hostApplyEverywhere(c, address, run.source)
+		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", run.name, output))
+		c.Assert(output, qt.Matches, run.want, qt.Commentf("%s", run.name))
+	}
+	c.Assert(heldEntries(c, opened, root), qt.DeepEquals, map[string]Ydb_Scheme.Entry_Type{
+		"events": Ydb_Scheme.Entry_TOPIC, locking.NodeName: Ydb_Scheme.Entry_COORDINATION_NODE,
+	})
 }
