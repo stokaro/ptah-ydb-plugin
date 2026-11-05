@@ -475,9 +475,9 @@ receipts explicitly report `transactional_ddl=false`. Live tests verify that
 DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
-Coordination, external object, row-table creation and row-table alteration operations use native envelopes, or
-YQL statements in the TEXT form; see [Text units](#text-units). Topic and
-changefeed operations have native envelopes only. Other operation
+Coordination, external object, row-table creation, row-table alteration and changefeed operations use native envelopes, or
+YQL statements in the TEXT form; see [Text units](#text-units). Topic
+operations have native envelopes only. Other operation
 models remain to be extracted. A SQL unit that runs one of the host's
 coordination node statements is run through the coordination service; the
 host's extended comment statements are not implemented here.
@@ -540,6 +540,7 @@ this provider's `Execute` does with it what the native call does:
 | Column table | The `CREATE TABLE ... STORE = COLUMN` and TTL statements the provider runs |
 | Coordination node | `CREATE COORDINATION NODE ... WITH (...)`, `ALTER ... SET (...)` naming the settings that change, `DROP COORDINATION NODE` |
 | External data source or external table | `CREATE`, `CREATE OR REPLACE` or `DROP EXTERNAL DATA SOURCE` or `EXTERNAL TABLE`, with the paths and options as the declaration writes them |
+| Changefeed change | One statement to a line: `ALTER TABLE ... DROP CHANGEFEED` for each removal, then `ALTER TABLE ... ADD CHANGEFEED` for each addition with one `ALTER TOPIC ... ADD CONSUMER` per consumer, then the `ALTER TOPIC` statements that change a topic in place |
 
 YQL has no coordination node statement, so `Execute` reads one as the host's
 YDB connection does and runs it through the coordination service: alone in its
@@ -558,8 +559,8 @@ column that is no Int16, Int32 or Int64, a start or an increment on a 16-bit or
 database (ALTER SEQUENCE takes only the absolute path), a TTL run interval other than YDB's own, a coordination node that
 declares its access, an external data source or external table dropped and
 created again around the plan's other statements, which the native call gives
-the owner and the access entries of the old one, and every topic and
-changefeed operation. A host that does not list the feature gets native units.
+the owner and the access entries of the old one, and every topic
+operation. A host that does not list the feature gets native units.
 
 ## Common objects
 
@@ -2173,9 +2174,15 @@ by tx` or `path is under operation`), which changed nothing: a changefeed added
 with an initial scan holds the path until the scan has read every row, so the
 next statement waits, 50 ms at first and up to a second between attempts,
 until it runs or the request's context ends. Any other unconfirmed result is
-UNKNOWN and is never retried. A changefeed
-operation has no TEXT form yet, so a host that writes a migration file is
-refused with `NO_TEXT_FORM`.
+UNKNOWN and is never retried.
+
+In the TEXT form a changefeed operation is the statements the host's embedded
+engine writes into a migration file for the same change, one to a line, in its
+order: the removals, a changed changefeed among them, then the additions, each
+with the consumers of its topic, then each topic's change in place. A
+migration runner runs each statement alone, so an `ALTER TOPIC` finds the
+topic the `ADD CHANGEFEED` above it created. A migration file then carries a
+changefeed change, and a rebuild of a table that holds changefeeds.
 
 `TestChangefeedLifecycleSubprocess` adds a changefeed with an initial scan and
 two consumers, restarts a consumer, refuses a change planned before another
