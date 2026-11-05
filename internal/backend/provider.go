@@ -113,6 +113,14 @@ func providerFeatures() []string {
 		// A refusal reaches the host with the reason the provider wrote, and a
 		// driver's error with its code alone; see package authored.
 		provider.ErrorReasonsFeature,
+		// A model of the description travels by reference in every other
+		// message, so the coverage the host sends for each table names the
+		// models it covers rather than repeating their definitions, and a
+		// message may be 64 MiB: a database of a few thousand tables is read,
+		// compared and planned in one request. The SDK sends and resolves the
+		// references.
+		provider.ModelReferencesFeature,
+		provider.LargeMessagesFeature,
 		provider.ScopeSelectionsFeature,
 		provider.StatementsFeature,
 		provider.TypedArgumentsFeature,
