@@ -39,9 +39,10 @@ func generatedMigration(c *qt.C, directory, migrations, source, flag string) str
 // A migration file carries a changefeed change. `ptah schema diff` writes the
 // statements the host's embedded engine writes for it: the drops, a changed
 // changefeed among them, then the additions with their consumers, then a
-// topic's change in place. `ptah migrations up` runs each statement alone, and
-// `ptah schema compare` finds nothing left to change; the changefeeds read
-// back as declared. `ptah migrations generate` writes a down file too, and
+// topic's change in place. `ptah migrations up` runs each statement alone,
+// with no --allow-destructive, since the host's lint reads no DROP CHANGEFEED
+// as a dropped column, and `ptah schema compare` finds nothing left to
+// change; the changefeeds read back as declared. `ptah migrations generate` writes a down file too, and
 // the host has no provider reversal of a table's property changes to write it
 // from, so the file comes from the diff.
 func TestHostMigrationFileCarriesChangefeedChanges_HappyPath(t *testing.T) {
@@ -64,7 +65,7 @@ func TestHostMigrationFileCarriesChangefeedChanges_HappyPath(t *testing.T) {
 	c.Assert(diffErr, qt.IsNil, qt.Commentf("schema diff:\n%s", file))
 	c.Assert(os.WriteFile(filepath.Join(migrations, "0000000001_changefeeds.up.sql"), []byte(file), 0o600), qt.IsNil)
 	c.Assert(os.WriteFile(filepath.Join(migrations, "0000000001_changefeeds.down.sql"), []byte("-- The test runs no down migration.\n"), 0o600), qt.IsNil)
-	up, upErr := hostCommand(c, append([]string{"migrations", "up", "--allow-destructive"}, f.target(migrations)...)...)
+	up, upErr := hostCommand(c, append([]string{"migrations", "up"}, f.target(migrations)...)...)
 	compared, compareErr := hostCommand(c, "schema", "compare", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", writeYAML(c, changed),
 		"--schemas", directory, "--exit-code")
 
@@ -93,8 +94,9 @@ func TestHostMigrationFileCarriesChangefeedChanges_HappyPath(t *testing.T) {
 // A migration file carries a rebuild of a table that holds changefeeds, as
 // the host's embedded engine writes it: the changefeed is dropped before the
 // old table moves and added with its consumer once the new table holds the
-// name. `ptah migrations up` runs it, the rows survive, and the changefeed
-// reads back as declared.
+// name. `ptah migrations up` runs it with no --allow-destructive, since the
+// host's lint reads the changefeed steps as part of the rebuild, the rows
+// survive, and the changefeed reads back as declared.
 func TestHostMigrationFileCarriesARebuildWithChangefeeds_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -110,7 +112,7 @@ func TestHostMigrationFileCarriesARebuildWithChangefeeds_HappyPath(t *testing.T)
 	table := "`" + directory + "/items`"
 
 	file := generatedMigration(c, directory, migrations, after, "--allow-table-rebuild")
-	up, upErr := hostCommand(c, append([]string{"migrations", "up", "--allow-destructive"}, f.target(migrations)...)...)
+	up, upErr := hostCommand(c, append([]string{"migrations", "up"}, f.target(migrations)...)...)
 	compared, compareErr := hostCommand(c, "schema", "compare", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", writeYAML(c, after),
 		"--schemas", directory, "--exit-code")
 
