@@ -314,3 +314,33 @@ func TestHostHCLExportListsNoEmptySetAsALoss_HappyPath(t *testing.T) {
 	c.Assert(found, qt.IsTrue)
 	c.Assert(held, qt.HasLen, 1)
 }
+
+// A read reports a facet for every column, which for a column of the default
+// family states nothing, and an HCL export lists no such facet as a detail it
+// leaves out. A column of another family is left out by name, beside the
+// family, and the document applied back plans nothing: the column stays in
+// its family.
+func TestHostHCLExportListsNoColumnOfTheDefaultFamilyAsALoss_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.HCLPlatformFeature)
+	listLosses(c)
+	opened, directory, database := lockFixture(c)
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	plain, family := path.Join(database, directory, "plain"), path.Join(database, directory, "family")
+	for _, statement := range []string{
+		"CREATE TABLE `" + plain + "` (id Uint64 NOT NULL, body Utf8, PRIMARY KEY (id))",
+		"CREATE TABLE `" + family + "` (id Uint64 NOT NULL, body Utf8 FAMILY cold, PRIMARY KEY (id), FAMILY cold (COMPRESSION = \"lz4\"))",
+	} {
+		c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil, qt.Commentf("%s", statement))
+	}
+
+	document, notes := hostExport(c, "schema", "inspect", "--schemas", directory, "--format", "hcl")
+
+	c.Assert(notes, qt.Not(qt.Contains), schema.ColumnProperties, qt.Commentf("%s", notes))
+	c.Assert(notes, qt.Not(qt.Contains), "Plain.id:", qt.Commentf("%s", notes))
+	c.Assert(notes, qt.Contains, "table."+directory+".family: column family cold is not represented in HCL", qt.Commentf("%s", notes))
+	c.Assert(notes, qt.Contains, ".body: its column family cold is not represented in HCL", qt.Commentf("%s", notes))
+	replanned, err := hostReplanSource(c, directory, "hcl", document)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", document, replanned))
+	c.Assert(replanned, qt.Contains, "Schema is synced, no changes to be made", qt.Commentf("%s\n%s", document, replanned))
+}

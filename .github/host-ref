@@ -1,0 +1,4 @@
+# The column facets of an HCL export reach the provider only with this host
+# change (stokaro/ptah, branch fix/4204-hcl-column-facets). Remove this file
+# once it is merged.
+fix/4204-hcl-column-facets
