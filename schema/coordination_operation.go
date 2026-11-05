@@ -26,9 +26,10 @@ var coordinationOperationModel = buildCoordinationOperationModel()
 
 func buildCoordinationOperationModel() *protocol.ValueModel {
 	data, err := json.Marshal(map[string]any{"kind": CoordinationOperation, "representation": "operation", "schema_version": 1,
-		"payload":       json.RawMessage(CoordinationChangeModel().DefinitionJson),
-		"execution":     "native CreateNode, AlterNode, or DropNode; no SQL text; no automatic mutation retry; outside SQL transactions; CreateNode creates a missing parent directory",
-		"precondition":  "before is the complete normalized observation or established absence; a parent directory YDB does not show establishes absence when the listing of its own parent, proved the same way up to the database root, does not name it; verify configuration and access metadata immediately before dispatch; the API has no atomic compare-and-set",
+		"payload":   json.RawMessage(CoordinationChangeModel().DefinitionJson),
+		"execution": "native CreateNode, AlterNode, or DropNode; no SQL text; no automatic mutation retry; outside SQL transactions; CreateNode creates a missing parent directory",
+		"precondition": "before is the complete normalized observation or established absence; a parent directory YDB does not show establishes absence when the listing of its own parent, " +
+			"proved the same way up to the database root, does not name it; verify configuration and access metadata immediately before dispatch; the API has no atomic compare-and-set",
 		"confirmation":  "read back effective configuration after create/alter or absence after drop; alter must preserve access metadata; a successful create does not establish exclusive ownership",
 		"database":      "a nonempty owner database must equal the selected session database; empty selects that session database for offline creation",
 		"configuration": "send all effective settings; never replace the node to alter settings; semantic no-op operations refused"})
@@ -40,7 +41,8 @@ func buildCoordinationOperationModel() *protocol.ValueModel {
 		panic(err)
 	}
 	sum := sha256.Sum256(canonical)
-	return &protocol.ValueModel{Kind: CoordinationOperation, Representation: protocol.ValueInput_OPERATION, SchemaVersion: 1, Encoding: "json", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(sum[:]), CanonicalFormat: CoordinationOperation + "/json-v1"}
+	return &protocol.ValueModel{Kind: CoordinationOperation, Representation: protocol.ValueInput_OPERATION, SchemaVersion: 1, Encoding: "json",
+		DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(sum[:]), CanonicalFormat: CoordinationOperation + "/json-v1"}
 }
 
 // CoordinationOperands returns independently normalized before/after envelopes.
@@ -58,7 +60,8 @@ func CoordinationOperands(value *protocol.Envelope) (*protocol.Envelope, *protoc
 		if bytes.Equal(payload[key], []byte("null")) {
 			return nil
 		}
-		return &protocol.Envelope{ProviderId: ProviderID, Kind: CoordinationProperties, Owner: proto.CloneOf(value.Owner), SchemaVersion: 1, Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: bytes.Clone(payload[key])}
+		return &protocol.Envelope{ProviderId: ProviderID, Kind: CoordinationProperties, Owner: proto.CloneOf(value.Owner), SchemaVersion: 1,
+			Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: bytes.Clone(payload[key])}
 	}
 	return operand("before", model(CoordinationProperties)), operand("after", CoordinationDesiredModel()), nil
 }
@@ -77,7 +80,8 @@ func CoordinationOperationFromChange(id string, change *protocol.Envelope) (*pro
 // NormalizeCoordinationOperation reconstructs operation facts and refuses no-ops.
 func NormalizeCoordinationOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	value, definition := input.GetValue(), CoordinationOperationModel()
-	if input.GetRepresentation() != protocol.ValueInput_OPERATION || value.GetProviderId() != ProviderID || value.GetKind() != definition.Kind || value.GetSchemaVersion() != definition.SchemaVersion || value.GetEncoding() != definition.Encoding || value.GetDefinitionSha256() != definition.DefinitionSha256 {
+	if input.GetRepresentation() != protocol.ValueInput_OPERATION || value.GetProviderId() != ProviderID || value.GetKind() != definition.Kind ||
+		value.GetSchemaVersion() != definition.SchemaVersion || value.GetEncoding() != definition.Encoding || value.GetDefinitionSha256() != definition.DefinitionSha256 {
 		return nil, fmt.Errorf("coordination operation does not match its negotiated definition")
 	}
 	change := CoordinationOperationChange(value)
@@ -113,7 +117,8 @@ func NormalizeCoordinationOperation(input *protocol.ValueInput) (*protocol.Norma
 	result := proto.CloneOf(value)
 	result.Payload = bytes.Clone(captured.Value.Payload)
 	facts := captured.ChangeSemantics
-	return &protocol.NormalizedValue{Id: input.Id, Value: result, NormalizedOwner: proto.CloneOf(result.Owner), CanonicalFormat: definition.CanonicalFormat, CanonicalProjection: bytes.Clone(result.Payload), OperationSemantics: &protocol.OperationSemantics{Impact: facts.Impact, Reason: facts.Reason, Access: facts.Access, AccessReason: facts.AccessReason}}, nil
+	return &protocol.NormalizedValue{Id: input.Id, Value: result, NormalizedOwner: proto.CloneOf(result.Owner), CanonicalFormat: definition.CanonicalFormat,
+		CanonicalProjection: bytes.Clone(result.Payload), OperationSemantics: &protocol.OperationSemantics{Impact: facts.Impact, Reason: facts.Reason, Access: facts.Access, AccessReason: facts.AccessReason}}, nil
 }
 
 // CoordinationOperationChange restores the complete change envelope of an operation.
@@ -144,7 +149,8 @@ func CoordinationNativeConfig(intent CoordinationIntent) (*Ydb_Coordination.Conf
 	if settings.CountersMode == "detailed" {
 		counters = Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_DETAILED
 	}
-	return &Ydb_Coordination.Config{SelfCheckPeriodMillis: settings.SelfCheckMillis, SessionGracePeriodMillis: settings.SessionGraceMillis, ReadConsistencyMode: mode(settings.ReadMode), AttachConsistencyMode: mode(settings.AttachMode), RateLimiterCountersMode: counters}, nil
+	return &Ydb_Coordination.Config{SelfCheckPeriodMillis: settings.SelfCheckMillis, SessionGracePeriodMillis: settings.SessionGraceMillis,
+		ReadConsistencyMode: mode(settings.ReadMode), AttachConsistencyMode: mode(settings.AttachMode), RateLimiterCountersMode: counters}, nil
 }
 
 // CoordinationBoundOwner checks exact bound components without parsing names.

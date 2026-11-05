@@ -34,7 +34,10 @@ const (
 
 // ObservedModels returns fresh definitions for the supported native observations.
 func ObservedModels() []*protocol.ValueModel {
-	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties), model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties), model(ResourcePoolProperties), model(ResourcePoolClassifierProperties), model(StreamingQueryProperties), model(SecretProperties), model(ReplicationProperties), model(TransferProperties)}
+	return []*protocol.ValueModel{model(TableProperties), model(ColumnProperties), model(IndexProperties), model(ChangefeedProperties), model(TopicProperties),
+		model(ViewProperties), model(CoordinationProperties), model(ExternalSourceProperties), model(ExternalTableProperties), model(ColumnStorageProperties),
+		model(ResourcePoolProperties), model(ResourcePoolClassifierProperties), model(StreamingQueryProperties), model(SecretProperties),
+		model(ReplicationProperties), model(TransferProperties)}
 }
 
 func message(kind string) proto.Message {
@@ -89,7 +92,8 @@ func excluded(kind string) []string {
 var definitions = map[string]*protocol.ValueModel{
 	SecretProperties:        buildModel(SecretProperties),
 	ColumnStorageProperties: buildModel(ColumnStorageProperties),
-	TableProperties:         buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties), ChangefeedProperties: buildModel(ChangefeedProperties), TopicProperties: buildModel(TopicProperties),
+	TableProperties:         buildModel(TableProperties), ColumnProperties: buildModel(ColumnProperties), IndexProperties: buildModel(IndexProperties),
+	ChangefeedProperties: buildModel(ChangefeedProperties), TopicProperties: buildModel(TopicProperties),
 	ViewProperties: buildModel(ViewProperties), CoordinationProperties: buildModel(CoordinationProperties), ExternalSourceProperties: buildModel(ExternalSourceProperties), ExternalTableProperties: buildModel(ExternalTableProperties),
 	ResourcePoolProperties: buildModel(ResourcePoolProperties), ResourcePoolClassifierProperties: buildModel(ResourcePoolClassifierProperties),
 	StreamingQueryProperties: buildModel(StreamingQueryProperties),
@@ -139,7 +143,8 @@ func buildModel(kind string) *protocol.ValueModel {
 	}
 	if kind == ColumnStorageProperties {
 		definition["not_observed"] = []string{"column_table_access", "shared_topic_consumers"}
-		definition["column_storage"] = "hash column order and TTL tier order retained; local indexes sorted by name; native IDs and versions excluded; omitted index defaults remain absent; a live read combines the table service and the monitoring scheme description"
+		definition["column_storage"] = "hash column order and TTL tier order retained; local indexes sorted by name; native IDs and versions excluded; omitted index defaults remain absent; " +
+			"a live read combines the table service and the monitoring scheme description"
 	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
@@ -272,50 +277,8 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	if refused {
 		return nil, fmt.Errorf("YDB facet repeats a common or transient field")
 	}
-	if storage, ok := target.(*native.ColumnStorageObservation); ok {
-		if err := normalizeColumnStorage(storage); err != nil {
-			return nil, err
-		}
-	}
-	if indexes, ok := target.(*native.IndexObservations); ok {
-		if err := normalizeIndexes(indexes); err != nil {
-			return nil, err
-		}
-	}
-	if IsNativeObject(value.GetKind()) {
-		if err := normalizeObject(target); err != nil {
-			return nil, err
-		}
-	}
-	if IsWorkloadObject(value.GetKind()) {
-		if err := validateWorkload(owner, target); err != nil {
-			return nil, err
-		}
-	}
-	if feeds, ok := target.(*native.ChangefeedObservations); ok {
-		if err := normalizeChangefeeds(feeds); err != nil {
-			return nil, err
-		}
-	}
-	if table, ok := target.(*native.DescribeTableResult); ok {
-		seen := make(map[string]bool)
-		if len(table.GetPrimaryKey()) == 0 {
-			return nil, fmt.Errorf("observed YDB table properties require a primary key")
-		}
-		for _, key := range table.GetPrimaryKey() {
-			if key == "" || seen[key] {
-				return nil, fmt.Errorf("invalid YDB primary key")
-			}
-			seen[key] = true
-		}
-		self := table.GetSelf()
-		if self.GetName() != "" || self.GetType() != 0 || self.GetSizeBytes() != 0 || self.GetCreatedAt() != nil {
-			return nil, fmt.Errorf("YDB facet repeats transient table identity")
-		}
-		if table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_ROW && table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED {
-			return nil, fmt.Errorf("column storage requires its own description")
-		}
-		table.StoreType = Ydb_Table.StoreType_STORE_TYPE_ROW
+	if err := normalizeObservation(value.GetKind(), owner, target); err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(owner.GetName()) == "" {
 		return nil, fmt.Errorf("empty YDB observation name")
@@ -334,10 +297,86 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 	return result, nil
 }
 
+// normalizeObservation runs the checks particular to an observation of kind
+// and normalizes target in place: column storage, index and changefeed sets,
+// native objects, workload objects and row-table properties each have checks
+// of their own.
+func normalizeObservation(kind string, owner *protocol.Reference, target proto.Message) error {
+	if storage, ok := target.(*native.ColumnStorageObservation); ok {
+		if err := normalizeColumnStorage(storage); err != nil {
+			return err
+		}
+	}
+	if indexes, ok := target.(*native.IndexObservations); ok {
+		if err := normalizeIndexes(indexes); err != nil {
+			return err
+		}
+	}
+	if IsNativeObject(kind) {
+		if err := normalizeObject(target); err != nil {
+			return err
+		}
+	}
+	if IsWorkloadObject(kind) {
+		if err := validateWorkload(owner, target); err != nil {
+			return err
+		}
+	}
+	if feeds, ok := target.(*native.ChangefeedObservations); ok {
+		if err := normalizeChangefeeds(feeds); err != nil {
+			return err
+		}
+	}
+	if table, ok := target.(*native.DescribeTableResult); ok {
+		if err := normalizeObservedTable(table); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// normalizeObservedTable checks a row-table observation for a distinct
+// nonempty primary key, no transient identity and row storage, and sets the
+// store type to row, which an unspecified one means.
+func normalizeObservedTable(table *native.DescribeTableResult) error {
+	seen := make(map[string]bool)
+	if len(table.GetPrimaryKey()) == 0 {
+		return fmt.Errorf("observed YDB table properties require a primary key")
+	}
+	for _, key := range table.GetPrimaryKey() {
+		if key == "" || seen[key] {
+			return fmt.Errorf("invalid YDB primary key")
+		}
+		seen[key] = true
+	}
+	if transientSelf(table.GetSelf()) {
+		return fmt.Errorf("YDB facet repeats transient table identity")
+	}
+	if table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_ROW && table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED {
+		return fmt.Errorf("column storage requires its own description")
+	}
+	table.StoreType = Ydb_Table.StoreType_STORE_TYPE_ROW
+	return nil
+}
+
 // Models returns negotiated models with their separate representations. Source
 // and change models retain their own canonical formats.
 func Models() []*protocol.ValueModel {
-	return append(ObservedModels(), NativeDesiredModel(SecretProperties), SecretChangeModel(), SecretOperationModel(), TableDesiredModel(), ColumnDesiredModel(), NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties), NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties), CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(), TopicChangeModel(), TopicOperationModel(), ExternalSourceChangeModel(), ExternalSourceOperationModel(), ExternalTableChangeModel(), ExternalTableOperationModel(), TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel(), NativeDesiredModel(ResourcePoolProperties), NativeDesiredModel(ResourcePoolClassifierProperties), ResourcePoolChangeModel(), ResourcePoolClassifierChangeModel(), WorkloadOperationModel(), NativeDesiredModel(StreamingQueryProperties), StreamingQueryChangeModel(), StreamingQueryOperationModel(), NativeDesiredModel(ReplicationProperties), ReplicationChangeModel(), ReplicationOperationModel(), NativeDesiredModel(TransferProperties), TransferChangeModel(), TransferOperationModel())
+	return append(ObservedModels(),
+		NativeDesiredModel(SecretProperties), SecretChangeModel(), SecretOperationModel(),
+		TableDesiredModel(), ColumnDesiredModel(),
+		NativeDesiredModel(IndexProperties), NativeDesiredModel(ChangefeedProperties), NativeDesiredModel(TopicProperties), NativeDesiredModel(ViewProperties),
+		NativeDesiredModel(ExternalSourceProperties), NativeDesiredModel(ExternalTableProperties), NativeDesiredModel(ColumnStorageProperties),
+		CoordinationDesiredModel(), CoordinationChangeModel(), CoordinationOperationModel(),
+		TopicChangeModel(), TopicOperationModel(),
+		ExternalSourceChangeModel(), ExternalSourceOperationModel(), ExternalTableChangeModel(), ExternalTableOperationModel(),
+		TablePropertiesChangeModel(), ColumnStorageChangeModel(), ChangefeedOperationModel(),
+		NativeDesiredModel(ResourcePoolProperties), NativeDesiredModel(ResourcePoolClassifierProperties),
+		ResourcePoolChangeModel(), ResourcePoolClassifierChangeModel(), WorkloadOperationModel(),
+		NativeDesiredModel(StreamingQueryProperties), StreamingQueryChangeModel(), StreamingQueryOperationModel(),
+		NativeDesiredModel(ReplicationProperties), ReplicationChangeModel(), ReplicationOperationModel(),
+		NativeDesiredModel(TransferProperties), TransferChangeModel(), TransferOperationModel(),
+	)
 }
 
 func validateModelOwner(value *protocol.Envelope) error {

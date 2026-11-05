@@ -129,24 +129,9 @@ func NormalizeTablePropertiesChange(input *protocol.ValueInput) (*protocol.Norma
 	if err != nil {
 		return nil, err
 	}
-	var operands map[string]json.RawMessage
-	if err := json.Unmarshal(canonical, &operands); err != nil || operands["before"] == nil || operands["after"] == nil {
-		return nil, fmt.Errorf("table properties change requires exact before and after operands")
-	}
-	expected := 2
-	if selector, found := operands[facetKey]; found {
-		expected = 3
-		switch {
-		case operandKind == TableProperties && bytes.Equal(selector, []byte(strconv.Quote(IndexProperties))):
-			operandKind = IndexProperties
-		case operandKind == TableProperties && bytes.Equal(selector, []byte(strconv.Quote(ChangefeedProperties))):
-			operandKind = ChangefeedProperties
-		default:
-			return nil, fmt.Errorf("table properties change names an unsupported facet")
-		}
-	}
-	if len(operands) != expected {
-		return nil, fmt.Errorf("table properties change requires exact before and after operands")
+	operands, operandKind, err := tableChangeOperands(canonical, operandKind)
+	if err != nil {
+		return nil, err
 	}
 	for _, key := range []string{"before", "after"} {
 		if bytes.Equal(operands[key], []byte("null")) {
@@ -173,6 +158,44 @@ func NormalizeTablePropertiesChange(input *protocol.ValueInput) (*protocol.Norma
 	}
 	result := proto.CloneOf(value)
 	result.Payload = canonical
+	semantics, err := tableChangeSemantics(operandKind, operands["before"], operands["after"])
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner), CanonicalFormat: contract.CanonicalFormat,
+		CanonicalProjection: bytes.Clone(canonical), ChangeSemantics: semantics}, nil
+}
+
+// tableChangeOperands reads the operands of a table properties change with
+// exact keys, and returns them with the kind of facet they are: the owner's
+// kind, or the index or changefeed set the facet key of a table change names.
+func tableChangeOperands(canonical []byte, operandKind string) (map[string]json.RawMessage, string, error) {
+	var operands map[string]json.RawMessage
+	if err := json.Unmarshal(canonical, &operands); err != nil || operands["before"] == nil || operands["after"] == nil {
+		return nil, "", fmt.Errorf("table properties change requires exact before and after operands")
+	}
+	expected := 2
+	if selector, found := operands[facetKey]; found {
+		expected = 3
+		switch {
+		case operandKind == TableProperties && bytes.Equal(selector, []byte(strconv.Quote(IndexProperties))):
+			operandKind = IndexProperties
+		case operandKind == TableProperties && bytes.Equal(selector, []byte(strconv.Quote(ChangefeedProperties))):
+			operandKind = ChangefeedProperties
+		default:
+			return nil, "", fmt.Errorf("table properties change names an unsupported facet")
+		}
+	}
+	if len(operands) != expected {
+		return nil, "", fmt.Errorf("table properties change requires exact before and after operands")
+	}
+	return operands, operandKind, nil
+}
+
+// tableChangeSemantics returns the safety facts of a change of a facet of
+// operandKind: behavioral with the facet's reason, and for a changefeed set
+// the impact of the steps that carry it out.
+func tableChangeSemantics(operandKind string, before, after json.RawMessage) (*protocol.ChangeSemantics, error) {
 	reason := "Table TTL, partitioning and column families change how rows are stored and expired"
 	switch operandKind {
 	case ColumnProperties:
@@ -185,12 +208,11 @@ func NormalizeTablePropertiesChange(input *protocol.ValueInput) (*protocol.Norma
 	semantics := &protocol.ChangeSemantics{ReplacesOwner: new(false), RemovesState: new(false), Impact: protocol.ChangeSemantics_BEHAVIORAL, Reason: reason,
 		Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: "Altering table settings preserves native access metadata"}
 	if operandKind == ChangefeedProperties {
-		if err := changefeedSetSemantics(semantics, operands["before"], operands["after"]); err != nil {
+		if err := changefeedSetSemantics(semantics, before, after); err != nil {
 			return nil, err
 		}
 	}
-	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner), CanonicalFormat: contract.CanonicalFormat,
-		CanonicalProjection: bytes.Clone(canonical), ChangeSemantics: semantics}, nil
+	return semantics, nil
 }
 
 func desiredModel(kind string) *protocol.ValueModel {

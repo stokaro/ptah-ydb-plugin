@@ -58,7 +58,8 @@ const replicationDefinition = "the connection string as YDB rebuilds it from end
 var replicationChanges = newObjectChanges(objectChanges{kind: ReplicationProperties, change: ReplicationChange, operation: ReplicationOperation, noun: "async replication",
 	semantics: replicationSemantics,
 	definition: map[string]any{
-		"semantics":  "create: additive, access unknown; drop: destructive with CASCADE, which drops the replica tables, unless the replication was failed over (state done), when the tables stay and the drop is behavioral; alter: behavioral, access unchanged; never replaces owner",
+		"semantics": "create: additive, access unknown; drop: destructive with CASCADE, which drops the replica tables, unless the replication was failed over (state done), " +
+			"when the tables stay and the drop is behavioral; alter: behavioral, access unchanged; never replaces owner",
 		"comparison": "the connection string in its canonical form, the credential by kind and secret, the consistency level row and a global commit interval ten seconds where none is named, and the items by the tables they replicate",
 		"validation": "a pair that holds no change is refused",
 	},
@@ -72,8 +73,9 @@ var replicationChanges = newObjectChanges(objectChanges{kind: ReplicationPropert
 var transferChanges = newObjectChanges(objectChanges{kind: TransferProperties, change: TransferChange, operation: TransferOperation, noun: "transfer",
 	semantics: transferSemantics,
 	definition: map[string]any{
-		"semantics":  "create: additive, access unknown; drop: destructive, drops the consumer YDB created for the transfer; alter of the lambda or the batch settings, or of the connection: behavioral, access unchanged; never replaces owner",
-		"comparison": "the lambda as text, the batch size 8 MiB and the flush interval a minute where none is named, the connection string in its canonical form, the credential by kind and secret, and the consumer as any where the declaration names none",
+		"semantics": "create: additive, access unknown; drop: destructive, drops the consumer YDB created for the transfer; alter of the lambda or the batch settings, or of the connection: behavioral, access unchanged; never replaces owner",
+		"comparison": "the lambda as text, the batch size 8 MiB and the flush interval a minute where none is named, the connection string in its canonical form, " +
+			"the credential by kind and secret, and the consumer as any where the declaration names none",
 		"validation": "a pair that holds no change is refused",
 	},
 	execution: map[string]any{
