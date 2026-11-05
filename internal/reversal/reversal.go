@@ -76,20 +76,8 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 	result := &protocol.ReversedChange{Value: reversed.Value}
 	switch change.GetKind() {
 	case schema.SecretChange:
-		switch {
-		case created:
-			result.Strategy = "drop the created secret"
-		case dropped:
-			env, err := restoredValueEnv(reversed)
-			if err != nil {
-				return nil, err
-			}
-			result.Strategy = "create the dropped secret again"
-			result.Limitations = []string{fmt.Sprintf("the dropped value of secret %s was never read; the rollback takes the value %s holds when it runs", name, env)}
-		default:
-			result.Value = nil
-			result.Strategy = "keep the secret and the value it holds"
-			result.Limitations = []string{fmt.Sprintf("the value secret %s held before the rotation was never read; the rollback keeps the rotated value", name)}
+		if err := describeSecret(result, reversed, name); err != nil {
+			return nil, err
 		}
 	case schema.CoordinationChange:
 		result.Strategy, _ = lifecycle(created, dropped, "drop the created coordination node", "recreate the dropped coordination node", "restore coordination settings in place")
@@ -108,17 +96,8 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 			result.Limitations = []string{fmt.Sprintf("the messages topic %s held and its consumers' positions were dropped; the rollback creates it empty", name)}
 		}
 	case schema.StreamingQueryChange:
-		changedText, err := streamingTextChanged(reversed)
-		if err != nil {
+		if err := describeStreamingQuery(result, reversed); err != nil {
 			return nil, err
-		}
-		settings := "restore streaming execution settings in place"
-		if changedText {
-			settings = "restore the query body in place"
-		}
-		result.Strategy, _ = lifecycle(created, dropped, "drop the created streaming query", "recreate the dropped streaming query", settings)
-		if created || dropped || changedText {
-			result.Limitations = []string{streaming.CheckpointLoss}
 		}
 	case schema.ExternalSourceChange, schema.ExternalTableChange:
 		family := map[string]string{schema.ExternalSourceChange: "data source", schema.ExternalTableChange: "external table"}[change.GetKind()]
@@ -153,6 +132,48 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 		return nil, authored.New("YDB change " + change.GetKind() + " has no reversal")
 	}
 	return result, nil
+}
+
+// describeSecret sets the strategy and the limitations of a secret's reverse
+// in result. A rotation is reversed by nothing: result keeps no change, and the
+// rotated value stays.
+func describeSecret(result *protocol.ReversedChange, reversed schema.Reversed, name string) error {
+	switch {
+	case reversed.Before == nil:
+		result.Strategy = "drop the created secret"
+	case reversed.After == nil:
+		env, err := restoredValueEnv(reversed)
+		if err != nil {
+			return err
+		}
+		result.Strategy = "create the dropped secret again"
+		result.Limitations = []string{fmt.Sprintf("the dropped value of secret %s was never read; the rollback takes the value %s holds when it runs", name, env)}
+	default:
+		result.Value = nil
+		result.Strategy = "keep the secret and the value it holds"
+		result.Limitations = []string{fmt.Sprintf("the value secret %s held before the rotation was never read; the rollback keeps the rotated value", name)}
+	}
+	return nil
+}
+
+// describeStreamingQuery sets the strategy and the limitations of a streaming
+// query's reverse in result. Creating, dropping and changing the query text
+// each lose the checkpoint; restoring execution settings keeps it.
+func describeStreamingQuery(result *protocol.ReversedChange, reversed schema.Reversed) error {
+	created, dropped := reversed.Before == nil, reversed.After == nil
+	changedText, err := streamingTextChanged(reversed)
+	if err != nil {
+		return err
+	}
+	settings := "restore streaming execution settings in place"
+	if changedText {
+		settings = "restore the query body in place"
+	}
+	result.Strategy, _ = lifecycle(created, dropped, "drop the created streaming query", "recreate the dropped streaming query", settings)
+	if created || dropped || changedText {
+		result.Limitations = []string{streaming.CheckpointLoss}
+	}
+	return nil
 }
 
 // lifecycle picks the strategy of a reverse by what the forward change did.
