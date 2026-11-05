@@ -3614,7 +3614,9 @@ without a changefeed is one with none. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
-name, for the kind.
+name, for the kind. An object the claim leaves out keeps the entries of its
+access list too: the host plans no REVOKE on an object its source does not
+describe.
 
 A replication or a transfer is read as the host's reader reads it: the items
 of `FOR ... AS ...`, `ENDPOINT` and `DATABASE` as the connection string they

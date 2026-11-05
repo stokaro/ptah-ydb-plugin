@@ -210,6 +210,52 @@ func TestHostDropsObjectsHoldingAGrant_HappyPath(t *testing.T) {
 	c.Assert(f.grants(c), qt.HasLen, 0)
 }
 
+// undescribedDocument is YQL that declares the run's principals, the group's
+// LIST on the directory and the table anchor, and no object of the fixture's
+// kinds: its header leaves each of those kinds undescribed, as an HCL
+// document, which cannot name a topic, leaves it.
+func (f objectAccess) undescribedDocument() string {
+	var text strings.Builder
+	for _, object := range f.objects {
+		fmt.Fprintf(&text, "-- ptah:not-described %s\n", strings.ReplaceAll(object.kind, " ", "_"))
+	}
+	fmt.Fprintf(&text, "CREATE TABLE `%s/anchor` (id Int64 NOT NULL, PRIMARY KEY (id));\n", f.directory)
+	fmt.Fprintf(&text, "CREATE USER %s;\nCREATE GROUP %s;\n", f.names.user, f.names.group)
+	fmt.Fprintf(&text, "GRANT LIST ON `%s` TO %s;\n", path.Join(f.database, f.directory), f.names.group)
+	return text.String()
+}
+
+// Ported from the host's TestYDBObjectAccess_AnUndeclaredObjectKeepsItsGrants:
+// once the objects stand with the user's grants on them, a YQL source that
+// declares the same principals and the group's LIST, names neither the
+// objects nor the grants, and leaves the objects' kinds undescribed plans the
+// table it adds and nothing else. Ptah manages the access of the objects a
+// source describes, so no grant is revoked: every entry stays as YDB holds
+// it, the secret's implicit METADATA-READERS entry included, and nothing is
+// left to plan. The table gives the source something to plan. YAML and Go
+// cannot stand in for YQL here: a source of either describes every object
+// kind of the directories it reads, so leaving the objects out drops them.
+func TestHostKeepsTheGrantsOfAnUndescribedObject_HappyPath(t *testing.T) {
+	t.Setenv(objectAccessSecretEnv, "object-access-v1")
+	c := testcheck.New(t)
+	f := objectAccessFixture(c)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_ = execFixtureSchema(ctx, f.opened.DB, "DROP TABLE `"+path.Join(f.database, f.directory, "anchor")+"`")
+	})
+	undescribed := f.undescribedDocument()
+	hostRun(c, f.directory, "the objects", f.document(f.objects, ""), `(?s).*Schema apply completed successfully.*`)
+
+	planned := hostPlanned(c, f.directory, "sql", undescribed)
+	output, err := hostApplySource(c, f.directory, "sql", undescribed)
+
+	c.Assert(planned, qt.DeepEquals, []string{"row-table-create-operation " + f.directory + ".anchor"}, qt.Commentf("%s", undescribed))
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
+	c.Assert(f.grants(c), qt.DeepEquals, f.expected(""))
+	c.Assert(hostPlanned(c, f.directory, "sql", undescribed), qt.HasLen, 0)
+}
+
 // Ported from the host's TestYDBObjectAccess_ExternalObjects: a user's
 // permissions on an external data source and an external table over it
 // stand once applied, and nothing is left to plan. A data source moved to
