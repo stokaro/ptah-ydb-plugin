@@ -296,7 +296,7 @@ func NormalizeAlteration(input *protocol.ValueInput) (*protocol.NormalizedValue,
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner),
 		CanonicalFormat: definition.CanonicalFormat, CanonicalProjection: bytes.Clone(payload),
 		OperationSemantics: &protocol.OperationSemantics{Impact: impact, Reason: reason,
-			Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Alteration inherits server access policy"}}, nil
+			Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: alteredAccess}}, nil
 }
 
 // DecodeAlteration returns independent native operands after validating the envelope.

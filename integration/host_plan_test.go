@@ -22,8 +22,11 @@ import (
 type plannedUnit struct {
 	SQL    string `json:"sql"`
 	Native struct {
-		Kind    string `json:"kind"`
-		Subject string `json:"subject"`
+		Kind         string `json:"kind"`
+		Subject      string `json:"subject"`
+		Severity     string `json:"severity"`
+		Access       string `json:"access"`
+		AccessReason string `json:"access_reason"`
 	} `json:"native"`
 }
 
@@ -55,6 +58,24 @@ func hostPlanned(c *qt.C, selectors, format, text string, flags ...string) []str
 // no selectors the run reads every directory of the address's database.
 func hostPlannedAt(c *qt.C, address, selectors, format, text string, flags ...string) []string {
 	c.Helper()
+	units := hostPlannedUnitsAt(c, address, selectors, format, text, flags...)
+	heads := make([]string, len(units))
+	for i, unit := range units {
+		heads[i] = unit.head()
+	}
+	return heads
+}
+
+// hostPlannedUnits is hostPlanned's plan as the host reports each unit, with
+// the assessment of a native operation.
+func hostPlannedUnits(c *qt.C, selectors, format, text string, flags ...string) []plannedUnit {
+	c.Helper()
+	return hostPlannedUnitsAt(c, os.Getenv("PTAH_YDB_TEST_URL"), selectors, format, text, flags...)
+}
+
+// hostPlannedUnitsAt is hostPlannedUnits against address.
+func hostPlannedUnitsAt(c *qt.C, address, selectors, format, text string, flags ...string) []plannedUnit {
+	c.Helper()
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
 	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql", "hcl": "schema.hcl"}[format]
@@ -81,9 +102,5 @@ func hostPlannedAt(c *qt.C, address, selectors, format, text string, flags ...st
 	c.Assert(json.Unmarshal(stdout.Bytes(), &report), qt.IsNil, qt.Commentf("%s", stdout.String()))
 	// A plan with nothing to run reports no-changes and no units.
 	c.Assert(report.Outcome, qt.Equals, map[bool]string{true: "dry-run", false: "no-changes"}[len(report.Units) != 0])
-	heads := make([]string, len(report.Units))
-	for i, unit := range report.Units {
-		heads[i] = unit.head()
-	}
-	return heads
+	return report.Units
 }

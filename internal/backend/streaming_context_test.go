@@ -390,7 +390,7 @@ func TestStreamingContextInventoryProvesTheOutside_FailurePath(t *testing.T) {
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Diagnostics, qt.HasLen, 1)
-	c.Assert(result.Diagnostics[0].Message, qt.Contains, `streaming query "outside" outside the command's scope reads a changed input`)
+	c.Assert(result.Diagnostics[0].Message, qt.Contains, `streaming query "other/outside" outside the command's scope reads a changed input; include its directory in the scope so the plan can stop and restart it`)
 	request = contextInventoryRequest(c)
 	unknown := &protocol.ComparisonIdentity{Kind: schema.StreamingQueryProperties, Schema: testcomparison.Part("other"), Name: testcomparison.Part("unread")}
 	request.ContextInventory.Coverage.Subjects = append(request.ContextInventory.Coverage.Subjects, &protocol.ComparisonSubjectCoverage{Kind: unknown.Kind, Subject: unknown,
