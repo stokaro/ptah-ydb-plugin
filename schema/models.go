@@ -106,12 +106,10 @@ var definitions = map[string]*protocol.ValueModel{
 func model(kind string) *protocol.ValueModel { return proto.CloneOf(definitions[kind]) }
 
 func buildModel(kind string) *protocol.ValueModel {
-	graph := make(map[string]any)
-	describeMessage(message(kind).ProtoReflect().Descriptor(), graph)
 	definition := map[string]any{
 		"kind": kind, "schema_version": 1, "encoding": "ydb-protojson",
-		"message":  string(message(kind).ProtoReflect().Descriptor().FullName()),
-		"messages": graph, "excluded_fields": excluded(kind),
+		"message":         string(message(kind).ProtoReflect().Descriptor().FullName()),
+		"messages_sha256": grammarDigest(message(kind).ProtoReflect().Descriptor()), "excluded_fields": excluded(kind),
 		"unknown_fields_and_enum_values": "refused", "representation": "observed",
 		"database_binding":        "offline models retain optional database binding; live capture requires a database",
 		"canonicalization":        "protojson with absent defaults omitted, then modeljson canonical JSON; arrays retain server order",
@@ -166,8 +164,34 @@ func buildModel(kind string) *protocol.ValueModel {
 		CanonicalFormat: kind + "/observed-json-v1"}
 }
 
-// describeMessage embeds the complete native field grammar in the negotiated
-// model. A dependency update that changes its grammar changes its digest too.
+// grammarDigest is the SHA-256 of the complete native field grammar of desc,
+// every message it reaches with each field's number, JSON name, kind,
+// cardinality and presence, and each enum's values, as canonical JSON. A
+// model definition names its grammar by this digest, so a dependency update
+// that changes the grammar changes the definition's digest too.
+//
+// The definition carries the digest rather than the grammar because the host
+// repeats a model's whole definition in every coverage record it sends, and a
+// declaration of a schema carries coverage for each of its tables: with the
+// grammar inline a table cost about 260 KB of a request, and a schema of 15
+// trivial tables passed the 4 MiB message limit of the provider protocol.
+func grammarDigest(desc protoreflect.MessageDescriptor) string {
+	graph := make(map[string]any)
+	describeMessage(desc, graph)
+	encoded, err := json.Marshal(graph)
+	if err != nil {
+		panic(err)
+	}
+	canonical, err := modeljson.Canonical(encoded)
+	if err != nil {
+		panic(err)
+	}
+	digest := sha256.Sum256(canonical)
+	return hex.EncodeToString(digest[:])
+}
+
+// describeMessage writes the complete native field grammar of desc into
+// graph, keyed by message name (see grammarDigest).
 func describeMessage(desc protoreflect.MessageDescriptor, graph map[string]any) {
 	name := string(desc.FullName())
 	if _, found := graph[name]; found {

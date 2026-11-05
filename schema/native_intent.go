@@ -71,11 +71,9 @@ func nativeIntentMessage(kind string) proto.Message {
 
 func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	target := nativeIntentMessage(kind)
-	graph := make(map[string]any)
-	describeMessage(target.ProtoReflect().Descriptor(), graph)
 	definition := map[string]any{
 		"kind": kind, "representation": "desired", "schema_version": 1, "encoding": "ydb-protojson",
-		"message": string(target.ProtoReflect().Descriptor().FullName()), "messages": graph,
+		"message": string(target.ProtoReflect().Descriptor().FullName()), "messages_sha256": grammarDigest(target.ProtoReflect().Descriptor()),
 		"unknown_fields_and_enum_values": "refused", "null_settings": "refused recursively except native typed null literals",
 		"canonicalization":     "protojson followed by modeljson canonical JSON; indexes, implementations, feeds and consumers sorted by name; columns and keys retain order",
 		"index_implementation": "complete typed requirements on server-owned implementation tables, with columns and native settings, or none for a declared vector or full-text index; not independent tables; mutable sequence positions excluded",

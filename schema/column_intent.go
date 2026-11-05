@@ -21,11 +21,9 @@ func ColumnDesiredModel() *protocol.ValueModel { return proto.CloneOf(columnDesi
 var columnDesiredModel = buildColumnDesiredModel()
 
 func buildColumnDesiredModel() *protocol.ValueModel {
-	graph := make(map[string]any)
-	describeMessage((&native.ColumnIntent{}).ProtoReflect().Descriptor(), graph)
 	definition := map[string]any{
 		"kind": ColumnProperties, "representation": "desired", "schema_version": 1,
-		"encoding": "ydb-protojson", "message": "ptah.ydb.native.ColumnIntent", "messages": graph,
+		"encoding": "ydb-protojson", "message": "ptah.ydb.native.ColumnIntent", "messages_sha256": grammarDigest((&native.ColumnIntent{}).ProtoReflect().Descriptor()),
 		"unknown_fields_and_enum_values": "refused", "null_settings": "refused",
 		"canonicalization": "protojson followed by modeljson canonical JSON; encoding order retained",
 		"default_intent":   "absent default requests the native no-default setting; normalization preserves omission; dropDefault must be true; literal and sequence are mutually exclusive",

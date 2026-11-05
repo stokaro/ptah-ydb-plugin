@@ -28,11 +28,9 @@ func TableDesiredModel() *protocol.ValueModel { return proto.CloneOf(tableDesire
 var tableDesiredModel = buildTableDesiredModel()
 
 func buildTableDesiredModel() *protocol.ValueModel {
-	graph := make(map[string]any)
-	describeMessage((&native.RowTableIntent{}).ProtoReflect().Descriptor(), graph)
 	definition := map[string]any{
 		"kind": TableProperties, "representation": "desired", "schema_version": 1,
-		"encoding": "ydb-protojson", "message": "ptah.ydb.native.RowTableIntent", "messages": graph,
+		"encoding": "ydb-protojson", "message": "ptah.ydb.native.RowTableIntent", "messages_sha256": grammarDigest((&native.RowTableIntent{}).ProtoReflect().Descriptor()),
 		"unknown_fields_and_enum_values": "refused", "null_settings": "refused recursively, including map entries",
 		"canonicalization": "protojson followed by modeljson canonical JSON; key, family and grant order retained",
 		"settings":         "ordered primary key, TTL, storage, column families, attributes, partitioning policy, bloom filter, read replicas, tiering, temporary lifetime and the starting layout of a new table",

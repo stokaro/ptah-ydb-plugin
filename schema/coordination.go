@@ -67,9 +67,7 @@ func buildCoordinationDesiredModel() *protocol.ValueModel {
 	if err := json.Unmarshal([]byte(definition), &document); err != nil {
 		panic(err)
 	}
-	graph := make(map[string]any)
-	describeMessage((&native.AccessIntent{}).ProtoReflect().Descriptor(), graph)
-	document["access_definition"] = graph
+	document["access_definition_sha256"] = grammarDigest((&native.AccessIntent{}).ProtoReflect().Descriptor())
 	document["access_contract"] = "snake_case JSON fields; missing access is unmanaged; complete direct and effective permission sets; owner omission is unmanaged; " +
 		"comparison and execution refuse unsatisfied constraints, never grant or infer inheritance"
 	document["conversion"] = "offline; native unspecified settings stay omitted; preserves access; source holder provenance cannot become observed state"
