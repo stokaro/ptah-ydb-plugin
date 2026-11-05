@@ -408,10 +408,11 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false,
 		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_index_on_existing_table": false, "index_rename": true,
 		"returning_clause": true, "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
+		"column_family_cache_mode": true,
 	})
 	// 25.1 takes none of the later changefeed options and no transfer, and
-	// 25.1 to 25.3 take no availability period on a consumer and no secret
-	// path on a data source or a replication.
+	// 25.1 to 25.3 take no availability period on a consumer, no secret path
+	// on a data source or a replication, and no family cache mode.
 	c.Assert(sessionCapabilities("25.1.4.7"), qt.DeepEquals, map[string]bool{
 		"transactional_ddl": false, "ddl_inside_transaction": false, "secrets": false, "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
 		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true, "relative_grant_paths": false,
@@ -425,6 +426,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"local_bloom_indexes": false, "local_ngram_indexes": false, "local_min_max_indexes": false,
 		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_index_on_existing_table": false, "index_rename": true,
 		"returning_clause": false, "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
+		"column_family_cache_mode": false,
 	})
 	// Each option arrives on the line the host's presets name.
 	for _, test := range []struct {
@@ -454,6 +456,8 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		{"26.2.1", "local_ngram_indexes", true},
 		{"25.2.1", "returning_clause", false},
 		{"25.3.1", "returning_clause", true},
+		{"25.3.1", "column_family_cache_mode", false},
+		{"25.4.1", "column_family_cache_mode", true},
 	} {
 		c.Assert(sessionCapabilities(test.version)[test.key], qt.Equals, test.want, qt.Commentf("%s on %s", test.key, test.version))
 	}

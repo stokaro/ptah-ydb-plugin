@@ -172,9 +172,9 @@ func TestCorpusShape(t *testing.T) {
 		c.Assert(r.golden.Outcome == "refused", qt.Equals, isRefused(r.name), qt.Commentf("%s: host outcome %q", r.name, r.golden.Outcome))
 	}
 	c.Assert(len(corpus(c, isRefused)) >= 150, qt.IsTrue)
-	c.Assert(len(corpus(c, isDeferred)) >= 12, qt.IsTrue)
+	c.Assert(len(corpus(c, isDeferred)) >= 10, qt.IsTrue)
 	c.Assert(len(corpus(c, isLater)) >= 11, qt.IsTrue)
-	c.Assert(len(corpus(c, isAccepted)) >= 101, qt.IsTrue)
+	c.Assert(len(corpus(c, isAccepted)) >= 103, qt.IsTrue)
 }
 
 // TestDifferential_HappyPath decodes every input the host accepts and requires
@@ -225,8 +225,6 @@ var elsewhere = map[string]string{
 // refusals names the inputs whose key or attribute the provider claims and
 // refuses by name, with the words of the refusal.
 var refusals = map[string]string{
-	"yaml-deferred-family-cache-mode":           "cache_mode is not supported by the YDB provider yet",
-	"go-deferred-family-cache-mode":             "cache_mode is not supported by the YDB provider yet",
 	"go-deferred-family-fields-other-table":     "fields is not supported by the YDB provider yet",
 	"yaml-deferred-ttl-platform-other-property": "platform.ydb.some_other_setting is not supported by the YDB provider yet",
 	"go-deferred-index-partitioning":            "auto_partitioning_by_load is not supported by the YDB provider yet",

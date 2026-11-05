@@ -122,7 +122,7 @@ func tableDiffers(want *native.RowTableIntent, held *native.DescribeTableResult)
 		if current == nil {
 			return true
 		}
-		if data, compression := familyDelta(family, current); data || compression {
+		if data, compression, cacheMode := familyDelta(family, current); data || compression || cacheMode {
 			return true
 		}
 		if family.GetKeepInMemory() == Ydb.FeatureFlag_ENABLED && current.GetKeepInMemory() != Ydb.FeatureFlag_ENABLED {
