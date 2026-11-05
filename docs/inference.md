@@ -1,7 +1,26 @@
+---
+title: Embedding generations on YDB
+description: The vector index a YDB embedding generation builds, and the refusals particular to YDB.
+type: reference
+audience:
+  - application-developer
+  - database-engineer
+readerQuestion: "How does ptah inference index an embedding generation on YDB, and why does it refuse a specification?"
+goal: "Write an embedding specification YDB accepts and fix one it refuses."
+sourceOfTruth:
+  - internal/embedstore
+  - stokaro/ptah#4204
+generated: false
+overlaps: []
+disposition: keep
+sidebar:
+  order: 4
+---
+
 # Embedding generations on YDB
 
 `ptah inference` builds an embedding generation on YDB through this provider's
-[embedding store](https://github.com/stokaro/ptah-ydb-plugin#embedding-store).
+[embedding store](../README.md#embedding-store).
 Ptah's [inference documentation](https://docs.ptah.run/edge/inference/overview/)
 describes the lifecycle for every engine; this page gives the YDB index and the
 refusals particular to YDB.
