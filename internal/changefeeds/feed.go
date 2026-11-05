@@ -325,7 +325,7 @@ func durationOf(text string) (*durationpb.Duration, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &durationpb.Duration{Seconds: int64(value)}, nil
+	return &durationpb.Duration{Seconds: int64(value)}, nil // #nosec G115 -- FeedSeconds refuses an interval longer than YDB's Interval holds, which is below 2^32 seconds
 }
 
 // seconds reads a duration as whole seconds, zero for none, and refuses a
@@ -337,7 +337,7 @@ func seconds(subject string, duration *durationpb.Duration) (uint64, error) {
 	if duration.GetSeconds() < 0 || duration.GetNanos() != 0 {
 		return 0, fmt.Errorf("%s is %s, which is not a whole number of seconds a declaration can hold", subject, duration.AsDuration())
 	}
-	return uint64(duration.GetSeconds()), nil
+	return uint64(duration.GetSeconds()), nil // #nosec G115 -- a negative count is refused above
 }
 
 // interval writes a duration as the interval a declaration takes, empty for

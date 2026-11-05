@@ -102,7 +102,7 @@ func (s *settings) finish() error {
 		enabled.Tiers = []*native.ColumnTTLTier{{ApplyAfterSeconds: uint64(mode.DateTypeColumn.GetExpireAfterSeconds()), Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}}}
 	case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
 		enabled.Column = mode.ValueSinceUnixEpoch.GetColumnName()
-		enabled.ColumnUnit = uint64(mode.ValueSinceUnixEpoch.GetColumnUnit())
+		enabled.ColumnUnit = uint64(mode.ValueSinceUnixEpoch.GetColumnUnit()) // #nosec G115 -- a column unit is one of YDB's enum numbers, 0 to 4
 		enabled.Tiers = []*native.ColumnTTLTier{{ApplyAfterSeconds: uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds()), Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}}}
 	default:
 		return fmt.Errorf("YDB TTL requires an explicit mode")
@@ -374,7 +374,7 @@ func (s *settings) setTTL(values map[string]string) error {
 	if s.intent.TtlSettings != nil {
 		return fmt.Errorf("it declares a TTL twice")
 	}
-	// ttlgrammar bounds the interval by MaxSeconds, which fits 32 bits.
+	// #nosec G115 -- ttlgrammar bounds the interval by MaxSeconds, which fits 32 bits.
 	expire := uint32(seconds)
 	if canonicalUnit == "" {
 		s.intent.TtlSettings = &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_DateTypeColumn{

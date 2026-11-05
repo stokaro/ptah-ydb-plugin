@@ -47,6 +47,7 @@ func (r *capture) start() int {
 }
 func (r *capture) position(index int) *protocol.SourcePosition {
 	prefix := r.source[:index]
+	// #nosec G115 -- the position is within a test fixture of a few kilobytes
 	return &protocol.SourcePosition{ByteOffset: uint64(index), Line: uint32(strings.Count(prefix, "\n") + 1), Column: uint32(index - strings.LastIndex(prefix, "\n"))}
 }
 func (r *capture) span(start int) *protocol.SourceSpan {

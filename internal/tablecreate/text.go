@@ -309,14 +309,14 @@ func ttlSetting(ttl *Ydb_Table.TtlSettings) (string, error) {
 	}
 	switch mode := ttl.GetMode().(type) {
 	case *Ydb_Table.TtlSettings_DateTypeColumn:
-		return `Interval("` + intervalText(uint64(mode.DateTypeColumn.GetExpireAfterSeconds())) + `") ON ` +
+		return `Interval("` + intervalText(mode.DateTypeColumn.GetExpireAfterSeconds()) + `") ON ` +
 			QuoteIdentifier(mode.DateTypeColumn.GetColumnName()), nil
 	case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
 		unit, found := epochUnits[mode.ValueSinceUnixEpoch.GetColumnUnit()]
 		if !found {
 			return "", noTextForm("the TTL counts in a unit YQL does not name")
 		}
-		return `Interval("` + intervalText(uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds())) + `") ON ` +
+		return `Interval("` + intervalText(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds()) + `") ON ` +
 			QuoteIdentifier(mode.ValueSinceUnixEpoch.GetColumnName()) + " AS " + unit, nil
 	default:
 		return "", noTextForm("the TTL reads its column in a mode YQL does not name")
@@ -334,7 +334,7 @@ var epochUnits = map[Ydb_Table.ValueSinceUnixEpochModeSettings_Unit]string{
 
 // intervalText writes seconds as an ISO 8601 duration of days, hours, minutes
 // and seconds.
-func intervalText(seconds uint64) string {
+func intervalText(seconds uint32) string {
 	return ydbtype.IntervalText(int64(seconds) * 1_000_000)
 }
 

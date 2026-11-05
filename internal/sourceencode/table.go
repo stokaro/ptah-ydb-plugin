@@ -405,6 +405,7 @@ func (f *tableFacets) ttl() []*protocol.SourceEntry {
 			column, seconds = mode.GetColumnName(), uint64(mode.GetExpireAfterSeconds())
 		} else {
 			mode := settings.GetValueSinceUnixEpoch()
+			// #nosec G115 -- a column unit is one of YDB's enum numbers, 0 to 4
 			column, seconds, unit = mode.GetColumnName(), uint64(mode.GetExpireAfterSeconds()), unitNames[uint64(mode.GetColumnUnit())]
 		}
 	case f.storage != nil && deletesOnly(f.storage):

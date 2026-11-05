@@ -218,6 +218,7 @@ func checkColumns(source *native.MonitoringColumnSchema, table *native.ColumnTab
 			typeValue = typeValue.GetOptionalType().GetItem()
 		}
 		_, primitive := typeValue.GetType().(*Ydb.Type_TypeId)
+		// #nosec G115 -- a primitive type id is one of YDB's positive enum numbers
 		if err != nil || !primitive || column.Name != nativeColumn.Name || column.Type != spelling ||
 			column.NotNull == nullable || column.TypeId != uint64(typeValue.GetTypeId()) {
 			return nil, nil, fmt.Errorf("YDB column type or nullability disagrees across descriptions")
@@ -345,6 +346,7 @@ func checkTTL(described *native.TtlSettings, observed *native.ColumnTTLPolicy) e
 	case *native.TtlSettings_DateTypeColumn:
 		held = []tier{{column: mode.DateTypeColumn.GetColumnName(), seconds: uint64(mode.DateTypeColumn.GetExpireAfterSeconds()), delete: true}}
 	case *native.TtlSettings_ValueSinceUnixEpoch:
+		// #nosec G115 -- a column unit is one of YDB's enum numbers, 0 to 4
 		held = []tier{{column: mode.ValueSinceUnixEpoch.GetColumnName(), unit: uint64(mode.ValueSinceUnixEpoch.GetColumnUnit()),
 			seconds: uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds()), delete: true}}
 	case *native.TtlSettings_TieredTtl:
@@ -354,6 +356,7 @@ func checkTTL(described *native.TtlSettings, observed *native.ColumnTTLPolicy) e
 			case *native.TtlTier_DateTypeColumn:
 				read = tier{column: expression.DateTypeColumn.GetColumnName(), seconds: uint64(expression.DateTypeColumn.GetExpireAfterSeconds())}
 			case *native.TtlTier_ValueSinceUnixEpoch:
+				// #nosec G115 -- a column unit is one of YDB's enum numbers, 0 to 4
 				read = tier{column: expression.ValueSinceUnixEpoch.GetColumnName(), unit: uint64(expression.ValueSinceUnixEpoch.GetColumnUnit()),
 					seconds: uint64(expression.ValueSinceUnixEpoch.GetExpireAfterSeconds())}
 			default:

@@ -343,6 +343,7 @@ func refusals(capabilities map[string]bool, changes []lowered) []*protocol.Plann
 			refused = refusal(capabilities, change, planned)
 		}
 		if refused != nil {
+			// #nosec G115 -- input is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 			diagnostics = append(diagnostics, &protocol.PlanningDiagnostic{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: change.kind, Object: display(change.subject),
 				Message: refused.Error(), Input: &protocol.PlanningDiagnostic_Change{Change: uint32(change.input)}})
 		}
@@ -523,6 +524,7 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 }
 
 func refused(change lowered, err error) *protocol.PlannedFeatures {
+	// #nosec G115 -- input is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: change.kind, Object: display(change.subject),
 		Message: err.Error(), Input: &protocol.PlanningDiagnostic_Change{Change: uint32(change.input)}}}}
 }

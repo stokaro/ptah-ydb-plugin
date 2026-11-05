@@ -61,6 +61,7 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 	tokenCount := 0
 	emit := func(end int) {
 		safety, reason := safetyOf(words)
+		// #nosec G115 -- offsets and lines are within the request's source, which runtime.MaxMessageBytes bounds to 4 MiB
 		file.Statements = append(file.Statements, &protocol.SQLStatement{Start: uint32(start), End: uint32(end), Line: uint32(startLine), Words: words, SourceWords: original, Canonical: strings.Join(words, " "), Safety: safety, Reason: reason})
 		start = -1
 		words = nil
@@ -127,7 +128,7 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 		case len(words) > 0:
 			emit(len(source))
 		case len(file.Statements) > 0:
-			file.Statements[len(file.Statements)-1].End = uint32(len(source))
+			file.Statements[len(file.Statements)-1].End = uint32(len(source)) // #nosec G115 -- runtime.MaxMessageBytes bounds the request's source to 4 MiB
 		default:
 			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB SQL analysis requires an executable statement beside comments or terminators")
 		}

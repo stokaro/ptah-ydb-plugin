@@ -177,6 +177,7 @@ func TestReply_RefusedLoad(t *testing.T) {
 			c.Assert(reply.GetDiagnostics(), qt.HasLen, 1)
 			want := expectedRefusal(c, r.golden.Grammar.Error)
 			diagnostic := reply.GetDiagnostics()[0]
+			// #nosec G115 -- an offset into a golden test document of a few kilobytes
 			got := hostRefusal{Document: documentIndex(c, diagnostic.GetDocumentId()), Offset: int(diagnostic.GetSpan().GetStart().GetByteOffset()),
 				Message: diagnostic.GetMessage()}
 			got.Offset = map[bool]int{true: -1, false: got.Offset}[want.Offset < 0]

@@ -721,6 +721,7 @@ func cloneEffects(effects []*protocol.PlanningEffect) []*protocol.PlanningEffect
 	return result
 }
 func refused(index int, message string) *protocol.PlannedFeatures {
+	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE,
 		Kind: schema.TableProperties, Message: message, Input: &protocol.PlanningDiagnostic_Parent{Parent: uint32(index)}}}}
 }
