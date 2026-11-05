@@ -32,7 +32,7 @@ func PrepareTables(ctx context.Context, request *protocol.PrepareTablesRequest) 
 		}
 		key, indexes, err := compiledTable(owner, input.Desired, request.Capabilities)
 		if err != nil {
-			return nil, err
+			return nil, declarationRefusal(owner, err)
 		}
 		prepared := &protocol.PreparedTable{
 			Subject: proto.CloneOf(input.Subject), ColumnPrimaryKeysPrepared: true,

@@ -42,9 +42,11 @@ type Gate struct {
 // through the dynamic configuration, the same CREATE TABLE succeeds).
 //
 // The host maps more flags than these. The provider reports only the
-// capabilities it owns, because the host plans the others itself: an
-// index_rename the host read as true would make the host plan a RENAME INDEX
-// that the provider's alteration does not carry out.
+// capabilities it owns, because the host plans the others itself.
+//
+// index_rename follows EnableMoveIndex, on by default on every line from
+// 25.1.4.7 to 26.2.1.14. With it off, YDB refuses a rename with `Move index is
+// not supported yet` and the index keeps its name.
 //
 // external_data_sources follows EnableExternalDataSources and
 // external_object_replace EnableReplaceIfExistsForExternalEntities, as the
@@ -58,6 +60,7 @@ var gates = []Gate{
 	// `Adding a unique index to an existing table is disabled`, which keeps
 	// the preset's false.
 	{Key: "unique_index_on_existing_table", Flag: "EnableAddUniqueIndex"},
+	{Key: "index_rename", Flag: "EnableMoveIndex"},
 	{Key: "alter_column_default", Flag: "EnableSetDropDefaultValue"},
 	{Key: "add_column_with_default", Flag: "EnableAddColumsWithDefaults"},
 	{Key: "wide_date_time_types", Flag: "EnableTableDatetime64"},

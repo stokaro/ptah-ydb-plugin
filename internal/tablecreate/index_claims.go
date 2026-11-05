@@ -39,6 +39,15 @@ func claimIndexSteps(owner *protocol.Reference, table *protocol.PlanningTable, s
 	var changes []indexChange
 	var declared *Ydb_Table.CreateTableRequest
 	for _, step := range steps {
+		if rename := step.GetRenamedIndex(); rename != nil && step.GetParent() != nil && provider.CompareIdentities(step.GetParent(), table.Subject) == 0 {
+			change, reason := claimIndexRename(table, rename, held, caps)
+			if reason != "" {
+				return nil, reason, nil
+			}
+			change.source = step
+			changes = append(changes, change)
+			continue
+		}
 		name, action, shaped := indexFootprint(step, table.Subject)
 		if !shaped {
 			continue
@@ -77,6 +86,28 @@ func claimIndexSteps(owner *protocol.Reference, table *protocol.PlanningTable, s
 		return boolOrder(a.add != nil) - boolOrder(b.add != nil)
 	})
 	return changes, "", nil
+}
+
+// IndexRenameCapability is an index renamed in place, as the host's
+// vocabulary spells it. YDB renames one with EnableMoveIndex on, its default
+// on every line from 25.1 to 26.2.
+const IndexRenameCapability = "index_rename"
+
+// claimIndexRename reads the host's step that renames an index of table in
+// place. The index keeps its definition and settings under the new name. A
+// session reports index_rename only with EnableMoveIndex on, and YDB refuses
+// the rename without it (`Move index is not supported yet`), so a rename on a
+// session without the capability is refused before dispatch. A non-empty
+// reason refuses the request.
+func claimIndexRename(table *protocol.PlanningTable, rename *protocol.CommonIndexRename, held *native.IndexObservations, caps map[string]bool) (indexChange, string) {
+	if !caps[IndexRenameCapability] {
+		return indexChange{}, fmt.Sprintf("The host renames index %q to %q, and this cluster renames no index in place: EnableMoveIndex is off", rename.GetFrom(), rename.GetTo())
+	}
+	description := heldIndex(table.Current, held, rename.GetFrom())
+	if description == nil {
+		return indexChange{}, fmt.Sprintf("The host renames index %q, which the table's index read does not hold", rename.GetFrom())
+	}
+	return indexChange{rename: &indexRename{held: description, to: rename.GetTo()}}, ""
 }
 
 // heldIndex is the index named name the table holds: as the native index read
@@ -120,6 +151,23 @@ func indexIntentOf(index *Ydb_Table.TableIndex) *native.IndexIntent {
 		result.Type = &native.IndexIntent_GlobalUniqueIndex{GlobalUniqueIndex: &native.GlobalUniqueIndex{}}
 	default:
 		result.Type = &native.IndexIntent_GlobalIndex{GlobalIndex: &native.GlobalIndex{}}
+	}
+	return result
+}
+
+// settingsAfterAdditions orders the addition of an index before the change
+// that gives it its declared settings, which needs the index to exist.
+func settingsAfterAdditions(steps []*indexStep, settings []*indexSettingsStep) []*protocol.PlanningDependency {
+	var result []*protocol.PlanningDependency
+	for _, add := range steps {
+		if add.change.add == nil {
+			continue
+		}
+		for _, change := range settings {
+			if change.change.held.GetName() == add.change.name() {
+				result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(add.id), After: proto.CloneOf(change.id)})
+			}
+		}
 	}
 	return result
 }

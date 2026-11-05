@@ -8,6 +8,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -146,4 +147,65 @@ func TestIndexClaims_DropAnIndexTheHostRead(t *testing.T) {
 	held, err := protojson.Marshal(alteration.HeldIndexes[0])
 	c.Assert(err, qt.IsNil)
 	c.Assert(string(held), qt.JSONEquals, jsonValue(c, `{"name":"by_label","indexColumns":["label"],"dataColumns":["extra"],"globalAsyncIndex":{}}`))
+}
+
+// commonRenameStep is the host's step that renames index from of
+// app.records to to in place: it reads the table, drops from and creates to.
+func commonRenameStep(id, from, to string) *protocol.CommonPlanningStep {
+	step := commonStep(id, tableSubject(), "",
+		&protocol.PlanningEffect{Subject: tableSubject(), Action: protocol.PlanningEffect_READ},
+		&protocol.PlanningEffect{Subject: indexSubject(from), Action: protocol.PlanningEffect_DROP},
+		&protocol.PlanningEffect{Subject: indexSubject(to), Action: protocol.PlanningEffect_CREATE})
+	step.RenamedIndex = &protocol.CommonIndexRename{From: from, To: to}
+	return step
+}
+
+// renameRequest alters app.records, which holds old_label and declares it as
+// by_label, on a host that lists planning.index-renames, with the host's
+// rename step and the session's index_rename as rename states it.
+func renameRequest(c *qt.C, rename bool) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	request := commonIndexRequest(c, heldIndexes(indexJSON("globalIndex", "old_label", byLabel, nil)),
+		[]*protocol.DeclaredIndex{{Name: "by_label", Fields: []string{"label"}, IncludeColumns: []string{"extra"}}},
+		commonRenameStep("rename", "old_label", "by_label"))
+	request.TargetFeatures = append(request.TargetFeatures, provider.IndexRenamesFeature)
+	request.Tables[0].Current.Indexes = []*protocol.ObservedIndex{{Name: "old_label", TableName: "records", Schema: "app", Columns: []string{"label"}, IncludeColumns: []string{"extra"}}}
+	request.Capabilities[tablecreate.IndexRenameCapability] = rename
+	return request
+}
+
+// The host's step that renames an index is replaced by one alteration that
+// renames it, which keeps the index, and the step keeps the host's footprint.
+func TestIndexClaims_RenameInPlace_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := renameRequest(c, true)
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(rewrites(plan), qt.DeepEquals, []string{"rename => row-table-rename-index/000000"})
+	step := plan.Contributions[0].Steps[0]
+	c.Assert(alterationJSON(c, step), qt.JSONEquals, jsonValue(c, `{"renameIndexes":[{"sourceName":"old_label","destinationName":"by_label"}]}`))
+	c.Assert(step.Metadata.Impact, qt.Equals, protocol.ChangeSemantics_BEHAVIORAL)
+	c.Assert(step.Metadata.Effects, qt.HasLen, 3)
+	for n, effect := range request.CommonSteps[0].Metadata.Effects {
+		c.Assert(proto.Equal(step.Metadata.Effects[n], effect), qt.IsTrue)
+	}
+	alteration, err := tablecreate.DecodeAlteration(step.Operation.Value.Value)
+	c.Assert(err, qt.IsNil)
+	c.Assert(alteration.HeldIndexes, qt.HasLen, 1)
+	c.Assert(alteration.HeldIndexes[0].Name, qt.Equals, "old_label")
+	text, err := tablecreate.AlterationStatement("app/records", alteration)
+	c.Assert(err, qt.IsNil)
+	c.Assert(text, qt.Equals, "ALTER TABLE `app/records` RENAME INDEX `old_label` TO `by_label`;")
+}
+
+// A rename the cluster cannot make is refused before dispatch, in the words
+// of the flag that decides it.
+func TestIndexClaims_RenameInPlace_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	plan, err := backend.New().PlanFeatures(c.Context(), renameRequest(c, false))
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].Message, qt.Equals, `The host renames index "old_label" to "by_label", and this cluster renames no index in place: EnableMoveIndex is off`)
+	c.Assert(plan.Contributions, qt.HasLen, 0)
 }
