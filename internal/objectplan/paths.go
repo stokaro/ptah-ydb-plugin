@@ -315,15 +315,8 @@ func checkPathTables(request *protocol.PlanFeaturesRequest, family Family, item 
 		if err := validatePath(family, table.Subject, item.input.Subject); err != nil {
 			return err
 		}
-		at := pathKey(table.Subject)
-		switch {
-		case ancestor(table.Subject, item.input.Subject) && item.action == protocol.PlanningEffect_DROP && table.Action == protocol.PlanningTable_CREATE:
-			return directoryKept(pathKey(item.input.Subject), at)
-		case ancestor(item.input.Subject, table.Subject) && item.action == protocol.PlanningEffect_CREATE && table.Action == protocol.PlanningTable_DROP:
-			return directoryKept(at, pathKey(item.input.Subject))
-		case ancestor(table.Subject, item.input.Subject) && (table.Action != protocol.PlanningTable_DROP || !occupied.freed[at]),
-			ancestor(item.input.Subject, table.Subject) && (table.Action != protocol.PlanningTable_CREATE || !occupied.filled[at]):
-			return fmt.Errorf("captured table overlaps the directory path of a %s", family.Noun)
+		if err := checkTableAboveOrBelow(family, item, table, occupied); err != nil {
+			return err
 		}
 		if !samePath(table.Subject, item.input.Subject) {
 			continue
@@ -334,6 +327,25 @@ func checkPathTables(request *protocol.PlanFeaturesRequest, family Family, item 
 			item.action == protocol.PlanningEffect_ALTER {
 			return fmt.Errorf("captured table lifecycle conflicts with the path of a %s", family.Noun)
 		}
+	}
+	return nil
+}
+
+// checkTableAboveOrBelow refuses a captured table above item's path that is
+// not dropped by a common step the item's creation follows, and one below that
+// is not created by a common step the item's drop precedes. A table created
+// above a drop, or dropped below a creation, keeps a directory there and is
+// refused with that reason.
+func checkTableAboveOrBelow(family Family, item change, table *protocol.PlanningTable, occupied occupants) error {
+	at := pathKey(table.Subject)
+	switch {
+	case ancestor(table.Subject, item.input.Subject) && item.action == protocol.PlanningEffect_DROP && table.Action == protocol.PlanningTable_CREATE:
+		return directoryKept(pathKey(item.input.Subject), at)
+	case ancestor(item.input.Subject, table.Subject) && item.action == protocol.PlanningEffect_CREATE && table.Action == protocol.PlanningTable_DROP:
+		return directoryKept(at, pathKey(item.input.Subject))
+	case ancestor(table.Subject, item.input.Subject) && (table.Action != protocol.PlanningTable_DROP || !occupied.freed[at]),
+		ancestor(item.input.Subject, table.Subject) && (table.Action != protocol.PlanningTable_CREATE || !occupied.filled[at]):
+		return fmt.Errorf("captured table overlaps the directory path of a %s", family.Noun)
 	}
 	return nil
 }
