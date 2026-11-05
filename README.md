@@ -116,6 +116,10 @@ PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
   GOWORK=off go test -race -tags integration ./integration -count=1 -v
 ```
 
+A test whose dev database must be on a server other than the target's reads a
+second isolated server from `PTAH_YDB_OTHER_TEST_URL` and skips without it. CI
+starts the second server beside the first.
+
 The test servers enable `enable_vector_index` and
 `enable_external_data_sources`; the 26.2 fixture also enables
 `enable_add_unique_index`. A full-text index is refused on 25.1, and the
@@ -151,7 +155,19 @@ The host and provider are built against the published SDK pin with
 run builds the newest published Ptah release whose provider contract this
 provider can run on (`scripts/resolve-host.sh`); it is skipped with a notice
 while no release speaks that contract. A second, non-blocking run builds Ptah's
-master branch, so a host change that breaks this provider shows up early. This
+master branch, so a host change that breaks this provider shows up early. A
+third run, on each image, builds a host a run names: a branch, tag or commit of
+stokaro/ptah, given as the `host_ref` input of a manual run or as the first line
+of `.github/host-ref` in a pull request whose tests need a host change master
+does not have yet (`scripts/live-lines.sh`). It blocks, because the run asked
+for that host, and a ref that names no commit fails it. Each run also builds
+the host's `ptah-compat` from the same checkout and names it in
+`PTAH_HOST_COMPAT_TEST_BIN`. The `TestHostCompat` tests run it with
+`PTAH_PROVIDER_CONFIG` naming this provider's manifest, which is how
+ptah-compat takes one. They skip, with the binary's answer, where ptah-compat
+still builds in a YDB engine of its own, which claims `ydb` and refuses this
+provider's registration; a host without the built-in engine
+(stokaro/ptah#5298) runs them. This
 repository owns the YDB end-to-end, live and parity tests; Ptah's own CI checks
 the provider contract only on its in-tree fixture provider. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
