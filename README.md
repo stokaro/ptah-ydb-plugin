@@ -1734,9 +1734,11 @@ The offline planner preserves complete before and after operands. Each step
 has an object effect, a shared `ydb.scheme-path` effect, and a forbidden SQL
 transaction requirement. The path effect names no database, as the host names
 a path of the session's database. Table-to-node and node-to-table replacements
-require an explicit common path handoff. Unsupported common footprints and
-overlapping parent/descendant paths are refused until a directory lifecycle is
-captured. The host's window markers (such as `common/feature-creations`) and the
+require an explicit common path handoff. A view the host creates or drops
+occupies its path as a table does: a node beside it needs no order, and a node
+that takes the path of a dropped view comes after the drop. Unsupported common
+footprints and overlapping parent/descendant paths are refused until a
+directory lifecycle is captured. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
 the change is refused. A parent directory that does not exist holds no node,
