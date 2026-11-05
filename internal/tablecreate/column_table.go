@@ -28,6 +28,11 @@ const ColumnOperationKind = schema.ProviderID + "/column-table-create-operation"
 // OLAP tables`).
 const TieredTTLCapability = "tiered_ttl"
 
+// CreatedDataChannelCount is the data channel count YDB gives every column
+// table the provider creates. No statement sets it, so a declaration that
+// states no count is a declaration of this one.
+const CreatedDataChannelCount = 64
+
 var columnOperationModel = buildColumnOperationModel()
 
 // ColumnModel binds the column-table creation payload, its precondition and its
@@ -112,8 +117,8 @@ func CompileColumnTable(owner *protocol.Reference, table *protocol.DeclaredTable
 	if captured.storage.GetTtl().GetDisabled() != nil {
 		result.Ttl = nil
 	}
-	if count := captured.storage.DataChannelCount; count != 0 && count != 64 {
-		return nil, unsupported("a column table's data channel count is set by the server; the provider creates tables with its 64")
+	if count := captured.storage.DataChannelCount; count != 0 && count != CreatedDataChannelCount {
+		return nil, unsupported("a column table's data channel count is set by the server; the provider creates tables with its %d", CreatedDataChannelCount)
 	}
 	if err := compileColumnTableColumns(result, table, captured, caps); err != nil {
 		return nil, err

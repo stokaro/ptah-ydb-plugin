@@ -355,6 +355,50 @@ func TestHostLocalIndexesFromGo_HappyPath(t *testing.T) {
 	})
 }
 
+// The host's Go export of a column table, as its embedded engine wrote it at
+// 74de0b65b, on a line with local indexes (26.2): `ptah introspect` writes the
+// table directive with the hash key and the shard count, and each local index
+// with its settings. The data channels YDB gives the table, and the storage
+// and the encodings it gives each index, are what a declaration without them
+// creates, so the export loses nothing, and the file applied back finds the
+// table synced, without local indexes and with them.
+func TestHostIntrospectsAColumnTable_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	_, session := accessSession(c)
+	requireSessionCapability(c, session, tablecreate.LocalBloomIndexesCapability)
+	requireSessionCapability(c, session, tablecreate.LocalNgramIndexesCapability)
+	requireHostNegotiates(c, provider.IndexKindsFeature)
+	opened, directory, database := lockFixture(c)
+	absolute := path.Join(database, directory, "events")
+	c.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
+	})
+	// The provider spells the store as its README does; the host's embedded
+	// engine wrote store="column", which reads the same.
+	table := `//ptah:schema:table name="events" schema="` + directory + `" store="COLUMN" partition_by_hash="id" column_shards="1"`
+	for _, step := range []struct {
+		name, indexes string
+		want          []string
+	}{
+		{"without local indexes", "", []string{table}},
+		{"with local indexes", bloom("bf", "0.01") + ngram, []string{table,
+			`//ptah:schema:index name="bf" fields="body" type="bloom_filter" false_positive_probability="0.01"`,
+			`//ptah:schema:index name="ng" fields="body" type="bloom_ngram_filter" false_positive_probability="0.1" ngram_size="3" case_sensitive="true"`}},
+	} {
+		created, err := hostApply(c, directory, eventsTable(directory, step.indexes))
+		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", step.name, created))
+		written := introspectDirectory(c, directory)
+		for _, line := range step.want {
+			c.Assert(written, qt.Contains, line+"\n", qt.Commentf("%s: %s", step.name, written))
+		}
+		output, err := hostApply(c, directory, written)
+		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", step.name, output))
+		c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`, qt.Commentf("%s", step.name))
+	}
+}
+
 // The host's column store tests on a line without local indexes (25.1): the
 // plan refuses a local index before a statement is sent, naming the
 // capability.

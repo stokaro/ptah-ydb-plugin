@@ -1698,6 +1698,14 @@ index directive or entry of its type, which a host that lists
 types](#index-declarations-of-the-providers-types)); an HCL document declares
 none, since HCL cannot state the column table it belongs to.
 
+Export. A Go or YAML export of a column table writes its hash key, its shard
+count and its TTL, and on a host that lists `source.index-kinds` each local
+index as a declaration of its type with its settings. A source writes no data
+channel count, and the 64 YDB gives every column table the provider creates is
+what a declaration without one creates, so a read's count of 64 is no loss; any
+other count is. The storage and the encodings YDB gives a local index are not
+part of a declaration either.
+
 Comparison and planning. The comparison `ydb-row-table-properties` compares the
 column-storage facet of a table that exists on both sides, and reports a
 `github.com/stokaro/ptah-ydb-plugin/column-storage-change` when the hash key,

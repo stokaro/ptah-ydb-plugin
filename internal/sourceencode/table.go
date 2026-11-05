@@ -920,7 +920,10 @@ func readDecodedTables(tables []tablesource.Table) (decodedTable, error) {
 // sameStorage reports a decoded column storage equal to the wanted one: the
 // same storage, and local indexes the comparison reads as the same ones, in
 // the same order. Whether the declaration states that it lists every local
-// index is the host's negotiation, which a source does not write.
+// index is the host's negotiation, which a source does not write. A source
+// writes no data channel count either, and the one YDB gives every table the
+// provider creates is what a declaration without one creates; any other count
+// is a loss.
 func sameStorage(want, got *native.ColumnStorageIntent) bool {
 	if got == nil {
 		return false
@@ -928,6 +931,9 @@ func sameStorage(want, got *native.ColumnStorageIntent) bool {
 	strip := func(storage *native.ColumnStorageIntent) *native.ColumnStorageIntent {
 		result := proto.CloneOf(storage)
 		result.LocalIndexes, result.LocalIndexesStated = nil, false
+		if result.DataChannelCount == tablecreate.CreatedDataChannelCount {
+			result.DataChannelCount = 0
+		}
 		return result
 	}
 	return proto.Equal(strip(want), strip(got)) && slices.EqualFunc(want.GetLocalIndexes(), got.GetLocalIndexes(), tablecreate.LocalIndexEqual)

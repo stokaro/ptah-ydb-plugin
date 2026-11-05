@@ -54,6 +54,13 @@ const (
 	// local index.
 	localIndexes = `{"hashColumns":["id"],"partitions":"1","localIndexes":[{"name":"bf","columns":["body"],"bloom":{"falsePositiveProbability":0.01}},` +
 		`{"name":"ng","columns":["body"],"ngram":{"ngramSize":"3","caseSensitive":true}}]}`
+	// readLocalIndexes is localIndexes as a read converts it: with the data
+	// channels YDB gives the table, and the storage and the encodings it gives
+	// each local index.
+	readLocalIndexes = `{"hashColumns":["id"],"partitions":"1","dataChannelCount":"64","localIndexesStated":true,"localIndexes":[` +
+		`{"name":"bf","columns":["body"],"storageId":"__DEFAULT","bloom":{"dataExtractor":"DEFAULT","bitsStorage":"SIMPLE_STRING","falsePositiveProbability":0.01}},` +
+		`{"name":"ng","columns":["body"],"storageId":"__DEFAULT","ngram":{"dataExtractor":"DEFAULT","bitsStorage":"SIMPLE_STRING","falsePositiveProbability":0.1,` +
+		`"ngramSize":"3","caseSensitive":true}}]}`
 )
 
 // indexKindParts are the inherited attributes and the content of each part
@@ -122,6 +129,29 @@ func TestEncodeSource_WritesIndexKinds_HappyPath(t *testing.T) {
 	c.Assert(decodedProjections(c, ctx, sourceDocument(protocol.SourceDocument_GO_ANNOTATIONS, local, encoded)), qt.DeepEquals, map[string]string{
 		schema.ColumnStorageProperties + " app/records": `{"hashColumns":["id"],"localIndexes":[{"bloom":{"falsePositiveProbability":0.01},"columns":["body"],"name":"bf"},` +
 			`{"columns":["body"],"name":"ng","ngram":{"caseSensitive":true,"ngramSize":"3"}}],"localIndexesStated":true,"partitions":"1"}`,
+	})
+}
+
+// A column table as a read converts it, with the data channels, the storage
+// and the encodings YDB gives a new table and its local indexes, is written as
+// the host's embedded engine wrote it: the hash key and the shard count on the
+// table, and each local index with its settings. None of the server's values
+// is a loss.
+func TestEncodeSource_WritesAReadColumnTable_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	ctx := indexKindsContext(c)
+	request := tableRequest(protocol.SourceDocument_GO_ANNOTATIONS, tableModelFacet(c, "storage", schema.ColumnStorageProperties, readLocalIndexes))
+	encoded, err := backend.New().EncodeSource(ctx, request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(encoded.Losses, qt.HasLen, 0)
+	c.Assert(provider.ValidateEncodedSource(provider.NegotiatedDescription(backend.Description(), provider.HostFeatures(ctx)), request, encoded), qt.IsNil)
+	c.Assert(indexKindParts(encoded), qt.DeepEquals, []string{
+		`bf type="bloom_filter" columns=["body"] false_positive_probability="0.01"`,
+		`ng type="bloom_ngram_filter" columns=["body"] false_positive_probability="0.1" ngram_size="3" case_sensitive="true"`,
+	})
+	c.Assert(decodedProjections(c, ctx, sourceDocument(protocol.SourceDocument_GO_ANNOTATIONS, request, encoded)), qt.DeepEquals, map[string]string{
+		schema.ColumnStorageProperties + " app/records": `{"hashColumns":["id"],"localIndexes":[{"bloom":{"falsePositiveProbability":0.01},"columns":["body"],"name":"bf"},` +
+			`{"columns":["body"],"name":"ng","ngram":{"caseSensitive":true,"falsePositiveProbability":0.1,"ngramSize":"3"}}],"localIndexesStated":true,"partitions":"1"}`,
 	})
 }
 
