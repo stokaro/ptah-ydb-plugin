@@ -239,8 +239,7 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	}
 	feeds, reason, err := planChangefeeds(changefeedInput{owner: owner, desired: desired.changefeeds, held: observed.changefeeds, indexes: indexNames,
 		droppedIndexes: droppedIndexes, addedIndexes: addedIndexes, keyType: keyType, capabilities: capabilities,
-		managed: desired.changefeeds != nil || observed.changefeeds != nil &&
-			FacetKnown(table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.ChangefeedProperties, table.Subject, true)})
+		managed: changefeedsManaged(table, desired, observed)})
 	if err != nil || reason != "" {
 		return alterationChanges{}, reason, err
 	}
