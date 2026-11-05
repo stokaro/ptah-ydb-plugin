@@ -5,7 +5,6 @@ package integration_test
 import (
 	"context"
 	"path"
-	"strings"
 	"testing"
 	"time"
 
@@ -41,7 +40,7 @@ func TestHostWaitsOutAnInitialScan_HappyPath(t *testing.T) {
 	output, err := hostApplySource(c, directory, "yaml", declared)
 
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
-	c.Assert(strings.Count(output, "Native operation: github.com/stokaro/ptah-ydb-plugin/changefeed-operation"), qt.Equals, 1, qt.Commentf("%s", output))
+	c.Assert(unitCount(output, "github.com/stokaro/ptah-ydb-plugin/changefeed-operation"), qt.Equals, 1, qt.Commentf("%s", output))
 	shapes, found := describedChangefeeds(c, opened, absolute)
 	c.Assert(found, qt.IsTrue)
 	c.Assert(shapes, qt.DeepEquals, map[string]feedShape{

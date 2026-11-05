@@ -143,7 +143,7 @@ func TestHostAppliesAYQLTransfer_HappyPath(t *testing.T) {
 	settled := yqlApply(f, "a second run", yqlTransfer(f), "Schema is synced, no changes to be made")
 	altered := yqlApply(f, "the change", changed, "Schema apply completed successfully")
 
-	c.Assert(settled, qt.Not(qt.Contains), "Native operation")
+	c.Assert(settled, qt.Not(qt.Contains), unitPrefix)
 	c.Assert(operationKinds(altered), qt.DeepEquals, []string{"transfer-operation"}, qt.Commentf("%s", altered))
 	spec, _, err := schema.ObservedTransfer(object(f.inspect(), schema.TransferProperties, "ingest"))
 	c.Assert(err, qt.IsNil)
@@ -180,14 +180,13 @@ func requireNoTransfers(c *qt.C, f *replicationFixture) {
 	}
 }
 
-// operationKinds lists the kinds of the native operations an apply printed,
+// operationKinds lists the kinds of the native operations an apply planned,
 // in plan order.
 func operationKinds(output string) []string {
 	var kinds []string
-	for _, line := range strings.Split(output, "\n") {
-		if kind, found := strings.CutPrefix(line, "Native operation: github.com/stokaro/ptah-ydb-plugin/"); found {
-			kinds = append(kinds, kind)
-		}
+	for _, unit := range pluginUnits(output) {
+		kind, _, _ := strings.Cut(unit, " ")
+		kinds = append(kinds, kind)
 	}
 	return kinds
 }

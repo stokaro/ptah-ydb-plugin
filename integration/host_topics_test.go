@@ -244,9 +244,9 @@ func TestHostTradesAPathBetweenATopicAndATable_HappyPath(t *testing.T) {
 
 	c.Assert(operations(toTable), qt.DeepEquals, []string{"topic-operation " + swap, "row-table-create-operation " + swap}, qt.Commentf("%s", toTable))
 	c.Assert(toTable, qt.Contains, swap+": DROP TOPIC removes the topic")
-	c.Assert(tableSettled, qt.Not(qt.Contains), "Native operation")
+	c.Assert(tableSettled, qt.Not(qt.Contains), unitPrefix)
 	c.Assert(operations(toTopic), qt.DeepEquals, []string{"table-drop-operation " + swap, "topic-operation " + swap}, qt.Commentf("%s", toTopic))
 	c.Assert(toTopic, qt.Contains, swap+": Drops a table and its rows")
-	c.Assert(topicSettled, qt.Not(qt.Contains), "Native operation")
+	c.Assert(topicSettled, qt.Not(qt.Contains), unitPrefix)
 	h.topic("swap")
 }

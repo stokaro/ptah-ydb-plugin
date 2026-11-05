@@ -20,6 +20,10 @@ through the public Ptah SDK. It supports anonymous, URL user/password, and URL t
 Session receipts contain the selected database and measured server version.
 The implementation does not import the Ptah application module.
 
+The [documentation](docs/README.md) says what YDB does in Ptah, from installing
+and selecting the provider to the objects it declares and how it runs a
+migration.
+
 The provider ID is `github.com/stokaro/ptah-ydb-plugin`. Model kinds use the `github.com/stokaro/ptah-ydb-plugin/` namespace. This changes
 the experimental model identities; pre-v1, no compatibility with the earlier
 unpublished names is owed. Older envelopes and plans are refused.
@@ -76,8 +80,8 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.14.1-0.20261104150804-7e71a23c3a16, a
-pseudo-version of the SDK that speaks provider contract 25.16. The provider
+The module pins `provider-sdk` v0.17.1-0.20261105053415-00cd95ca0040, a
+pseudo-version of the SDK that speaks provider contract 25.23. The provider
 still requires 25.7 of its host and offers each later feature to a host that
 lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -544,7 +548,12 @@ caller transaction (`ABORTED`, `Transaction locks invalidated`) is
 `NOT_APPLIED` with `Execution.transaction_aborted`, and a commit YDB aborted is
 `ROLLED_BACK` with `TransactionResult.aborted`. Neither applied anything, and
 the host may run the transaction again. A host that does not list the feature
-gets the same outcomes without the flags.
+gets the same outcomes without the flags. An `ABORTED` answer YDB gives for the
+transaction itself, not for a conflict, sets neither flag, since every new
+attempt answers the same: measured on 25.1.4.7, a transaction whose writes do
+not fit one datashard program, such as the copy of a table rebuild over about
+48 MiB, commits with issue 200509 (`Datashard program size limit exceeded`),
+and the commit is `ROLLED_BACK` with the reason that says so.
 
 ## Text units
 
@@ -584,6 +593,40 @@ created again around the plan's other statements, which the native call gives
 the owner and the access entries of the old one, and every topic
 operation. A host that does not list the feature gets native units.
 
+## Reverse migrations
+
+The provider lists `models.reverse` (contract 25.19, ADR 0062 in Ptah) and
+declares one reversal service, `ydb-objects`, for the changes of its
+standalone objects: coordination nodes, secrets, topics, streaming queries,
+external data sources and external tables, resource pools and classifiers,
+async replications and transfers. `ptah migrations generate` writes the down
+file of such a change from this service's reverse of it, as the host's
+embedded engine writes it from its own:
+
+- The reverse asks for the declaration of what the forward change found, the
+  conversion of the read, and finds what the forward change leaves, the
+  conversion of its declaration. A creation reverses to a drop, a drop to a
+  creation and a change to the settings the object held. The prediction of
+  what the forward change leaves is the forward state the host plans the
+  reverse against; it is never read from the server.
+- The down file carries the strategy and the limitations, in the embedded
+  engine's words: a dropped topic loses its messages and its consumers'
+  positions, a dropped coordination node its semaphores, a restored workload
+  setting cannot undo the queries run under the forward one.
+- A rotated secret has nothing to run in reverse: the value it replaced was
+  never read. A secret created again takes the value of the variable for its
+  path when the rollback runs.
+- A changed streaming query text keeps `allow_state_reset` in the reverse,
+  which resets the query's checkpoint again.
+
+A change of a table's own settings has no reversal yet: for a change of a row
+table's TTL, partitioning, families, indexes or changefeeds, or of a column
+table's storage, `migrations generate` writes no migration, and the host
+names the change kind that has no reversal. A host that does not list the
+feature gets no reversal service and refuses every such change the same way.
+A topic reverses like any other object, but no migration file holds a topic
+(see [Text units](#text-units)).
+
 ## Common objects
 
 The provider lists `schema.common-objects` (contract 25.3, ADR 0033 in Ptah),
@@ -598,7 +641,7 @@ The comments of a table the host creates, of its columns and of its indexes,
 and of a column or an index it adds to a table, reach the provider as comment
 steps after the step that creates the object, as for any comment change. The
 provider takes them off the declaration it creates the table from, and runs
-the steps after its own steps on that table.
+the steps after its own steps on that table, with the exceptions below.
 
 Views and comments use these shared stages:
 
@@ -608,7 +651,7 @@ Views and comments use these shared stages:
 | PrepareCommonObjects | The query in the server's form: its tokens joined by single spaces, comments and terminators left out | As declared |
 | ValidateSchema | Refuses a view without a query, `WITH CHECK OPTION`, view attributes and materialized views | Refuses what an attribute cannot hold: a key over 100 bytes, a value over 4096 bytes, text that is not UTF-8, more than 10240 bytes on one table |
 | Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
-| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes |
+| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes; a comment on the table or a column also skips a step that changes only an index |
 
 The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
 two- or three-character operator is one token except `>>`, which YDB writes
@@ -625,6 +668,12 @@ keeps the attribute once the column is gone and would give it to a column
 added later under that name. The host sends that step for each dropped column
 that held a comment (stokaro/ptah#5280), in its comment window, so it runs
 before the removal.
+
+A comment on a table or on one of its columns is not ordered after a step that
+changes only an index of the table, such as an index's addition. The host
+places the comment of a column it adds right after the column, before the
+index additions, and the index step changes nothing such a comment names. A
+comment on an index still follows the steps on its table.
 
 YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table
@@ -925,15 +974,25 @@ sentence.
 
 Where YDB's issues say a feature flag is off, the reason names the capability
 and the flag, as the host's embedded engine words such a refusal, around the
-provider's own reason where the host's engine quotes YDB's text. The plan took
-the capability from the release line's default, and the cluster runs with the
-flag off. The texts and the flags they name are the host's measured ones
-(`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and 26.2.1.14, where
-`EnableResourcePools` is off by default:
+provider's own reason where the host's engine quotes YDB's text, then what to
+do. A session whose address names no monitoring endpoint took the capability
+from its release line's default, and is told to name the endpoint as well as
+to turn the flag on; one whose address names it read the flags already, and is
+told only to turn the flag on. The texts and the flags they name are the
+host's measured ones (`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and
+26.2.1.14, where `EnableResourcePools` is off by default, without the endpoint:
 
 ```text
 provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans
 ```
+
+and with it, the same sentence up to `Turn the flag on`.
+
+25.1.4.7 has no unique secondary index, and refuses one with `Unknown index
+type: syncGlobalUnique` inside its execution stage, before it proposes a
+schema operation. The unit is NOT_APPLIED (PARTIAL after an applied prefix),
+with the reason `YDB refused the statement: the YDB release the cluster runs
+has no unique secondary index (GENERIC_ERROR, issue 1060, line 1, column N)`.
 
 ## Operational storage reservations
 
@@ -3266,11 +3325,17 @@ streaming query definitions as the streaming query model; and secrets whose
 values are approved input references; and the async replications and transfers
 `CREATE ASYNC REPLICATION` and `CREATE TRANSFER` declare, with what a later
 `ALTER ASYNC REPLICATION ... SET` or `ALTER TRANSFER ... SET` of the load
-changes folded in, as this provider's replication and transfer models. It
-says what each document declares, traces every object to its statement, and
-claims complete coverage of the row-table, column, column-storage,
-coordination, topic, external data source, external table, streaming query,
-secret, async replication and transfer models. A
+changes folded in, as this provider's replication and transfer models. For a
+host that lists `schema.sql-facets` (contract 25.23), it carries the
+changefeeds `ALTER TABLE ... ADD CHANGEFEED` declares, with the consumers
+`ALTER TOPIC <table>/<changefeed> ADD CONSUMER` adds to their topics, as one
+facet of each table in this provider's changefeed model, the value a YAML
+`changefeeds:` key of the table declares. It says what each document declares,
+traces every object to its statement, and claims complete coverage of the
+row-table, column, column-storage, coordination, topic, external data source,
+external table, streaming query, secret, async replication and transfer models,
+and of the changefeed model under that feature, so a table a load declares
+without a changefeed is one with none. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
@@ -3299,10 +3364,9 @@ carry is refused by name, with no partial reading:
 - the partitioning settings, column families, TTL and column storage of a
   table, which Ptah refuses in a SQL schema reading;
 - the partitioning and vector settings of an index;
-- changefeeds and the consumers of their topics: the host refuses the facets
-  of a table in a SQL schema reading, and a changefeed is one. A YQL source
-  therefore leaves the changefeeds of its tables as they are; declare them in
-  YAML or Go;
+- changefeeds and the consumers of their topics, for a host that does not list
+  `schema.sql-facets`, which has no home for a facet of a table. The load then
+  claims nothing about changefeeds and leaves those of its tables as they are;
 - a user's password: the reply's role carries none, so the host would create
   the user without it; a YAML or Go declaration carries the password, which
   the host sets when it creates the user;

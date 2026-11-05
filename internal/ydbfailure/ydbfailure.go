@@ -52,6 +52,28 @@ type Answer struct {
 	// those of the last issue, in the order of Issues, that names one. They
 	// are 0 when no issue does.
 	Row, Column uint32
+	// FlagsRead reports a session that read the cluster's feature flags from
+	// the monitoring endpoint its address names, rather than taking its
+	// release line's default. Read leaves it false; the caller that knows
+	// the session sets it.
+	FlagsRead bool
+	// Repeats reports an answer one of whose issues has a code a new attempt
+	// of the transaction answers again (see [RepeatedAbort]): YDB aborted it
+	// for its size, not for a conflict.
+	Repeats bool
+}
+
+// repeatedAborts are the issue codes of an ABORTED answer that YDB gives for
+// the transaction itself, not for a conflict with another one, so every new
+// attempt answers the same. Measured on 25.1.4.7, a transaction whose writes
+// do not fit one datashard program commits with ABORTED and issue 200509,
+// `Datashard program size limit exceeded (56281509 > 50331648)`.
+var repeatedAborts = map[uint32]bool{200509: true}
+
+// RepeatedAbort reports an issue code of an ABORTED answer that a new attempt
+// of the transaction answers again.
+func RepeatedAbort(code uint32) bool {
+	return repeatedAborts[code]
 }
 
 // operation is the SDK's error for an operation status YDB returned: the
@@ -81,6 +103,7 @@ func Read(err error) Answer {
 			if issue.GetIssueCode() != 0 {
 				answer.Code = issue.GetIssueCode()
 			}
+			answer.Repeats = answer.Repeats || RepeatedAbort(issue.GetIssueCode())
 			if issue.GetPosition().GetRow() > 0 {
 				positioned = true
 				answer.Row, answer.Column = issue.GetPosition().GetRow(), issue.GetPosition().GetColumn()
@@ -97,6 +120,30 @@ func Read(err error) Answer {
 // executionIssueCode is the code YQL gives the issue of its execution stage
 // (TIssuesIds::CORE_EXEC), which holds what a query reported while it ran.
 const executionIssueCode = 1060
+
+// unproposed are the measured messages of an issue in which YDB refused a
+// schema statement while it turned the statement into a schema operation,
+// before it proposed one, with what each says the statement asked for. The
+// issue stands inside the execution stage's, so the answer is not one YDB
+// gave while compiling the text, but no schema operation started, so nothing
+// of the statement applied. 25.1.4.7 answers a unique secondary index this
+// way, GENERIC_ERROR with `Unknown index type: syncGlobalUnique`; 26.2 knows
+// the index type.
+var unproposed = map[string]string{
+	"Unknown index type: syncGlobalUnique": "the YDB release the cluster runs has no unique secondary index",
+}
+
+// refusedUnproposed is the meaning of the answer's issue that refused a
+// schema statement before YDB proposed its operation, or "" for an answer
+// with no such issue.
+func (a Answer) refusedUnproposed() string {
+	for _, issue := range a.Issues {
+		if meaning, known := unproposed[strings.TrimSpace(issue)]; known {
+			return meaning
+		}
+	}
+	return ""
+}
 
 // executionIssue reports an issue of the stage that executes a query: the
 // execution stage's own, or a schema operation's, which YDB words as
@@ -126,7 +173,8 @@ var refusals = []Ydb.StatusIds_StatusCode{
 // those it establishes nothing unless YDB refused the text before any of it
 // ran.
 func (a Answer) Confirmed(text string) bool {
-	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || statisticsStatement(text) || a.Compiled)
+	return slices.Contains(refusals, a.Status) ||
+		a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || statisticsStatement(text) || a.Compiled || a.refusedUnproposed() != "")
 }
 
 // Rejected reports an answer that proves nothing of a unit of text was
@@ -140,12 +188,14 @@ func (a Answer) Rejected(text string, inTransaction bool) bool {
 	return a.Confirmed(text) && (inTransaction || appliedWhole(text))
 }
 
-// Aborted reports a transaction YDB aborted without applying it, which YDB
-// answers with ABORTED. Measured on 26.2.1.14, a commit and a write that follow
-// a conflicting commit are both aborted with `Transaction locks invalidated`.
-// A new attempt may succeed.
+// Aborted reports a transaction YDB aborted for a conflict without applying
+// it, which YDB answers with ABORTED. Measured on 26.2.1.14, a commit and a
+// write that follow a conflicting commit are both aborted with `Transaction
+// locks invalidated`. A new attempt may succeed. An ABORTED answer that
+// [Answer.Repeats] is not one: nothing of the transaction was applied either,
+// and a new attempt answers the same.
 func (a Answer) Aborted() bool {
-	return a.Status == Ydb.StatusIds_ABORTED
+	return a.Status == Ydb.StatusIds_ABORTED && !a.Repeats
 }
 
 // PathBusy reports an answer that says another schema operation holds the
@@ -189,6 +239,9 @@ var issueMeanings = map[uint32]string{
 	2031: "a value it writes does not convert to its column's type",
 	// `Missing not null column in input: ...`.
 	2032: "it gives no value to a NOT NULL column",
+	// `Datashard program size limit exceeded (56281509 > 50331648)`, at the
+	// commit on 25.1.4.7.
+	200509: "its writes do not fit one datashard program, which holds about 48 MiB; write the rows in smaller transactions",
 }
 
 // WithoutLines is a with its position counted from the unit's own text, for
@@ -223,11 +276,17 @@ func (a Answer) detail() string {
 // means when the provider knows, and the detail, and names the feature flag
 // the refusal says is off (see [Answer.flagged]).
 func (a Answer) RefusedReason() string {
-	reason := "YDB refused the statement"
+	return a.refusedReason("YDB refused the statement")
+}
+
+// refusedReason is [Answer.RefusedReason] with the refusal said as reason.
+func (a Answer) refusedReason(reason string) string {
 	if a.Compiled {
 		reason += " while compiling it"
 	}
 	if meaning, known := issueMeanings[a.Code]; known {
+		reason += ": " + meaning
+	} else if meaning := a.refusedUnproposed(); meaning != "" {
 		reason += ": " + meaning
 	}
 	return a.flagged(reason + " (" + a.detail() + ")")
@@ -236,19 +295,21 @@ func (a Answer) RefusedReason() string {
 // flagged is reason for an answer whose issues say a feature flag YDB keeps a
 // capability behind is off, in the words the host's embedded engine writes
 // for such a refusal: the capability, the flag, then reason where the host's
-// engine quotes YDB's text, and how to have the session report the
-// capability. The plan took the capability from the release line's
-// default, and this cluster runs with the flag off. A session reads the
-// flags only when the address names the monitoring endpoint. reason is
-// returned as it is for any other answer.
+// engine quotes YDB's text, and what to do. A session reads the flags only
+// when its address names the monitoring endpoint. One that took its release
+// line's default planned with the capability on, and is told to name the
+// endpoint as well; one that read the flags names it already, so turning the
+// flag on is what remains. reason is returned as it is for any other answer.
 func (a Answer) flagged(reason string) string {
 	gate, off := featureflags.Refused(a.Issues)
 	if !off {
 		return reason
 	}
-	return fmt.Sprintf("capability %s is off on this YDB cluster, which runs with feature flag %s off: %s. "+
-		"Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans",
-		gate.Key, gate.Flag, reason)
+	refused := fmt.Sprintf("capability %s is off on this YDB cluster, which runs with feature flag %s off: %s. Turn the flag on", gate.Key, gate.Flag, reason)
+	if a.FlagsRead {
+		return refused
+	}
+	return refused + ", or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans"
 }
 
 // AbortedReason is the reason of a reply to a unit or a commit whose
@@ -324,16 +385,23 @@ func Failed(answer Answer, unit Unit, applied uint32) *protocol.Execution {
 }
 
 // Commit is the outcome of a COMMIT that failed with answer, or nil when the
-// failure leaves the outcome unknown. A transaction YDB aborted for a conflict
-// applied nothing: it is ROLLED_BACK, with aborted set when the host
-// negotiated it.
+// failure leaves the outcome unknown. A transaction YDB aborted applied
+// nothing: it is ROLLED_BACK. One aborted for a conflict sets aborted when the
+// host negotiated it, so the host may run it again; one whose answer
+// [Answer.Repeats] is refused, since a new attempt answers the same.
 func Commit(answer Answer, aborts bool) *protocol.TransactionResult {
-	if !answer.Aborted() {
+	switch {
+	case answer.Aborted():
+		return &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, Aborted: aborts,
+			DiagnosticCode: "ydb.transaction-aborted", Message: answer.Message(abortedMessage),
+			Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.AbortedReason()}}
+	case answer.Status == Ydb.StatusIds_ABORTED:
+		return &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK,
+			DiagnosticCode: "ydb.transaction-rejected", Message: answer.Message(rejectedMessage),
+			Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.refusedReason("YDB refused the transaction at its commit")}}
+	default:
 		return nil
 	}
-	return &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, Aborted: aborts,
-		DiagnosticCode: "ydb.transaction-aborted", Message: answer.Message(abortedMessage),
-		Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.AbortedReason()}}
 }
 
 // appliedWhole reports a unit of text that YDB applies whole or not at all:
