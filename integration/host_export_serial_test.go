@@ -33,3 +33,25 @@ func TestHostAppliesAGoExportOfSerialColumns_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", source, output))
 	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`, qt.Commentf("%s\n%s", source, output))
 }
+
+// A 32-bit Serial whose sequence holds a start and an increment, which YDB's
+// ALTER SEQUENCE gave it outside Ptah, exports as the host's embedded engine
+// writes it and applies back with nothing to plan, as that engine plans it:
+// the table needs no statement, so nothing raises the sequence's range. Gap
+// G113 of stokaro/ptah#4204: validation refused the declaration for
+// serial_sequence_keeps_range whatever the table held.
+func TestHostAppliesAGoExportOfA32BitSerial_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	stepped := path.Join(database, directory, "stepped")
+	createSchemaObject(c, opened, "CREATE TABLE `"+stepped+"` (id Serial, label Utf8, PRIMARY KEY (id))", "DROP TABLE IF EXISTS `"+stepped+"`")
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "ALTER SEQUENCE `"+stepped+"/_serial_column_id` START WITH 100 INCREMENT BY 5"), qt.IsNil)
+
+	source := introspectDirectory(c, directory)
+
+	c.Assert(source, qt.Contains, `//ptah:schema:field name="id" type="Int32" not_null="true" primary="true" auto_increment="true" identity_start="100" identity_increment="5"`,
+		qt.Commentf("%s", source))
+	output, err := hostApplySelected(c, directory, "go", source)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", source, output))
+	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`, qt.Commentf("%s\n%s", source, output))
+}
