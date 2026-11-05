@@ -116,6 +116,10 @@ PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
   GOWORK=off go test -race -tags integration ./integration -count=1 -v
 ```
 
+A test whose dev database must be on a server other than the target's reads a
+second isolated server from `PTAH_YDB_OTHER_TEST_URL` and skips without it. CI
+starts the second server beside the first.
+
 The test servers enable `enable_vector_index` and
 `enable_external_data_sources`; the 26.2 fixture also enables
 `enable_add_unique_index`. A full-text index is refused on 25.1, and the
