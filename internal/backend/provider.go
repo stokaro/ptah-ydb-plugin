@@ -182,7 +182,15 @@ func providerFeatures() []string {
 		// Resource pools and their classifiers belong to the database, so a
 		// read of directories reports them beside its scope; see
 		// inspect.Workload.
-		provider.DatabaseKindsFeature}
+		provider.DatabaseKindsFeature,
+		// A read names each replica table no replication it describes
+		// writes, which YDB keeps read-only, so the host refuses a table
+		// declared there at planning; see inspect.unreadReplicas.
+		provider.UnreadTablesFeature,
+		// `ptah schema stats` counts topics, changefeeds, the other native
+		// objects and the table settings with the provider's counts; see
+		// ReportValues.
+		provider.ReportCountsFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -561,6 +569,7 @@ func Description() *protocol.Description {
 					HeaderKinds: []string{"coordination_node"},
 				},
 				GoHeaderKinds: yqlschema.HeaderKinds(),
+				Reports:       schema.Reports(),
 			},
 		},
 	}

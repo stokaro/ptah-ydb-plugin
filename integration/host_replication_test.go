@@ -20,6 +20,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 )
 
@@ -261,15 +262,18 @@ func TestHostRefusesATableAtAReplica_FailurePath(t *testing.T) {
 
 // Ported from the third half of the host's
 // TestYDBReplication_RefusesATableAtAReplica: a replication dropped without
-// CASCADE leaves its replica, which YDB keeps read-only for good, and a schema
-// that declares a table at its path changes nothing. The host's engine refuses
-// the plan, naming the replica; the provider leaves a replica out of the
-// tables it reads, and the protocol gives it no way to report a table it
-// leaves out, so the host plans the table and the provider refuses the
-// creation before it runs a statement, because the path is taken. A schema
-// that leaves the table out keeps it.
+// CASCADE leaves its replica, which YDB keeps read-only for good. The read
+// names the replica as a table it does not describe, so the host refuses a
+// schema that declares a table at its path before any step, with the reason
+// the host's engine gives, and runs nothing; a schema that leaves the table
+// out keeps it, and db read names it in a note. The read is filtered to the
+// fixture's directory, as every apply here is, and the provider still tells
+// the replica from one a replication elsewhere in the database writes. A host
+// that does not list schema.unread-tables plans the table, and the provider
+// refuses its creation before it runs a statement.
 func TestHostRefusesATableAtAnOrphanedReplica_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.UnreadTablesFeature)
 	h := newHostReplication(c)
 	output, err := h.apply(h.tables("src"))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
@@ -277,14 +281,21 @@ func TestHostRefusesATableAtAnOrphanedReplica_FailurePath(t *testing.T) {
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
 	h.awaitReplica()
 	c.Assert(execFixtureSchema(c.Context(), h.opened.DB, "DROP ASYNC REPLICATION `"+h.absolute("mirror")+"`"), qt.IsNil)
+	quoted := regexp.QuoteMeta(h.directory)
+	reason := quoted + "\\.rep is a replica table no replication of this database writes any more, which YDB keeps read-only for good " +
+		"\\(`path is an async replica table`\\); drop it by hand with DROP TABLE, which YDB accepts, or remove it from the schema"
 
 	declared, declaredErr := h.apply(h.tables("src", "rep") + "async_replications: {}\n")
 	left, leftErr := h.apply(h.tables("src") + "async_replications: {}\n")
+	read, readErr := hostCommand(c, "db", "read", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", h.directory)
 
 	c.Assert(declaredErr, qt.IsNotNil)
-	c.Assert(declared, qt.Matches, `(?s).*`+regexp.QuoteMeta(h.directory)+`\.rep: Creates a row table \(safe\).*provider execution: NOT_STARTED \(0 units confirmed applied\).*`)
+	c.Assert(declared, qt.Matches, `(?s).*table `+quoted+`\.rep: `+reason+`\n.*`)
+	c.Assert(declared, qt.Not(qt.Contains), "NOT_STARTED")
 	c.Assert(leftErr, qt.IsNil, qt.Commentf("%s", left))
 	c.Assert(left, qt.Contains, "Schema is synced, no changes to be made")
+	c.Assert(readErr, qt.IsNil, qt.Commentf("%s", read))
+	c.Assert(read, qt.Matches, `(?s).*note: 1 table this read does not describe: `+quoted+`\.rep: `+reason+`\n.*`)
 	c.Assert(listedNames(c, h.opened, path.Join(h.database, h.directory)), qt.DeepEquals, []string{"rep", "src"})
 	c.Assert(replicaWritten(c, c.Context(), h.opened, path.Join(h.database, h.directory), "rep"), qt.IsTrue)
 	c.Assert(execFixtureSchema(c.Context(), h.opened.DB, "UPSERT INTO `"+h.absolute("rep")+"` (id, note) VALUES (1, 'written'u)"), qt.ErrorMatches, `(?s).*replicated table.*`)
