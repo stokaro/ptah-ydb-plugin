@@ -17,9 +17,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 )
 
 // The tests here export a read of one directory through the host's own

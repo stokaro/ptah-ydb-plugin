@@ -3,8 +3,9 @@ package topics
 import (
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // AdoptTransferConsumers returns intent with each consumer of the read topic

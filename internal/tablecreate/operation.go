@@ -8,14 +8,15 @@ import (
 	"fmt"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // OperationKind identifies a complete native row-table creation request.
@@ -176,7 +177,7 @@ func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {
 			return nil, fmt.Errorf("invalid YDB typed literal default")
 		}
 	}
-	keys := map[string]bool{}
+	keys := make(map[string]bool)
 	for _, key := range request.PrimaryKey {
 		if !names[key] || keys[key] {
 			return nil, fmt.Errorf("invalid YDB primary key column")
@@ -220,7 +221,7 @@ func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {
 	}
 	// Native requests must carry no duplicate family declarations even if their
 	// unpopulated settings happen to serialize identically.
-	families := []string{}
+	families := make([]string, 0)
 	for _, family := range request.ColumnFamilies {
 		families = append(families, family.Name)
 	}
@@ -236,10 +237,8 @@ func containsNull(value any) bool {
 	case nil:
 		return true
 	case []any:
-		for _, item := range v {
-			if containsNull(item) {
-				return true
-			}
+		if slices.ContainsFunc(v, containsNull) {
+			return true
 		}
 	case map[string]any:
 		for _, item := range v {

@@ -9,14 +9,15 @@ import (
 	"slices"
 	"time"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // AlterationSession exposes one native table session without a retry wrapper.
@@ -511,7 +512,7 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 // and the settings it held, and every other index to be as it was before the
 // call.
 func confirmIndexes(request *Ydb_Table.AlterTableRequest, before, observed *native.DescribeTableResult) error {
-	named := map[string]bool{}
+	named := make(map[string]bool)
 	for _, rename := range request.RenameIndexes {
 		named[rename.SourceName], named[rename.DestinationName] = true, true
 		held, actual := indexByName(before.Indexes, rename.SourceName), indexByName(observed.Indexes, rename.DestinationName)

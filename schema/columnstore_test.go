@@ -4,20 +4,21 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func storageObservation() *native.ColumnStorageObservation {
 	return &native.ColumnStorageObservation{
 		HashColumns: []string{"b", "a"}, Partitions: 4, DataChannelCount: 64,
 		LocalIndexes: []*native.LocalIndexObservation{
-			{Name: "z", Columns: []string{"a"}, StorageId: "__DEFAULT", Kind: &native.LocalIndexObservation_Ngram{Ngram: &native.LocalNGramSettings{CaseSensitive: proto.Bool(false)}}},
+			{Name: "z", Columns: []string{"a"}, StorageId: "__DEFAULT", Kind: &native.LocalIndexObservation_Ngram{Ngram: &native.LocalNGramSettings{CaseSensitive: new(false)}}},
 			{Name: "a", Columns: []string{"b", "a"}, StorageId: "__DEFAULT", Kind: &native.LocalIndexObservation_Bloom{Bloom: &native.LocalBloomSettings{}}},
 		},
 		Ttl: &native.ColumnTTLPolicy{State: &native.ColumnTTLPolicy_Enabled{Enabled: &native.ColumnTTLEnabled{

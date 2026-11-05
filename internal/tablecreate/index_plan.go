@@ -5,12 +5,13 @@ import (
 	"slices"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // indexChange is one index an alteration adds to a table or drops from it. An
@@ -143,7 +144,7 @@ func signatureOf(spec *native.IndexIntent) indexSignature {
 
 // indexSignatures reads the indexes of one side by name, in name order.
 func indexSignatures(specs []*native.IndexIntent) (names []string, signatures map[string]indexSignature, specByName map[string]*native.IndexIntent) {
-	signatures, specByName = map[string]indexSignature{}, map[string]*native.IndexIntent{}
+	signatures, specByName = make(map[string]indexSignature), make(map[string]*native.IndexIntent)
 	for _, spec := range specs {
 		names = append(names, spec.Name)
 		signatures[spec.Name] = signatureOf(spec)
@@ -162,7 +163,7 @@ func declaredSpecs(set *native.IndexSetIntent) []*native.IndexIntent {
 }
 
 func heldSpecs(observed *native.IndexObservations) (specs []*native.IndexIntent, held map[string]*native.TableIndexDescription) {
-	held = map[string]*native.TableIndexDescription{}
+	held = make(map[string]*native.TableIndexDescription)
 	for _, index := range observed.GetIndexes() {
 		specs = append(specs, comparableIndex(schema.IndexSpecification(index.GetDescription())))
 		held[index.GetDescription().GetName()] = index.GetDescription()

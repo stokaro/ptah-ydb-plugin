@@ -7,13 +7,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 // node is the desired value of a coordination node.
@@ -84,7 +85,7 @@ func decodedProjections(c *qt.C, ctx context.Context, request *protocol.DecodeSo
 	c.Helper()
 	decoded, err := backend.New().DecodeSource(ctx, request)
 	c.Assert(err, qt.IsNil)
-	projections := map[string]string{}
+	projections := make(map[string]string)
 	for _, fragment := range decoded.Documents[0].Fragments {
 		for _, value := range fragment.Values {
 			owner := value.Value.Value.Owner
@@ -202,7 +203,7 @@ func TestEncodeSource_ReportsAccessConstraintsAsLosses(t *testing.T) {
 			value := node(c, "queue", "app", "queue", schema.CoordinationIntent{Access: &native.AccessIntent{Owner: new("alice")}})
 			encoded, err := backend.New().EncodeSource(encodingContext(c), encodeRequest(format, value))
 			c.Assert(err, qt.IsNil)
-			c.Assert(len(encoded.Fragments), qt.Equals, 0)
+			c.Assert(encoded.Fragments, qt.HasLen, 0)
 			c.Assert(encoded.Losses, qt.HasLen, 1)
 			c.Assert(encoded.Losses[0].ValueId, qt.Equals, "queue")
 			c.Assert(encoded.Losses[0].Message, qt.Equals, "the access requirement of coordination node app/queue has no source spelling")

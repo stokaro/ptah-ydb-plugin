@@ -8,8 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/ydb-platform/ydb-go-sdk/v3/balancers"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 )
 
 // The query parameters of a YDB address besides database, token and

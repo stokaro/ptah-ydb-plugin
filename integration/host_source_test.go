@@ -13,6 +13,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -63,7 +64,7 @@ func hostManifest(c *qt.C) (string, string) {
 // ptah-compat's PTAH_PROVIDER_CONFIG alike.
 func providerManifest(c *qt.C) string {
 	c.Helper()
-	return providerManifestWith(c, []string{})
+	return providerManifestWith(c, make([]string, 0))
 }
 
 // providerManifestWith is providerManifest whose provider starts with the

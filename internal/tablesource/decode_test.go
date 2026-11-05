@@ -6,16 +6,17 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func yamlRequest(c *qt.C, source string) *protocol.DecodeSourceRequest {
@@ -28,7 +29,7 @@ func yamlRequest(c *qt.C, source string) *protocol.DecodeSourceRequest {
 func TestClaims(t *testing.T) {
 	c := testcheck.New(t)
 	var keys []string
-	models := map[string][]string{}
+	models := make(map[string][]string)
 	for _, claim := range tablesource.YAMLKeys() {
 		keys = append(keys, claim.Key)
 		c.Assert(claim.Scope, qt.Equals, protocol.YAMLSourceKey_TABLE)
@@ -51,8 +52,8 @@ func TestClaims(t *testing.T) {
 	c.Assert(models["platform.ydb"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnStorageProperties})
 	c.Assert(models["column_store"], qt.DeepEquals, []string{schema.ColumnStorageProperties})
 	directives := tablesource.GoDirectives()
-	c.Assert(len(directives), qt.Equals, 3)
-	scopes := map[string]protocol.GoSourceDirective_Scope{}
+	c.Assert(directives, qt.HasLen, 3)
+	scopes := make(map[string]protocol.GoSourceDirective_Scope)
 	var names []string
 	for _, directive := range directives {
 		names = append(names, directive.Directive)
@@ -92,13 +93,13 @@ func TestClaims_TableAttributesAreTheYAMLKeysAndMore(t *testing.T) {
 	c.Assert(table, qt.IsNotNil)
 	for _, key := range tablesource.YAMLKeys() {
 		if key.Key != tablesource.KeyColumnFamilies && key.Key != tablesource.KeyPlatformYDB && key.Key != tablesource.KeyColumnStore {
-			c.Assert(slices.Contains(table.Attributes, key.Key), qt.IsTrue, qt.Commentf(key.Key))
+			c.Assert(table.Attributes, qt.Contains, key.Key, qt.Commentf(key.Key))
 		}
 	}
 	c.Assert(table.Attributes[len(table.Attributes)-3:], qt.DeepEquals,
 		[]string{"platform.ydb.row_deletion_column", "platform.ydb.row_deletion_interval", "platform.ydb.row_deletion_unit"})
 	for _, forbidden := range []string{"name", "schema", "table", "comment", "primary_key", "custom"} {
-		c.Assert(slices.Contains(table.Attributes, forbidden), qt.IsFalse, qt.Commentf(forbidden))
+		c.Assert(table.Attributes, qt.Not(qt.Contains), forbidden, qt.Commentf(forbidden))
 	}
 }
 
@@ -150,7 +151,7 @@ func TestDecode_HappyPath(t *testing.T) {
 			request := yamlRequest(c, test.source)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.IsNil)
-			c.Assert(len(tables), qt.Equals, 1)
+			c.Assert(tables, qt.HasLen, 1)
 			c.Assert(string(tables[0].Value.CanonicalProjection), qt.Equals, test.want)
 			c.Assert(string(tables[0].Value.Value.Payload), qt.Equals, test.want)
 			c.Assert(tables[0].Value.Value.Kind, qt.Equals, schema.TableProperties)
@@ -183,7 +184,7 @@ func TestDecode_ColumnStore(t *testing.T) {
 			request := yamlRequest(c, test.source)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.IsNil)
-			c.Assert(len(tables), qt.Equals, 1)
+			c.Assert(tables, qt.HasLen, 1)
 			c.Assert(tables[0].Value.Value.Kind, qt.Equals, schema.ColumnStorageProperties)
 			c.Assert(string(tables[0].Value.CanonicalProjection), qt.Equals, test.want)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
@@ -237,7 +238,7 @@ func TestDecodeSource_OneFacetForAllFragmentsOfATable(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidateDecodedSource(backend.Description(), request, decoded), qt.IsNil)
 	fragments := decoded.Documents[0].Fragments
-	c.Assert(len(fragments), qt.Equals, 4)
+	c.Assert(fragments, qt.HasLen, 4)
 	var owners []string
 	for _, fragment := range fragments {
 		for _, value := range fragment.Values {
@@ -248,7 +249,7 @@ func TestDecodeSource_OneFacetForAllFragmentsOfATable(t *testing.T) {
 		}
 	}
 	c.Assert(owners, qt.DeepEquals, []string{"orders/key_bloom_filter shop.orders", "items/read_replicas_settings .items"})
-	c.Assert(len(decoded.Documents[0].Coverage.Subjects), qt.Equals, 2)
+	c.Assert(decoded.Documents[0].Coverage.Subjects, qt.HasLen, 2)
 	for _, subject := range decoded.Documents[0].Coverage.Subjects {
 		c.Assert(subject.Kind, qt.Equals, schema.TableProperties)
 		c.Assert(subject.Knowledge.State, qt.Equals, protocol.ModelKnowledge_COMPLETE)
@@ -276,13 +277,13 @@ func TestDecode_DeclaringNothingGivesNoFacet(t *testing.T) {
 			request := yamlRequest(c, source)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.IsNil)
-			c.Assert(len(tables), qt.Equals, 0)
+			c.Assert(tables, qt.HasLen, 0)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(err, qt.IsNil)
 			for _, fragment := range decoded.Documents[0].Fragments {
-				c.Assert(len(fragment.Values), qt.Equals, 0)
+				c.Assert(fragment.Values, qt.HasLen, 0)
 			}
-			c.Assert(len(decoded.Documents[0].Coverage.Subjects), qt.Equals, 0)
+			c.Assert(decoded.Documents[0].Coverage.Subjects, qt.HasLen, 0)
 		})
 	}
 }
@@ -331,10 +332,10 @@ func TestDecode_FailurePath(t *testing.T) {
 			request := yamlRequest(c, test.source)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
-			c.Assert(len(tables), qt.Equals, 0)
+			c.Assert(tables, qt.HasLen, 0)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -354,10 +355,10 @@ func TestDecodeSource_CanceledWithoutOutput(t *testing.T) {
 	cancel()
 	decoded, err := backend.New().DecodeSource(ctx, request)
 	c.Assert(status.Code(err), qt.Equals, codes.Canceled)
-	c.Assert(decoded == nil, qt.IsTrue)
+	c.Assert(decoded, qt.IsNil)
 	tables, err := tablesource.Decode(ctx, request.Documents[0])
 	c.Assert(err, qt.ErrorIs, ctx.Err())
-	c.Assert(len(tables), qt.Equals, 0)
+	c.Assert(tables, qt.HasLen, 0)
 }
 
 func TestDecodeSource_DoesNotChangeItsInput(t *testing.T) {

@@ -9,13 +9,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 const poolAccessDirectory = ".metadata/workload_manager/pools"
@@ -37,7 +38,7 @@ func Access(ctx context.Context, snapshot *protocol.Schema, database string, rea
 	if err != nil {
 		return err
 	}
-	describers := map[string]map[string]bool{}
+	describers := make(map[string]map[string]bool)
 	for _, target := range targets {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -122,7 +123,7 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 		return nil, fmt.Errorf("YDB access database is not an exact absolute path")
 	}
 	var result []accessTarget
-	seen := map[string]*protocol.Reference{}
+	seen := make(map[string]*protocol.Reference)
 	add := func(reference *protocol.Reference, absolute string, types ...Ydb_Scheme.Entry_Type) error {
 		if reference.GetEngine() != "ydb" || reference.GetDatabase() != database || reference.GetCatalog() != "" || len(reference.GetPath())+len(reference.GetOverload()) != 0 {
 			return fmt.Errorf("YDB access target is outside the captured database")
@@ -236,7 +237,7 @@ func secretDescribers(ctx context.Context, describe func(context.Context, string
 	if entry.GetName() != path.Base(absolute) || (entry.GetType() != Ydb_Scheme.Entry_DIRECTORY && entry.GetType() != Ydb_Scheme.Entry_DATABASE) {
 		return nil, fmt.Errorf("YDB access description disagrees with the directory of a captured secret")
 	}
-	subjects := map[string]bool{}
+	subjects := make(map[string]bool)
 	for _, permission := range entry.GetEffectivePermissions() {
 		if slices.ContainsFunc(permission.GetPermissionNames(), ydbacl.DescribesSchema) {
 			subjects[permission.GetSubject()] = true
@@ -257,7 +258,7 @@ func recordAccess(objects *protocol.ObservedCommonObjects, reference *protocol.R
 	if target.Kind == "view" {
 		target.Kind = "table"
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, permission := range entry.GetPermissions() {
 		if strings.TrimSpace(permission.GetSubject()) == "" {
 			return fmt.Errorf("YDB reports a permission without a principal")
@@ -292,7 +293,7 @@ func recordPrincipals(objects *protocol.ObservedCommonObjects, held nativeapi.Pr
 			owner = entry.Owner
 		}
 	}
-	canLogin := map[string]bool{}
+	canLogin := make(map[string]bool)
 	add := func(role *protocol.ObservedRole) {
 		if realm || role.Name == owner || ydbacl.CheckName(role.Name) != nil {
 			objects.RolesOutOfScope = append(objects.RolesOutOfScope, role.Name)

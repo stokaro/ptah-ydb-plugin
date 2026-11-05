@@ -11,9 +11,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
 )
 
 // heldTable is what a compatibility test reads back of a table before and
@@ -72,29 +73,29 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 		{name: "a column family", table: "docs",
 			create: []string{"CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `body` Utf8 FAMILY `cold`, PRIMARY KEY (`id`), FAMILY `cold` (COMPRESSION = 'lz4'))"},
 			want: heldTable{Storage: storedTable{Families: []string{"cold compression=lz4 columns=body", "default compression=off"}, Partitioning: bySize},
-				Changefeeds: map[string]feedShape{}, Indexes: map[string][2][]string{}}},
+				Changefeeds: make(map[string]feedShape), Indexes: make(map[string][2][]string)}},
 		{name: "splitting settings and a key bloom filter", table: "items",
 			create: []string{"CREATE TABLE `{table}` (`id` Uint64 NOT NULL, `code` Utf8 NOT NULL, `label` Utf8, PRIMARY KEY (`id`, `code`)) WITH (" +
 				"AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 4, KEY_BLOOM_FILTER = ENABLED)"},
 			want: heldTable{Storage: storedTable{Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=ENABLED min=4 max=0", KeyBloomFilter: "ENABLED"},
-				Changefeeds: map[string]feedShape{}, Indexes: map[string][2][]string{}}},
+				Changefeeds: make(map[string]feedShape), Indexes: make(map[string][2][]string)}},
 		{name: "a TTL", table: "events",
 			create: []string{"CREATE TABLE `{table}` (`id` Int64 NOT NULL, `created_at` Timestamp, PRIMARY KEY (`id`)) WITH (TTL = Interval('P1D') ON `created_at`)"},
 			want: heldTable{Storage: storedTable{TTL: "created_at 86400s", Families: plain, Partitioning: bySize},
-				Changefeeds: map[string]feedShape{}, Indexes: map[string][2][]string{}}},
+				Changefeeds: make(map[string]feedShape), Indexes: make(map[string][2][]string)}},
 		{name: "a changefeed and its consumer", table: "cf",
 			create: []string{"CREATE TABLE `{table}` (`id` Int64 NOT NULL, `v` Int32, PRIMARY KEY (`id`))",
 				"ALTER TABLE `{table}` ADD CHANGEFEED `feed` WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
 				"ALTER TOPIC `{table}/feed` ADD CONSUMER `reader`"},
 			want: heldTable{Storage: storedTable{Families: plain, Partitioning: bySize},
 				Changefeeds: map[string]feedShape{"feed": {Mode: options.ChangefeedModeUpdates, Retention: 24 * time.Hour, Consumers: []string{"reader"}}},
-				Indexes:     map[string][2][]string{}}},
+				Indexes:     make(map[string][2][]string)}},
 		{name: "a vector index", table: "vdocs", capability: "vector_indexes",
 			create: []string{"CREATE TABLE `{table}` (`id` Uint64 NOT NULL, `body` Utf8, `emb` String, PRIMARY KEY (`id`), " +
 				"INDEX `docs_emb` GLOBAL USING vector_kmeans_tree ON (`emb`) COVER (`body`) WITH (distance = cosine, vector_type = float, " +
 				"vector_dimension = 3, levels = 1, clusters = 2))"},
 			want: heldTable{Storage: storedTable{Families: plain, Partitioning: bySize},
-				Changefeeds: map[string]feedShape{}, Indexes: map[string][2][]string{"docs_emb": {{"emb"}, {"body"}}}}},
+				Changefeeds: make(map[string]feedShape), Indexes: map[string][2][]string{"docs_emb": {{"emb"}, {"body"}}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

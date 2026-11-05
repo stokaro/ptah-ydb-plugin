@@ -6,14 +6,15 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -193,7 +194,7 @@ func request(c *qt.C, desired, current side) *protocol.CompareModelsRequest {
 	c.Helper()
 	wanted, desiredParents := state(c, protocol.ValueInput_DESIRED, desired)
 	held, currentParents := state(c, protocol.ValueInput_OBSERVED, current)
-	parents := map[string]*protocol.ComparisonParent{}
+	parents := make(map[string]*protocol.ComparisonParent)
 	for _, parent := range append(desiredParents, currentParents...) {
 		key := parent.Subject.Kind + "/" + parent.Subject.Name.Normalized
 		parents[key] = &protocol.ComparisonParent{Subject: parent.Subject, Desired: true, Current: true}

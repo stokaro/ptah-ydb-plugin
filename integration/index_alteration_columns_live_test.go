@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 // columnStep is a host step that adds or drops a column of records, with the
@@ -49,10 +50,10 @@ func TestIndexAlterationDropsTheIndexBeforeTheColumnItReads(t *testing.T) {
 	fixture.steps = []*protocol.CommonPlanningStep{fixture.columnStep("drop-payload", "payload", false)}
 	declared := declaredIndexes()
 	found := fixture.compareIndexes(c, declared)
-	c.Assert(len(found.Changes), qt.Equals, 1)
+	c.Assert(found.Changes, qt.HasLen, 1)
 	plan := fixture.plan(c, found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.TableProperties, noTTLDeclaration),
 		desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
-	c.Assert(len(plan.Diagnostics), qt.Equals, 0, qt.Commentf("%s", plan))
+	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
 	var names []string
 	for _, step := range scheduled(c, plan) {
 		names = append(names, step.Id.Name)
@@ -60,7 +61,7 @@ func TestIndexAlterationDropsTheIndexBeforeTheColumnItReads(t *testing.T) {
 	c.Assert(names, qt.DeepEquals, []string{"row-table-drop-index/000000", "row-table-drop-column/000000"})
 	execution := fixture.execute(c, "index-and-column-drop", plan)
 	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
-	c.Assert(len(fixture.heldIndexes(c)), qt.Equals, 0)
+	c.Assert(fixture.heldIndexes(c), qt.HasLen, 0)
 	c.Assert(fixture.heldColumns(c), qt.DeepEquals, []string{"id", "ts"})
 }
 
@@ -74,10 +75,10 @@ func TestIndexAlterationAddsTheIndexAfterTheColumnItReads(t *testing.T) {
 	fixture.steps = []*protocol.CommonPlanningStep{fixture.columnStep("add-label", "label", true)}
 	declared := declaredIndexes(indexSpec("by_label", "globalIndex", `["label"]`, ""))
 	found := fixture.compareIndexes(c, declared)
-	c.Assert(len(found.Changes), qt.Equals, 1)
+	c.Assert(found.Changes, qt.HasLen, 1)
 	plan := fixture.plan(c, found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.TableProperties, noTTLDeclaration),
 		desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
-	c.Assert(len(plan.Diagnostics), qt.Equals, 0, qt.Commentf("%s", plan))
+	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
 	var names []string
 	for _, step := range scheduled(c, plan) {
 		names = append(names, step.Id.Name)
@@ -98,9 +99,9 @@ func TestIndexAlterationRefusesTheColumnOfAKeptIndex(t *testing.T) {
 	declared := declaredIndexes(indexSpec("by_payload", "globalIndex", `["payload"]`, ""))
 	plan := fixture.plan(c, nil, desiredFacet(c, fixture.client, fixture.owner, schema.TableProperties, noTTLDeclaration),
 		desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
-	c.Assert(len(plan.Diagnostics), qt.Equals, 1)
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
 	c.Assert(plan.Diagnostics[0].Message, qt.Equals, `index "by_payload" reads column "payload", which the declaration does not state`)
-	c.Assert(len(plan.Contributions), qt.Equals, 0)
+	c.Assert(plan.Contributions, qt.HasLen, 0)
 }
 
 // TestIndexAlterationUniqueSubprocess adds a unique index to a table that
@@ -112,15 +113,15 @@ func TestIndexAlterationUniqueSubprocess(t *testing.T) {
 	requireSessionCapability(c, fixture.session, tablecreate.UniqueIndexOnExistingTableCapability, true)
 	declared := declaredIndexes(indexSpec("by_payload", "globalUniqueIndex", `["payload"]`, ""))
 	found := fixture.compareIndexes(c, declared)
-	c.Assert(len(found.Changes), qt.Equals, 1)
+	c.Assert(found.Changes, qt.HasLen, 1)
 	plan := fixture.plan(c, found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.TableProperties, noTTLDeclaration),
 		desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
-	c.Assert(len(plan.Diagnostics), qt.Equals, 0, qt.Commentf("%s", plan))
+	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
 	execution, err := fixture.tryExecute(c, "unique-add", plan)
 	c.Assert(err, qt.IsNil)
 	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
 	c.Assert(fixture.heldIndexes(c)["by_payload"].GetGlobalUniqueIndex(), qt.IsNotNil)
-	c.Assert(len(fixture.compareIndexes(c, declared).Changes), qt.Equals, 0)
+	c.Assert(fixture.compareIndexes(c, declared).Changes, qt.HasLen, 0)
 }
 
 // TestIndexAlterationUniqueRefusedSubprocess is the host's
@@ -137,7 +138,7 @@ func TestIndexAlterationUniqueRefusedSubprocess(t *testing.T) {
 	requireSessionCapability(c, fixture.session, tablecreate.UniqueIndexOnExistingTableCapability, false)
 	declared := declaredIndexes(indexSpec("by_payload", "globalUniqueIndex", `["payload"]`, ""))
 	found := fixture.compareIndexes(c, declared)
-	c.Assert(len(found.Changes), qt.Equals, 1)
+	c.Assert(found.Changes, qt.HasLen, 1)
 	plan := fixture.plan(c, found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.TableProperties, noTTLDeclaration),
 		desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
 	c.Assert(plan.Diagnostics, qt.HasLen, 1)

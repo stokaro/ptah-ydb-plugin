@@ -15,6 +15,15 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+	"github.com/ydb-platform/ydb-go-sdk/v3/scheme"
+	"github.com/ydb-platform/ydb-go-sdk/v3/table"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -25,14 +34,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
-	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
-	"github.com/ydb-platform/ydb-go-sdk/v3/scheme"
-	"github.com/ydb-platform/ydb-go-sdk/v3/table"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // selfConnection is the connection string through which the server's own
@@ -495,7 +496,7 @@ func TestTransferRefusedWithoutTheCapabilitySubprocess(t *testing.T) {
 
 // tableNames names the tables a snapshot holds, in the order it lists them.
 func tableNames(snapshot *protocol.Schema) []string {
-	names := []string{}
+	names := make([]string, 0)
 	for _, table := range snapshot.Tables {
 		names = append(names, table.Identity.Name)
 	}

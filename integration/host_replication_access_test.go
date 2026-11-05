@@ -15,11 +15,12 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // accessSession opens a provider session on the test address for a host that

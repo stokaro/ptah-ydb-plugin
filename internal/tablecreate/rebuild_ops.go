@@ -6,14 +6,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // The operations a table rebuild takes beside a creation and a removal: the
@@ -52,9 +54,7 @@ func RenameModel() *protocol.ValueModel { return proto.CloneOf(renameModel) }
 func buildStatementModel(kind string, contract map[string]any) *protocol.ValueModel {
 	definition := map[string]any{"kind": kind, "representation": "operation", "schema_version": 1, "encoding": "json",
 		"database": "an explicit owner database must match the selected session; an empty database binds to that session"}
-	for key, value := range contract {
-		definition[key] = value
-	}
+	maps.Copy(definition, contract)
 	raw, err := json.Marshal(definition)
 	if err != nil {
 		panic(err)

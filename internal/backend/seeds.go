@@ -11,13 +11,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
-	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
-	"github.com/stokaro/ptah-ydb-plugin/internal/seeds"
-	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
-	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
@@ -26,6 +19,14 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
+	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/seeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
+	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 )
 
 // seedSession locks the session a seed request names for the duration of the

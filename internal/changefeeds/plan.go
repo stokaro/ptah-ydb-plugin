@@ -6,9 +6,10 @@ import (
 	"slices"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
-	"google.golang.org/protobuf/proto"
 )
 
 // Action is what a change does to one changefeed.
@@ -72,8 +73,8 @@ func (c Change) Action() Action {
 // declaration leaves out is kept, because its controller, not the schema,
 // owns it.
 func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservations) ([]Change, string) {
-	wanted := map[string]*native.ChangefeedIntent{}
-	wantedFeeds := map[string]Feed{}
+	wanted := make(map[string]*native.ChangefeedIntent)
+	wantedFeeds := make(map[string]Feed)
 	for _, intent := range desired.GetChangefeeds() {
 		feed, err := FromIntent(intent)
 		if err != nil {
@@ -81,8 +82,8 @@ func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservatio
 		}
 		wanted[intent.GetName()], wantedFeeds[intent.GetName()] = intent, feed
 	}
-	having := map[string]*native.ObservedChangefeed{}
-	havingFeeds := map[string]Feed{}
+	having := make(map[string]*native.ObservedChangefeed)
+	havingFeeds := make(map[string]Feed)
 	for _, observed := range held.GetChangefeeds() {
 		name := observed.GetDescription().GetName()
 		feed, err := FromObserved(observed)

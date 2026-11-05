@@ -4,11 +4,12 @@ import (
 	"path"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // markTransferReaders marks each consumer of a topic or a changefeed the read
@@ -20,7 +21,7 @@ import (
 // description names no consumer yet, and a topic or a changefeed outside the
 // read mark nothing.
 func markTransferReaders(snapshot *protocol.Schema) error {
-	readers := map[string]map[string]string{}
+	readers := make(map[string]map[string]string)
 	for _, value := range snapshot.GetNativeObjects() {
 		if value.GetKind() != schema.TransferProperties {
 			continue
@@ -34,7 +35,7 @@ func markTransferReaders(snapshot *protocol.Schema) error {
 		}
 		source := path.Clean(spec.Source)
 		if readers[source] == nil {
-			readers[source] = map[string]string{}
+			readers[source] = make(map[string]string)
 		}
 		readers[source][spec.Consumer] = replication.TablePath(value.GetOwner().GetSchema(), value.GetOwner().GetName())
 	}

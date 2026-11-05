@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
-	"google.golang.org/protobuf/proto"
 )
 
 // A Serial column, and how a table is created with one.
@@ -34,9 +35,9 @@ import (
 // serialSequence is the sequence a Serial column of type serialType named
 // column is created with.
 func serialSequence(column, serialType string, settings ydbsequence.Settings) *Ydb_Table.SequenceDescription {
-	return &Ydb_Table.SequenceDescription{Name: proto.String(ydbsequence.Name(column)), MinValue: proto.Int64(1),
-		MaxValue: proto.Int64(ydbsequence.Maximum(serialType)), StartValue: proto.Int64(settings.Start), Cache: proto.Uint64(1),
-		Increment: proto.Int64(settings.Increment), Cycle: proto.Bool(false)}
+	return &Ydb_Table.SequenceDescription{Name: new(ydbsequence.Name(column)), MinValue: proto.Int64(1),
+		MaxValue: new(ydbsequence.Maximum(serialType)), StartValue: new(settings.Start), Cache: proto.Uint64(1),
+		Increment: new(settings.Increment), Cycle: new(false)}
 }
 
 // declaresSerial reports whether a declaration asks for a Serial column of the

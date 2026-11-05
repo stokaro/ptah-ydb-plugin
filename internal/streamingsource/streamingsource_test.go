@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 func text(value string) *protocol.SourceValue {
@@ -69,8 +70,8 @@ func TestDecodeDeclarations(t *testing.T) {
 			c := testcheck.New(t)
 			values, err := streamingsource.Decode(c.Context(), tc.document)
 			c.Assert(err, qt.IsNil)
-			c.Assert(len(values), qt.Equals, 1)
-			c.Assert(len(values[0]), qt.Equals, 1)
+			c.Assert(values, qt.HasLen, 1)
+			c.Assert(values[0], qt.HasLen, 1)
 			value := values[0][0]
 			c.Assert(value.Placement, qt.Equals, protocol.SourceModelValue_NATIVE_OBJECT)
 			c.Assert(value.Value.Value.Owner.Schema, qt.Equals, "app/jobs")
@@ -85,7 +86,7 @@ func TestDecodeDeclarations(t *testing.T) {
 			if tc.name == "YAML" {
 				c.Assert(value.Source.Path[0].GetKey(), qt.Equals, "holder")
 			} else {
-				c.Assert(len(value.Source.Path), qt.Equals, 0)
+				c.Assert(value.Source.Path, qt.HasLen, 0)
 			}
 		})
 	}
@@ -97,7 +98,7 @@ func TestDecodeDefaultsAndKeyOrder(t *testing.T) {
 		entry("a", mapping(entry("text", text("SELECT 2;")), entry("run", null()), entry("allow_state_reset", null()), entry("resource_pool", number("10"))))))
 	values, err := streamingsource.Decode(c.Context(), document)
 	c.Assert(err, qt.IsNil)
-	c.Assert(len(values[0]), qt.Equals, 2)
+	c.Assert(values[0], qt.HasLen, 2)
 	c.Assert(values[0][0].Value.Value.Owner.Name, qt.Equals, "a")
 	c.Assert(values[0][1].Value.Value.Owner.Name, qt.Equals, "z")
 	c.Assert(values[0][0].Value.Id, qt.Not(qt.Equals), values[0][1].Value.Id)
@@ -108,8 +109,8 @@ func TestDecodeDefaultsAndKeyOrder(t *testing.T) {
 	for _, empty := range []*protocol.SourceValue{mapping(), null()} {
 		values, err := streamingsource.Decode(c.Context(), yamlDocument(empty))
 		c.Assert(err, qt.IsNil)
-		c.Assert(len(values), qt.Equals, 1)
-		c.Assert(len(values[0]), qt.Equals, 0)
+		c.Assert(values, qt.HasLen, 1)
+		c.Assert(values[0], qt.HasLen, 0)
 	}
 }
 

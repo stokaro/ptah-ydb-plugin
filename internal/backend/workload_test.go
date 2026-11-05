@@ -5,6 +5,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
@@ -13,9 +17,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 // workloadCapabilities are a target whose EnableResourcePools flag is on.
@@ -173,13 +174,13 @@ func TestWorkloadComparison_Undecided(t *testing.T) {
 func TestWorkloadComparison_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	request := workloadRequest(c, schema.ResourcePoolProperties, map[string]proto.Message{"batch": pool(workload.PoolSpec{})}, nil)
-	request.Capabilities = map[string]bool{}
+	request.Capabilities = make(map[string]bool)
 	result, err := backend.New().CompareModels(c.Context(), request)
 	c.Assert(err, qt.ErrorMatches, `.*changing resource pools requires resource_pools; YDB keeps it behind feature flag EnableResourcePools: .*`)
 	c.Assert(result, qt.IsNil)
 
 	kept := workloadRequest(c, schema.ResourcePoolProperties, nil, map[string]proto.Message{"default": pool(workload.PoolSpec{})})
-	kept.Capabilities = map[string]bool{}
+	kept.Capabilities = make(map[string]bool)
 	c.Assert(compareWorkload(c, kept).Changes, qt.HasLen, 0)
 }
 

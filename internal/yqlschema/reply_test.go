@@ -9,6 +9,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
@@ -18,10 +23,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // readRequest is the request a provider-selected run of the host sends for a
@@ -116,7 +117,7 @@ func gaps(reading *yqlschema.Reading) []string {
 func complete(c *qt.C, r row) bool {
 	c.Helper()
 	reading, refusal := yqlschema.Read(r.documents, r.golden.DatabasePath)
-	c.Assert(refusal == nil, qt.IsTrue)
+	c.Assert(refusal, qt.IsNil)
 	return len(gaps(reading)) == 0
 }
 
@@ -207,7 +208,7 @@ func boundedMessage(message string) string {
 func settle(c *qt.C, m meaning) meaning {
 	c.Helper()
 	first := func(values []map[string]any, key func(map[string]any) string) []map[string]any {
-		seen := map[string]bool{}
+		seen := make(map[string]bool)
 		var kept []map[string]any
 		for _, value := range values {
 			if k := key(value); !seen[k] {
@@ -237,7 +238,7 @@ func settle(c *qt.C, m meaning) meaning {
 // withoutFacets is a meaning with the settings of tables and indexes left
 // out, which a complete reply carries none of.
 func withoutFacets(m meaning) meaning {
-	m.TableFacets, m.IndexFacets = map[string]map[string]any{}, map[string]map[string]any{}
+	m.TableFacets, m.IndexFacets = make(map[string]map[string]any), make(map[string]map[string]any)
 	return m
 }
 
@@ -266,7 +267,7 @@ func wireOrder(m meaning) meaning {
 // and each coordination node with the settings its envelope holds.
 func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 	c.Helper()
-	result := meaning{TableFacets: map[string]map[string]any{}, IndexFacets: map[string]map[string]any{}}
+	result := meaning{TableFacets: make(map[string]map[string]any), IndexFacets: make(map[string]map[string]any)}
 	for _, table := range reply.GetTables() {
 		qualified := canonical(table.GetSchema(), table.GetName())
 		object := map[string]any{"Name": table.GetName(), "Schema": table.GetSchema(), "Comment": table.GetComment(), "PrimaryKey": table.GetPrimaryKey()}
@@ -415,7 +416,7 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 		for _, statement := range declared.GetTables() {
 			file.Tables = append(file.Tables, yqlschema.TableStatement{Name: statement.GetName(), Drop: statement.GetDrop(), Guarded: statement.GetGuarded()})
 		}
-		file.Objects = append([]yqlschema.Declaration{}, file.Objects...)
+		file.Objects = append(make([]yqlschema.Declaration, 0), file.Objects...)
 		result.Files = append(result.Files, file)
 	}
 	return result
@@ -548,7 +549,7 @@ var claimedHostKinds = map[string][]string{
 }
 
 func pluginCoverage(coverage *protocol.ModelCoverage) coverageMeaning {
-	result := coverageMeaning{Kinds: map[string]string{}}
+	result := coverageMeaning{Kinds: make(map[string]string)}
 	for _, record := range coverage.GetKinds() {
 		for _, kind := range claimedHostKinds[record.GetModel().GetKind()] {
 			result.Kinds[kind] = strings.ToLower(record.GetKnowledge().GetState().String()) + " " + record.GetKnowledge().GetReason()
@@ -562,8 +563,8 @@ func pluginCoverage(coverage *protocol.ModelCoverage) coverageMeaning {
 
 func hostCoverage(c *qt.C, coverage *goldenCoverage) coverageMeaning {
 	c.Helper()
-	result := coverageMeaning{Kinds: map[string]string{}}
-	claimed := map[string]bool{}
+	result := coverageMeaning{Kinds: make(map[string]string)}
+	claimed := make(map[string]bool)
 	for _, kinds := range claimedHostKinds {
 		for _, kind := range kinds {
 			claimed[kind] = true

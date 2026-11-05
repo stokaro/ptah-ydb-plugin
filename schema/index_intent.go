@@ -2,9 +2,11 @@ package schema
 
 import (
 	"fmt"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"google.golang.org/protobuf/proto"
 	"slices"
+
+	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 func indexIntents(observed *native.IndexObservations) (*native.IndexSetIntent, error) {

@@ -11,12 +11,13 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
-	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // ServiceID names the workload planner.
@@ -182,8 +183,7 @@ func capture(request *protocol.PlanFeaturesRequest, index int, input *protocol.P
 
 // refusedIndex is the input of the change err names, or the first one.
 func refusedIndex(planned []change, err error) int {
-	var refused *workload.ChangeError
-	if errors.As(err, &refused) {
+	if refused, ok := errors.AsType[*workload.ChangeError](err); ok {
 		for _, item := range planned {
 			if item.classifier == refused.Classifier && item.input.Subject.GetName().GetNormalized() == refused.Name {
 				return item.index

@@ -15,17 +15,18 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"slices"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 // ServiceID names the external object planner.
@@ -183,7 +184,7 @@ func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowere
 		inputs[i].specs = specs
 	}
 	replace := request.Capabilities[externals.CapabilityReplace]
-	displaced := map[ydbdecl.Path]bool{}
+	displaced := make(map[ydbdecl.Path]bool)
 	for _, input := range inputs {
 		if input.specs.SourceBefore != nil && externals.Displaces(input.specs.SourceBefore, input.specs.SourceAfter, replace) {
 			displaced[path(input.subject)] = true
@@ -357,9 +358,9 @@ func refusals(capabilities map[string]bool, changes []lowered) []*protocol.Plann
 // supported but got PostgreSQL`), both measured by the host on 25.1.4.7 and
 // 26.2.1.14.
 func conflicts(changes []lowered) map[int]error {
-	found := map[int]error{}
-	written := map[ydbdecl.Path]step{}
-	sourceTypes := map[ydbdecl.Path]string{}
+	found := make(map[int]error)
+	written := make(map[ydbdecl.Path]step)
+	sourceTypes := make(map[ydbdecl.Path]string)
 	for _, change := range changes {
 		for _, planned := range change.steps {
 			if planned.action == protocol.PlanningEffect_DROP && len(planned.secrets) != 0 {
@@ -435,7 +436,7 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 	result := &protocol.PlannedFeatures{Complete: true, Changes: make([]*protocol.PlanningReceipt, len(changes))}
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
 	ids := make([]*protocol.StepIdentity, len(steps))
-	byInput := map[int][]*protocol.StepIdentity{}
+	byInput := make(map[int][]*protocol.StepIdentity)
 	for index, planned := range steps {
 		if err := ctx.Err(); err != nil {
 			return nil, err

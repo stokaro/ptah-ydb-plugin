@@ -29,12 +29,13 @@ import (
 	"slices"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
 // Feed is one changefeed as the host's specification keeps it, with what only

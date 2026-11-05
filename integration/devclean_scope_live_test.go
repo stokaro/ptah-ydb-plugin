@@ -10,9 +10,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // emptyRealmOnCleanup empties the session's realm when the test ends, so the

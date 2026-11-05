@@ -7,6 +7,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
@@ -18,9 +22,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 func declarationRequest(c *qt.C, values ...*protocol.Envelope) *protocol.PlanDeclarationsRequest {
@@ -72,7 +73,7 @@ func TestAuthoredDeclarationsCreateEveryNativeFamily(t *testing.T) {
 	text, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)
 	c.Assert(text.Units, qt.HasLen, 6)
-	byName := map[string]string{}
+	byName := make(map[string]string)
 	for i, step := range result.Contributions[0].Steps {
 		byName[step.Operation.Value.Value.Owner.Name] = text.Units[i].GetSql()
 		var payload map[string]json.RawMessage
@@ -170,7 +171,7 @@ func TestAuthoredStreamingQueryFollowsItsTopics(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Diagnostics, qt.HasLen, 0)
 	c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
-	effects := map[string][]string{}
+	effects := make(map[string][]string)
 	for _, step := range result.Contributions[0].Steps {
 		owner := step.Operation.Value.Value.Owner.Name
 		for _, effect := range step.Metadata.Effects {

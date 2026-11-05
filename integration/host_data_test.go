@@ -14,11 +14,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/seeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // hostDataEntities declares a table and the rows of regions.yaml for it.
@@ -108,7 +108,7 @@ func (f *hostData) stored(c *qt.C) map[string]string {
 	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT code, name, rank FROM `"+path.Join(f.root, "regions")+"` ORDER BY code")
 	c.Assert(err, qt.IsNil)
 	defer func() { c.Check(rows.Close(), qt.IsNil) }()
-	result := map[string]string{}
+	result := make(map[string]string)
 	for rows.Next() {
 		var code, name string
 		var rank *int64

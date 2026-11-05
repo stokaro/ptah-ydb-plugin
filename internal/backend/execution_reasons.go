@@ -3,8 +3,9 @@ package backend
 import (
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 )
 
 // realmPrefixLines is how many lines a session on a dev realm sends in front

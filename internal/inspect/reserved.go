@@ -1,9 +1,10 @@
 package inspect
 
 import (
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // YDB tables and native scheme objects share one directory namespace. A service

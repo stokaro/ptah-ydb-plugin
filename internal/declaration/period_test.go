@@ -1,10 +1,12 @@
 package declaration_test
 
 import (
+	"testing"
+
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/declaration"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"testing"
 )
 
 func TestCoordinationPeriodsRemainExact(t *testing.T) {

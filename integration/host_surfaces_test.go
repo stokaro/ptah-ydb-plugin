@@ -16,8 +16,9 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The tests in this file run the host's reading surfaces, which have no YDB

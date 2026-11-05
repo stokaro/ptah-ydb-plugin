@@ -12,10 +12,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // storagePool is the storage pool kind local-ydb has, the only one its
@@ -72,7 +73,7 @@ func ttlText(ttl *options.TimeToLiveSettings) string {
 // compression and the columns placed in it, in name order. The columns of the
 // default family are not listed, as the host's reader does not list them.
 func familyTexts(described options.Description) []string {
-	placed := map[string][]string{}
+	placed := make(map[string][]string)
 	for _, column := range described.Columns {
 		if column.Family != "" && column.Family != "default" {
 			placed[column.Family] = append(placed[column.Family], column.Name)

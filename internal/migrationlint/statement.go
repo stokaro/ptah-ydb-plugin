@@ -23,8 +23,9 @@
 package migrationlint
 
 import (
-	"github.com/stokaro/ptah-ydb-plugin/internal/yqlddl"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/yqlddl"
 )
 
 // Statement is one statement of a migration file, in the forms rules read.

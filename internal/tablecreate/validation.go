@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 )
 
 // unsupportedError marks a declaration the provider cannot carry, as opposed

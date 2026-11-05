@@ -4,15 +4,16 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func indexObservation(name string) *native.ObservedIndex {
@@ -136,7 +137,7 @@ func TestNativeSequenceTypeSurvivesWireAndOfflineNormalization(t *testing.T) {
 	c := testcheck.New(t)
 	dataType, err := proto.Marshal(primitive(Ydb.Type_INT64))
 	c.Assert(err, qt.IsNil)
-	sequence := &Ydb_Table.SequenceDescription{Name: proto.String("_serial"), Increment: proto.Int64(1)}
+	sequence := &Ydb_Table.SequenceDescription{Name: new("_serial"), Increment: proto.Int64(1)}
 	sequence.ProtoReflect().SetUnknown(protowire.AppendBytes(protowire.AppendTag(nil, 9, protowire.BytesType), dataType))
 	upstream := &Ydb_Table.ColumnMeta{Name: "id", Type: primitive(Ydb.Type_INT64), DefaultValue: &Ydb_Table.ColumnMeta_FromSequence{FromSequence: sequence}}
 	wire, err := proto.Marshal(upstream)

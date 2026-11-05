@@ -3,10 +3,11 @@ package testsource
 import (
 	"encoding/json"
 	"fmt"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 	"io"
 	"strings"
+
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
 )
 
 // YAMLDocument captures one document-level mapping under its declared model.

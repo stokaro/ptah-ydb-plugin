@@ -16,8 +16,9 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The host's selectors name native objects within the opened database, while
@@ -54,7 +55,7 @@ func TestHostScopesNativeObjectsSubprocess(t *testing.T) {
 		statements           []string
 	}{
 		{"included node", "--include", directory + ".workers[type=coordination_node]", []string{"ALTER COORDINATION NODE `" + directory + "/workers` SET (self_check_period = Interval('PT3S'))"}},
-		{"excluded node", "--exclude", directory + ".workers[type=coordination_node]", []string{}},
+		{"excluded node", "--exclude", directory + ".workers[type=coordination_node]", make([]string, 0)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

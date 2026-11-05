@@ -11,14 +11,15 @@ import (
 	"strconv"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // NativeIndexOperationKind identifies the addition of one vector or full-text
@@ -451,7 +452,7 @@ func decodeNativeIndex(raw []byte) (*NativeIndex, error) {
 	if !nativeOnlyIndex(index) || !proto.Equal(index, nativeIndexDefinition(index)) {
 		return nil, fmt.Errorf("a YDB index addition adds one vector or full-text index and states no settings of the tables that implement it")
 	}
-	columns := nativeIndexColumns{types: map[string]string{}}
+	columns := nativeIndexColumns{types: make(map[string]string)}
 	for _, name := range slices.Concat(index.GetIndexColumns(), index.GetDataColumns()) {
 		// The operation is checked without the table: every column reads as the
 		// type its kind takes, and execution checks the columns the table holds.
@@ -514,7 +515,7 @@ func nativeIndexOptions(spec *native.IndexIntent) []string {
 	if analyzers == nil {
 		return nil
 	}
-	options := map[string]string{}
+	options := make(map[string]string)
 	if analyzers.Tokenizer != nil {
 		options["tokenizer"] = strings.ToLower(analyzers.GetTokenizer().String())
 	}

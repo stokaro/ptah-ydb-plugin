@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/readproof"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // Each read ran on YDB 26.2.1.14 and answered rows.

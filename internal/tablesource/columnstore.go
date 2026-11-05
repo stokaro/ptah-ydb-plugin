@@ -10,10 +10,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 )
 
 // The YAML table key that declares a column table, and the keys of its
@@ -174,7 +175,7 @@ func tieredTTL(column, unit string, tiers []tierText) (*native.ColumnTTLPolicy, 
 
 // checkHashColumns refuses a hash column that is blank or named twice.
 func checkHashColumns(names []string) error {
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, name := range names {
 		if !utf8.ValidString(name) || strings.ContainsRune(name, 0) || strings.TrimSpace(name) == "" || seen[name] {
 			return fmt.Errorf("hash partitioning column %q is empty or repeated", name)

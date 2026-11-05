@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 )
 
 const (
@@ -139,7 +140,7 @@ func normalizeObject(described proto.Message) error {
 		if value.GetSourceType() == "" || value.GetDataSourcePath() == "" || value.Location == nil || len(value.Columns) == 0 {
 			return fmt.Errorf("incomplete YDB external table")
 		}
-		names := map[string]bool{}
+		names := make(map[string]bool)
 		for _, column := range value.Columns {
 			if column.Name == "" || names[column.Name] {
 				return fmt.Errorf("invalid YDB external column identity")

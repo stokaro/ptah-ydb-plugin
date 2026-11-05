@@ -1,10 +1,11 @@
 package yqlschema
 
 import (
+	"strings"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
-	"strings"
 )
 
 // secret accepts a reference only. Every parse error is replaced because a

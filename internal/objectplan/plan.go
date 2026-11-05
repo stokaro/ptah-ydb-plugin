@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // PathKind identifies the physical namespace shared by native YDB objects.

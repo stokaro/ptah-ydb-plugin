@@ -10,14 +10,15 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 // TestSerialCreationNativeAndTextSubprocess creates a BigSerial that starts
@@ -74,7 +75,7 @@ func TestSerialCreationNativeAndTextSubprocess(t *testing.T) {
 
 	snapshot, err := client.Inspect(ctx, &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
 	c.Assert(err, qt.IsNil)
-	held := map[string][]any{}
+	held := make(map[string][]any)
 	for _, table := range snapshot.Tables {
 		id := table.Columns[0].Observed
 		held[table.Identity.Name] = []any{id.ColumnType, id.IsNullable, id.AutoIncrement, id.IdentityStart, id.IdentityIncrement, id.SequenceRestart}

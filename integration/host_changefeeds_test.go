@@ -13,10 +13,6 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
@@ -25,6 +21,11 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
 // feedShape is what the server holds of one changefeed: its mode, its topic's
@@ -48,7 +49,7 @@ func describedChangefeeds(c *qt.C, opened *connection.Connection, absolute strin
 	if err != nil {
 		return nil, false
 	}
-	result := map[string]feedShape{}
+	result := make(map[string]feedShape)
 	for _, feed := range described.Changefeeds {
 		topic, err := opened.Driver.Topic().Describe(c.Context(), path.Join(absolute, feed.Name))
 		c.Assert(err, qt.IsNil)

@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // HeldWorkload is the resource pools and the classifiers a database holds,
@@ -28,7 +29,7 @@ type HeldWorkload struct {
 // nothing while the EnableResourcePools flag is off, so an empty answer
 // establishes absence only on a target that keeps resource pools.
 func ReadWorkload(ctx context.Context, db *sql.DB, database string) (held HeldWorkload, err error) {
-	held = HeldWorkload{Pools: map[string]workload.PoolSpec{}, Classifiers: map[string]workload.ClassifierSpec{}}
+	held = HeldWorkload{Pools: make(map[string]workload.PoolSpec), Classifiers: make(map[string]workload.ClassifierSpec)}
 	pools, err := db.QueryContext(ctx, "SELECT Name, ConcurrentQueryLimit, QueueSize, DatabaseLoadCpuThreshold, QueryMemoryLimitPercentPerNode, "+
 		"QueryCpuLimitPercentPerNode, TotalCpuLimitPercentPerNode, ResourceWeight FROM "+ydbtype.QuoteIdentifier(path.Join(database, ".sys/resource_pools")))
 	if err != nil {

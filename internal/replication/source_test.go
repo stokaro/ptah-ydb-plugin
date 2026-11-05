@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -52,7 +53,7 @@ func TestApplyReplicationSettings_FailurePath(t *testing.T) {
 		settings map[string]string
 		wantErr  string
 	}{
-		{name: "nothing", settings: map[string]string{}, wantErr: `ALTER needs a modeled setting`},
+		{name: "nothing", settings: make(map[string]string), wantErr: `ALTER needs a modeled setting`},
 		{name: "a consistency level", settings: map[string]string{"consistency_level": "GLOBAL"}, wantErr: `setting "consistency_level" cannot change in a desired ALTER declaration`},
 		{name: "a lifecycle command", settings: map[string]string{"state": "PAUSED"}, wantErr: `setting "state" cannot change in a desired ALTER declaration`},
 		{name: "a connection string beside an endpoint", settings: map[string]string{"endpoint": "moved:2136", "connection_string": "grpc://other:2136/?database=/remote"},

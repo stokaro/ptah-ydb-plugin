@@ -1,10 +1,10 @@
 package externals
 
 import (
-	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 

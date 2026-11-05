@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/grpc/status"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
 
 // GuardReplay judges each replay statement offline, as the host's YDB replay
@@ -22,8 +23,7 @@ func (p *Provider) GuardReplay(ctx context.Context, request *protocol.GuardRepla
 	result := &protocol.GuardedReplay{Verdicts: make([]*protocol.ReplayVerdict, len(request.GetStatements()))}
 	for i, statement := range request.GetStatements() {
 		verdict := &protocol.ReplayVerdict{}
-		var refusal *yql.RealmRefusal
-		if errors.As(yql.GuardReplay(statement, request.GetScope().GetServer()), &refusal) {
+		if refusal, ok := errors.AsType[*yql.RealmRefusal](yql.GuardReplay(statement, request.GetScope().GetServer())); ok {
 			verdict.Refused, verdict.Operation = true, refusal.Operation
 		}
 		result.Verdicts[i] = verdict

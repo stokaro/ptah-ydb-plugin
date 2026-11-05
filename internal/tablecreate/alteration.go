@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -18,6 +16,9 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // AlterOperationKind identifies a native alteration of an existing row table:
@@ -141,7 +142,7 @@ func CaptureTTLAlteration(id string, owner *protocol.Reference, change ttlChange
 	} else {
 		request.TtlAction = &Ydb_Table.AlterTableRequest_SetTtlSettings{SetTtlSettings: change.set}
 	}
-	return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: map[string]string{}, HeldTTL: change.held})
+	return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: make(map[string]string), HeldTTL: change.held})
 }
 
 // CapturePartitioningAlteration builds the operation for a change of the
@@ -149,7 +150,7 @@ func CaptureTTLAlteration(id string, owner *protocol.Reference, change ttlChange
 // planned against a table in owner.
 func CapturePartitioningAlteration(id string, owner *protocol.Reference, change partitioningChange) (*protocol.NormalizedValue, error) {
 	request := &Ydb_Table.AlterTableRequest{AlterPartitioningSettings: change.set, SetKeyBloomFilter: change.bloom, SetReadReplicasSettings: change.replicas}
-	alteration := &Alteration{Request: request, HeldColumns: map[string]string{}}
+	alteration := &Alteration{Request: request, HeldColumns: make(map[string]string)}
 	if change.set != nil {
 		alteration.HeldPartitioning = change.held
 	}
@@ -171,17 +172,17 @@ func CaptureIndexAlteration(id string, owner *protocol.Reference, change indexCh
 	}
 	if change.rename != nil {
 		request := &Ydb_Table.AlterTableRequest{RenameIndexes: []*Ydb_Table.RenameIndexItem{{SourceName: change.rename.held.Name, DestinationName: change.rename.to}}}
-		return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: map[string]string{}, HeldIndexes: []*native.TableIndexDescription{change.rename.held}})
+		return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: make(map[string]string), HeldIndexes: []*native.TableIndexDescription{change.rename.held}})
 	}
 	if change.add == nil {
 		request := &Ydb_Table.AlterTableRequest{DropIndexes: []string{change.drop.Name}}
-		return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: map[string]string{}, HeldIndexes: []*native.TableIndexDescription{change.drop}})
+		return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: make(map[string]string), HeldIndexes: []*native.TableIndexDescription{change.drop}})
 	}
 	index, err := tableIndex(change.add)
 	if err != nil {
 		return nil, err
 	}
-	return captureRequest(id, owner, &Alteration{Request: &Ydb_Table.AlterTableRequest{AddIndexes: []*Ydb_Table.TableIndex{index}}, HeldColumns: map[string]string{}})
+	return captureRequest(id, owner, &Alteration{Request: &Ydb_Table.AlterTableRequest{AddIndexes: []*Ydb_Table.TableIndex{index}}, HeldColumns: make(map[string]string)})
 }
 
 func captureRequest(id string, owner *protocol.Reference, alteration *Alteration) (*protocol.NormalizedValue, error) {
@@ -323,7 +324,7 @@ func decodeAlteration(raw []byte) (*Alteration, error) {
 	if err := json.Unmarshal(canonical, &fields); err != nil || containsNull(fields) {
 		return nil, fmt.Errorf("YDB alteration settings cannot be null")
 	}
-	alteration := &Alteration{Request: &Ydb_Table.AlterTableRequest{}, HeldColumns: map[string]string{}}
+	alteration := &Alteration{Request: &Ydb_Table.AlterTableRequest{}, HeldColumns: make(map[string]string)}
 	if err := unmarshalRequest(payload.Request, alteration.Request); err != nil {
 		return nil, fmt.Errorf("invalid YDB table alteration request")
 	}
@@ -424,7 +425,7 @@ func validateAlteration(alteration *Alteration) error {
 	if err := validateIndexAlteration(alteration); err != nil {
 		return err
 	}
-	named := map[string]bool{}
+	named := make(map[string]bool)
 	for _, family := range slices.Concat(request.AddColumnFamilies, request.AlterColumnFamilies) {
 		if err := only(family, "name", "data", "compression"); err != nil {
 			return err
@@ -449,7 +450,7 @@ func validateAlteration(alteration *Alteration) error {
 			return fmt.Errorf("YDB family alteration states no setting")
 		}
 	}
-	held := map[string]bool{}
+	held := make(map[string]bool)
 	for _, family := range alteration.HeldFamilies {
 		held[family.Name] = true
 	}
@@ -461,7 +462,7 @@ func validateAlteration(alteration *Alteration) error {
 			return fmt.Errorf("held YDB column families disagree with the alteration")
 		}
 	}
-	columns := map[string]bool{}
+	columns := make(map[string]bool)
 	for _, column := range request.AlterColumns {
 		if err := only(column, "name", "family"); err != nil {
 			return err
@@ -484,7 +485,7 @@ func validateAlteration(alteration *Alteration) error {
 // added column is nullable, has no default and states no family: the server
 // refuses a NOT NULL addition, and a default is accepted on some lines only.
 func validateColumnAlteration(request *Ydb_Table.AlterTableRequest) error {
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for _, column := range request.AddColumns {
 		if err := only(column, "name", "type", "not_null"); err != nil {
 			return err
@@ -644,7 +645,7 @@ func validateIndexAlteration(alteration *Alteration) error {
 	if !validName(index.Name) || len(index.IndexColumns) == 0 {
 		return fmt.Errorf("invalid YDB index addition")
 	}
-	columns := map[string]bool{}
+	columns := make(map[string]bool)
 	for _, column := range slices.Concat(index.IndexColumns, index.DataColumns) {
 		if !validName(column) || columns[column] {
 			return fmt.Errorf("invalid or duplicate YDB index column")

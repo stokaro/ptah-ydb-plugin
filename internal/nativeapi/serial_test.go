@@ -6,11 +6,6 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -18,6 +13,12 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
 )
 
 // serialOwner is app.records, which these tests create and change.
@@ -28,8 +29,8 @@ func serialOwner() *protocol.Reference {
 // serialSequence is the sequence YDB reports for a BigSerial id that steps by
 // increment from start, with the data type YDB reports beside it.
 func serialSequence(start, increment int64) *native.SequenceDescription {
-	return &native.SequenceDescription{Name: proto.String("_serial_column_id"), MinValue: proto.Int64(1), MaxValue: proto.Int64(9223372036854775807),
-		StartValue: proto.Int64(start), Cache: proto.Uint64(1), Increment: proto.Int64(increment), Cycle: proto.Bool(false),
+	return &native.SequenceDescription{Name: new("_serial_column_id"), MinValue: proto.Int64(1), MaxValue: proto.Int64(9223372036854775807),
+		StartValue: new(start), Cache: proto.Uint64(1), Increment: new(increment), Cycle: new(false),
 		DataType: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_INT64}}}
 }
 
@@ -37,7 +38,7 @@ func serialSequence(start, increment int64) *native.SequenceDescription {
 // the sequence given.
 func serialRecords(sequence *native.SequenceDescription) *native.DescribeTableResult {
 	return &native.DescribeTableResult{Self: &Ydb_Scheme.Entry{Name: "records", Type: Ydb_Scheme.Entry_TABLE}, PrimaryKey: []string{"id"},
-		Columns: []*native.ColumnMeta{{Name: "id", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_INT64}}, NotNull: proto.Bool(true),
+		Columns: []*native.ColumnMeta{{Name: "id", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_INT64}}, NotNull: new(true),
 			DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: sequence}}}}
 }
 

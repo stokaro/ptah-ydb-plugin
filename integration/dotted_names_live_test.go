@@ -12,11 +12,12 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // readTable is what an inspection reports of one table: the identity a
@@ -30,7 +31,7 @@ type readTable struct {
 // identity, as directory|name.
 func tablesRead(c *qt.C, snapshot *protocol.Schema, owned ...string) map[string]readTable {
 	c.Helper()
-	read := map[string]readTable{}
+	read := make(map[string]readTable)
 	for _, table := range snapshot.GetTables() {
 		identity := table.GetIdentity().GetSchema() + "|" + table.GetIdentity().GetName()
 		if !slices.Contains(owned, identity) {

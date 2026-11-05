@@ -38,7 +38,7 @@ func run() error {
 			if definition.Options == nil {
 				definition.Options = &descriptorpb.FileOptions{}
 			}
-			definition.Options.GoPackage = proto.String("github.com/ydb-platform/ydb-go-genproto/" + prefix + strings.ReplaceAll(string(file.Package()), ".", "_"))
+			definition.Options.GoPackage = new("github.com/ydb-platform/ydb-go-genproto/" + prefix + strings.ReplaceAll(string(file.Package()), ".", "_"))
 		}
 		set.File = append(set.File, definition)
 		return true

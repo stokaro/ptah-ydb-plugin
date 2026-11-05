@@ -15,7 +15,6 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -24,6 +23,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // embeddingFixture is a session on a dev realm of its own through a provider
@@ -372,14 +372,14 @@ func TestEmbeddingEventsSubprocess(t *testing.T) {
 	}{
 		{name: "one page of one", run: "r1", after: 1, max: 1, exists: true, kinds: []string{"claimed"}, complete: false},
 		{name: "the rest", run: "r1", after: 2, max: 5, exists: true, kinds: []string{"checkpoint"}, complete: true},
-		{name: "a run that is not there", run: "r9", max: 5, kinds: []string{}, complete: true},
+		{name: "a run that is not there", run: "r9", max: 5, kinds: make([]string, 0), complete: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			page, err := f.client.ReadEmbeddingEvents(c.Context(), &protocol.ReadEmbeddingEventsRequest{SessionId: f.session, RunId: test.run,
 				AfterSequence: test.after, MaxEvents: test.max})
 			c.Assert(err, qt.IsNil)
-			kinds := []string{}
+			kinds := make([]string, 0)
 			for _, event := range page.Events {
 				kinds = append(kinds, event.Kind)
 			}

@@ -10,12 +10,13 @@ import (
 	"strconv"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // ColumnOperationKind identifies the creation of a column table.
@@ -210,8 +211,8 @@ func ValidateColumnTableCreation(creation *native.ColumnTableCreation) error {
 	if len(creation.Columns) == 0 || len(creation.PrimaryKey) == 0 {
 		return fmt.Errorf("YDB creation requires columns and an ordered primary key")
 	}
-	types := map[string]string{}
-	nullable := map[string]bool{}
+	types := make(map[string]string)
+	nullable := make(map[string]bool)
 	for _, column := range creation.Columns {
 		if err := only(column, "name", "type", "not_null"); err != nil {
 			return err
@@ -228,7 +229,7 @@ func ValidateColumnTableCreation(creation *native.ColumnTableCreation) error {
 		}
 		types[column.Name], nullable[column.Name] = spelling, optional
 	}
-	keys := map[string]bool{}
+	keys := make(map[string]bool)
 	for _, key := range creation.PrimaryKey {
 		if types[key] == "" || keys[key] {
 			return fmt.Errorf("invalid YDB primary key column")
@@ -238,7 +239,7 @@ func ValidateColumnTableCreation(creation *native.ColumnTableCreation) error {
 		}
 		keys[key] = true
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, name := range creation.HashColumns {
 		if !keys[name] {
 			return unsupported("hash column %q must belong to the primary key", name)

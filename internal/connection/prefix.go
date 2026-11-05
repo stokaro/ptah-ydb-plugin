@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 )
 
 // pathPrefix is the pragma every query of a session on a dev realm starts

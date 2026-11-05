@@ -181,8 +181,8 @@ func NormalizeCoordinationChange(input *protocol.ValueInput) (*protocol.Normaliz
 	if err := json.Unmarshal(canonical, &operands); err != nil || len(operands) != 2 || operands["before"] == nil || operands["after"] == nil {
 		return nil, fmt.Errorf("coordination change requires exact before and after operands")
 	}
-	present := map[string]bool{}
-	validated := map[string]*protocol.Envelope{}
+	present := make(map[string]bool)
+	validated := make(map[string]*protocol.Envelope)
 	for _, key := range []string{"before", "after"} {
 		raw := operands[key]
 		if bytes.Equal(raw, []byte("null")) {

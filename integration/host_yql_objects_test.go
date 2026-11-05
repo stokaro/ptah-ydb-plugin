@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
@@ -36,7 +37,7 @@ func TestHostAppliesYQLComments_HappyPath(t *testing.T) {
 			table: map[string]string{"ptah.comment": "table", "ptah.comment.column.body": "column"}, view: map[string]string{"ptah.comment": "view"}},
 		{name: "changed", comments: "COMMENT ON TABLE `{dir}/items` IS 'changed; table'; COMMENT ON COLUMN `{dir}/items`.body IS 'line\\nnext'; COMMENT ON VIEW `{dir}/summary` IS 'changed view';",
 			table: map[string]string{"ptah.comment": "changed; table", "ptah.comment.column.body": "line\nnext"}, view: map[string]string{"ptah.comment": "changed view"}},
-		{name: "removed", table: map[string]string{}, view: map[string]string{}},
+		{name: "removed", table: make(map[string]string), view: make(map[string]string)},
 	} {
 		applyRuns(c, directory, "sql", declarations+replacer.Replace(step.comments))
 		c.Assert(storedAttributes(c, opened, items), qt.DeepEquals, step.table, qt.Commentf("%s", step.name))

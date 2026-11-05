@@ -8,9 +8,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-sdk/v3/table"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 )
 
 // storedDefaults reads the literal default of each column of the table at
@@ -18,7 +19,7 @@ import (
 // one.
 func storedDefaults(c *qt.C, opened *connection.Connection, absolute string) map[string]string {
 	c.Helper()
-	defaults := map[string]string{}
+	defaults := make(map[string]string)
 	err := opened.Driver.Table().Do(c.Context(), func(ctx context.Context, session table.Session) error {
 		described, err := session.DescribeTable(ctx, absolute)
 		if err != nil {

@@ -10,12 +10,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // The corpus holds the inputs the host's bundled YDB source decoder
@@ -162,7 +163,7 @@ func TestCorpusShape(t *testing.T) {
 	c := testcheck.New(t)
 	rows := corpus(c, func(string) bool { return true })
 	c.Assert(len(rows) >= 240, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
-	hosts := map[string]bool{}
+	hosts := make(map[string]bool)
 	for _, r := range rows {
 		hosts[r.golden.Host] = true
 		c.Assert(r.golden.Host, qt.Matches, `[0-9a-f]{40}`, qt.Commentf(r.name))
@@ -200,7 +201,7 @@ func TestDifferential_FailurePath(t *testing.T) {
 			c := testcheck.New(t)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, r))
 			c.Assert(err, qt.IsNotNil, qt.Commentf("the host refuses it with: %s", r.golden.Error))
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -210,7 +211,7 @@ func TestDifferential_FailurePath(t *testing.T) {
 // unclaimed YAML key by name before it dispatches anything. (It reads an
 // unclaimed Go comment as no declaration at all, so the provider claims the
 // Go directives it cannot carry and refuses them itself.)
-var unclaimed = map[string]string{}
+var unclaimed = make(map[string]string)
 
 // elsewhere names the inputs whose declarations another decoder of the
 // provider carries, with the facet kind it returns for the table. The rows were
@@ -280,10 +281,10 @@ func TestStricter_AreRefusedAtDecode(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c := testcheck.New(t)
 			rows := corpus(c, func(candidate string) bool { return candidate == name })
-			c.Assert(len(rows), qt.Equals, 1)
+			c.Assert(rows, qt.HasLen, 1)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
 			c.Assert(err, qt.ErrorMatches, `(?s).*`+words+`.*`)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -302,10 +303,10 @@ func TestLater_AreRefusedAtDecode(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c := testcheck.New(t)
 			rows := corpus(c, func(candidate string) bool { return candidate == name })
-			c.Assert(len(rows), qt.Equals, 1)
+			c.Assert(rows, qt.HasLen, 1)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
 			c.Assert(err, qt.ErrorMatches, `(?s).*`+words+`.*`)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -341,10 +342,10 @@ func TestDeferred_RefusedByName(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c := testcheck.New(t)
 			rows := corpus(c, func(candidate string) bool { return candidate == name })
-			c.Assert(len(rows), qt.Equals, 1)
+			c.Assert(rows, qt.HasLen, 1)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
 			c.Assert(err, qt.ErrorMatches, `(?s).*`+words+`.*`)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -357,7 +358,7 @@ func TestDeferred_DecodedElsewhere(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			c := testcheck.New(t)
 			rows := corpus(c, func(candidate string) bool { return candidate == name })
-			c.Assert(len(rows), qt.Equals, 1)
+			c.Assert(rows, qt.HasLen, 1)
 			decoded, err := backend.New().DecodeSource(c.Context(), request(c, rows[0]))
 			c.Assert(err, qt.IsNil)
 			c.Assert(pluginMeaning(c, decoded), qt.DeepEquals, hostMeaning(c, rows[0].golden))
@@ -373,7 +374,7 @@ func TestDeferred_DecodedElsewhere(t *testing.T) {
 }
 
 func claimedNames() map[string]bool {
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for _, key := range tablesource.YAMLKeys() {
 		names[key.Key] = true
 	}

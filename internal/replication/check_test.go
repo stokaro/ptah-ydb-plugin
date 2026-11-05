@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	ydbreplication "github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
@@ -38,7 +39,7 @@ func TestReplicationCapabilityAndImmutableState(t *testing.T) {
 	c := testcheck.New(t)
 	spec := mirror()
 	c.Assert(ydbreplication.CheckReplication("mirror", spec, ydbtype.Capabilities{}).Key, qt.Equals, ydbreplication.CapabilityReplication)
-	c.Assert(ydbreplication.CheckReplication("mirror", spec, ydbtype.Capabilities{ydbreplication.CapabilityReplication: true}) == nil, qt.IsTrue)
+	c.Assert(ydbreplication.CheckReplication("mirror", spec, ydbtype.Capabilities{ydbreplication.CapabilityReplication: true}), qt.Equals, (*ydbreplication.Refusal)(nil))
 	changed := mirror()
 	changed.Items[0].Target = "other"
 	c.Assert(ydbreplication.ReplicationChangeRefusal("mirror", changed, spec, ydbreplication.StatePaused), qt.IsNotNil)

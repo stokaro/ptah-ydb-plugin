@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
-	"github.com/stokaro/ptah-ydb-plugin/internal/monitoring"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/monitoring"
 )
 
 // ErrNoMonitoring reports a session whose address names no monitoring

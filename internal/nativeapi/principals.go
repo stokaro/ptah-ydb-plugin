@@ -8,9 +8,10 @@ import (
 	"path"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 )
 
 // ErrPrincipalsRefused marks the specific access refusal of the system views

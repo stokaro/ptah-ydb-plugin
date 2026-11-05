@@ -5,11 +5,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // declaredIndexes compiles the indexes a table declares into the indexes its
@@ -187,7 +188,7 @@ func keyComparable(ydbType string) bool {
 // build: one of another kind, with settings of its own, or that reads a column
 // the request does not create, and two indexes of one name.
 func validateIndexes(request *Ydb_Table.CreateTableRequest, names map[string]bool) error {
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, index := range request.GetIndexes() {
 		if err := only(index, "name", "index_columns", "data_columns", "global_index", "global_async_index", "global_unique_index"); err != nil {
 			return err

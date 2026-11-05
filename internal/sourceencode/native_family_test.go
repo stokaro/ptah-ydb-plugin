@@ -6,6 +6,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/sourceencode"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
@@ -17,10 +22,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func familyValue(c *qt.C, value *protocol.Envelope, err error) *protocol.NormalizedValue {
@@ -182,7 +183,7 @@ func TestTopicFromARead_HappyPath(t *testing.T) {
 func TestNativeFamilies_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	withAccess := topicFamilyIntent(c)
-	withAccess.Access = &native.AccessIntent{Owner: proto.String("alice")}
+	withAccess.Access = &native.AccessIntent{Owner: new("alice")}
 	withStorage := topicFamilyIntent(c)
 	withStorage.RetentionStorageMb = 100
 	withMetrics := topicFamilyIntent(c)

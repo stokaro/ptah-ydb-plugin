@@ -59,7 +59,7 @@ func hostCompat(c *qt.C) (binary, manifest string) {
 	if !probed {
 		answer = probeCompat(c, binary, manifest)
 		if compatReach.answers == nil {
-			compatReach.answers = map[string]string{}
+			compatReach.answers = make(map[string]string)
 		}
 		compatReach.answers[binary] = answer
 	}

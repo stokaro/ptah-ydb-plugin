@@ -12,9 +12,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 )
 
 // hostCommand runs one command of the pinned host with this provider selected

@@ -5,10 +5,11 @@ import (
 	"slices"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 const (
@@ -40,7 +41,7 @@ func projectTopic(topic *native.DescribeTopicResult) {
 
 // ValidateChangefeeds validates names before they become native API paths.
 func ValidateChangefeeds(feeds []*native.ChangefeedDescription) error {
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, feed := range feeds {
 		if err := Known(feed); err != nil {
 			return err
@@ -149,7 +150,7 @@ func normalizeTopic(topic *native.DescribeTopicResult) error {
 	if self.GetName() != "" || self.GetType() != 0 || self.GetSizeBytes() != 0 || self.GetCreatedAt() != nil {
 		return fmt.Errorf("topic properties contain transient identity")
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, consumer := range topic.Consumers {
 		if consumer.Name == "" || seen[consumer.Name] {
 			return fmt.Errorf("invalid or duplicate YDB topic consumer")

@@ -16,8 +16,6 @@ import (
 	"path"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -26,6 +24,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Page is the monitoring page a column table's description is read from, with
@@ -104,7 +105,7 @@ func Decode(body []byte, fullPath string, table *native.ColumnTableDescribeResul
 		HashColumns: slices.Clone(hash.Columns), Partitions: source.ColumnShardCount,
 		DataChannelCount: source.GetStorageConfig().GetDataChannelCount(),
 	}
-	indexIDs := map[uint64]bool{}
+	indexIDs := make(map[uint64]bool)
 	for _, index := range source.GetSchema().GetIndexes() {
 		if index.Id == 0 || indexIDs[index.Id] {
 			return nil, fmt.Errorf("invalid or duplicate YDB local index ID")
@@ -145,7 +146,7 @@ func object(data []byte) (map[string]json.RawMessage, error) {
 	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
 		return nil, fmt.Errorf("expected a JSON object")
 	}
-	members := map[string]json.RawMessage{}
+	members := make(map[string]json.RawMessage)
 	for decoder.More() {
 		token, err := decoder.Token()
 		if err != nil {
@@ -196,7 +197,7 @@ func checkColumns(source *native.MonitoringColumnSchema, table *native.ColumnTab
 		!slices.Equal(source.KeyColumnNames, table.PrimaryKey) {
 		return nil, nil, fmt.Errorf("YDB columns or primary key disagree across descriptions")
 	}
-	ids, names := map[uint64]string{}, map[string]bool{}
+	ids, names := make(map[uint64]string), make(map[string]bool)
 	for i, column := range source.Columns {
 		if column.Id == 0 || ids[column.Id] != "" || column.Name == "" || names[column.Name] {
 			return nil, nil, fmt.Errorf("invalid or duplicate YDB column identity")
@@ -241,7 +242,7 @@ func referencesKnown(columns []string, known map[string]bool) bool {
 	if len(columns) == 0 {
 		return false
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, name := range columns {
 		if !known[name] || seen[name] {
 			return false

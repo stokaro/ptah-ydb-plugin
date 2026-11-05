@@ -12,11 +12,12 @@ import (
 	"strconv"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 // The syntax this package claims.
@@ -89,7 +90,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 		consumer      ydbdecl.Consumer
 	}
 	var consumers []pendingConsumer
-	owned := map[int]bool{}
+	owned := make(map[int]bool)
 	for index, fragment := range document.GetFragments() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -163,7 +164,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 	for index := range owned {
 		result[index] = nil
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for position, topic := range topicsDeclared {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -217,7 +218,7 @@ func yamlTopic(entry *protocol.SourceEntry) (declared, error) {
 	if fields == nil {
 		return declared{}, fmt.Errorf("a topic requires a mapping")
 	}
-	values := map[string]string{}
+	values := make(map[string]string)
 	var consumerEntries []*protocol.SourceEntry
 	topic := declared{name: entry.Key}
 	for _, field := range fields.GetEntries() {
@@ -266,7 +267,7 @@ func yamlTopic(entry *protocol.SourceEntry) (declared, error) {
 }
 
 func yamlConsumer(entry *protocol.SourceEntry) (ydbdecl.Consumer, error) {
-	values := map[string]string{}
+	values := make(map[string]string)
 	if entry.GetValue().GetNull() == nil {
 		fields := entry.GetValue().GetMapping()
 		if fields == nil {
@@ -300,7 +301,7 @@ func attributes(mapping *protocol.SourceMapping) (map[string]string, error) {
 	if mapping == nil {
 		return nil, fmt.Errorf("a topic directive requires attributes")
 	}
-	values := map[string]string{}
+	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {

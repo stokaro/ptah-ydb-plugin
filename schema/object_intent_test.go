@@ -4,9 +4,6 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -15,6 +12,10 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func TestObjectConversionsPreserveNativeOptions(t *testing.T) {
@@ -23,8 +24,8 @@ func TestObjectConversionsPreserveNativeOptions(t *testing.T) {
 		value      proto.Message
 	}{
 		{"view", schema.ViewProperties, &native.ViewObservation{View: &Ydb_View.DescribeViewResult{Self: objectSelf(), QueryText: "SELECT 1 AS id"}, Properties: &native.DescribeTableResult{Self: objectSelf(), Attributes: map[string]string{"ptah.comment": "Caption", "custom": ""}}}},
-		{"source", schema.ExternalSourceProperties, &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: proto.String("PostgreSQL"), Location: proto.String("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "BASIC", "PASSWORD_SECRET_PATH": "/local/auth/credential", "LOGIN": "reader"}}},
-		{"table", schema.ExternalTableProperties, &native.DescribeExternalTableResult{Self: objectSelf(), SourceType: proto.String("ObjectStorage"), DataSourcePath: proto.String("/local/App/bucket"), Location: proto.String(""), Content: map[string]string{"FORMAT": `["json_each_row"]`}, Columns: []*native.ColumnMeta{{Name: "z", Type: primitive(Ydb.Type_INT64), NotNull: proto.Bool(true)}, {Name: "a", Type: optional(primitive(Ydb.Type_UTF8)), Family: "cold", DefaultValue: &native.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: primitive(Ydb.Type_UTF8), Value: &Ydb.Value{Value: &Ydb.Value_TextValue{TextValue: "Default"}}}}}}}},
+		{"source", schema.ExternalSourceProperties, &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: new("PostgreSQL"), Location: new("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "BASIC", "PASSWORD_SECRET_PATH": "/local/auth/credential", "LOGIN": "reader"}}},
+		{"table", schema.ExternalTableProperties, &native.DescribeExternalTableResult{Self: objectSelf(), SourceType: new("ObjectStorage"), DataSourcePath: new("/local/App/bucket"), Location: new(""), Content: map[string]string{"FORMAT": `["json_each_row"]`}, Columns: []*native.ColumnMeta{{Name: "z", Type: primitive(Ydb.Type_INT64), NotNull: new(true)}, {Name: "a", Type: optional(primitive(Ydb.Type_UTF8)), Family: "cold", DefaultValue: &native.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: primitive(Ydb.Type_UTF8), Value: &Ydb.Value{Value: &Ydb.Value_TextValue{TextValue: "Default"}}}}}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -234,7 +235,7 @@ func TestWithoutAccessLeavesTheRequirementOut(t *testing.T) {
 		value      proto.Message
 	}{
 		{"view", schema.ViewProperties, &native.ViewObservation{View: &Ydb_View.DescribeViewResult{Self: objectSelf(), QueryText: "SELECT 1 AS id"}, Properties: &native.DescribeTableResult{Self: objectSelf()}}},
-		{"source", schema.ExternalSourceProperties, &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: proto.String("PostgreSQL"), Location: proto.String("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "NONE"}}},
+		{"source", schema.ExternalSourceProperties, &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: new("PostgreSQL"), Location: new("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "NONE"}}},
 		{"coordination node", schema.CoordinationProperties, &Ydb_Coordination.DescribeNodeResult{Self: objectSelf(), Config: &Ydb_Coordination.Config{SelfCheckPeriodMillis: 2000}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

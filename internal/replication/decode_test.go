@@ -5,12 +5,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	ydbreplication "github.com/stokaro/ptah-ydb-plugin/internal/replication"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_Replication"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	ydbreplication "github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // connectionParams is a connection to the local database with no credential.

@@ -3,9 +3,10 @@ package sourceencode
 import (
 	"strconv"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // StreamingQuery writes a streaming query's text, whether it runs and the

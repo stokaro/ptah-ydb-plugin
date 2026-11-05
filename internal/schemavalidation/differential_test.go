@@ -9,9 +9,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // The corpus holds declarations and what the Ptah host's bundled YDB schema
@@ -130,7 +131,7 @@ func codes(diagnostics []*protocol.SchemaDiagnostic) []string {
 		protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE: "unsupported-feature",
 		protocol.SchemaDiagnostic_OMITTED_DECLARATION: "omitted-declaration",
 	}
-	result := []string{}
+	result := make([]string, 0)
 	for _, diagnostic := range diagnostics {
 		result = append(result, names[diagnostic.Code])
 	}
@@ -139,7 +140,7 @@ func codes(diagnostics []*protocol.SchemaDiagnostic) []string {
 }
 
 func hostCodes(recorded []struct{ Code string }) []string {
-	result := []string{}
+	result := make([]string, 0)
 	for _, diagnostic := range recorded {
 		result = append(result, diagnostic.Code)
 	}
@@ -197,7 +198,7 @@ func TestCorpus_RefusesWhatOnlyALaterHostStageRefuses(t *testing.T) {
 
 func TestCorpus_CoversTheHostCommit(t *testing.T) {
 	c := testcheck.New(t)
-	hosts := map[string]bool{}
+	hosts := make(map[string]bool)
 	for _, row := range readCorpus(c, func(string) bool { return true }) {
 		hosts[row.golden.Host] = true
 	}

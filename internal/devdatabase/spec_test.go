@@ -3,11 +3,11 @@ package devdatabase_test
 import (
 	"cmp"
 	"encoding/json"
-	"errors"
 	"os"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/devdatabase"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -103,7 +103,7 @@ func TestParseSpec_FailurePath(t *testing.T) {
 			spec, err := devdatabase.ParseSpec(test.spec)
 
 			var refusal *devdatabase.Refusal
-			c.Assert(errors.As(err, &refusal), qt.IsTrue)
+			c.Assert(err, qt.ErrorAs, &refusal)
 			c.Assert(refusal.Unavailable, qt.IsFalse)
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(err.Error(), qt.Not(qt.Contains), "test-secret=")

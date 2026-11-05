@@ -13,8 +13,9 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // hostApplySQL runs the host's `schema apply` over a YQL schema, a file or a
@@ -94,7 +95,7 @@ func TestHostAppliesASQLSchema_HappyPath(t *testing.T) {
 					c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+path.Join(database, directory, name)+"`"), qt.IsNil)
 				}
 			})
-			documents := map[string]string{}
+			documents := make(map[string]string)
 			for name, text := range test.documents {
 				documents[name] = replaceDirectory(text, directory)
 			}

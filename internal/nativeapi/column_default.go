@@ -7,12 +7,13 @@ import (
 	"path"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 )
 
 // DefaultSession reads one row table and releases its native session.

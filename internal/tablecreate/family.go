@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // DefaultFamily names the family every row table has. It holds the key columns
@@ -102,7 +103,7 @@ func familyDelta(want, held *native.ColumnFamily) (data, compression, cacheMode 
 // states, or the reason it cannot be made. An empty change means the table
 // already satisfies the declaration.
 func planFamilies(in familyInput) (familyChange, string) {
-	change := familyChange{heldColumns: map[string]string{}}
+	change := familyChange{heldColumns: make(map[string]string)}
 	names := make([]string, 0, len(in.desired))
 	for _, family := range in.desired {
 		names = append(names, familyKey(family.GetName()))

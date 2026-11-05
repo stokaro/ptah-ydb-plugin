@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -24,7 +25,8 @@ func TestEqualUsesTokensAndDefaults(t *testing.T) {
 		{"pool", streaming.Spec{Text: "SELECT 1;"}, streaming.Spec{Text: "SELECT 1;", ResourcePool: "batch"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			qt.Assert(t, streaming.Equal(tc.left, tc.right), qt.Equals, tc.want)
+			c := testcheck.New(t)
+			c.Assert(streaming.Equal(tc.left, tc.right), qt.Equals, tc.want)
 		})
 	}
 }
@@ -36,7 +38,7 @@ func TestStepsRetainPreconditions(t *testing.T) {
 	change := streaming.Change{Schema: "app", Name: "copy", Before: before, After: after, AllowStateReset: true}
 	steps, err := streaming.Steps(change)
 	c.Assert(err, qt.IsNil)
-	c.Assert(len(steps), qt.Equals, 2)
+	c.Assert(steps, qt.HasLen, 2)
 	c.Assert(streaming.Running(*before), qt.IsTrue)
 	c.Assert(steps[0].Before, qt.DeepEquals, before)
 	c.Assert(steps[0].After, qt.DeepEquals, &streaming.Spec{Text: "SELECT 1;", Run: new(false)})
@@ -50,7 +52,7 @@ func TestStepsRetainPreconditions(t *testing.T) {
 	for _, step := range steps {
 		rendered, err := streaming.Statements(step)
 		c.Assert(err, qt.IsNil)
-		c.Assert(len(rendered), qt.Equals, 1)
+		c.Assert(rendered, qt.HasLen, 1)
 		statements = append(statements, rendered...)
 	}
 	c.Assert(statements, qt.DeepEquals, []string{
@@ -79,7 +81,7 @@ func TestStepsAndCheckpointImpact(t *testing.T) {
 			tc.change.Name = "copy"
 			steps, err := streaming.Steps(tc.change)
 			c.Assert(err, qt.IsNil)
-			c.Assert(len(steps), qt.Equals, 1)
+			c.Assert(steps, qt.HasLen, 1)
 			c.Assert(streaming.Early(steps[0]), qt.Equals, tc.early)
 			c.Assert(streaming.LosesCheckpoint(tc.change), qt.Equals, tc.checkpoint)
 		})
@@ -110,20 +112,23 @@ func TestStatementsRefuseInvalidChanges(t *testing.T) {
 }
 
 func TestValidateRefusesSchemaAndEscapedBlocks(t *testing.T) {
+	c := testcheck.New(t)
 	for _, body := range []string{"", "-- only a comment", "DROP TABLE t;", "SELECT 1; CREATE TABLE t(id Int32);", "END DO; DROP TABLE t;", "SELECT '\xff';"} {
 		t.Run(body, func(t *testing.T) {
-			qt.Assert(t, streaming.Validate(streaming.Spec{Text: body}), qt.IsNotNil)
+			c := testcheck.New(t)
+			c.Assert(streaming.Validate(streaming.Spec{Text: body}), qt.IsNotNil)
 		})
 	}
-	qt.Assert(t, streaming.Validate(streaming.Spec{Text: "INSERT INTO stream_output SELECT * FROM stream_input;", Run: new(false)}), qt.IsNil)
+	c.Assert(streaming.Validate(streaming.Spec{Text: "INSERT INTO stream_output SELECT * FROM stream_input;", Run: new(false)}), qt.IsNil)
 }
 
 func TestValidateIdentity(t *testing.T) {
+	c := testcheck.New(t)
 	for _, tc := range []struct{ directory, name string }{{"../app", "q"}, {"/app", "q"}, {"app/../jobs", "q"}, {"app", "dir/q"}, {"app", ".."}, {"", " "}, {"", "\x00"}, {"", "\xff"}} {
-		qt.Assert(t, streaming.ValidateIdentity(tc.directory, tc.name), qt.IsNotNil)
+		c.Assert(streaming.ValidateIdentity(tc.directory, tc.name), qt.IsNotNil)
 	}
-	qt.Assert(t, streaming.ValidateIdentity("app/jobs", "copy"), qt.IsNil)
-	qt.Assert(t, streaming.ValidateIdentity("", "copy.v2"), qt.IsNil)
+	c.Assert(streaming.ValidateIdentity("app/jobs", "copy"), qt.IsNil)
+	c.Assert(streaming.ValidateIdentity("", "copy.v2"), qt.IsNil)
 }
 
 func TestNamedPaths(t *testing.T) {
@@ -152,14 +157,16 @@ func TestNamedPaths(t *testing.T) {
 		{"prefix reset", "PRAGMA TablePathPrefix = 'app'; SELECT * FROM first; PRAGMA TablePathPrefix = ''; SELECT * FROM second;", []string{"app/first", "second"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
 			got, err := streaming.NamedPaths(tc.text)
-			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, got, qt.DeepEquals, tc.want)
+			c.Assert(err, qt.IsNil)
+			c.Assert(got, qt.DeepEquals, tc.want)
 		})
 	}
 }
 
 func TestNamedPathsRefusesUnresolvedPaths(t *testing.T) {
+	c := testcheck.New(t)
 	for _, text := range []string{
 		"SELECT * FROM good; PRAGMA TablePathPrefix = $prefix; SELECT * FROM input;",
 		"PRAGMA TablePathPrefix = '../app'; SELECT * FROM input;",
@@ -178,8 +185,8 @@ func TestNamedPathsRefusesUnresolvedPaths(t *testing.T) {
 		"USE other; SELECT * FROM input;",
 	} {
 		got, err := streaming.NamedPaths(text)
-		qt.Assert(t, err, qt.IsNotNil)
-		qt.Assert(t, got, qt.IsNil)
+		c.Assert(err, qt.IsNotNil)
+		c.Assert(got, qt.IsNil)
 	}
 }
 

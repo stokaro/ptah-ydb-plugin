@@ -11,18 +11,19 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
 	"github.com/ydb-platform/ydb-go-sdk/v3/topic/topictypes"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // TestChangefeedLifecycleSubprocess drives a changefeed through the provider's
@@ -112,7 +113,7 @@ func TestChangefeedLifecycleSubprocess(t *testing.T) {
 		return description
 	}
 	consumers := func(description topictypes.TopicDescription) map[string][]topictypes.Codec {
-		result := map[string][]topictypes.Codec{}
+		result := make(map[string][]topictypes.Codec)
 		for _, consumer := range description.Consumers {
 			// The topic service reports an empty list for a consumer that
 			// takes any codec; nil stands for it here.

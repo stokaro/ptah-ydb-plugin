@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestAccessReadsStreamingQueryIdentity(t *testing.T) {
@@ -83,7 +84,7 @@ func TestAccessRefusalDoesNotBecomeAnEmptyPrincipalSet(t *testing.T) {
 	c.Assert(snapshot.CommonObjects.ObjectOwners[0].OwnerCanLogin, qt.IsNil)
 	c.Assert(snapshot.CommonObjects.Roles, qt.HasLen, 0)
 	c.Assert(snapshot.CommonObjects.Memberships, qt.HasLen, 0)
-	states := map[protocol.CommonObjectSupport_Kind]protocol.ModelKnowledge_State{}
+	states := make(map[protocol.CommonObjectSupport_Kind]protocol.ModelKnowledge_State)
 	for _, record := range snapshot.CommonObjects.Coverage {
 		states[record.Kind] = record.Knowledge.State
 	}

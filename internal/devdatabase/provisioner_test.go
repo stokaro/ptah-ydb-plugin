@@ -9,12 +9,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/devdatabase"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // fakeRuntime records what the provisioner asks of a container runtime.
@@ -224,7 +225,7 @@ func TestDockerCLIAvailable_FailurePath(t *testing.T) {
 	err := devdatabase.DockerCLI{RunLabel: "test"}.Available(c.Context(), "ydbplatform/local-ydb:26.2.1.14")
 
 	var refusal *devdatabase.Refusal
-	c.Assert(errors.As(err, &refusal), qt.IsTrue)
+	c.Assert(err, qt.ErrorAs, &refusal)
 	c.Assert(refusal.Unavailable, qt.IsTrue)
 	c.Assert(refusal.Reason, qt.Matches, `the docker command is not on PATH; .* pass PATH, and DOCKER_HOST or DOCKER_CONTEXT .*`)
 }

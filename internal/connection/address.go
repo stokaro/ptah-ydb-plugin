@@ -10,9 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	environ "github.com/ydb-platform/ydb-go-sdk-auth-environ"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 )
 
 // Address separates the credential-free SDK address from authentication.
@@ -75,7 +76,7 @@ func Parse(raw string) (Address, error) {
 	if database == "" {
 		return Address{}, authored.New("YDB URL must name a database")
 	}
-	for _, part := range strings.Split(database, "/") {
+	for part := range strings.SplitSeq(database, "/") {
 		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "\\\x00\r\n") {
 			return Address{}, authored.New("invalid YDB database path")
 		}

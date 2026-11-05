@@ -10,12 +10,6 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Topic_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -27,6 +21,13 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // feedServer is a table at /local/app/records and the topics of its
@@ -134,7 +135,7 @@ func (s *feedServer) execute(_ context.Context, statement string) error {
 
 // withFeed is a server whose table holds changefeed f in UPDATES mode.
 func withFeed() *feedServer {
-	server := &feedServer{topics: map[string]*native.DescribeTopicResult{}}
+	server := &feedServer{topics: make(map[string]*native.DescribeTopicResult)}
 	_ = server.execute(context.Background(), "ALTER TABLE `/local/app/records` ADD CHANGEFEED `f` WITH (MODE = 'UPDATES', FORMAT = 'JSON');")
 	server.statements = nil
 	return server
@@ -181,7 +182,7 @@ func TestChangefeedApply_HappyPath(t *testing.T) {
 		// held are the changefeeds the table holds afterward.
 		held []string
 	}{
-		{"an addition with a consumer", &feedServer{topics: map[string]*native.DescribeTopicResult{}},
+		{"an addition with a consumer", &feedServer{topics: make(map[string]*native.DescribeTopicResult)},
 			func(c *qt.C, _ *feedServer) []changefeeds.Change {
 				return []changefeeds.Change{{Name: "f", After: declaredFeed(c, updates)}}
 			},
@@ -230,7 +231,7 @@ func TestChangefeedApply_FailurePath(t *testing.T) {
 		other.feeds[0].Mode = Ydb_Table.ChangefeedMode_MODE_KEYS_ONLY
 		return readFeed(c, other)
 	}
-	ignoring, failing := &feedServer{topics: map[string]*native.DescribeTopicResult{}, ignore: true}, &feedServer{topics: map[string]*native.DescribeTopicResult{}, fail: true}
+	ignoring, failing := &feedServer{topics: make(map[string]*native.DescribeTopicResult), ignore: true}, &feedServer{topics: make(map[string]*native.DescribeTopicResult), fail: true}
 	for _, test := range []struct {
 		name       string
 		server     *feedServer
@@ -248,10 +249,10 @@ func TestChangefeedApply_FailurePath(t *testing.T) {
 		{"a removal of a changefeed another writer changed", withFeed(), "/local",
 			func(c *qt.C) changefeeds.Change { return changefeeds.Change{Name: "f", Before: keysOnly(c)} }, allowed, false,
 			`changefeed "f" of table "app/records" changed since the plan read it`},
-		{"a removal of a changefeed that is gone", &feedServer{topics: map[string]*native.DescribeTopicResult{}}, "/local",
+		{"a removal of a changefeed that is gone", &feedServer{topics: make(map[string]*native.DescribeTopicResult)}, "/local",
 			func(c *qt.C) changefeeds.Change { return changefeeds.Change{Name: "f", Before: keysOnly(c)} }, allowed, false,
 			`changefeed "f" of table "app/records" is gone since the plan read it`},
-		{"a lock lost before the statement", &feedServer{topics: map[string]*native.DescribeTopicResult{}}, "/local",
+		{"a lock lost before the statement", &feedServer{topics: make(map[string]*native.DescribeTopicResult)}, "/local",
 			func(c *qt.C) changefeeds.Change {
 				return changefeeds.Change{Name: "f", After: declaredFeed(c, updates)}
 			},
@@ -265,7 +266,7 @@ func TestChangefeedApply_FailurePath(t *testing.T) {
 				return changefeeds.Change{Name: "f", After: declaredFeed(c, updates)}
 			}, allowed, true,
 			`changefeed "f" of table "app/records" is absent after the operation`},
-		{"a table of another database", &feedServer{topics: map[string]*native.DescribeTopicResult{}}, "/other",
+		{"a table of another database", &feedServer{topics: make(map[string]*native.DescribeTopicResult)}, "/other",
 			func(c *qt.C) changefeeds.Change {
 				return changefeeds.Change{Name: "f", After: declaredFeed(c, updates)}
 			}, allowed, false, `no such table`},
@@ -284,7 +285,7 @@ func TestChangefeedApply_FailurePath(t *testing.T) {
 // whose owner names a database other than the session's before it reads.
 func TestChangefeedApply_RefusesAnOwnerOfAnotherDatabase(t *testing.T) {
 	c := testcheck.New(t)
-	server := &feedServer{topics: map[string]*native.DescribeTopicResult{}}
+	server := &feedServer{topics: make(map[string]*native.DescribeTopicResult)}
 	captured, err := schema.CaptureChangefeedOperation("op", &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/other", Schema: "app", Name: "records"},
 		[]changefeeds.Change{{Name: "f", After: declaredFeed(c, ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON"})}})
 	c.Assert(err, qt.IsNil)
@@ -303,7 +304,7 @@ func TestChangefeedApply_WaitsOutABusyPath(t *testing.T) {
 	addition := "ALTER TABLE `/local/app/records` ADD CHANGEFEED `f` WITH (MODE = 'UPDATES', FORMAT = 'JSON');"
 	synctest.Test(t, func(t *testing.T) {
 		c := testcheck.New(t)
-		server := &feedServer{topics: map[string]*native.DescribeTopicResult{}, busy: 3}
+		server := &feedServer{topics: make(map[string]*native.DescribeTopicResult), busy: 3}
 		started := time.Now()
 
 		dispatched, err := changefeedApplier(server).Apply(c.Context(), "/local",
@@ -323,7 +324,7 @@ func TestChangefeedApply_WaitsOutABusyPath(t *testing.T) {
 func TestChangefeedApply_FailurePath_ABusyPathOutlastsTheContext(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		c := testcheck.New(t)
-		server := &feedServer{topics: map[string]*native.DescribeTopicResult{}, busy: -1}
+		server := &feedServer{topics: make(map[string]*native.DescribeTopicResult), busy: -1}
 		ctx, cancel := context.WithTimeout(c.Context(), 2*time.Second)
 		defer cancel()
 

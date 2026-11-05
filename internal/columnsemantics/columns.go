@@ -7,10 +7,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 )
 
 // Compare answers exactly the requested aspects in captured table and pair order.

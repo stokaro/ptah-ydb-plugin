@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -45,7 +46,7 @@ func TestCheck_FailurePath(t *testing.T) {
 		capabilities map[string]bool
 		want         string
 	}{
-		{"no topics", ydbdecl.Topic{}, map[string]bool{}, "topic app/events, which requires target capability topics, unavailable on this ydb target"},
+		{"no topics", ydbdecl.Topic{}, make(map[string]bool), "topic app/events, which requires target capability topics, unavailable on this ydb target"},
 		{"an availability period on 25.3", ydbdecl.Topic{Consumers: []ydbdecl.Consumer{{Name: "c", AvailabilityPeriod: "PT2H"}}}, map[string]bool{"topics": true},
 			`consumer "c" of topic app/events takes availability_period, which requires target capability topic_consumer_availability_period, unavailable on this ydb target`},
 	} {

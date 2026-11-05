@@ -6,16 +6,17 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // How this provider rebuilds a table.
@@ -161,7 +162,7 @@ func requestedWith(policy *protocol.PlanningPolicy) string {
 // the planning request's observed common objects hold what lies beyond the
 // tables, and a host fills them for no table.
 func keepHeldComments(request *Ydb_Table.CreateTableRequest, current *protocol.ObservedTable) {
-	comments := ydbcomment.Comments{Own: current.GetComment(), Columns: map[string]string{}, Indexes: map[string]string{}}
+	comments := ydbcomment.Comments{Own: current.GetComment(), Columns: make(map[string]string), Indexes: make(map[string]string)}
 	for _, column := range current.GetColumns() {
 		if column.GetComment() != "" && slices.ContainsFunc(request.GetColumns(), func(created *Ydb_Table.ColumnMeta) bool { return created.GetName() == column.GetName() }) {
 			comments.Columns[column.GetName()] = column.GetComment()
@@ -174,7 +175,7 @@ func keepHeldComments(request *Ydb_Table.CreateTableRequest, current *protocol.O
 	}
 	for key, value := range comments.Attributes() {
 		if request.Attributes == nil {
-			request.Attributes = map[string]string{}
+			request.Attributes = make(map[string]string)
 		}
 		request.Attributes[key] = value
 	}
@@ -211,7 +212,7 @@ func heldProperties(observed *protocol.ObservedTable) *native.DescribeTableResul
 
 // heldColumns are the column properties of an observed table by column name.
 func heldColumnProperties(observed *protocol.ObservedTable) map[string]*native.ColumnMeta {
-	result := map[string]*native.ColumnMeta{}
+	result := make(map[string]*native.ColumnMeta)
 	for _, record := range observed.GetFeatures().GetFacets().GetRecords() {
 		if record.GetKind() != schema.ColumnProperties {
 			continue
@@ -498,7 +499,7 @@ func rebuiltIndexSettings(request *Ydb_Table.CreateTableRequest, table *protocol
 			}
 		}
 	}
-	formerName := map[string]string{}
+	formerName := make(map[string]string)
 	for _, step := range steps {
 		if rename := step.GetRenamedIndex(); rename != nil && step.GetParent() != nil && provider.CompareIdentities(step.GetParent(), table.GetSubject()) == 0 {
 			formerName[rename.GetTo()] = rename.GetFrom()
@@ -670,13 +671,13 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 	for key, value := range held.GetAttributes() {
 		if _, declared := request.GetAttributes()[key]; !declared {
 			if request.Attributes == nil {
-				request.Attributes = map[string]string{}
+				request.Attributes = make(map[string]string)
 			}
 			request.Attributes[key] = value
 		}
 	}
 	placements := heldColumnProperties(current)
-	families := map[string]bool{}
+	families := make(map[string]bool)
 	for i, requested := range request.GetColumnFamilies() {
 		families[familyKey(requested.GetName())] = true
 		held := findFamily(held.GetColumnFamilies(), requested.GetName())
@@ -705,7 +706,7 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 			Data: proto.CloneOf(family.GetData()), Compression: family.GetCompression(), CacheMode: family.GetCacheMode()}))
 		families[familyKey(family.GetName())] = true
 	}
-	placed := map[string]bool{}
+	placed := make(map[string]bool)
 	for _, record := range desired.GetFeatures().GetFacets().GetRecords() {
 		if record.GetKind() == schema.ColumnProperties && record.GetValue() != nil {
 			placed[record.GetSubject().GetName().GetNormalized()] = true
@@ -729,7 +730,7 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 // requestTableNames are the paths of every table a planning request declares
 // or holds, which a scratch name must not take.
 func requestTableNames(request *protocol.PlanFeaturesRequest) map[string]bool {
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for _, table := range request.GetTables() {
 		names[TextPath(table.GetSubject().GetSchema().GetNormalized(), table.GetSubject().GetName().GetNormalized())] = true
 	}

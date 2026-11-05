@@ -3,10 +3,11 @@ package tablecreate
 import (
 	"fmt"
 
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 )
 
 func validateInventoryAddition(column *Ydb_Table.ColumnMeta) error {

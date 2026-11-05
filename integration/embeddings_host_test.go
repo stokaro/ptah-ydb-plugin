@@ -18,10 +18,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-sdk/v3/scheme"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // topics are the words the fake embedding endpoint embeds along, one
@@ -357,7 +358,7 @@ func (f *embeddingFixture) tables(c *qt.C) []string {
 	c.Helper()
 	listing, err := f.opened.Driver.Scheme().ListDirectory(c.Context(), f.root)
 	c.Assert(err, qt.IsNil)
-	names := []string{}
+	names := make([]string, 0)
 	for _, entry := range listing.Children {
 		if entry.Type == scheme.EntryTable {
 			names = append(names, entry.Name)

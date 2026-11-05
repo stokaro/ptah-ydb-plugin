@@ -11,15 +11,16 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // TestTableCreationWithIndexesSubprocess creates a table with a unique, an
@@ -75,7 +76,7 @@ func TestTableCreationWithIndexesSubprocess(t *testing.T) {
 		"    INDEX `by_seen` GLOBAL SYNC ON (`seen`) COVER (`note`)\n);")
 	snapshot, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
 	c.Assert(err, qt.IsNil)
-	held := map[string][]string{}
+	held := make(map[string][]string)
 	for _, value := range snapshot.Tables {
 		for _, facet := range value.Facets {
 			if facet.Kind != schema.IndexProperties {

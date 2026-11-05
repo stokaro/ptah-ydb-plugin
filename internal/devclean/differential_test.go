@@ -12,10 +12,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/devclean"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The corpus holds scheme trees and what the host's embedded YDB engine did
@@ -92,9 +92,9 @@ type fakeTree struct {
 
 func newFakeTree(c *qt.C, input corpusCase, root string) *fakeTree {
 	c.Helper()
-	f := &fakeTree{root: root, tree: map[string][]*Ydb_Scheme.Entry{}}
+	f := &fakeTree{root: root, tree: make(map[string][]*Ydb_Scheme.Entry)}
 	for dir, entries := range input.Tree {
-		f.tree[dir] = []*Ydb_Scheme.Entry{}
+		f.tree[dir] = make([]*Ydb_Scheme.Entry, 0)
 		for _, entry := range entries {
 			kind, known := Ydb_Scheme.Entry_Type_value[entry.Type]
 			c.Assert(known, qt.IsTrue)
@@ -170,10 +170,10 @@ func TestWalkListsWhatTheHostLists(t *testing.T) {
 func cleaned(fake *fakeTree, err error) corpusRun {
 	run := corpusRun{Executed: slices.Clone(fake.executed), Removed: slices.Clone(fake.removed)}
 	if run.Executed == nil {
-		run.Executed = []string{}
+		run.Executed = make([]string, 0)
 	}
 	if run.Removed == nil {
-		run.Removed = []string{}
+		run.Removed = make([]string, 0)
 	}
 	if err != nil {
 		run.Error = "ydb: " + err.Error()

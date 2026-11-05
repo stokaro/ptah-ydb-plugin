@@ -283,7 +283,7 @@ func refuseUnknownFields(messages map[string]protoreflect.ProtoMessage) error {
 // in the order they appear. Bytes that do not parse are reported as such.
 func unknownNumbers(raw protoreflect.RawFields) []string {
 	var numbers []string
-	seen := map[protowire.Number]bool{}
+	seen := make(map[protowire.Number]bool)
 	for len(raw) > 0 {
 		number, _, length := protowire.ConsumeField(raw)
 		if length < 0 {

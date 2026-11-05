@@ -11,13 +11,14 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // externalShape is what the server holds of the fixture's data source and
@@ -37,7 +38,7 @@ func describedExternals(c *qt.C, opened *connection.Connection, database, direct
 	c.Helper()
 	listing, err := opened.Driver.Scheme().ListDirectory(c.Context(), path.Join(database, directory))
 	c.Assert(err, qt.IsNil)
-	held := map[string]bool{}
+	held := make(map[string]bool)
 	for _, entry := range listing.Children {
 		held[entry.Name] = true
 	}

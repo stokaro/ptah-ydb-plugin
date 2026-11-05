@@ -5,16 +5,16 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // fileSize is the length of the imaginary Go file the declarations sit in.
@@ -115,13 +115,13 @@ func TestGoDirectives_TablesGetTheirOwnFacets(t *testing.T) {
 		declaration(4, "Item", map[string]string{"name": "warm", "table": "shop.orders"}))
 	tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 	c.Assert(err, qt.IsNil)
-	c.Assert(len(tables), qt.Equals, 2)
+	c.Assert(tables, qt.HasLen, 2)
 	c.Assert(tables[0].Fragment, qt.Equals, 0)
 	c.Assert(tables[0].Binding.Object.Name, qt.Equals, "items")
 	c.Assert(string(tables[0].Value.CanonicalProjection), qt.Equals, `{"columnFamilies":[{"name":"cold"}]}`)
 	c.Assert(tables[1].Fragment, qt.Equals, 1)
 	c.Assert(string(tables[1].Value.CanonicalProjection), qt.Equals, `{"columnFamilies":[{"data":{"media":"ssd"},"name":"hot"},{"name":"warm"}]}`)
-	ids := map[string]bool{}
+	ids := make(map[string]bool)
 	for _, table := range tables {
 		ids[table.Value.Id] = true
 	}
@@ -176,10 +176,10 @@ func TestGoDirectives_FailurePath(t *testing.T) {
 			request := goRequest(c, test.declarations...)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
-			c.Assert(len(tables), qt.Equals, 0)
+			c.Assert(tables, qt.HasLen, 0)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -191,7 +191,7 @@ func TestGoDirectives_AttributeOutsideTheClaim(t *testing.T) {
 	request := goRequest(c, declaration(2, "Item", map[string]string{"name": "cold", "barriers": "x"}))
 	decoded, err := backend.New().DecodeSource(c.Context(), request)
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-	c.Assert(decoded == nil, qt.IsTrue)
+	c.Assert(decoded, qt.IsNil)
 }
 
 // attributes is a ptah:schema:table directive on its own line of the file,
@@ -295,7 +295,7 @@ func TestTableDirective_RowStorageAloneDeclaresNothing(t *testing.T) {
 
 func TestTableDirective_FailurePath(t *testing.T) {
 	ttl := func(column, interval, unit string) map[string]string {
-		attributes := map[string]string{}
+		attributes := make(map[string]string)
 		for name, value := range map[string]string{"platform.ydb.row_deletion_column": column, "platform.ydb.row_deletion_interval": interval, "platform.ydb.row_deletion_unit": unit} {
 			if value != "-" {
 				attributes[name] = value
@@ -351,7 +351,7 @@ func TestTableDirective_FailurePath(t *testing.T) {
 			c.Assert(tables, qt.HasLen, 0)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -367,7 +367,7 @@ func TestIndexDirective_RefusedByName(t *testing.T) {
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(err, qt.ErrorMatches, `(?s).*`+attribute+` is not supported by the YDB provider yet: an index states no settings of its own.*`)
 			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }

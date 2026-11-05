@@ -9,6 +9,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -18,9 +22,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 // HeaderKinds are the kinds a `ptah:not-described` header of a YQL document
@@ -518,9 +519,9 @@ var limitedKinds = map[string]struct {
 // refuses it.
 func claim(limits []*protocol.SchemaCoverageLimit, models []*protocol.ValueModel) (*protocol.ModelCoverage, *Refusal) {
 	coverage := &protocol.ModelCoverage{Representation: protocol.ValueInput_DESIRED}
-	whole := map[string]*protocol.ModelKnowledge{}
+	whole := make(map[string]*protocol.ModelKnowledge)
 	var subjects []*protocol.ModelSubjectCoverage
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, limit := range limits {
 		if refusal := checkLimit(limit); refusal != nil {
 			return nil, refusal

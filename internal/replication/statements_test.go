@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	ydbreplication "github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // TestCreateReplicationStatement writes each item in the order declared and

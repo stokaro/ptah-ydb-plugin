@@ -9,12 +9,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // ChangefeedOperation identifies the executable change of the changefeeds of
@@ -95,7 +96,7 @@ func CaptureChangefeedOperation(id string, owner *protocol.Reference, changes []
 }
 
 func encodeChangefeedChanges(changes []changefeeds.Change) ([]byte, error) {
-	payload := changefeedPayload{Changefeeds: []changefeedEntry{}}
+	payload := changefeedPayload{Changefeeds: make([]changefeedEntry, 0)}
 	for _, change := range changes {
 		entry := changefeedEntry{Name: change.Name}
 		var err error

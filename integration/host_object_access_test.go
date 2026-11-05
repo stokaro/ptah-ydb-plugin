@@ -14,11 +14,12 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 )
 
 // objectAccessNames are the principals one run creates: a user the grants

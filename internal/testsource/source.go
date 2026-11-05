@@ -8,8 +8,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Request captures one coordination_nodes mapping without evaluating expressions.

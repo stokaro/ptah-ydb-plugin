@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretvalue"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // environment answers lookups from a fixed set of variables, the way

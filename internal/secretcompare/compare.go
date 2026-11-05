@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // ServiceID names the secret comparison owner.

@@ -19,14 +19,15 @@ import (
 	"unicode"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // The export tests read a live schema through the provider, have it write the
@@ -161,7 +162,7 @@ func structName(name string) string {
 // binding whose table is the facet's owner.
 func exportRequest(read readExport, format protocol.SourceDocument_Format) *protocol.EncodeSourceRequest {
 	request := &protocol.EncodeSourceRequest{Engine: "ydb", Format: format, TargetFeatures: read.features}
-	bindings := map[string]string{}
+	bindings := make(map[string]string)
 	for i, table := range read.tables {
 		id := "table-" + strconv.Itoa(i)
 		bindings[table.Identity.Name] = id
@@ -192,7 +193,7 @@ func exportRequest(read readExport, format protocol.SourceDocument_Format) *prot
 // encodedParts are the parts of a reply, by the binding they are attached to,
 // "" for the document's own.
 func encodedParts(encoded *protocol.EncodedSource) map[string][]*protocol.SourceFragment {
-	parts := map[string][]*protocol.SourceFragment{}
+	parts := make(map[string][]*protocol.SourceFragment)
 	for _, part := range provider.EncodedSourceParts(encoded) {
 		parts[part.Fragment.BindingId] = append(parts[part.Fragment.BindingId], part.Fragment)
 	}
@@ -206,8 +207,8 @@ func encodedParts(encoded *protocol.EncodedSource) map[string][]*protocol.Source
 // document.
 func renderGo(c *qt.C, read readExport, request *protocol.EncodeSourceRequest, encoded *protocol.EncodedSource) string {
 	c.Helper()
-	types := map[string]*protocol.EncodedFieldType{}
-	imports := map[string]bool{}
+	types := make(map[string]*protocol.EncodedFieldType)
+	imports := make(map[string]bool)
 	for _, typed := range encoded.FieldTypes {
 		types[typed.BindingId+"/"+typed.Column] = typed
 		if typed.GoImport != "" {
@@ -275,7 +276,7 @@ func renderYAML(read readExport, request *protocol.EncodeSourceRequest, encoded 
 			columns = append(columns, fmt.Sprintf("%q: {\"type\": %q, \"primary\": %t, \"not_null\": %t}", column.name, column.ydbType, column.primary, !column.nullable))
 		}
 		entries := []string{fmt.Sprintf("\"schema\": %q", table.Identity.Schema), "\"columns\": {" + strings.Join(columns, ", ") + "}"}
-		platform := map[string]string{}
+		platform := make(map[string]string)
 		for _, fragment := range parts[binding.Id] {
 			key := fragment.YamlKey.Key
 			if group, found := strings.CutPrefix(key, "platform."); found {
@@ -290,7 +291,7 @@ func renderYAML(read readExport, request *protocol.EncodeSourceRequest, encoded 
 		tables = append(tables, fmt.Sprintf("%q: {%s}", table.Identity.Name, strings.Join(entries, ", ")))
 	}
 	document := []string{"\"tables\": {" + strings.Join(tables, ", ") + "}"}
-	keys := map[string][]string{}
+	keys := make(map[string][]string)
 	var order []string
 	for _, fragment := range parts[""] {
 		key := fragment.YamlKey.Key

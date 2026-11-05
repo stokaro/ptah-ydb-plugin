@@ -17,14 +17,15 @@ import (
 	"strconv"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // The syntax this package claims.
@@ -267,7 +268,7 @@ func (t *declaredTable) facet(document *protocol.SourceDocument) (*protocol.Norm
 // changefeed keyed by its name, with each option keyed as the annotation keys
 // it and its consumers keyed by name.
 func yamlChangefeed(entry *protocol.SourceEntry) (ydbdecl.Changefeed, error) {
-	values := map[string]string{}
+	values := make(map[string]string)
 	var consumerEntries []*protocol.SourceEntry
 	if entry.GetValue().GetNull() == nil {
 		fields := entry.GetValue().GetMapping()
@@ -310,7 +311,7 @@ func yamlChangefeed(entry *protocol.SourceEntry) (ydbdecl.Changefeed, error) {
 
 // yamlConsumer reads one consumer of a changefeed's topic, keyed by its name.
 func yamlConsumer(entry *protocol.SourceEntry) (ydbdecl.Consumer, error) {
-	values := map[string]string{}
+	values := make(map[string]string)
 	if entry.GetValue().GetNull() == nil {
 		fields := entry.GetValue().GetMapping()
 		if fields == nil {
@@ -344,7 +345,7 @@ func attributes(mapping *protocol.SourceMapping) (map[string]string, error) {
 	if mapping == nil {
 		return nil, fmt.Errorf("a changefeed directive requires attributes")
 	}
-	values := map[string]string{}
+	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {

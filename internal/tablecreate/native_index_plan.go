@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // nativeIndexInput is what the vector and full-text index rule reads: the
@@ -25,7 +26,7 @@ type nativeIndexInput struct {
 // nativeIndexNames are the names of the indexes either side holds as a vector
 // or full-text index.
 func nativeIndexNames(desired *native.IndexSetIntent, held *native.IndexObservations) map[string]bool {
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for _, declaration := range desired.GetIndexes() {
 		if nativeOnlyIndex(declaration.GetSpecification()) {
 			names[declaration.GetSpecification().GetName()] = true
@@ -79,11 +80,11 @@ func planNativeIndexes(in nativeIndexInput) ([]indexChange, string) {
 		return nil, ""
 	}
 	names := nativeIndexNames(in.desired, in.held)
-	wanted := map[string]*native.IndexIntent{}
+	wanted := make(map[string]*native.IndexIntent)
 	for _, declaration := range in.desired.GetIndexes() {
 		wanted[declaration.GetSpecification().GetName()] = declaration.GetSpecification()
 	}
-	held := map[string]*native.TableIndexDescription{}
+	held := make(map[string]*native.TableIndexDescription)
 	for _, index := range in.held.GetIndexes() {
 		held[index.GetDescription().GetName()] = index.GetDescription()
 	}
@@ -225,7 +226,7 @@ func plannedCreationIndexes(owner *protocol.Reference, table *protocol.DeclaredT
 	if err != nil {
 		return nil, "", err
 	}
-	creation := &nativeCreation{columns: nativeIndexColumns{types: map[string]string{}, key: slices.Clone(created.GetPrimaryKey())}}
+	creation := &nativeCreation{columns: nativeIndexColumns{types: make(map[string]string), key: slices.Clone(created.GetPrimaryKey())}}
 	for _, index := range created.GetIndexes() {
 		creation.names = append(creation.names, index.GetName())
 	}

@@ -7,11 +7,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // RoleRefusal checks the attributes YDB users and groups can carry. Password

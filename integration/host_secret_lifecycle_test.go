@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"errors"
 	"os"
 	"os/exec"
 	"path"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
@@ -206,7 +206,7 @@ func TestHostRefusesTheDeprecatedSecretObjectInAReplay_FailurePath(t *testing.T)
 	refused, err := cmd.CombinedOutput()
 
 	var exited *exec.ExitError
-	c.Assert(errors.As(err, &exited), qt.IsTrue, qt.Commentf("%s", refused))
+	c.Assert(err, qt.ErrorAs, &exited, qt.Commentf("%s", refused))
 	c.Assert(string(refused), qt.Contains, "ydb migration replay rejects an object of the whole database because its "+
 		"effects cannot be confined to the disposable database realm")
 }

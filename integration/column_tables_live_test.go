@@ -15,12 +15,6 @@ import (
 	"unicode"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/draft/Ydb_DynamicConfig_V1"
@@ -28,6 +22,13 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // monitoredAddress returns the test address, which names the server's
@@ -203,7 +204,7 @@ func (f *clusterFlags) pageIn(ctx context.Context, c *qt.C) (featureflags.Flags,
 		}
 	}
 	c.Assert(json.Unmarshal(body, &listed), qt.IsNil)
-	set := map[string]bool{}
+	set := make(map[string]bool)
 	for _, database := range listed.Databases {
 		for _, flag := range database.FeatureFlags {
 			if flag.Current != nil {

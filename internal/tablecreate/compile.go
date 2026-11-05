@@ -8,15 +8,16 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // Compile preserves explicit key order and native settings. The result has no
@@ -358,7 +359,7 @@ func validateOwner(owner *protocol.Reference) error {
 		// The directory of the dev realms belongs to other runs at the root of a database.
 		return fmt.Errorf("invalid YDB table namespace")
 	}
-	for _, part := range strings.Split(owner.Schema, "/") {
+	for part := range strings.SplitSeq(owner.Schema, "/") {
 		if owner.Schema != "" && !validName(part) {
 			return fmt.Errorf("invalid YDB table namespace")
 		}
@@ -367,7 +368,7 @@ func validateOwner(owner *protocol.Reference) error {
 		if !strings.HasPrefix(owner.Database, "/") || owner.Database == "/" {
 			return fmt.Errorf("invalid YDB database path")
 		}
-		for _, part := range strings.Split(owner.Database[1:], "/") {
+		for part := range strings.SplitSeq(owner.Database[1:], "/") {
 			if !validName(part) {
 				return fmt.Errorf("invalid YDB database path")
 			}

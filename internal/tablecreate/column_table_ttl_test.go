@@ -1,17 +1,19 @@
 package tablecreate_test
 
 import (
+	"maps"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -27,9 +29,7 @@ func columnTTLRequest(c *qt.C, declared, held string, capabilities map[string]bo
 	c.Helper()
 	request := columnAlterRequest(c, []*protocol.ComparisonRecord{storageFacet(c, protocol.ValueInput_DESIRED, declared)},
 		[]*protocol.ComparisonRecord{storageFacet(c, protocol.ValueInput_OBSERVED, held)})
-	for key, value := range capabilities {
-		request.Capabilities[key] = value
-	}
+	maps.Copy(request.Capabilities, capabilities)
 	return request
 }
 
@@ -91,7 +91,7 @@ func TestColumnTablePlan_TTLChange_HappyPath(t *testing.T) {
 			c.Assert(steps, qt.DeepEquals, test.steps)
 			c.Assert(placements, qt.DeepEquals, test.placements)
 			c.Assert(actions, qt.DeepEquals, test.actions)
-			c.Assert(len(payloads), qt.Equals, len(test.payloads))
+			c.Assert(payloads, qt.HasLen, len(test.payloads))
 			for i, payload := range payloads {
 				c.Assert(jsonValue(c, payload), qt.DeepEquals, jsonValue(c, test.payloads[i]))
 			}

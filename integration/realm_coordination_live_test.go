@@ -9,19 +9,20 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // realmNodes is what a read of a session reports of its coordination nodes:
 // each node's directory and name, and its attach consistency mode.
 func realmNodes(c *qt.C, snapshot *protocol.Schema) map[string]Ydb_Coordination.ConsistencyMode {
 	c.Helper()
-	nodes := map[string]Ydb_Coordination.ConsistencyMode{}
+	nodes := make(map[string]Ydb_Coordination.ConsistencyMode)
 	for _, object := range snapshot.GetNativeObjects() {
 		if object.GetKind() != schema.CoordinationProperties {
 			continue

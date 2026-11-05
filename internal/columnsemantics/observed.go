@@ -5,14 +5,15 @@ import (
 	"math"
 	"strconv"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Projected derives common facts from the exact column native creation writes.

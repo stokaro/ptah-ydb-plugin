@@ -9,13 +9,14 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func convertProperties(c *qt.C, client *providerruntime.Client, request *protocol.NormalizeValuesRequest) {
@@ -45,7 +46,7 @@ func convertProperties(c *qt.C, client *providerruntime.Client, request *protoco
 func TestColumnConversionOfflineSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	owner := &protocol.Reference{Engine: "ydb", Database: "/local", Schema: "App", Kind: "column", Path: []string{"Orders"}, Name: "Id"}
-	observed, err := schema.CaptureColumn(owner, &native.ColumnMeta{Family: "cold", DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: &native.SequenceDescription{Name: proto.String("_serial"), Increment: proto.Int64(1)}}})
+	observed, err := schema.CaptureColumn(owner, &native.ColumnMeta{Family: "cold", DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: &native.SequenceDescription{Name: new("_serial"), Increment: proto.Int64(1)}}})
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)

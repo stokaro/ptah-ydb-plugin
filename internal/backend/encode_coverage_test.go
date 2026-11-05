@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // limitsContext is the context of a call from a host that lists source.limits
@@ -203,7 +204,7 @@ func TestEncodeSource_ReadBackClaimsNoMoreThanTheRequest(t *testing.T) {
 			c.Assert(provider.ValidateDecodedSource(provider.NegotiatedDescription(backend.Description(), []string{provider.EntryKeysFeature, provider.HCLSourceFeature, provider.SourceLimitsFeature}),
 				document, decoded), qt.IsNil)
 			coverage := decoded.GetDocuments()[0].GetCoverage()
-			states := map[string]string{}
+			states := make(map[string]string)
 			for _, kind := range coverage.GetKinds() {
 				states[kind.GetModel().GetKind()] = kind.GetKnowledge().GetState().String() + " " + kind.GetKnowledge().GetReason()
 			}

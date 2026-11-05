@@ -3,12 +3,13 @@ package tablecreate
 import (
 	"fmt"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // The refusals of a column-table change no statement makes in place. YDB fixes
@@ -242,7 +243,7 @@ func (s columnTableStep) plan(number int, numbers *localIndexNumbers) ([]*protoc
 		}
 		steps, dependencies = append(steps, ttlSteps...), append(dependencies, ttlDependencies...)
 	}
-	dropped := map[string]*protocol.StepIdentity{}
+	dropped := make(map[string]*protocol.StepIdentity)
 	for _, change := range s.change.indexes {
 		prefix, counter, action := "column-table-drop-local-index", &numbers.drops, protocol.PlanningEffect_DROP
 		alteration := &native.ColumnTableLocalIndexAlteration{Drop: change.drop}

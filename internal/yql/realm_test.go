@@ -1,10 +1,10 @@
 package yql_test
 
 import (
-	"errors"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
@@ -53,7 +53,7 @@ func TestConfineToRealm_FailurePath(t *testing.T) {
 			err := yql.ConfineToRealm(test.source)
 
 			var refusal *yql.RealmRefusal
-			c.Assert(errors.As(err, &refusal), qt.IsTrue)
+			c.Assert(err, qt.ErrorAs, &refusal)
 			c.Assert(refusal.Operation, qt.Equals, test.operation)
 			c.Assert(err, qt.ErrorMatches, "YDB dev realm session rejects .* because its effects cannot be confined to the dev realm")
 		})

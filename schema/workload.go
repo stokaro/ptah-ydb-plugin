@@ -11,13 +11,14 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 )
 
 const (
@@ -435,7 +436,7 @@ func CaptureWorkloadOperation(id, database string, changes WorkloadChanges) (*pr
 }
 
 func encodeWorkload(changes WorkloadChanges) ([]byte, error) {
-	payload := workloadPayload{Pools: []workloadEntry{}, Classifiers: []workloadEntry{}}
+	payload := workloadPayload{Pools: make([]workloadEntry, 0), Classifiers: make([]workloadEntry, 0)}
 	for _, change := range changes.Pools {
 		entry := workloadEntry{Name: change.Name}
 		var err error

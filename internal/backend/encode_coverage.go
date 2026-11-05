@@ -5,10 +5,11 @@ import (
 	"path"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 )
 
 // encodeCoverage is what a source written from request says of the knowledge

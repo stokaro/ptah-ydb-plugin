@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Literal writes a typed default value as the canonical YQL literal of its

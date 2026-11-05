@@ -4,12 +4,13 @@ package externalpath
 import (
 	"errors"
 	"fmt"
-	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"maps"
 	"path"
 	"slices"
 	"strings"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
 const secretPathSuffix = "_SECRET_PATH"

@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 )
 
 // CacheModeCapability is a column family's cache mode: CACHE_MODE in YQL,

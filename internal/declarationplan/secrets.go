@@ -2,13 +2,14 @@ package declarationplan
 
 import (
 	"fmt"
-	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 func sourceSecretEffects(object *protocol.ComparisonRecord) ([]*protocol.PlanningEffect, error) {

@@ -6,10 +6,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // IndexProperties identifies the complete observed index set of one table.
@@ -18,7 +19,7 @@ const IndexProperties = modelNamespace + "table-indexes"
 // ValidateIndexes refuses incomplete, unknown, or duplicate native indexes before
 // their names are used to read physical tables.
 func ValidateIndexes(values []*native.TableIndexDescription) error {
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, value := range values {
 		if err := validateIndex(value); err != nil {
 			return err
@@ -74,7 +75,7 @@ func validateIndex(index *native.TableIndexDescription) error {
 		return fmt.Errorf("YDB index is not ready for schema comparison")
 	}
 	for _, columns := range [][]string{index.GetIndexColumns(), index.GetDataColumns()} {
-		seen := map[string]bool{}
+		seen := make(map[string]bool)
 		for _, column := range columns {
 			if column == "" || seen[column] {
 				return fmt.Errorf("invalid or duplicate YDB index column")
@@ -130,7 +131,7 @@ func CaptureIndexes(owner *protocol.Reference, observed *native.IndexObservation
 }
 
 func normalizeIndexes(value *native.IndexObservations) error {
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, index := range value.GetIndexes() {
 		if err := validateIndex(index.GetDescription()); err != nil {
 			return err
@@ -149,7 +150,7 @@ func normalizeIndexes(value *native.IndexObservations) error {
 		if len(names) != len(index.Tables) {
 			return fmt.Errorf("incomplete YDB index implementation tables")
 		}
-		tables := map[string]bool{}
+		tables := make(map[string]bool)
 		for _, table := range index.Tables {
 			if !slices.Contains(names, table.GetName()) || tables[table.GetName()] {
 				return fmt.Errorf("unexpected or duplicate YDB index implementation table")
@@ -201,7 +202,7 @@ func validateImplementation(table *native.DescribeTableResult) error {
 		return fmt.Errorf("index implementation requires row storage")
 	}
 	table.StoreType = Ydb_Table.StoreType_STORE_TYPE_ROW
-	columns := map[string]bool{}
+	columns := make(map[string]bool)
 	for _, column := range table.GetColumns() {
 		if column.GetName() == "" || columns[column.GetName()] {
 			return fmt.Errorf("invalid YDB index implementation column")
@@ -214,7 +215,7 @@ func validateImplementation(table *native.DescribeTableResult) error {
 			return err
 		}
 	}
-	keys := map[string]bool{}
+	keys := make(map[string]bool)
 	for _, name := range table.GetPrimaryKey() {
 		if !columns[name] || keys[name] {
 			return fmt.Errorf("invalid YDB index implementation primary key")

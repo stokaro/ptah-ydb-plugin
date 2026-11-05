@@ -13,10 +13,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // The syntax this package claims.
@@ -74,7 +75,7 @@ type declared struct {
 // document, and so does an object declared twice.
 func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	var objects []declared
-	owned := map[int]bool{}
+	owned := make(map[int]bool)
 	for index, fragment := range document.GetFragments() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -109,7 +110,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 	for index := range owned {
 		result[index] = nil
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for position, object := range objects {
 		kind, noun := schema.ResourcePoolProperties, "resource pool"
 		if object.classifier {
@@ -151,7 +152,7 @@ func yamlObjects(fragment int, classifier bool, mapping *protocol.SourceMapping)
 		if fields == nil && entry.GetValue().GetNull() == nil {
 			return nil, fmt.Errorf("%s %q: a %s requires a mapping", noun, entry.Key, noun)
 		}
-		values := map[string]string{}
+		values := make(map[string]string)
 		for _, field := range fields.GetEntries() {
 			if !slices.Contains(allowed, field.Key) {
 				return nil, fmt.Errorf("%s %q: unknown key %q", noun, entry.Key, field.Key)
@@ -183,7 +184,7 @@ func goObject(classifier bool, mapping *protocol.SourceMapping) (declared, error
 	if mapping == nil {
 		return declared{}, fmt.Errorf("%s requires attributes", directive)
 	}
-	values := map[string]string{}
+	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {

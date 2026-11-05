@@ -15,12 +15,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // This is an external binary contract test. The provider module does not import
@@ -35,7 +36,7 @@ func assertHostSchemaExport(t *testing.T, binary, digest string, schemas []strin
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	configuration := map[string]any{"format_version": 2, "providers": []any{map[string]any{
-		"executable": binary, "sha256": digest, "provider_id": schema.ProviderID, "engines": []any{map[string]any{"id": "ydb", "aliases": []string{"ydbs"}}}, "environment": []string{},
+		"executable": binary, "sha256": digest, "provider_id": schema.ProviderID, "engines": []any{map[string]any{"id": "ydb", "aliases": []string{"ydbs"}}}, "environment": make([]string, 0),
 	}}}
 	encoded, err := json.Marshal(configuration)
 	c.Assert(err, qt.IsNil)
@@ -57,7 +58,7 @@ func assertHostSchemaExport(t *testing.T, binary, digest string, schemas []strin
 	c.Assert(json.Unmarshal(document["feature_coverage"], &coverage), qt.IsNil)
 	c.Assert(coverage.Representation, qt.Equals, "desired")
 	c.Assert(coverage.Kinds, qt.HasLen, len(schema.ObservedModels()))
-	seenKinds := map[string]bool{}
+	seenKinds := make(map[string]bool)
 	for _, kind := range coverage.Kinds {
 		c.Assert(kind.Model.Representation, qt.Equals, "desired")
 		seenKinds[kind.Model.Kind] = true
@@ -82,7 +83,7 @@ func assertHostSchemaExport(t *testing.T, binary, digest string, schemas []strin
 	c.Assert(err, qt.IsNil)
 	var tree any
 	c.Assert(json.Unmarshal(output, &tree), qt.IsNil)
-	found := map[int]bool{}
+	found := make(map[int]bool)
 	var visit func(any)
 	visit = func(value any) {
 		switch node := value.(type) {

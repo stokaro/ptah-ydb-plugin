@@ -12,13 +12,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func prepareMetadataStore(c *qt.C, client *providerruntime.Client, opened *connection.Connection, database string, scope *protocol.MetadataScope) {
@@ -191,7 +192,7 @@ func TestNativeMetadataPagesExceedOneRPCWithoutChangingSnapshot(t *testing.T) {
 	const count = 300
 	var declarations, values []string
 	var args []any
-	for index := 0; index < count; index++ {
+	for index := range count {
 		row := logRecord(int64(index + 1))
 		row.RunId = "bulk"
 		row.Error = strings.Repeat("x", 12<<10)
@@ -249,7 +250,7 @@ func TestNativeMetadataOwnershipInspectionAndCorruption(t *testing.T) {
 	c.Assert(snapshot.Tables, qt.HasLen, 1)
 	c.Assert(snapshot.Tables[0].Identity.Name, qt.Equals, "foreign")
 	c.Assert(snapshot.ReservedObjects, qt.HasLen, 2)
-	purposes := map[string]protocol.ReservedObject_Purpose{}
+	purposes := make(map[string]protocol.ReservedObject_Purpose)
 	for _, reserved := range snapshot.ReservedObjects {
 		purposes[reserved.Object.Name] = reserved.Purpose
 	}

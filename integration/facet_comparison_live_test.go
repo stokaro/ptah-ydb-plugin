@@ -13,15 +13,16 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
-	"google.golang.org/protobuf/proto"
 )
 
 // facetFixture holds one live row table app.records, the provider that reads
@@ -130,7 +131,7 @@ func (f *facetFixture) compareRecords(c *qt.C, desired ...*protocol.ComparisonRe
 		subject          *protocol.ComparisonIdentity
 		desired, current bool
 	}
-	held := map[string]sides{}
+	held := make(map[string]sides)
 	for _, record := range desired {
 		key := record.Subject.Kind + "/" + record.Subject.Name.Normalized
 		held[key] = sides{subject: record.Subject, desired: true, current: held[key].current}

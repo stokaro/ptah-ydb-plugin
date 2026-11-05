@@ -204,7 +204,7 @@ type TableStatement struct {
 // TableFacetPayloads are the YDB settings a table declares, each by the
 // host's model kind and in the form the host's codec writes its payload.
 func TableFacetPayloads(table Table) map[string]any {
-	result := map[string]any{}
+	result := make(map[string]any)
 	facets := table.Facets
 	if facets.Partitioning != nil {
 		result["ptah.run/ydb/table-partitioning"] = facets.Partitioning
@@ -224,7 +224,7 @@ func TableFacetPayloads(table Table) map[string]any {
 // IndexFacetPayloads are the YDB settings an index declares, as
 // [TableFacetPayloads] writes a table's.
 func IndexFacetPayloads(index Index) map[string]any {
-	result := map[string]any{}
+	result := make(map[string]any)
 	if index.Partitioning != nil {
 		result["ptah.run/ydb/index-partitioning"] = index.Partitioning
 	}

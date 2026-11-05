@@ -9,6 +9,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
@@ -16,11 +22,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
-	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
-	"google.golang.org/protobuf/proto"
 )
 
 // The pinned vendor protobuf does not name STREAMING_QUERY.
@@ -82,7 +83,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 	if len(selectors) == 0 {
 		schemas = []string{""}
 	}
-	visited := map[string]bool{}
+	visited := make(map[string]bool)
 	skippedRealm := false
 	for len(schemas) != 0 {
 		selected := schemas[0]
@@ -104,7 +105,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		}
 		children := slices.Clone(listed.GetChildren())
 		slices.SortFunc(children, func(a, b *Ydb_Scheme.Entry) int { return strings.Compare(a.GetName(), b.GetName()) })
-		names := map[string]bool{}
+		names := make(map[string]bool)
 		for _, entry := range children {
 			name := entry.GetName()
 			if !component(name) || names[name] {
@@ -338,14 +339,14 @@ func component(value string) bool {
 func scopes(database string, selectors, leaveOut []string) ([]string, []*protocol.InspectionScopeBinding, error) {
 	var directories []string
 	var bindings []*protocol.InspectionScopeBinding
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, selector := range selectors {
 		if strings.TrimSpace(selector) == "" {
 			return nil, nil, fmt.Errorf("use / to select the YDB database root")
 		}
 		selected := strings.Trim(selector, "/")
 		if selected != "" {
-			for _, part := range strings.Split(selected, "/") {
+			for part := range strings.SplitSeq(selected, "/") {
 				if !component(part) || strings.HasPrefix(part, ".") {
 					return nil, nil, fmt.Errorf("invalid YDB schema selector")
 				}
@@ -378,7 +379,7 @@ func readTable(database, directory, name string, described *nativeprotocol.Descr
 		return nil, err
 	}
 	table.Facets = []*protocol.Envelope{facet}
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for position, column := range described.GetColumns() {
 		if column.GetName() == "" || names[column.GetName()] {
 			return nil, fmt.Errorf("invalid YDB column identity")
@@ -396,7 +397,7 @@ func readTable(database, directory, name string, described *nativeprotocol.Descr
 		projected.Facets = []*protocol.Envelope{facet}
 		table.Columns = append(table.Columns, projected)
 	}
-	keys := map[string]bool{}
+	keys := make(map[string]bool)
 	for _, key := range described.GetPrimaryKey() {
 		if !names[key] || keys[key] {
 			return nil, fmt.Errorf("invalid YDB primary key description")

@@ -52,7 +52,7 @@ func CaptureColumnStorageChange(id string, owner *protocol.Reference, before, af
 	if before == nil && after == nil {
 		return nil, fmt.Errorf("column storage change requires an operand")
 	}
-	operands := map[string]json.RawMessage{}
+	operands := make(map[string]json.RawMessage)
 	for key, operand := range map[string]*protocol.Envelope{"before": before, "after": after} {
 		if operand == nil {
 			continue
@@ -126,7 +126,7 @@ func NormalizeColumnStorageChange(input *protocol.ValueInput) (*protocol.Normali
 	if err != nil {
 		return nil, err
 	}
-	operands := map[string]json.RawMessage{}
+	operands := make(map[string]json.RawMessage)
 	if before != nil {
 		operands["before"] = before.Payload
 	}

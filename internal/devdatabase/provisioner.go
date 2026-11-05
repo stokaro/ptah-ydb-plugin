@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 )
 
 // readyTimeout bounds the wait for a started server to take DDL.
@@ -50,7 +51,7 @@ func New(runtime Runtime, probe Probe, realms Realms) *Provisioner {
 	if probe == nil {
 		probe = Ready
 	}
-	return &Provisioner{runtime: runtime, probe: probe, realms: realms, leases: map[string]lease{}}
+	return &Provisioner{runtime: runtime, probe: probe, realms: realms, leases: make(map[string]lease)}
 }
 
 // NewDocker returns a provisioner that drives the docker command line and

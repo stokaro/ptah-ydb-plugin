@@ -12,12 +12,13 @@ import (
 	"strconv"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // The session capabilities a column table's local index of each kind
@@ -214,8 +215,8 @@ func localIndexRenames(wanted, have map[string]*native.LocalIndexObservation) ma
 	}
 	slices.Sort(additions)
 	slices.Sort(removals)
-	renames := map[string]string{}
-	paired := map[string]bool{}
+	renames := make(map[string]string)
+	paired := make(map[string]bool)
 	for _, to := range additions {
 		for _, from := range removals {
 			if !paired[from] && LocalIndexEqual(renamedTo(have[from], to), wanted[to]) {
@@ -250,11 +251,11 @@ func planLocalIndexes(desired *native.ColumnStorageIntent, held *native.ColumnSt
 	if !localIndexesManaged(desired) {
 		return nil, ""
 	}
-	wanted := map[string]*native.LocalIndexObservation{}
+	wanted := make(map[string]*native.LocalIndexObservation)
 	for _, index := range desired.GetLocalIndexes() {
 		wanted[index.GetName()] = index
 	}
-	have := map[string]*native.LocalIndexObservation{}
+	have := make(map[string]*native.LocalIndexObservation)
 	for _, index := range held.GetLocalIndexes() {
 		have[index.GetName()] = index
 	}
@@ -268,11 +269,11 @@ func planLocalIndexes(desired *native.ColumnStorageIntent, held *native.ColumnSt
 		}
 	}
 	slices.Sort(names)
-	renames := map[string]string{}
+	renames := make(map[string]string)
 	if capabilities[IndexRenameCapability] {
 		renames = localIndexRenames(wanted, have)
 	}
-	renamed := map[string]bool{}
+	renamed := make(map[string]bool)
 	for _, from := range renames {
 		renamed[from] = true
 	}

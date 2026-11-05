@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // sequenceStep is the change of the sequence of one Serial column of a table

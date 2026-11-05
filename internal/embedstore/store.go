@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/releaseline"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/releaseline"
 )
 
 // Store is the embedding store of one session: its database/sql pool, whose

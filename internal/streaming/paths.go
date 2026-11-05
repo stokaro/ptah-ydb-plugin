@@ -123,7 +123,7 @@ func bindPath(tokens []yql.Token, bindings map[string]pathBinding) pathBinding {
 		return bindings[tokens[0].Value]
 	}
 	if tokens[0].IsOperator("[") && tokens[len(tokens)-1].IsOperator("]") {
-		result := pathBinding{list: []string{}}
+		result := pathBinding{list: make([]string, 0)}
 		for _, argument := range pathArguments(tokens[1 : len(tokens)-1]) {
 			value := bindPath(argument, bindings)
 			if !value.constant {

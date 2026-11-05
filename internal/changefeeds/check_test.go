@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -61,7 +62,7 @@ func TestCheck_RefusesWhatTheTargetLacks(t *testing.T) {
 		want    changefeeds.Refusal
 		wantErr string
 	}{
-		{name: "any changefeed on a target without them", spec: plain, caps: map[string]bool{},
+		{name: "any changefeed on a target without them", spec: plain, caps: make(map[string]bool),
 			want:    changefeeds.Refusal{Subject: `changefeed "f" of table "app/items"`, Key: changefeeds.CapabilityChangefeeds},
 			wantErr: `changefeed "f" of table "app/items", which requires target capability changefeeds, unavailable on this ydb target`},
 		{name: "USER_SIDS on 25.4", spec: withSIDs, caps: line(25, 4),

@@ -4,11 +4,12 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // unrepresentableSubject is an unrepresentable claim a read makes for the
@@ -27,7 +28,7 @@ func TestComparisonLeavesAReservedNameOut_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	request, err := testcomparison.Request(nil, nil)
 	c.Assert(err, qt.IsNil)
-	request.Capabilities = map[string]bool{}
+	request.Capabilities = make(map[string]bool)
 	request.Current.Coverage.Subjects = []*protocol.ComparisonSubjectCoverage{unrepresentableSubject(schema.ReservedNameReason)}
 	result, err := backend.New().CompareModels(c.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -69,7 +70,7 @@ func TestComparisonLeavesAReservedNameOut_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	request, err := testcomparison.Request(&schema.CoordinationIntent{}, nil)
 	c.Assert(err, qt.IsNil)
-	request.Capabilities = map[string]bool{}
+	request.Capabilities = make(map[string]bool)
 	request.Current.Coverage.Subjects = []*protocol.ComparisonSubjectCoverage{unrepresentableSubject(schema.ReservedNameReason)}
 	result, err := backend.New().CompareModels(c.Context(), request)
 	c.Assert(err, qt.ErrorMatches, `.*coordination node capability was not established`)

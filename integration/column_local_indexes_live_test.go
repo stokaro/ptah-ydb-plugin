@@ -10,14 +10,15 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // The local indexes the host's TestYDBColumnStore_RoundTrip declares on 26.2:
@@ -55,7 +56,7 @@ func (f *columnTableFixture) creationPlan(c *qt.C, session *protocol.Session, st
 // by name.
 func (f *columnTableFixture) heldLocalIndexes(c *qt.C) map[string]*native.LocalIndexObservation {
 	c.Helper()
-	result := map[string]*native.LocalIndexObservation{}
+	result := make(map[string]*native.LocalIndexObservation)
 	for _, index := range f.held(c).LocalIndexes {
 		result[index.Name] = index
 	}

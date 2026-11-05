@@ -9,6 +9,12 @@ import (
 	"strconv"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -16,11 +22,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // Table is one table of an encoding request: its binding, and the facets of
@@ -680,7 +681,7 @@ func (f *tableFacets) verify(format protocol.SourceDocument_Format, parts []*pro
 	}
 	var decodedRow *native.RowTableIntent
 	var decodedStorage *native.ColumnStorageIntent
-	placed := map[string]string{}
+	placed := make(map[string]string)
 	for _, table := range tables {
 		switch table.Value.GetValue().GetKind() {
 		case schema.TableProperties:

@@ -2,12 +2,14 @@ package locking
 
 import (
 	"context"
+	"testing"
+
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	wire "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
-	"testing"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The stream seam injects native replies that a healthy live server cannot

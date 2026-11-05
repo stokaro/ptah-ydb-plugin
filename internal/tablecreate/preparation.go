@@ -4,10 +4,11 @@ import (
 	"context"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
 // PrepareTables derives key membership from the same captured native declaration

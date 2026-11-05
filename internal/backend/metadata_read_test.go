@@ -8,12 +8,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func readerFixture() (*Provider, *session, *protocol.MetadataReadRequest) {
@@ -62,7 +63,7 @@ func TestMetadataPageFailureClosesSnapshot(t *testing.T) {
 func TestMetadataReaderBoundsAndTransactionCleanup(t *testing.T) {
 	c := testcheck.New(t)
 	p, s, request := readerFixture()
-	for i := 0; i < metadataOpenLimit; i++ {
+	for i := range metadataOpenLimit {
 		s.metadataReaders[strconv.Itoa(i)] = &metadataReader{scope: proto.CloneOf(request.Scope)}
 	}
 	_, err := p.OpenMetadataRead(t.Context(), request)
@@ -73,7 +74,7 @@ func TestMetadataReaderBoundsAndTransactionCleanup(t *testing.T) {
 		c.Assert(reader.closed, qt.IsTrue)
 	}
 	s.metadataReaders = make(map[string]*metadataReader)
-	for i := 0; i < metadataReaderLimit; i++ {
+	for i := range metadataReaderLimit {
 		s.metadataReaders[strconv.Itoa(i)] = &metadataReader{scope: proto.CloneOf(request.Scope), closed: true}
 	}
 	_, err = p.CloseMetadataRead(t.Context(), request)

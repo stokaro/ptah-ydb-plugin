@@ -11,12 +11,6 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
@@ -24,6 +18,13 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // capturedCoordinationCoverage transfers the source's exact namespace bounds.
@@ -90,7 +91,7 @@ func TestCoordinationPlanningExecutionSubprocess(t *testing.T) {
 
 	compare := func(mode string, drop bool) *protocol.ComparedModels {
 		c.Helper()
-		nodes := map[string]any{}
+		nodes := make(map[string]any)
 		if !drop {
 			fields := map[string]any{"schema": directory}
 			if mode != "" {

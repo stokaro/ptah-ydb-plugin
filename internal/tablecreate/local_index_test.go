@@ -1,19 +1,21 @@
 package tablecreate_test
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // localIndexCapabilities are the capabilities of a target that builds every
@@ -154,9 +156,7 @@ func TestColumnTableLocalIndexPlan_CreationNeedsTheCapability(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			capabilities := map[string]bool{"transactional_ddl": false}
-			for key, value := range test.capabilities {
-				capabilities[key] = value
-			}
+			maps.Copy(capabilities, test.capabilities)
 			plan, err := backend.New().PlanFeatures(t.Context(), columnCreationRequest(c, `{"localIndexes":[`+test.index+`]}`, capabilities))
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -171,9 +171,7 @@ func TestColumnTableLocalIndexPlan_CreationNeedsTheCapability(t *testing.T) {
 func TestColumnTableLocalIndexPlan_CreationWithTheCapability(t *testing.T) {
 	c := testcheck.New(t)
 	capabilities := map[string]bool{"transactional_ddl": false}
-	for key, value := range localIndexCapabilities {
-		capabilities[key] = value
-	}
+	maps.Copy(capabilities, localIndexCapabilities)
 	request := columnCreationRequest(c, `{"localIndexes":[`+declaredBloom+`,`+declaredNgram+`]}`, capabilities)
 	plan, err := backend.New().PlanFeatures(t.Context(), request)
 	c.Assert(err, qt.IsNil)

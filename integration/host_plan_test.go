@@ -70,7 +70,7 @@ func appliedUnits(report []byte, printed string) string {
 // the object it changes.
 func pluginUnits(output string) []string {
 	var listed []string
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		unit, found := strings.CutPrefix(line, unitPrefix+"github.com/stokaro/ptah-ydb-plugin/")
 		if !found {
 			continue
@@ -85,7 +85,7 @@ func pluginUnits(output string) []string {
 // such as the reason of an operation's assessment.
 func unitsSaying(output, text string) int {
 	count := 0
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		if strings.HasPrefix(line, unitPrefix) && strings.Contains(line, text) {
 			count++
 		}

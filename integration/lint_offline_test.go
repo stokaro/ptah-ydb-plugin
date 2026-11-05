@@ -10,10 +10,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // TestMigrationLintOfflineSubprocess drives migration lint through the
@@ -95,7 +96,7 @@ func startLintProvider(c *qt.C, hostFeatures ...string) *providerruntime.Client 
 
 // kindsOf is each statement's kind and the facts it carries beside it.
 func kindsOf(statements []*protocol.LintStatement) []string {
-	result := []string{}
+	result := make([]string, 0)
 	for _, statement := range statements {
 		var described []string
 		for _, effect := range statement.Effects {
@@ -134,7 +135,7 @@ func TestStatementFactsOfflineSubprocess(t *testing.T) {
 		{name: "a host that lists the feature", features: []string{provider.LintStatementFactsFeature}, listed: true,
 			judged: []protocol.LintFact{protocol.LintFact_LINT_FACT_STATEMENT_KIND, protocol.LintFact_LINT_FACT_MISSING_PRIMARY_KEY, protocol.LintFact_LINT_FACT_REQUIRED_CAPABILITY},
 			kinds:  want},
-		{name: "a host that does not", judged: []protocol.LintFact{}, kinds: []string{"", "", "", ""}},
+		{name: "a host that does not", judged: make([]protocol.LintFact, 0), kinds: []string{"", "", "", ""}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

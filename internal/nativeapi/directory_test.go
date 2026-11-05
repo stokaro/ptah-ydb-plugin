@@ -8,13 +8,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Operations"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/grpc"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // listing is the directory listing YDB answers for absolute.
@@ -117,7 +118,7 @@ func TestListDirectory_FailurePath(t *testing.T) {
 		c := testcheck.New(t)
 		listed, err := nativeapi.ListDirectory(c.Context(), nativeapi.SchemeLister(newDirectory()), "/local", "records/nested")
 		c.Assert(err, qt.ErrorMatches, `list YDB directory /local/records/nested: its parent is not a directory`)
-		c.Assert(errors.Is(err, nativeapi.ErrDirectoryNotVisible), qt.IsFalse)
+		c.Assert(err, qt.Not(qt.ErrorIs), nativeapi.ErrDirectoryNotVisible)
 		c.Assert(listed, qt.IsNil)
 	})
 	t.Run("a failed parent listing", func(t *testing.T) {

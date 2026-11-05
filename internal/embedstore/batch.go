@@ -41,7 +41,7 @@ func (s *Store) targetKey(ctx context.Context, spec *protocol.EmbeddingSpec) ([]
 	}
 	fields := spec.GetSource().GetKeyFields()
 	if ownsTable(spec) {
-		owned := append(append([]string{}, fields...), spec.GetTarget().GetColumn()+ordinalSuffix)
+		owned := append(append(make([]string, 0), fields...), spec.GetTarget().GetColumn()+ordinalSuffix)
 		key, err := keyOf(described, owned, name)
 		if err != nil {
 			return nil, RowTable{}, err

@@ -9,8 +9,6 @@ import (
 	"slices"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
@@ -18,6 +16,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 )
 
 const modelNamespace = ProviderID + "/"
@@ -297,7 +298,7 @@ func Normalize(value *protocol.Envelope) (*protocol.Envelope, error) {
 		}
 	}
 	if table, ok := target.(*native.DescribeTableResult); ok {
-		seen := map[string]bool{}
+		seen := make(map[string]bool)
 		if len(table.GetPrimaryKey()) == 0 {
 			return nil, fmt.Errorf("observed YDB table properties require a primary key")
 		}

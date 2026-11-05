@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 )
 

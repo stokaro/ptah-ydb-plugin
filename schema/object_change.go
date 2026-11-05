@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
@@ -55,9 +56,7 @@ func newObjectChanges(c objectChanges) *objectChanges {
 	}
 	definition := map[string]any{"kind": c.change, "representation": "change", "schema_version": 1, "payload": payload,
 		"operands": "before is the complete native observation including access metadata; after is complete desired intent; null means established absence; both null refused"}
-	for key, value := range c.definition {
-		definition[key] = value
-	}
+	maps.Copy(definition, c.definition)
 	c.changeModel = buildJSONModel(c.change, protocol.ValueInput_CHANGE, definition)
 	if c.operation == "" {
 		// The family's changes run as part of an operation of its own.
@@ -68,9 +67,7 @@ func newObjectChanges(c objectChanges) *objectChanges {
 		operation["operation"] = map[string]any{"required": true, "enum": c.operations,
 			"meaning": "how the operation carries out the change it holds beside the operation key"}
 	}
-	for key, value := range c.execution {
-		operation[key] = value
-	}
+	maps.Copy(operation, c.execution)
 	c.operationModel = buildJSONModel(c.operation, protocol.ValueInput_OPERATION, operation)
 	return &c
 }
@@ -223,7 +220,7 @@ func (c *objectChanges) parts(value *protocol.Envelope) (*protocol.Envelope, *pr
 		}
 		delete(payload, "database")
 	}
-	contexts := map[string]*protocol.DatabaseContext{}
+	contexts := make(map[string]*protocol.DatabaseContext)
 	for _, key := range []string{"before", "after"} {
 		if encoded, found := payload[key+"_context"]; found {
 			bound := &protocol.DatabaseContext{}

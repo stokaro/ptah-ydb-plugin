@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // alteration is one planned change of an existing table: its column families,
@@ -77,7 +78,7 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	if err != nil {
 		return alterationChanges{}, "", err
 	}
-	in := familyInput{placement: map[string]string{}, heldPlacement: map[string]string{}, existing: map[string]bool{}}
+	in := familyInput{placement: make(map[string]string), heldPlacement: make(map[string]string), existing: make(map[string]bool)}
 	var intent native.RowTableIntent
 	if env := desired.table; env != nil {
 		if err := protojson.Unmarshal(env.Payload, &intent); err != nil {
@@ -308,7 +309,7 @@ type capturedFacets struct {
 // facet excluded for this target, a facet bound to other targets and a kind
 // this service does not own state nothing here.
 func facetEnvelopes(owner *protocol.Reference, state *protocol.ComparisonState, representation protocol.ValueInput_Representation) (capturedFacets, error) {
-	result := capturedFacets{columns: map[string]*protocol.Envelope{}}
+	result := capturedFacets{columns: make(map[string]*protocol.Envelope)}
 	if state == nil {
 		return result, nil
 	}
@@ -358,11 +359,11 @@ func facetEnvelopes(owner *protocol.Reference, state *protocol.ComparisonState, 
 // alteration. A claimed step is named by its native replacement, so the edge
 // joins two steps of this service; any other step keeps its host identity.
 func alterStepDependencies(item alteration, steps []*protocol.CommonPlanningStep) []*protocol.PlanningDependency {
-	moved := map[string]bool{}
+	moved := make(map[string]bool)
 	for _, move := range item.change.move {
 		moved[move.Name] = true
 	}
-	replacement := map[string]*protocol.StepIdentity{}
+	replacement := make(map[string]*protocol.StepIdentity)
 	for _, claim := range item.claims {
 		replacement[stepKey(claim.source.Id)] = claim.id
 	}
@@ -402,7 +403,7 @@ func dropsColumn(step *protocol.CommonPlanningStep) bool {
 // TTL reads it. A claimed step is named by its native replacement, as in
 // alterStepDependencies.
 func ttlStepDependencies(item alteration, steps []*protocol.CommonPlanningStep) []*protocol.PlanningDependency {
-	replacement := map[string]*protocol.StepIdentity{}
+	replacement := make(map[string]*protocol.StepIdentity)
 	for _, claim := range item.claims {
 		replacement[stepKey(claim.source.Id)] = claim.id
 	}
@@ -453,7 +454,7 @@ func indexSubject(table *protocol.ComparisonIdentity, name string) *protocol.Com
 // step that does not name its column is assumed to remove any column. A claimed
 // step is named by its native replacement, as in alterStepDependencies.
 func indexStepDependencies(item alteration, index *indexStep, steps []*protocol.CommonPlanningStep) []*protocol.PlanningDependency {
-	replacement := map[string]*protocol.StepIdentity{}
+	replacement := make(map[string]*protocol.StepIdentity)
 	for _, claim := range item.claims {
 		replacement[stepKey(claim.source.Id)] = claim.id
 	}

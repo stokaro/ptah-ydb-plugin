@@ -15,15 +15,16 @@ package externals
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"maps"
 	"slices"
 	"strings"
 
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 )
 
 // The options a statement writes from attributes of their own, and the one
@@ -101,7 +102,7 @@ func SourceIntent(spec ydbdecl.ExternalDataSource) (*native.ExternalSourceIntent
 	}
 	properties := maps.Clone(spec.Options)
 	if properties == nil {
-		properties = map[string]string{}
+		properties = make(map[string]string)
 	}
 	properties[optionAuthMethod] = spec.AuthMethod
 	return &native.ExternalSourceIntent{SourceType: new(spec.SourceType), Location: new(spec.Location), Properties: properties}, nil
@@ -167,7 +168,7 @@ func TableIntent(spec ydbdecl.ExternalTable) (*native.ExternalTableIntent, error
 	if err := ydbdecl.ValidateExternalTable(spec); err != nil {
 		return nil, err
 	}
-	intent := &native.ExternalTableIntent{SourceType: new(objectStorage), DataSourcePath: new(spec.DataSource), Location: new(spec.Location), Content: map[string]string{}}
+	intent := &native.ExternalTableIntent{SourceType: new(objectStorage), DataSourcePath: new(spec.DataSource), Location: new(spec.Location), Content: make(map[string]string)}
 	for _, column := range spec.Columns {
 		storage, err := schema.StorageType(column.Type, !column.NotNull)
 		if err != nil {

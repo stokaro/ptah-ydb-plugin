@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replicationsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // document captures one document key's mapping, written as JSON the way the
@@ -26,7 +27,7 @@ func document(c *qt.C, source string, key *protocol.YAMLSourceKey) *protocol.Sou
 // directory/name keyed declarations of each kind.
 func declared(c *qt.C, values []*protocol.SourceModelValue) (map[string]replication.ReplicationSpec, map[string]replication.TransferSpec) {
 	c.Helper()
-	replications, transfers := map[string]replication.ReplicationSpec{}, map[string]replication.TransferSpec{}
+	replications, transfers := make(map[string]replication.ReplicationSpec), make(map[string]replication.TransferSpec)
 	for _, value := range values {
 		owner := value.Value.Value.Owner
 		key := owner.Schema + "/" + owner.Name
@@ -130,7 +131,7 @@ func TestDecode_FailurePath(t *testing.T) {
 func goDocument(directives ...goDirective) *protocol.SourceDocument {
 	document := &protocol.SourceDocument{Id: "doc", Format: protocol.SourceDocument_GO_ANNOTATIONS,
 		Models: []*protocol.ValueModel{schema.NativeDesiredModel(schema.ReplicationProperties), schema.NativeDesiredModel(schema.TransferProperties)}}
-	claims := map[string]*protocol.GoSourceDirective{}
+	claims := make(map[string]*protocol.GoSourceDirective)
 	for _, claim := range replicationsource.GoDirectives() {
 		claims[claim.Directive] = claim
 	}

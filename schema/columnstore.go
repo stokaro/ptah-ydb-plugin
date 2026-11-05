@@ -8,9 +8,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // The host's words for a column table that states a row table's settings, and
@@ -124,7 +125,7 @@ func ValidateDeclaredLocalIndexes(indexes []*native.LocalIndexObservation) error
 // representation. A read describes the storage YDB placed each index in; a
 // declaration may leave it out, since no statement names it.
 func validateLocalIndexes(indexes []*native.LocalIndexObservation, declared bool) error {
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for _, index := range indexes {
 		if !componentName(index.GetName()) || names[index.Name] || !distinctColumns(index.Columns) {
 			return fmt.Errorf("invalid or duplicate YDB local index")
@@ -172,7 +173,7 @@ func distinctColumns(names []string) bool {
 	if len(names) == 0 {
 		return false
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, name := range names {
 		if name == "" || seen[name] {
 			return false

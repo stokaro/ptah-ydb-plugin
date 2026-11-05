@@ -7,9 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/stokaro/ptah/provider-sdk/runtime"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/devdatabase"
-	"github.com/stokaro/ptah/provider-sdk/runtime"
 )
 
 func main() {

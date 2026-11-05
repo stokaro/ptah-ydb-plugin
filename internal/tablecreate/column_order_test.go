@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // hostCycle joins the plan's dependencies with the order the host keeps, and
@@ -21,7 +22,7 @@ import (
 // between the window's two markers. A step that drops something joins
 // common/feature-removals, and any other step common/feature-creations.
 func hostCycle(request *protocol.PlanFeaturesRequest, plan *protocol.PlannedFeatures) []string {
-	replacement := map[string]string{}
+	replacement := make(map[string]string)
 	for _, rewrite := range plan.Rewrites {
 		for _, source := range rewrite.Sources {
 			replacement[source.Name] = rewrite.Replacement.Name
@@ -33,7 +34,7 @@ func hostCycle(request *protocol.PlanFeaturesRequest, plan *protocol.PlannedFeat
 		}
 		return name
 	}
-	later := map[string][]string{}
+	later := make(map[string][]string)
 	link := func(before, after string) {
 		later[node(before)] = append(later[node(before)], node(after))
 	}
@@ -73,7 +74,7 @@ func cycle(later map[string][]string) []string {
 		open
 		closed
 	)
-	state := map[string]int{}
+	state := make(map[string]int)
 	var path []string
 	var visit func(string) []string
 	visit = func(name string) []string {

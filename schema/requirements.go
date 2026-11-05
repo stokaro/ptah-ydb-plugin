@@ -3,9 +3,10 @@ package schema
 import (
 	"errors"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // RequiredObjects returns the native prerequisites retained when a model is
