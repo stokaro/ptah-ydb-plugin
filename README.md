@@ -555,13 +555,18 @@ Views and comments use these shared stages:
 | PrepareCommonObjects | The query in the server's form: its tokens joined by single spaces, comments and terminators left out | As declared |
 | ValidateSchema | Refuses a view without a query, `WITH CHECK OPTION`, view attributes and materialized views | Refuses what an attribute cannot hold: a key over 100 bytes, a value over 4096 bytes, text that is not UTF-8, more than 10240 bytes on one table |
 | Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
-| PlanFeatures | Dropped before every table step and created after them | After every step on the table that keeps it |
+| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes |
 
 The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
 two- or three-character operator is one token except `>>`, which YDB writes
 `> >`; `$x` is `$ x`; a number keeps its exponent and its suffix; a quoted
 string or name, a multi-line string among them, is kept whole. A read of a view
 applied once therefore equals the preparation of its declaration.
+
+A step that only removes, such as a column's removal, is ordered after the
+views and comments of the plan, not before them: the host places a removal
+after its views and comments, and what a removal drops is no longer declared,
+so no view the plan creates reads it and no comment the plan sets names it.
 
 YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table
