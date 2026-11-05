@@ -69,8 +69,9 @@ func TestHostRenamesAnIndexInPlace_HappyPath(t *testing.T) {
 	for _, run := range []struct{ name, want string }{
 		// One alteration, then the comment cleared under the old name and set
 		// under the new one.
-		{"the rename", "(?s)Planned changes:\nNative operation: \\S+/row-table-alter-operation\n(  [^\n]*\n)*" +
-			"COMMENT ON INDEX `idx_items_kind` ON `[^`]+` IS NULL;\nCOMMENT ON INDEX `idx_items_by_kind` ON `[^`]+` IS 'By kind';\n.*Schema apply completed successfully.*"},
+		{"the rename", "(?s)" + unitPrefix + "\\S+/row-table-alter-operation [^\n]*\n" +
+			unitPrefix + "COMMENT ON INDEX `idx_items_kind` ON `[^`]+` IS NULL\n" + unitPrefix + "COMMENT ON INDEX `idx_items_by_kind` ON `[^`]+` IS 'By kind'\n" +
+			".*Schema apply completed successfully.*"},
 		{"a run after the rename", `(?s).*Schema is synced, no changes to be made.*`},
 	} {
 		output, err := hostApply(c, directory, renamed)

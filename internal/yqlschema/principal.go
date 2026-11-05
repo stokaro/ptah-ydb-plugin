@@ -1,6 +1,9 @@
 package yqlschema
 
 import (
+	"strings"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
@@ -85,10 +88,19 @@ func (p *parser) userOptions() []roleOption {
 	return options
 }
 
+// userPassword reads the password after PASSWORD or HASH: NULL, a string
+// literal, a YDB password hash after HASH, or after PASSWORD the reference a
+// migration file Ptah generated names the password by, `$PTAH_SECRET_...`
+// (ADR 0071). A reference is kept as written, as the host keeps it: the
+// password it stands for is the variable's value where the schema is applied.
 func (p *parser) userPassword(clause string) string {
 	if clause == "PASSWORD" && p.word("NULL") {
 		p.pos++
 		return ""
+	}
+	if token := p.peek(); clause == "PASSWORD" && token.Type == yql.TokenIdentifier && passwordReference(token.Value) {
+		p.pos++
+		return token.Value
 	}
 	value, ok := stringLiteral(p.peek().Value, "String")
 	if !ok || (clause == "HASH") != ydbacl.IsPasswordHash(value) {
@@ -140,4 +152,17 @@ func (p *parser) groupMembers(group, clause string) []statement {
 		p.failf("expected a group member")
 	}
 	return result
+}
+
+// passwordReference reports a token that names a password's variable: `$`, the
+// PTAH_SECRET_ prefix in exactly that case, and a name of ASCII letters, digits
+// and underscores.
+func passwordReference(token string) bool {
+	name, ok := strings.CutPrefix(token, "$"+secrets.ValuePrefix)
+	if !ok || name == "" {
+		return false
+	}
+	return strings.IndexFunc(name, func(r rune) bool {
+		return r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	}) < 0
 }

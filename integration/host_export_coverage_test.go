@@ -159,14 +159,23 @@ func TestHostAppliesAGoExportOfADirectoryOverAnother(t *testing.T) {
 // An HCL export of a read of one directory says nothing of the coordination
 // nodes it read less, applied back over that directory plans nothing, and
 // without a node's block drops the node; applied over a second directory too,
-// it drops that directory's node.
+// it drops that directory's node. Ported from the export half of the host's
+// TestYDBCoordinationNodes_HCLRequiresExplicitNamespaceClaim: the export
+// without the node's block, applied, drops the node, and the next plan over
+// it is empty.
 func TestHostAppliesAnHCLExportOfADirectoryAsComplete(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	outside := outsideDirectory(c, opened, database, directory)
-	events := path.Join(database, directory, "events")
+	events, local := path.Join(database, directory, "events"), path.Join(database, directory, "local")
 	createSchemaObject(c, opened, "CREATE TABLE `"+events+"` (id Uint64 NOT NULL, PRIMARY KEY (id))", "DROP TABLE IF EXISTS `"+events+"`")
-	createNode(c, opened, path.Join(database, directory, "local"))
+	c.Assert(opened.Driver.Coordination().CreateNode(c.Context(), local, coordination.NodeConfig{SelfCheckPeriodMillis: 2000, SessionGracePeriodMillis: 10000}), qt.IsNil)
+	c.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		// The test drops the node; a run that fails before the drop leaves it.
+		_ = opened.Driver.Coordination().DropNode(cleanup, local)
+	})
 	createNode(c, opened, path.Join(database, outside, "workers"))
 
 	document, _ := hostExport(c, "schema", "inspect", "--schemas", directory, "--format", "hcl")
@@ -184,4 +193,9 @@ func TestHostAppliesAnHCLExportOfADirectoryAsComplete(t *testing.T) {
 	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", document, output))
 	c.Assert(output, qt.Contains, outside+".workers: Drops the node", qt.Commentf("%s\n%s", document, output))
 	c.Assert(output, qt.Not(qt.Contains), directory+".local", qt.Commentf("%s\n%s", document, output))
+	output, err = hostApplySelected(c, directory, "hcl", withoutNode)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", withoutNode, output))
+	_, found := describedNode(c, opened, database, directory, "local")
+	c.Assert(found, qt.IsFalse)
+	c.Assert(hostPlanned(c, directory, "hcl", withoutNode), qt.HasLen, 0)
 }

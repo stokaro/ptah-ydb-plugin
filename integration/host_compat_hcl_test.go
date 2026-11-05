@@ -144,7 +144,9 @@ func TestHostCompatRebuildFromHCLKeepsWhatTheDocumentLeavesOut_HappyPath(t *test
 			synced, _, syncedExit := runCompat(c, nil, append(apply, "--dry-run")...)
 
 			c.Assert(exit, qt.Equals, 0, qt.Commentf("schema apply:\n%s\n%s", rebuilt, notes))
-			c.Assert(rebuilt, qt.Matches, `(?s).*row-table-copy-operation.*row-table-rename-operation.*Schema apply completed successfully.*`)
+			// A host lists a native operation by its kind or shows the
+			// provider's statement for it.
+			c.Assert(rebuilt, qt.Matches, `(?s).*(row-table-copy-operation|INSERT INTO ).*(row-table-rename-operation| RENAME TO ).*Schema apply completed successfully.*`)
 			c.Assert(syncedAllowedExit, qt.Equals, 0, qt.Commentf("%s", syncedAllowed))
 			c.Assert(syncedAllowed, qt.Equals, "Schema is synced, no changes to be made\n")
 			c.Assert(syncedExit, qt.Equals, 0, qt.Commentf("%s", synced))

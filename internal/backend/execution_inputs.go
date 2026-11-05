@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -11,8 +12,10 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 var _ provider.ExecutionInputDescriber = (*Provider)(nil)
@@ -109,6 +112,15 @@ func executionBindings(ctx context.Context, request *protocol.ExecuteRequest) (m
 	return values, ctx.Err()
 }
 
+// definesSecret reports whether query defines a secret's value, which only a
+// target with schema secrets takes. A query that names a user's password
+// alone needs no such target. Discovery has already checked every position,
+// so a query Expand refuses here defines nothing to gate on.
+func definesSecret(query string) bool {
+	expansion, err := secretvalue.Expand(query, func(string) (string, bool) { return "", true })
+	return err == nil && expansion.DefinesSecrets()
+}
+
 func expandInputs(query string, values map[string]string) (secretvalue.Expansion, error) {
 	return secretvalue.Expand(query, func(name string) (string, bool) { value, found := values[name]; return value, found })
 }
@@ -118,5 +130,47 @@ func inputError(expansion secretvalue.Expansion, err error) error {
 		return err
 	}
 	// Do not retain an error chain whose message could expose expanded SQL.
-	return fmt.Errorf("%s", expansion.Redact(err.Error()))
+	// What YDB answered, its status and its issues, is kept with the bound
+	// values taken out of each issue, so the unit's outcome is still read
+	// from it: a refused CREATE USER stays NOT_APPLIED rather than UNKNOWN.
+	text := expansion.Redact(err.Error())
+	answered, ok := errors.AsType[ydbAnswer](err)
+	if !ok {
+		return errors.New(text)
+	}
+	return redactedAnswer{text: text, code: answered.Code(), issues: redactIssues(expansion, answered.Issues())}
+}
+
+// ydbAnswer is the SDK's error for an operation status YDB returned, as
+// ydbfailure reads it.
+type ydbAnswer interface {
+	error
+	Code() int32
+	Issues() []*Ydb_Issue.IssueMessage
+}
+
+// redactedAnswer is what YDB answered a statement that held bound values with,
+// those values taken out of its text and its issues, and nothing else of the
+// error chain.
+type redactedAnswer struct {
+	text   string
+	code   int32
+	issues []*Ydb_Issue.IssueMessage
+}
+
+func (e redactedAnswer) Error() string                     { return e.text }
+func (e redactedAnswer) Code() int32                       { return e.code }
+func (e redactedAnswer) Issues() []*Ydb_Issue.IssueMessage { return e.issues }
+
+// redactIssues copies issues with the expansion's values taken out of each
+// message, at every depth.
+func redactIssues(expansion secretvalue.Expansion, issues []*Ydb_Issue.IssueMessage) []*Ydb_Issue.IssueMessage {
+	redacted := make([]*Ydb_Issue.IssueMessage, 0, len(issues))
+	for _, issue := range issues {
+		copied := proto.CloneOf(issue)
+		copied.Message = expansion.Redact(copied.GetMessage())
+		copied.Issues = redactIssues(expansion, issue.GetIssues())
+		redacted = append(redacted, copied)
+	}
+	return redacted
 }
