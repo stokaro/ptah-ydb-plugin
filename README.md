@@ -441,13 +441,19 @@ object and no row, or for a text YDB refused while compiling it, which its
 issues show by naming a position in the text and no execution stage) and a
 unit that ran in a caller transaction, which YDB
 applies only by its commit, or that is one query YDB applies whole: a data
-query or one scheme statement. Its message is YDB's own issue text on one line,
-which no host prints; its reason is the provider's (see
+query or one scheme statement. A native unit whose first statement YDB refused
+is judged by that statement: the service reads and checks before it writes, and
+writes only through its statements, so nothing of the unit was applied. That
+holds for every native unit but a column inventory, which alters a table through
+the table service first, a rebuild's copy, a table creation or alteration and a
+coordination node operation, which run no statement. Its message is YDB's own
+issue text on one line, which no host prints; its reason is the provider's (see
 [Error reasons](#error-reasons)).
 Every other failed dispatched unit reports `UNKNOWN`, even when earlier units
 succeeded: a block or action call that runs scheme statements, a `BATCH`
-statement, a unit of several scheme statements, a native unit, a unit that
-holds a coordination node statement, a unit that expands secret inputs, and a
+statement, a unit of several scheme statements, a native unit past its first
+statement, a unit that holds a coordination node statement, a unit that expands
+secret inputs, and a
 failure that carries no server status. A unit that holds a comment statement
 runs as its statements one after another, and reads by the first one when that
 one fails, since nothing of the unit ran before it: a query by the rules above,
@@ -1004,8 +1010,9 @@ showing whether it applied), followed by YDB's status, the most specific issue
 code and the position YDB named, counted in the unit's own text: on a dev
 realm, the realm's pragma YDB received first is not counted. For the issue
 codes 2003, 2012, 2031 and 2032
-it also says what the statement did, in the provider's words. It never quotes
-YDB's issue text: measured on 25.1.4.7 and 26.2.1.14, that text quotes the
+it also says what the statement did, in the provider's words. Apart from the
+paths of the objects a refused DROP leaves in place, it never quotes YDB's
+issue text: measured on 25.1.4.7 and 26.2.1.14, that text quotes the
 token YDB refused, a string literal of the statement and the table's path, and
 a statement can carry a password or a bound secret. The issue text stays in the
 result's message. The one sentence a reason takes from YDB's answer is the
@@ -1045,6 +1052,17 @@ provider execution: NOT_APPLIED (0 units confirmed applied): capability resource
 ```
 
 and with it, the same sentence up to `Turn the flag on`.
+
+YDB refuses a DROP of an object other objects depend on, such as an external
+data source an external table reads, with `SCHEME_ERROR` before it changes
+anything, and names the dependents inside issue 2019. Their paths are the one
+part of YDB's text a reason repeats, as Ptah's built-in YDB engine printed
+them, because the operator has to drop them first. Measured on 25.1.4.7 and
+26.2.1.14:
+
+```text
+provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the statement: other scheme objects depend on what it drops, /local/readers/tbl; drop them first (SCHEME_ERROR, issue 2019)
+```
 
 25.1.4.7 has no unique secondary index, and refuses one with `Unknown index
 type: syncGlobalUnique` inside its execution stage, before it proposes a

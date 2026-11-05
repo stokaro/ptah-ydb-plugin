@@ -596,3 +596,54 @@ func TestRefusedReasonNamesTheFlag_FailurePath(t *testing.T) {
 	refused := ydbfailure.Answer{Status: Ydb.StatusIds_PRECONDITION_FAILED, Code: 2012, Issues: []string{"Constraint violated", "Conflict with existing key."}}
 	c.Assert(refused.RefusedReason(), qt.Equals, "YDB refused the statement: it violates a constraint of the table, such as a key the table holds (PRECONDITION_FAILED, issue 2012)")
 }
+
+// YDB refuses a DROP of an object other objects depend on before it changes
+// anything, as 25.1.4.7 and 26.2.1.14 answered a DROP EXTERNAL DATA SOURCE an
+// external table reads: SCHEME_ERROR, with the dependents named inside issue
+// 2019. The unit is NOT_APPLIED, and the reason names the dependents, as the
+// built-in engine at host 74de0b65b printed them.
+func TestFailedRefusesADropOthersDependOn_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		issues []*Ydb_Issue.IssueMessage
+	}{
+		{"26.2", []*Ydb_Issue.IssueMessage{
+			issue(2003, 0, 0, `Executing operation with object "EXTERNAL_DATA_SOURCE"`,
+				issue(2003, 0, 0, "Failed to execute ESchemeOpDropExternalDataSource: <main>: Error: Other entities depend on this data source, "+
+					"please remove them at the beginning: /local/g134x/tbl, code: 2003\n")),
+			issue(2019, 0, 0, "Query invalidated on scheme/internal error during Scheme execution"),
+		}},
+		{"25.1", []*Ydb_Issue.IssueMessage{
+			issue(2003, 0, 0, "<main>: Error: Other entities depend on this data source, please remove them at the beginning: /local/g134x/tbl, code: 2003\n"),
+			issue(2019, 0, 0, "Query invalidated on scheme/internal error during Scheme execution"),
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			read := ydbfailure.Read(&answered{status: Ydb.StatusIds_SCHEME_ERROR, issues: test.issues})
+
+			result := ydbfailure.Failed(read, ydbfailure.Unit{Text: "DROP EXTERNAL DATA SOURCE `g134/src`"}, 0)
+
+			c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
+			c.Assert(result.GetDiagnostic().GetReason(), qt.Equals,
+				"YDB refused the statement: other scheme objects depend on what it drops, /local/g134x/tbl; drop them first (SCHEME_ERROR, issue 2019)")
+		})
+	}
+}
+
+// Without the statement the answer says nothing of what the unit applied: a
+// native unit that ran other statements first stays UNKNOWN, and its reason
+// gives the answer's status alone.
+func TestFailedRefusesADropOthersDependOn_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	read := ydbfailure.Read(&answered{status: Ydb.StatusIds_SCHEME_ERROR, issues: []*Ydb_Issue.IssueMessage{
+		issue(2003, 0, 0, "<main>: Error: Other entities depend on this data source, please remove them at the beginning: /local/g134x/tbl, code: 2003\n"),
+		issue(2019, 0, 0, "Query invalidated on scheme/internal error during Scheme execution"),
+	}})
+
+	result := ydbfailure.Failed(read, ydbfailure.Unit{}, 0)
+
+	c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(result.GetDiagnostic().GetReason(), qt.Equals,
+		"the unit's outcome is unknown: YDB answered SCHEME_ERROR, issue 2019, which does not show whether the unit applied")
+}

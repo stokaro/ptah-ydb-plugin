@@ -12,7 +12,9 @@
 // did, its status, and the issue code and the position YDB gave, with the
 // capability and the feature flag where YDB refused for want of the flag, and
 // never YDB's issue text, which quotes the statement's text, a literal in it
-// or the database's path.
+// or the database's path. The one part of it a reason repeats is the paths of
+// the objects YDB says depend on one a statement drops, which the operator
+// has to drop first.
 package ydbfailure
 
 import (
@@ -347,6 +349,37 @@ func (a Answer) RefusedReason() string {
 	return a.refusedReason("YDB refused the statement")
 }
 
+// dependentsIssue opens the issue in which YDB refuses to drop an object other
+// objects depend on, and dependentsNamed the paths of those objects after it.
+// Measured on 25.1.4.7 and 26.2.1.14, a DROP EXTERNAL DATA SOURCE an external
+// table reads answers SCHEME_ERROR with `Other entities depend on this data
+// source, please remove them at the beginning: /local/x/tbl, code: 2003` inside
+// issue 2019, `Query invalidated on scheme/internal error during Scheme
+// execution`, whose code alone says nothing.
+const (
+	dependentsIssue = "Other entities depend on this"
+	dependentsNamed = "please remove them at the beginning: "
+)
+
+// refusedDependents is the meaning of the answer's issue that refused to drop
+// an object others depend on, naming them where YDB does, or "" for an answer
+// with no such issue.
+func (a Answer) refusedDependents() string {
+	for _, issue := range a.Issues {
+		at := strings.Index(issue, dependentsIssue)
+		if at < 0 {
+			continue
+		}
+		_, named, found := strings.Cut(issue[at:], dependentsNamed)
+		named, _, _ = strings.Cut(named, ", code:")
+		if named = strings.TrimSpace(named); !found || named == "" {
+			return "other scheme objects depend on what it drops; drop them first"
+		}
+		return "other scheme objects depend on what it drops, " + named + "; drop them first"
+	}
+	return ""
+}
+
 // refusedReason is [Answer.RefusedReason] with the refusal said as reason.
 func (a Answer) refusedReason(reason string) string {
 	if a.Compiled {
@@ -355,6 +388,8 @@ func (a Answer) refusedReason(reason string) string {
 	switch meaning, known := issueMeanings[a.Code]; {
 	case a.Check != "" && fits(reason+": "+a.Check+" ("+a.detail()+")"):
 		reason += ": " + a.Check
+	case a.refusedDependents() != "":
+		reason += ": " + a.refusedDependents()
 	case known:
 		reason += ": " + meaning
 	case a.refusedUnproposed() != "":
