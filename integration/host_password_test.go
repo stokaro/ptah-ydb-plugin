@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,7 +47,15 @@ func passwordSource(c *qt.C, user, password string) string {
 func TestHostKeepsAUsersPasswordOutOfEveryOutput_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.PasswordInputsFeature)
-	opened, directory, _ := lockFixture(c)
+	opened, directory, database := lockFixture(c)
+	// The revision tables go below the fixture's directory, in a directory of
+	// their own the test removes, so the directory is empty when it goes.
+	revisions := path.Join(directory, "m")
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		removeTree(ctx, opened, path.Join(database, revisions))
+	})
 	suffix := strings.ToLower(rand.Text())[:8]
 	planned, applied, migrated, refused := "ptahpwp"+suffix, "ptahpwa"+suffix, "ptahpwm"+suffix, "ptahpwr"+suffix
 	passwords := map[string]string{planned: "Plan1SENTINEL" + suffix, applied: "Apply1SENTINEL" + suffix,
@@ -75,7 +84,7 @@ func TestHostKeepsAUsersPasswordOutOfEveryOutput_HappyPath(t *testing.T) {
 	generatedOut, generateErr := hostCommand(c, append([]string{"migrations", "generate", "--schema-file", migratedSource,
 		"--migrations-dir", migrations, "--name", "user"}, scope...)...)
 	c.Setenv(passwordVariable(migrated), passwords[migrated])
-	upOut, upErr := hostCommand(c, "migrations", "up", "--db-url", address, "--migrations-dir", migrations, "--migrations-schema", directory)
+	upOut, upErr := hostCommand(c, "migrations", "up", "--db-url", address, "--migrations-dir", migrations, "--migrations-schema", revisions)
 	refusedOut, refusedErr := hostCommand(c, append([]string{"schema", "apply", "--schema-file", passwordSource(c, refused, passwords[refused]),
 		"--auto-approve"}, scope...)...)
 
