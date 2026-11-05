@@ -10,6 +10,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -398,4 +399,51 @@ func TestStreamingContextInventoryProvesTheOutside_FailurePath(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Diagnostics, qt.HasLen, 1)
 	c.Assert(result.Diagnostics[0].Message, qt.Contains, "cannot exclude unknown streaming queries")
+}
+
+// reservedContextName is a read's claim, on the streaming query kind, for
+// name at the database root: no object of the kind is representable there,
+// for reason.
+func reservedContextName(name, reason string) *protocol.ComparisonSubjectCoverage {
+	return &protocol.ComparisonSubjectCoverage{Kind: schema.StreamingQueryProperties,
+		Subject:   &protocol.ComparisonIdentity{Kind: schema.StreamingQueryProperties, Name: testcomparison.Part(name)},
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE, Reason: reason}}
+}
+
+// contextSteps is the number of steps each object receipt of result holds, by
+// the object's name.
+func contextSteps(result *protocol.PlannedFeatures) map[string]int {
+	steps := make(map[string]int, len(result.Objects))
+	for _, receipt := range result.Objects {
+		steps[receipt.Subject.GetName().GetSource()] = len(receipt.Steps)
+	}
+	return steps
+}
+
+// A read claims the name of the provider's own storage, the lock node at the
+// root, on every native kind. The claim is no streaming query, so a plan that
+// changes an input restarts the query that reads it and asks nothing of the
+// reserved name, which keeps a receipt without steps.
+func TestUnchangedStreamingQueryBesideAReservedName_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := unchangedStreamingRequest(c, nil)
+	request.CurrentObjects.Coverage.Subjects = append(request.CurrentObjects.Coverage.Subjects, reservedContextName(locking.NodeName, schema.ReservedNameReason))
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	c.Assert(contextSteps(result), qt.DeepEquals, map[string]int{"copy": 2, locking.NodeName: 0})
+}
+
+// A name the read could not represent for another reason may hold a query
+// that reads the changed input, so the plan is still refused.
+func TestUnchangedStreamingQueryBesideAReservedName_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := unchangedStreamingRequest(c, nil)
+	request.CurrentObjects.Coverage.Subjects = append(request.CurrentObjects.Coverage.Subjects, reservedContextName("unread", "The query uses a setting the provider does not model"))
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Contributions, qt.HasLen, 0)
+	c.Assert(result.Objects, qt.HasLen, 0)
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].Message, qt.Equals, `streaming query "unread" has no complete captured definition: The query uses a setting the provider does not model`)
 }

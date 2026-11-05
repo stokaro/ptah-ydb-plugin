@@ -812,8 +812,10 @@ Confirmed history, journal, and tag stores are returned as SDK reservations
 instead of managed tables. A reservation occupies the name for every supported native scheme-object
 kind and for common tables. Exact UNREPRESENTABLE subject coverage overrides
 directory completeness at these occupied names, so omission does not assert
-absence. Filtered reads return reservations only from the exact directories
-they inspect. Names or layout alone never establish ownership.
+absence. A comparison leaves a reserved name out. When a plan changes an object
+a streaming query could read, it counts no query at a reserved name. Filtered
+reads return reservations only from the exact directories they inspect. Names
+or layout alone never establish ownership.
 
 The coordination node `ptah_locks` at the root of the session's database is
 reserved with purpose LOCK by its name alone. The lock service takes whatever

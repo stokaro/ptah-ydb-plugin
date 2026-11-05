@@ -401,7 +401,7 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		}
 		return nil, nil
 	}
-	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && reservedName(claim) {
+	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && ReservedName(claim) {
 		// The read reserves the name for the provider's own storage on every
 		// native kind, so it holds no object of this family. It is left out as
 		// Reserved leaves the family's own objects; only a declaration at the
