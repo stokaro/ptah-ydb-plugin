@@ -142,6 +142,12 @@ func providerFeatures() []string {
 		provider.ReadSQLSchemaFeature,
 		provider.TextUnitsFeature,
 		provider.PlanningPolicyFeature,
+		// The exact statement style asks for no comment that only describes
+		// a statement, no IF EXISTS or IF NOT EXISTS guard the plan does not
+		// need and no CASCADE. The operations this provider plans carry none
+		// of them in either style, so it honors the exact style by planning
+		// as it always does. ptah-compat's migrate diff plans in that style.
+		provider.PlanningStatementStyleFeature,
 		provider.CommonObjectsFeature,
 		provider.CommonAccessFeature,
 		provider.PlanningLifecycleFeature,

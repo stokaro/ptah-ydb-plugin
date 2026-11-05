@@ -282,7 +282,7 @@ func TestHostRefusesATableAtAnOrphanedReplica_FailurePath(t *testing.T) {
 	left, leftErr := h.apply(h.tables("src") + "async_replications: {}\n")
 
 	c.Assert(declaredErr, qt.IsNotNil)
-	c.Assert(declared, qt.Matches, `(?s).*`+regexp.QuoteMeta(h.directory)+`\.rep: access effect is unknown.*provider execution: NOT_STARTED \(0 units confirmed applied\).*`)
+	c.Assert(declared, qt.Matches, `(?s).*`+regexp.QuoteMeta(h.directory)+`\.rep: Creates a row table \(safe\).*provider execution: NOT_STARTED \(0 units confirmed applied\).*`)
 	c.Assert(leftErr, qt.IsNil, qt.Commentf("%s", left))
 	c.Assert(left, qt.Contains, "Schema is synced, no changes to be made")
 	c.Assert(listedNames(c, h.opened, path.Join(h.database, h.directory)), qt.DeepEquals, []string{"rep", "src"})
