@@ -1136,7 +1136,10 @@ provider's decoders read, which decode to the same declarations:
 A value is written as the declaration the provider compares it as: a topic or a
 changefeed as its declared settings, without the attributes YDB keeps on it; a
 table's settings without the primary key the common columns carry; a column
-default not at all, since the common column carries it. A facet a source states
+default and a Serial's sequence not at all, since the common column carries
+them: the read reports a sequence's start and increment as the column's
+`identity_start` and `identity_increment` beside `auto_increment`, and refuses a
+sequence with any other setting. A facet a source states
 by writing nothing, such as an empty changefeed set, an empty native index set
 or a column of the default family, is written by the table's own part. A Go
 export also gives each column the Go type of its YDB type, as the host's
@@ -1146,8 +1149,8 @@ can ask for.
 What no declaration states is a loss for its value, in one line that names it:
 an access requirement, table attributes, storage settings, tiering, a temporary
 table, a family kept in memory, a TTL run interval, a disabled changefeed or the
-stream of an async replication, a native index, a column's sequence,
-compression or encoding, a native view (the host writes views from the common
+stream of an async replication, a native index, a column's compression or
+encoding, a native view (the host writes views from the common
 wire), and an object of another database than the one it was read in. A
 secret's value is never written. HCL declares coordination nodes only, as the
 host's embedded engine does; its other YDB settings are losses. The parts are

@@ -176,6 +176,12 @@ func TestEncodeTable_HappyPath(t *testing.T) {
 		name:    "only what a source states by writing nothing",
 		facets:  []facet{{"feeds", schema.ChangefeedProperties, "", `{}`}, {"indexes", schema.IndexProperties, "", `{}`}, {"id", schema.ColumnProperties, "id", `{}`}},
 		columns: map[string]string{}, written: []string{"feeds", "indexes", "id"},
+	}, {
+		// The read reports a Serial's start and increment on the common
+		// column, which the host writes; the facet adds nothing.
+		name:    "a Serial's sequence, which the common column writes",
+		facets:  []facet{{"id", schema.ColumnProperties, "id", `{"sequence":{"startValue":"5"}}`}, {"seq", schema.ColumnProperties, "seq", `{"sequence":{}}`}},
+		columns: map[string]string{}, written: []string{"id", "seq"},
 	}} {
 		for _, format := range []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS} {
 			t.Run(test.name+"/"+format.String(), func(t *testing.T) {
@@ -284,7 +290,6 @@ func TestEncodeTable_FailurePath(t *testing.T) {
 			"table app/events: its YDB settings cannot be written so that a source reads them back unchanged"},
 		{"column table data channels", facet{"lost", schema.ColumnStorageProperties, "", `{"dataChannelCount":"4"}`},
 			"table app/events: its YDB settings cannot be written so that a source reads them back unchanged"},
-		{"sequence", facet{"lost", schema.ColumnProperties, "id", `{"sequence":{"startValue":"5"}}`}, "column app/events/id: its sequence has no source spelling"},
 		{"compression", facet{"lost", schema.ColumnProperties, "id", `{"compression":{"algorithm":"ALGORITHM_ZSTD"}}`}, "column app/events/id: its compression or encoding has no source spelling"},
 		{"undeclared family", facet{"lost", schema.ColumnProperties, "id", `{"family":"cold"}`}, "column app/events/id sits in family cold, which no family the source declares for the table holds"},
 		{"native index", facet{"lost", schema.IndexProperties, "", nativeIndex}, "table app/events: its native indexes (by_body) have no source spelling the provider writes"},
