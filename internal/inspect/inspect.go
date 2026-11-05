@@ -150,7 +150,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 					return nil, err
 				}
 				if description.reservation != protocol.ReservedObject_PURPOSE_UNSPECIFIED {
-					reserve(result, &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: "table", Name: name}, description.reservation, common.Views)
+					common.reserve(result, &protocol.Reference{Engine: "ydb", Database: database, Schema: selected, Kind: "table", Name: name}, description.reservation)
 					break
 				}
 				// A table an async replication writes, or wrote without
@@ -244,7 +244,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 					// session's database by its name, so the name is the
 					// reservation. Read as a managed node, it would be
 					// exported into a source that declarations then refuse.
-					reserve(result, &protocol.Reference{Engine: "ydb", Database: database, Kind: schema.CoordinationProperties, Name: name}, protocol.ReservedObject_LOCK, common.Views)
+					common.reserve(result, &protocol.Reference{Engine: "ydb", Database: database, Kind: schema.CoordinationProperties, Name: name}, protocol.ReservedObject_LOCK)
 					break
 				}
 				fallthrough

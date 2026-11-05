@@ -102,12 +102,9 @@ func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps
 		if err != nil {
 			continue
 		}
-		have := heldType(held)
-		if serial := SerialTypeOf(column); serial != "" || held.GetAutoIncrement() {
-			// A column that becomes or stops being a Serial changes type, as
-			// the host's comparison reads it.
-			want, have = serialSpelling(want, serial != ""), serialSpelling(have, held.GetAutoIncrement())
-		}
+		// A column that becomes or stops being a Serial changes type, as the
+		// host's comparison reads it.
+		want, have := declaredSpelling(want, column), heldSpelling(heldType(held), held)
 		switch {
 		case have != "" && have != want:
 			needs = append(needs, rebuildNeed{capability: "alter_column_type",
@@ -228,7 +225,7 @@ func heldColumnProperties(observed *protocol.ObservedTable) map[string]*native.C
 // heldType is the YDB type of an observed column as the provider spells it,
 // or "" when the read does not say.
 func heldType(column *protocol.ObservedColumn) string {
-	kind, err := schema.StorageType(column.GetDataType(), false)
+	kind, err := schema.StorageType(column.GetDataType())
 	if err != nil {
 		return ""
 	}

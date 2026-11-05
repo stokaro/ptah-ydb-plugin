@@ -12,34 +12,37 @@ import (
 )
 
 // commented is app.records with a comment on itself, a column and an index,
-// on a host that negotiated the common wire when carried.
-func commented(carried bool, comment string) *protocol.ValidateSchemaRequest {
+// on a host that did not negotiate the common wire.
+func commented(comment string) *protocol.ValidateSchemaRequest {
 	declared := keyed("app", "records")
 	declared.Declaration.Comment = comment
 	declared.Declaration.Columns[1].Comment = "the text"
 	declared.Declaration.Indexes = []*protocol.DeclaredIndex{{Name: "by_body", Fields: []string{"body"}, Comment: "lookups"}}
-	request := newRequest(declared)
-	if carried {
-		request.TargetFeatures = []string{provider.CommonObjectsFeature}
-	}
+	return newRequest(declared)
+}
+
+// carriedComment is commented on a host that negotiated the common wire.
+func carriedComment(comment string) *protocol.ValidateSchemaRequest {
+	request := commented(comment)
+	request.TargetFeatures = []string{provider.CommonObjectsFeature}
 	return request
 }
 
 func TestValidateSchema_CommentsOnTheCommonWire(t *testing.T) {
 	t.Run("held", func(t *testing.T) {
 		c := testcheck.New(t)
-		c.Assert(diagnostics(c, commented(true, "rows")), qt.HasLen, 0)
+		c.Assert(diagnostics(c, carriedComment("rows")), qt.HasLen, 0)
 	})
 	t.Run("more than an attribute holds", func(t *testing.T) {
 		c := testcheck.New(t)
-		found := diagnostics(c, commented(true, strings.Repeat("x", 4097)))
+		found := diagnostics(c, carriedComment(strings.Repeat("x", 4097)))
 		c.Assert(found, qt.HasLen, 1)
 		c.Assert(found[0].Code, qt.Equals, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE)
 		c.Assert(found[0].Message, qt.Equals, "unsupported feature: the comment on table app/records: the comment is 4097 bytes long, and YDB keeps at most 4096 bytes in an attribute value")
 	})
 	t.Run("off the wire", func(t *testing.T) {
 		c := testcheck.New(t)
-		found := diagnostics(c, commented(false, "rows"))
+		found := diagnostics(c, commented("rows"))
 		c.Assert(found, qt.HasLen, 1)
 		c.Assert(found[0].Message, qt.Matches, `.*YDB table creation does not support .*comment`)
 	})

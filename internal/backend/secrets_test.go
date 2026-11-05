@@ -66,7 +66,17 @@ func TestExternalSecretDependencies(t *testing.T) {
 	}
 }
 
-func secretRequest(c *qt.C, present bool) *protocol.CompareModelsRequest {
+// secretRead is what the read of the database holds of the secret.
+type secretRead int
+
+const (
+	// secretAbsent is a read that holds no secret at the name.
+	secretAbsent secretRead = iota
+	// secretPresent is a read that holds the secret.
+	secretPresent
+)
+
+func secretRequest(c *qt.C, read secretRead) *protocol.CompareModelsRequest {
 	c.Helper()
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.SecretProperties, Schema: "app", Name: "pg.pw"}
 	var observedModel *protocol.ValueModel
@@ -86,7 +96,7 @@ func secretRequest(c *qt.C, present bool) *protocol.CompareModelsRequest {
 	value, err := schema.CaptureSecretIntent(owner, &native.SecretIntent{ValueEnv: "PTAH_SECRET_PG"})
 	c.Assert(err, qt.IsNil)
 	add(desired, value)
-	if present {
+	if read == secretPresent {
 		readOwner := proto.CloneOf(owner)
 		readOwner.Database = "/local"
 		value, err := schema.CaptureObject(readOwner, &native.SecretPresence{})
@@ -99,19 +109,20 @@ func secretRequest(c *qt.C, present bool) *protocol.CompareModelsRequest {
 
 func TestSecretsPresenceAndExplicitRotation(t *testing.T) {
 	for _, test := range []struct {
-		name            string
-		present, rotate bool
-		changes         int
-		impact          protocol.ChangeSemantics_Impact
+		name    string
+		read    secretRead
+		rotate  bool
+		changes int
+		impact  protocol.ChangeSemantics_Impact
 	}{
 		{name: "create", changes: 1, impact: protocol.ChangeSemantics_ADDITIVE},
-		{name: "presence ignores value reference", present: true},
-		{name: "explicit rotation", present: true, rotate: true, changes: 1, impact: protocol.ChangeSemantics_BEHAVIORAL},
+		{name: "presence ignores value reference", read: secretPresent},
+		{name: "explicit rotation", read: secretPresent, rotate: true, changes: 1, impact: protocol.ChangeSemantics_BEHAVIORAL},
 		{name: "rotation of absent secret creates", rotate: true, changes: 1, impact: protocol.ChangeSemantics_ADDITIVE},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := secretRequest(c, test.present)
+			request := secretRequest(c, test.read)
 			if test.rotate {
 				request.Requests = []*protocol.RequestedChange{{Action: "rotate", Written: "app/pg.pw"}}
 			}
@@ -146,7 +157,7 @@ func TestSecretRotationRefusesUndeclaredAndUnknownPresence(t *testing.T) {
 	for _, written := range []string{"missing", "app/missing", "/local/app/pg.pw", "../app/pg.pw", "app//pg.pw"} {
 		t.Run(written, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := secretRequest(c, true)
+			request := secretRequest(c, secretPresent)
 			request.Requests = []*protocol.RequestedChange{{Action: "rotate", Written: written}}
 			result, err := backend.New().CompareModels(c.Context(), request)
 			c.Assert(err, qt.IsNotNil)
@@ -154,7 +165,7 @@ func TestSecretRotationRefusesUndeclaredAndUnknownPresence(t *testing.T) {
 		})
 	}
 	c := testcheck.New(t)
-	request := secretRequest(c, false)
+	request := secretRequest(c, secretAbsent)
 	request.Current.Coverage.Kinds[0].Sources[0].Regions = nil
 	request.Requests = []*protocol.RequestedChange{{Action: "rotate", Written: "app/pg.pw"}}
 	result, err := backend.New().CompareModels(c.Context(), request)
@@ -165,7 +176,7 @@ func TestSecretRotationRefusesUndeclaredAndUnknownPresence(t *testing.T) {
 
 func TestSecretComparisonKeepsUnsupportedObservationsUndecided(t *testing.T) {
 	c := testcheck.New(t)
-	request := secretRequest(c, true)
+	request := secretRequest(c, secretPresent)
 	request.Capabilities["secrets"] = false
 	request.Desired.Records = nil
 	result, err := backend.New().CompareModels(c.Context(), request)
@@ -220,7 +231,7 @@ func TestSecretInputDiscoveryRejectsAnUnsafeSuffixBeforeExecution(t *testing.T) 
 // statements reads.
 func TestSecretComparisonRefusesDroppingASecretADeclarationReads_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	request := secretRequest(c, true)
+	request := secretRequest(c, secretPresent)
 	request.Required = []*protocol.ComparisonIdentity{proto.CloneOf(request.Desired.Records[0].Subject)}
 	request.Desired.Records = nil
 
@@ -234,7 +245,7 @@ func TestSecretComparisonRefusesDroppingASecretADeclarationReads_FailurePath(t *
 // a drop.
 func TestSecretComparisonDropsASecretNoDeclarationReads_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	request := secretRequest(c, true)
+	request := secretRequest(c, secretPresent)
 	request.Desired.Records = nil
 
 	result, err := backend.New().CompareModels(c.Context(), request)

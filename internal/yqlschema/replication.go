@@ -47,7 +47,7 @@ func (p *parser) replicationError() {
 
 // replicationName reads the path of an async replication or a transfer: a
 // directory and a name, relative to the database root.
-func (p *parser) replicationName() (string, string) {
+func (p *parser) replicationName() (directory, name string) {
 	ref, err := ydbdecl.ParseTopicPath(decodedName(p.path()))
 	if err != nil {
 		p.failf("invalid path")

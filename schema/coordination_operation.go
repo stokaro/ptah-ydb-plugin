@@ -45,7 +45,7 @@ func buildCoordinationOperationModel() *protocol.ValueModel {
 
 // CoordinationOperands returns independently normalized before/after envelopes.
 // This decoder accepts the change model; operations normalize through that model.
-func CoordinationOperands(value *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error) {
+func CoordinationOperands(value *protocol.Envelope) (before, after *protocol.Envelope, err error) {
 	normalized, err := NormalizeCoordinationChange(&protocol.ValueInput{Id: "operands", Representation: protocol.ValueInput_CHANGE, Value: value})
 	if err != nil {
 		return nil, nil, err

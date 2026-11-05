@@ -155,22 +155,22 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			return nil, fmt.Errorf("YDB table creation targets another database")
 		}
 		if table.Action == protocol.PlanningTable_ALTER {
-			column, reason, columnChange, err := planColumnAlteration(owner, table, request.CommonSteps, request.Capabilities)
+			columnPlan, err := planColumnAlteration(owner, table, request.CommonSteps, request.Capabilities)
 			if err != nil {
 				return nil, err
 			}
-			if reason != "" {
-				return refused(i, reason), nil
+			if columnPlan.reason != "" {
+				return refused(i, columnPlan.reason), nil
 			}
-			if column {
+			if columnPlan.columnTable {
 				if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
 					if reason := completeColumnAlteration(owner, table, nil, nil, nil, nil, request.Capabilities); reason != "" {
 						return refused(i, reason), nil
 					}
 				}
 				columnAlterations = append(columnAlterations, i)
-				if columnChange != nil {
-					columnChanges = append(columnChanges, columnTableStep{index: i, table: table, owner: owner, change: *columnChange})
+				if columnPlan.change != nil {
+					columnChanges = append(columnChanges, columnTableStep{index: i, table: table, owner: owner, change: *columnPlan.change})
 				}
 				continue
 			}

@@ -166,13 +166,13 @@ func NormalizeExternalChange(input *protocol.ValueInput) (*protocol.NormalizedVa
 
 // ExternalOperands returns an external object change's normalized operands,
 // nil for an absent one, and the database it names, "" for none.
-func ExternalOperands(change *protocol.Envelope) (before, after *protocol.Envelope, database string, err error) {
+func ExternalOperands(change *protocol.Envelope) (ChangeParts, error) {
 	changes, err := externalChanges(change.GetKind())
 	if err != nil {
-		return nil, nil, "", err
+		return ChangeParts{}, err
 	}
 	if change.GetKind() != changes.change {
-		return nil, nil, "", fmt.Errorf("expected a YDB external object change")
+		return ChangeParts{}, fmt.Errorf("expected a YDB external object change")
 	}
 	return changes.parts(change)
 }

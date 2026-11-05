@@ -67,9 +67,8 @@ type typeRow struct {
 	golden typeGolden
 }
 
-// typeCorpus lists the type cases the host accepted, or the ones it refused,
-// in name order.
-func typeCorpus(c *qt.C, accepted bool) []typeRow {
+// typeCorpus lists every type case in name order.
+func typeCorpus(c *qt.C) []typeRow {
 	c.Helper()
 	var rows []typeRow
 	for _, name := range corpusNames(c, "type-") {
@@ -77,11 +76,21 @@ func typeCorpus(c *qt.C, accepted bool) []typeRow {
 		row.name = name
 		readJSON(c, filepath.Join(corpusDirectory, name+".json"), &row.input)
 		readJSON(c, filepath.Join(corpusDirectory, name+".golden.json"), &row.golden)
-		if row.golden.Accepted == accepted {
-			rows = append(rows, row)
-		}
+		rows = append(rows, row)
 	}
 	return rows
+}
+
+// acceptedTypes lists the type cases the host accepted, in name order.
+func acceptedTypes(c *qt.C) []typeRow {
+	c.Helper()
+	return slices.DeleteFunc(typeCorpus(c), func(row typeRow) bool { return !row.golden.Accepted })
+}
+
+// refusedTypes lists the type cases the host refused, in name order.
+func refusedTypes(c *qt.C) []typeRow {
+	c.Helper()
+	return slices.DeleteFunc(typeCorpus(c), func(row typeRow) bool { return row.golden.Accepted })
 }
 
 func corpusNames(c *qt.C, prefix string) []string {
@@ -236,7 +245,7 @@ func corpusRows(c *qt.C, rows []*protocol.Row) [][]tagged {
 
 func TestTypeRowsMatchesTheHost_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	rows := typeCorpus(c, true)
+	rows := acceptedTypes(c)
 	c.Assert(len(rows) >= 25, qt.IsTrue, qt.Commentf("%d accepted type cases", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
@@ -260,7 +269,7 @@ func TestTypeRowsMatchesTheHost_HappyPath(t *testing.T) {
 
 func TestTypeRowsMatchesTheHost_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	rows := typeCorpus(c, false)
+	rows := refusedTypes(c)
 	c.Assert(len(rows) >= 32, qt.IsTrue, qt.Commentf("%d refused type cases", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
@@ -298,9 +307,27 @@ type writeRow struct {
 	answers []writeAnswer
 }
 
-// writeCorpus lists the write cases the host rendered whole, or the ones in
-// which it refused a write, in name order.
-func writeCorpus(c *qt.C, rendered bool) []writeRow {
+// refused reports whether the host refused a write of the case.
+func (r writeRow) refused() bool {
+	return slices.ContainsFunc(r.answers, func(answer writeAnswer) bool { return answer.Error != "" })
+}
+
+// renderedWrites lists the write cases the host rendered whole, in name
+// order.
+func renderedWrites(c *qt.C) []writeRow {
+	c.Helper()
+	return slices.DeleteFunc(writeCorpus(c), writeRow.refused)
+}
+
+// refusedWrites lists the write cases in which the host refused a write, in
+// name order.
+func refusedWrites(c *qt.C) []writeRow {
+	c.Helper()
+	return slices.DeleteFunc(writeCorpus(c), func(row writeRow) bool { return !row.refused() })
+}
+
+// writeCorpus lists every write case in name order.
+func writeCorpus(c *qt.C) []writeRow {
 	c.Helper()
 	var rows []writeRow
 	for _, name := range corpusNames(c, "write-") {
@@ -312,10 +339,7 @@ func writeCorpus(c *qt.C, rendered bool) []writeRow {
 		}
 		readJSON(c, filepath.Join(corpusDirectory, name+".json"), &input)
 		readJSON(c, filepath.Join(corpusDirectory, name+".golden.json"), &golden)
-		refused := slices.ContainsFunc(golden.Writes, func(answer writeAnswer) bool { return answer.Error != "" })
-		if refused != rendered {
-			rows = append(rows, writeRow{name: name, writes: input.Writes, answers: golden.Writes})
-		}
+		rows = append(rows, writeRow{name: name, writes: input.Writes, answers: golden.Writes})
 	}
 	return rows
 }
@@ -349,7 +373,7 @@ func expectedStatement(answer writeAnswer) string {
 
 func TestRenderRowWritesMatchesTheHost_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	rows := writeCorpus(c, true)
+	rows := renderedWrites(c)
 	c.Assert(len(rows) >= 10, qt.IsTrue, qt.Commentf("%d rendered write cases", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
@@ -387,7 +411,7 @@ func refusalMessage(host string) string {
 
 func TestRenderRowWritesMatchesTheHost_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	rows := writeCorpus(c, false)
+	rows := refusedWrites(c)
 	c.Assert(len(rows) >= 6, qt.IsTrue, qt.Commentf("%d refused write cases", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {

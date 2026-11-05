@@ -17,8 +17,7 @@ func Display(owner *protocol.Reference) string {
 
 // SourcePair reads a read data source and its declaration, either nil, as
 // the host's specifications, with paths relative to root.
-func SourcePair(current, desired *protocol.Envelope, root string) (*ydbdecl.ExternalDataSource, *ydbdecl.ExternalDataSource, error) {
-	var before, after *ydbdecl.ExternalDataSource
+func SourcePair(current, desired *protocol.Envelope, root string) (before, after *ydbdecl.ExternalDataSource, err error) {
 	if current != nil {
 		observed, err := schema.ObservedExternalSource(current)
 		if err != nil {
@@ -46,8 +45,7 @@ func SourcePair(current, desired *protocol.Envelope, root string) (*ydbdecl.Exte
 
 // TablePair reads a read external table and its declaration, either nil, as
 // the host's specifications, with paths relative to root.
-func TablePair(current, desired *protocol.Envelope, root string) (*ydbdecl.ExternalTable, *ydbdecl.ExternalTable, error) {
-	var before, after *ydbdecl.ExternalTable
+func TablePair(current, desired *protocol.Envelope, root string) (before, after *ydbdecl.ExternalTable, err error) {
 	if current != nil {
 		observed, err := schema.ObservedExternalTable(current)
 		if err != nil {
@@ -129,15 +127,15 @@ type ChangeSpecs struct {
 
 // ReadChange reads a normalized external object change.
 func ReadChange(change *protocol.Envelope) (ChangeSpecs, error) {
-	before, after, database, err := schema.ExternalOperands(change)
+	parts, err := schema.ExternalOperands(change)
 	if err != nil {
 		return ChangeSpecs{}, err
 	}
-	result := ChangeSpecs{Database: database, Before: before, After: after}
+	result := ChangeSpecs{Database: parts.Database, Before: parts.Before, After: parts.After}
 	if change.GetKind() == schema.ExternalSourceChange {
-		result.SourceBefore, result.SourceAfter, err = SourcePair(before, after, database)
+		result.SourceBefore, result.SourceAfter, err = SourcePair(parts.Before, parts.After, parts.Database)
 	} else {
-		result.TableBefore, result.TableAfter, err = TablePair(before, after, database)
+		result.TableBefore, result.TableAfter, err = TablePair(parts.Before, parts.After, parts.Database)
 	}
 	return result, err
 }

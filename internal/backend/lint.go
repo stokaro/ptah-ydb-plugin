@@ -24,8 +24,11 @@ func (*Provider) SplitLintStatements(ctx context.Context, request *protocol.Spli
 	if err := provider.ValidateSplitLintRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	describe := slices.Contains(description.GetEngines()[0].GetFeatures(), provider.LintStatementFactsFeature)
-	result, err := migrationlint.SplitRequest(ctx, request, describe)
+	answer := migrationlint.SplitRequest
+	if slices.Contains(description.GetEngines()[0].GetFeatures(), provider.LintStatementFactsFeature) {
+		answer = migrationlint.DescribedSplitRequest
+	}
+	result, err := answer(ctx, request)
 	if err != nil {
 		return nil, lintError(ctx, err)
 	}

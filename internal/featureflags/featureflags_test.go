@@ -33,6 +33,16 @@ func with(set map[string]bool) map[string]bool {
 	return caps
 }
 
+// releaseLine names a release line a preset describes.
+type releaseLine int
+
+const (
+	// line251 is YDB 25.1.
+	line251 releaseLine = iota
+	// line262 is YDB 26.2.
+	line262
+)
+
 // linePreset is the preset of one release line: an auto-partitioned
 // changefeed topic, a vector index and a transfer are off on 25.1 and on from
 // 25.2, and a full-text index and the bloom_filter and bloom_ngram_filter
@@ -41,7 +51,10 @@ func with(set map[string]bool) map[string]bool {
 // and 25.1 does not list it. EnableMoveIndex is on by default on both, so an
 // index is renamed in place. A family cache mode is on with 26.2's default
 // EnableTableCacheModes, and 25.1 does not list the flag.
-func linePreset(autoPartitionedFeeds, secrets bool) map[string]bool {
+func linePreset(line releaseLine) map[string]bool {
+	// What is on from 25.2 and what is on from 26.2: 26.2 has both, 25.1
+	// neither.
+	autoPartitionedFeeds, secrets := line == line262, line == line262
 	caps := preset()
 	caps["changefeed_topic_auto_partitioning"] = autoPartitionedFeeds
 	caps["wide_date_time_types"] = autoPartitionedFeeds
@@ -74,8 +87,8 @@ func TestRefine_EveryLineDefaultIsThePreset(t *testing.T) {
 		page   string
 		preset map[string]bool
 	}{
-		{page: "local-ydb-25.1.4.7.json", preset: linePreset(false, false)},
-		{page: "local-ydb-26.2.1.14.json", preset: linePreset(true, true)},
+		{page: "local-ydb-25.1.4.7.json", preset: linePreset(line251)},
+		{page: "local-ydb-26.2.1.14.json", preset: linePreset(line262)},
 	} {
 		t.Run(test.page, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -94,7 +107,7 @@ func TestRefine_ClusterThatTurnedTieringOn(t *testing.T) {
 	flags, err := featureflags.Decode(page(c, "local-ydb-26.2.1.14-tiering-on.json"), "/local")
 	c.Assert(err, qt.IsNil)
 	c.Assert(flags["EnableTieringInColumnShard"], qt.IsTrue)
-	c.Assert(flags.Refine(linePreset(true, true)), qt.DeepEquals, with(map[string]bool{"secrets": true, "alter_column_default": true, "add_column_with_default": true, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "wide_date_time_types": true, "parameterized_decimal": true, "vector_indexes": true, "full_text_indexes": true, "transfers": true, "async_replication": true,
+	c.Assert(flags.Refine(linePreset(line262)), qt.DeepEquals, with(map[string]bool{"secrets": true, "alter_column_default": true, "add_column_with_default": true, "tiered_ttl": true, "changefeed_topic_auto_partitioning": true, "external_data_sources": true, "wide_date_time_types": true, "parameterized_decimal": true, "vector_indexes": true, "full_text_indexes": true, "transfers": true, "async_replication": true,
 		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false, "unique_index_on_existing_table": true, "index_rename": true,
 		"column_family_cache_mode": true}))
 }

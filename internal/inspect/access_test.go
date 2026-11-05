@@ -21,7 +21,7 @@ func TestAccessReadsStreamingQueryIdentity(t *testing.T) {
 	snapshot := accessSnapshot()
 	snapshot.NativeObjects = []*protocol.Envelope{{Kind: schema.StreamingQueryProperties,
 		Owner: &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: "/local", Schema: "app", Name: "copy"}}}
-	err := inspect.Access(c.Context(), snapshot, "/local", false, func(_ context.Context, path string) (*Ydb_Scheme.Entry, error) {
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, func(_ context.Context, path string) (*Ydb_Scheme.Entry, error) {
 		if path == "/local" {
 			return accessRoot("root"), nil
 		}
@@ -45,7 +45,7 @@ func TestAccessPreservesIndependentMembershipsAndOwnerKnowledge(t *testing.T) {
 		Memberships: []nativeapi.Membership{{Group: "DATA-READERS", Member: "app"}, {Group: "team", Member: "root"}},
 	}
 	var paths []string
-	err := inspect.Access(c.Context(), snapshot, "/local", false, func(_ context.Context, path string) (*Ydb_Scheme.Entry, error) {
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, func(_ context.Context, path string) (*Ydb_Scheme.Entry, error) {
 		paths = append(paths, path)
 		return accessRoot("root"), nil
 	}, func(context.Context) (nativeapi.Principals, error) { return held, nil })
@@ -75,7 +75,7 @@ func TestAccessPreservesIndependentMembershipsAndOwnerKnowledge(t *testing.T) {
 func TestAccessRefusalDoesNotBecomeAnEmptyPrincipalSet(t *testing.T) {
 	c := testcheck.New(t)
 	snapshot := accessSnapshot()
-	err := inspect.Access(c.Context(), snapshot, "/local", false, func(context.Context, string) (*Ydb_Scheme.Entry, error) { return accessRoot("root"), nil },
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, func(context.Context, string) (*Ydb_Scheme.Entry, error) { return accessRoot("root"), nil },
 		func(context.Context) (nativeapi.Principals, error) {
 			return nativeapi.Principals{}, nativeapi.ErrPrincipalsRefused
 		})
@@ -99,7 +99,7 @@ func TestAccessRefusalDoesNotBecomeAnEmptyPrincipalSet(t *testing.T) {
 func TestAccessDoesNotInventLoginKnowledge(t *testing.T) {
 	c := testcheck.New(t)
 	snapshot := accessSnapshot()
-	err := inspect.Access(c.Context(), snapshot, "/local", false, func(context.Context, string) (*Ydb_Scheme.Entry, error) { return accessRoot("external@directory"), nil },
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, func(context.Context, string) (*Ydb_Scheme.Entry, error) { return accessRoot("external@directory"), nil },
 		func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
 	c.Assert(err, qt.IsNil)
 	c.Assert(snapshot.CommonObjects.ObjectOwners[0].Owner, qt.Equals, "external@directory")
@@ -109,7 +109,7 @@ func TestAccessDoesNotInventLoginKnowledge(t *testing.T) {
 func TestAccessRealmKeepsDatabasePrincipalsOutOfScope(t *testing.T) {
 	c := testcheck.New(t)
 	snapshot := accessSnapshot()
-	err := inspect.Access(c.Context(), snapshot, "/local/realm", true, func(context.Context, string) (*Ydb_Scheme.Entry, error) {
+	err := inspect.Access(c.Context(), snapshot, "/local/realm", inspect.RealmScope, func(context.Context, string) (*Ydb_Scheme.Entry, error) {
 		entry := accessRoot("root")
 		entry.Name, entry.Type = "realm", Ydb_Scheme.Entry_DIRECTORY
 		return entry, nil
@@ -139,7 +139,7 @@ func TestAccessFailureReturnsNoPartialProjection(t *testing.T) {
 			c := testcheck.New(t)
 			snapshot := accessSnapshot()
 			before := proto.CloneOf(snapshot)
-			err := inspect.Access(c.Context(), snapshot, "/local", false,
+			err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope,
 				func(context.Context, string) (*Ydb_Scheme.Entry, error) { return test.entry, test.readError },
 				func(context.Context) (nativeapi.Principals, error) {
 					return nativeapi.Principals{}, test.principalError
@@ -185,7 +185,7 @@ func described(entries map[string]*Ydb_Scheme.Entry) func(context.Context, strin
 func TestAccessOfADirectoryTheReadProvedAbsent_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	snapshot := accessDirectory("fresh")
-	err := inspect.Access(c.Context(), snapshot, "/local", false, described(map[string]*Ydb_Scheme.Entry{"/local": accessRoot("root")}),
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, described(map[string]*Ydb_Scheme.Entry{"/local": accessRoot("root")}),
 		func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
 	c.Assert(err, qt.IsNil)
 	c.Assert(snapshot.CommonObjects.ObjectOwners, qt.HasLen, 1)
@@ -198,7 +198,7 @@ func TestAccessOfAnObjectItCannotSee_FailurePath(t *testing.T) {
 	snapshot.NativeObjects = []*protocol.Envelope{{Kind: schema.StreamingQueryProperties,
 		Owner: &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: "/local", Schema: "app", Name: "copy"}}}
 	before := proto.CloneOf(snapshot)
-	err := inspect.Access(c.Context(), snapshot, "/local", false, described(map[string]*Ydb_Scheme.Entry{"/local": accessRoot("root")}),
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, described(map[string]*Ydb_Scheme.Entry{"/local": accessRoot("root")}),
 		func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
 	c.Assert(err, qt.ErrorIs, nativeapi.ErrAccessPathNotVisible)
 	c.Assert(proto.Equal(snapshot, before), qt.IsTrue)

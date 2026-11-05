@@ -60,7 +60,7 @@ func (b *lifecycleBuilder) add(prefix string, subject *protocol.ComparisonIdenti
 			metadata.Placement = protocol.PlanningMetadata_EARLY
 			spec = part.Before
 		}
-		reads, dependencies, err := queryResources(b.paths, subject, *spec, streaming.Early(part), id)
+		reads, dependencies, err := queryResources(b.paths, subject, *spec, metadata.Placement, id)
 		if err != nil {
 			return nil, err
 		}

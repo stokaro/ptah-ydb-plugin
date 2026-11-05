@@ -35,10 +35,11 @@ import (
 // So a facet kind's knowledge outside those tables is left as it is, and a
 // table the source declares whose facet knowledge is not complete is refused.
 //
-// limited says whether the host negotiated source.limits. Without it, and in
-// a format that writes no header, any knowledge that needs an entry is
-// refused, as is a kind no header names.
-func encodeCoverage(request *protocol.EncodeSourceRequest, engine *protocol.Engine, limited bool) ([]*protocol.SchemaCoverageLimit, error) {
+// Without source.limits among the engine's negotiated features, and in a
+// format that writes no header, any knowledge that needs an entry is refused,
+// as is a kind no header names.
+func encodeCoverage(request *protocol.EncodeSourceRequest, engine *protocol.Engine) ([]*protocol.SchemaCoverageLimit, error) {
+	limited := sourceLimitsNegotiated(engine)
 	format := request.GetFormat()
 	headers := map[protocol.SourceDocument_Format][]string{
 		protocol.SourceDocument_GO_ANNOTATIONS: engine.GetGoHeaderKinds(),

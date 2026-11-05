@@ -76,8 +76,8 @@ func lintCorpus(c *qt.C) []lintCase {
 
 // lineColumn is the host's position of a byte offset: the 1-based line, and
 // the 1-based column counted in characters.
-func lineColumn(sql string, offset int) (int, int) {
-	line, column := 1, 1
+func lineColumn(sql string, offset int) (line, column int) {
+	line, column = 1, 1
 	for i, r := range sql {
 		if i >= offset {
 			break
@@ -98,7 +98,7 @@ func lineColumn(sql string, offset int) (int, int) {
 // message otherwise.
 func ownedFindings(c *qt.C, sql string, caps map[string]bool) []string {
 	c.Helper()
-	split, err := migrationlint.SplitRequest(c.Context(), &protocol.SplitLintRequest{Engine: "ydb", Sources: []*protocol.LintSource{{Name: "x.yql", Sql: sql}}}, true)
+	split, err := migrationlint.DescribedSplitRequest(c.Context(), &protocol.SplitLintRequest{Engine: "ydb", Sources: []*protocol.LintSource{{Name: "x.yql", Sql: sql}}})
 	c.Assert(err, qt.IsNil)
 	examined := map[protocol.LintStatementClass]bool{
 		protocol.LintStatementClass_LINT_STATEMENT_CLASS_CREATE_TABLE: slices.Contains(split.Judged, protocol.LintFact_LINT_FACT_MISSING_PRIMARY_KEY),

@@ -90,7 +90,7 @@ func TestNativeTableAlteration_IndexHappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			fixture := &alterFixture{before: test.before, after: test.after, later: test.later}
-			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
+			dispatched, err := applyAlteration(c, fixture, "", test.payload, nil)
 			c.Assert(err, qt.IsNil)
 			c.Assert(dispatched, qt.IsTrue)
 			c.Assert(fixture.events, qt.DeepEquals, test.events)
@@ -146,7 +146,7 @@ func TestNativeTableAlteration_IndexFailurePath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			fixture := test.fixture
-			dispatched, err := applyAlteration(c, &fixture, "", test.payload, false)
+			dispatched, err := applyAlteration(c, &fixture, "", test.payload, nil)
 			c.Assert(err, qt.ErrorMatches, test.message)
 			c.Assert(dispatched, qt.Equals, test.dispatched)
 			if test.events != nil {

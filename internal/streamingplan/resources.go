@@ -62,11 +62,16 @@ func poolSubject(pool string) *protocol.ComparisonIdentity {
 	}
 }
 
-func queryResources(request *protocol.PlanFeaturesRequest, subject *protocol.ComparisonIdentity, spec streaming.Spec, early bool, id *protocol.StepIdentity) ([]*protocol.PlanningEffect, []*protocol.PlanningDependency, error) {
+// queryResources is what the query step id of spec reads and the order it
+// keeps with the common steps that write those resources. A step placed
+// early reads the tables the database holds and runs before the common
+// steps; any other reads the declared tables and runs after them.
+func queryResources(request *protocol.PlanFeaturesRequest, subject *protocol.ComparisonIdentity, spec streaming.Spec, placement protocol.PlanningMetadata_Placement, id *protocol.StepIdentity) ([]*protocol.PlanningEffect, []*protocol.PlanningDependency, error) {
 	slots, err := querySlots(request.DatabasePath, spec)
 	if err != nil {
 		return nil, nil, err
 	}
+	early := placement == protocol.PlanningMetadata_EARLY
 	var effects []*protocol.PlanningEffect
 	var dependencies []*protocol.PlanningDependency
 	addRead := func(subject *protocol.ComparisonIdentity) {

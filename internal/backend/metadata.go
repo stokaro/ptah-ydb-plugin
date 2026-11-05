@@ -16,15 +16,17 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
 )
 
-func (p *Provider) metadataSession(ctx context.Context, scope *protocol.MetadataScope) (*session, metadata.Store, func(), error) {
+// metadataSession locks the session scope names and resolves the metadata store
+// the scope selects. On success the caller unlocks the session's mutex.
+func (p *Provider) metadataSession(ctx context.Context, scope *protocol.MetadataScope) (*session, metadata.Store, error) {
 	s, err := p.lookup(scope.SessionId)
 	if err != nil {
-		return nil, metadata.Store{}, nil, err
+		return nil, metadata.Store{}, err
 	}
 	s.mu.Lock()
-	fail := func(err error) (*session, metadata.Store, func(), error) {
+	fail := func(err error) (*session, metadata.Store, error) {
 		s.mu.Unlock()
-		return nil, metadata.Store{}, nil, err
+		return nil, metadata.Store{}, err
 	}
 	if s.closed {
 		return fail(runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed"))
@@ -44,7 +46,7 @@ func (p *Provider) metadataSession(ctx context.Context, scope *protocol.Metadata
 	if err != nil {
 		return fail(authored.Status(codes.InvalidArgument, err))
 	}
-	return s, store, s.mu.Unlock, nil
+	return s, store, nil
 }
 func metadataResult(scope *protocol.MetadataScope, id string, outcome protocol.MetadataResult_Outcome) *protocol.MetadataResult {
 	return &protocol.MetadataResult{Scope: proto.CloneOf(scope), RequestId: id, Outcome: outcome}
@@ -71,11 +73,11 @@ func (p *Provider) PrepareMetadata(ctx context.Context, request *protocol.Prepar
 	if err := provider.ValidatePrepareMetadataRequest(request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	s, store, unlock, err := p.metadataSession(ctx, request.Scope)
+	s, store, err := p.metadataSession(ctx, request.Scope)
 	if err != nil {
 		return nil, err
 	}
-	defer unlock()
+	defer s.mu.Unlock()
 	guarded, stop, err := s.guard(ctx)
 	if err != nil {
 		return metadataResult(request.Scope, request.RequestId, protocol.MetadataResult_REJECTED), nil
@@ -145,11 +147,11 @@ func (p *Provider) MutateMetadata(ctx context.Context, request *protocol.MutateM
 	if err := provider.ValidateMutateMetadataRequest(request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	s, store, unlock, err := p.metadataSession(ctx, request.Scope)
+	s, store, err := p.metadataSession(ctx, request.Scope)
 	if err != nil {
 		return nil, err
 	}
-	defer unlock()
+	defer s.mu.Unlock()
 	guarded, stop, err := s.guard(ctx)
 	if err != nil {
 		return metadataResult(request.Scope, request.RequestId, protocol.MetadataResult_REJECTED), nil
@@ -214,11 +216,11 @@ func (p *Provider) LookupMetadataTag(ctx context.Context, request *protocol.Look
 	if err := provider.ValidateLookupMetadataTagRequest(request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	s, store, unlock, err := p.metadataSession(ctx, request.Scope)
+	s, store, err := p.metadataSession(ctx, request.Scope)
 	if err != nil {
 		return nil, err
 	}
-	defer unlock()
+	defer s.mu.Unlock()
 	defer func() { err = metadataFailure(s, request.Scope, err) }()
 	result = &protocol.MetadataTagResult{Scope: proto.CloneOf(request.Scope), RequestId: request.RequestId}
 	exists, err := store.Check(ctx, s.connection.Driver)

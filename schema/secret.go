@@ -62,7 +62,7 @@ func NormalizeSecretChange(input *protocol.ValueInput) (*protocol.NormalizedValu
 }
 
 // SecretOperands reads the complete normalized operands, nil for absence.
-func SecretOperands(value *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error) {
+func SecretOperands(value *protocol.Envelope) (before, after *protocol.Envelope, err error) {
 	return secretChanges.operands(value)
 }
 

@@ -42,7 +42,7 @@ func assessObjects(ctx context.Context, request *protocol.PlanFeaturesRequest, r
 			}
 		}
 		if !matched {
-			steps, err := assessUnchanged(request, builder, index, subject, writes)
+			steps, err := assessUnchanged(request, builder, index, subject)
 			if err != nil {
 				result.Diagnostics = []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: schema.StreamingQueryProperties, Message: err.Error(), Input: &protocol.PlanningDiagnostic_ContextObject{ContextObject: uint32(index)}}}
 				return nil
@@ -54,14 +54,16 @@ func assessObjects(ctx context.Context, request *protocol.PlanFeaturesRequest, r
 	return nil
 }
 
-func assessUnchanged(request *protocol.PlanFeaturesRequest, builder *lifecycleBuilder, index int, subject *protocol.ComparisonIdentity, writes bool) ([]*protocol.StepIdentity, error) {
+func assessUnchanged(request *protocol.PlanFeaturesRequest, builder *lifecycleBuilder, index int, subject *protocol.ComparisonIdentity) ([]*protocol.StepIdentity, error) {
 	if !localContextSubject(request, subject) {
 		return nil, fmt.Errorf("streaming query context names another database")
 	}
 	current := contextRecord(request.CurrentObjects, subject)
 	desired := contextRecord(request.DesiredObjects, subject)
 	if current == nil && desired == nil {
-		if !writes {
+		// A name no captured query holds matters only to a plan that writes
+		// an input a query may read.
+		if !dependencyWrites(request, builder.paths) {
 			return nil, nil
 		}
 		// A name the provider's own storage occupies, such as the lock node

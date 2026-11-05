@@ -95,7 +95,7 @@ func (c Copy) validate() error {
 			return fmt.Errorf("a YDB row copy copies each column once")
 		}
 		if column.Cast != "" {
-			if _, err := schema.StorageType(column.Cast, false); err != nil {
+			if _, err := schema.StorageType(column.Cast); err != nil {
 				return fmt.Errorf("a YDB row copy converts to a type YDB stores")
 			}
 		}

@@ -89,7 +89,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 				if position > 0 && entry.Key == entries[position-1].Key {
 					return nil, fmt.Errorf("%s: duplicate key %q", KeyQueries, entry.Key)
 				}
-				object, err := query(entry.Key, entry.GetValue().GetMapping(), false)
+				object, err := query(entry.Key, entry.GetValue().GetMapping(), document.Format)
 				if err != nil {
 					return nil, fmt.Errorf("streaming query %q: %w", entry.Key, err)
 				}
@@ -97,7 +97,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 				read = append(read, object)
 			}
 		case document.Format == protocol.SourceDocument_GO_ANNOTATIONS && fragment.GetGoDirective() != nil && fragment.Selector == DirectiveQuery:
-			object, err := query("", fragment.GetValue().GetMapping(), true)
+			object, err := query("", fragment.GetValue().GetMapping(), document.Format)
 			if err != nil {
 				return nil, fmt.Errorf("%w on //%s", err, DirectiveQuery)
 			}
@@ -135,7 +135,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 	return result, nil
 }
 
-func query(name string, mapping *protocol.SourceMapping, goSource bool) (declared, error) {
+func query(name string, mapping *protocol.SourceMapping, format protocol.SourceDocument_Format) (declared, error) {
 	if mapping == nil {
 		return declared{}, fmt.Errorf("a streaming query requires a mapping")
 	}
@@ -150,13 +150,13 @@ func query(name string, mapping *protocol.SourceMapping, goSource bool) (declare
 		}
 		seen[entry.Key] = true
 		value := entry.GetValue()
-		if goSource {
+		if format == protocol.SourceDocument_GO_ANNOTATIONS {
 			if _, ok := value.GetValue().(*protocol.SourceValue_Text); !ok {
 				return declared{}, fmt.Errorf("attribute %s requires text", entry.Key)
 			}
 		}
 		if entry.Key == "run" || entry.Key == "allow_state_reset" {
-			flag, err := boolean(value, goSource)
+			flag, err := boolean(value, format)
 			if err != nil {
 				return declared{}, fmt.Errorf("%s: %w", entry.Key, err)
 			}
@@ -211,8 +211,8 @@ func scalar(value *protocol.SourceValue) (string, error) {
 
 // boolean keeps each frontend's grammar: Go uses ParseBool, while the YAML
 // decoder accepts typed booleans, null, and the YAML 1.1 boolean words.
-func boolean(value *protocol.SourceValue, goSource bool) (*bool, error) {
-	if goSource {
+func boolean(value *protocol.SourceValue, format protocol.SourceDocument_Format) (*bool, error) {
+	if format == protocol.SourceDocument_GO_ANNOTATIONS {
 		flag, err := strconv.ParseBool(value.GetText())
 		if err != nil {
 			return nil, fmt.Errorf("expected a boolean")

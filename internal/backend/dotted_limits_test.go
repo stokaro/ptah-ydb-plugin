@@ -88,7 +88,7 @@ func TestDottedLimits_FailurePath(t *testing.T) {
 	})
 	t.Run("a secret", func(t *testing.T) {
 		c := testcheck.New(t)
-		request := secretRequest(c, true)
+		request := secretRequest(c, secretPresent)
 		request.Desired.Records = nil
 		limited(request, schema.SecretProperties, "", "app.pg.pw")
 		result, err := backend.New().CompareModels(c.Context(), request)

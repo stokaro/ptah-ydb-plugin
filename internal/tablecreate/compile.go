@@ -253,9 +253,12 @@ func compileColumn(table string, column *protocol.DeclaredColumn, settings *nati
 	}
 	// A Serial column is NOT NULL whatever the declaration says.
 	nullable := column.Nullable && sequence == nil
-	value, err := schema.StorageType(stored, nullable)
+	value, err := schema.StorageType(stored)
 	if err != nil {
 		return nil, unsupported("%s", err)
+	}
+	if nullable {
+		value = schema.Optional(value)
 	}
 	result := &Ydb_Table.ColumnMeta{Name: column.Name, Type: value, NotNull: new(!nullable)}
 	if sequence != nil {

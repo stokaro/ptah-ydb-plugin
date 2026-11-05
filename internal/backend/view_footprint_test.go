@@ -16,11 +16,21 @@ import (
 // commonView is the host's step that creates the view name in the directory
 // app, or drops it, with the footprint the host gives it: the view's creation
 // or its drop.
-func commonView(name string, drop bool) *protocol.CommonPlanningStep {
+// viewChange is what the host's step does to a view.
+type viewChange int
+
+const (
+	// createView creates the view.
+	createView viewChange = iota
+	// dropView drops the view.
+	dropView
+)
+
+func commonView(name string, operation viewChange) *protocol.CommonPlanningStep {
 	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_CreateView{CreateView: &protocol.ViewCreation{
 		View: &protocol.SQLView{Schema: "app", Name: name, Body: "SELECT 1 AS id"}}}}
 	action := protocol.PlanningEffect_CREATE
-	if drop {
+	if operation == dropView {
 		change.Operation = &protocol.CommonObjectChange_DropView{DropView: &protocol.Reference{Engine: "ydb", Kind: "view", Schema: "app", Name: name}}
 		action = protocol.PlanningEffect_DROP
 	}
@@ -33,11 +43,11 @@ func commonView(name string, drop bool) *protocol.CommonPlanningStep {
 
 // viewPlan plans the coordination node app/node, created as action says,
 // beside the host's step on the view name.
-func viewPlan(c *qt.C, action, name string, drop bool) (*protocol.PlannedFeatures, *protocol.CommonPlanningStep) {
+func viewPlan(c *qt.C, action, name string, operation viewChange) (*protocol.PlannedFeatures, *protocol.CommonPlanningStep) {
 	c.Helper()
 	request := nativePlan(c, action)
 	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.PlanningLifecycleFeature}
-	view := commonView(name, drop)
+	view := commonView(name, operation)
 	request.CommonSteps = []*protocol.CommonPlanningStep{view}
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -51,16 +61,16 @@ func viewPlan(c *qt.C, action, name string, drop bool) (*protocol.PlannedFeature
 func TestViewBesideANativeObject_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, action string
-		drop         bool
+		operation    viewChange
 	}{
 		{name: "a view created beside a creation", action: "create"},
 		{name: "a view created beside an alteration", action: "alter"},
-		{name: "a view dropped beside a drop", action: "drop", drop: true},
+		{name: "a view dropped beside a drop", action: "drop", operation: dropView},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 
-			result, _ := viewPlan(c, test.action, "summary", test.drop)
+			result, _ := viewPlan(c, test.action, "summary", test.operation)
 
 			c.Assert(result.Diagnostics, qt.HasLen, 0)
 			c.Assert(result.Contributions, qt.HasLen, 1)
@@ -74,7 +84,7 @@ func TestViewBesideANativeObject_HappyPath(t *testing.T) {
 func TestNodeTakesThePathOfADroppedView_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 
-	result, view := viewPlan(c, "create", "node", true)
+	result, view := viewPlan(c, "create", "node", dropView)
 
 	c.Assert(result.Diagnostics, qt.HasLen, 0)
 	c.Assert(result.Contributions, qt.HasLen, 1)
@@ -88,7 +98,7 @@ func TestNodeTakesThePathOfADroppedView_HappyPath(t *testing.T) {
 func TestNodeAtThePathOfACreatedView_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 
-	result, _ := viewPlan(c, "create", "node", false)
+	result, _ := viewPlan(c, "create", "node", createView)
 
 	c.Assert(result.Diagnostics, qt.HasLen, 1)
 	c.Assert(result.Diagnostics[0].GetMessage(), qt.Matches, `.*conflicts with a common occupant at its path.*`)

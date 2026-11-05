@@ -110,7 +110,7 @@ func TestSchemaStatementsAreTheHosts(t *testing.T) {
 	}{{"25.1", false}, {"26.2", true}} {
 		t.Run(test.line, func(t *testing.T) {
 			c := testcheck.New(t)
-			c.Assert(embedstore.SchemaStatements(test.wide), qt.DeepEquals, answers.Schema[test.line])
+			c.Assert(embedstore.SchemaStatements(embedstore.Capabilities{WideTimestamps: test.wide}), qt.DeepEquals, answers.Schema[test.line])
 		})
 	}
 }

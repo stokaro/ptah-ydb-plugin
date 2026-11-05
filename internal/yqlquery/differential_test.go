@@ -34,9 +34,20 @@ type splitRow struct {
 	queries []query
 }
 
-// splitCorpus lists the texts the host split, or the ones it refused, in name
-// order.
-func splitCorpus(c *qt.C, split bool) []splitRow {
+// splitTexts lists the texts the host split, in name order.
+func splitTexts(c *qt.C) []splitRow {
+	c.Helper()
+	return slices.DeleteFunc(splitCorpus(c), func(row splitRow) bool { return row.error != "" })
+}
+
+// refusedTexts lists the texts the host refused, in name order.
+func refusedTexts(c *qt.C) []splitRow {
+	c.Helper()
+	return slices.DeleteFunc(splitCorpus(c), func(row splitRow) bool { return row.error == "" })
+}
+
+// splitCorpus lists every text of the corpus in name order.
+func splitCorpus(c *qt.C) []splitRow {
 	c.Helper()
 	paths, err := filepath.Glob("testdata/corpus/*.golden.json")
 	c.Assert(err, qt.IsNil)
@@ -53,16 +64,14 @@ func splitCorpus(c *qt.C, split bool) []splitRow {
 		c.Assert(json.Unmarshal(data, &golden), qt.IsNil)
 		text, err := os.ReadFile(filepath.Join("testdata/corpus", name+".yql"))
 		c.Assert(err, qt.IsNil)
-		if (golden.Error == "") == split {
-			rows = append(rows, splitRow{name: name, text: string(text), error: golden.Error, queries: golden.Queries})
-		}
+		rows = append(rows, splitRow{name: name, text: string(text), error: golden.Error, queries: golden.Queries})
 	}
 	return rows
 }
 
 func TestSplitMatchesTheHost_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	rows := splitCorpus(c, true)
+	rows := splitTexts(c)
 	c.Assert(len(rows) >= 21, qt.IsTrue, qt.Commentf("%d split texts", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
@@ -86,7 +95,7 @@ func TestSplitMatchesTheHost_HappyPath(t *testing.T) {
 // through its terminator.
 func TestSplitSpansNameEachStatement(t *testing.T) {
 	c := testcheck.New(t)
-	for _, row := range splitCorpus(c, true) {
+	for _, row := range splitTexts(c) {
 		t.Run(row.name, func(t *testing.T) {
 			c := testcheck.New(t)
 
@@ -107,7 +116,7 @@ func TestSplitSpansNameEachStatement(t *testing.T) {
 
 func TestSplitMatchesTheHost_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	rows := splitCorpus(c, false)
+	rows := refusedTexts(c)
 	c.Assert(len(rows) >= 3, qt.IsTrue, qt.Commentf("%d refused texts", len(rows)))
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {

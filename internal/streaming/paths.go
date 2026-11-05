@@ -57,7 +57,7 @@ func NamedPaths(text string) ([]string, error) {
 		if index+1 >= len(tokens) || (!token.IsWord("FROM") && !token.IsWord("JOIN") && !token.IsWord("INTO") && !implicit[index]) {
 			continue
 		}
-		names, err := sourcePaths(tokens[index+1:], bindings, token.IsWord("INTO"))
+		names, err := sourcePaths(tokens[index+1:], bindings, useAfter(token))
 		if err != nil {
 			return nil, err
 		}
@@ -147,14 +147,34 @@ func bindPath(tokens []yql.Token, bindings map[string]pathBinding) pathBinding {
 	return pathBinding{}
 }
 
-func sourcePaths(tokens []yql.Token, bindings map[string]pathBinding, target bool) ([]string, error) {
+// pathUse is how a statement uses the paths that follow a keyword.
+type pathUse int
+
+const (
+	// readPath follows FROM or JOIN, or stands in a FROM list: the statement
+	// reads it.
+	readPath pathUse = iota
+	// writePath follows INTO: the statement writes it.
+	writePath
+)
+
+// useAfter is how a statement uses the paths after keyword: it writes them
+// after INTO and reads them otherwise.
+func useAfter(keyword yql.Token) pathUse {
+	if keyword.IsWord("INTO") {
+		return writePath
+	}
+	return readPath
+}
+
+func sourcePaths(tokens []yql.Token, bindings map[string]pathBinding, use pathUse) ([]string, error) {
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("streaming query requires a statically bound source or target")
 	}
 	name := tokens[0]
 	if name.IsOperator("(") {
 		end := closingParen(tokens)
-		if !target && end > 0 && bindPath(tokens[:end+1], bindings).relation {
+		if use == readPath && end > 0 && bindPath(tokens[:end+1], bindings).relation {
 			return nil, nil // The outer walk also visits the subquery's sources.
 		}
 		return nil, fmt.Errorf("streaming query contains an unresolved table expression")
@@ -163,10 +183,10 @@ func sourcePaths(tokens []yql.Token, bindings map[string]pathBinding, target boo
 		if len(tokens) < 3 || tokens[2].Type != yql.TokenIdentifier || len(tokens) > 3 && (tokens[3].IsOperator("(") || tokens[3].IsOperator(".")) {
 			return nil, fmt.Errorf("streaming query contains an unresolved qualified data source")
 		}
-		return literalPath(name, bindings, false)
+		return literalPath(name, bindings)
 	}
 	if len(tokens) > 1 && tokens[1].IsOperator("(") {
-		if target {
+		if use == writePath {
 			return nil, fmt.Errorf("streaming query target must name one static path")
 		}
 		end := closingParen(tokens[1:])
@@ -193,7 +213,7 @@ func sourcePaths(tokens []yql.Token, bindings map[string]pathBinding, target boo
 				if len(argument) != 1 {
 					return nil, fmt.Errorf("streaming query CONCAT requires static table paths")
 				}
-				paths, err := literalPath(argument[0], bindings, false)
+				paths, err := literalPath(argument[0], bindings)
 				if err != nil {
 					return nil, err
 				}
@@ -203,17 +223,27 @@ func sourcePaths(tokens []yql.Token, bindings map[string]pathBinding, target boo
 		}
 		return nil, fmt.Errorf("streaming query table function %q has unresolved physical inputs", name.Value)
 	}
-	return literalPath(name, bindings, !target)
+	if use == readPath {
+		return readLiteralPath(name, bindings)
+	}
+	return literalPath(name, bindings)
 }
 
-func literalPath(token yql.Token, bindings map[string]pathBinding, relation bool) ([]string, error) {
+// readLiteralPath is [literalPath] for a path a statement reads, where a name
+// bound to a subquery also stands and opens no path of its own: the outer walk
+// visits the subquery's sources.
+func readLiteralPath(token yql.Token, bindings map[string]pathBinding) ([]string, error) {
+	if bound := bindings[token.Value]; strings.HasPrefix(token.Value, "$") && !bound.constant && bound.relation {
+		return nil, nil
+	}
+	return literalPath(token, bindings)
+}
+
+func literalPath(token yql.Token, bindings map[string]pathBinding) ([]string, error) {
 	if strings.HasPrefix(token.Value, "$") {
 		bound := bindings[token.Value]
 		if bound.constant {
 			return []string{bound.scalar}, nil
-		}
-		if relation && bound.relation {
-			return nil, nil
 		}
 		return nil, fmt.Errorf("streaming query named table %q has no static path or subquery binding", token.Value)
 	}

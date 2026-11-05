@@ -209,7 +209,7 @@ func compareStorage(request *protocol.CompareModelsRequest, result *protocol.Com
 		}
 	case after != nil && rowRead:
 	case before != nil && (rowStated[recordKey(schema.TableProperties, subject)] ||
-		tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.ColumnStorageProperties, subject, true)):
+		tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.ColumnStorageProperties, subject, tablecreate.DesiredSide)):
 	default:
 		return nil
 	}
@@ -232,7 +232,7 @@ func compareStorage(request *protocol.CompareModelsRequest, result *protocol.Com
 // that could not describe them states nothing, and a record the desired side
 // carries without a value is an exclusion, so neither is compared.
 func compareUnstated(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, subject *protocol.ComparisonIdentity, observed *protocol.ComparisonRecord) error {
-	if !tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.TableProperties, subject, true) {
+	if !tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.TableProperties, subject, tablecreate.DesiredSide) {
 		return nil
 	}
 	before, err := tablecreate.NormalizedFacet(observed, protocol.ValueInput_OBSERVED)
@@ -317,7 +317,7 @@ func compareUnstatedChangefeeds(request *protocol.CompareModelsRequest, result *
 		}
 	}
 	observed := held[recordKey(schema.ChangefeedProperties, subject)]
-	if observed == nil || !compared(request, observed) || !tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.ChangefeedProperties, subject, true) {
+	if observed == nil || !compared(request, observed) || !tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.ChangefeedProperties, subject, tablecreate.DesiredSide) {
 		return nil
 	}
 	before, err := tablecreate.NormalizedFacet(observed, protocol.ValueInput_OBSERVED)

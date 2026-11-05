@@ -24,12 +24,8 @@ var judged = []protocol.LintFact{
 	protocol.LintFact_LINT_FACT_SAFETY_EFFECT,
 }
 
-// Judged returns the facts [Split] judges for every statement, with the
-// statement facts where it describes statements.
-func Judged(describeStatements bool) []protocol.LintFact {
-	if describeStatements {
-		return slices.Concat(judged, statementFacts)
-	}
+// Judged returns the facts [Split] judges for every statement.
+func Judged() []protocol.LintFact {
 	return slices.Clone(judged)
 }
 
@@ -44,10 +40,8 @@ func StatementFacts() []protocol.LintFact {
 // effects: a drop that loses state, YQL's unique index, the steps of a table
 // rebuild, whose old table's columns it reads from the directory's own
 // history, and its judgment of a statement whose effect only this owner
-// knows. Where describeStatements holds, every statement also carries its
-// statement facts (see [describe]). Cancellation returns the context's error
-// and no statement.
-func Split(ctx context.Context, sources []Source, describeStatements bool) ([][]Statement, error) {
+// knows. Cancellation returns the context's error and no statement.
+func Split(ctx context.Context, sources []Source) ([][]Statement, error) {
 	files := make([]File, 0, len(sources))
 	for _, source := range sources {
 		if err := ctx.Err(); err != nil {
@@ -76,13 +70,20 @@ func Split(ctx context.Context, sources []Source, describeStatements bool) ([][]
 			if steps.renames[j] {
 				stmt.Effects = append(stmt.Effects, Effect{Fact: protocol.LintFact_LINT_FACT_REBUILD_RENAME})
 			}
-			if describeStatements {
-				stmt.Effects = append(stmt.Effects, describe(stmt)...)
-			}
 		}
 		result = append(result, statements)
 	}
 	return result, ctx.Err()
+}
+
+// addStatementFacts appends to every statement of files its statement facts
+// (see [describe]), after the effects [Split] reported.
+func addStatementFacts(files [][]Statement) {
+	for _, statements := range files {
+		for j := range statements {
+			statements[j].Effects = append(statements[j].Effects, describe(&statements[j])...)
+		}
+	}
 }
 
 // annotated are the facts [Annotate] judges, in the order it reports them.

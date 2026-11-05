@@ -80,7 +80,7 @@ func statementProvider(c *qt.C, probe *statementProbe) *Provider {
 	db := sql.OpenDB(statementConnector{probe: probe})
 	p := &Provider{sessions: map[string]*session{"session": {connection: &connection.Connection{DB: db}}}}
 	c.Cleanup(func() {
-		p.sessions["session"].closeStatements("", true)
+		p.sessions["session"].closeStatements()
 		p.sessions["session"].rollbackTransactions()
 		_ = db.Close()
 	})

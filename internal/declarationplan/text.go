@@ -125,7 +125,7 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 		if err := streaming.Validate(spec); err != nil {
 			return "", err
 		}
-		return streaming.Create(owner.Schema, owner.Name, spec, false), nil
+		return streaming.Create(owner.Schema, owner.Name, spec), nil
 	case schema.ResourcePoolProperties:
 		if !capabilities[workload.CapabilityResourcePools] {
 			return "", fmt.Errorf("resource pools require target capability resource_pools")

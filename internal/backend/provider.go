@@ -443,8 +443,8 @@ func (p *Provider) Close(_ context.Context, request *protocol.CloseRequest) erro
 	defer opened.mu.Unlock()
 	if !opened.closed {
 		opened.closed = true
-		opened.closeStatements("", true)
-		opened.closeMetadataReaders("", true)
+		opened.closeStatements()
+		opened.closeMetadataReaders()
 		opened.rollbackTransactions()
 		opened.closeLocks()
 		opened.closeErr = errors.Join(opened.cleanupErr, opened.connection.Close())

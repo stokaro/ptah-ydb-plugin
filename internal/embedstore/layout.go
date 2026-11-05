@@ -108,10 +108,8 @@ func layout() []table {
 	return []table{generationLayout, runLayout, eventLayout, pointerLayout}
 }
 
-// typeName is the YQL type a column of kind is created with. A timestamp is
-// Timestamp64 on a line with the 64-bit date and time types and Timestamp on
-// 25.1, which has none, as the host renders it.
-func typeName(k kind, wide bool) string {
+// typeName is the YQL type of a column of kind, Timestamp for a timestamp.
+func typeName(k kind) string {
 	switch k {
 	case integer:
 		return "Int32"
@@ -120,13 +118,20 @@ func typeName(k kind, wide bool) string {
 	case boolean:
 		return "Bool"
 	case timestamp:
-		if wide {
-			return "Timestamp64"
-		}
 		return "Timestamp"
 	default:
 		return "Utf8"
 	}
+}
+
+// createdType is the YQL type a column of kind is created with on a line
+// with caps. A timestamp is Timestamp64 on a line with the 64-bit date and
+// time types and Timestamp on 25.1, which has none, as the host renders it.
+func createdType(k kind, caps Capabilities) string {
+	if k == timestamp && caps.WideTimestamps {
+		return "Timestamp64"
+	}
+	return typeName(k)
 }
 
 // accepts reports whether a column of kind may be stored as the type a table
@@ -136,15 +141,16 @@ func accepts(k kind, declared string) bool {
 	if k == timestamp {
 		return declared == "Timestamp" || declared == "Timestamp64"
 	}
-	return declared == typeName(k, false)
+	return declared == typeName(k)
 }
 
 // createStatement is the CREATE TABLE of one run-state table, the text the
-// host's renderer writes. It creates the table only where none is.
-func (t table) createStatement(wide bool) string {
+// host's renderer writes on a line with caps. It creates the table only
+// where none is.
+func (t table) createStatement(caps Capabilities) string {
 	definitions := make([]string, 0, len(t.columns)+1)
 	for _, c := range t.columns {
-		definition := Quote(c.name) + " " + typeName(c.kind, wide)
+		definition := Quote(c.name) + " " + createdType(c.kind, caps)
 		if !c.nullable {
 			definition += " NOT NULL"
 		}
@@ -190,7 +196,7 @@ func (t table) mismatch(described RowTable) string {
 
 // spelling is a layout column's type for a diagnostic.
 func (c column) spelling() string {
-	name := typeName(c.kind, false)
+	name := typeName(c.kind)
 	if c.kind == timestamp {
 		name = "Timestamp or Timestamp64"
 	}
@@ -205,12 +211,12 @@ func Quote(name string) string {
 	return "`" + strings.NewReplacer("\\", "\\\\", "`", "\\`").Replace(name) + "`"
 }
 
-// SchemaStatements are the statements that create the run-state tables, with
-// 64-bit timestamps where wide holds.
-func SchemaStatements(wide bool) []string {
+// SchemaStatements are the statements that create the run-state tables on a
+// line with caps, with 64-bit timestamps where it has them.
+func SchemaStatements(caps Capabilities) []string {
 	statements := make([]string, 0, len(layout()))
 	for _, t := range layout() {
-		statements = append(statements, t.createStatement(wide))
+		statements = append(statements, t.createStatement(caps))
 	}
 	return statements
 }

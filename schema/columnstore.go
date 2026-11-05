@@ -47,7 +47,7 @@ func normalizeColumnStorage(value *native.ColumnStorageObservation) error {
 	if value.Partitions > math.MaxUint32 {
 		return fmt.Errorf("column shard count exceeds a 32-bit integer")
 	}
-	if err := validateLocalIndexes(value.LocalIndexes, false); err != nil {
+	if err := validateLocalIndexes(value.LocalIndexes, localIndexStorage); err != nil {
 		return err
 	}
 	slices.SortFunc(value.LocalIndexes, func(a, b *native.LocalIndexObservation) int { return cmp.Compare(a.Name, b.Name) })
@@ -66,7 +66,7 @@ func validateColumnStorageIntent(value *native.ColumnStorageIntent) error {
 	if value.Partitions > math.MaxUint32 {
 		return fmt.Errorf("column shard count exceeds a 32-bit integer")
 	}
-	if err := validateLocalIndexes(value.LocalIndexes, true); err != nil {
+	if err := validateLocalIndexes(value.LocalIndexes, declaredLocalIndexStorage); err != nil {
 		return err
 	}
 	return validateDesiredColumnTTL(value.Ttl)
@@ -118,13 +118,14 @@ func validateDesiredColumnTTL(policy *native.ColumnTTLPolicy) error {
 // writes, a probability strictly between 0 and 1, and no storage or the
 // storage YDB writes.
 func ValidateDeclaredLocalIndexes(indexes []*native.LocalIndexObservation) error {
-	return validateLocalIndexes(indexes, true)
+	return validateLocalIndexes(indexes, declaredLocalIndexStorage)
 }
 
 // validateLocalIndexes checks the local indexes of a column table, in either
-// representation. A read describes the storage YDB placed each index in; a
-// declaration may leave it out, since no statement names it.
-func validateLocalIndexes(indexes []*native.LocalIndexObservation, declared bool) error {
+// representation, and the storage of each with storage: a read describes the
+// storage YDB placed each index in ([localIndexStorage]); a declaration may
+// leave it out, since no statement names it ([declaredLocalIndexStorage]).
+func validateLocalIndexes(indexes []*native.LocalIndexObservation, storage func(*native.LocalIndexObservation) error) error {
 	names := make(map[string]bool)
 	for _, index := range indexes {
 		if !componentName(index.GetName()) || names[index.Name] || !distinctColumns(index.Columns) {
@@ -155,18 +156,33 @@ func validateLocalIndexes(indexes []*native.LocalIndexObservation, declared bool
 		if probability != nil && (math.IsNaN(*probability) || math.IsInf(*probability, 0) || *probability <= 0 || *probability >= 1) {
 			return fmt.Errorf("invalid YDB local index probability")
 		}
-		if declared && index.StorageId == "" && !index.InheritPortionStorage {
-			continue
-		}
-		if index.GetMinMax() != nil {
-			if index.StorageId != "__LOCAL_METADATA" || index.InheritPortionStorage {
-				return fmt.Errorf("unsupported YDB min/max storage")
-			}
-		} else if index.StorageId != "__DEFAULT" && (index.StorageId != "" || !index.InheritPortionStorage) {
-			return fmt.Errorf("unsupported YDB bloom storage")
+		if err := storage(index); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// localIndexStorage checks the storage YDB places a local index in: the
+// local metadata for a min/max index, and the default storage for any other.
+func localIndexStorage(index *native.LocalIndexObservation) error {
+	if index.GetMinMax() != nil {
+		if index.StorageId != "__LOCAL_METADATA" || index.InheritPortionStorage {
+			return fmt.Errorf("unsupported YDB min/max storage")
+		}
+	} else if index.StorageId != "__DEFAULT" && (index.StorageId != "" || !index.InheritPortionStorage) {
+		return fmt.Errorf("unsupported YDB bloom storage")
+	}
+	return nil
+}
+
+// declaredLocalIndexStorage is [localIndexStorage] for a declaration, which
+// may leave the storage out.
+func declaredLocalIndexStorage(index *native.LocalIndexObservation) error {
+	if index.StorageId == "" && !index.InheritPortionStorage {
+		return nil
+	}
+	return localIndexStorage(index)
 }
 
 func distinctColumns(names []string) bool {

@@ -20,10 +20,14 @@ func (p *Provider) GuardReplay(ctx context.Context, request *protocol.GuardRepla
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
+	guard := yql.GuardReplay
+	if request.GetScope().GetServer() {
+		guard = yql.GuardServerReplay
+	}
 	result := &protocol.GuardedReplay{Verdicts: make([]*protocol.ReplayVerdict, len(request.GetStatements()))}
 	for i, statement := range request.GetStatements() {
 		verdict := &protocol.ReplayVerdict{}
-		if refusal, ok := errors.AsType[*yql.RealmRefusal](yql.GuardReplay(statement, request.GetScope().GetServer())); ok {
+		if refusal, ok := errors.AsType[*yql.RealmRefusal](guard(statement)); ok {
 			verdict.Refused, verdict.Operation = true, refusal.Operation
 		}
 		result.Verdicts[i] = verdict

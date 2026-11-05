@@ -37,7 +37,7 @@ func streamingTextChange(c *qt.C) *protocol.NormalizedValue {
 func TestReverseObjectChange_KeepsAStreamingQuerysStateReset(t *testing.T) {
 	c := testcheck.New(t)
 
-	reversed, err := schema.ReverseObjectChange("reverse", streamingTextChange(c).Value, false)
+	reversed, err := schema.ReverseObjectChange("reverse", streamingTextChange(c).Value, schema.NativeAccess)
 
 	c.Assert(err, qt.IsNil)
 	restored, left := &native.StreamingQueryIntent{}, &native.StreamingQuerySettings{}
@@ -57,7 +57,7 @@ func TestReverseObjectChange_FailurePath(t *testing.T) {
 	change := streamingTextChange(c).Value
 	change.Kind = schema.TablePropertiesChange
 
-	reversed, err := schema.ReverseObjectChange("reverse", change, false)
+	reversed, err := schema.ReverseObjectChange("reverse", change, schema.NativeAccess)
 
 	c.Assert(err, qt.ErrorMatches, `YDB change .*row-table-properties-change has no reversal`)
 	c.Assert(reversed.Value, qt.IsNil)

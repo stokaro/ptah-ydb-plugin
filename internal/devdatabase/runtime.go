@@ -41,12 +41,12 @@ type DockerCLI struct {
 	RunLabel string
 }
 
-func (DockerCLI) docker(ctx context.Context, args ...string) (string, string, error) {
+func (DockerCLI) docker(ctx context.Context, args ...string) (stdout, stderr string, err error) {
 	command := exec.CommandContext(ctx, "docker", args...)
-	var stdout, stderr bytes.Buffer
-	command.Stdout, command.Stderr = &stdout, &stderr
-	err := command.Run()
-	return stdout.String(), stderr.String(), err
+	var out, diagnostics bytes.Buffer
+	command.Stdout, command.Stderr = &out, &diagnostics
+	err = command.Run()
+	return out.String(), diagnostics.String(), err
 }
 
 // Available checks that the daemon answers and runs on this machine. local-ydb

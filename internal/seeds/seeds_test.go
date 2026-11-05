@@ -273,19 +273,22 @@ func TestRefusal_FailurePath(t *testing.T) {
 	}
 }
 
-func ledgerColumn(name string, id Ydb.Type_PrimitiveTypeId, nullable bool) *native.ColumnMeta {
-	column := &native.ColumnMeta{Name: name, Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: id}}}
-	if nullable {
-		column.Type = &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: column.Type}}}
-	}
+func ledgerColumn(name string, id Ydb.Type_PrimitiveTypeId) *native.ColumnMeta {
+	return &native.ColumnMeta{Name: name, Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: id}}}
+}
+
+// nullableLedgerColumn is ledgerColumn name of the optional type id.
+func nullableLedgerColumn(name string, id Ydb.Type_PrimitiveTypeId) *native.ColumnMeta {
+	column := ledgerColumn(name, id)
+	column.Type = &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: column.Type}}}
 	return column
 }
 
 // ledger is the layout the host's tracker DDL creates, in its column order.
 func ledger() *native.DescribeTableResult {
 	return &native.DescribeTableResult{PrimaryKey: []string{"seed_path"}, Columns: []*native.ColumnMeta{
-		ledgerColumn("seed_path", Ydb.Type_UTF8, false), ledgerColumn("env", Ydb.Type_UTF8, false),
-		ledgerColumn("checksum", Ydb.Type_UTF8, false), ledgerColumn("applied_at", Ydb.Type_TIMESTAMP, false),
+		ledgerColumn("seed_path", Ydb.Type_UTF8), ledgerColumn("env", Ydb.Type_UTF8),
+		ledgerColumn("checksum", Ydb.Type_UTF8), ledgerColumn("applied_at", Ydb.Type_TIMESTAMP),
 	}}
 }
 
@@ -304,17 +307,17 @@ func TestCheckLayout_FailurePath(t *testing.T) {
 		change func(*native.DescribeTableResult)
 	}{
 		{"nullable column", func(table *native.DescribeTableResult) {
-			table.Columns[1] = ledgerColumn("env", Ydb.Type_UTF8, true)
+			table.Columns[1] = nullableLedgerColumn("env", Ydb.Type_UTF8)
 		}},
 		{"another type", func(table *native.DescribeTableResult) {
-			table.Columns[3] = ledgerColumn("applied_at", Ydb.Type_DATETIME, false)
+			table.Columns[3] = ledgerColumn("applied_at", Ydb.Type_DATETIME)
 		}},
 		{"another key", func(table *native.DescribeTableResult) { table.PrimaryKey = []string{"seed_path", "env"} }},
 		{"a column more", func(table *native.DescribeTableResult) {
-			table.Columns = append(table.Columns, ledgerColumn("extra", Ydb.Type_UTF8, true))
+			table.Columns = append(table.Columns, nullableLedgerColumn("extra", Ydb.Type_UTF8))
 		}},
 		{"a column renamed", func(table *native.DescribeTableResult) {
-			table.Columns[2] = ledgerColumn("digest", Ydb.Type_UTF8, false)
+			table.Columns[2] = ledgerColumn("digest", Ydb.Type_UTF8)
 		}},
 		{"an index", func(table *native.DescribeTableResult) {
 			table.Indexes = []*native.TableIndexDescription{{Name: "by_env"}}

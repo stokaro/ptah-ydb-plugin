@@ -132,7 +132,7 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 		{name: "a data channel count of its own", storage: `{"dataChannelCount":"32"}`, modify: keep, wantErr: `a column table's data channel count is set by the server.*`},
 		{name: "row-table settings beside the storage", storage: `{}`, modify: withFacet(facet(c, schema.TableProperties, "", `{"keyBloomFilter":"ENABLED"}`)),
 			wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
-		{name: "a vector index", storage: `{}`, modify: withFacet(facet(c, schema.IndexProperties, "", vectorIndexes(false))),
+		{name: "a vector index", storage: `{}`, modify: withFacet(facet(c, schema.IndexProperties, "", declaredVectorIndexes())),
 			wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
 		{name: "a column in a family", storage: `{}`, modify: withFacet(facet(c, schema.ColumnProperties, "body", `{"family":"cold"}`)),
 			wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},

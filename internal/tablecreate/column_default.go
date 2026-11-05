@@ -194,9 +194,12 @@ func defaultColumnState(column *native.ColumnMeta) (*native.ColumnMeta, error) {
 		return nil, err
 	}
 	result := proto.CloneOf(column)
-	result.Type, err = schema.StorageType(name, nullable && !column.GetNotNull())
+	result.Type, err = schema.StorageType(name)
 	if err != nil {
 		return nil, err
+	}
+	if nullable && !column.GetNotNull() {
+		result.Type = schema.Optional(result.Type)
 	}
 	if literal := column.GetFromLiteral(); literal != nil {
 		canonical, err := columnsemantics.CanonicalLiteral(literal)

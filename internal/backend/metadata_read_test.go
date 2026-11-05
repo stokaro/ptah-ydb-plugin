@@ -69,7 +69,7 @@ func TestMetadataReaderBoundsAndTransactionCleanup(t *testing.T) {
 	_, err := p.OpenMetadataRead(t.Context(), request)
 	c.Assert(status.Code(err), qt.Equals, codes.ResourceExhausted)
 	c.Assert(s.metadataReaders[request.ReaderId].closed, qt.IsTrue)
-	s.closeMetadataReaders("", true)
+	s.closeMetadataReaders()
 	for _, reader := range s.metadataReaders {
 		c.Assert(reader.closed, qt.IsTrue)
 	}
@@ -93,9 +93,9 @@ func TestMetadataSnapshotScopeCannotCloseAnotherTransaction(t *testing.T) {
 	other := &metadataReader{scope: proto.CloneOf(request.Scope)}
 	s.metadataReaders["selected"] = selected
 	s.metadataReaders["other"] = other
-	s.closeMetadataReaders("tx", false)
+	s.closeTransactionMetadataReaders("tx")
 	c.Assert(selected.closed, qt.IsTrue)
 	c.Assert(other.closed, qt.IsFalse)
-	s.closeMetadataReaders("", true)
+	s.closeMetadataReaders()
 	c.Assert(other.closed, qt.IsTrue)
 }

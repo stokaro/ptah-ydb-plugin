@@ -309,13 +309,12 @@ func yamlPath(object *declared, fields map[string]string, key string) error {
 // yamlFields reads an entry's scalar fields of names and its options
 // mapping, and refuses a field of another name. An entry that takes columns
 // holds them in a field yamlColumns reads.
-func yamlFields(entry *protocol.SourceEntry, names []string, columns bool) (map[string]string, map[string]string, error) {
+func yamlFields(entry *protocol.SourceEntry, names []string, columns bool) (fields, options map[string]string, err error) {
 	mapping := entry.GetValue().GetMapping()
 	if mapping == nil {
 		return nil, nil, fmt.Errorf("an entry requires a mapping")
 	}
-	fields := make(map[string]string)
-	var options map[string]string
+	fields = make(map[string]string)
 	for _, field := range mapping.GetEntries() {
 		switch {
 		case field.Key == externals.AttributeOptions:

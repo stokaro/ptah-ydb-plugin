@@ -154,11 +154,11 @@ func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowere
 		if slices.ContainsFunc(inputs, func(other read) bool { return provider.CompareIdentities(other.subject, input.Subject) == 0 }) {
 			return nil, fmt.Errorf("duplicate external object change")
 		}
-		_, _, database, err := schema.ExternalOperands(captured.Value)
+		parts, err := schema.ExternalOperands(captured.Value)
 		if err != nil {
 			return nil, err
 		}
-		if database != "" {
+		if database := parts.Database; database != "" {
 			if root != "" && database != root {
 				return nil, fmt.Errorf("external object change targets another database")
 			}
@@ -202,15 +202,15 @@ func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowere
 }
 
 func readAgainst(change *protocol.Envelope, root string) (externals.ChangeSpecs, error) {
-	before, after, _, err := schema.ExternalOperands(change)
+	parts, err := schema.ExternalOperands(change)
 	if err != nil {
 		return externals.ChangeSpecs{}, err
 	}
-	result := externals.ChangeSpecs{Database: root, Before: before, After: after}
+	result := externals.ChangeSpecs{Database: root, Before: parts.Before, After: parts.After}
 	if change.GetKind() == schema.ExternalSourceChange {
-		result.SourceBefore, result.SourceAfter, err = externals.SourcePair(before, after, root)
+		result.SourceBefore, result.SourceAfter, err = externals.SourcePair(parts.Before, parts.After, root)
 	} else {
-		result.TableBefore, result.TableAfter, err = externals.TablePair(before, after, root)
+		result.TableBefore, result.TableAfter, err = externals.TablePair(parts.Before, parts.After, root)
 	}
 	return result, err
 }
@@ -227,11 +227,11 @@ func display(subject *protocol.ComparisonIdentity) string {
 // of a table dropped and created again carries out. The second step restores
 // the table from the whole change.
 func dropHalf(change *protocol.Envelope, database string) (*protocol.Envelope, error) {
-	before, _, _, err := schema.ExternalOperands(change)
+	parts, err := schema.ExternalOperands(change)
 	if err != nil {
 		return nil, err
 	}
-	captured, err := schema.CaptureExternalChange(schema.ExternalTableProperties, "step", change.Owner, database, before, nil)
+	captured, err := schema.CaptureExternalChange(schema.ExternalTableProperties, "step", change.Owner, database, parts.Before, nil)
 	if err != nil {
 		return nil, err
 	}

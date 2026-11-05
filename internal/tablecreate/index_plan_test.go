@@ -54,18 +54,21 @@ func heldIndexes(descriptions ...string) string {
 
 const vectorKind = `"globalVectorKmeansTreeIndex":{"vectorSettings":{"settings":{"metric":"DISTANCE_COSINE","vectorType":"VECTOR_TYPE_FLOAT","vectorDimension":3},"clusters":2,"levels":1}}`
 
-// vectorIndexes is an index set of one vector index, declared or held. A vector
+// declaredVectorIndexes is a declared index set of one vector index. A vector
 // index is implemented by two tables.
-func vectorIndexes(held bool) string {
+func declaredVectorIndexes() string {
 	columns := `"columns":[{"name":"label","type":{"typeId":"UTF8"},"settings":{}},{"name":"id","type":{"typeId":"UINT64"},"settings":{}}]`
-	if held {
-		observed := `"columns":[{"name":"label","type":{"typeId":"UTF8"}},{"name":"id","type":{"typeId":"UINT64"}}],"primaryKey":["label","id"]`
-		return `{"indexes":[{"description":{"name":"by_embedding","indexColumns":["label"],` + vectorKind + `,"status":"STATUS_READY"},"tables":[` +
-			`{"name":"indexImplLevelTable","description":{` + observed + `}},{"name":"indexImplPostingTable","description":{` + observed + `}}]}]}`
-	}
 	return `{"indexes":[{"specification":{"name":"by_embedding","indexColumns":["label"],` + vectorKind + `},"implementation":[` +
 		`{"name":"indexImplLevelTable","settings":{"primaryKey":["label","id"]},` + columns + `},` +
 		`{"name":"indexImplPostingTable","settings":{"primaryKey":["label","id"]},` + columns + `}]}]}`
+}
+
+// heldVectorIndexes is the index set a read holds of the vector index
+// declaredVectorIndexes declares, with its two tables.
+func heldVectorIndexes() string {
+	observed := `"columns":[{"name":"label","type":{"typeId":"UTF8"}},{"name":"id","type":{"typeId":"UINT64"}}],"primaryKey":["label","id"]`
+	return `{"indexes":[{"description":{"name":"by_embedding","indexColumns":["label"],` + vectorKind + `,"status":"STATUS_READY"},"tables":[` +
+		`{"name":"indexImplLevelTable","description":{` + observed + `}},{"name":"indexImplPostingTable","description":{` + observed + `}}]}]}`
 }
 
 // settings is a global index with the partitioning of its table, as the server
@@ -215,7 +218,7 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 			`index "by_label" holds a global index on \(label\), but the declaration states a global async index on \(label\); YDB cannot alter.*`},
 		{"the key order changed", indexCase(declaredIndexes(indexJSON("globalIndex", "by_both", []string{"extra", "label"}, nil)), heldIndexes(indexJSON("globalIndex", "by_both", labelAndData, nil)), "label", "extra"),
 			`index "by_both" holds a global index on \(label, extra\), but the declaration states a global index on \(extra, label\).*`},
-		{"a vector index on a target without vector indexes", indexCase(vectorIndexes(false), heldIndexes(), "label"),
+		{"a vector index on a target without vector indexes", indexCase(declaredVectorIndexes(), heldIndexes(), "label"),
 			`index "by_embedding" declares vector settings, which requires target capability vector_indexes, unavailable on this ydb target .*`},
 		// YDB refuses a unique index on a table that exists after the call
 		// unless the session establishes that it adds one.
@@ -243,7 +246,7 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 
 func TestIndexPlan_NoChangeForAnUnchangedVectorIndex(t *testing.T) {
 	c := testcheck.New(t)
-	plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, indexCase(vectorIndexes(false), vectorIndexes(true), "label")))
+	plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, indexCase(declaredVectorIndexes(), heldVectorIndexes(), "label")))
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
 	c.Assert(plan.Contributions, qt.HasLen, 0)

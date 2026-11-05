@@ -129,7 +129,7 @@ func TestRangeRefusal(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			c.Assert(ydbsequence.RangeRefusal(test.serial, test.settings, test.keepsRange), qt.Matches, test.want)
+			c.Assert(ydbsequence.RangeRefusal(test.serial, test.settings, map[string]bool{ydbsequence.KeepsRange: test.keepsRange}), qt.Matches, test.want)
 		})
 	}
 }

@@ -161,7 +161,7 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 		return alterationChanges{}, "The table's current TTL was not captured", nil
 	}
 	ttlManaged := managed || observed.table != nil &&
-		FacetKnown(table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.TableProperties, table.Subject, true)
+		FacetKnown(table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.TableProperties, table.Subject, DesiredSide)
 	ttl, reason := planTTL(ttlInput{managed: ttlManaged, desired: intent.TtlSettings, held: held.TtlSettings, declared: declaredTypes(table.Desired.GetColumns())})
 	if reason != "" {
 		return alterationChanges{}, reason, nil

@@ -45,21 +45,32 @@ func ReversibleObjectChanges() []string {
 		SecretChange, StreamingQueryChange, TopicChange, TransferChange}
 }
 
+// AccessWire is where a target carries the access entries of an object.
+type AccessWire int
+
+const (
+	// NativeAccess carries them in the object's own value.
+	NativeAccess AccessWire = iota
+	// CommonAccess carries them as common grants, on a target that lists
+	// provider.CommonAccessFeature.
+	CommonAccess
+)
+
 // ReverseObjectChange returns the change that undoes change, a change of one
 // of ReversibleObjectChanges, under id. The reverse finds what the forward
 // change leaves, the conversion of its declaration, and asks for what the
 // forward change found, the conversion of that read; an absent operand stays
 // absent, so a creation reverses to a drop and a drop to a creation. With
-// commonAccess the restored declaration keeps no access entries, which travel
+// CommonAccess the restored declaration keeps no access entries, which travel
 // as common grants. Each operand keeps the database context it was read or
 // declared in.
-func ReverseObjectChange(id string, change *protocol.Envelope, commonAccess bool) (Reversed, error) {
+func ReverseObjectChange(id string, change *protocol.Envelope, access AccessWire) (Reversed, error) {
 	if change.GetKind() == CoordinationChange {
 		before, after, err := CoordinationOperands(change)
 		if err != nil {
 			return Reversed{}, err
 		}
-		left, restored, err := reversedOperands(before, after, ConvertCoordination, commonAccess)
+		left, restored, err := reversedOperands(before, after, ConvertCoordination, access)
 		if err != nil {
 			return Reversed{}, err
 		}
@@ -76,29 +87,29 @@ func ReverseObjectChange(id string, change *protocol.Envelope, commonAccess bool
 	if _, err := family.normalizeChange(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_CHANGE, Value: change}); err != nil {
 		return Reversed{}, err
 	}
-	before, after, database, err := family.parts(change)
+	parts, err := family.parts(change)
 	if err != nil {
 		return Reversed{}, err
 	}
-	left, restored, err := reversedOperands(before, after, ConvertNative, commonAccess)
+	left, restored, err := reversedOperands(parts.Before, parts.After, ConvertNative, access)
 	if err != nil {
 		return Reversed{}, err
 	}
-	if restored, err = keepStateReset(family, after, restored); err != nil {
+	if restored, err = keepStateReset(family, parts.After, restored); err != nil {
 		return Reversed{}, err
 	}
-	value, err := family.captureIn(id, change.Owner, database, left, restored)
+	value, err := family.captureIn(id, change.Owner, parts.Database, left, restored)
 	if err != nil {
 		return Reversed{}, err
 	}
-	return Reversed{Value: value, Kind: family.kind, Before: before, After: after, Left: left, Restored: restored}, nil
+	return Reversed{Value: value, Kind: family.kind, Before: parts.Before, After: parts.After, Left: left, Restored: restored}, nil
 }
 
 // reversedOperands converts the forward change's operands into the reverse
 // change's: what the change asked for, as a read would report it, and what
 // it found, as a declaration.
 func reversedOperands(before, after *protocol.Envelope, convert func(*protocol.Envelope, protocol.ValueInput_Representation, protocol.ValueInput_Representation) (*protocol.Envelope, error),
-	commonAccess bool,
+	access AccessWire,
 ) (left, restored *protocol.Envelope, err error) {
 	if after != nil {
 		if left, err = convert(after, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED); err != nil {
@@ -110,7 +121,7 @@ func reversedOperands(before, after *protocol.Envelope, convert func(*protocol.E
 		if restored, err = convert(before, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED); err != nil {
 			return nil, nil, err
 		}
-		if commonAccess {
+		if access == CommonAccess {
 			if restored, err = WithoutAccess(restored); err != nil {
 				return nil, nil, err
 			}

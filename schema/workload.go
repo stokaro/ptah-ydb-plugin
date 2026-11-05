@@ -526,7 +526,7 @@ func decodeWorkload(database string, raw []byte) (WorkloadChanges, error) {
 	if err != nil {
 		return WorkloadChanges{}, err
 	}
-	if err := workloadKeys(canonical, true, "pools", "classifiers"); err != nil {
+	if err := requiredWorkloadKeys(canonical, "pools", "classifiers"); err != nil {
 		return WorkloadChanges{}, err
 	}
 	var payload struct {
@@ -556,7 +556,7 @@ func decodeWorkload(database string, raw []byte) (WorkloadChanges, error) {
 	names := func(entries []json.RawMessage) ([]workloadEntry, error) {
 		var decoded []workloadEntry
 		for _, raw := range entries {
-			if err := workloadKeys(raw, false, "name", "before", "after"); err != nil {
+			if _, err := workloadKeys(raw, "name", "before", "after"); err != nil {
 				return nil, err
 			}
 			var entry workloadEntry
@@ -626,22 +626,32 @@ func workloadOperand(database, kind, name string, raw json.RawMessage, represent
 }
 
 // workloadKeys refuses a JSON object with a key outside allowed or a null
-// value; required asks for every allowed key.
-func workloadKeys(raw json.RawMessage, required bool, allowed ...string) error {
+// value, and returns how many keys it holds.
+func workloadKeys(raw json.RawMessage, allowed ...string) (int, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
-		return fmt.Errorf("invalid workload operation payload")
+		return 0, fmt.Errorf("invalid workload operation payload")
 	}
 	for key, field := range fields {
 		if !slices.Contains(allowed, key) {
-			return fmt.Errorf("workload operation has an unknown key %q", key)
+			return 0, fmt.Errorf("workload operation has an unknown key %q", key)
 		}
 		if bytes.Equal(field, []byte("null")) {
-			return fmt.Errorf("workload operation key %q cannot be null", key)
+			return 0, fmt.Errorf("workload operation key %q cannot be null", key)
 		}
 	}
-	if required && len(fields) != len(allowed) {
-		return fmt.Errorf("workload operation requires the keys %s", strings.Join(allowed, " and "))
+	return len(fields), nil
+}
+
+// requiredWorkloadKeys is [workloadKeys] for an object that holds every key
+// of keys and no other.
+func requiredWorkloadKeys(raw json.RawMessage, keys ...string) error {
+	count, err := workloadKeys(raw, keys...)
+	if err != nil {
+		return err
+	}
+	if count != len(keys) {
+		return fmt.Errorf("workload operation requires the keys %s", strings.Join(keys, " and "))
 	}
 	return nil
 }

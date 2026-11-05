@@ -254,10 +254,11 @@ func externalText(path string, value *protocol.Envelope) (string, error) {
 	if operation == schema.ExternalReplace {
 		creation = externals.Replace
 	}
-	_, after, _, err := schema.ExternalOperands(change)
+	parts, err := schema.ExternalOperands(change)
 	if err != nil {
 		return "", err
 	}
+	after := parts.After
 	// An empty root keeps every path as the declaration writes it.
 	if source {
 		_, spec, err := externals.SourcePair(nil, after, "")
