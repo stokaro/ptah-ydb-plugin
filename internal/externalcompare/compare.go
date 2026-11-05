@@ -78,12 +78,12 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 
 // Family is one kind's part of the comparison, its paths read against root.
 func Family(kind, root string) objectcompare.Family {
-	noun := "external data source"
+	noun, changeKind := "external data source", schema.ExternalSourceChange
 	if kind == schema.ExternalTableProperties {
-		noun = "external table"
+		noun, changeKind = "external table", schema.ExternalTableChange
 	}
 	return objectcompare.Family{
-		ServiceID: ServiceID, Kind: kind, Noun: noun, DottedLimits: true,
+		ServiceID: ServiceID, Kind: kind, ChangeKind: changeKind, Noun: noun, DottedLimits: true,
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(kind) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 			return schema.NativeBoundOwner(kind, subject)

@@ -1759,6 +1759,32 @@ YAML, a Go and a YQL source: it creates a node, finds nothing to change on the
 next run, changes its settings in place, and removes it once the source no
 longer declares it, reading the node back after each run.
 
+## Comparison counts
+
+The provider offers `models.compare-counts`, so `ptah schema drift --format json`
+lists its native kinds in the report's inventory. Each object comparison counts,
+under its change kind, the objects it decides: an object both sides hold counts
+on both, whether or not it differs and also when the plan drops and creates it
+again, an object only the source declares counts as desired, and an object only
+the server holds counts as observed. An object the comparison excludes, reserves,
+keeps because the source does not describe it, or leaves undecided counts on
+neither side.
+
+The counted kinds are secrets, streaming queries, coordination nodes, topics,
+external data sources, external tables, resource pools, resource pool classifiers,
+async replications and transfers. A service counts every kind it owns, with zeros
+for a kind a batch holds nothing of, because the host reports a kind only when
+every service that ran counted it.
+
+The row-table facet comparison counts nothing, so its two change kinds have no
+inventory entry. A table's TTL and partitioning are settings that stand for no
+object. A table's changefeeds change as one set, with one change for the table,
+and the contract refuses more additions and removals than a kind has changes, so
+a set that gains two changefeeds cannot count them.
+
+A host that does not list the feature receives no counts and reports none of
+these kinds, never a zero.
+
 ## Offline column declarations
 
 The `values.convert` service converts column properties between distinct typed
