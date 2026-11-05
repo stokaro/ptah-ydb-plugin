@@ -190,7 +190,8 @@ func providerFeatures() []string {
 		// `ptah schema stats` counts topics, changefeeds, the other native
 		// objects and the table settings with the provider's counts; see
 		// ReportValues.
-		provider.ReportCountsFeature}
+		provider.ReportCountsFeature,
+	}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -300,24 +301,58 @@ func negotiatedFeatures(ctx context.Context) []string {
 // measured. The flag decides it where the address names the monitoring
 // endpoint.
 func sessionCapabilities(version string) map[string]bool {
-	return map[string]bool{"wide_date_time_types": releaseline.AtLeast(version, 25, 2), "parameterized_decimal": releaseline.AtLeast(version, 25, 2),
-		"alter_column_default":    releaseline.AtLeast(version, 26, 2),
-		"add_column_with_default": releaseline.AtLeast(version, 26, 1),
-		"small_integer_defaults":  releaseline.AtLeast(version, 25, 2), "document_type_defaults": releaseline.AtLeast(version, 25, 3),
-		"transactional_ddl": false, "ddl_inside_transaction": false, "secrets": releaseline.AtLeast(version, 25, 4), "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
-		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true,
-		"relative_grant_paths": releaseline.AtLeast(version, 26, 1), "topics": true, "topic_consumer_availability_period": releaseline.AtLeast(version, 25, 4), workload.CapabilityResourcePools: false, streaming.Capability: false,
-		changefeeds.CapabilityChangefeeds: true, changefeeds.CapabilityUserSIDs: releaseline.AtLeast(version, 26, 1),
-		changefeeds.CapabilitySchemaChanges: releaseline.AtLeast(version, 25, 3), changefeeds.CapabilityTopicAutoPartitioning: releaseline.AtLeast(version, 25, 2),
-		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": releaseline.AtLeast(version, 25, 4),
-		tablecreate.VectorIndexesCapability: releaseline.AtLeast(version, 25, 2), tablecreate.VectorMaintainedOnWriteCapability: releaseline.AtLeast(version, 25, 3),
-		tablecreate.VectorBitTypeCapability: releaseline.AtLeast(version, 26, 1), tablecreate.FullTextIndexesCapability: releaseline.AtLeast(version, 26, 2),
-		tablecreate.LocalBloomIndexesCapability: releaseline.AtLeast(version, 26, 2), tablecreate.LocalNgramIndexesCapability: releaseline.AtLeast(version, 26, 2),
-		tablecreate.LocalMinMaxIndexesCapability: false,
-		replication.CapabilityReplication:        true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
-		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, "unique_constraints": false, tablecreate.UniqueIndexOnExistingTableCapability: false, tablecreate.IndexRenameCapability: true,
-		"returning_clause": releaseline.AtLeast(version, 25, 3), "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
-		tablecreate.CacheModeCapability: releaseline.AtLeast(version, 25, 4)}
+	return map[string]bool{
+		"wide_date_time_types":                           releaseline.AtLeast(version, 25, 2),
+		"parameterized_decimal":                          releaseline.AtLeast(version, 25, 2),
+		"alter_column_default":                           releaseline.AtLeast(version, 26, 2),
+		"add_column_with_default":                        releaseline.AtLeast(version, 26, 1),
+		"small_integer_defaults":                         releaseline.AtLeast(version, 25, 2),
+		"document_type_defaults":                         releaseline.AtLeast(version, 25, 3),
+		"transactional_ddl":                              false,
+		"ddl_inside_transaction":                         false,
+		"secrets":                                        releaseline.AtLeast(version, 25, 4),
+		"coordination_nodes":                             true,
+		"migration_statement_timeout":                    true,
+		"tiered_ttl":                                     false,
+		"role_management":                                true,
+		"role_membership":                                true,
+		"group_principals":                               true,
+		"database_grants":                                true,
+		"relative_grant_paths":                           releaseline.AtLeast(version, 26, 1),
+		"topics":                                         true,
+		"topic_consumer_availability_period":             releaseline.AtLeast(version, 25, 4),
+		workload.CapabilityResourcePools:                 false,
+		streaming.Capability:                             false,
+		changefeeds.CapabilityChangefeeds:                true,
+		changefeeds.CapabilityUserSIDs:                   releaseline.AtLeast(version, 26, 1),
+		changefeeds.CapabilitySchemaChanges:              releaseline.AtLeast(version, 25, 3),
+		changefeeds.CapabilityTopicAutoPartitioning:      releaseline.AtLeast(version, 25, 2),
+		"external_data_sources":                          false,
+		"external_object_replace":                        false,
+		"external_data_source_secret_paths":              releaseline.AtLeast(version, 25, 4),
+		tablecreate.VectorIndexesCapability:              releaseline.AtLeast(version, 25, 2),
+		tablecreate.VectorMaintainedOnWriteCapability:    releaseline.AtLeast(version, 25, 3),
+		tablecreate.VectorBitTypeCapability:              releaseline.AtLeast(version, 26, 1),
+		tablecreate.FullTextIndexesCapability:            releaseline.AtLeast(version, 26, 2),
+		tablecreate.LocalBloomIndexesCapability:          releaseline.AtLeast(version, 26, 2),
+		tablecreate.LocalNgramIndexesCapability:          releaseline.AtLeast(version, 26, 2),
+		tablecreate.LocalMinMaxIndexesCapability:         false,
+		replication.CapabilityReplication:                true,
+		replication.CapabilityTransfers:                  releaseline.AtLeast(version, 25, 2),
+		replication.CapabilitySecretPaths:                releaseline.AtLeast(version, 25, 4),
+		ydbtype.SerialColumns:                            true,
+		ydbsequence.Options:                              true,
+		ydbsequence.KeepsRange:                           false,
+		"unique_constraints":                             false,
+		tablecreate.UniqueIndexOnExistingTableCapability: false,
+		tablecreate.IndexRenameCapability:                true,
+		"returning_clause":                               releaseline.AtLeast(version, 25, 3),
+		"common_table_expressions":                       false,
+		"correlated_subqueries":                          false,
+		"non_equi_joins":                                 false,
+		"offset_without_limit":                           false,
+		tablecreate.CacheModeCapability:                  releaseline.AtLeast(version, 25, 4),
+	}
 }
 
 // indexRenames returns capabilities with index_rename true only for a host
