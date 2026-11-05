@@ -3,12 +3,19 @@ package schema
 import (
 	"fmt"
 
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // Known refuses unknown fields and enum values recursively. Protobuf's normal
 // unknown-field retention must never become silent field loss in JSON.
+//
+// The one unknown field it takes is the cache mode of a request's column
+// family, field 6 of Ydb.Table.ColumnFamily, holding a mode the provider's
+// ColumnFamily names: the pinned bindings lack the field, so a table service
+// request carries it there (see [RequestFamily]), and the provider writes and
+// reads it itself.
 func Known(value proto.Message) error {
 	if value == nil || !value.ProtoReflect().IsValid() {
 		return fmt.Errorf("missing YDB description")
@@ -20,7 +27,7 @@ func knownMessage(value protoreflect.Message) error {
 	if !value.IsValid() {
 		return fmt.Errorf("missing YDB description")
 	}
-	if len(value.GetUnknown()) != 0 {
+	if unknown := value.GetUnknown(); len(unknown) != 0 && !requestFamilyCacheMode(value, unknown) {
 		return fmt.Errorf("unknown fields in %s", value.Descriptor().FullName())
 	}
 	var result error
@@ -61,4 +68,14 @@ func knownValue(field protoreflect.FieldDescriptor, value protoreflect.Value) er
 		}
 	}
 	return nil
+}
+
+// requestFamilyCacheMode reports unknown fields of value that are only the
+// cache mode of a request's column family.
+func requestFamilyCacheMode(value protoreflect.Message, unknown []byte) bool {
+	if value.Descriptor().FullName() != (&Ydb_Table.ColumnFamily{}).ProtoReflect().Descriptor().FullName() {
+		return false
+	}
+	_, read := requestCacheMode(unknown)
+	return read
 }

@@ -27,10 +27,30 @@ func Compile(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[
 	if err != nil {
 		return nil, err
 	}
-	if err := serialSettingsRefusal(result, tableLabel(owner), caps); err != nil {
+	if err := targetRefusal(owner, result, caps); err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+// targetRefusal refuses a creation the target cannot make as compiled: the
+// settings of a Serial's sequence, and a family's cache mode, each of which
+// the target takes only with a capability.
+func targetRefusal(owner *protocol.Reference, request *Ydb_Table.CreateTableRequest, caps map[string]bool) error {
+	if err := serialSettingsRefusal(request, tableLabel(owner), caps); err != nil {
+		return err
+	}
+	return creationCacheModeError(owner, request, caps)
+}
+
+// creationCacheModeError refuses a family's cache mode on a target that does not
+// take one. Unlike the settings of a Serial's sequence, a declaration can be
+// checked for it alone: a target without the capability holds no cache mode.
+func creationCacheModeError(owner *protocol.Reference, request *Ydb_Table.CreateTableRequest, caps map[string]bool) error {
+	if reason := creationCacheModeRefusal(fmt.Sprintf("table %q declares column family cache mode", tableLabel(owner)), request, caps); reason != "" {
+		return unsupported("%s", reason)
+	}
+	return nil
 }
 
 // predictedCreation is the creation Compile writes, before it asks whether
@@ -82,7 +102,7 @@ func compile(owner *protocol.Reference, table *protocol.DeclaredTable, caps map[
 		Tiering:              settings.Tiering,
 	}
 	for _, family := range settings.ColumnFamilies {
-		result.ColumnFamilies = append(result.ColumnFamilies, proto.CloneOf(family))
+		result.ColumnFamilies = append(result.ColumnFamilies, schema.RequestFamily(family))
 	}
 	if len(settings.PrimaryKey) > 0 {
 		if len(result.PrimaryKey) != 0 && !slices.Equal(result.PrimaryKey, settings.PrimaryKey) {
