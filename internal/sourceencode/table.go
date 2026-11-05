@@ -162,7 +162,7 @@ func (f *tableFacets) add(value *protocol.EncodeSourceValue) error {
 			f.losef(id, "table %s: %s", tableSubject(f.binding), setting)
 			return nil
 		}
-		f.row, f.rowID = &intent, id
+		f.row, f.rowID = statedRow(&intent), id
 	case schema.ColumnStorageProperties:
 		var intent native.ColumnStorageIntent
 		if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
@@ -259,6 +259,17 @@ func (f *tableFacets) addIndexSettings(id string, envelope, normalized *protocol
 
 // defaultFamily is the family every row table has.
 const defaultFamily = "default"
+
+// statedRow is a row table's intent as the host's embedded engine exports a
+// read: without a default family that holds nothing of its own (see
+// [plainDefaultFamily]), which a read reports for every row table. A
+// declaration that leaves a family out keeps what the table holds of it, so
+// the source reads back as the same table.
+func statedRow(intent *native.RowTableIntent) *native.RowTableIntent {
+	result := proto.CloneOf(intent)
+	result.ColumnFamilies = slices.DeleteFunc(result.ColumnFamilies, plainDefaultFamily)
+	return result
+}
 
 // rowLoss says which setting of a row table no source declares, the first
 // one it finds.
@@ -394,10 +405,28 @@ func (f *tableFacets) fragmentID(suffix string) string {
 
 // tableAttributes are the attributes a Go source writes on the table
 // directive, and the scalar keys of a YAML table entry, in the order the
-// decoder reads them: partitioning, starting layout, column storage, TTL.
+// host's embedded engine writes them: a column table's storage, the TTL, then
+// the partitioning and the starting layout.
 func (f *tableFacets) tableAttributes(format protocol.SourceDocument_Format) []*protocol.SourceEntry {
 	var entries []*protocol.SourceEntry
 	add := func(key, value string) { entries = append(entries, field(key, value)) }
+	if storage := f.storage; storage != nil && format == protocol.SourceDocument_GO_ANNOTATIONS {
+		// The embedded engine writes the storage in lower case, which the
+		// decoder reads in either case.
+		add(tablesource.AttributeStore, "column")
+		if len(storage.GetHashColumns()) != 0 {
+			add(tablesource.AttributeHash, strings.Join(storage.GetHashColumns(), ","))
+		}
+		addCount(add, tablesource.AttributeShards, storage.GetPartitions())
+		if tiered := tieredTTL(storage); tiered != "" {
+			add(tablesource.AttributeColumnTTL, tiered)
+		}
+	}
+	if format == protocol.SourceDocument_GO_ANNOTATIONS {
+		for _, setting := range f.ttl() {
+			add(tablesource.PlatformPrefix+setting.Key, setting.GetValue().GetText())
+		}
+	}
 	if row := f.row; row != nil {
 		partitioning := row.GetPartitioningSettings()
 		addSwitch(add, tablesource.AttributeBySize, partitioning.GetPartitioningBySize())
@@ -412,21 +441,6 @@ func (f *tableFacets) tableAttributes(format protocol.SourceDocument_Format) []*
 		addCount(add, tablesource.AttributeUniformPartitions, row.GetUniformPartitions())
 		if len(row.GetPartitionAtKeys()) != 0 {
 			add(tablesource.AttributePartitionAtKeys, splitPoints(row.GetPartitionAtKeys()))
-		}
-	}
-	if storage := f.storage; storage != nil && format == protocol.SourceDocument_GO_ANNOTATIONS {
-		add(tablesource.AttributeStore, "COLUMN")
-		if len(storage.GetHashColumns()) != 0 {
-			add(tablesource.AttributeHash, strings.Join(storage.GetHashColumns(), ","))
-		}
-		addCount(add, tablesource.AttributeShards, storage.GetPartitions())
-		if tiered := tieredTTL(storage); tiered != "" {
-			add(tablesource.AttributeColumnTTL, tiered)
-		}
-	}
-	if format == protocol.SourceDocument_GO_ANNOTATIONS {
-		for _, setting := range f.ttl() {
-			add(tablesource.PlatformPrefix+setting.Key, setting.GetValue().GetText())
 		}
 	}
 	return entries

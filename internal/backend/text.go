@@ -18,6 +18,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -69,6 +70,8 @@ func textOf(value *protocol.Envelope) (string, error) {
 		return externalText(path, value)
 	case schema.StreamingQueryOperation:
 		return streamingText(value)
+	case schema.TopicOperation:
+		return topicText(path, value)
 	case schema.WorkloadOperation:
 		return workloadText(value)
 	case schema.ReplicationOperation:
@@ -174,7 +177,7 @@ func tableStatementText(value *protocol.Envelope, path string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return tablecreate.CopyStatement(path, copied)
+		return tablecreate.CopyStatement(path, value.GetOwner().GetSchema(), copied)
 	case tablecreate.RenameOperationKind:
 		rename, err := tablecreate.DecodeRename(value)
 		if err != nil {
@@ -184,6 +187,26 @@ func tableStatementText(value *protocol.Envelope, path string) (string, error) {
 	default:
 		return "", fmt.Errorf("%w: the native operation %s has no YQL statement", tablecreate.ErrNoTextForm, value.GetKind())
 	}
+}
+
+// topicText writes a topic operation as the statements the provider's Execute
+// runs for it, which are the ones the host's embedded engine writes for the
+// same change: one CREATE TOPIC, one DROP TOPIC, or the ALTER TOPIC
+// statements of an alteration, one to a line.
+func topicText(path string, value *protocol.Envelope) (string, error) {
+	normalized, err := schema.NormalizeTopicOperation(&protocol.ValueInput{Id: "text", Representation: protocol.ValueInput_OPERATION, Value: value})
+	if err != nil {
+		return "", err
+	}
+	previous, desired, err := schema.TopicSpecs(schema.TopicOperationChange(normalized.Value))
+	if err != nil {
+		return "", err
+	}
+	statements := topics.Statements(path, previous, desired)
+	if len(statements) == 0 {
+		return "", fmt.Errorf("topic operation changes nothing")
+	}
+	return strings.Join(statements, "\n"), nil
 }
 
 // streamingText writes a streaming query operation as its one YQL statement.

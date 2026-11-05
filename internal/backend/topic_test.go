@@ -193,6 +193,40 @@ func TestTopicPlanning_HappyPath(t *testing.T) {
 	}
 }
 
+// In the TEXT form a topic change is the statements the host's embedded
+// engine wrote into a migration file for it, which are the ones Execute runs
+// natively: one CREATE TOPIC, one ALTER TOPIC, one DROP TOPIC.
+func TestTopicTextForm_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		declared *ydbdecl.Topic
+		read     *native.DescribeTopicResult
+		want     string
+	}{
+		{"create", &ydbdecl.Topic{MinActivePartitions: 1, Consumers: []ydbdecl.Consumer{{Name: "worker"}}}, nil,
+			"CREATE TOPIC `app/events` (CONSUMER `worker`) WITH (min_active_partitions = 1);"},
+		{"alter", &ydbdecl.Topic{RetentionPeriod: "P2D", Consumers: []ydbdecl.Consumer{{Name: "worker"}, {Name: "audit", Important: true}}}, readTopic(),
+			"ALTER TOPIC `app/events` SET (min_active_partitions = 1, auto_partitioning_strategy = 'disabled', retention_period = Interval('P2D'), " +
+				"partition_write_speed_bytes_per_second = 1048576, partition_write_burst_bytes = 1048576, supported_codecs = ''), ADD CONSUMER `audit` WITH (important = TRUE);"},
+		{"drop", nil, readTopic(), "DROP TOPIC `app/events`;"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			capabilities := map[string]bool{"topics": true, "topic_consumer_availability_period": true, "transactional_ddl": false}
+			_, plan := topicPlan(c, test.declared, test.read, capabilities)
+			rendering := testplanning.RenderRequest(backend.Description(), plan, capabilities)
+			rendering.Form = protocol.RenderRequest_TEXT
+
+			rendered, err := backend.New().Render(t.Context(), rendering)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(rendered.Refusal, qt.IsNil)
+			c.Assert(rendered.Units, qt.HasLen, 1)
+			c.Assert(rendered.Units[0].GetSql(), qt.Equals, test.want)
+		})
+	}
+}
+
 // A change YDB cannot make in place, or one the target lacks a capability
 // for, is refused with the host's words and plans nothing.
 func TestTopicPlanning_FailurePath(t *testing.T) {
