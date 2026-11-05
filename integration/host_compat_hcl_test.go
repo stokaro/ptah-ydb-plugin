@@ -11,6 +11,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
@@ -50,12 +51,10 @@ func compatInspect(c *qt.C, directory string) (document, notes, reapplied string
 	return document, notes, reapplied
 }
 
-// Ported from the host's TestYDBCompatBinary_KeepsColumnFamiliesHCLCannotWrite,
-// TestYDBCompatBinary_KeepsTableSettingsHCLCannotWrite and the part of
-// TestYDBVectorIndexes_ApplyBackFromInspectedHCL that holds without HCL
-// blocks for this provider's table settings. HCL has no spelling for a column
-// family, a table's splitting settings, its changefeeds or a vector index's
-// settings through this provider. A TTL has one, its platform "ydb" block
+// Ported from the host's TestYDBCompatBinary_KeepsColumnFamiliesHCLCannotWrite
+// and TestYDBCompatBinary_KeepsTableSettingsHCLCannotWrite. HCL has no
+// spelling for a column family, a table's splitting settings or its
+// changefeeds through this provider. A TTL has one, its platform "ydb" block
 // (host_hcl_platform_test.go). `ptah-compat schema inspect` reports
 // that the table's settings are not in the document, and the document applied
 // back to the database it came from plans nothing: what a description leaves
@@ -65,11 +64,7 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 	hostCompat(testcheck.New(t))
 	plain := []string{"default compression=off"}
 	bySize := "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0"
-	for _, test := range []struct {
-		name, table, capability string
-		create                  []string
-		want                    heldTable
-	}{
+	for _, test := range []keptCase{
 		{name: "a column family", table: "docs",
 			create: []string{"CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `body` Utf8 FAMILY `cold`, PRIMARY KEY (`id`), FAMILY `cold` (COMPRESSION = 'lz4'))"},
 			want: heldTable{Storage: storedTable{Families: []string{"cold compression=lz4 columns=body", "default compression=off"}, Partitioning: bySize},
@@ -86,32 +81,67 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 			want: heldTable{Storage: storedTable{Families: plain, Partitioning: bySize},
 				Changefeeds: map[string]feedShape{"feed": {Mode: options.ChangefeedModeUpdates, Retention: 24 * time.Hour, Consumers: []string{"reader"}}},
 				Indexes:     make(map[string][2][]string)}},
-		{name: "a vector index", table: "vdocs", capability: "vector_indexes",
-			create: []string{"CREATE TABLE `{table}` (`id` Uint64 NOT NULL, `body` Utf8, `emb` String, PRIMARY KEY (`id`), " +
-				"INDEX `docs_emb` GLOBAL USING vector_kmeans_tree ON (`emb`) COVER (`body`) WITH (distance = cosine, vector_type = float, " +
-				"vector_dimension = 3, levels = 1, clusters = 2))"},
-			want: heldTable{Storage: storedTable{Families: plain, Partitioning: bySize},
-				Changefeeds: make(map[string]feedShape), Indexes: map[string][2][]string{"docs_emb": {{"emb"}, {"body"}}}}},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			c := testcheck.New(t)
-			requireCapability(c, targetCapabilities(c), test.capability)
-			listLosses(c)
-			opened, directory, database := lockFixture(c)
-			absolute := path.Join(database, directory, test.table)
-			emptyAtCleanup(c, opened, path.Join(database, directory))
-			for _, statement := range test.create {
-				c.Assert(execFixtureSchema(c.Context(), opened.DB, strings.ReplaceAll(statement, "{table}", absolute)), qt.IsNil, qt.Commentf("%s", statement))
-			}
-			before := heldTableOf(c, opened, absolute)
+		t.Run(test.name, func(t *testing.T) { inspectKeeps(testcheck.New(t), test) })
+	}
+}
 
-			_, notes, reapplied := compatInspect(c, directory)
+// keptCase is a table whose settings HCL cannot write: the statements that
+// create it and what it holds before and after its inspected document is
+// applied back.
+type keptCase struct {
+	name, table, capability string
+	create                  []string
+	want                    heldTable
+}
 
-			c.Assert(before, qt.DeepEquals, test.want)
-			c.Assert(notes, qt.Matches, `(?s).*table\.`+regexp.QuoteMeta(directory+"."+test.table)+`: [^\n]* (is|are) not represented in HCL.*`)
-			c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
-			c.Assert(heldTableOf(c, opened, absolute), qt.DeepEquals, test.want)
-		})
+// inspectKeeps creates the table of test, inspects it with ptah-compat, which
+// reports what the document cannot write, and applies the document back, which
+// plans nothing and leaves the table as it was.
+func inspectKeeps(c *qt.C, test keptCase) {
+	c.Helper()
+	requireCapability(c, targetCapabilities(c), test.capability)
+	listLosses(c)
+	opened, directory, database := lockFixture(c)
+	absolute := path.Join(database, directory, test.table)
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	for _, statement := range test.create {
+		c.Assert(execFixtureSchema(c.Context(), opened.DB, strings.ReplaceAll(statement, "{table}", absolute)), qt.IsNil, qt.Commentf("%s", statement))
+	}
+	before := heldTableOf(c, opened, absolute)
+
+	_, notes, reapplied := compatInspect(c, directory)
+
+	c.Assert(before, qt.DeepEquals, test.want)
+	c.Assert(notes, qt.Matches, `(?s).*table\.`+regexp.QuoteMeta(directory+"."+test.table)+`: [^\n]* (is|are) not represented in HCL.*`)
+	c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
+	c.Assert(heldTableOf(c, opened, absolute), qt.DeepEquals, test.want)
+}
+
+// The vector index row of the host's TestYDBVectorIndexes_ApplyBackFromInspectedHCL
+// for a host that does not read the provider's index kinds: HCL has no
+// spelling for a vector index there, the inspection reports it, and the
+// document applied back keeps it. A host that reads them writes the index
+// (TestHostCompatInspectedHCLCarriesTheVectorIndex_HappyPath).
+func TestHostCompatInspectedHCLKeepsAVectorIndexItCannotWrite_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	hostCompat(c)
+	requireHostWithout(c, provider.IndexKindsFeature)
+	inspectKeeps(c, keptCase{name: "a vector index", table: "vdocs", capability: "vector_indexes",
+		create: []string{"CREATE TABLE `{table}` (`id` Uint64 NOT NULL, `body` Utf8, `emb` String, PRIMARY KEY (`id`), " +
+			"INDEX `docs_emb` GLOBAL USING vector_kmeans_tree ON (`emb`) COVER (`body`) WITH (distance = cosine, vector_type = float, " +
+			"vector_dimension = 3, levels = 1, clusters = 2))"},
+		want: heldTable{Storage: storedTable{Families: []string{"default compression=off"}, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0"},
+			Changefeeds: make(map[string]feedShape), Indexes: map[string][2][]string{"docs_emb": {{"emb"}, {"body"}}}}})
+}
+
+// requireHostWithout skips a test whose host negotiates feature: what it
+// asserts holds for a host without the feature only.
+func requireHostWithout(c *qt.C, feature string) {
+	c.Helper()
+	host, manifest := hostManifest(c)
+	if hostNegotiates(c, host, manifest, feature) {
+		c.Skipf("the selected host negotiates %s", feature)
 	}
 }
 

@@ -121,7 +121,7 @@ func buildModel(kind string) *protocol.ValueModel {
 		"topic_observations":      "retain topic and consumer configuration, attributes and access metadata; omit partitions, topic/consumer stats and transient self fields; consumers sorted by name",
 		"changefeed_observations": "complete feed set per table sorted by name; each feed includes its child topic settings; initial scan presence retained, progress counters excluded",
 		"native_objects":          "retain view query plus table API attributes; coordination config except duplicate path; external source options and ordered external columns; transient self identity excluded",
-		"index_observations":      "all indexes of the owner table; complete kind-specific implementation tables; index and implementation lists sorted by name; column/key order retained; runtime statistics excluded",
+		"index_observations":      "all indexes of the owner table; complete implementation tables, none for a declared vector or full-text index; lists sorted by name; column/key order retained; runtime statistics excluded",
 	}
 	if kind == SecretProperties {
 		definition["secrets"] = "presence only; the server never returns the value; owners and access are independently observed common objects"
@@ -319,7 +319,7 @@ func normalizeObservation(kind string, owner *protocol.Reference, target proto.M
 		}
 	}
 	if indexes, ok := target.(*native.IndexObservations); ok {
-		if err := normalizeIndexes(indexes, nil); err != nil {
+		if err := normalizeIndexes(indexes); err != nil {
 			return err
 		}
 	}

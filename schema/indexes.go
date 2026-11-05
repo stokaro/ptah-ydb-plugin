@@ -131,14 +131,14 @@ func CaptureIndexes(owner *protocol.Reference, observed *native.IndexObservation
 }
 
 // validateImplementationTables checks the tables that implement an index:
-// each one YDB uses for its kind, once, or none where optional reports that
-// the index may state none (see normalizeIndexes).
-func validateImplementationTables(index *native.ObservedIndex, optional func(*native.TableIndexDescription) bool) error {
+// each one YDB uses for its kind, once, or none for a vector or full-text
+// index (see normalizeIndexes).
+func validateImplementationTables(index *native.ObservedIndex) error {
 	names, err := ImplementationNames(index.Description)
 	if err != nil {
 		return err
 	}
-	if len(names) != len(index.Tables) && (len(index.Tables) != 0 || optional == nil || !optional(index.Description)) {
+	if len(names) != len(index.Tables) && (len(index.Tables) != 0 || CommonIndex(index.Description)) {
 		return fmt.Errorf("incomplete YDB index implementation tables")
 	}
 	tables := make(map[string]bool)
@@ -155,11 +155,11 @@ func validateImplementationTables(index *native.ObservedIndex, optional func(*na
 }
 
 // normalizeIndexes validates and sorts an index set. A read describes every
-// table that implements each index. A declaration converted to this form may
-// state none of them for an index optional reports, which is nil for a read: a
-// source declares a vector or full-text index without the tables YDB gives it,
-// and the planner writes none.
-func normalizeIndexes(value *native.IndexObservations, optional func(*native.TableIndexDescription) bool) error {
+// table that implements each index. A declaration, and the observation the
+// host predicts from one, may state none of them for a vector or full-text
+// index: a source declares one without the tables YDB gives it, and the
+// planner writes none.
+func normalizeIndexes(value *native.IndexObservations) error {
 	seen := make(map[string]bool)
 	for _, index := range value.GetIndexes() {
 		if err := validateIndex(index.GetDescription()); err != nil {
@@ -172,7 +172,7 @@ func normalizeIndexes(value *native.IndexObservations, optional func(*native.Tab
 		if index.Description.SizeBytes != 0 {
 			return fmt.Errorf("index properties cannot contain runtime statistics")
 		}
-		if err := validateImplementationTables(index, optional); err != nil {
+		if err := validateImplementationTables(index); err != nil {
 			return err
 		}
 		slices.SortFunc(index.Tables, func(a, b *native.ImplementationTable) int { return strings.Compare(a.Name, b.Name) })

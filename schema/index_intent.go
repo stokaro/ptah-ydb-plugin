@@ -30,10 +30,6 @@ func indexIntents(observed *native.IndexObservations) (*native.IndexSetIntent, e
 	return result, nil
 }
 
-// nativeOnly reports a vector or full-text index, which a declaration states
-// without the tables that implement it.
-func nativeOnly(index *native.TableIndexDescription) bool { return !CommonIndex(index) }
-
 func indexObservations(intent *native.IndexSetIntent) (*native.IndexObservations, error) {
 	result := &native.IndexObservations{}
 	for _, index := range intent.Indexes {
@@ -58,7 +54,7 @@ func indexObservations(intent *native.IndexSetIntent) (*native.IndexObservations
 		}
 		result.Indexes = append(result.Indexes, observed)
 	}
-	if err := normalizeIndexes(result, nativeOnly); err != nil {
+	if err := normalizeIndexes(result); err != nil {
 		return nil, err
 	}
 	return result, nil
