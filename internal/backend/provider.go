@@ -122,6 +122,8 @@ func providerFeatures() []string {
 		provider.LocksFeature,
 		provider.MetadataFeature,
 		provider.AnalyzeSQLFeature,
+		// The host reads YQL text by the provider's scanner; see ScanSQL.
+		provider.ScanSQLFeature,
 		provider.DevDatabaseFeature,
 		provider.LintFeature,
 		provider.TypeRowsFeature,

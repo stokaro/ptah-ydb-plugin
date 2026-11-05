@@ -3297,6 +3297,19 @@ Cancellation returns no analysis. The native CLI still requires integration of
 YDB's table comparison rules; the provider does not claim the common table
 identity contract to bypass that requirement.
 
+### Text scanning
+
+The provider lists `sql.scan` (contract 25.26). `ScanSQL` returns the tokens of
+one YQL text with the same scanner, so the host reads YQL wherever it reads SQL
+text without parsing it: the lineage of view bodies, the indentation of the
+`sql` template function, and the scans of migration bodies. Both quote styles
+and `@@...@@` delimit strings, a type suffix belongs to its string, and a
+backticked name carries the path it stands for. A `--!` comment is a setting
+the server reads only at the head of a text; the host clears `head` for a range
+inside one, where the comment is a comment. A string whose escape YDB refuses
+carries no value. A host of an earlier contract never calls the RPC and reads
+YQL by its shared rules.
+
 ## Migration lint
 
 The provider serves the SDK's `lint.migrations` service for the `ydb` engine
