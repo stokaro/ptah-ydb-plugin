@@ -50,7 +50,7 @@ func projectCreation(input *protocol.TableCreationInput, index int, targetFeatur
 		// choices the declaration leaves out stay unspecified.
 		compiled, err := CompileColumnTable(owner, input.Declaration, caps)
 		if err != nil {
-			return nil, err
+			return nil, declarationRefusal(owner, err)
 		}
 		result := &protocol.ProjectedTableCreation{Subject: proto.CloneOf(input.Subject), ColumnPrimaryKeysPrepared: true, ColumnPrimaryKeys: slices.Clone(compiled.PrimaryKey)}
 		if columns {
@@ -60,7 +60,7 @@ func projectCreation(input *protocol.TableCreationInput, index int, targetFeatur
 	}
 	compiled, err := predictedCreation(owner, input.Declaration, caps)
 	if err != nil {
-		return nil, err
+		return nil, declarationRefusal(owner, err)
 	}
 	result := &protocol.ProjectedTableCreation{Subject: proto.CloneOf(input.Subject), ColumnPrimaryKeysPrepared: true, ColumnPrimaryKeys: slices.Clone(compiled.PrimaryKey)}
 	if columns {

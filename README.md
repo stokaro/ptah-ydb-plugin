@@ -786,8 +786,11 @@ errors the provider receives: `authored.New` marks one, and `authored.Status`
 sends it as the reason, with the error's whole text as the status message,
 which no host prints. The reasons the provider gives are its refusals of a
 connection address, of a capability the target lacks, of a lock the server
-refuses this user, and the refusals whose text is a fixed sentence, such as a
-closed session or a reached handle limit. A YDB driver's error is never a
+refuses this user, the refusals whose text is a fixed sentence, such as a
+closed session or a reached handle limit, and the refusal of a table's
+declaration by table preparation or the creation projection. That last reason
+names the table and gives the sentence schema validation reports for the same
+declaration; the compilation behind it reads no server. A YDB driver's error is never a
 reason, because YDB can quote a statement and its values, or a credential
 source: the host prints its code alone.
 
@@ -2800,9 +2803,14 @@ that table itself.
 - The rules above are those of global sync, async and unique indexes. A vector
   or full-text index follows its own (see
   [Vector and full-text indexes](#vector-and-full-text-indexes)). An index to
-  add that states its partitioning or read replicas is refused by name: the step
-  that adds it carries none, so add the index first and declare its settings in
-  a later plan.
+  add that states its partitioning or read replicas is added without them,
+  since no call that adds an index takes them, and a
+  `row-table-index-settings/N` step after the addition gives it the declared
+  ones over the settings YDB gives a new index (automatic partitioning by size
+  at 2048 MB, none by load, at least one partition, no read replicas; measured
+  on 25.1.4.7 and 26.2.1.14), as the host's embedded engine writes `ALTER INDEX
+  ... SET` after `ADD INDEX`. Execution of that step requires the new index to
+  hold exactly those settings.
 - A unique index added to a table that exists needs
   `unique_index_on_existing_table`. YDB 25.1 and 25.2 never add one, and later
   lines keep it behind `EnableAddUniqueIndex`, off by default; without it the

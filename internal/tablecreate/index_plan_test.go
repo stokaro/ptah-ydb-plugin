@@ -214,8 +214,6 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 			`index "by_label" holds a global index on \(label\), but the declaration states a global async index on \(label\); YDB cannot alter.*`},
 		{"the key order changed", indexCase(declaredIndexes(indexJSON("globalIndex", "by_both", []string{"extra", "label"}, nil)), heldIndexes(indexJSON("globalIndex", "by_both", labelAndData, nil)), "label", "extra"),
 			`index "by_both" holds a global index on \(label, extra\), but the declaration states a global index on \(extra, label\).*`},
-		{"a declared index states settings", indexCase(declaredIndexes(settings), heldIndexes(), "label"),
-			`the declared index "by_label" states its partitioning or read replicas, which this provider changes only on an index the table holds; add the index first, then declare them`},
 		{"a vector index on a target without vector indexes", indexCase(vectorIndexes(false), heldIndexes(), "label"),
 			`index "by_embedding" declares vector settings, which requires target capability vector_indexes, unavailable on this ydb target .*`},
 		// YDB refuses a unique index on a table that exists after the call
@@ -286,4 +284,29 @@ func TestIndexPlan_OrdersAgainstColumnSteps(t *testing.T) {
 			c.Assert(edges(plan), qt.DeepEquals, test.edges)
 		})
 	}
+}
+
+// An index the plan adds with its settings is added without them, since no
+// call that adds an index takes them, and a change after the addition gives
+// it the declared ones over the settings YDB gives a new index, as the host's
+// embedded engine writes ALTER INDEX ... SET after ADD INDEX.
+func TestIndexPlan_AddsAnIndexWithItsSettings(t *testing.T) {
+	c := testcheck.New(t)
+	plan, err := backend.New().PlanFeatures(c.Context(), alterRequest(c, indexCase(declaredIndexes(settings), heldIndexes(), "label")))
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	steps := plan.Contributions[0].Steps
+	c.Assert(steps, qt.HasLen, 2)
+	c.Assert(steps[0].Id.Name, qt.Equals, "row-table-add-index/000000")
+	c.Assert(alterationJSON(c, steps[0]), qt.JSONEquals, jsonValue(c, `{"addIndexes":[{"name":"by_label","indexColumns":["label"],"globalIndex":{}}]}`))
+	c.Assert(steps[1].Id.Name, qt.Equals, "row-table-index-settings/000000")
+	change, err := tablecreate.DecodeIndexSettings(steps[1].Operation.Value.Value)
+	c.Assert(err, qt.IsNil)
+	set, err := protojson.Marshal(change.Set)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(set), qt.JSONEquals, jsonValue(c, `{"partitioningSettings":{"minPartitionsCount":"4"}}`))
+	held, err := protojson.Marshal(change.Held)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(held), qt.JSONEquals, jsonValue(c, `{"name":"by_label","indexColumns":["label"],"globalIndex":{"settings":{`+heldIndexDefaults+`}}}`))
+	c.Assert(edges(plan), qt.DeepEquals, []string{"row-table-add-index/000000 -> row-table-index-settings/000000"})
 }

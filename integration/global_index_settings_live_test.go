@@ -76,8 +76,10 @@ func (f *facetFixture) heldSettingsOf(c *qt.C, name string) string {
 // plans nothing too.
 //
 // The host also creates the indexes with their settings in one plan, a CREATE
-// TABLE and an ALTER INDEX after it. This provider adds no setting to an index
-// it creates in the same plan, so the indexes are created with the table first.
+// TABLE and an ALTER INDEX after it. A new table takes its global indexes from
+// the common declaration here, which states no settings, so the indexes are
+// created with the table first; TestGlobalIndexAddedWithItsSettingsSubprocess
+// adds one with its settings in one plan.
 func TestGlobalIndexSettingsRoundTripSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newItemsFixture(c)
@@ -135,4 +137,34 @@ func TestGlobalIndexSettingsRoundTripSubprocess(t *testing.T) {
 	c.Assert(fixture.compareIndexes(c, itemsIndexSet(nil)).Changes, qt.HasLen, 0)
 	c.Assert(fixture.heldSettingsOf(c, "idx_items_kind"), qt.JSONEquals, decodedJSON(c,
 		`{"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"4","maxPartitionsCount":"9"}}`))
+}
+
+// TestGlobalIndexAddedWithItsSettingsSubprocess is the partitioning half of
+// the host's TestYDBGlobalIndexes_AddedToATableThatExists. An index added to a
+// table that holds rows, with its settings, in one plan, is an ADD INDEX
+// without them and an ALTER INDEX after it that gives them over the settings
+// YDB gives a new index. The index reads back with the declared settings and
+// the next plan has nothing to change.
+func TestGlobalIndexAddedWithItsSettingsSubprocess(t *testing.T) {
+	c := testcheck.New(t)
+	fixture := newFacetFixtureListing(c, ", sku Utf8, kind Utf8, price Int64, INDEX idx_items_kind GLOBAL SYNC ON (kind), INDEX uq_items_sku GLOBAL UNIQUE SYNC ON (sku)",
+		"", provider.TextUnitsFeature)
+	fixture.columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true},
+		{Name: "payload", Type: "Utf8", Nullable: true}, {Name: "sku", Type: "Utf8", Nullable: true}, {Name: "kind", Type: "Utf8", Nullable: true},
+		{Name: "price", Type: "Int64", Nullable: true}}
+	c.Assert(fixture.exec(c, "UPSERT INTO "+fixture.recordsPath()+" (id, sku, kind, price) VALUES (1, 'a'u, 'tool'u, 10)"), qt.IsNil)
+
+	declared := itemsIndexSet(map[string]string{"idx_items_price": `"partitioningSettings":{"partitioningByLoad":"ENABLED","minPartitionsCount":"2"}`})
+	plan := fixture.indexPlan(c, declared)
+	names, statements := fixture.planned(c, plan)
+	c.Assert(names, qt.DeepEquals, []string{"row-table-add-index/000000", "row-table-index-settings/000000"})
+	c.Assert(statements, qt.DeepEquals, []string{
+		"ALTER TABLE `<dir>/records` ADD INDEX `idx_items_price` GLOBAL ASYNC ON (`price`) COVER (`kind`, `sku`);",
+		"ALTER TABLE `<dir>/records` ALTER INDEX `idx_items_price` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, " +
+			"AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2);",
+	})
+	fixture.run(c, "added-with-settings", plan)
+	c.Assert(fixture.heldSettingsOf(c, "idx_items_price"), qt.JSONEquals, decodedJSON(c,
+		`{"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"2"}}`))
+	c.Assert(fixture.compareIndexes(c, declared).Changes, qt.HasLen, 0)
 }

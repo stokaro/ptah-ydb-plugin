@@ -8,6 +8,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
 )
@@ -225,14 +226,22 @@ func planIndexes(in indexInput) ([]indexChange, []indexSettingsChange, string) {
 			if scope := want.scope(); scope != "" {
 				return nil, nil, fmt.Sprintf("the declared index %q is outside the global secondary indexes this provider alters: it %s", name, scope)
 			}
-			if want.statesSettings() {
-				return nil, nil, fmt.Sprintf("the declared index %q states its partitioning or read replicas, which this provider changes only on an index the table holds; "+
-					"add the index first, then declare them", name)
-			}
 			if reason := declaredColumns(name, want, in.columns); reason != "" {
 				return nil, nil, reason
 			}
-			changes = append(changes, indexChange{add: proto.CloneOf(wantedByName[name])})
+			added := withoutIndexSettings(wantedByName[name])
+			changes = append(changes, indexChange{add: added})
+			// No call that adds an index takes its settings, so the index
+			// takes YDB's and a change of its own gives it the declared ones,
+			// as the host's embedded engine writes ALTER INDEX ... SET after
+			// ADD INDEX.
+			change, reason := planIndexSettings(name, want.settings, newIndexDescription(added))
+			if reason != "" {
+				return nil, nil, reason
+			}
+			if change != nil {
+				settings = append(settings, *change)
+			}
 		case present:
 			if scope := have.scope(); scope != "" {
 				return nil, nil, fmt.Sprintf("the index %q the declaration leaves out is outside the global secondary indexes this provider alters: it %s", name, scope)
@@ -297,4 +306,38 @@ func tableIndex(spec *native.IndexIntent) (*Ydb_Table.TableIndex, error) {
 		return nil, fmt.Errorf("YDB adds only global sync, async and unique indexes to an existing table")
 	}
 	return result, nil
+}
+
+// withoutIndexSettings is a copy of a global sync, async or unique index
+// without the settings of its kind: the call that adds it takes none.
+func withoutIndexSettings(spec *native.IndexIntent) *native.IndexIntent {
+	result := proto.CloneOf(spec)
+	switch kind := result.Type.(type) {
+	case *native.IndexIntent_GlobalIndex:
+		kind.GlobalIndex.Settings = nil
+	case *native.IndexIntent_GlobalAsyncIndex:
+		kind.GlobalAsyncIndex.Settings = nil
+	case *native.IndexIntent_GlobalUniqueIndex:
+		kind.GlobalUniqueIndex.Settings = nil
+	}
+	return result
+}
+
+// newIndexDescription is the index added as the table describes it once YDB
+// builds it: the settings a new index takes whatever its table holds, measured
+// on 25.1.4.7 and 26.2.1.14 as automatic partitioning by size at 2048 MB, none
+// by load, at least one partition, and no read replicas.
+func newIndexDescription(added *native.IndexIntent) *native.TableIndexDescription {
+	settings := &native.GlobalIndexSettings{PartitioningSettings: &Ydb_Table.PartitioningSettings{
+		PartitioningBySize: Ydb.FeatureFlag_ENABLED, PartitionSizeMb: 2048, PartitioningByLoad: Ydb.FeatureFlag_DISABLED, MinPartitionsCount: 1}}
+	result := &native.TableIndexDescription{Name: added.Name, IndexColumns: slices.Clone(added.IndexColumns), DataColumns: slices.Clone(added.DataColumns)}
+	switch added.Type.(type) {
+	case *native.IndexIntent_GlobalAsyncIndex:
+		result.Type = &native.TableIndexDescription_GlobalAsyncIndex{GlobalAsyncIndex: &native.GlobalAsyncIndex{Settings: settings}}
+	case *native.IndexIntent_GlobalUniqueIndex:
+		result.Type = &native.TableIndexDescription_GlobalUniqueIndex{GlobalUniqueIndex: &native.GlobalUniqueIndex{Settings: settings}}
+	default:
+		result.Type = &native.TableIndexDescription_GlobalIndex{GlobalIndex: &native.GlobalIndex{Settings: settings}}
+	}
+	return result
 }
