@@ -20,6 +20,10 @@ through the public Ptah SDK. It supports anonymous, URL user/password, and URL t
 Session receipts contain the selected database and measured server version.
 The implementation does not import the Ptah application module.
 
+The [documentation](docs/README.md) says what YDB does in Ptah, from installing
+and selecting the provider to the objects it declares and how it runs a
+migration.
+
 The provider ID is `github.com/stokaro/ptah-ydb-plugin`. Model kinds use the `github.com/stokaro/ptah-ydb-plugin/` namespace. This changes
 the experimental model identities; pre-v1, no compatibility with the earlier
 unpublished names is owed. Older envelopes and plans are refused.
@@ -584,6 +588,40 @@ created again around the plan's other statements, which the native call gives
 the owner and the access entries of the old one, and every topic
 operation. A host that does not list the feature gets native units.
 
+## Reverse migrations
+
+The provider lists `models.reverse` (contract 25.19, ADR 0062 in Ptah) and
+declares one reversal service, `ydb-objects`, for the changes of its
+standalone objects: coordination nodes, secrets, topics, streaming queries,
+external data sources and external tables, resource pools and classifiers,
+async replications and transfers. `ptah migrations generate` writes the down
+file of such a change from this service's reverse of it, as the host's
+embedded engine writes it from its own:
+
+- The reverse asks for the declaration of what the forward change found, the
+  conversion of the read, and finds what the forward change leaves, the
+  conversion of its declaration. A creation reverses to a drop, a drop to a
+  creation and a change to the settings the object held. The prediction of
+  what the forward change leaves is the forward state the host plans the
+  reverse against; it is never read from the server.
+- The down file carries the strategy and the limitations, in the embedded
+  engine's words: a dropped topic loses its messages and its consumers'
+  positions, a dropped coordination node its semaphores, a restored workload
+  setting cannot undo the queries run under the forward one.
+- A rotated secret has nothing to run in reverse: the value it replaced was
+  never read. A secret created again takes the value of the variable for its
+  path when the rollback runs.
+- A changed streaming query text keeps `allow_state_reset` in the reverse,
+  which resets the query's checkpoint again.
+
+A change of a table's own settings has no reversal yet: for a change of a row
+table's TTL, partitioning, families, indexes or changefeeds, or of a column
+table's storage, `migrations generate` writes no migration, and the host
+names the change kind that has no reversal. A host that does not list the
+feature gets no reversal service and refuses every such change the same way.
+A topic reverses like any other object, but no migration file holds a topic
+(see [Text units](#text-units)).
+
 ## Common objects
 
 The provider lists `schema.common-objects` (contract 25.3, ADR 0033 in Ptah),
@@ -598,7 +636,7 @@ The comments of a table the host creates, of its columns and of its indexes,
 and of a column or an index it adds to a table, reach the provider as comment
 steps after the step that creates the object, as for any comment change. The
 provider takes them off the declaration it creates the table from, and runs
-the steps after its own steps on that table.
+the steps after its own steps on that table, with the exceptions below.
 
 Views and comments use these shared stages:
 
@@ -608,7 +646,7 @@ Views and comments use these shared stages:
 | PrepareCommonObjects | The query in the server's form: its tokens joined by single spaces, comments and terminators left out | As declared |
 | ValidateSchema | Refuses a view without a query, `WITH CHECK OPTION`, view attributes and materialized views | Refuses what an attribute cannot hold: a key over 100 bytes, a value over 4096 bytes, text that is not UTF-8, more than 10240 bytes on one table |
 | Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
-| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes |
+| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes; a comment on the table or a column also skips a step that changes only an index |
 
 The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
 two- or three-character operator is one token except `>>`, which YDB writes
@@ -625,6 +663,12 @@ keeps the attribute once the column is gone and would give it to a column
 added later under that name. The host sends that step for each dropped column
 that held a comment (stokaro/ptah#5280), in its comment window, so it runs
 before the removal.
+
+A comment on a table or on one of its columns is not ordered after a step that
+changes only an index of the table, such as an index's addition. The host
+places the comment of a column it adds right after the column, before the
+index additions, and the index step changes nothing such a comment names. A
+comment on an index still follows the steps on its table.
 
 YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table

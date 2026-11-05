@@ -18,7 +18,8 @@ import (
 
 // hostApply runs the pinned host's `schema apply` over one Go source with this
 // provider selected for ydb, against the test address, restricted to the
-// fixture directory, and returns what the host printed and how it exited.
+// fixture directory, and returns the plan's units as appliedUnits lists them,
+// what the host printed, and how it exited.
 // YDB runs no DDL in a transaction, and the host requires the run to say so for
 // a provider's steps.
 func hostApply(c *qt.C, directory, source string) (string, error) {
@@ -28,12 +29,12 @@ func hostApply(c *qt.C, directory, source string) (string, error) {
 	c.Assert(os.WriteFile(filepath.Join(root, "entities.go"), []byte(source), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", root, "--schemas", directory)
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
+	var report, printed bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &report, &printed
 	err := cmd.Run()
-	return output.String(), err
+	return appliedUnits(report.Bytes(), printed.String()), err
 }
 
 // hostItems declares items in the fixture directory, with the given further

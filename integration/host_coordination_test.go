@@ -30,7 +30,8 @@ func hostApplySource(c *qt.C, directory, format, text string) (string, error) {
 
 // hostApplySelected is hostApplySource over the comma-separated selectors
 // given, such as a directory and the database root, with the further flags
-// given, such as --allow-table-rebuild.
+// given, such as --allow-table-rebuild. The output starts with the plan's
+// units as appliedUnits lists them.
 func hostApplySelected(c *qt.C, selectors, format, text string, flags ...string) (string, error) {
 	c.Helper()
 	host, manifest := hostManifest(c)
@@ -43,13 +44,13 @@ func hostApplySelected(c *qt.C, selectors, format, text string, flags ...string)
 	}
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	arguments := append([]string{"schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+	arguments := append([]string{"schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", selectors}, slices.Concat(flags, source)...)
 	cmd := exec.CommandContext(ctx, host, arguments...)
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
+	var report, printed bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &report, &printed
 	err := cmd.Run()
-	return output.String(), err
+	return appliedUnits(report.Bytes(), printed.String()), err
 }
 
 // nodeSettings is what the server holds of a coordination node: the settings
