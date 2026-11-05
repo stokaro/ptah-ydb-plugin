@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"maps"
 	"net/url"
 	"slices"
@@ -222,6 +221,10 @@ func negotiatedFeatures(ctx context.Context) []string {
 // which 25.4 and later take and 25.1 to 25.3 read as a missing name
 // (`PASSWORD_SECRET_NAME requires key`).
 //
+// unique_index_on_existing_table is false on every line: 25.1 and 25.2 add
+// no unique index to a table that exists, and later lines keep it behind
+// EnableAddUniqueIndex, off by default, which the flags decide where the
+// address names the monitoring endpoint.
 // index_rename is true on every line: YDB renames an index in place with
 // EnableMoveIndex on, its default from 25.1.4.7 to 26.2.1.14, and the flag
 // decides it where the address names the monitoring endpoint. A host that
@@ -252,7 +255,7 @@ func sessionCapabilities(version string) map[string]bool {
 		tablecreate.LocalBloomIndexesCapability: releaseline.AtLeast(version, 26, 2), tablecreate.LocalNgramIndexesCapability: releaseline.AtLeast(version, 26, 2),
 		tablecreate.LocalMinMaxIndexesCapability: false,
 		replication.CapabilityReplication:        true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
-		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, tablecreate.IndexRenameCapability: true}
+		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, tablecreate.UniqueIndexOnExistingTableCapability: false, tablecreate.IndexRenameCapability: true}
 }
 
 // indexRenames returns capabilities with index_rename true only for a host
@@ -282,7 +285,9 @@ func clusterCapabilities(ctx context.Context, opened *connection.Connection, ver
 	}
 	flags, err := featureflags.Decode(body, opened.Database())
 	if err != nil {
-		return nil, fmt.Errorf("read the YDB feature flags: %w", err)
+		// Decode writes its refusals itself and names a flag or the
+		// database at most, so the refusal is a reason.
+		return nil, authored.Wrap(err, "read the YDB feature flags: "+err.Error())
 	}
 	return flags.Refine(sessionCapabilities(version)), nil
 }

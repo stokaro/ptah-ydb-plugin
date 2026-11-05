@@ -225,7 +225,8 @@ func compileColumn(table string, column *protocol.DeclaredColumn, settings *nati
 	if err != nil {
 		return nil, unsupported("%s", err)
 	}
-	stored, sequence, err := serialColumn(fmt.Sprintf("column %q of table %q", column.Name, table), column, mapping, caps)
+	subject := fmt.Sprintf("column %q of table %q", column.Name, table)
+	stored, sequence, err := serialColumn(subject, column, mapping, caps)
 	if err != nil {
 		return nil, err
 	}
@@ -250,10 +251,19 @@ func compileColumn(table string, column *protocol.DeclaredColumn, settings *nati
 	if settings == nil {
 		return result, nil
 	}
-	if err := only(settings, "family", "literal", "drop_default"); err != nil {
+	if err := only(settings, "family", "literal", "sequence", "drop_default"); err != nil {
 		return nil, err
 	}
-	if settings.GetDefaultValue() != nil && (column.DefaultSet || column.DefaultValue != "" || sequence != nil) {
+	// A declaration converted from a read states a column's default twice,
+	// as the common column's default and as the native one, and the two must
+	// agree. Any other declaration states a default once.
+	switch {
+	case settings.GetSequence() != nil:
+		if err := sameSerial(subject, column.Name, stored, sequence, settings.GetSequence()); err != nil {
+			return nil, err
+		}
+	case settings.GetLiteral() != nil && proto.Equal(settings.GetLiteral(), result.GetFromLiteral()):
+	case settings.GetDefaultValue() != nil && (column.DefaultSet || column.DefaultValue != "" || sequence != nil):
 		return nil, unsupported("a column default must have one declaration, common or native")
 	}
 	result.Family = settings.Family

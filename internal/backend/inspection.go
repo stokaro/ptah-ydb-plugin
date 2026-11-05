@@ -137,9 +137,9 @@ func (s *session) workload() (func(context.Context) (nativeapi.HeldWorkload, err
 	case !s.capabilities[workload.CapabilityResourcePools]:
 		return nil, "The target does not keep resource pools, so its empty system views establish no absence; " + workload.FlagHint
 	}
-	return func(ctx context.Context) (nativeapi.HeldWorkload, error) {
+	return nativeapi.RoutedRead(func(ctx context.Context) (nativeapi.HeldWorkload, error) {
 		return nativeapi.ReadWorkload(ctx, s.connection.DB, s.database)
-	}, ""
+	}), ""
 }
 
 // columnTables reads a column table's monitoring description with the

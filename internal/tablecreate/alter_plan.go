@@ -197,6 +197,9 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 		}
 	}
 	indexes = append(claimed, indexes...)
+	if reason := uniqueAdditionRefusal(table.Subject, indexes, capabilities); reason != "" {
+		return alterationChanges{}, reason, nil
+	}
 	// The changefeeds are managed by a declaration that states them, and by a
 	// source that describes the changefeeds of every table it declares. Without
 	// the table's own read, a changefeed the table already holds would look
@@ -241,6 +244,30 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 		return alterationChanges{}, reason, err
 	}
 	return alterationChanges{family: change, ttl: ttl, partitioning: partitioning, indexes: indexes, indexSettings: indexSettings, changefeeds: feeds}, "", nil
+}
+
+// UniqueIndexOnExistingTableCapability is a unique index added to a table
+// that exists, as the host's vocabulary spells it.
+const UniqueIndexOnExistingTableCapability = "unique_index_on_existing_table"
+
+// uniqueAdditionRefusal refuses, in the host's embedded engine's words, a
+// unique index added to table, which exists, on a session without
+// unique_index_on_existing_table. YDB refuses one there after the call
+// (`Adding a unique index to an existing table is disabled`): 25.1 and 25.2
+// always, and later lines with EnableAddUniqueIndex off, its default. A table
+// the plan creates takes its unique indexes in its CreateTable request and
+// needs no capability.
+func uniqueAdditionRefusal(table *protocol.ComparisonIdentity, changes []indexChange, capabilities map[string]bool) string {
+	if capabilities[UniqueIndexOnExistingTableCapability] {
+		return ""
+	}
+	for _, change := range changes {
+		if change.add.GetGlobalUniqueIndex() != nil {
+			return fmt.Sprintf("adding unique index %q to table %q, which exists already, which requires target capability %s, unavailable on this ydb target",
+				change.add.GetName(), table.GetSchema().GetSource()+"."+table.GetName().GetSource(), UniqueIndexOnExistingTableCapability)
+		}
+	}
+	return ""
 }
 
 // heldIndexNames lists the indexes a table holds.

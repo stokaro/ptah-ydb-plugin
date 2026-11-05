@@ -205,8 +205,11 @@ say. When the address names a monitoring endpoint, opening a session reads
 `/viewer/json/feature_flags?database=<db>` and folds the flags that gate a
 capability the provider owns into the session's capabilities, `false`
 included. A failed read fails the session rather than falling back to the
-defaults, as in the host's embedded engine. Without the endpoint the session
-reports the defaults of every supported line.
+defaults, as in the host's embedded engine. The refusal is a reason the host
+prints, and it names the right a user lacks: on 26.x the page is served only
+to a user with `DESCRIBE SCHEMA` on the database. What the endpoint answered
+stays out of the reason. Without the endpoint the session reports the
+defaults of every supported line.
 
 | Capability | Flag | Default |
 | --- | --- | --- |
@@ -220,6 +223,7 @@ reports the defaults of every supported line.
 | `full_text_indexes` | `EnableFulltextIndex` | `false` through 26.1, `true` from 26.2 |
 | `local_bloom_indexes` | `EnableLocalBloomFilterIndex` | `false` through 26.1, `true` from 26.2 |
 | `local_ngram_indexes` | `EnableLocalBloomNgramFilterIndex` | `false` through 26.1, `true` from 26.2 |
+| `unique_index_on_existing_table` | `EnableAddUniqueIndex` | `false` on every line; 25.1 and 25.2 do not list the flag |
 | `index_rename` | `EnableMoveIndex` | `true` on every line from 25.1 to 26.2, for a host that lists `planning.index-renames` |
 | `local_min_max_indexes` | `EnableLocalMinMaxIndex` | `false` on every line from 25.1 to 26.2 |
 
@@ -563,7 +567,9 @@ YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table
 service, after checking that the object is in the session's database or realm,
 is a row table or a view of the kind the statement names, and for a non-empty
-comment has the column or the index. A unit holding a comment statement beside
+comment has the column or the index. A statement whose path holds nothing, or
+one the session may not see, is refused before any write with a message that
+names the path. A unit holding a comment statement beside
 other statements, such as a commented view, runs as the queries a migration
 file is split into, one statement after another. A comment statement in a
 transaction, or one that cannot be read, refuses the batch before any unit
@@ -784,11 +790,12 @@ credential. Package `internal/authored` keeps such sentences apart from the
 errors the provider receives: `authored.New` marks one, and `authored.Status`
 sends it as the reason, with the error's whole text as the status message,
 which no host prints. The reasons the provider gives are its refusals of a
-connection address, of a capability the target lacks, a declared external
-object among them, of a lock the server refuses this user, of a streaming
-query body changed without `allow_state_reset`, the refusals whose text is a
-fixed sentence, such as a closed session or a reached handle limit, and the
-refusal of a table's declaration by table preparation or the creation
+connection address, of a monitoring page it could not read, of a capability
+the target lacks, a declared external object among them, of a lock the server
+refuses this user, of a streaming query body changed without
+`allow_state_reset`, the refusals whose text is a fixed sentence, such as a
+closed session or a reached handle limit, and the refusal of a table's
+declaration by table preparation or the creation
 projection. That last reason names the table and gives the sentence schema
 validation reports for the same declaration; the compilation behind it reads no
 server. A YDB driver's error is never a
@@ -1992,7 +1999,17 @@ unit, which one query takes.
 
 Execution reads `.sys/resource_pools` and `.sys/resource_pool_classifiers`
 before the first statement and refuses objects that changed since the plan read
-them; it runs each statement once and reads both views back. Inspection reads
+them; it runs each statement once and reads both views back. The workload
+manager reads its classifiers from a cache, so for a while after a classifier
+and its pool are dropped it can still route a query to the pool, and YDB
+refuses that query with `Failed to resolve pool id` before it runs it. A read of
+the views refused so is sent again, for up to 20 seconds, for an inspection and
+for an execution's check and confirmation alike; a statement is never sent
+twice. A classifier with no member name routes every query of the database,
+the server's own included. Measured on 25.1.4.7: while such a classifier
+routed every query to a pool that admits none, a read of
+`.sys/resource_pool_classifiers` sent to the `default` pool ended in
+`System view: timeout`. Inspection reads
 the views on a target with resource pools, for a read of the whole database or
 one that selects the root, `/`: a read filtered to other directories cannot
 report what belongs to the database, so it leaves both kinds uninspected. A dev
@@ -2822,8 +2839,16 @@ that table itself.
   on 25.1.4.7 and 26.2.1.14), as the host's embedded engine writes `ALTER INDEX
   ... SET` after `ADD INDEX`. Execution of that step requires the new index to
   hold exactly those settings.
-- A unique index needs a server that accepts `ALTER TABLE ... ADD INDEX ...
-  GLOBAL UNIQUE`; YDB 25.1 refuses it unless `enable_add_unique_index` is set.
+- A unique index added to a table that exists needs
+  `unique_index_on_existing_table`. YDB 25.1 and 25.2 never add one, and later
+  lines keep it behind `EnableAddUniqueIndex`, off by default; without it the
+  server refuses the call (`Adding a unique index to an existing table is
+  disabled`) with an outcome the provider cannot confirm. So a session without
+  the capability refuses such an addition when it is planned, in the host's
+  embedded engine's words: `adding unique index "<name>" to table
+  "<table>", which exists already, which requires target capability
+  unique_index_on_existing_table, unavailable on this ydb target`. A table
+  the plan creates takes its unique indexes with it and needs nothing.
 - An index reads columns the declaration states. A declared index that reads a
   column the declaration does not state is refused, and so is a kept index whose
   column the declaration drops.

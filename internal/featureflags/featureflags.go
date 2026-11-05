@@ -55,6 +55,11 @@ type Gate struct {
 // disabled`), and the second refuses CREATE OR REPLACE of either object.
 var gates = []Gate{
 	{Key: "secrets", Flag: "EnableSchemaSecrets"},
+	// Off by default on every line that lists it, 25.3 and later; 25.1 and
+	// 25.2 do not list it and refuse a unique index on an existing table with
+	// `Adding a unique index to an existing table is disabled`, which keeps
+	// the preset's false.
+	{Key: "unique_index_on_existing_table", Flag: "EnableAddUniqueIndex"},
 	{Key: "index_rename", Flag: "EnableMoveIndex"},
 	{Key: "alter_column_default", Flag: "EnableSetDropDefaultValue"},
 	{Key: "add_column_with_default", Flag: "EnableAddColumsWithDefaults"},

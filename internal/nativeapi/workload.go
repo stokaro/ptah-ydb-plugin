@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"strings"
+	"time"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
@@ -91,6 +93,28 @@ func share(value sql.NullFloat64) *float64 {
 	return new(value.Float64)
 }
 
+// PoolRoutingBudget bounds how long a read of the workload waits out a pool
+// the workload manager still routes queries to after it is gone, and
+// PoolRoutingPause is the pause between attempts. The budget leaves an
+// execution room inside the host's 30-second call.
+const (
+	PoolRoutingBudget = 20 * time.Second
+	PoolRoutingPause  = 500 * time.Millisecond
+)
+
+// PoolUnresolved reports a query YDB refused because the workload manager
+// routed it to a resource pool that no longer exists. The manager reads its
+// classifiers from a cache, so for a while after a classifier and its pool
+// are dropped a query a classifier still names can be sent to the pool, and
+// YDB answers NOT_FOUND, `Failed to resolve pool id ...`, `Query failed
+// during adding/waiting in workload pool`, before the query runs. Measured
+// on 26.2.1.14: the read that confirms the removal of a classifier routing
+// every query to its pool, and the pool, fails so in about one run of
+// fifteen.
+func PoolUnresolved(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "Failed to resolve pool id")
+}
+
 // Workload owns the precondition, the dispatch and the confirmation of a
 // workload operation. Pools and classifiers change through YQL, as the host's
 // embedded engine changes them, and are read from the system views.
@@ -154,6 +178,32 @@ func (w *Workload) Apply(ctx context.Context, database string, value *protocol.E
 		return true, fmt.Errorf("%s was not confirmed: the database holds it otherwise", subject)
 	}
 	return true, nil
+}
+
+// RoutedRead returns read, sending a read again while the workload manager
+// routes it to a pool that is gone (see [PoolUnresolved]), for up to
+// PoolRoutingBudget. YDB refuses such a read before it runs it, and a read
+// changes nothing, so it is safe to send again. Any other answer is returned
+// as it came, and so is the last refusal once the budget or ctx ends. A
+// session reads its workload through it, for an inspection and for the check
+// and the confirmation of a [Workload] operation alike, so the read that
+// confirms the removal of a classifier and its pool does not fail while the
+// manager's cache still holds the classifier.
+func RoutedRead(read func(context.Context) (HeldWorkload, error)) func(context.Context) (HeldWorkload, error) {
+	return func(ctx context.Context) (HeldWorkload, error) {
+		deadline := time.Now().Add(PoolRoutingBudget)
+		for {
+			held, err := read(ctx)
+			if !PoolUnresolved(err) || !time.Now().Before(deadline) {
+				return held, err
+			}
+			select {
+			case <-ctx.Done():
+				return HeldWorkload{}, err
+			case <-time.After(PoolRoutingPause):
+			}
+		}
+	}
 }
 
 // differs names the first object held does not carry as a change's before

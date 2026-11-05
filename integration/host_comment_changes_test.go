@@ -15,6 +15,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 )
 
@@ -160,3 +162,65 @@ func TestHostRunsCommentsOfAMigrationFile_HappyPath(t *testing.T) {
 	c.Assert(rowCount(c, opened, path.Join(database, directory, "notes"), ""), qt.Equals, int64(1))
 }
 
+// commentFixture is a provider session beside table records (id, ts,
+// payload) in a fixture directory, for the statements a migration file runs.
+type commentFixture struct {
+	opened              *connection.Connection
+	directory, database string
+	client              *providerruntime.Client
+	session             *protocol.Session
+}
+
+func newCommentFixture(c *qt.C) *commentFixture {
+	c.Helper()
+	opened, directory, database := inspectionFixture(c)
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+path.Join(database, directory, "records")+"` (id Uint64, ts Timestamp, payload Utf8, PRIMARY KEY (id))"), qt.IsNil)
+	client := startProviderFor(c, provider.CommonObjectsFeature, provider.TextUnitsFeature)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	return &commentFixture{opened: opened, directory: directory, database: database, client: client, session: session}
+}
+
+// statement runs one YQL statement through the provider as a migration
+// file's unit, outside a transaction.
+func (f *commentFixture) statement(c *qt.C, statement string) (*protocol.Execution, error) {
+	c.Helper()
+	return f.client.Execute(c.Context(), &protocol.ExecuteRequest{SessionId: f.session.Id, RequestId: "comment", Units: []*protocol.Unit{
+		{ChangeId: "comment", Body: &protocol.Unit_Sql{Sql: statement}}}})
+}
+
+// Ported from the host's TestYDBComments_StatementRefusals: Ptah's own COMMENT
+// ON statements, run as a migration file would run them. What YDB would
+// accept and lose, or keep where nothing reads it, is refused before the
+// server is asked: a comment on a column table, on an index the table lacks,
+// on a table named as a view, and on a table that does not exist. Removing
+// the comment of a column the table no longer has is accepted, since that is
+// how a plan cleans up after a drop. TestCommonObjectsSubprocess holds the
+// column the table lacks and the transaction.
+func TestCommentStatementRefusalsSubprocess(t *testing.T) {
+	c := testcheck.New(t)
+	f := newCommentFixture(c)
+	events := path.Join(f.database, f.directory, "events")
+	c.Assert(execFixtureSchema(c.Context(), f.opened.DB, "CREATE TABLE `"+events+"` (id Int64 NOT NULL, PRIMARY KEY (id)) PARTITION BY HASH(id) WITH (STORE = COLUMN)"), qt.IsNil)
+	records := "`" + f.directory + "/records`"
+	for _, test := range []struct{ name, statement, want string }{
+		{"a column table", "COMMENT ON TABLE `" + f.directory + "/events` IS 'x'", `invalid comment statement: /\w+/` + f.directory + `/events is a column table, .*`},
+		{"an index the table lacks", "COMMENT ON INDEX `missing` ON " + records + " IS 'x'", `invalid comment statement: table /\w+/` + f.directory + `/records has no index "missing"`},
+		{"a table named as a view", "COMMENT ON VIEW " + records + " IS 'x'", `invalid comment statement: COMMENT ON VIEW names /\w+/` + f.directory + `/records, which is a row table`},
+		{"a missing table", "COMMENT ON TABLE `" + f.directory + "/absent` IS 'x'",
+			`invalid comment statement: set the comment on table /\w+/` + f.directory + `/absent: YDB holds no object at the path, or the session may not see it \(SCHEME_ERROR\)`},
+	} {
+		result, err := f.statement(c, test.statement)
+		c.Assert(err, qt.ErrorIs, provider.ErrExecution, qt.Commentf("%s", test.name))
+		c.Assert(result.Outcome, qt.Equals, protocol.Execution_NOT_STARTED, qt.Commentf("%s: %s", test.name, result))
+		c.Assert(result.Message, qt.Matches, test.want, qt.Commentf("%s", test.name))
+	}
+
+	result, err := f.statement(c, "COMMENT ON COLUMN "+records+".`gone` IS NULL")
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", result))
+	c.Assert(storedAttributes(c, f.opened, path.Join(f.database, f.directory, "records")), qt.HasLen, 0)
+}

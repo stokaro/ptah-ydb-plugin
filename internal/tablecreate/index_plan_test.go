@@ -75,6 +75,13 @@ func indexCase(desired, held string, declared ...string) alterCase {
 	return alterCase{desiredTable: plainTable, heldTable: plainTable, declared: declared, held: declared, desiredIndexes: desired, heldIndexes: held}
 }
 
+// withUniqueAdditions is in on a session that adds a unique index to a table
+// that exists.
+func withUniqueAdditions(in alterCase) alterCase {
+	in.capabilities = map[string]bool{tablecreate.UniqueIndexOnExistingTableCapability: true}
+	return in
+}
+
 var (
 	byLabel      = []string{"label"}
 	extra        = []string{"extra"}
@@ -98,7 +105,7 @@ func TestIndexPlan_HappyPath(t *testing.T) {
 		{"adds an async index that covers a column", indexCase(declaredIndexes(indexJSON("globalAsyncIndex", "by_label", byLabel, extra)), heldIndexes(), "label", "extra"),
 			`{"addIndexes":[{"name":"by_label","indexColumns":["label"],"dataColumns":["extra"],"globalAsyncIndex":{}}]}`,
 			"row-table-add-index/000000", protocol.ChangeSemantics_ADDITIVE, protocol.PlanningEffect_CREATE, "", "by_label"},
-		{"adds a unique index on two columns", indexCase(declaredIndexes(indexJSON("globalUniqueIndex", "by_both", labelAndData, nil)), heldIndexes(), "label", "extra"),
+		{"adds a unique index on two columns", withUniqueAdditions(indexCase(declaredIndexes(indexJSON("globalUniqueIndex", "by_both", labelAndData, nil)), heldIndexes(), "label", "extra")),
 			`{"addIndexes":[{"name":"by_both","indexColumns":["label","extra"],"globalUniqueIndex":{}}]}`,
 			"row-table-add-index/000000", protocol.ChangeSemantics_ADDITIVE, protocol.PlanningEffect_CREATE, "", "by_both"},
 		{"adds one index beside a kept one", indexCase(
@@ -209,6 +216,10 @@ func TestIndexPlan_FailurePath(t *testing.T) {
 			`index "by_both" holds a global index on \(label, extra\), but the declaration states a global index on \(extra, label\).*`},
 		{"a vector index on a target without vector indexes", indexCase(vectorIndexes(false), heldIndexes(), "label"),
 			`index "by_embedding" declares vector settings, which requires target capability vector_indexes, unavailable on this ydb target .*`},
+		// YDB refuses a unique index on a table that exists after the call
+		// unless the session establishes that it adds one.
+		{"a unique index on a target without unique additions", indexCase(declaredIndexes(indexJSON("globalUniqueIndex", "by_both", labelAndData, nil)), heldIndexes(), "label", "extra"),
+			`adding unique index "by_both" to table "app.records", which exists already, which requires target capability unique_index_on_existing_table, unavailable on this ydb target`},
 		{"a declared index reads an undeclared column", indexCase(declaredIndexes(indexJSON("globalIndex", "by_other", []string{"other"}, nil)), heldIndexes(), "label"),
 			`index "by_other" reads column "other", which the declaration does not state`},
 		{"a kept index reads a column the declaration drops", indexCase(
