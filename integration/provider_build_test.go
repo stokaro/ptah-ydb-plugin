@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 // providerBinary returns the provider built with the race detector and its
 // digest, for the tests that start it directly and the host-driven tests
 // alike.
-func providerBinary(c *qt.C) (string, string) {
+func providerBinary(c *qt.C) (binary, digest string) {
 	c.Helper()
 	providerBuild.Lock()
 	defer providerBuild.Unlock()

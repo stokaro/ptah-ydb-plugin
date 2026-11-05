@@ -29,16 +29,16 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
-func inspectionFixture(c *qt.C) (*connection.Connection, string, string) {
+func inspectionFixture(c *qt.C) (opened *connection.Connection, directory, database string) {
 	c.Helper()
 	address, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	opened, err := connection.Open(ctx, address)
+	opened, err = connection.Open(ctx, address)
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(opened.Close(), qt.IsNil) })
-	directory := "ptah4204_" + strings.ToLower(rand.Text())
+	directory = "ptah4204_" + strings.ToLower(rand.Text())
 	absolute := path.Join(address.Database(), directory)
 	c.Assert(opened.Driver.Scheme().MakeDirectory(ctx, absolute), qt.IsNil)
 	c.Cleanup(func() {

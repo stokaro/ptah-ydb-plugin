@@ -367,15 +367,11 @@ func (f *embeddingFixture) tables(c *qt.C) []string {
 	return names
 }
 
-// columns lists a table's columns.
+// columns lists the columns of a table at the realm's root, as the server
+// describes the table.
 func (f *embeddingFixture) columns(c *qt.C, table string) []string {
 	c.Helper()
-	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT * FROM `"+path.Join(f.root, table)+"` LIMIT 1")
-	c.Assert(err, qt.IsNil)
-	defer func() { c.Check(rows.Close(), qt.IsNil) }()
-	names, err := rows.Columns()
-	c.Assert(err, qt.IsNil)
-	return names
+	return heldColumnNames(c, f.opened, path.Join(f.root, table))
 }
 
 // theSecret is source text an answer must never carry, the host's own.

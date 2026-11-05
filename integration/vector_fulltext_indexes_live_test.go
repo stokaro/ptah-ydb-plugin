@@ -127,10 +127,9 @@ func (f *facetFixture) nearest(c *qt.C, index string) uint64 {
 
 // planned is a plan's steps in the order they run, by name, and the TEXT
 // form of each, the statement a migration file holds.
-func (f *facetFixture) planned(c *qt.C, plan *protocol.PlannedFeatures) ([]string, []string) {
+func (f *facetFixture) planned(c *qt.C, plan *protocol.PlannedFeatures) (names, statements []string) {
 	c.Helper()
 	steps := scheduled(c, plan)
-	var names []string
 	for _, step := range steps {
 		names = append(names, step.Id.Name)
 	}
@@ -139,7 +138,6 @@ func (f *facetFixture) planned(c *qt.C, plan *protocol.PlannedFeatures) ([]strin
 	rendered, err := f.client.Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)
 	c.Assert(rendered.Refusal, qt.IsNil)
-	var statements []string
 	for _, unit := range rendered.Units {
 		statements = append(statements, strings.ReplaceAll(unit.GetSql(), f.directory+"/", "<dir>/"))
 	}
@@ -166,12 +164,21 @@ func (f *facetFixture) run(c *qt.C, id string, plan *protocol.PlannedFeatures) {
 }
 
 // requireSessionCapability skips a test on a target whose session does not
-// report key as wanted: the suite runs on every release line, and a line
-// without the capability runs the refusal tests instead.
-func requireSessionCapability(c *qt.C, session *protocol.Session, key string, wanted bool) {
+// report key: the suite runs on every release line, and a line without the
+// capability runs the refusal tests instead.
+func requireSessionCapability(c *qt.C, session *protocol.Session, key string) {
 	c.Helper()
-	if session.Capabilities[key] != wanted {
-		c.Skipf("the target's %s is %t; this test needs %t", key, session.Capabilities[key], wanted)
+	if !session.Capabilities[key] {
+		c.Skipf("the target's %s is false; this test needs true", key)
+	}
+}
+
+// requireNoSessionCapability skips a refusal test on a target whose session
+// reports key, which runs the tests of the capability instead.
+func requireNoSessionCapability(c *qt.C, session *protocol.Session, key string) {
+	c.Helper()
+	if session.Capabilities[key] {
+		c.Skipf("the target's %s is true; this test needs false", key)
 	}
 }
 
@@ -238,7 +245,7 @@ func TestVectorIndexRoundTripSubprocess(t *testing.T) {
 		`{"settings":{"metric":"SIMILARITY_INNER_PRODUCT","vectorType":"VECTOR_TYPE_INT8","vectorDimension":3},"levels":2,"clusters":2}`)
 	withTitle := nativeIndexSet(nativeIndex(vectorIndex("docs_emb_cosine", `["gen","emb"]`, `["body"]`, 4), prefixedTables), nativeIndex(titleIP, vectorTables))
 	fixture.columns = append(documentColumns(), &protocol.DeclaredColumn{Name: "title_emb", Type: "String", Nullable: true})
-	addition := fixture.columnStep("add-title-emb", "title_emb", true)
+	addition := fixture.addColumnStep("add-title-emb", "title_emb")
 	addition.AddedColumn.Type = "String"
 	fixture.steps = []*protocol.CommonPlanningStep{addition}
 	plan = fixture.indexPlan(c, withTitle)
@@ -253,7 +260,7 @@ func TestVectorIndexRoundTripSubprocess(t *testing.T) {
 
 	// And both gone again: the index first.
 	fixture.columns = documentColumns()
-	fixture.steps = []*protocol.CommonPlanningStep{fixture.columnStep("drop-title-emb", "title_emb", false)}
+	fixture.steps = []*protocol.CommonPlanningStep{fixture.dropColumnStep("drop-title-emb", "title_emb")}
 	plan = fixture.indexPlan(c, declared)
 	names, statements = fixture.planned(c, plan)
 	c.Assert(names, qt.DeepEquals, []string{"row-table-drop-index/000000", "row-table-drop-column/000000"})
@@ -363,7 +370,7 @@ const (
 func TestFullTextIndexRoundTripSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newDocumentsFixture(c)
-	requireSessionCapability(c, fixture.session, tablecreate.FullTextIndexesCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.FullTextIndexesCapability)
 	declared := nativeIndexSet(nativeIndex(fullTextIndex("globalFulltextRelevanceIndex", "ft", "body", standardBody), relevanceTables))
 	plan := fixture.indexPlan(c, declared)
 	_, statements := fixture.planned(c, plan)
@@ -401,7 +408,7 @@ func TestFullTextIndexRoundTripSubprocess(t *testing.T) {
 func TestFullTextIndexOlderLineSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newDocumentsFixture(c)
-	requireSessionCapability(c, fixture.session, tablecreate.FullTextIndexesCapability, false)
+	requireNoSessionCapability(c, fixture.session, tablecreate.FullTextIndexesCapability)
 	declared := nativeIndexSet(nativeIndex(fullTextIndex("globalFulltextRelevanceIndex", "ft", "body", standardBody), relevanceTables))
 	found := fixture.compareIndexes(c, declared)
 	plan := fixture.plan(c, found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
@@ -419,7 +426,7 @@ func TestFullTextIndexOlderLineSubprocess(t *testing.T) {
 func TestFullTextIndexDisabledFlagSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newDocumentsFixture(c)
-	requireSessionCapability(c, fixture.session, tablecreate.FullTextIndexesCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.FullTextIndexesCapability)
 	address := monitoredAddress(c)
 	flags := newClusterFlags(c, fixture.connection(c))
 	flags.set(c, map[string]bool{"EnableFulltextIndex": false})

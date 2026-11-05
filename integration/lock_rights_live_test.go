@@ -27,7 +27,7 @@ import (
 // returns its name and the test address that authenticates as it. The cleanup
 // drops the user. Such a user may connect: a default cluster's USERS group,
 // which every user is in, holds ydb.database.connect on the database.
-func testUser(c *qt.C, admin *connection.Connection, prefix string) (string, string) {
+func testUser(c *qt.C, admin *connection.Connection, prefix string) (name, address string) {
 	c.Helper()
 	name, password := prefix+strings.ToLower(rand.Text())[:10], "Rights1"+rand.Text()
 	c.Assert(execFixtureSchema(c.Context(), admin.DB, "CREATE USER `"+name+"` PASSWORD '"+password+"'"), qt.IsNil)

@@ -37,9 +37,9 @@ func secretVariable(t *testing.T, value string) string {
 
 // secretsFixture is a locked fixture directory on a line with secrets. The
 // cleanup drops every secret the directory holds, named or not.
-func secretsFixture(c *qt.C) (*connection.Connection, string, string) {
+func secretsFixture(c *qt.C) (opened *connection.Connection, directory, database string) {
 	c.Helper()
-	opened, directory, database := lockFixture(c)
+	opened, directory, database = lockFixture(c)
 	_, session := accessSession(c)
 	skipWithout(c, session, secrets.Capability)
 	c.Cleanup(func() { dropSecretsBelow(c, opened, path.Join(database, directory)) })
@@ -127,17 +127,19 @@ func TestHostRefusesASecretOverATableWithoutItsValue_FailurePath(t *testing.T) {
 	c.Assert(described.IsTable(), qt.IsTrue)
 }
 
-// secretsEntities is a Go source with a table and the secret beside it, and,
-// where refused is set, a secret whose name holds a space, which the server
-// refuses at execution (`symbol ' ' is not allowed in the path part`).
-func secretsEntities(directory, variable string, refused bool) string {
-	text := "package entities\n\n//ptah:schema:table name=\"accounts\" schema=\"" + directory + "\"\ntype Account struct {\n" +
+// secretsEntities is a Go source with a table and the secret beside it.
+func secretsEntities(directory, variable string) string {
+	return "package entities\n\n//ptah:schema:table name=\"accounts\" schema=\"" + directory + "\"\ntype Account struct {\n" +
 		"\t//ptah:schema:field name=\"id\" type=\"BIGINT\" primary\n\tID int64\n}\n\n" +
 		"//ptah:schema:secret name=\"pg_password\" schema=\"" + directory + "\" value_env=\"" + variable + "\"\ntype Credentials struct{}\n"
-	if refused {
-		text += "\n//ptah:schema:secret name=\"bad name\" schema=\"" + directory + "\" value_env=\"" + variable + "\"\ntype Refused struct{}\n"
-	}
-	return text
+}
+
+// refusedSecretsEntities is secretsEntities with a second secret whose name
+// holds a space, which the server refuses at execution (`symbol ' ' is not
+// allowed in the path part`).
+func refusedSecretsEntities(directory, variable string) string {
+	return secretsEntities(directory, variable) +
+		"\n//ptah:schema:secret name=\"bad name\" schema=\"" + directory + "\" value_env=\"" + variable + "\"\ntype Refused struct{}\n"
 }
 
 // Ported from the host's TestYDBBinary_KeepsASecretsValueOutOfEveryOutput:
@@ -154,8 +156,8 @@ func TestHostKeepsASecretsValueOutOfEveryOutput_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := secretsFixture(c)
 	entities, refusing := c.TempDir(), c.TempDir()
-	c.Assert(os.WriteFile(filepath.Join(entities, "schema.go"), []byte(secretsEntities(directory, variable, false)), 0o600), qt.IsNil)
-	c.Assert(os.WriteFile(filepath.Join(refusing, "schema.go"), []byte(secretsEntities(directory, variable, true)), 0o600), qt.IsNil)
+	c.Assert(os.WriteFile(filepath.Join(entities, "schema.go"), []byte(secretsEntities(directory, variable)), 0o600), qt.IsNil)
+	c.Assert(os.WriteFile(filepath.Join(refusing, "schema.go"), []byte(refusedSecretsEntities(directory, variable)), 0o600), qt.IsNil)
 	address := os.Getenv("PTAH_YDB_TEST_URL")
 	scope := []string{"--schemas", directory, "--tx-mode", "none"}
 
@@ -255,17 +257,24 @@ func TestHostConvergesYQLSecretsInADevRealm_HappyPath(t *testing.T) {
 	}
 }
 
-// pgSource declares a PostgreSQL data source at location whose password the
-// secret at secretPath holds, and, where secret is set, that secret as
-// abs_pw, from a source that describes every secret.
-func pgSource(directory, location, secretPath, variable string, secret bool) string {
-	text := "secrets:"
-	if secret {
-		text += "\n  abs_pw:\n    schema: " + directory + "\n    value_env: " + variable + "\n"
-	} else {
-		text += " {}\n"
-	}
-	return text + "external_data_sources:\n  warehouse:\n    schema: " + directory + "\n    source_type: PostgreSQL\n    location: " + location +
+// pgSourceAndSecret declares a PostgreSQL data source at location whose
+// password the secret at secretPath holds, and the secret abs_pw whose value
+// variable holds, from a source that describes every secret.
+func pgSourceAndSecret(directory, location, secretPath, variable string) string {
+	return "secrets:\n  abs_pw:\n    schema: " + directory + "\n    value_env: " + variable + "\n" + warehouseSource(directory, location, secretPath)
+}
+
+// pgSourceAlone declares the data source of pgSourceAndSecret and no secret,
+// from a source that describes every secret.
+func pgSourceAlone(directory, location, secretPath string) string {
+	return "secrets: {}\n" + warehouseSource(directory, location, secretPath)
+}
+
+// warehouseSource is the external_data_sources section of pgSourceAndSecret
+// and pgSourceAlone: the data source warehouse at location whose password the
+// secret at secretPath holds.
+func warehouseSource(directory, location, secretPath string) string {
+	return "external_data_sources:\n  warehouse:\n    schema: " + directory + "\n    source_type: PostgreSQL\n    location: " + location +
 		"\n    auth_method: BASIC\n    options:\n      DATABASE_NAME: app\n      LOGIN: reader\n      PASSWORD_SECRET_PATH: " + secretPath + "\n"
 }
 
@@ -282,7 +291,7 @@ func TestHostReadsASecretThroughAnAbsolutePath_HappyPath(t *testing.T) {
 		defer cancel()
 		_ = execFixtureSchema(ctx, opened.DB, "DROP EXTERNAL DATA SOURCE `"+path.Join(database, directory, "warehouse")+"`")
 	})
-	declared := pgSource(directory, "pg.invalid:5432", path.Join(database, directory, "abs_pw"), variable, true)
+	declared := pgSourceAndSecret(directory, "pg.invalid:5432", path.Join(database, directory, "abs_pw"), variable)
 
 	first := hostPlanned(c, directory, "yaml", declared)
 	hostRun(c, directory, "the secret and the source", declared, `(?s).*Schema apply completed successfully.*`)
@@ -312,11 +321,11 @@ func TestHostRefusesASecretPathNoStatementCanRead_FailurePath(t *testing.T) {
 		_ = execFixtureSchema(ctx, opened.DB, "DROP EXTERNAL DATA SOURCE `"+path.Join(database, directory, "warehouse")+"`")
 	})
 	secretPath := path.Join(database, directory, "abs_pw")
-	hostRun(c, directory, "the secret and the source", pgSource(directory, "pg.invalid:5432", secretPath, variable, true), `(?s).*Schema apply completed successfully.*`)
+	hostRun(c, directory, "the secret and the source", pgSourceAndSecret(directory, "pg.invalid:5432", secretPath, variable), `(?s).*Schema apply completed successfully.*`)
 
-	outside, outsideErr := hostApplySource(c, directory, "yaml", pgSource(directory, "pg2.invalid:5432", "/elsewhere/abs_pw", variable, true))
-	replaced, replacedErr := hostApplySource(c, directory, "yaml", pgSource(directory, "pg2.invalid:5432", secretPath, variable, false))
-	kept, keptErr := hostApplySource(c, directory, "yaml", pgSource(directory, "pg.invalid:5432", secretPath, variable, false))
+	outside, outsideErr := hostApplySource(c, directory, "yaml", pgSourceAndSecret(directory, "pg2.invalid:5432", "/elsewhere/abs_pw", variable))
+	replaced, replacedErr := hostApplySource(c, directory, "yaml", pgSourceAlone(directory, "pg2.invalid:5432", secretPath))
+	kept, keptErr := hostApplySource(c, directory, "yaml", pgSourceAlone(directory, "pg.invalid:5432", secretPath))
 
 	c.Assert(outsideErr, qt.IsNotNil, qt.Commentf("%s", outside))
 	c.Assert(replacedErr, qt.IsNotNil, qt.Commentf("%s", replaced))
@@ -324,7 +333,7 @@ func TestHostRefusesASecretPathNoStatementCanRead_FailurePath(t *testing.T) {
 	c.Assert(keptErr, qt.IsNotNil, qt.Commentf("%s", kept))
 	c.Assert(kept, qt.Contains, "secret "+directory+"/abs_pw is dropped while a declared object reads it by its path")
 	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.DeepEquals, []string{"abs_pw", "warehouse"})
-	c.Assert(hostPlanned(c, directory, "yaml", pgSource(directory, "pg.invalid:5432", secretPath, variable, true)), qt.HasLen, 0)
+	c.Assert(hostPlanned(c, directory, "yaml", pgSourceAndSecret(directory, "pg.invalid:5432", secretPath, variable)), qt.HasLen, 0)
 }
 
 // Ported from the 25.1 half of the host's

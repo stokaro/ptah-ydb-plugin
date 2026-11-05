@@ -41,7 +41,7 @@ func TestHostShadowVerifiesARotation_HappyPath(t *testing.T) {
 	opened, directory, database := secretsFixture(c)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	entities := c.TempDir()
-	c.Assert(os.WriteFile(filepath.Join(entities, "schema.go"), []byte(secretsEntities(directory, variable, false)), 0o600), qt.IsNil)
+	c.Assert(os.WriteFile(filepath.Join(entities, "schema.go"), []byte(secretsEntities(directory, variable)), 0o600), qt.IsNil)
 	address := os.Getenv("PTAH_YDB_TEST_URL")
 	secret := directory + "/pg_password"
 	migrations := c.TempDir()

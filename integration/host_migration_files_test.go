@@ -48,7 +48,7 @@ func hostMigrate(c *qt.C, directory, migrations string, verb ...string) (string,
 
 // generatedPair reads the up files and the down files a generation wrote
 // into dir, each kind joined.
-func generatedPair(c *qt.C, dir string) (string, string) {
+func generatedPair(c *qt.C, dir string) (up, down string) {
 	c.Helper()
 	read := func(pattern string) string {
 		names, err := filepath.Glob(filepath.Join(dir, pattern))

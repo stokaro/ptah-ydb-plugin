@@ -92,17 +92,18 @@ func TestRefusedUnitGivesItsReasonSubprocess(t *testing.T) {
 func TestRefusedUnitNamesTheFeatureFlagSubprocess(t *testing.T) {
 	const refusal = "provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, " +
 		"which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on"
+	c := testcheck.New(t)
+	monitored := testAddress(c, nil, "", "")
 	for _, test := range []struct {
-		name, want string
-		monitoring bool
+		name, want, address string
 	}{
-		{"the flags read", refusal, true},
-		{"the line's default", refusal + ", or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans", false},
+		{"the flags read", refusal, monitored},
+		{"the line's default", refusal + ", or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans", withoutMonitoring(c, monitored)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			client := startProviderFor(c, provider.ErrorReasonsFeature)
-			session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: flagReasonAddress(c, test.monitoring)})
+			session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: test.address})
 			c.Assert(err, qt.IsNil)
 			c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
 			c.Assert(session.GetCapabilities()["resource_pools"], qt.IsFalse)
@@ -115,17 +116,6 @@ func TestRefusedUnitNamesTheFeatureFlagSubprocess(t *testing.T) {
 			c.Assert(err.Error(), qt.Not(qt.Contains), "Resource pools are disabled")
 		})
 	}
-}
-
-// flagReasonAddress is the test address, which names the monitoring endpoint,
-// or the same address without the endpoint.
-func flagReasonAddress(c *qt.C, monitoring bool) string {
-	c.Helper()
-	address := testAddress(c, nil, "", "")
-	if monitoring {
-		return address
-	}
-	return withoutMonitoring(c, address)
 }
 
 // skipOffLine skips a test that measures what one release line answers on a
