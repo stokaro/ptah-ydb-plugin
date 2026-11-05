@@ -1,3 +1,29 @@
+---
+title: Declaring YDB objects
+description: The Go annotation directives and YAML keys that declare an object or a setting only YDB has.
+type: reference
+audience:
+  - schema-author
+  - database-engineer
+readerQuestion: "Which directives and YAML keys declare YDB objects such as column families, changefeeds and topics?"
+goal: "Declare a YDB-only object in a Go or YAML schema source."
+sourceOfTruth:
+  - internal/declaration
+  - internal/ydbdecl
+  - internal/sourceencode
+  - schema
+  - stokaro/ptah#4204
+generated: false
+searchAliases:
+  - "YDB column family"
+  - "YDB changefeed"
+  - "YDB topic"
+overlaps: []
+disposition: keep
+sidebar:
+  order: 2
+---
+
 # Declaring YDB objects
 
 Ptah's source formats carry the YDB objects and settings this provider claims.

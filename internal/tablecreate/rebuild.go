@@ -655,8 +655,9 @@ func copiedColumns(request *Ydb_Table.CreateTableRequest, current *protocol.Obse
 // table holds, the default one included, with each setting the declaration
 // does not state, the family each column sits in where the declaration does
 // not say, the automatic partitioning, read replicas, key bloom filter and
-// user attributes, and the TTL where the declaration states no table
-// properties at all. A declaration says where a column sits with a column
+// user attributes, the TTL where the declaration states no table properties
+// at all, and the TTL's run interval where the declaration states a TTL. A
+// declaration says where a column sits with a column
 // property record, and a source that describes where every column sits says
 // it of a column it places in no family too: that column sits in the default
 // family (see PlacedInDefault). A cluster's
@@ -673,6 +674,14 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 	})
 	if !stated && request.TtlSettings == nil {
 		request.TtlSettings = proto.CloneOf(held.GetTtlSettings())
+	}
+	// A declared TTL names no run interval, since YQL has no setting for one,
+	// and a table created without one runs its TTL on YDB's default. The new
+	// table takes the interval the old one holds, as a TTL changed in place
+	// keeps it (see planTTL). The text form refuses such a table (see
+	// ttlSetting), so a migration file is refused rather than dropping it.
+	if request.GetTtlSettings() != nil && request.TtlSettings.RunIntervalSeconds == 0 {
+		request.TtlSettings.RunIntervalSeconds = held.GetTtlSettings().GetRunIntervalSeconds()
 	}
 	keepHeldPartitioning(request, held)
 	if request.ReadReplicasSettings == nil {

@@ -294,8 +294,34 @@ func (a *alterationSides) indexes(steps []*protocol.CommonPlanningStep, capabili
 	if reason := uniqueAdditionRefusal(a.table.Subject, indexes, capabilities); reason != "" {
 		return alterationIndexes{}, reason, nil
 	}
+	own, reason, err := a.ownIndexSettings(indexes, indexSettings, result.held)
+	if err != nil || reason != "" {
+		return alterationIndexes{}, reason, err
+	}
+	indexSettings = append(indexSettings, own...)
 	result.changes, result.settings = indexes, indexSettings
 	return result, "", nil
+}
+
+// ownIndexSettings plans the partitioning and read replicas an index's own
+// facet declares, as a Go index directive or a YAML index entry writes them.
+// An index whose settings the native index set changes as well is refused.
+func (a *alterationSides) ownIndexSettings(indexes []indexChange, fromSet []indexSettingsChange, held *native.IndexObservations) ([]indexSettingsChange, string, error) {
+	declaredSettings, _, err := indexSettingsFacets(a.owner, a.table.Desired.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
+	if err != nil {
+		return nil, "", err
+	}
+	_, heldSettings, err := indexSettingsFacets(a.owner, a.table.Current.GetFeatures().GetFacets(), protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return nil, "", err
+	}
+	for _, change := range fromSet {
+		if _, declared := declaredSettings[change.held.GetName()]; declared {
+			return nil, fmt.Sprintf("Index %q declares its settings both in the native index set and as its own facet", change.held.GetName()), nil
+		}
+	}
+	own, reason := planDeclaredIndexSettings(a.table, declaredSettings, heldSettings, indexes, held)
+	return own, reason, nil
 }
 
 // feeds plans the changefeed changes of the table, against the indexes it

@@ -2420,6 +2420,61 @@ func (x *RowTableIntent) GetPartitionAtKeys() []*SplitPoint {
 	return nil
 }
 
+// IndexSettingsObservation is what a read finds a global sync, async or
+// unique index holds: its automatic partitioning, without the partition
+// columns, and its read replicas, defaults included.
+type IndexSettingsObservation struct {
+	state                protoimpl.MessageState          `protogen:"open.v1"`
+	PartitioningSettings *Ydb_Table.PartitioningSettings `protobuf:"bytes,1,opt,name=partitioning_settings,json=partitioningSettings,proto3" json:"partitioning_settings,omitempty"`
+	ReadReplicasSettings *Ydb_Table.ReadReplicasSettings `protobuf:"bytes,2,opt,name=read_replicas_settings,json=readReplicasSettings,proto3" json:"read_replicas_settings,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *IndexSettingsObservation) Reset() {
+	*x = IndexSettingsObservation{}
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IndexSettingsObservation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IndexSettingsObservation) ProtoMessage() {}
+
+func (x *IndexSettingsObservation) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IndexSettingsObservation.ProtoReflect.Descriptor instead.
+func (*IndexSettingsObservation) Descriptor() ([]byte, []int) {
+	return file_internal_nativeprotocol_indexes_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *IndexSettingsObservation) GetPartitioningSettings() *Ydb_Table.PartitioningSettings {
+	if x != nil {
+		return x.PartitioningSettings
+	}
+	return nil
+}
+
+func (x *IndexSettingsObservation) GetReadReplicasSettings() *Ydb_Table.ReadReplicasSettings {
+	if x != nil {
+		return x.ReadReplicasSettings
+	}
+	return nil
+}
+
 type FulltextIndexSettings_Analyzers struct {
 	state                protoimpl.MessageState           `protogen:"open.v1"`
 	Tokenizer            *FulltextIndexSettings_Tokenizer `protobuf:"varint,1,opt,name=tokenizer,proto3,enum=ptah.ydb.native.FulltextIndexSettings_Tokenizer,oneof" json:"tokenizer,omitempty"`
@@ -2440,7 +2495,7 @@ type FulltextIndexSettings_Analyzers struct {
 
 func (x *FulltextIndexSettings_Analyzers) Reset() {
 	*x = FulltextIndexSettings_Analyzers{}
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[25]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2452,7 +2507,7 @@ func (x *FulltextIndexSettings_Analyzers) String() string {
 func (*FulltextIndexSettings_Analyzers) ProtoMessage() {}
 
 func (x *FulltextIndexSettings_Analyzers) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[25]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2562,7 +2617,7 @@ type FulltextIndexSettings_ColumnAnalyzers struct {
 
 func (x *FulltextIndexSettings_ColumnAnalyzers) Reset() {
 	*x = FulltextIndexSettings_ColumnAnalyzers{}
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[26]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2574,7 +2629,7 @@ func (x *FulltextIndexSettings_ColumnAnalyzers) String() string {
 func (*FulltextIndexSettings_ColumnAnalyzers) ProtoMessage() {}
 
 func (x *FulltextIndexSettings_ColumnAnalyzers) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[26]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2614,7 +2669,7 @@ type SequenceDescription_SetVal struct {
 
 func (x *SequenceDescription_SetVal) Reset() {
 	*x = SequenceDescription_SetVal{}
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[27]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2626,7 +2681,7 @@ func (x *SequenceDescription_SetVal) String() string {
 func (*SequenceDescription_SetVal) ProtoMessage() {}
 
 func (x *SequenceDescription_SetVal) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[27]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2664,7 +2719,7 @@ type ColumnEncoding_Off struct {
 
 func (x *ColumnEncoding_Off) Reset() {
 	*x = ColumnEncoding_Off{}
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[28]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2676,7 +2731,7 @@ func (x *ColumnEncoding_Off) String() string {
 func (*ColumnEncoding_Off) ProtoMessage() {}
 
 func (x *ColumnEncoding_Off) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[28]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2700,7 +2755,7 @@ type ColumnEncoding_Dictionary struct {
 
 func (x *ColumnEncoding_Dictionary) Reset() {
 	*x = ColumnEncoding_Dictionary{}
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[29]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2712,7 +2767,7 @@ func (x *ColumnEncoding_Dictionary) String() string {
 func (*ColumnEncoding_Dictionary) ProtoMessage() {}
 
 func (x *ColumnEncoding_Dictionary) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[29]
+	mi := &file_internal_nativeprotocol_indexes_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3022,7 +3077,10 @@ const file_internal_nativeprotocol_indexes_proto_rawDesc = "" +
 	"\x11partition_at_keys\x18\r \x03(\v2\x1b.ptah.ydb.native.SplitPointR\x0fpartitionAtKeys\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc7\x01\n" +
+	"\x18IndexSettingsObservation\x12T\n" +
+	"\x15partitioning_settings\x18\x01 \x01(\v2\x1f.Ydb.Table.PartitioningSettingsR\x14partitioningSettings\x12U\n" +
+	"\x16read_replicas_settings\x18\x02 \x01(\v2\x1f.Ydb.Table.ReadReplicasSettingsR\x14readReplicasSettingsB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
 
 var (
 	file_internal_nativeprotocol_indexes_proto_rawDescOnce sync.Once
@@ -3037,7 +3095,7 @@ func file_internal_nativeprotocol_indexes_proto_rawDescGZIP() []byte {
 }
 
 var file_internal_nativeprotocol_indexes_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_internal_nativeprotocol_indexes_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_internal_nativeprotocol_indexes_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_internal_nativeprotocol_indexes_proto_goTypes = []any{
 	(VectorIndexSettings_Metric)(0),               // 0: ptah.ydb.native.VectorIndexSettings.Metric
 	(VectorIndexSettings_VectorType)(0),           // 1: ptah.ydb.native.VectorIndexSettings.VectorType
@@ -3070,34 +3128,35 @@ var file_internal_nativeprotocol_indexes_proto_goTypes = []any{
 	(*AccessIntent)(nil),                          // 28: ptah.ydb.native.AccessIntent
 	(*SplitPoint)(nil),                            // 29: ptah.ydb.native.SplitPoint
 	(*RowTableIntent)(nil),                        // 30: ptah.ydb.native.RowTableIntent
-	(*FulltextIndexSettings_Analyzers)(nil),       // 31: ptah.ydb.native.FulltextIndexSettings.Analyzers
-	(*FulltextIndexSettings_ColumnAnalyzers)(nil), // 32: ptah.ydb.native.FulltextIndexSettings.ColumnAnalyzers
-	(*SequenceDescription_SetVal)(nil),            // 33: ptah.ydb.native.SequenceDescription.SetVal
-	(*ColumnEncoding_Off)(nil),                    // 34: ptah.ydb.native.ColumnEncoding.Off
-	(*ColumnEncoding_Dictionary)(nil),             // 35: ptah.ydb.native.ColumnEncoding.Dictionary
-	nil,                                           // 36: ptah.ydb.native.DescribeTableResult.AttributesEntry
-	nil,                                           // 37: ptah.ydb.native.RowTableIntent.AttributesEntry
-	(*Ydb_Table.ExplicitPartitions)(nil),          // 38: Ydb.Table.ExplicitPartitions
-	(*Ydb_Table.PartitioningSettings)(nil),        // 39: Ydb.Table.PartitioningSettings
-	(*Ydb_Table.ReadReplicasSettings)(nil),        // 40: Ydb.Table.ReadReplicasSettings
-	(*Ydb.Type)(nil),                              // 41: Ydb.Type
-	(*Ydb.TypedValue)(nil),                        // 42: Ydb.TypedValue
-	(structpb.NullValue)(0),                       // 43: google.protobuf.NullValue
-	(*Ydb_Table.StoragePool)(nil),                 // 44: Ydb.Table.StoragePool
-	(Ydb_Table.ColumnFamily_Compression)(0),       // 45: Ydb.Table.ColumnFamily.Compression
-	(Ydb.FeatureFlag_Status)(0),                   // 46: Ydb.FeatureFlag.Status
-	(*Ydb_Scheme.Entry)(nil),                      // 47: Ydb.Scheme.Entry
-	(*Ydb_Table.TableStats)(nil),                  // 48: Ydb.Table.TableStats
-	(*Ydb_Table.TtlSettings)(nil),                 // 49: Ydb.Table.TtlSettings
-	(*Ydb_Table.StorageSettings)(nil),             // 50: Ydb.Table.StorageSettings
-	(*ChangefeedDescription)(nil),                 // 51: ptah.ydb.native.ChangefeedDescription
-	(Ydb_Table.StoreType)(0),                      // 52: Ydb.Table.StoreType
-	(*Ydb_Scheme.Permissions)(nil),                // 53: Ydb.Scheme.Permissions
+	(*IndexSettingsObservation)(nil),              // 31: ptah.ydb.native.IndexSettingsObservation
+	(*FulltextIndexSettings_Analyzers)(nil),       // 32: ptah.ydb.native.FulltextIndexSettings.Analyzers
+	(*FulltextIndexSettings_ColumnAnalyzers)(nil), // 33: ptah.ydb.native.FulltextIndexSettings.ColumnAnalyzers
+	(*SequenceDescription_SetVal)(nil),            // 34: ptah.ydb.native.SequenceDescription.SetVal
+	(*ColumnEncoding_Off)(nil),                    // 35: ptah.ydb.native.ColumnEncoding.Off
+	(*ColumnEncoding_Dictionary)(nil),             // 36: ptah.ydb.native.ColumnEncoding.Dictionary
+	nil,                                           // 37: ptah.ydb.native.DescribeTableResult.AttributesEntry
+	nil,                                           // 38: ptah.ydb.native.RowTableIntent.AttributesEntry
+	(*Ydb_Table.ExplicitPartitions)(nil),          // 39: Ydb.Table.ExplicitPartitions
+	(*Ydb_Table.PartitioningSettings)(nil),        // 40: Ydb.Table.PartitioningSettings
+	(*Ydb_Table.ReadReplicasSettings)(nil),        // 41: Ydb.Table.ReadReplicasSettings
+	(*Ydb.Type)(nil),                              // 42: Ydb.Type
+	(*Ydb.TypedValue)(nil),                        // 43: Ydb.TypedValue
+	(structpb.NullValue)(0),                       // 44: google.protobuf.NullValue
+	(*Ydb_Table.StoragePool)(nil),                 // 45: Ydb.Table.StoragePool
+	(Ydb_Table.ColumnFamily_Compression)(0),       // 46: Ydb.Table.ColumnFamily.Compression
+	(Ydb.FeatureFlag_Status)(0),                   // 47: Ydb.FeatureFlag.Status
+	(*Ydb_Scheme.Entry)(nil),                      // 48: Ydb.Scheme.Entry
+	(*Ydb_Table.TableStats)(nil),                  // 49: Ydb.Table.TableStats
+	(*Ydb_Table.TtlSettings)(nil),                 // 50: Ydb.Table.TtlSettings
+	(*Ydb_Table.StorageSettings)(nil),             // 51: Ydb.Table.StorageSettings
+	(*ChangefeedDescription)(nil),                 // 52: ptah.ydb.native.ChangefeedDescription
+	(Ydb_Table.StoreType)(0),                      // 53: Ydb.Table.StoreType
+	(*Ydb_Scheme.Permissions)(nil),                // 54: Ydb.Scheme.Permissions
 }
 var file_internal_nativeprotocol_indexes_proto_depIdxs = []int32{
-	38, // 0: ptah.ydb.native.GlobalIndexSettings.partition_at_keys:type_name -> Ydb.Table.ExplicitPartitions
-	39, // 1: ptah.ydb.native.GlobalIndexSettings.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
-	40, // 2: ptah.ydb.native.GlobalIndexSettings.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
+	39, // 0: ptah.ydb.native.GlobalIndexSettings.partition_at_keys:type_name -> Ydb.Table.ExplicitPartitions
+	40, // 1: ptah.ydb.native.GlobalIndexSettings.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
+	41, // 2: ptah.ydb.native.GlobalIndexSettings.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
 	0,  // 3: ptah.ydb.native.VectorIndexSettings.metric:type_name -> ptah.ydb.native.VectorIndexSettings.Metric
 	1,  // 4: ptah.ydb.native.VectorIndexSettings.vector_type:type_name -> ptah.ydb.native.VectorIndexSettings.VectorType
 	7,  // 5: ptah.ydb.native.KMeansTreeSettings.settings:type_name -> ptah.ydb.native.VectorIndexSettings
@@ -3108,7 +3167,7 @@ var file_internal_nativeprotocol_indexes_proto_depIdxs = []int32{
 	6,  // 10: ptah.ydb.native.GlobalVectorKMeansTreeIndex.posting_table_settings:type_name -> ptah.ydb.native.GlobalIndexSettings
 	6,  // 11: ptah.ydb.native.GlobalVectorKMeansTreeIndex.prefix_table_settings:type_name -> ptah.ydb.native.GlobalIndexSettings
 	8,  // 12: ptah.ydb.native.GlobalVectorKMeansTreeIndex.vector_settings:type_name -> ptah.ydb.native.KMeansTreeSettings
-	32, // 13: ptah.ydb.native.FulltextIndexSettings.columns:type_name -> ptah.ydb.native.FulltextIndexSettings.ColumnAnalyzers
+	33, // 13: ptah.ydb.native.FulltextIndexSettings.columns:type_name -> ptah.ydb.native.FulltextIndexSettings.ColumnAnalyzers
 	6,  // 14: ptah.ydb.native.GlobalFulltextPlainIndex.settings:type_name -> ptah.ydb.native.GlobalIndexSettings
 	13, // 15: ptah.ydb.native.GlobalFulltextPlainIndex.fulltext_settings:type_name -> ptah.ydb.native.FulltextIndexSettings
 	6,  // 16: ptah.ydb.native.GlobalFulltextRelevanceIndex.posting_table_settings:type_name -> ptah.ydb.native.GlobalIndexSettings
@@ -3128,58 +3187,60 @@ var file_internal_nativeprotocol_indexes_proto_depIdxs = []int32{
 	16, // 30: ptah.ydb.native.ObservedIndex.description:type_name -> ptah.ydb.native.TableIndexDescription
 	19, // 31: ptah.ydb.native.ObservedIndex.tables:type_name -> ptah.ydb.native.ImplementationTable
 	25, // 32: ptah.ydb.native.ImplementationTable.description:type_name -> ptah.ydb.native.DescribeTableResult
-	33, // 33: ptah.ydb.native.SequenceDescription.set_val:type_name -> ptah.ydb.native.SequenceDescription.SetVal
-	41, // 34: ptah.ydb.native.SequenceDescription.data_type:type_name -> Ydb.Type
+	34, // 33: ptah.ydb.native.SequenceDescription.set_val:type_name -> ptah.ydb.native.SequenceDescription.SetVal
+	42, // 34: ptah.ydb.native.SequenceDescription.data_type:type_name -> Ydb.Type
 	4,  // 35: ptah.ydb.native.ColumnCompression.algorithm:type_name -> ptah.ydb.native.ColumnCompression.Algorithm
-	34, // 36: ptah.ydb.native.ColumnEncoding.off:type_name -> ptah.ydb.native.ColumnEncoding.Off
-	35, // 37: ptah.ydb.native.ColumnEncoding.dictionary:type_name -> ptah.ydb.native.ColumnEncoding.Dictionary
-	41, // 38: ptah.ydb.native.ColumnMeta.type:type_name -> Ydb.Type
-	42, // 39: ptah.ydb.native.ColumnMeta.from_literal:type_name -> Ydb.TypedValue
+	35, // 36: ptah.ydb.native.ColumnEncoding.off:type_name -> ptah.ydb.native.ColumnEncoding.Off
+	36, // 37: ptah.ydb.native.ColumnEncoding.dictionary:type_name -> ptah.ydb.native.ColumnEncoding.Dictionary
+	42, // 38: ptah.ydb.native.ColumnMeta.type:type_name -> Ydb.Type
+	43, // 39: ptah.ydb.native.ColumnMeta.from_literal:type_name -> Ydb.TypedValue
 	20, // 40: ptah.ydb.native.ColumnMeta.from_sequence:type_name -> ptah.ydb.native.SequenceDescription
-	43, // 41: ptah.ydb.native.ColumnMeta.empty_default:type_name -> google.protobuf.NullValue
+	44, // 41: ptah.ydb.native.ColumnMeta.empty_default:type_name -> google.protobuf.NullValue
 	21, // 42: ptah.ydb.native.ColumnMeta.compression:type_name -> ptah.ydb.native.ColumnCompression
 	22, // 43: ptah.ydb.native.ColumnMeta.encoding:type_name -> ptah.ydb.native.ColumnEncoding
-	44, // 44: ptah.ydb.native.ColumnFamily.data:type_name -> Ydb.Table.StoragePool
-	45, // 45: ptah.ydb.native.ColumnFamily.compression:type_name -> Ydb.Table.ColumnFamily.Compression
-	46, // 46: ptah.ydb.native.ColumnFamily.keep_in_memory:type_name -> Ydb.FeatureFlag.Status
+	45, // 44: ptah.ydb.native.ColumnFamily.data:type_name -> Ydb.Table.StoragePool
+	46, // 45: ptah.ydb.native.ColumnFamily.compression:type_name -> Ydb.Table.ColumnFamily.Compression
+	47, // 46: ptah.ydb.native.ColumnFamily.keep_in_memory:type_name -> Ydb.FeatureFlag.Status
 	5,  // 47: ptah.ydb.native.ColumnFamily.cache_mode:type_name -> ptah.ydb.native.ColumnFamily.CacheMode
-	47, // 48: ptah.ydb.native.DescribeTableResult.self:type_name -> Ydb.Scheme.Entry
+	48, // 48: ptah.ydb.native.DescribeTableResult.self:type_name -> Ydb.Scheme.Entry
 	23, // 49: ptah.ydb.native.DescribeTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
-	42, // 50: ptah.ydb.native.DescribeTableResult.shard_key_bounds:type_name -> Ydb.TypedValue
+	43, // 50: ptah.ydb.native.DescribeTableResult.shard_key_bounds:type_name -> Ydb.TypedValue
 	16, // 51: ptah.ydb.native.DescribeTableResult.indexes:type_name -> ptah.ydb.native.TableIndexDescription
-	48, // 52: ptah.ydb.native.DescribeTableResult.table_stats:type_name -> Ydb.Table.TableStats
-	49, // 53: ptah.ydb.native.DescribeTableResult.ttl_settings:type_name -> Ydb.Table.TtlSettings
-	50, // 54: ptah.ydb.native.DescribeTableResult.storage_settings:type_name -> Ydb.Table.StorageSettings
+	49, // 52: ptah.ydb.native.DescribeTableResult.table_stats:type_name -> Ydb.Table.TableStats
+	50, // 53: ptah.ydb.native.DescribeTableResult.ttl_settings:type_name -> Ydb.Table.TtlSettings
+	51, // 54: ptah.ydb.native.DescribeTableResult.storage_settings:type_name -> Ydb.Table.StorageSettings
 	24, // 55: ptah.ydb.native.DescribeTableResult.column_families:type_name -> ptah.ydb.native.ColumnFamily
-	36, // 56: ptah.ydb.native.DescribeTableResult.attributes:type_name -> ptah.ydb.native.DescribeTableResult.AttributesEntry
-	39, // 57: ptah.ydb.native.DescribeTableResult.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
-	46, // 58: ptah.ydb.native.DescribeTableResult.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
-	40, // 59: ptah.ydb.native.DescribeTableResult.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
-	51, // 60: ptah.ydb.native.DescribeTableResult.changefeeds:type_name -> ptah.ydb.native.ChangefeedDescription
-	52, // 61: ptah.ydb.native.DescribeTableResult.store_type:type_name -> Ydb.Table.StoreType
-	42, // 62: ptah.ydb.native.ColumnIntent.literal:type_name -> Ydb.TypedValue
+	37, // 56: ptah.ydb.native.DescribeTableResult.attributes:type_name -> ptah.ydb.native.DescribeTableResult.AttributesEntry
+	40, // 57: ptah.ydb.native.DescribeTableResult.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
+	47, // 58: ptah.ydb.native.DescribeTableResult.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
+	41, // 59: ptah.ydb.native.DescribeTableResult.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
+	52, // 60: ptah.ydb.native.DescribeTableResult.changefeeds:type_name -> ptah.ydb.native.ChangefeedDescription
+	53, // 61: ptah.ydb.native.DescribeTableResult.store_type:type_name -> Ydb.Table.StoreType
+	43, // 62: ptah.ydb.native.ColumnIntent.literal:type_name -> Ydb.TypedValue
 	27, // 63: ptah.ydb.native.ColumnIntent.sequence:type_name -> ptah.ydb.native.SequenceIntent
 	21, // 64: ptah.ydb.native.ColumnIntent.compression:type_name -> ptah.ydb.native.ColumnCompression
 	22, // 65: ptah.ydb.native.ColumnIntent.encoding:type_name -> ptah.ydb.native.ColumnEncoding
-	41, // 66: ptah.ydb.native.SequenceIntent.data_type:type_name -> Ydb.Type
-	53, // 67: ptah.ydb.native.AccessIntent.direct_grants:type_name -> Ydb.Scheme.Permissions
-	53, // 68: ptah.ydb.native.AccessIntent.required_effective_permissions:type_name -> Ydb.Scheme.Permissions
+	42, // 66: ptah.ydb.native.SequenceIntent.data_type:type_name -> Ydb.Type
+	54, // 67: ptah.ydb.native.AccessIntent.direct_grants:type_name -> Ydb.Scheme.Permissions
+	54, // 68: ptah.ydb.native.AccessIntent.required_effective_permissions:type_name -> Ydb.Scheme.Permissions
 	28, // 69: ptah.ydb.native.RowTableIntent.access:type_name -> ptah.ydb.native.AccessIntent
-	49, // 70: ptah.ydb.native.RowTableIntent.ttl_settings:type_name -> Ydb.Table.TtlSettings
-	50, // 71: ptah.ydb.native.RowTableIntent.storage_settings:type_name -> Ydb.Table.StorageSettings
+	50, // 70: ptah.ydb.native.RowTableIntent.ttl_settings:type_name -> Ydb.Table.TtlSettings
+	51, // 71: ptah.ydb.native.RowTableIntent.storage_settings:type_name -> Ydb.Table.StorageSettings
 	24, // 72: ptah.ydb.native.RowTableIntent.column_families:type_name -> ptah.ydb.native.ColumnFamily
-	37, // 73: ptah.ydb.native.RowTableIntent.attributes:type_name -> ptah.ydb.native.RowTableIntent.AttributesEntry
-	39, // 74: ptah.ydb.native.RowTableIntent.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
-	46, // 75: ptah.ydb.native.RowTableIntent.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
-	40, // 76: ptah.ydb.native.RowTableIntent.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
+	38, // 73: ptah.ydb.native.RowTableIntent.attributes:type_name -> ptah.ydb.native.RowTableIntent.AttributesEntry
+	40, // 74: ptah.ydb.native.RowTableIntent.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
+	47, // 75: ptah.ydb.native.RowTableIntent.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
+	41, // 76: ptah.ydb.native.RowTableIntent.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
 	29, // 77: ptah.ydb.native.RowTableIntent.partition_at_keys:type_name -> ptah.ydb.native.SplitPoint
-	2,  // 78: ptah.ydb.native.FulltextIndexSettings.Analyzers.tokenizer:type_name -> ptah.ydb.native.FulltextIndexSettings.Tokenizer
-	31, // 79: ptah.ydb.native.FulltextIndexSettings.ColumnAnalyzers.analyzers:type_name -> ptah.ydb.native.FulltextIndexSettings.Analyzers
-	80, // [80:80] is the sub-list for method output_type
-	80, // [80:80] is the sub-list for method input_type
-	80, // [80:80] is the sub-list for extension type_name
-	80, // [80:80] is the sub-list for extension extendee
-	0,  // [0:80] is the sub-list for field type_name
+	40, // 78: ptah.ydb.native.IndexSettingsObservation.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
+	41, // 79: ptah.ydb.native.IndexSettingsObservation.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
+	2,  // 80: ptah.ydb.native.FulltextIndexSettings.Analyzers.tokenizer:type_name -> ptah.ydb.native.FulltextIndexSettings.Tokenizer
+	32, // 81: ptah.ydb.native.FulltextIndexSettings.ColumnAnalyzers.analyzers:type_name -> ptah.ydb.native.FulltextIndexSettings.Analyzers
+	82, // [82:82] is the sub-list for method output_type
+	82, // [82:82] is the sub-list for method input_type
+	82, // [82:82] is the sub-list for extension type_name
+	82, // [82:82] is the sub-list for extension extendee
+	0,  // [0:82] is the sub-list for field type_name
 }
 
 func init() { file_internal_nativeprotocol_indexes_proto_init() }
@@ -3220,16 +3281,16 @@ func file_internal_nativeprotocol_indexes_proto_init() {
 	}
 	file_internal_nativeprotocol_indexes_proto_msgTypes[21].OneofWrappers = []any{}
 	file_internal_nativeprotocol_indexes_proto_msgTypes[22].OneofWrappers = []any{}
-	file_internal_nativeprotocol_indexes_proto_msgTypes[25].OneofWrappers = []any{}
 	file_internal_nativeprotocol_indexes_proto_msgTypes[26].OneofWrappers = []any{}
 	file_internal_nativeprotocol_indexes_proto_msgTypes[27].OneofWrappers = []any{}
+	file_internal_nativeprotocol_indexes_proto_msgTypes[28].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_nativeprotocol_indexes_proto_rawDesc), len(file_internal_nativeprotocol_indexes_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   32,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

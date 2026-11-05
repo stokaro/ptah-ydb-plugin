@@ -37,7 +37,7 @@ func hostApplySelected(c *qt.C, selectors, format, text string, flags ...string)
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
 	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql", "hcl": "schema.hcl"}[format]
-	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil)
+	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil) // #nosec G703 -- a fixed file name under the test's c.TempDir()
 	source := []string{"--schema-file", filepath.Join(root, name)}
 	if format == "go" {
 		source = []string{"--root-dir", root}

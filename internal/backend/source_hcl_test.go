@@ -1,6 +1,7 @@
 package backend_test
 
 import (
+	"context"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -101,21 +102,67 @@ func TestCoordinationHCLSource_FailurePath(t *testing.T) {
 	})
 }
 
-// An index entry's YAML keys are claimed so that each is refused by name, as
-// the index directive's attributes are.
-func TestIndexYAMLKeysAreRefusedByName(t *testing.T) {
-	c := testcheck.New(t)
-	claim := tablesource.IndexYAMLKeys()[0]
+// yamlIndexKey is a document holding one key of index by_ts of records: the
+// claim of key, written with value.
+func yamlIndexKey(key string, value *protocol.SourceValue) *protocol.DecodeSourceRequest {
+	var claim *protocol.YAMLSourceKey
+	for _, candidate := range tablesource.IndexYAMLKeys() {
+		if candidate.Key == key {
+			claim = candidate
+		}
+	}
 	table := &protocol.Reference{Engine: "ydb", Kind: "table", Name: "records"}
 	document := &protocol.SourceDocument{Id: "doc", File: "schema.yaml", Format: protocol.SourceDocument_YAML, ByteLength: 1,
-		Models:   []*protocol.ValueModel{schema.TableDesiredModel()},
+		Models:   []*protocol.ValueModel{schema.TableDesiredModel(), schema.NativeDesiredModel(schema.IndexSettingsProperties)},
 		Bindings: []*protocol.SourceBinding{{Id: "records", EntryKey: "records", Object: table}},
 		Fragments: []*protocol.SourceFragment{{Id: "a", Selector: claim.Selector, YamlKey: claim, BindingId: "records", Span: span(),
 			Subject: &protocol.Reference{Engine: "ydb", Kind: "index", Name: "by_ts", Path: []string{"records"}},
-			Content: &protocol.SourceFragment_Value{Value: text("ENABLED")}}}}
-	result, err := backend.New().DecodeSource(c.Context(), &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{document}})
-	c.Assert(err, qt.ErrorMatches, `.*`+claim.Key+` is not supported by the YDB provider yet: an index states no settings of its own in the row-table model.*`)
-	c.Assert(result, qt.IsNil)
+			Content: &protocol.SourceFragment_Value{Value: value}}}}
+	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{document}}
+}
+
+// indexFacetsContext is the context of a call from a host that reads index
+// facets.
+func indexFacetsContext(c *qt.C) context.Context {
+	return provider.ContextWithHostFeatures(c.Context(), []string{provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.ObservedIndexFacetsFeature})
+}
+
+// An index entry's partitioning and read replica keys declare the index's own
+// facet, a number written as its digits, as the host's embedded engine reads
+// them.
+func TestIndexYAMLKeys_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		key, payload string
+		value        *protocol.SourceValue
+	}{
+		{"auto_partitioning_by_load", `{"partitioningSettings":{"partitioningByLoad":"ENABLED"}}`, text("enabled")},
+		{"auto_partitioning_min_partitions_count", `{"partitioningSettings":{"minPartitionsCount":"3"}}`, &protocol.SourceValue{Span: span(), Value: &protocol.SourceValue_Number{Number: "3"}}},
+		{"read_replicas_settings", `{"readReplicasSettings":{"anyAzReadReplicasCount":"2"}}`, text("ANY_AZ:2")},
+	} {
+		t.Run(test.key, func(t *testing.T) {
+			c := testcheck.New(t)
+			result, err := backend.New().DecodeSource(indexFacetsContext(c), yamlIndexKey(test.key, test.value))
+			c.Assert(err, qt.IsNil)
+			values := result.Documents[0].Fragments[0].Values
+			c.Assert(values, qt.HasLen, 1)
+			c.Assert(values[0].Value.Value.Kind, qt.Equals, schema.IndexSettingsProperties)
+			c.Assert(string(values[0].Value.Value.Payload), qt.Equals, test.payload)
+			c.Assert(values[0].Value.Value.Owner.Name, qt.Equals, "by_ts")
+		})
+	}
+}
+
+// Any other index entry key is claimed so that it is refused by name, as the
+// index directive's attributes are.
+func TestIndexYAMLKeys_FailurePath(t *testing.T) {
+	for _, key := range []string{"tokenizer", "false_positive_probability", "vector_dimension"} {
+		t.Run(key, func(t *testing.T) {
+			c := testcheck.New(t)
+			result, err := backend.New().DecodeSource(indexFacetsContext(c), yamlIndexKey(key, text("x")))
+			c.Assert(err, qt.ErrorMatches, `.*`+key+` is not supported by the YDB provider yet: an index directive or entry declares the partitioning and read replicas of a global index here.*`)
+			c.Assert(result, qt.IsNil)
+		})
+	}
 }
 
 // Both claims are two-way: a host that does not list a feature gets none of

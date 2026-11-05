@@ -47,10 +47,15 @@ type declaredFacets struct {
 	// indexes is the native index set of a row table, nil where the
 	// declaration states none.
 	indexes *native.IndexSetIntent
+	// indexSettings are the partitioning and read replicas the indexes'
+	// own facets declare, by index name. The creation request carries none of
+	// them: YDB takes an index's settings only once the index exists, so each
+	// is a step of its own after the creation (see plannedCreationIndexSettings).
+	indexSettings map[string]*native.IndexSettingsIntent
 }
 
 func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures) (declaredFacets, error) {
-	result := declaredFacets{table: &native.RowTableIntent{}, columns: make(map[string]*native.ColumnIntent)}
+	result := declaredFacets{table: &native.RowTableIntent{}, columns: make(map[string]*native.ColumnIntent), indexSettings: make(map[string]*native.IndexSettingsIntent)}
 	if captured == nil {
 		return result, nil
 	}
@@ -77,8 +82,11 @@ func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures)
 			return declaredFacets{}, err
 		}
 		identity := proto.CloneOf(owner)
-		if value.Kind == schema.ColumnProperties {
+		switch value.Kind {
+		case schema.ColumnProperties:
 			identity.Kind, identity.Path, identity.Name = "column", []string{owner.Name}, value.Owner.Name
+		case schema.IndexSettingsProperties:
+			identity.Kind, identity.Path, identity.Name = "index", []string{owner.Name}, value.Owner.Name
 		}
 		if !proto.Equal(identity, value.Owner) {
 			return declaredFacets{}, fmt.Errorf("YDB creation facet belongs to a different owner")
@@ -138,10 +146,39 @@ func (f *declaredFacets) decode(value *protocol.Envelope) error {
 		if err := protojson.Unmarshal(value.Payload, f.changefeeds); err != nil {
 			return err
 		}
+	case schema.IndexSettingsProperties:
+		settings := &native.IndexSettingsIntent{}
+		if err := protojson.Unmarshal(value.Payload, settings); err != nil {
+			return err
+		}
+		f.indexSettings[value.Owner.Name] = settings
 	default:
 		return unsupported("YDB table creation does not yet support facet %s", value.Kind)
 	}
 	return nil
+}
+
+// inSubjectTerms returns a facet's value with its owner named as the host's
+// subject names it: an index's read settings under the name a rename gives
+// the index, and a table's facets without the session's database.
+func inSubjectTerms(value *protocol.Envelope, subject *protocol.ComparisonIdentity, representation protocol.ValueInput_Representation) *protocol.Envelope {
+	if representation == protocol.ValueInput_OBSERVED && value.Kind == schema.IndexSettingsProperties && subject.GetKind() == value.Owner.Kind &&
+		subject.GetName().GetSource() != value.Owner.Name {
+		// The host compares the settings of an index the plan renames under
+		// the name the declaration gives it (schema.observed-index-facets):
+		// the rename keeps them, and the read named them by the old name.
+		value = proto.CloneOf(value)
+		value.Owner.Name = subject.GetName().GetSource()
+	}
+	if subject.GetDatabase().GetSource() == "" && value.Owner.Database != "" {
+		// The host names a table and its columns without a database: they live
+		// in the session's, which a read owner names and a declared owner leaves
+		// out. The facet is read in the subject's terms, so both sides of one
+		// table name the same owner.
+		value = proto.CloneOf(value)
+		value.Owner.Database = ""
+	}
+	return value
 }
 
 func normalizedDesired(record *protocol.ComparisonRecord) (*protocol.Envelope, error) {
@@ -168,23 +205,16 @@ func normalizedFacet(record *protocol.ComparisonRecord, representation protocol.
 	if err := provider.ValidateComparisonIdentity(record.Subject); err != nil {
 		return nil, err
 	}
-	subject, owner := record.Subject, value.Owner
-	if subject.GetDatabase().GetSource() == "" && owner.Database != "" {
-		// The host names a table and its columns without a database: they live
-		// in the session's, which a read owner names and a declared owner leaves
-		// out. The facet is read in the subject's terms, so both sides of one
-		// table name the same owner.
-		value = proto.CloneOf(value)
-		value.Owner.Database = ""
-		owner = value.Owner
-	}
+	subject := record.Subject
+	value = inSubjectTerms(value, subject, representation)
+	owner := value.Owner
 	if subject.Kind != owner.Kind || subject.GetDatabase().GetSource() != owner.Database ||
 		subject.GetSchema().GetSource() != owner.Schema || subject.GetName().GetSource() != owner.Name ||
 		subject.GetCatalog().GetSource() != "" || len(subject.Path)+len(subject.Signature) != 0 {
 		return nil, fmt.Errorf("YDB creation facet has a different bound identity")
 	}
 	parent := ""
-	if owner.Kind == "column" && len(owner.Path) == 1 {
+	if (owner.Kind == "column" || owner.Kind == "index") && len(owner.Path) == 1 {
 		parent = owner.Path[0]
 	}
 	if subject.GetParent().GetSource() != parent {

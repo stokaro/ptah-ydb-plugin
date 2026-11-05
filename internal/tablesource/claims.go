@@ -24,6 +24,7 @@ package tablesource
 
 import (
 	"slices"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
@@ -84,6 +85,23 @@ const PlatformPrefix = "platform.ydb."
 // of the group, so every key the provider does not read is refused by name.
 const KeyPlatformYDB = "platform.ydb"
 
+// HCLPlatformBlock returns the claim of a table's platform "ydb" block in HCL
+// (contract 25.22, source.hcl-platform): its row_deletion_column,
+// row_deletion_interval and row_deletion_unit overrides, which declare the
+// same TTL as the Go attributes and the YAML group above. The host refuses an
+// override the claim does not list, so the provider reads every override the
+// group holds. The row-table and column-storage models list no HCL: a table
+// that writes no block states nothing about its TTL, and the TTL it holds
+// stays, as on the host's embedded engine.
+func HCLPlatformBlock() *protocol.HCLSourceBlock {
+	attributes := make([]*protocol.HCLSourceAttribute, 0, len(ttlAttributes()))
+	for _, name := range ttlAttributes() {
+		attributes = append(attributes, &protocol.HCLSourceAttribute{Name: strings.TrimPrefix(name, PlatformPrefix), Kind: protocol.HCLSourceAttribute_STRING})
+	}
+	return &protocol.HCLSourceBlock{Site: protocol.HCLSourceBlock_TABLE_PLATFORM, Type: "ydb", Selector: KeyPlatformYDB, Attributes: attributes,
+		Models: []string{schema.TableProperties, schema.ColumnStorageProperties}}
+}
+
 // DirectiveIndex is the host's directive that declares an index. The bundled
 // decoder reads partitioning, vector and full-text options on it.
 const DirectiveIndex = "ptah:schema:index"
@@ -129,11 +147,27 @@ func tableAttributes() []string {
 }
 
 // indexAttributes are the attributes the provider claims on ptah:schema:index:
-// the ones that set an index's partitioning, local options, full-text options
-// and vector settings. The provider refuses every one by name.
+// the ones that set a global index's partitioning and read replicas, which
+// declare the index's own facet, and the local, full-text and vector options,
+// which the provider refuses by name.
 func indexAttributes() []string {
+	return slices.Concat(IndexSettingsAttributes(), refusedIndexAttributes())
+}
+
+// IndexSettingsAttributes are the attributes, and the YAML index keys, that
+// set the partitioning and the read replicas of a global sync, async or
+// unique index, in the order an export writes them, as the host's embedded
+// engine writes them.
+func IndexSettingsAttributes() []string {
+	return []string{AttributeBySize, AttributePartitionSizeMB, AttributeByLoad, AttributeMinPartitions, AttributeMaxPartitions, AttributeReadReplicas}
+}
+
+// refusedIndexAttributes are the index options the bundled decoder in the host
+// reads and the provider does not carry from a source: a column table's local
+// index options, and the full-text and vector settings, which the native
+// index facet states.
+func refusedIndexAttributes() []string {
 	return []string{
-		AttributeBySize, AttributePartitionSizeMB, AttributeByLoad, AttributeMinPartitions, AttributeMaxPartitions, AttributeReadReplicas,
 		"false_positive_probability", "ngram_size", "case_sensitive", "tokenizer", "language",
 		"use_filter_lowercase", "use_filter_stopwords", "use_filter_ngram", "use_filter_edge_ngram", "filter_ngram_min_length", "filter_ngram_max_length",
 		"use_filter_length", "filter_length_min", "filter_length_max", "use_filter_snowball",
@@ -153,9 +187,10 @@ func YAMLKeys() []*protocol.YAMLSourceKey {
 		switch key {
 		case KeyColumnFamilies:
 			// The families place columns. A table entry states a column of
-			// the default family and an empty native index set by writing
-			// nothing, and the families key is where an export writes that.
-			models = []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties}
+			// the default family, an empty native index set and an index
+			// holding the settings YDB gives a new one by writing nothing,
+			// and the families key is where an export writes that.
+			models = []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.IndexSettingsProperties}
 		case KeyColumnStore:
 			models = []string{schema.ColumnStorageProperties}
 		case KeyPlatformYDB:
@@ -169,12 +204,17 @@ func YAMLKeys() []*protocol.YAMLSourceKey {
 // IndexYAMLKeys returns the index-entry YAML keys the provider claims
 // (contract 25.3, under source.entry-keys): the index directive's attributes,
 // which a YAML index entry spells alike, as the host's bundled YAML source
-// reads them. Each is claimed so that it is refused by name, as the
-// directive's attributes are; the provider carries no index setting yet.
+// reads them. A partitioning or read replica key declares the index's own
+// facet; any other is claimed so that it is refused by name, as the
+// directive's attributes are.
 func IndexYAMLKeys() []*protocol.YAMLSourceKey {
 	var claims []*protocol.YAMLSourceKey
 	for _, key := range indexAttributes() {
-		claims = append(claims, &protocol.YAMLSourceKey{Scope: protocol.YAMLSourceKey_INDEX, Key: key, Selector: "index." + key, Models: []string{schema.TableProperties}})
+		models := []string{schema.TableProperties}
+		if slices.Contains(IndexSettingsAttributes(), key) {
+			models = []string{schema.IndexSettingsProperties}
+		}
+		claims = append(claims, &protocol.YAMLSourceKey{Scope: protocol.YAMLSourceKey_INDEX, Key: key, Selector: "index." + key, Models: models})
 	}
 	return claims
 }
@@ -191,18 +231,32 @@ func GoDirectives() []*protocol.GoSourceDirective {
 	family := claim(DirectiveColumnFamily, AttributeName, AttributeTable, AttributeData, AttributeCompression, AttributeCacheMode, AttributeFields)
 	family.Models = append(family.Models, schema.ColumnProperties)
 	index := claim(DirectiveIndex, indexAttributes()...)
-	index.Scope = protocol.GoSourceDirective_INDEX
+	index.Scope, index.Models = protocol.GoSourceDirective_INDEX, []string{schema.IndexSettingsProperties}
 	// The table directive declares a row table's settings or a column table's
 	// storage. It is also where a table states what it states by writing
-	// nothing: a column of the default family, no changefeed and no native
-	// index, which an export writes as the directive's part.
+	// nothing: a column of the default family, no changefeed, no native index
+	// and an index holding the settings YDB gives a new one, which an export
+	// writes as the directive's part.
 	table := claim(DirectiveTable, tableAttributes()...)
-	table.Models = append(table.Models, schema.ColumnStorageProperties, schema.ColumnProperties, schema.ChangefeedProperties, schema.IndexProperties)
+	table.Models = append(table.Models, schema.ColumnStorageProperties, schema.ColumnProperties, schema.ChangefeedProperties, schema.IndexProperties,
+		schema.IndexSettingsProperties)
 	return []*protocol.GoSourceDirective{
 		table,
 		index,
 		family,
 	}
+}
+
+// HCLIndexBlock returns the HCL claim of this package: the attributes that set
+// a global index's partitioning and read replicas inside the frontend's index
+// block, as the host's embedded engine writes them there. A switch and the
+// read replicas are strings, and a count a number, read as its text.
+func HCLIndexBlock() *protocol.HCLSourceBlock {
+	block := &protocol.HCLSourceBlock{Site: protocol.HCLSourceBlock_INDEX_ATTRIBUTES, Type: "index", Selector: "index", Models: []string{schema.IndexSettingsProperties}}
+	for _, name := range IndexSettingsAttributes() {
+		block.Attributes = append(block.Attributes, &protocol.HCLSourceAttribute{Name: name, Kind: protocol.HCLSourceAttribute_TEXT})
+	}
+	return block
 }
 
 // Owns reports whether the fragment carries one of the claims of this package.
@@ -215,6 +269,15 @@ func Owns(fragment *protocol.SourceFragment) bool {
 	if directive := fragment.GetGoDirective(); directive != nil {
 		return slices.ContainsFunc(GoDirectives(), func(claim *protocol.GoSourceDirective) bool {
 			return claim.GetDirective() == directive.GetDirective() && claim.GetScope() == directive.GetScope()
+		})
+	}
+	// An HCL fragment is this package's when it is one of the blocks the
+	// package declares, an index's attributes or a table's platform "ydb"
+	// block. Both are recognized here, so neither reaches the coordination
+	// decoder, which refuses any other block.
+	if block := fragment.GetHclBlock(); block != nil {
+		return slices.ContainsFunc([]*protocol.HCLSourceBlock{HCLIndexBlock(), HCLPlatformBlock()}, func(claim *protocol.HCLSourceBlock) bool {
+			return claim.GetSite() == block.GetSite() && claim.GetType() == block.GetType()
 		})
 	}
 	return false

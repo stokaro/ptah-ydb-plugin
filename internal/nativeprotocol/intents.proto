@@ -109,3 +109,11 @@ message ColumnStorageIntent {
     repeated LocalIndexObservation local_indexes = 4;
     ColumnTTLPolicy ttl = 5;
 }
+
+// IndexSettingsIntent is the automatic partitioning and the read replicas a
+// source declares for one global sync, async or unique index. A setting it
+// leaves out keeps what the index holds.
+message IndexSettingsIntent {
+  Ydb.Table.PartitioningSettings partitioning_settings = 1;
+  Ydb.Table.ReadReplicasSettings read_replicas_settings = 2;
+}

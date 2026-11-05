@@ -80,6 +80,13 @@ func dependencies(request *protocol.PlanFeaturesRequest, family Family, item cha
 			if effect.GetSubject().GetParent().GetNormalized() != "" {
 				continue
 			}
+			// The access list of a table or a view, which a grant or a revoke
+			// on it changes, and a comment are resources of their own, named
+			// by the object with the kind access or comment. They occupy no
+			// path; the step's read of the object beside them carries it.
+			if kind := effect.GetSubject().GetKind(); kind == "access" || kind == "comment" {
+				continue
+			}
 			// A directory effect needs its own path projection. Until that
 			// contract exists, it cannot establish a disjoint footprint.
 			if !isSchemeSubject(effect.Subject) {

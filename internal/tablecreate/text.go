@@ -12,6 +12,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -299,6 +300,19 @@ func creationSettings(request *Ydb_Table.CreateTableRequest) ([]string, error) {
 		settings = append(settings, "PARTITION_AT_KEYS = ("+points+")")
 	}
 	return settings, nil
+}
+
+// SettingsText writes the settings of a row table YQL's WITH clause holds
+// beside its TTL and its split points, as creationSettings writes them: the
+// automatic partitioning, the read replicas, the key Bloom filter and a
+// uniform starting layout.
+func SettingsText(intent *native.RowTableIntent) ([]string, error) {
+	request := &Ydb_Table.CreateTableRequest{PartitioningSettings: intent.GetPartitioningSettings(), ReadReplicasSettings: intent.GetReadReplicasSettings(),
+		KeyBloomFilter: intent.GetKeyBloomFilter()}
+	if partitions := intent.GetUniformPartitions(); partitions != 0 {
+		request.Partitions = &Ydb_Table.CreateTableRequest_UniformPartitions{UniformPartitions: partitions}
+	}
+	return creationSettings(request)
 }
 
 // ttlSetting writes a row table's TTL as the value of YQL's TTL setting:

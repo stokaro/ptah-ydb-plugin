@@ -3,6 +3,7 @@ package tablesource_test
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // meaning is what a table's declared partitioning, TTL, column families and
@@ -89,7 +91,7 @@ func families(list []familyMeaning) []familyMeaning {
 	return list
 }
 
-func tableKey(schema, name string) string { return schema + "." + name }
+func tableKey(directory, name string) string { return directory + "." + name }
 
 // hostPartitioning and hostFamilies are the host's facet payloads. An unknown
 // field fails the decode, so an agreement row cannot carry a setting that the
@@ -197,8 +199,16 @@ func hostMeaning(c *qt.C, recorded golden) map[string]meaning {
 			m.TTL = nil
 		}
 		// A row the host and the provider are expected to agree on carries no
-		// index option, which the provider cannot carry.
-		c.Assert(table.Indexes, qt.HasLen, 0, qt.Commentf("table %s", table.Name))
+		// index option but a global index's partitioning, which the
+		// provider's index facet carries and a table's meaning leaves out.
+		for _, index := range table.Indexes {
+			var read struct {
+				Name   string                     `json:"name"`
+				Facets map[string]json.RawMessage `json:"facets"`
+			}
+			strictJSON(c, index, &read)
+			c.Assert(slices.Collect(maps.Keys(read.Facets)), qt.DeepEquals, []string{"ptah.run/ydb/index-partitioning"}, qt.Commentf("table %s", table.Name))
+		}
 		if !m.empty() {
 			result[tableKey(table.Schema, table.Name)] = m
 		}
@@ -228,9 +238,10 @@ func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning 
 			for _, value := range fragment.Values {
 				envelope := value.Value.Value
 				c.Assert(value.Placement, qt.Equals, protocol.SourceModelValue_FACET)
-				if envelope.Kind == "github.com/stokaro/ptah-ydb-plugin/table-changefeeds" {
+				if envelope.Kind == "github.com/stokaro/ptah-ydb-plugin/table-changefeeds" || envelope.Kind == schema.IndexSettingsProperties {
 					// A table's changefeeds are internal/changefeedsource's,
-					// and the host's golden facets do not record them.
+					// an index's settings its own facet, and the host's
+					// golden facets of a table record neither.
 					continue
 				}
 				if envelope.Kind == "github.com/stokaro/ptah-ydb-plugin/column-properties" {

@@ -11,7 +11,7 @@ page installs and selects this provider.
 
 | Topic | Where |
 | --- | --- |
-| Using the provider from `ptah` and `ptah-compat` | [Using the provider with Ptah](ptah.md) |
+| Using the provider from `ptah` and `ptah-compat` | [Using the provider with Ptah](usage.md) |
 | Go annotations and YAML keys that declare YDB objects | [Declaring YDB objects](declarations.md) |
 | How a migration is split, the migration lock, statement and lock timeouts | [Migrations on YDB](migrations.md) |
 | The vector index of an embedding generation | [Embedding generations on YDB](inference.md) |
@@ -23,6 +23,7 @@ page installs and selects this provider.
 | Views, comments, users, groups and permissions | [Common objects](../README.md#common-objects) |
 | Row tables, keys, types and Serial columns | [Native row-table creation](../README.md#native-row-table-creation), [Serial columns](../README.md#serial-columns) |
 | Column families, TTL, partitioning, read replicas and key bloom filter | [Native table alteration](../README.md#native-table-alteration) |
+| A table's TTL in HCL, its `platform "ydb"` block | [Offline row-table declarations](../README.md#offline-row-table-declarations) |
 | Indexes, index partitioning, vector and full-text indexes | [Index alteration](../README.md#index-alteration), [Vector and full-text indexes](../README.md#vector-and-full-text-indexes) |
 | Table rebuilds | [Native table rebuild](../README.md#native-table-rebuild) |
 | Column tables | [Column tables](../README.md#column-tables) |
@@ -41,3 +42,51 @@ page installs and selects this provider.
 The YDB release lines and their capabilities are this provider's to declare;
 its release publishes them in `release-lines.json`, and Ptah's support matrix
 lists only the engines Ptah builds in.
+
+## How these pages reach docs.ptah.run
+
+Every page in this folder except this README is published on docs.ptah.run
+under `extend/providers/ydb/<page>/`, beside Ptah's own pages, and
+[Configure the YDB provider](https://docs.ptah.run/edge/extend/providers/ydb/)
+introduces them. The pages live here so that a change to the provider and a
+change to its documentation are one pull request.
+
+Ptah's documentation build imports this folder at the release of this provider
+that `docs/site/scripts/data/provider-docs.json` in stokaro/ptah names. A merged
+change here therefore reaches the site when Ptah declares a release that
+carries it: the pull request that moves the declaration to the new release
+imports its pages, records any new page's address, and adds a redirect for a
+page this folder removed or renamed. Each released version of Ptah's
+documentation keeps the pages of the release it declared.
+
+A page here is written for both places:
+
+- It starts with the frontmatter every page of the site carries: `title`,
+  `description`, `type`, `audience`, `readerQuestion`, `goal`,
+  `sourceOfTruth`, `generated: false`, `overlaps` and `disposition`.
+  `sidebar.order` places it in the provider's part of the navigation.
+- Its `# Title` heading repeats `title`, so the page reads on GitHub; the site
+  renders the title from the frontmatter and drops the heading.
+- It links another page of this folder by its file name, any other file of this
+  repository by its relative path, and a Ptah page by its address on
+  `https://docs.ptah.run/edge/`. The import turns each into an address that
+  works on the site: a route of the site, or the file on GitHub at the imported
+  commit. `sourceOfTruth` names paths relative to the repository root.
+
+Ptah's
+[documentation site README](https://github.com/stokaro/ptah/blob/master/docs/site/README.md#provider-documentation)
+lists what the import accepts and refuses.
+
+`.github/workflows/docs.yml` runs Ptah's documentation checks on this folder in
+every pull request, from Ptah's own `provider-docs.yml` workflow: the style,
+terminology and link checks, the command lines a page publishes, and a build of
+the whole site with these pages in it. The checkers stay in Ptah. To read a page
+on the site before a release declares it, import this checkout into a Ptah
+checkout:
+
+```console
+cd docs/site
+npm ci
+node scripts/import-provider-docs.mjs --source ydb=/path/to/ptah-ydb-plugin
+npm run dev
+```

@@ -11,9 +11,9 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/emptypb"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -95,19 +95,11 @@ func (s *settings) finish() error {
 	if s.column.Ttl != nil {
 		return errors.New(schema.ColumnTableBothTTLRefusal)
 	}
-	enabled := &native.ColumnTTLEnabled{}
-	switch mode := ttl.GetMode().(type) {
-	case *Ydb_Table.TtlSettings_DateTypeColumn:
-		enabled.Column = mode.DateTypeColumn.GetColumnName()
-		enabled.Tiers = []*native.ColumnTTLTier{{ApplyAfterSeconds: uint64(mode.DateTypeColumn.GetExpireAfterSeconds()), Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}}}
-	case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
-		enabled.Column = mode.ValueSinceUnixEpoch.GetColumnName()
-		enabled.ColumnUnit = uint64(mode.ValueSinceUnixEpoch.GetColumnUnit()) // #nosec G115 -- a column unit is one of YDB's enum numbers, 0 to 4
-		enabled.Tiers = []*native.ColumnTTLTier{{ApplyAfterSeconds: uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds()), Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}}}
-	default:
-		return fmt.Errorf("YDB TTL requires an explicit mode")
+	policy, err := tablecreate.DeletingColumnTTL(ttl)
+	if err != nil {
+		return err
 	}
-	s.column.Ttl = &native.ColumnTTLPolicy{State: &native.ColumnTTLPolicy_Enabled{Enabled: enabled}}
+	s.column.Ttl = policy
 	s.intent.TtlSettings = nil
 	return nil
 }

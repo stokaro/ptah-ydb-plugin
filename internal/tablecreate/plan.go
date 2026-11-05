@@ -21,7 +21,7 @@ const ServiceID = "ydb-row-table-create"
 // column table, and the changefeeds of a table to this assessment: the host
 // plans no table whose facets no planning service claims.
 func ParentKinds() []string {
-	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.IndexSettingsProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
 }
 
 type creation struct {
@@ -34,6 +34,10 @@ type creation struct {
 	// indexes add the vector and full-text indexes the new table declares,
 	// each after its creation.
 	indexes []*indexStep
+	// settings give the new table's global indexes the partitioning and read
+	// replicas their own facets declare, each after the creation: the call
+	// that creates a table takes no index settings.
+	settings []*indexSettingsStep
 }
 
 // removal is a table the plan drops, and the host's steps its drop replaces.
@@ -136,6 +140,9 @@ type planner struct {
 	// feedNumber numbers the changefeed steps of the created and the altered
 	// tables.
 	feedNumber int
+	// indexSettingsNumber numbers the index settings steps of the created and
+	// the altered tables.
+	indexSettingsNumber int
 }
 
 // planTable plans table i of the request by its action. A context table is
@@ -434,7 +441,14 @@ func (p *planner) planTableCreation(i int, table *protocol.PlanningTable, owner 
 	if reason != "" {
 		return refused(i, reason), nil
 	}
-	p.creations = append(p.creations, creation{index: i, table: table, operation: operation, feeds: feeds, indexes: indexes})
+	settings, reason, err := plannedCreationIndexSettings(owner, table.Desired, operation)
+	if err != nil {
+		return nil, err
+	}
+	if reason != "" {
+		return refused(i, reason), nil
+	}
+	p.creations = append(p.creations, creation{index: i, table: table, operation: operation, feeds: feeds, indexes: indexes, settings: settings})
 	return nil, nil
 }
 
@@ -488,6 +502,13 @@ func (p *planner) contributeCreations() (*protocol.PlannedFeatures, error) {
 			p.contribution.Steps = append(p.contribution.Steps, step)
 			p.contribution.Dependencies = append(p.contribution.Dependencies, dependency)
 			p.receiptSteps[item.index] = append(p.receiptSteps[item.index], index.id)
+		}
+		for _, settings := range item.settings {
+			step := settings.planningStep(p.indexSettingsNumber, item.table.Subject)
+			p.indexSettingsNumber++
+			p.contribution.Steps = append(p.contribution.Steps, step)
+			p.contribution.Dependencies = append(p.contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(item.id), After: proto.CloneOf(settings.id)})
+			p.receiptSteps[item.index] = append(p.receiptSteps[item.index], settings.id)
 		}
 		if item.feeds != nil {
 			step, dependencies := item.feeds.planningStep(p.feedNumber, item.table.Subject, []*protocol.StepIdentity{item.id})
@@ -577,9 +598,9 @@ func (p *planner) contributeRebuilds() {
 // alterationNumbers number the steps of each kind the altered tables take,
 // across the tables in subject order.
 type alterationNumbers struct {
-	families, additions, removals, ttls, partitionings         int
-	indexAdditions, indexRemovals, indexRenames, indexSettings int
-	defaults, inventories, sequences                           int
+	families, additions, removals, ttls, partitionings int
+	indexAdditions, indexRemovals, indexRenames        int
+	defaults, inventories, sequences                   int
 }
 
 // contributeAlterations contributes the steps of the altered tables in subject
@@ -605,7 +626,7 @@ func (p *planner) contributeAlteration(item *alteration, numbers *alterationNumb
 	ordered = append(ordered, kept...)
 	ordered = append(ordered, p.contributeTableSettings(item, numbers)...)
 	ordered = append(ordered, p.contributeIndexChanges(item, numbers)...)
-	ordered = append(ordered, p.contributeIndexSettings(item, numbers)...)
+	ordered = append(ordered, p.contributeIndexSettings(item)...)
 	if item.feeds != nil {
 		step, dependencies := item.feeds.planningStep(p.feedNumber, item.table.Subject, nil)
 		p.feedNumber++
@@ -791,19 +812,12 @@ func (p *planner) contributeIndexChanges(item *alteration, numbers *alterationNu
 // contributeIndexSettings contributes the step of each change of the settings
 // of an index the altered table holds, then the order that puts each after the
 // addition of its index, and returns the steps.
-func (p *planner) contributeIndexSettings(item *alteration, numbers *alterationNumbers) []*protocol.StepIdentity {
+func (p *planner) contributeIndexSettings(item *alteration) []*protocol.StepIdentity {
 	subject := item.table.Subject
 	var ordered []*protocol.StepIdentity
 	for _, settings := range item.indexSettings {
-		settings.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-index-settings/%06d", numbers.indexSettings)}
-		numbers.indexSettings++
-		settings.operation.Id = settings.id.Name
-		facts := settings.operation.OperationSemantics
-		p.contribution.Steps = append(p.contribution.Steps, &protocol.PlanningStep{Id: settings.id,
-			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: settings.operation},
-			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
-				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
-					{Subject: indexSubject(subject, settings.change.held.GetName()), Action: protocol.PlanningEffect_ALTER}}}})
+		p.contribution.Steps = append(p.contribution.Steps, settings.planningStep(p.indexSettingsNumber, subject))
+		p.indexSettingsNumber++
 		ordered = append(ordered, settings.id)
 	}
 	p.contribution.Dependencies = append(p.contribution.Dependencies, settingsAfterAdditions(item.indexes, item.indexSettings)...)

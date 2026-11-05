@@ -1,3 +1,27 @@
+---
+title: Using the provider with Ptah
+description: How a ydb:// URL, a dev database and ptah-compat reach YDB through this provider.
+type: how-to
+audience:
+  - database-engineer
+readerQuestion: "How do ptah and ptah-compat connect to YDB through this provider?"
+goal: "Connect Ptah to a YDB database and choose where a run's dev database lives."
+sourceOfTruth:
+  - internal/connection
+  - internal/devdatabase
+  - internal/devclean
+  - cmd/ptah-plugin-ydb
+  - stokaro/ptah#4204
+generated: false
+searchAliases:
+  - "ydb:// URL"
+  - "YDB dev database"
+overlaps: []
+disposition: keep
+sidebar:
+  order: 1
+---
+
 # Using the provider with Ptah
 
 Ptah reaches YDB only through this provider, provider ID

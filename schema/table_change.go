@@ -39,6 +39,9 @@ func buildTablePropertiesChangeModel() *protocol.ValueModel {
 			"column": map[string]any{
 				"before": json.RawMessage(model(ColumnProperties).DefinitionJson),
 				"after":  json.RawMessage(ColumnDesiredModel().DefinitionJson)},
+			"index": map[string]any{
+				"before": json.RawMessage(model(IndexSettingsProperties).DefinitionJson),
+				"after":  json.RawMessage(NativeDesiredModel(IndexSettingsProperties).DefinitionJson)},
 			"indexes": map[string]any{
 				"facet":  "the kind of the index set model, present exactly when the operands are index sets",
 				"before": json.RawMessage(model(IndexProperties).DefinitionJson),
@@ -47,7 +50,7 @@ func buildTablePropertiesChangeModel() *protocol.ValueModel {
 				"facet":  "the kind of the changefeed set model, present exactly when the operands are changefeed sets",
 				"before": json.RawMessage(model(ChangefeedProperties).DefinitionJson),
 				"after":  json.RawMessage(NativeDesiredModel(ChangefeedProperties).DefinitionJson)}},
-		"operands": "the owner is a table or one of its columns; before is the complete observed facet of that owner and after is the complete desired facet; neither may be null; " +
+		"operands": "the owner is a table, one of its columns or one of its global indexes; before is the complete observed facet of that owner and after is the complete desired facet; neither may be null; " +
 			"the facet key names the index set or the changefeed set model when the owner is a table and the operands are its index or changefeed sets",
 		"validation": "exact lowercase keys; validate both operands against the model that matches the owner kind, or the set model the facet key names",
 		"semantics": "behavioral; replaces no owner, removes no state, leaves access unchanged; a changefeed set change that drops or recreates a changefeed, or drops or restarts a consumer of its topic, " +
@@ -78,8 +81,10 @@ func tableChangeOperandKind(owner *protocol.Reference) (string, error) {
 		return TableProperties, nil
 	case "column":
 		return ColumnProperties, nil
+	case "index":
+		return IndexSettingsProperties, nil
 	default:
-		return "", fmt.Errorf("table properties change requires a table or column owner")
+		return "", fmt.Errorf("table properties change requires a table, column or index owner")
 	}
 }
 
@@ -200,6 +205,8 @@ func tableChangeSemantics(operandKind string, before, after json.RawMessage) (*p
 	switch operandKind {
 	case ColumnProperties:
 		reason = "A column moves to another column family"
+	case IndexSettingsProperties:
+		reason = "A global index's partitioning or read replicas change how YDB splits and merges its partitions and where it serves reads"
 	case IndexProperties:
 		reason = "A secondary index is added, dropped or differs from its declaration; YDB builds a new index in the background and cannot alter one in place"
 	case ChangefeedProperties:
@@ -219,7 +226,7 @@ func desiredModel(kind string) *protocol.ValueModel {
 	switch kind {
 	case ColumnProperties:
 		return ColumnDesiredModel()
-	case IndexProperties, ChangefeedProperties:
+	case IndexProperties, IndexSettingsProperties, ChangefeedProperties:
 		return NativeDesiredModel(kind)
 	}
 	return TableDesiredModel()

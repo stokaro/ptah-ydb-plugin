@@ -53,14 +53,17 @@ func wireRows(c *qt.C) []row {
 }
 
 // gaps names what a reading declares that a SQL schema reading has no home
-// for: a table's or an index's YDB settings, a password, and an object other
-// than a coordination node, a topic, an external data source or an external
-// table. A coordination node at a path the provider's model refuses counts as
-// one too.
+// for: a column table that declares a row table's settings, a row table that
+// declares both starting layouts, which the row-table model refuses as YDB
+// does, an index's YDB settings, a password, and an object other than a
+// coordination node, a topic, an external data source or an external table. A
+// coordination node at a path the provider's model refuses counts as one too.
 func gaps(reading *yqlschema.Reading) []string {
 	var found []string
 	for _, table := range reading.Tables {
-		if !table.Facets.Empty() {
+		facets := table.Facets
+		layouts := facets.Partitioning != nil && facets.Partitioning.UniformPartitions != 0 && len(facets.Partitioning.PartitionAtKeys) != 0
+		if facets.ColumnStore != nil && (facets.Partitioning != nil || len(facets.Families) != 0) || layouts {
 			found = append(found, "table "+table.Qualified())
 		}
 	}
@@ -137,7 +140,7 @@ func TestReply_HappyPath(t *testing.T) {
 			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
 			c.Assert(reply.GetComplete(), qt.IsTrue, qt.Commentf("%v", reply.GetDiagnostics()))
 			c.Assert(wireOrder(settle(c, hostMapping(c, reply))), qt.DeepEquals,
-				wireOrder(settle(c, normalChangefeeds(c, normalExternals(c, normalTopics(c, withoutFacets(hostMeaning(c, r.golden.Grammar))))))))
+				wireOrder(settle(c, normalChangefeeds(c, normalExternals(c, normalTopics(c, normalTableFacets(c, hostMeaning(c, r.golden.Grammar))))))))
 		})
 	}
 }
@@ -148,7 +151,7 @@ func TestReply_HappyPath(t *testing.T) {
 func TestReply_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	rows := slices.DeleteFunc(wireRows(c), func(r row) bool { return complete(c, r) })
-	c.Assert(len(rows) >= 30, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
+	c.Assert(len(rows) >= 20, qt.IsTrue, qt.Commentf("%d rows reach a refusal", len(rows)))
 	for _, r := range rows {
 		t.Run(r.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -236,13 +239,6 @@ func settle(c *qt.C, m meaning) meaning {
 	return m
 }
 
-// withoutFacets is a meaning with the settings of tables and indexes left
-// out, which a complete reply carries none of.
-func withoutFacets(m meaning) meaning {
-	m.TableFacets, m.IndexFacets = make(map[string]map[string]any), make(map[string]map[string]any)
-	return m
-}
-
 // wireOrder orders the columns of a meaning by table, and its objects as
 // the host orders feature objects: by kind, directory, parent and name. A
 // reply carries a table's changefeeds as a facet of the table, apart from its
@@ -263,12 +259,13 @@ func wireOrder(m meaning) meaning {
 
 // hostMapping is the meaning of the model the host maps a complete reply to,
 // as internal/providerhost maps a SQL schema reading: each table at its
-// qualified name with its columns and indexes, each view at its qualified
-// name, each grant at the field of the host's model its target's kind names,
-// and each coordination node with the settings its envelope holds.
+// qualified name with its columns, its indexes and the settings its facets
+// hold, each view at its qualified name, each grant at the field of the host's
+// model its target's kind names, and each coordination node with the settings
+// its envelope holds.
 func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 	c.Helper()
-	result := meaning{TableFacets: make(map[string]map[string]any), IndexFacets: make(map[string]map[string]any)}
+	result := meaning{TableFacets: hostTableFacets(c, reply), IndexFacets: make(map[string]map[string]any)}
 	for _, table := range reply.GetTables() {
 		qualified := canonical(table.GetSchema(), table.GetName())
 		object := map[string]any{"Name": table.GetName(), "Schema": table.GetSchema(), "Comment": table.GetComment(), "PrimaryKey": table.GetPrimaryKey()}
@@ -395,7 +392,9 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 			Payload: map[string]any{"spec": spec}})
 	}
 	for _, facet := range reply.GetFacets() {
-		c.Assert(facet.GetKind(), qt.Equals, schema.ChangefeedProperties)
+		if facet.GetKind() != schema.ChangefeedProperties {
+			continue
+		}
 		var set native.ChangefeedSetIntent
 		c.Assert(protojson.Unmarshal(facet.GetPayload(), &set), qt.IsNil)
 		owner := facet.GetOwner()
