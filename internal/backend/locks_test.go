@@ -203,3 +203,47 @@ func TestRefusedLockIsAConfirmedReceipt_FailurePath(t *testing.T) {
 		})
 	}
 }
+
+// slowLock is a held lock whose check takes delay, or ends when the context it
+// is given ends first.
+type slowLock struct {
+	lockProbe
+	delay time.Duration
+}
+
+func (l *slowLock) Check(ctx context.Context) error {
+	select {
+	case <-time.After(l.delay):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// A statement timeout shorter than the check of the session's locks before a
+// unit bounds the unit, not the check: the check completes, the unit is sent
+// and stopped by the timeout, and the session keeps its lock. A check run
+// under the unit's timeout ends with the deadline, and checkLock fences the
+// session as if the lock were lost: the unit is not sent, and the lock reads
+// as unknown.
+func TestStatementTimeoutDoesNotFenceTheLockCheck(t *testing.T) {
+	c := testcheck.New(t)
+	probe := &driverProbe{}
+	p := probeProvider(c, probe)
+	lease, cancel := context.WithCancel(context.Background())
+	c.Cleanup(cancel)
+	p.sessions["session"].locks = map[string]*lockRecord{"lock": {name: "migration", outcome: protocol.LockResult_ACQUIRED,
+		hold: &slowLock{lockProbe: lockProbe{ctx: lease, cancel: cancel}, delay: 50 * time.Millisecond}}}
+	request := sqlRequest("")
+	request.StatementTimeoutNanoseconds = int64(5 * time.Millisecond)
+
+	result, err := p.Execute(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(result.StatementTimedOut, qt.IsTrue)
+	c.Assert(result.DiagnosticCode, qt.Equals, "ydb.statement-timeout")
+	checked, err := p.CheckLock(c.Context(), lockRequest())
+	c.Assert(err, qt.IsNil)
+	c.Assert(checked.Outcome, qt.Equals, protocol.LockResult_ACQUIRED)
+}

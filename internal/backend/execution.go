@@ -187,25 +187,31 @@ func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest
 		}
 		return result
 	}
+	// The statement timeout bounds each unit's statements, not the check of
+	// the session's locks before them. checkLock fences the session on any
+	// failed check, so a timeout that ended during the check would fence it as
+	// if the lock were lost, and the unit would not be sent at all. The checks
+	// run under the request's context, which a lost lock ends (see guard).
+	checkLocks := func(context.Context) error { return s.verifyLocks(ctx) }
 	result := executeUnits(ctx, time.Duration(request.GetStatementTimeoutNanoseconds()), stopped, failed, func(ctx context.Context, unit *protocol.Unit) (bool, error) {
 		if unit.GetNative() != nil {
 			switch unit.GetNative().GetKind() {
 			case tablecreate.OperationKind:
-				return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.InventoryOperationKind:
-				return nativeapi.NewColumnInventory(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.capabilities, s.verifyLocks)
+				return nativeapi.NewColumnInventory(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.capabilities, checkLocks)
 			case tablecreate.DefaultOperationKind:
-				return nativeapi.NewColumnDefault(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewColumnDefault(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.AlterOperationKind:
-				return nativeapi.NewTableAlteration(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewTableAlteration(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.IndexSettingsOperationKind:
-				return nativeapi.NewIndexSettings(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewIndexSettings(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.ColumnOperationKind:
-				return nativeapi.NewColumnTableCreation(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewColumnTableCreation(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.ColumnTTLOperationKind:
-				return nativeapi.NewColumnTableTTL(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewColumnTableTTL(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.ColumnLocalIndexOperationKind:
-				return nativeapi.NewColumnTableLocalIndex(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewColumnTableLocalIndex(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case schema.SecretOperation:
 				if !s.capabilities["secrets"] {
 					return false, fmt.Errorf("the target does not support scheme secrets")
@@ -217,45 +223,45 @@ func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest
 					}
 					return inputError(expansion, s.executeSchema(ctx, expansion.Text))
 				}
-				return nativeapi.NewSecret(s.connection.Driver, execute).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewSecret(s.connection.Driver, execute).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case schema.TopicOperation:
-				return nativeapi.NewTopic(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewTopic(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.DropOperationKind:
-				return nativeapi.NewTableDrop(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewTableDrop(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.CopyOperationKind:
-				return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyCopy(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyCopy(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.RenameOperationKind:
-				return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyRename(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyRename(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.NativeIndexOperationKind:
-				return nativeapi.NewNativeIndexAddition(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewNativeIndexAddition(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case tablecreate.SequenceOperationKind:
-				return nativeapi.NewSerialSequence(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.capabilities, s.verifyLocks)
+				return nativeapi.NewSerialSequence(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.capabilities, checkLocks)
 			case schema.ChangefeedOperation:
-				return nativeapi.NewChangefeed(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewChangefeed(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case schema.ExternalSourceOperation, schema.ExternalTableOperation:
-				return nativeapi.NewExternal(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewExternal(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case schema.StreamingQueryOperation:
 				read := s.streaming()
 				if read == nil {
 					return false, fmt.Errorf("streaming queries require an established capability")
 				}
-				return (&nativeapi.StreamingQuery{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return (&nativeapi.StreamingQuery{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			case schema.ReplicationOperation:
-				return nativeapi.NewReplications(s.connection.Driver, s.executeSchema).ApplyReplication(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewReplications(s.connection.Driver, s.executeSchema).ApplyReplication(ctx, s.database, unit.GetNative(), checkLocks)
 			case schema.TransferOperation:
-				return nativeapi.NewReplications(s.connection.Driver, s.executeSchema).ApplyTransfer(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return nativeapi.NewReplications(s.connection.Driver, s.executeSchema).ApplyTransfer(ctx, s.database, unit.GetNative(), checkLocks)
 			case schema.WorkloadOperation:
 				read, unread := s.workload()
 				if read == nil {
 					return false, fmt.Errorf("resource pools cannot change here: %s", unread)
 				}
-				return (&nativeapi.Workload{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+				return (&nativeapi.Workload{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 			}
-			return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), s.verifyLocks)
+			return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, unit.GetNative(), checkLocks)
 		}
 		if pieces, split := services[unit]; split {
 			for i, piece := range pieces {
-				if dispatched, err := s.runInputPiece(ctx, runner, piece, bindings); err != nil {
+				if dispatched, err := s.runInputPiece(ctx, runner, piece, bindings, checkLocks); err != nil {
 					// A piece after the first leaves the unit partly applied.
 					if i == 0 {
 						err = &firstPieceFailure{piece: piece, err: err}
@@ -265,7 +271,7 @@ func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest
 			}
 			return true, nil
 		}
-		return s.runInputPiece(ctx, runner, sqlPiece{text: unit.GetSql()}, bindings)
+		return s.runInputPiece(ctx, runner, sqlPiece{text: unit.GetSql()}, bindings, checkLocks)
 	}, request.Units)
 	if s.verifyLocks(ctx) != nil && (result.AppliedCount > 0 || result.Outcome == protocol.Execution_UNKNOWN) {
 		result.Outcome = protocol.Execution_UNKNOWN
@@ -360,15 +366,16 @@ func (p sqlPiece) service() bool { return p.coordination != nil || p.comment != 
 
 // runPiece runs one piece of a SQL unit once: a comment statement through the
 // table service, a coordination node statement through the coordination
-// service, and every other query through runner.
-func (s *session) runPiece(ctx context.Context, runner sqlExecutor, piece sqlPiece) (bool, error) {
+// service, and every other query through runner. checkLocks verifies the
+// session's locks right before the piece is sent.
+func (s *session) runPiece(ctx context.Context, runner sqlExecutor, piece sqlPiece, checkLocks func(context.Context) error) (bool, error) {
 	switch {
 	case piece.coordination != nil:
-		return nativeapi.NewCoordination(s.connection.Driver).RunStatement(ctx, s.connection.Database(), s.database, *piece.coordination, s.verifyLocks)
+		return nativeapi.NewCoordination(s.connection.Driver).RunStatement(ctx, s.connection.Database(), s.database, *piece.coordination, checkLocks)
 	case piece.comment != nil:
-		return nativeapi.NewComments(s.connection.Driver).RunStatement(ctx, s.connection.Database(), s.database, *piece.comment, s.verifyLocks)
+		return nativeapi.NewComments(s.connection.Driver).RunStatement(ctx, s.connection.Database(), s.database, *piece.comment, checkLocks)
 	}
-	if err := s.verifyLocks(ctx); err != nil {
+	if err := checkLocks(ctx); err != nil {
 		return false, err
 	}
 	_, err := runner.ExecContext(ctx, piece.text)
@@ -513,9 +520,9 @@ func (p *Provider) lookup(id string) (*session, error) {
 }
 
 // runInputPiece expands references only in the transient text passed to YDB.
-func (s *session) runInputPiece(ctx context.Context, runner sqlExecutor, piece sqlPiece, bindings map[string]string) (bool, error) {
+func (s *session) runInputPiece(ctx context.Context, runner sqlExecutor, piece sqlPiece, bindings map[string]string, checkLocks func(context.Context) error) (bool, error) {
 	if piece.service() {
-		return s.runPiece(ctx, runner, piece)
+		return s.runPiece(ctx, runner, piece, checkLocks)
 	}
 	expansion, err := expandInputs(piece.text, bindings)
 	if err != nil {
@@ -525,6 +532,6 @@ func (s *session) runInputPiece(ctx context.Context, runner sqlExecutor, piece s
 		return false, fmt.Errorf("the target does not support scheme secrets")
 	}
 	piece.text = expansion.Text
-	dispatched, err := s.runPiece(ctx, runner, piece)
+	dispatched, err := s.runPiece(ctx, runner, piece, checkLocks)
 	return dispatched, inputError(expansion, err)
 }
