@@ -221,14 +221,16 @@ func normalizedStatement(input *protocol.ValueInput, definition *protocol.ValueM
 // convert, so the value is unwrapped and such a row fails the copy with a
 // message naming the table being rebuilt and the column; a NOT NULL column is
 // unwrapped too, which YQL requires of an optional value written to one.
-func CopyStatement(path string, request *Copy) (string, error) {
+// directoryName is the table's directory relative to the database root,
+// which the message names whether path is absolute or relative.
+func CopyStatement(path, directoryName string, request *Copy) (string, error) {
 	directory := path[:max(strings.LastIndex(path, "/"), 0)]
 	source := TextPath(directory, request.Source)
 	// The embedded engine names the table as the host does, its schema and
 	// name joined by a dot.
 	label := request.Source
-	if directory != "" {
-		label = directory + "." + request.Source
+	if directoryName != "" {
+		label = directoryName + "." + request.Source
 	}
 	names := make([]string, 0, len(request.Columns))
 	values := make([]string, 0, len(request.Columns))

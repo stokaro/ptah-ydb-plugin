@@ -10,6 +10,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -52,6 +53,37 @@ func TestTableConversionPreservesConfigurationAndAccessRequirements(t *testing.T
 	c.Assert(proto.Equal(back, observed), qt.IsTrue)
 	c.Assert(proto.Equal(observed, before), qt.IsTrue)
 	c.Assert(original.StoreType, qt.Equals, Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED)
+}
+
+// YDB describes a subject once for each access entry it keeps, so a GRANT of
+// two permissions reads as two grants to one subject, and a grant on the
+// directory above adds one more among the effective permissions. The desired
+// table names each subject once, with every permission its entries name, in
+// the order YDB described them.
+func TestTableConversionMergesTheEntriesOfOneSubject_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	grant := func(subject string, names ...string) *Ydb_Scheme.Permissions {
+		return &Ydb_Scheme.Permissions{Subject: subject, PermissionNames: names}
+	}
+	observed, err := schema.CaptureTable(tableOwner(), &native.DescribeTableResult{PrimaryKey: []string{"id"}, Self: &Ydb_Scheme.Entry{
+		Permissions: []*Ydb_Scheme.Permissions{grant("writer", "ydb.granular.update_row"), grant("reader", "ydb.granular.select_row"),
+			grant("writer", "ydb.granular.select_row")},
+		EffectivePermissions: []*Ydb_Scheme.Permissions{grant("USERS", "ydb.database.connect"), grant("writer", "ydb.granular.select_row"),
+			grant("writer", "ydb.granular.update_row"), grant("writer", "ydb.granular.select_row")},
+	}})
+	c.Assert(err, qt.IsNil)
+
+	desired, err := schema.ConvertTable(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+
+	c.Assert(err, qt.IsNil)
+	var intent native.RowTableIntent
+	c.Assert(protojson.Unmarshal(desired.Payload, &intent), qt.IsNil)
+	c.Assert(intent.Access.DirectGrants, qt.CmpEquals(protocmp.Transform()), []*Ydb_Scheme.Permissions{
+		grant("writer", "ydb.granular.update_row", "ydb.granular.select_row"), grant("reader", "ydb.granular.select_row"),
+	})
+	c.Assert(intent.Access.RequiredEffectivePermissions, qt.CmpEquals(protocmp.Transform()), []*Ydb_Scheme.Permissions{
+		grant("USERS", "ydb.database.connect"), grant("writer", "ydb.granular.select_row", "ydb.granular.update_row"),
+	})
 }
 
 func TestTableConversionKeepsNativeDefaultsAndEpochTTL(t *testing.T) {
