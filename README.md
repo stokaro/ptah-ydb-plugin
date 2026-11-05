@@ -118,6 +118,16 @@ declarative rule: no `if`, `switch` or `goto` in a test function. The functions
 that broke it when the rule was adopted are listed in
 `.teststyle-baseline.json`; the list may shrink and must not grow.
 
+CI compares `.golangci.yml` with the host's: every linter and formatter the
+host enables is enabled, every setting of one is the host's, and the
+exclusions that name no path are the host's. The gci prefix, the rowserrcheck
+packages, the depguard messages and the path exclusions name this module and
+are not compared. To run the comparison against a checkout of Ptah:
+
+```sh
+GOWORK=off go run ./internal/cmd/lintcontract -host ../ptah/.golangci.yml
+```
+
 The executable requires the SDK's authenticated local subprocess bootstrap.
 Run it through a Ptah SDK client rather than invoking it as a command-line tool.
 The committed module has no `replace` directive or workspace file.
