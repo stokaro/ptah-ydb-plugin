@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"maps"
 	"net/url"
 	"slices"
@@ -286,7 +285,9 @@ func clusterCapabilities(ctx context.Context, opened *connection.Connection, ver
 	}
 	flags, err := featureflags.Decode(body, opened.Database())
 	if err != nil {
-		return nil, fmt.Errorf("read the YDB feature flags: %w", err)
+		// Decode writes its refusals itself and names a flag or the
+		// database at most, so the refusal is a reason.
+		return nil, authored.Wrap(err, "read the YDB feature flags: "+err.Error())
 	}
 	return flags.Refine(sessionCapabilities(version)), nil
 }

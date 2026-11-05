@@ -205,8 +205,11 @@ say. When the address names a monitoring endpoint, opening a session reads
 `/viewer/json/feature_flags?database=<db>` and folds the flags that gate a
 capability the provider owns into the session's capabilities, `false`
 included. A failed read fails the session rather than falling back to the
-defaults, as in the host's embedded engine. Without the endpoint the session
-reports the defaults of every supported line.
+defaults, as in the host's embedded engine. The refusal is a reason the host
+prints, and it names the right a user lacks: on 26.x the page is served only
+to a user with `DESCRIBE SCHEMA` on the database. What the endpoint answered
+stays out of the reason. Without the endpoint the session reports the
+defaults of every supported line.
 
 | Capability | Flag | Default |
 | --- | --- | --- |
@@ -785,12 +788,13 @@ credential. Package `internal/authored` keeps such sentences apart from the
 errors the provider receives: `authored.New` marks one, and `authored.Status`
 sends it as the reason, with the error's whole text as the status message,
 which no host prints. The reasons the provider gives are its refusals of a
-connection address, of a capability the target lacks, of a lock the server
-refuses this user, the refusals whose text is a fixed sentence, such as a
-closed session or a reached handle limit, and the refusal of a table's
-declaration by table preparation or the creation projection. That last reason
-names the table and gives the sentence schema validation reports for the same
-declaration; the compilation behind it reads no server. A YDB driver's error is never a
+connection address, of a monitoring page it could not read, of a capability
+the target lacks, of a lock the server refuses this user, the refusals whose
+text is a fixed sentence, such as a closed session or a reached handle limit,
+and the refusal of a table's declaration by table preparation or the creation
+projection. That last reason names the table and gives the sentence schema
+validation reports for the same declaration; the compilation behind it reads no
+server. A YDB driver's error is never a
 reason, because YDB can quote a statement and its values, or a credential
 source: the host prints its code alone.
 
