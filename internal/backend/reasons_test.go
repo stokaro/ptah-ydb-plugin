@@ -87,3 +87,18 @@ func TestComparisonRefusesAnInvalidRequestWithoutAReason(t *testing.T) {
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
 	c.Assert(statusReasons(c, err), qt.HasLen, 0)
 }
+
+// A comparison that refuses a declared external data source on a target
+// without external data sources carries the provider's sentence as the
+// reason, which a host that negotiates errors.reasons prints after the code.
+// Without it the host prints the code alone.
+func TestComparisonRefusesAnExternalObjectWithAReason(t *testing.T) {
+	c := testcheck.New(t)
+	request := externalRequest(c, []external{{name: "bucket", source: bucketAt("https://a/")}}, nil, map[string]bool{"transactional_ddl": false})
+
+	result, err := backend.New().CompareModels(c.Context(), request)
+
+	c.Assert(result, qt.IsNil)
+	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
+	c.Assert(statusReasons(c, err), qt.DeepEquals, []string{"external data source app/bucket, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: turn the flag on, and name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans"})
+}

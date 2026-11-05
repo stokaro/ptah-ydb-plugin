@@ -226,9 +226,12 @@ func TestHostResumesWhereAFailedMigrationStopped_HappyPath(t *testing.T) {
 	c.Assert(failErr, qt.IsNotNil)
 	// The built-in engine prints YDB's issue, `Unknown simple type
 	// 'NoSuchType'`. The host leaves a provider's execution message out of
-	// the error it prints, so the outcome and the statement are what show.
+	// the error it prints, so the outcome and the statement show, and a host
+	// of contract 25.18 prints the provider's reason between them.
 	c.Assert(failure, qt.Contains, "failed to apply migration 1: failed to execute migration SQL: provider execution failed (0 of 1 units confirmed): "+
-		"provider execution: NOT_APPLIED (0 units confirmed applied)\nSQL: $id = 1l;\nCREATE TABLE `"+f.table("b")+"` (id NoSuchType NOT NULL, PRIMARY KEY (id))")
+		"provider execution: NOT_APPLIED (0 units confirmed applied)")
+	c.Assert(failure, qt.Contains, "\nSQL: $id = 1l;\nCREATE TABLE `"+f.table("b")+"` (id NoSuchType NOT NULL, PRIMARY KEY (id))")
+	c.Assert(failure, qt.Not(qt.Contains), "Unknown simple type")
 	c.Assert(stopped, qt.DeepEquals, []progress{{"1", failed, 2, 3}})
 	c.Assert(rows, qt.Equals, int64(1))
 	c.Assert(resumeErr, qt.IsNil, qt.Commentf("resume:\n%s", resumed))
@@ -261,9 +264,12 @@ func TestHostRunsADataQueryAsOneTransaction_HappyPath(t *testing.T) {
 
 	c.Assert(failErr, qt.IsNotNil)
 	// The built-in engine prints YDB's `Conflict with existing key`; through
-	// a provider the host prints the outcome and the data query.
+	// a provider the host prints the outcome and the data query, and a host
+	// of contract 25.18 prints the provider's reason between them.
 	c.Assert(failure, qt.Contains, "failed to apply migration 1: failed to execute migration SQL: provider execution failed (0 of 1 units confirmed): "+
-		"provider execution: NOT_APPLIED (0 units confirmed applied)\nSQL: INSERT INTO `"+f.table("c")+"` (id) VALUES (1l);\nINSERT INTO `"+f.table("c")+"` (id) VALUES (1l)")
+		"provider execution: NOT_APPLIED (0 units confirmed applied)")
+	c.Assert(failure, qt.Contains, "\nSQL: INSERT INTO `"+f.table("c")+"` (id) VALUES (1l);\nINSERT INTO `"+f.table("c")+"` (id) VALUES (1l)")
+	c.Assert(failure, qt.Not(qt.Contains), "Conflict with existing key")
 	c.Assert(rows, qt.Equals, int64(0))
 	c.Assert(stopped, qt.DeepEquals, []progress{{"1", failed, 1, 2}})
 	c.Assert(resumeErr, qt.IsNil, qt.Commentf("resume:\n%s", resumed))

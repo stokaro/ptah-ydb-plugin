@@ -128,6 +128,17 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 			return nil, err
 		}
 	}
+	for _, parent := range request.GetParents() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if parent.GetSubject().GetKind() != "column" || !parent.GetDesired() || !parent.GetCurrent() {
+			continue
+		}
+		if err := compareUnplacedColumn(request, result, parent.GetSubject(), held); err != nil {
+			return nil, err
+		}
+	}
 	// desiredStorage holds the declared column storage of each table, and
 	// rowStated every table the declaration states row-table settings for.
 	desiredStorage := make(map[string]*protocol.ComparisonRecord)
@@ -240,6 +251,52 @@ func compareUnstated(request *protocol.CompareModelsRequest, result *protocol.Co
 		return err
 	}
 	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: schema.TableProperties, Subject: proto.CloneOf(subject), Value: change})
+	return nil
+}
+
+// compareUnplacedColumn compares a column both sides hold, for which the
+// desired side carries no column properties, with the family the column sits
+// in. A source that describes where every column sits places such a column in
+// the default family (see tablecreate.PlacedInDefault), so a column the table
+// holds in another family is reported to move back. A source that could not
+// describe the column properties states nothing, and neither does the
+// declaration of a column table, whose storage the column table comparison
+// owns.
+func compareUnplacedColumn(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, subject *protocol.ComparisonIdentity,
+	held map[string]*protocol.ComparisonRecord) error {
+	for _, record := range request.GetDesired().GetRecords() {
+		if record.GetKind() == schema.ColumnProperties && provider.CompareIdentities(record.GetSubject(), subject) == 0 {
+			return nil
+		}
+	}
+	observed := held[recordKey(schema.ColumnProperties, subject)]
+	if observed == nil || !compared(request, observed) || !tablecreate.PlacedInDefault(request.GetDesired().GetCoverage(), subject) {
+		return nil
+	}
+	table := proto.CloneOf(subject)
+	table.Kind, table.Name, table.Parent = "table", proto.CloneOf(subject.GetParent()), nil
+	if held[recordKey(schema.ColumnStorageProperties, table)] != nil || slices.ContainsFunc(request.GetDesired().GetRecords(), func(record *protocol.ComparisonRecord) bool {
+		return record.GetKind() == schema.ColumnStorageProperties && provider.CompareIdentities(record.GetSubject(), table) == 0
+	}) {
+		return nil
+	}
+	before, err := tablecreate.NormalizedFacet(observed, protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return err
+	}
+	after, err := tablecreate.UnstatedColumnFacet(before.Owner)
+	if err != nil {
+		return err
+	}
+	differs, err := tablecreate.FacetDiffers(after, before)
+	if err != nil || !differs {
+		return err
+	}
+	change, err := schema.CaptureTablePropertiesChange("change-"+strconv.Itoa(len(result.Changes)), after.Owner, before, after)
+	if err != nil {
+		return err
+	}
+	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: schema.ColumnProperties, Subject: proto.CloneOf(subject), Value: change})
 	return nil
 }
 

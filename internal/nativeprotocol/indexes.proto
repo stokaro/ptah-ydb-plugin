@@ -133,7 +133,14 @@ message TableIndexDescription {
 }
 
 // IndexObservations binds every index to the physical tables read for it.
-message IndexObservations { repeated ObservedIndex indexes = 1; }
+message IndexObservations {
+  repeated ObservedIndex indexes = 1;
+  // common_indexes describes each index the common model describes, when a
+  // read leaves those indexes out of indexes. It is read for what the common
+  // model has no place for, the partitioning and the read replicas, which a
+  // rebuild gives the new table's index.
+  repeated TableIndexDescription common_indexes = 2;
+}
 message ObservedIndex {
   TableIndexDescription description = 1;
   repeated ImplementationTable tables = 2;

@@ -35,6 +35,19 @@ func UnstatedTableFacet(owner *protocol.Reference) (*protocol.Envelope, error) {
 	return value, nil
 }
 
+// UnstatedColumnFacet returns the desired column properties of a column whose
+// source places it in no family: the intent with no family, which the
+// comparison reads as the default family (see PlacedInDefault).
+func UnstatedColumnFacet(owner *protocol.Reference) (*protocol.Envelope, error) {
+	payload, err := protojson.Marshal(&native.ColumnIntent{})
+	if err != nil {
+		return nil, err
+	}
+	model := schema.ColumnDesiredModel()
+	return schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion,
+		Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: proto.CloneOf(owner), Payload: payload})
+}
+
 // FacetDiffers reports whether the table the observed facet describes does not
 // already satisfy the desired facet. It applies the rules the alteration
 // planner applies, so a difference reported here is one the planner can act on:

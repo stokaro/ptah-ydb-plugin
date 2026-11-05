@@ -128,6 +128,18 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 			return alterationChanges{}, fmt.Sprintf("Column properties name column %q, which the table does not declare", name), nil
 		}
 	}
+	// A source that describes where every column sits places a column it
+	// names in no family in the default family, so a column the table holds
+	// elsewhere moves back (see PlacedInDefault).
+	for _, name := range in.columns {
+		if _, placed := in.placement[name]; placed {
+			continue
+		}
+		if held, read := in.heldPlacement[name]; read && familyKey(held) != DefaultFamily &&
+			PlacedInDefault(table.Desired.GetFeatures().GetFacets().GetCoverage(), ColumnSubject(table.Subject, name)) {
+			in.placement[name] = ""
+		}
+	}
 	change, reason := planFamilies(in)
 	if reason != "" {
 		return alterationChanges{}, reason, nil
@@ -239,8 +251,7 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	}
 	feeds, reason, err := planChangefeeds(changefeedInput{owner: owner, desired: desired.changefeeds, held: observed.changefeeds, indexes: indexNames,
 		droppedIndexes: droppedIndexes, addedIndexes: addedIndexes, keyType: keyType, capabilities: capabilities,
-		managed: desired.changefeeds != nil || observed.changefeeds != nil &&
-			FacetKnown(table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.ChangefeedProperties, table.Subject, true)})
+		managed: changefeedsManaged(table, desired, observed)})
 	if err != nil || reason != "" {
 		return alterationChanges{}, reason, err
 	}
