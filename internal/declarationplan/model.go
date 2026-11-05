@@ -31,9 +31,15 @@ func Kinds() []string {
 
 // Model declares the desired-only CREATE operation and its text execution form.
 func Model() *protocol.ValueModel {
-	definition := []byte(`{"access":"creation inherits database access; explicit access requirements have no text form","execution":"render one CREATE statement; the server checks existence during dispatch; SQL units only; no automatic retry","kind":"github.com/stokaro/ptah-ydb-plugin/authored-create","payload":"one complete normalized desired envelope; no current state"}`)
+	definition := []byte(`{"access":"creation inherits database access; explicit access requirements have no text form",` +
+		`"execution":"render one CREATE statement; the server checks existence during dispatch; SQL units only; no automatic retry",` +
+		`"kind":"github.com/stokaro/ptah-ydb-plugin/authored-create",` +
+		`"payload":"one complete normalized desired envelope; no current state"}`)
 	sum := sha256.Sum256(definition)
-	return &protocol.ValueModel{Kind: OperationKind, Representation: protocol.ValueInput_OPERATION, SchemaVersion: 1, Encoding: "json", DefinitionJson: definition, DefinitionSha256: hex.EncodeToString(sum[:]), CanonicalFormat: OperationKind + "/json-v1"}
+	return &protocol.ValueModel{
+		Kind: OperationKind, Representation: protocol.ValueInput_OPERATION, SchemaVersion: 1, Encoding: "json",
+		DefinitionJson: definition, DefinitionSha256: hex.EncodeToString(sum[:]), CanonicalFormat: OperationKind + "/json-v1",
+	}
 }
 
 type payload struct {
@@ -47,13 +53,17 @@ func Capture(id string, desired *protocol.Envelope) (*protocol.NormalizedValue, 
 		return nil, err
 	}
 	model := Model()
-	return Normalize(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: proto.CloneOf(desired.GetOwner()), Context: proto.CloneOf(desired.GetContext()), Payload: raw}})
+	return Normalize(&protocol.ValueInput{Id: id, Representation: protocol.ValueInput_OPERATION, Value: &protocol.Envelope{
+		ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256,
+		Owner: proto.CloneOf(desired.GetOwner()), Context: proto.CloneOf(desired.GetContext()), Payload: raw,
+	}})
 }
 
 // Normalize validates the complete desired definition and derives CREATE facts.
 func Normalize(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	value, model := input.GetValue(), Model()
-	if input.GetRepresentation() != protocol.ValueInput_OPERATION || value.GetProviderId() != schema.ProviderID || value.GetKind() != model.Kind || value.GetSchemaVersion() != model.SchemaVersion || value.GetEncoding() != model.Encoding || value.GetDefinitionSha256() != model.DefinitionSha256 {
+	if input.GetRepresentation() != protocol.ValueInput_OPERATION || value.GetProviderId() != schema.ProviderID || value.GetKind() != model.Kind ||
+		value.GetSchemaVersion() != model.SchemaVersion || value.GetEncoding() != model.Encoding || value.GetDefinitionSha256() != model.DefinitionSha256 {
 		return nil, fmt.Errorf("authored CREATE does not match its declared model")
 	}
 	desired, err := Declaration(value)
@@ -70,7 +80,13 @@ func Normalize(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	}
 	frozen := proto.CloneOf(value)
 	frozen.Payload = canonical
-	return &protocol.NormalizedValue{Id: input.Id, Value: frozen, NormalizedOwner: proto.CloneOf(desired.Owner), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(canonical), OperationSemantics: &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Create the authored object", Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Creation inherits access from the database"}}, nil
+	return &protocol.NormalizedValue{
+		Id: input.Id, Value: frozen, NormalizedOwner: proto.CloneOf(desired.Owner), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(canonical),
+		OperationSemantics: &protocol.OperationSemantics{
+			Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Create the authored object",
+			Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Creation inherits access from the database",
+		},
+	}, nil
 }
 
 // Declaration returns the validated desired operand of an authored CREATE.

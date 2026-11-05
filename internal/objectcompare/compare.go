@@ -324,57 +324,92 @@ func refuseDottedLimits(request *protocol.CompareModelsRequest, family Family, o
 // request in the host's terms, original the request as sent; their records
 // and claims are in the same order.
 func capture(original, bound *protocol.CompareModelsRequest, family *Family, session string) ([]object, error) {
-	var objects []object
-	find := func(subject, reported *protocol.ComparisonIdentity, rank int) *object {
-		for i := range objects {
-			if provider.CompareIdentities(objects[i].subject, subject) == 0 {
-				if rank < objects[i].rank {
-					objects[i].reported, objects[i].rank = proto.CloneOf(reported), rank
-				}
-				return &objects[i]
-			}
-		}
-		objects = append(objects, object{family: family, subject: proto.CloneOf(subject), reported: proto.CloneOf(reported), rank: rank})
-		return &objects[len(objects)-1]
-	}
+	set := objectSet{family: family}
 	originals := []*protocol.ComparisonState{original.Desired, original.Current}
 	for side, state := range []*protocol.ComparisonState{bound.Desired, bound.Current} {
-		for index, record := range state.Records {
-			if record.Kind != family.Kind {
-				continue
-			}
-			if !selected(record.Targets) {
-				return nil, fmt.Errorf("%s record is outside the selected target", family.Noun)
-			}
-			if _, err := family.Owner(record.Subject); err != nil {
-				return nil, err
-			}
-			value, err := captureRecord(state, *family, record, session)
-			if err != nil {
-				return nil, err
-			}
-			item := find(record.Subject, originals[side].Records[index].Subject, side)
-			if state.Representation == protocol.ValueInput_DESIRED {
-				item.desired = value
-			} else {
-				item.current = value
-			}
+		if err := set.addRecords(state, originals[side], side, session); err != nil {
+			return nil, err
 		}
-		for index, claim := range state.GetCoverage().GetSubjects() {
-			if !selected(claim.Targets) || claim.Kind != family.Kind {
-				continue
-			}
-			if claim.GetKnowledge().GetState() == protocol.ModelKnowledge_DEFAULTED {
-				return nil, fmt.Errorf("a %s cannot be defaulted", family.Noun)
-			}
-			if _, err := family.Owner(claim.Subject); err != nil {
-				return nil, err
-			}
-			find(claim.Subject, originals[side].Coverage.Subjects[index].Subject, 2)
+		if err := set.addClaims(state, originals[side]); err != nil {
+			return nil, err
 		}
 	}
-	slices.SortFunc(objects, func(a, b object) int { return provider.CompareIdentities(a.subject, b.subject) })
-	return objects, nil
+	slices.SortFunc(set.objects, func(a, b object) int { return provider.CompareIdentities(a.subject, b.subject) })
+	return set.objects, nil
+}
+
+// objectSet collects the objects of one family that capture pairs, in the
+// order their subjects are first seen.
+type objectSet struct {
+	family  *Family
+	objects []object
+}
+
+// find returns the object of subject, adding one that names reported at rank
+// when the set holds none. A lower rank than the object's replaces the
+// identity it reports.
+func (s *objectSet) find(subject, reported *protocol.ComparisonIdentity, rank int) *object {
+	for i := range s.objects {
+		if provider.CompareIdentities(s.objects[i].subject, subject) == 0 {
+			if rank < s.objects[i].rank {
+				s.objects[i].reported, s.objects[i].rank = proto.CloneOf(reported), rank
+			}
+			return &s.objects[i]
+		}
+	}
+	s.objects = append(s.objects, object{family: s.family, subject: proto.CloneOf(subject), reported: proto.CloneOf(reported), rank: rank})
+	return &s.objects[len(s.objects)-1]
+}
+
+// addRecords sets the records of the family's kind in state, as captureRecord
+// reads them, on the objects their subjects name. original is state as sent,
+// with its records in the same order, and side, 0 for the desired state and 1
+// for the current one, is the rank of the identity a record reports. A record
+// outside the selected target or with an invalid subject is refused.
+func (s *objectSet) addRecords(state, original *protocol.ComparisonState, side int, session string) error {
+	for index, record := range state.Records {
+		if record.Kind != s.family.Kind {
+			continue
+		}
+		if !selected(record.Targets) {
+			return fmt.Errorf("%s record is outside the selected target", s.family.Noun)
+		}
+		if _, err := s.family.Owner(record.Subject); err != nil {
+			return err
+		}
+		value, err := captureRecord(state, *s.family, record, session)
+		if err != nil {
+			return err
+		}
+		item := s.find(record.Subject, original.Records[index].Subject, side)
+		if state.Representation == protocol.ValueInput_DESIRED {
+			item.desired = value
+		} else {
+			item.current = value
+		}
+	}
+	return nil
+}
+
+// addClaims adds an object for each subject a coverage claim of state names
+// in the selected target for the family's kind. original is state as sent,
+// with its claims in the same order; a claim reports its identity at rank 2,
+// below every record. A defaulted claim or one with an invalid subject is
+// refused.
+func (s *objectSet) addClaims(state, original *protocol.ComparisonState) error {
+	for index, claim := range state.GetCoverage().GetSubjects() {
+		if !selected(claim.Targets) || claim.Kind != s.family.Kind {
+			continue
+		}
+		if claim.GetKnowledge().GetState() == protocol.ModelKnowledge_DEFAULTED {
+			return fmt.Errorf("a %s cannot be defaulted", s.family.Noun)
+		}
+		if _, err := s.family.Owner(claim.Subject); err != nil {
+			return err
+		}
+		s.find(claim.Subject, original.Coverage.Subjects[index].Subject, 2)
+	}
+	return nil
 }
 
 // owner is the owner a subject of the family names, in the host's terms.
@@ -441,81 +476,14 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 	if namespace := item.subject.GetSchema().GetSource(); namespace != "" {
 		name = namespace + "/" + name
 	}
-	for _, exclusion := range request.Exclusions {
-		if exclusion.GetKind() == family.Kind && exclusion.GetName() == name {
-			return nil, nil
-		}
-	}
-	if reason := family.Reserved(item.subject); reason != "" {
-		// The provider's own object is left out of the comparison, as the
-		// host's embedded engine leaves it out of every read. Only a
-		// declaration at its path is worth a word.
-		if item.desired != nil {
-			undecided(result, family, item, reason)
-		}
+	if leftOut(request, result, family, item, name) || unestablished(request, result, family, item) {
 		return nil, nil
 	}
-	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && ReservedName(claim) {
-		// The read reserves the name for the provider's own storage on every
-		// native kind, so it holds no object of this family. It is left out as
-		// Reserved leaves the family's own objects; only a declaration at the
-		// name is worth a word.
-		if item.desired != nil {
-			undecided(result, family, item, claim.GetReason())
-		}
-		return nil, nil
+	if settled, err := settleOmitted(request, result, family, item, id); settled || err != nil {
+		return nil, err
 	}
-	if family.Unread != nil && item.current != nil {
-		if reason := family.Unread(request.Capabilities); reason != "" {
-			undecided(result, family, item, "The current "+family.Noun+" or its absence was not established: "+reason)
-			return nil, nil
-		}
-	}
-	if claim, found := subjectKnowledge(request.Desired.Coverage, family.Kind, item.subject); found && unknown(claim) && item.desired != nil {
-		undecided(result, family, item, "The desired source cannot describe the complete "+family.Noun)
-		return nil, nil
-	}
-	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); (found && unknown(claim)) || (item.current == nil && unknown(knowledge(request.Current.Coverage, family.Kind, item.subject))) {
-		undecided(result, family, item, "The current "+family.Noun+" or its absence was not established")
-		return nil, nil
-	}
-	if item.desired == nil && family.KeepOmitted {
-		if claim, found := subjectKnowledge(request.Desired.Coverage, family.Kind, item.subject); found && claim.GetState() == protocol.ModelKnowledge_ABSENT {
-			undecided(result, family, item, family.OmittedRemoval)
-			return nil, nil
-		}
-		if item.current == nil {
-			return nil, nil
-		}
-		return nil, keep(result, family, item, id)
-	}
-	if item.desired == nil && unknown(knowledge(request.Desired.Coverage, family.Kind, item.subject)) {
-		if item.current == nil {
-			return nil, nil
-		}
-		return nil, keep(result, family, item, id)
-	}
-	if item.desired == nil && item.current == nil {
-		return nil, nil
-	}
-	if item.desired != nil && !family.DatabaseWide {
-		for _, relation := range request.DeclaredRelations {
-			if relation.GetDatabase().GetNormalized() == item.subject.GetDatabase().GetNormalized() && relation.GetCatalog().GetNormalized() == "" && relation.GetSchema().GetNormalized() == item.subject.GetSchema().GetNormalized() && relation.GetName().GetNormalized() == item.subject.GetName().GetNormalized() && len(relation.GetPath()) == 0 {
-				return nil, fmt.Errorf("%s collides with a declared relation", family.Noun)
-			}
-		}
-	}
-	if item.desired == nil {
-		for _, required := range request.Required {
-			if provider.CompareIdentities(required, item.subject) != 0 {
-				continue
-			}
-			if family.RequiredRemoval != "" {
-				return nil, authored.New(family.Noun + " " + name + " " + family.RequiredRemoval)
-			}
-			undecided(result, family, item, "A declared dependency requires the "+family.Noun)
-			return nil, nil
-		}
+	if settled, err := settleRelations(request, result, family, item, name); settled || err != nil {
+		return nil, err
 	}
 	if err := family.Unsettled(item.current, item.desired); err != nil {
 		undecided(result, family, item, err.Error())
@@ -549,6 +517,120 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Value: change})
 	pair.Change = change
 	return pair, nil
+}
+
+// leftOut reports whether the comparison leaves item out: an exclusion of
+// request names it as name, the provider reserves its subject, or the read
+// reserves its name for the provider's own storage. A declaration of a
+// reserved subject or name is left undecided in result.
+func leftOut(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, family Family, item object, name string) bool {
+	for _, exclusion := range request.Exclusions {
+		if exclusion.GetKind() == family.Kind && exclusion.GetName() == name {
+			return true
+		}
+	}
+	if reason := family.Reserved(item.subject); reason != "" {
+		// The provider's own object is left out of the comparison, as the
+		// host's embedded engine leaves it out of every read. Only a
+		// declaration at its path is worth a word.
+		if item.desired != nil {
+			undecided(result, family, item, reason)
+		}
+		return true
+	}
+	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && ReservedName(claim) {
+		// The read reserves the name for the provider's own storage on every
+		// native kind, so it holds no object of this family. It is left out as
+		// Reserved leaves the family's own objects; only a declaration at the
+		// name is worth a word.
+		if item.desired != nil {
+			undecided(result, family, item, claim.GetReason())
+		}
+		return true
+	}
+	return false
+}
+
+// unestablished reports whether a side of item is not established, and
+// leaves item undecided in result if so: the family does not read a current
+// object on this target, the desired source cannot describe the declared
+// object, or the read did not establish the current object or its absence.
+func unestablished(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, family Family, item object) bool {
+	if family.Unread != nil && item.current != nil {
+		if reason := family.Unread(request.Capabilities); reason != "" {
+			undecided(result, family, item, "The current "+family.Noun+" or its absence was not established: "+reason)
+			return true
+		}
+	}
+	if claim, found := subjectKnowledge(request.Desired.Coverage, family.Kind, item.subject); found && unknown(claim) && item.desired != nil {
+		undecided(result, family, item, "The desired source cannot describe the complete "+family.Noun)
+		return true
+	}
+	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); (found && unknown(claim)) ||
+		(item.current == nil && unknown(knowledge(request.Current.Coverage, family.Kind, item.subject))) {
+		undecided(result, family, item, "The current "+family.Noun+" or its absence was not established")
+		return true
+	}
+	return false
+}
+
+// settleOmitted settles an item the desired side leaves out. A family that
+// keeps omitted objects keeps the current one, or leaves undecided one whose
+// absence the desired side claims; otherwise a current object whose absence
+// the desired source did not establish is kept. An item neither side holds
+// is settled with nothing to report. It reports whether item is settled,
+// with the error of keeping it.
+func settleOmitted(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, family Family, item object, id string) (bool, error) {
+	if item.desired == nil && family.KeepOmitted {
+		if claim, found := subjectKnowledge(request.Desired.Coverage, family.Kind, item.subject); found && claim.GetState() == protocol.ModelKnowledge_ABSENT {
+			undecided(result, family, item, family.OmittedRemoval)
+			return true, nil
+		}
+		if item.current == nil {
+			return true, nil
+		}
+		return true, keep(result, family, item, id)
+	}
+	if item.desired == nil && unknown(knowledge(request.Desired.Coverage, family.Kind, item.subject)) {
+		if item.current == nil {
+			return true, nil
+		}
+		return true, keep(result, family, item, id)
+	}
+	if item.desired == nil && item.current == nil {
+		return true, nil
+	}
+	return false, nil
+}
+
+// settleRelations checks item against what request declares beside it. A
+// declared object of a family that is not database-wide must not collide with
+// a declared relation; an object to remove that a declared dependency
+// requires is refused, as name, when the family gives a reason, and left
+// undecided otherwise. It reports whether item is settled.
+func settleRelations(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, family Family, item object, name string) (bool, error) {
+	if item.desired != nil && !family.DatabaseWide {
+		for _, relation := range request.DeclaredRelations {
+			if relation.GetDatabase().GetNormalized() == item.subject.GetDatabase().GetNormalized() && relation.GetCatalog().GetNormalized() == "" &&
+				relation.GetSchema().GetNormalized() == item.subject.GetSchema().GetNormalized() &&
+				relation.GetName().GetNormalized() == item.subject.GetName().GetNormalized() && len(relation.GetPath()) == 0 {
+				return false, fmt.Errorf("%s collides with a declared relation", family.Noun)
+			}
+		}
+	}
+	if item.desired == nil {
+		for _, required := range request.Required {
+			if provider.CompareIdentities(required, item.subject) != 0 {
+				continue
+			}
+			if family.RequiredRemoval != "" {
+				return false, authored.New(family.Noun + " " + name + " " + family.RequiredRemoval)
+			}
+			undecided(result, family, item, "A declared dependency requires the "+family.Noun)
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // keep preserves the current object, or leaves undecided one the family has
@@ -596,8 +678,14 @@ func preserve(result *protocol.ComparedModels, family Family, item object, id st
 	if result.Desired.Coverage == nil {
 		result.Desired.Coverage = &protocol.ComparisonCoverage{}
 	}
-	if len(kindSources(result.Desired.Coverage, family.Kind)) == 0 && !slices.ContainsFunc(result.Desired.Coverage.Kinds, func(claim *protocol.ComparisonKindCoverage) bool { return claim.GetModel().GetKind() == family.Kind }) {
-		result.Desired.Coverage.Kinds = append(result.Desired.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: model, Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "The desired source did not describe " + family.Noun + "s"}}}})
+	if len(kindSources(result.Desired.Coverage, family.Kind)) == 0 &&
+		!slices.ContainsFunc(result.Desired.Coverage.Kinds, func(claim *protocol.ComparisonKindCoverage) bool { return claim.GetModel().GetKind() == family.Kind }) {
+		result.Desired.Coverage.Kinds = append(result.Desired.Coverage.Kinds, &protocol.ComparisonKindCoverage{
+			Model: model,
+			Sources: []*protocol.ComparisonKnowledgeSource{{
+				Outside: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "The desired source did not describe " + family.Noun + "s"},
+			}},
+		})
 	}
 	for i, claim := range result.Desired.Coverage.Subjects {
 		if claim.Kind == family.Kind && provider.CompareIdentities(claim.Subject, item.reported) == 0 {
@@ -608,6 +696,8 @@ func preserve(result *protocol.ComparedModels, family Family, item object, id st
 			break
 		}
 	}
-	result.Desired.Coverage.Subjects = append(result.Desired.Coverage.Subjects, &protocol.ComparisonSubjectCoverage{Kind: family.Kind, Subject: proto.CloneOf(item.reported), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}})
+	result.Desired.Coverage.Subjects = append(result.Desired.Coverage.Subjects, &protocol.ComparisonSubjectCoverage{
+		Kind: family.Kind, Subject: proto.CloneOf(item.reported), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
+	})
 	return nil
 }

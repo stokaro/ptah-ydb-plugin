@@ -84,20 +84,8 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 	result := &protocol.ReversedChange{Value: reversed.Value}
 	switch change.GetKind() {
 	case schema.SecretChange:
-		switch {
-		case created:
-			result.Strategy = "drop the created secret"
-		case dropped:
-			env, err := restoredValueEnv(reversed)
-			if err != nil {
-				return nil, err
-			}
-			result.Strategy = "create the dropped secret again"
-			result.Limitations = []string{fmt.Sprintf("the dropped value of secret %s was never read; the rollback takes the value %s holds when it runs", name, env)}
-		default:
-			result.Value = nil
-			result.Strategy = "keep the secret and the value it holds"
-			result.Limitations = []string{fmt.Sprintf("the value secret %s held before the rotation was never read; the rollback keeps the rotated value", name)}
+		if err := describeSecret(result, reversed, name); err != nil {
+			return nil, err
 		}
 	case schema.CoordinationChange:
 		result.Strategy, _ = lifecycle(created, dropped, "drop the created coordination node", "recreate the dropped coordination node", "restore coordination settings in place")
@@ -116,17 +104,8 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 			result.Limitations = []string{fmt.Sprintf("the messages topic %s held and its consumers' positions were dropped; the rollback creates it empty", name)}
 		}
 	case schema.StreamingQueryChange:
-		changedText, err := streamingTextChanged(reversed)
-		if err != nil {
+		if err := describeStreamingQuery(result, reversed); err != nil {
 			return nil, err
-		}
-		settings := "restore streaming execution settings in place"
-		if changedText {
-			settings = "restore the query body in place"
-		}
-		result.Strategy, _ = lifecycle(created, dropped, "drop the created streaming query", "recreate the dropped streaming query", settings)
-		if created || dropped || changedText {
-			result.Limitations = []string{streaming.CheckpointLoss}
 		}
 	case schema.ExternalSourceChange, schema.ExternalTableChange:
 		family := map[string]string{schema.ExternalSourceChange: "data source", schema.ExternalTableChange: "external table"}[change.GetKind()]
@@ -139,24 +118,9 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 			"restore captured resource pool classifier settings")
 		result.Limitations = []string{workloadLimitation}
 	case schema.ReplicationChange:
-		result.Strategy, _ = lifecycle(created, dropped, "drop the created replication with its replica tables", "create the dropped replication again with its connection and items",
-			"restore the replication's connection and credential in place")
-		switch {
-		case created:
-			result.Limitations = []string{fmt.Sprintf("dropping async replication %s drops the replica tables it created, with every row it copied", name)}
-		case dropped:
-			result.Limitations = []string{fmt.Sprintf("the replica tables async replication %s dropped are created again empty, and the replication copies its source again from the start", name)}
-		}
+		describeReplication(result, created, dropped, name)
 	case schema.TransferChange:
-		result.Strategy, _ = lifecycle(created, dropped, "drop the created transfer", "create the dropped transfer again with its lambda and settings",
-			"restore the transfer's lambda, batch settings and connection in place")
-		switch {
-		case created:
-			result.Limitations = []string{fmt.Sprintf("the rows transfer %s wrote into its target table stay", name)}
-		case dropped:
-			result.Limitations = []string{fmt.Sprintf("dropping transfer %s removed the consumer YDB created for it, if it had one, with its position in its source topic; "+
-				"the transfer created again does not resume from it", name)}
-		}
+		describeTransfer(result, created, dropped, name)
 	case schema.TablePropertiesChange, schema.ColumnStorageChange:
 		ttl, err := ttlTransition(reversed)
 		if err != nil {
@@ -167,6 +131,77 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 		return nil, authored.New("YDB change " + change.GetKind() + " has no reversal")
 	}
 	return result, nil
+}
+
+// describeReplication describes the reversal of an async replication change:
+// a created replication is dropped with its replica tables, a dropped one is
+// created again and copies its source from the start.
+func describeReplication(result *protocol.ReversedChange, created, dropped bool, name string) {
+	result.Strategy, _ = lifecycle(created, dropped, "drop the created replication with its replica tables", "create the dropped replication again with its connection and items",
+		"restore the replication's connection and credential in place")
+	switch {
+	case created:
+		result.Limitations = []string{fmt.Sprintf("dropping async replication %s drops the replica tables it created, with every row it copied", name)}
+	case dropped:
+		result.Limitations = []string{fmt.Sprintf("the replica tables async replication %s dropped are created again empty, and the replication copies its source again from the start", name)}
+	}
+}
+
+// describeTransfer describes the reversal of a transfer change: the rows a
+// created transfer wrote stay, and a dropped one created again does not resume
+// from its consumer's position.
+func describeTransfer(result *protocol.ReversedChange, created, dropped bool, name string) {
+	result.Strategy, _ = lifecycle(created, dropped, "drop the created transfer", "create the dropped transfer again with its lambda and settings",
+		"restore the transfer's lambda, batch settings and connection in place")
+	switch {
+	case created:
+		result.Limitations = []string{fmt.Sprintf("the rows transfer %s wrote into its target table stay", name)}
+	case dropped:
+		result.Limitations = []string{fmt.Sprintf("dropping transfer %s removed the consumer YDB created for it, if it had one, with its position in its source topic; "+
+			"the transfer created again does not resume from it", name)}
+	}
+}
+
+// describeSecret sets the strategy and the limitations of a secret's reverse
+// in result. A rotation is reversed by nothing: result keeps no change, and the
+// rotated value stays.
+func describeSecret(result *protocol.ReversedChange, reversed schema.Reversed, name string) error {
+	switch {
+	case reversed.Before == nil:
+		result.Strategy = "drop the created secret"
+	case reversed.After == nil:
+		env, err := restoredValueEnv(reversed)
+		if err != nil {
+			return err
+		}
+		result.Strategy = "create the dropped secret again"
+		result.Limitations = []string{fmt.Sprintf("the dropped value of secret %s was never read; the rollback takes the value %s holds when it runs", name, env)}
+	default:
+		result.Value = nil
+		result.Strategy = "keep the secret and the value it holds"
+		result.Limitations = []string{fmt.Sprintf("the value secret %s held before the rotation was never read; the rollback keeps the rotated value", name)}
+	}
+	return nil
+}
+
+// describeStreamingQuery sets the strategy and the limitations of a streaming
+// query's reverse in result. Creating, dropping and changing the query text
+// each lose the checkpoint; restoring execution settings keeps it.
+func describeStreamingQuery(result *protocol.ReversedChange, reversed schema.Reversed) error {
+	created, dropped := reversed.Before == nil, reversed.After == nil
+	changedText, err := streamingTextChanged(reversed)
+	if err != nil {
+		return err
+	}
+	settings := "restore streaming execution settings in place"
+	if changedText {
+		settings = "restore the query body in place"
+	}
+	result.Strategy, _ = lifecycle(created, dropped, "drop the created streaming query", "recreate the dropped streaming query", settings)
+	if created || dropped || changedText {
+		result.Limitations = []string{streaming.CheckpointLoss}
+	}
+	return nil
 }
 
 // lifecycle picks the strategy of a reverse by what the forward change did.

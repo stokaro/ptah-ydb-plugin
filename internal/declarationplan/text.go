@@ -39,93 +39,15 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 		}
 		return secrets.CreateStatement(owner.Schema, owner.Name, intent.GetValueEnv()), nil
 	case schema.CoordinationProperties:
-		if !capabilities["coordination_nodes"] {
-			return "", fmt.Errorf("coordination creation requires capability coordination_nodes")
-		}
-		intent, err := schema.CoordinationConfiguration(desired, protocol.ValueInput_DESIRED)
-		if err != nil {
-			return "", err
-		}
-		if intent.Access != nil {
-			return "", accessRefusal()
-		}
-		settings := ydbdecl.CoordinationNode{}
-		if intent.SelfCheckPeriodMillis != nil {
-			settings.SelfCheckPeriodMillis = *intent.SelfCheckPeriodMillis
-		}
-		if intent.SessionGracePeriodMillis != nil {
-			settings.SessionGracePeriodMillis = *intent.SessionGracePeriodMillis
-		}
-		if intent.ReadConsistencyMode != nil {
-			settings.ReadConsistencyMode = *intent.ReadConsistencyMode
-		}
-		if intent.AttachConsistencyMode != nil {
-			settings.AttachConsistencyMode = *intent.AttachConsistencyMode
-		}
-		if intent.RateLimiterCountersMode != nil {
-			settings.RateLimiterCountersMode = *intent.RateLimiterCountersMode
-		}
-		return (coordinationsql.Statement{Verb: coordinationsql.Create, Path: path, Settings: settings}).Text()
+		return coordinationText(desired, path, capabilities)
 	case schema.TopicProperties:
-		intent, err := schema.DesiredTopic(desired)
-		if err != nil {
-			return "", err
-		}
-		if intent.Access != nil {
-			return "", accessRefusal()
-		}
-		spec, err := topics.FromIntent(intent)
-		if err != nil {
-			return "", err
-		}
-		if err := topics.Check(owner.Schema, owner.Name, spec, capabilities); err != nil {
-			return "", err
-		}
-		return topics.CreateStatement(path, spec), nil
+		return topicText(desired, owner, path, capabilities)
 	case schema.ExternalSourceProperties:
-		intent, err := schema.DesiredExternalSource(desired)
-		if err != nil {
-			return "", err
-		}
-		if intent.Access != nil {
-			return "", accessRefusal()
-		}
-		spec, err := externals.SourceFromIntent(intent, schema.InterpretationRoot(desired))
-		if err != nil {
-			return "", err
-		}
-		if err := externals.CheckDataSource(path, spec, capabilities); err != nil {
-			return "", err
-		}
-		return externals.CreateDataSourceStatement(path, spec, externals.Create), nil
+		return externalSourceText(desired, path, capabilities)
 	case schema.ExternalTableProperties:
-		intent, err := schema.DesiredExternalTable(desired)
-		if err != nil {
-			return "", err
-		}
-		if intent.Access != nil {
-			return "", accessRefusal()
-		}
-		spec, err := externals.TableFromIntent(intent, schema.InterpretationRoot(desired))
-		if err != nil {
-			return "", err
-		}
-		if err := externals.CheckTable(path, spec, capabilities); err != nil {
-			return "", err
-		}
-		return externals.CreateTableStatement(path, spec, externals.Create), nil
+		return externalTableText(desired, path, capabilities)
 	case schema.StreamingQueryProperties:
-		if !capabilities[streaming.Capability] {
-			return "", fmt.Errorf("%s", streaming.CapabilityRefusal(streaming.Display(owner.Schema, owner.Name)))
-		}
-		spec, _, err := schema.DesiredStreamingQuery(desired)
-		if err != nil {
-			return "", err
-		}
-		if err := streaming.Validate(spec); err != nil {
-			return "", err
-		}
-		return streaming.Create(owner.Schema, owner.Name, spec, false), nil
+		return streamingQueryText(desired, owner, capabilities)
 	case schema.ResourcePoolProperties:
 		if !capabilities[workload.CapabilityResourcePools] {
 			return "", fmt.Errorf("resource pools require target capability resource_pools")
@@ -147,6 +69,124 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 	default:
 		return "", fmt.Errorf("unsupported authored object kind")
 	}
+}
+
+// coordinationText renders the CREATE of a coordination node at path with
+// the settings its declaration names. It needs the coordination_nodes
+// capability, and refuses a declaration with explicit access.
+func coordinationText(desired *protocol.Envelope, path string, capabilities map[string]bool) (string, error) {
+	if !capabilities["coordination_nodes"] {
+		return "", fmt.Errorf("coordination creation requires capability coordination_nodes")
+	}
+	intent, err := schema.CoordinationConfiguration(desired, protocol.ValueInput_DESIRED)
+	if err != nil {
+		return "", err
+	}
+	if intent.Access != nil {
+		return "", accessRefusal()
+	}
+	return (coordinationsql.Statement{Verb: coordinationsql.Create, Path: path, Settings: coordinationSettings(intent)}).Text()
+}
+
+// coordinationSettings returns the settings intent names, each one it leaves
+// out at its zero value.
+func coordinationSettings(intent schema.CoordinationIntent) ydbdecl.CoordinationNode {
+	settings := ydbdecl.CoordinationNode{}
+	if intent.SelfCheckPeriodMillis != nil {
+		settings.SelfCheckPeriodMillis = *intent.SelfCheckPeriodMillis
+	}
+	if intent.SessionGracePeriodMillis != nil {
+		settings.SessionGracePeriodMillis = *intent.SessionGracePeriodMillis
+	}
+	if intent.ReadConsistencyMode != nil {
+		settings.ReadConsistencyMode = *intent.ReadConsistencyMode
+	}
+	if intent.AttachConsistencyMode != nil {
+		settings.AttachConsistencyMode = *intent.AttachConsistencyMode
+	}
+	if intent.RateLimiterCountersMode != nil {
+		settings.RateLimiterCountersMode = *intent.RateLimiterCountersMode
+	}
+	return settings
+}
+
+// topicText renders the CREATE of the topic owner names at path, after the
+// target requirements of its settings are checked. It refuses a declaration
+// with explicit access.
+func topicText(desired *protocol.Envelope, owner *protocol.Reference, path string, capabilities map[string]bool) (string, error) {
+	intent, err := schema.DesiredTopic(desired)
+	if err != nil {
+		return "", err
+	}
+	if intent.Access != nil {
+		return "", accessRefusal()
+	}
+	spec, err := topics.FromIntent(intent)
+	if err != nil {
+		return "", err
+	}
+	if err := topics.Check(owner.Schema, owner.Name, spec, capabilities); err != nil {
+		return "", err
+	}
+	return topics.CreateStatement(path, spec), nil
+}
+
+// externalSourceText renders the CREATE of an external data source at path,
+// after the target requirements of its settings are checked. It refuses a
+// declaration with explicit access.
+func externalSourceText(desired *protocol.Envelope, path string, capabilities map[string]bool) (string, error) {
+	intent, err := schema.DesiredExternalSource(desired)
+	if err != nil {
+		return "", err
+	}
+	if intent.Access != nil {
+		return "", accessRefusal()
+	}
+	spec, err := externals.SourceFromIntent(intent, schema.InterpretationRoot(desired))
+	if err != nil {
+		return "", err
+	}
+	if err := externals.CheckDataSource(path, spec, capabilities); err != nil {
+		return "", err
+	}
+	return externals.CreateDataSourceStatement(path, spec, externals.Create), nil
+}
+
+// externalTableText renders the CREATE of an external table at path, after
+// the target requirements of its settings are checked. It refuses a
+// declaration with explicit access.
+func externalTableText(desired *protocol.Envelope, path string, capabilities map[string]bool) (string, error) {
+	intent, err := schema.DesiredExternalTable(desired)
+	if err != nil {
+		return "", err
+	}
+	if intent.Access != nil {
+		return "", accessRefusal()
+	}
+	spec, err := externals.TableFromIntent(intent, schema.InterpretationRoot(desired))
+	if err != nil {
+		return "", err
+	}
+	if err := externals.CheckTable(path, spec, capabilities); err != nil {
+		return "", err
+	}
+	return externals.CreateTableStatement(path, spec, externals.Create), nil
+}
+
+// streamingQueryText renders the CREATE of the streaming query owner names,
+// after its spec is validated. It needs the streaming query capability.
+func streamingQueryText(desired *protocol.Envelope, owner *protocol.Reference, capabilities map[string]bool) (string, error) {
+	if !capabilities[streaming.Capability] {
+		return "", fmt.Errorf("%s", streaming.CapabilityRefusal(streaming.Display(owner.Schema, owner.Name)))
+	}
+	spec, _, err := schema.DesiredStreamingQuery(desired)
+	if err != nil {
+		return "", err
+	}
+	if err := streaming.Validate(spec); err != nil {
+		return "", err
+	}
+	return streaming.Create(owner.Schema, owner.Name, spec, false), nil
 }
 
 func accessRefusal() error {

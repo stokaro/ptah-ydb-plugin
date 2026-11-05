@@ -26,44 +26,9 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 	if err != nil {
 		return nil, err
 	}
-	bound := func(id *protocol.ComparisonIdentity) *protocol.ComparisonIdentity {
-		result := proto.CloneOf(id)
-		if result.GetDatabase().GetNormalized() == database {
-			result.Database = &protocol.ComparisonPart{}
-		}
-		return result
-	}
-	var rotations []*protocol.ComparisonIdentity
-	var resolved []*protocol.ResolvedRequest
-	for i, change := range request.Requests {
-		if change.GetAction() != "rotate" {
-			return nil, fmt.Errorf("unsupported secret change request")
-		}
-		subject := change.GetSubject()
-		if change.GetWritten() != "" {
-			subject, err = written(change.Written)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if _, err := schema.NativeBoundOwner(schema.SecretProperties, subject); err != nil {
-			return nil, err
-		}
-		subject = bound(subject)
-		var declared *protocol.ComparisonIdentity
-		for _, record := range request.GetDesired().GetRecords() {
-			if record.GetKind() == schema.SecretProperties && provider.CompareIdentities(bound(record.Subject), subject) == 0 {
-				declared = record.Subject
-				break
-			}
-		}
-		if declared == nil {
-			return nil, fmt.Errorf("rotation names a secret the desired schema does not declare")
-		}
-		rotations = append(rotations, subject)
-		if change.Written != "" {
-			resolved = append(resolved, &protocol.ResolvedRequest{Request: uint32(i), Subject: proto.CloneOf(declared)})
-		}
+	rotations, resolved, err := resolveRotations(request, database)
+	if err != nil {
+		return nil, err
 	}
 	family := objectcompare.Family{
 		ServiceID: ServiceID, Kind: schema.SecretProperties, ChangeKind: schema.SecretChange, Capability: secrets.Capability, ChangeCapability: true, Noun: "secret", DottedLimits: true,
@@ -111,6 +76,63 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 	}
 	result.ResolvedRequests = resolved
 	return result, nil
+}
+
+// resolveRotations reads the rotation requests: the subject each rotates,
+// bound to the session database, and a resolved request for each one written
+// as a path, naming the declared secret. A request that is not a rotation, or
+// one naming a secret the desired schema does not declare, refuses the
+// comparison.
+func resolveRotations(request *protocol.CompareModelsRequest, database string) ([]*protocol.ComparisonIdentity, []*protocol.ResolvedRequest, error) {
+	var rotations []*protocol.ComparisonIdentity
+	var resolved []*protocol.ResolvedRequest
+	for i, change := range request.Requests {
+		if change.GetAction() != "rotate" {
+			return nil, nil, fmt.Errorf("unsupported secret change request")
+		}
+		subject := change.GetSubject()
+		if change.GetWritten() != "" {
+			var err error
+			subject, err = written(change.Written)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		if _, err := schema.NativeBoundOwner(schema.SecretProperties, subject); err != nil {
+			return nil, nil, err
+		}
+		subject = bound(database, subject)
+		declared := declaredSecret(request, database, subject)
+		if declared == nil {
+			return nil, nil, fmt.Errorf("rotation names a secret the desired schema does not declare")
+		}
+		rotations = append(rotations, subject)
+		if change.Written != "" {
+			resolved = append(resolved, &protocol.ResolvedRequest{Request: uint32(i), Subject: proto.CloneOf(declared)})
+		}
+	}
+	return rotations, resolved, nil
+}
+
+// bound copies id, clearing its database part when that part names the
+// session database.
+func bound(database string, id *protocol.ComparisonIdentity) *protocol.ComparisonIdentity {
+	result := proto.CloneOf(id)
+	if result.GetDatabase().GetNormalized() == database {
+		result.Database = &protocol.ComparisonPart{}
+	}
+	return result
+}
+
+// declaredSecret returns the subject of the desired secret record that names
+// subject once bound to the session database, or nil when none does.
+func declaredSecret(request *protocol.CompareModelsRequest, database string, subject *protocol.ComparisonIdentity) *protocol.ComparisonIdentity {
+	for _, record := range request.GetDesired().GetRecords() {
+		if record.GetKind() == schema.SecretProperties && provider.CompareIdentities(bound(database, record.Subject), subject) == 0 {
+			return record.Subject
+		}
+	}
+	return nil
 }
 
 func written(value string) (*protocol.ComparisonIdentity, error) {

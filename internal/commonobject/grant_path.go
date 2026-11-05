@@ -80,7 +80,14 @@ func grantTargetRefusal(target *protocol.Reference) error {
 	if _, native := grantObjectCapabilities[kind]; !native && kind != "table" && kind != "schema" && kind != "database" && kind != "path" {
 		return unsupported("a YDB grant cannot name object kind %q", target.GetKind())
 	}
-	name, directory := target.GetName(), target.GetSchema()
+	return grantNameRefusal(kind, target.GetName(), target.GetSchema())
+}
+
+// grantNameRefusal refuses the object name and directory of a grant target of
+// the given normalized kind: a database grant names neither, and any other
+// target names an exact path, with a directory relative to the database that
+// does not qualify an absolute name, and a resource pool by its name alone.
+func grantNameRefusal(kind, name, directory string) error {
 	if kind == "database" {
 		if name != "" || directory != "" {
 			return unsupported("a database grant names the database the connection opens")

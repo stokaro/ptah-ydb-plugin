@@ -24,7 +24,16 @@ func Request(desired *schema.CoordinationIntent, observed *Ydb_Coordination.Desc
 		}
 	}
 	desiredState, currentState := State(schema.CoordinationDesiredModel()), State(currentModel)
-	request := &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: coordinationcompare.ServiceID, Kinds: []string{schema.CoordinationProperties}, Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: map[string]bool{"coordination_nodes": true}, DatabasePath: "/local", Desired: desiredState, Current: currentState}
+	request := &protocol.CompareModelsRequest{
+		Engine:       "ydb",
+		ComparisonId: coordinationcompare.ServiceID,
+		Kinds:        []string{schema.CoordinationProperties},
+		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
+		Capabilities: map[string]bool{"coordination_nodes": true},
+		DatabasePath: "/local",
+		Desired:      desiredState,
+		Current:      currentState,
+	}
 	for _, side := range []struct {
 		state   *protocol.ComparisonState
 		present bool
@@ -58,7 +67,13 @@ func Part(name string) *protocol.ComparisonPart {
 
 // State declares complete namespace knowledge for one model representation.
 func State(model *protocol.ValueModel) *protocol.ComparisonState {
-	return &protocol.ComparisonState{Representation: model.Representation, Coverage: &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{{Model: model, Sources: []*protocol.ComparisonKnowledgeSource{{Outside: Knowledge(protocol.ModelKnowledge_COMPLETE)}}}}}}
+	return &protocol.ComparisonState{
+		Representation: model.Representation,
+		Coverage: &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{{
+			Model:   model,
+			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: Knowledge(protocol.ModelKnowledge_COMPLETE)}},
+		}}},
+	}
 }
 
 // Knowledge supplies the reason required for incomplete claims.
