@@ -29,7 +29,8 @@ const (
 var topicChanges = newObjectChanges(objectChanges{kind: TopicProperties, change: TopicChange, operation: TopicOperation, noun: "topic",
 	semantics: topicSemantics,
 	definition: map[string]any{
-		"semantics":  "create: additive, access unknown; drop: destructive, removes the topic's messages and consumer positions, narrows access; alter dropping or restarting a consumer: destructive, removes its position; alter adding consumers only: additive; other alter: behavioral; alter keeps access; never replaces owner",
+		"semantics": "create: additive, access unknown; drop: destructive, removes the topic's messages and consumer positions, narrows access; " +
+			"alter dropping or restarting a consumer: destructive, removes its position; alter adding consumers only: additive; other alter: behavioral; alter keeps access; never replaces owner",
 		"comparison": "both operands read as the host's topic specification: settings resolved to the values YDB gives a new topic, consumers by name; attributes and access metadata are not compared",
 		"validation": "a pair that holds no change is refused",
 	},
@@ -173,7 +174,8 @@ func topicSemantics(before, after *protocol.Envelope) (*protocol.ChangeSemantics
 		semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ADDITIVE, "CREATE TOPIC adds a topic", protocol.ChangeSemantics_UNCHANGED,
 			"The topic is created by this plan, so no role could read it before; it takes its directory's permissions"
 	case desired == nil:
-		semantics.RemovesState, semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = new(true), protocol.ChangeSemantics_DESTRUCTIVE, dropTopicReason, protocol.ChangeSemantics_NARROWS, "Dropping the topic removes access to it"
+		semantics.RemovesState, semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = new(true), protocol.ChangeSemantics_DESTRUCTIVE, dropTopicReason,
+			protocol.ChangeSemantics_NARROWS, "Dropping the topic removes access to it"
 	case topics.Equal(*desired, *current):
 		return nil, fmt.Errorf("topic operands contain no change")
 	default:
