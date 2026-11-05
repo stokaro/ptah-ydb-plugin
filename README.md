@@ -1521,7 +1521,12 @@ ISO 8601 duration of weeks, days, hours, minutes and seconds (`P30D`,
 months and years are refused. A column that counts since the Unix epoch also
 needs `row_deletion_unit`, one of `SECONDS`, `MILLISECONDS`, `MICROSECONDS` and
 `NANOSECONDS` in any case. Which column types fit the unit is checked when the
-plan is made, where the table's columns are known.
+plan is made, where the table's columns are known. A refused interval or unit
+says why in the host's output, in the words of the host's embedded engine
+without the value the source wrote, which a provider's reason never quotes:
+`table "items": platform.ydb.row_deletion_interval: the interval has a fraction
+of a second, and YDB keeps whole seconds only (PT1.5S reads back as PT1S)`. A
+tier of a column table's TTL is refused the same way.
 
 All the keys, attributes and directives of one table become one desired
 row-table facet, because a document may hold only one facet of a kind for a
