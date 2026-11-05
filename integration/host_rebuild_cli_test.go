@@ -213,7 +213,8 @@ func TestHostSchemaApplyRebuildCarriesChangefeeds_HappyPath(t *testing.T) {
 		"--schemas", directory, "--exit-code")
 
 	c.Assert(rebuildErr, qt.IsNil, qt.Commentf("schema apply --allow-table-rebuild:\n%s", rebuilt))
-	c.Assert(rebuilt, qt.Contains, "Changefeed updates of table "+directory+"/items is dropped before the swap")
+	c.Assert(rebuilt, qt.Contains, "Changefeed updates of table "+directory+"/items is dropped before the swap and added again after it, "+
+		"because YDB moves no table that carries a changefeed.")
 	c.Assert(rebuilt, qt.Contains, "Its stream restarts")
 	c.Assert(compareErr, qt.IsNil, qt.Commentf("schema compare:\n%s", compared))
 	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+absolute+"` WHERE `id` = 1l AND `n` = 10l"), qt.Equals, int64(1))

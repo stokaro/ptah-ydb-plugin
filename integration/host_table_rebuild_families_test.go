@@ -61,22 +61,24 @@ type hclRebuildCase struct {
 }
 
 // hclRebuildCases are the tables the rebuilds from HCL start from, for native
-// ptah and for ptah-compat alike.
+// ptah and for ptah-compat alike. Each new table holds KEY_BLOOM_FILTER =
+// DISABLED, which the rebuild names where the old table states no filter, as
+// the host's embedded engine names it.
 func hclRebuildCases() []hclRebuildCase {
 	plain := []string{"default compression=off"}
 	return []hclRebuildCase{
 		{name: "a TTL, for a widened column", nType: "Int64",
 			create: "CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `ts` Timestamp, PRIMARY KEY (`id`)) WITH (TTL = Interval('P1D') ON `ts`)",
-			want:   storedTable{TTL: "ts 86400s", Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0", ReadReplicas: ""}},
+			want:   storedTable{TTL: "ts 86400s", Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0", ReadReplicas: "", KeyBloomFilter: "DISABLED"}},
 		{name: "column families, for a widened column", nType: "Int64",
 			create: "CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `ts` Timestamp FAMILY `cold`, PRIMARY KEY (`id`), " +
 				"FAMILY `default` (COMPRESSION = 'lz4'), FAMILY `cold` (DATA = '" + storagePool + "', COMPRESSION = 'lz4'))",
 			want: storedTable{Families: []string{"cold data=hdd compression=lz4 columns=ts", "default compression=lz4"},
-				Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0", ReadReplicas: ""}},
+				Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0", ReadReplicas: "", KeyBloomFilter: "DISABLED"}},
 		{name: "splitting settings and read replicas, for a column made NOT NULL", nType: "Int32",
 			create: "CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `ts` Timestamp, PRIMARY KEY (`id`)) WITH (" +
 				"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3, READ_REPLICAS_SETTINGS = 'PER_AZ:1')",
-			want: storedTable{Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=3 max=0", ReadReplicas: "PER_AZ:1"}},
+			want: storedTable{Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=3 max=0", ReadReplicas: "PER_AZ:1", KeyBloomFilter: "DISABLED"}},
 	}
 }
 
