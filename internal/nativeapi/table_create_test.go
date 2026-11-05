@@ -31,6 +31,10 @@ type creationFixture struct {
 	indexes []*native.TableIndexDescription
 	// columns are extra columns the described table reports after id.
 	columns []*native.ColumnMeta
+	// families are the column families the described table reports.
+	families []*native.ColumnFamily
+	// sent is the request Create was given.
+	sent *Ydb_Table.CreateTableRequest
 }
 
 func (f *creationFixture) ListDirectory(_ context.Context, _ *Ydb_Scheme.ListDirectoryRequest, _ ...grpc.CallOption) (*Ydb_Scheme.ListDirectoryResponse, error) {
@@ -43,6 +47,7 @@ func (f *creationFixture) ListDirectory(_ context.Context, _ *Ydb_Scheme.ListDir
 }
 func (f *creationFixture) Create(_ context.Context, request *Ydb_Table.CreateTableRequest) error {
 	f.events = append(f.events, "create")
+	f.sent = proto.CloneOf(request)
 	if request.Path != "/local/app/records" {
 		return errors.New("wrong dispatch path")
 	}
@@ -69,7 +74,7 @@ func (f *creationFixture) Describe(_ context.Context, _ string) (*native.Describ
 		partitioning = &Ydb_Table.PartitioningSettings{MinPartitionsCount: f.minimum}
 	}
 	return &native.DescribeTableResult{PartitioningSettings: partitioning, Attributes: attributes, Self: &Ydb_Scheme.Entry{Name: "records", Type: Ydb_Scheme.Entry_TABLE},
-		PrimaryKey: []string{"id"}, Indexes: f.indexes,
+		PrimaryKey: []string{"id"}, Indexes: f.indexes, ColumnFamilies: f.families,
 		Columns: append([]*native.ColumnMeta{{Name: name, Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UINT64}}, NotNull: new(true)}}, f.columns...)}, nil
 }
 func (f *creationFixture) Close() error {

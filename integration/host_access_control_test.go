@@ -16,6 +16,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -130,12 +131,9 @@ func loginError(c *qt.C, user, password string) error {
 // reports them as declared and nothing is left to plan, and a second apply
 // plans nothing either. A change of a membership, of a user's login and of a
 // grant is planned in place as exactly four statements, and nothing is left
-// to plan after it.
-//
-// The table is applied before the access: the host refuses a common grant on a
-// table the same plan creates through a provider (conflicting writers of the
-// table), which its embedded engine plans in one run. The access part of the
-// host's scenario is otherwise kept whole.
+// to plan after it. The table is created in the same run as the access, as
+// the host's embedded engine plans it: a grant on the table reads the table and
+// changes its access, so the provider's creation stays the table's only writer.
 func TestHostAppliesAccessControl_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -150,8 +148,7 @@ func TestHostAppliesAccessControl_HappyPath(t *testing.T) {
 	declared := accessDeclaration(directory, names, []string{"DATA-READERS", names.group}, false, "SELECT ROW", "ydb.generic.list")
 	changed := accessDeclaration(directory, names, []string{"DATA-READERS"}, true, "SELECT ROW", "UPDATE ROW")
 
-	hostRun(c, directory, "the table", accessTable(directory), `(?s).*Schema apply completed successfully.*`)
-	hostRun(c, directory, "the access", declared, `(?s).*Schema apply completed successfully.*`)
+	hostRun(c, directory, "the table and the access", declared, `(?s).*Schema apply completed successfully.*`)
 	settled := hostPlanned(c, directory, "yaml", declared)
 	hostRun(c, directory, "a second apply", declared, `(?s).*Schema is synced, no changes to be made.*`)
 	roles, memberships, grants := principalsOf(c, client, session, directory, names)
@@ -325,4 +322,41 @@ func TestHostConvergesYQLPrivileges_HappyPath(t *testing.T) {
 	roles, _, grants := principalsOf(c, client, session, directory, names)
 	c.Assert(roles, qt.HasLen, 2)
 	c.Assert(grants, qt.HasLen, 0)
+}
+
+// A grant on a table the same run alters is planned with the alteration: the
+// grant follows the provider's step that changes the table's settings and adds
+// a column, and the read reports all of it.
+func TestHostGrantsOnATableTheRunAlters_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	client, session := accessSession(c)
+	names := newAccessNames()
+	removeAccess(c, opened, database, names)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		c.Check(execFixtureSchema(ctx, opened.DB, "DROP TABLE IF EXISTS `"+path.Join(database, directory, "orders")+"`"), qt.IsNil)
+	})
+	declared := accessDeclaration(directory, names, []string{names.group}, false, "SELECT ROW")
+	altered := strings.Replace(declared, "    columns:\n", "    auto_partitioning_min_partitions_count: 2\n    columns:\n", 1)
+	altered = strings.Replace(altered, "      note: {type: Utf8}\n", "      note: {type: Utf8}\n      total: {type: Int64}\n", 1)
+	c.Assert(strings.Count(altered, "\n")-strings.Count(declared, "\n"), qt.Equals, 2)
+
+	hostRun(c, directory, "the table", accessTable(directory), `(?s).*Schema apply completed successfully.*`)
+	hostRun(c, directory, "a column and the access", altered, `(?s).*Schema apply completed successfully.*`)
+	hostRun(c, directory, "a second apply", altered, `(?s).*Schema is synced, no changes to be made.*`)
+	_, _, grants := principalsOf(c, client, session, directory, names)
+	c.Assert(grants, qt.Contains, grantEntry{Role: names.group, Privilege: "ydb.granular.select_row", Kind: "table", Name: directory + "/orders"})
+	table, err := nativeapi.OpenTable(c.Context(), opened.Driver)
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(table.Close(), qt.IsNil) })
+	described, err := table.Describe(c.Context(), path.Join(database, directory, "orders"))
+	c.Assert(err, qt.IsNil)
+	var columns []string
+	for _, column := range described.GetColumns() {
+		columns = append(columns, column.GetName())
+	}
+	c.Assert(columns, qt.DeepEquals, []string{"id", "note", "total"})
+	c.Assert(described.GetPartitioningSettings().GetMinPartitionsCount(), qt.Equals, uint64(2))
 }
