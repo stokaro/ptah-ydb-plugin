@@ -15,6 +15,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -22,6 +23,15 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
 )
+
+// directoryRegion is the namespace of one directory of database, below which
+// nothing is claimed: a nested directory is a namespace of its own.
+func directoryRegion(database, directory string) *protocol.ModelNamespaceKnowledge {
+	return &protocol.ModelNamespaceKnowledge{
+		Scope:     &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: database, Normalized: database}, Catalog: &protocol.NamespaceComponent{}, Schema: &protocol.NamespaceComponent{Source: directory, Normalized: directory}},
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
+	}
+}
 
 // The pinned vendor protobuf does not name STREAMING_QUERY.
 const streamingQueryEntry = Ydb_Scheme.Entry_Type(26)
@@ -287,13 +297,20 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		}
 		// A successful list and complete child reads prove native-object
 		// absence only in this exact directory, never in skipped descendants.
+		// The read describes every table of the directory with each facet its
+		// kind of table has, a row table's settings, indexes and changefeeds,
+		// a column table's storage and every column's properties, so the
+		// facet kinds are known completely there too. Without that the kinds
+		// stay narrowed, and an export the read knows completely could not be
+		// written: a source has no limit that says a facet kind.
 		for _, record := range result.Coverage.Kinds {
+			if slices.Contains(tablecompare.Kinds(), record.Model.Kind) {
+				record.Regions = append(record.Regions, directoryRegion(database, selected))
+				continue
+			}
 			// Views the common wire carries are not read as native objects.
 			if schema.IsNativeObject(record.Model.Kind) && (record.Model.Kind != schema.ViewProperties || !common.Views) {
-				record.Regions = append(record.Regions, &protocol.ModelNamespaceKnowledge{
-					Scope:     &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: database, Normalized: database}, Catalog: &protocol.NamespaceComponent{}, Schema: &protocol.NamespaceComponent{Source: selected, Normalized: selected}},
-					Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
-				})
+				record.Regions = append(record.Regions, directoryRegion(database, selected))
 			}
 		}
 	}

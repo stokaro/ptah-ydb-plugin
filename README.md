@@ -1056,7 +1056,15 @@ exact database, empty catalog, and exact schema directory; an unfiltered read
 sends subtree regions instead where the host negotiates them (see below). An
 empty directory therefore establishes native-object absence there. Unread
 descendants, excluded system directories, and other namespaces remain unknown.
-Table and column facets keep subject-only coverage.
+The table and column facet kinds (a row table's settings, indexes and
+changefeeds, a column table's storage, a column's properties) get the same
+complete region for each such directory, since the read describes every table
+there with each facet its kind of table has. Without it those kinds stay
+narrowed in an export the read otherwise knows completely, and a Go or HCL
+source has no not-described entry for a facet kind, so `ptah introspect` of
+such a read, of the whole database or of a directory beside the database's
+pools, is refused before it writes (`provider encode source failed
+(Internal)`).
 
 A selected directory YDB does not show (it answers SCHEME_ERROR) reads as
 empty when its parent's listing, proved the same way up to the database root,

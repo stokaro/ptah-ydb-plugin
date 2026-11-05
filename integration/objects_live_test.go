@@ -6,12 +6,14 @@ import (
 	"context"
 	"os"
 	"path"
+	"slices"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -161,7 +163,9 @@ func assertExactObjectRegions(c *qt.C, snapshot *protocol.Schema, database strin
 	c.Helper()
 	for _, record := range snapshot.Coverage.Kinds {
 		c.Assert(record.Knowledge.State, qt.Equals, protocol.ModelKnowledge_UNINSPECTED)
-		if !schema.IsNativeObject(record.Model.Kind) {
+		// The table facet kinds are known in each listed directory too, as
+		// the read describes every table there with its facets.
+		if !schema.IsNativeObject(record.Model.Kind) && !slices.Contains(tablecompare.Kinds(), record.Model.Kind) {
 			c.Assert(record.Regions, qt.HasLen, 0)
 			continue
 		}
