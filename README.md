@@ -20,6 +20,10 @@ through the public Ptah SDK. It supports anonymous, URL user/password, and URL t
 Session receipts contain the selected database and measured server version.
 The implementation does not import the Ptah application module.
 
+The [documentation](docs/README.md) says what YDB does in Ptah, from installing
+and selecting the provider to the objects it declares and how it runs a
+migration.
+
 The provider ID is `github.com/stokaro/ptah-ydb-plugin`. Model kinds use the `github.com/stokaro/ptah-ydb-plugin/` namespace. This changes
 the experimental model identities; pre-v1, no compatibility with the earlier
 unpublished names is owed. Older envelopes and plans are refused.
@@ -76,8 +80,8 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.14.1-0.20261104150804-7e71a23c3a16, a
-pseudo-version of the SDK that speaks provider contract 25.16. The provider
+The module pins `provider-sdk` v0.17.1-0.20261105053415-00cd95ca0040, a
+pseudo-version of the SDK that speaks provider contract 25.23. The provider
 still requires 25.7 of its host and offers each later feature to a host that
 lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -544,7 +548,12 @@ caller transaction (`ABORTED`, `Transaction locks invalidated`) is
 `NOT_APPLIED` with `Execution.transaction_aborted`, and a commit YDB aborted is
 `ROLLED_BACK` with `TransactionResult.aborted`. Neither applied anything, and
 the host may run the transaction again. A host that does not list the feature
-gets the same outcomes without the flags.
+gets the same outcomes without the flags. An `ABORTED` answer YDB gives for the
+transaction itself, not for a conflict, sets neither flag, since every new
+attempt answers the same: measured on 25.1.4.7, a transaction whose writes do
+not fit one datashard program, such as the copy of a table rebuild over about
+48 MiB, commits with issue 200509 (`Datashard program size limit exceeded`),
+and the commit is `ROLLED_BACK` with the reason that says so.
 
 ## Text units
 
@@ -690,10 +699,20 @@ membership, including edges whose principals are outside the managed role list.
 
 A user's password is set when the user is created, from a YAML or Go
 declaration, and is never read back: a declaration that names another password
-plans nothing, as the host's embedded engine plans it. The statement holds the
-password in plain text below a warning, as the host's engine writes it; a
-declared password hash (`CREATE USER ... HASH`) keeps the password out of the
-plan.
+plans nothing, as the host's embedded engine plans it.
+
+The password never enters a plan. Under `schema.password-inputs` (contract
+25.22, ADR 0071) the host sends a declared password, or a password hash, as an
+execution input, and the statement names the input where the password stands:
+``CREATE USER `app` PASSWORD $PTAH_SECRET_PASSWORD_APP;``. YDB refuses that
+statement as written. `DescribeExecutionInputs` reports the input, and the
+provider writes the bound value in as a string literal only when it runs the
+statement, with `HASH` for a password hash, and keeps it out of any error the
+server answers with. The host binds the declared password when it plans from
+the schema and applies in one run, and the variable's value for a saved plan
+or a migration file. A host that does not negotiate the feature sends the
+password itself, and the provider refuses the user rather than write the
+password into the plan.
 
 `schema.common-access` (contract 25.5) carries independently covered owners and
 memberships. An owner's login state is optional: unknown remains unknown,
@@ -955,15 +974,25 @@ sentence.
 
 Where YDB's issues say a feature flag is off, the reason names the capability
 and the flag, as the host's embedded engine words such a refusal, around the
-provider's own reason where the host's engine quotes YDB's text. The plan took
-the capability from the release line's default, and the cluster runs with the
-flag off. The texts and the flags they name are the host's measured ones
-(`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and 26.2.1.14, where
-`EnableResourcePools` is off by default:
+provider's own reason where the host's engine quotes YDB's text, then what to
+do. A session whose address names no monitoring endpoint took the capability
+from its release line's default, and is told to name the endpoint as well as
+to turn the flag on; one whose address names it read the flags already, and is
+told only to turn the flag on. The texts and the flags they name are the
+host's measured ones (`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and
+26.2.1.14, where `EnableResourcePools` is off by default, without the endpoint:
 
 ```text
 provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans
 ```
+
+and with it, the same sentence up to `Turn the flag on`.
+
+25.1.4.7 has no unique secondary index, and refuses one with `Unknown index
+type: syncGlobalUnique` inside its execution stage, before it proposes a
+schema operation. The unit is NOT_APPLIED (PARTIAL after an applied prefix),
+with the reason `YDB refused the statement: the YDB release the cluster runs
+has no unique secondary index (GENERIC_ERROR, issue 1060, line 1, column N)`.
 
 ## Operational storage reservations
 
@@ -1184,6 +1213,20 @@ name no node can take with the host's words. With `source.limits` negotiated,
 the document's claim leaves the node it names, or every node, unmanaged. A host
 that does not list `source.hcl` reads no such block.
 
+An HCL document is an Atlas file, which names none of the nodes it leaves out,
+so it claims the nodes only through its header, as the host's embedded engine
+reads it: a `coordination_node` entry, or the captured `ptah:feature-coverage`
+header an export writes, which the host reads itself. A document with neither
+claims nothing of them, and a plan from it creates and alters the nodes it
+declares and drops none. The provider cannot keep this rule alone: the SDK lets
+a decoding claim less than complete only through header limits, so its reply
+for a document without them claims every node. A host that takes an HCL
+document's claim only from its header asks the provider about no other
+document; one that asks about every document plans to drop each node the
+document does not declare, and writes its HCL exports without the captured
+header. `TestHostKeepsTheNodesAnHCLDocumentDoesNotName` measures the first
+kind of host and skips on the second.
+
 A Go source carries the same entries as `ptah:schema:notdescribed`
 declarations, under `source.limits`, of the kinds the engine lists in
 `go_header_kinds`: `coordination_node`, `streaming_query`, `resource_pool`,
@@ -1257,7 +1300,9 @@ and a declared table whose facet knowledge is not complete refuses the export.
 Knowledge left unmanaged by a source's own entry is passed on with
 `provenance="declared"`. YAML writes no header, and neither does a format for a
 host that does not negotiate `source.limits`, so there such knowledge refuses
-the export, as does a kind no entry names.
+the export, as does a kind no entry names. A host that writes an HCL export's
+account itself, as its captured `ptah:feature-coverage` header, sends the
+provider no coverage for HCL, and the provider writes no entry there.
 
 The subprocess tests exercise decoding, encoding, normalization, and
 representation conversion without a database address; a YQL schema declares
@@ -1791,9 +1836,11 @@ The offline planner preserves complete before and after operands. Each step
 has an object effect, a shared `ydb.scheme-path` effect, and a forbidden SQL
 transaction requirement. The path effect names no database, as the host names
 a path of the session's database. Table-to-node and node-to-table replacements
-require an explicit common path handoff. Unsupported common footprints and
-overlapping parent/descendant paths are refused until a directory lifecycle is
-captured. The host's window markers (such as `common/feature-creations`) and the
+require an explicit common path handoff. A view the host creates or drops
+occupies its path as a table does: a node beside it needs no order, and a node
+that takes the path of a dropped view comes after the drop. Unsupported common
+footprints and overlapping parent/descendant paths are refused until a
+directory lifecycle is captured. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
 the change is refused. A parent directory that does not exist holds no node,
@@ -2606,8 +2653,11 @@ for is refused in the embedded engine's words: an expression, an order, a
 prefix, a NULLS order or an operator class on a key column, an index on the
 table's key, a covered key column. A vector, full-text or local index is
 refused as a common index, since the pinned table protocol builds none of them
-with a table. Execution confirms each index by reading it back. In the TEXT
-form each index is an INDEX clause of the CREATE TABLE.
+with a table. An index names its table as the host names it: by its name, by
+its directory and name, or, where a part holds a dot, by the quoted reference
+`"app.records"` for the root table app.records and `app."v.1"` for the table
+v.1 of the directory app. Execution confirms each index by reading it back. In
+the TEXT form each index is an INDEX clause of the CREATE TABLE.
 
 YDB has no UNIQUE constraint: it refuses one as a parse error and holds the
 same rows with a global unique index, a second row with the same value refused
@@ -3303,11 +3353,17 @@ streaming query definitions as the streaming query model; and secrets whose
 values are approved input references; and the async replications and transfers
 `CREATE ASYNC REPLICATION` and `CREATE TRANSFER` declare, with what a later
 `ALTER ASYNC REPLICATION ... SET` or `ALTER TRANSFER ... SET` of the load
-changes folded in, as this provider's replication and transfer models. It
-says what each document declares, traces every object to its statement, and
-claims complete coverage of the row-table, column, column-storage,
-coordination, topic, external data source, external table, streaming query,
-secret, async replication and transfer models. A
+changes folded in, as this provider's replication and transfer models. For a
+host that lists `schema.sql-facets` (contract 25.23), it carries the
+changefeeds `ALTER TABLE ... ADD CHANGEFEED` declares, with the consumers
+`ALTER TOPIC <table>/<changefeed> ADD CONSUMER` adds to their topics, as one
+facet of each table in this provider's changefeed model, the value a YAML
+`changefeeds:` key of the table declares. It says what each document declares,
+traces every object to its statement, and claims complete coverage of the
+row-table, column, column-storage, coordination, topic, external data source,
+external table, streaming query, secret, async replication and transfer models,
+and of the changefeed model under that feature, so a table a load declares
+without a changefeed is one with none. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
@@ -3336,10 +3392,9 @@ carry is refused by name, with no partial reading:
 - the partitioning settings, column families, TTL and column storage of a
   table, which Ptah refuses in a SQL schema reading;
 - the partitioning and vector settings of an index;
-- changefeeds and the consumers of their topics: the host refuses the facets
-  of a table in a SQL schema reading, and a changefeed is one. A YQL source
-  therefore leaves the changefeeds of its tables as they are; declare them in
-  YAML or Go;
+- changefeeds and the consumers of their topics, for a host that does not list
+  `schema.sql-facets`, which has no home for a facet of a table. The load then
+  claims nothing about changefeeds and leaves those of its tables as they are;
 - a user's password: the reply's role carries none, so the host would create
   the user without it; a YAML or Go declaration carries the password, which
   the host sets when it creates the user;

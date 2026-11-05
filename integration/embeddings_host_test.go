@@ -86,14 +86,6 @@ type inferenceTarget struct {
 	noIndex    bool
 }
 
-// inferenceSpec is the host's specification of a generation of the
-// articles' title and body, in column embedding beside them with a
-// vector_kmeans_tree index, the shape the host's YDB inference tests use.
-func inferenceSpec(c *qt.C, endpoint string) string {
-	c.Helper()
-	return writeInferenceSpec(c, endpoint, inferenceTarget{column: "embedding", revision: "1"})
-}
-
 // writeInferenceSpec writes a host specification for the realm's articles.
 func writeInferenceSpec(c *qt.C, endpoint string, spec inferenceTarget) string {
 	c.Helper()
@@ -154,8 +146,8 @@ policy:
 	return file
 }
 
-// hostInference runs one `ptah inference` verb of the pinned host with its
-// embedded YDB engine, without this provider, and returns what it printed.
+// hostInference runs one `ptah inference` verb of the pinned host and returns
+// what it printed.
 func hostInference(c *qt.C, host string, args ...string) string {
 	c.Helper()
 	output, err := hostInferenceCommand(c, host, args...)
@@ -220,57 +212,11 @@ func generationOf(c *qt.C, status string) string {
 	return ""
 }
 
-// The provider reads and runs on a database the host's embedded YDB engine
-// wrote: the engine prepares, backfills and indexes a generation, and the
-// provider recognizes its run-state tables as its own layout, reads the
-// generation, the run and its events, walks the vectors the engine stored,
-// finds the nearest row through the engine's index, and appends an event the
-// engine then reads back.
-func TestEmbeddedEngineDatabaseRunsThroughTheProvider(t *testing.T) {
-	c := testcheck.New(t)
-	host, _ := hostManifest(c)
-	f := newEmbeddingFixture(c)
-	f.seedArticles(c)
-	spec := inferenceSpec(c, embeddingsEndpoint(c).URL)
-	hostInference(c, host, "prepare", "--spec", spec, "--db-url", f.address, "--run-id", "host-run")
-	backfill := hostInference(c, host, "backfill", "--spec", spec, "--db-url", f.address, "--run-id", "host-run", "--batch-rows", "2")
-	c.Assert(backfill, qt.Contains, "backfill finished: 5 scanned")
-	hostInference(c, host, "index", "--spec", spec, "--db-url", f.address, "--run-id", "host-run")
-
-	f.prepareStore(c)
-	state := f.read(c, everything())
-	c.Assert(state.Records.Generations, qt.HasLen, 1)
-	c.Assert(state.Records.Runs, qt.HasLen, 1)
-	generation, run := state.Records.Generations[0], state.Records.Runs[0]
-	c.Assert([]any{run.Id, run.GenerationIdentity, generation.Dimension, generation.TargetColumn, generation.ConsistencyMode},
-		qt.DeepEquals, []any{"host-run", generation.Identity, uint32(4), "embedding", "immutable"})
-	events, err := f.client.ReadEmbeddingEvents(c.Context(), &protocol.ReadEmbeddingEventsRequest{SessionId: f.session, RunId: "host-run", MaxEvents: 1000})
-	c.Assert(err, qt.IsNil)
-	c.Assert(len(events.Events) > 1, qt.IsTrue)
-
-	read := articlesSpec(protocol.EmbeddingTarget_SOURCE_COLUMNS, true)
-	read.Generation = generation.Identity
-	read.Names.Index = "articles_embedding_" + generation.Identity[:12] + "_idx"
-	walked := f.verification(c, read, 2)
-	c.Assert(walked, qt.DeepEquals, []string{"1 true 0:UPSERT:4", "2 true 0:UPSERT:4", "3 true 0:UPSERT:4", "4 true 0:UPSERT:4", "5 true 0:UPSERT:4"})
-	found, err := f.client.SearchEmbeddings(c.Context(), &protocol.SearchEmbeddingsRequest{SessionId: f.session, Spec: read, Vector: topicVector("billing"), Depth: 1})
-	c.Assert(err, qt.IsNil)
-	c.Assert([]any{found.IndexUsed, found.Exact[0].Components}, qt.DeepEquals, []any{true, []string{"3"}})
-
-	appended, err := f.client.AppendEmbeddingEvent(c.Context(), &protocol.AppendEmbeddingEventRequest{SessionId: f.session, RequestId: "provider-event",
-		Event: &protocol.EmbeddingEvent{RunId: "host-run", Kind: "note", At: at(time.Now().Unix(), 0), Detail: "written through the provider"}})
-	c.Assert(err, qt.IsNil)
-	c.Assert(appended.Sequence, qt.Equals, events.Events[len(events.Events)-1].Sequence+1)
-	status := hostInference(c, host, "status", "--spec", spec, "--db-url", f.address, "--run-id", "host-run")
-	c.Assert(status, qt.Contains, "run host-run")
-}
-
-// The host runs an embedding migration through this provider's store, as its
-// own YDB inference tests run one on the embedded engine: plan, prepare twice,
-// backfill in batches, index twice, verify, evaluate and cut over one
-// generation with an approval, then a second generation cut over with a
-// stabilization window, a rollback to the first, the retirement of the second,
-// and a write into the first after its index, which the line decides.
+// The host runs an embedding migration through this provider's store: plan,
+// prepare twice, backfill in batches, index twice, verify, evaluate and cut
+// over one generation with an approval, then a second generation cut over
+// with a stabilization window, a rollback to the first, the retirement of the
+// second, and a write into the first after its index, which the line decides.
 func TestHostRunsInferenceThroughTheProvider(t *testing.T) {
 	c := testcheck.New(t)
 	host, manifest := hostManifest(c)

@@ -93,3 +93,47 @@ func TestHostResumesARebuildAfterAFailureAfterTheCopy_HappyPath(t *testing.T) {
 	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+absolute+"`"), qt.Equals, int64(2))
 	c.Assert(objectsIn(heldEntries(c, f.opened, path.Join(f.database, directory))), qt.HasLen, 1)
 }
+
+// Ported from the host's TestYDBRebuild_AConversionFailureLeavesTheOldTable,
+// through migration files: a value the new type cannot hold fails the copy,
+// which is one data query, so nothing is copied, the old table keeps its type
+// and its rows, and the revision records the run as failed at the copy. Once
+// the row is fixed, a rerun with --allow-dirty resumes at the copy and
+// completes the rebuild.
+func TestHostResumesARebuildAfterAFailedConversion_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	directory, absolute, after, f := hostRebuildFixtureOf(c, "TEXT", "BIGINT", "(1l, 'x'u), (2l, '5'u)")
+	migrations, _, _ := hostRebuildMigration(c, directory, after, f)
+	scratch := path.Join(f.database, directory, "__ptah_rebuild_items")
+
+	failure, failErr := hostMigrate(c, directory, migrations, "migrations", "up")
+	stopped := f.progress(c, protocol.HistoryScope_NATIVE)
+	kept := heldColumnTypes(c, f.opened, absolute)["n"]
+	unconverted := f.count(c, "SELECT COUNT(*) FROM `"+absolute+"` WHERE `n` = 'x'u")
+	copied := f.count(c, "SELECT COUNT(*) FROM `"+scratch+"`")
+	c.Assert(execFixtureSchema(c.Context(), f.opened.DB, "UPDATE `"+absolute+"` SET `n` = '7'u WHERE `n` = 'x'u"), qt.IsNil)
+	resumed, resumeErr := hostMigrate(c, directory, migrations, "migrations", "up", "--allow-dirty")
+
+	c.Assert(failErr, qt.IsNotNil, qt.Commentf("up:\n%s", failure))
+	// The built-in engine prints YDB's answer, the Unwrap message that names
+	// the column. Through a provider the host prints the outcome and the
+	// provider's reason, and the statement after them, which quotes the
+	// message.
+	c.Assert(failure, qt.Contains, "failed to execute migration SQL: provider execution failed (0 of 1 units confirmed): "+
+		"provider execution: NOT_APPLIED (0 units confirmed applied)")
+	c.Assert(failure, qt.Contains, "\nSQL: INSERT INTO `"+directory+"/__ptah_rebuild_items` (`id`, `n`) SELECT ")
+	c.Assert(stopped, qt.HasLen, 1)
+	c.Assert(stopped[0].State, qt.Equals, failed)
+	c.Assert(stopped[0].Total-stopped[0].Applied, qt.Equals, uint64(4))
+	c.Assert(kept, qt.Equals, "Optional<Utf8>")
+	c.Assert(unconverted, qt.Equals, int64(1))
+	c.Assert(copied, qt.Equals, int64(0))
+	c.Assert(resumeErr, qt.IsNil, qt.Commentf("up --allow-dirty:\n%s", resumed))
+	completed := f.progress(c, protocol.HistoryScope_NATIVE)
+	c.Assert(completed, qt.HasLen, 1)
+	c.Assert(completed[0].State, qt.Equals, applied)
+	c.Assert(completed[0].Applied, qt.Equals, completed[0].Total)
+	c.Assert(heldColumnTypes(c, f.opened, absolute)["n"], qt.Equals, "Optional<Int64>")
+	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+absolute+"` WHERE `n` = 7l"), qt.Equals, int64(1))
+	c.Assert(objectsIn(heldEntries(c, f.opened, path.Join(f.database, directory))), qt.HasLen, 1)
+}

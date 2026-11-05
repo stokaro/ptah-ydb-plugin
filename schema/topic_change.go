@@ -154,6 +154,13 @@ func CaptureTopicIntent(owner *protocol.Reference, intent *native.TopicIntent) (
 	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: TopicProperties, Owner: proto.CloneOf(owner)}, definition, intent, NormalizeDesired)
 }
 
+// CaptureChangefeedIntent writes the changefeeds a table declares as the
+// provider's desired facet of that table.
+func CaptureChangefeedIntent(owner *protocol.Reference, intent *native.ChangefeedSetIntent) (*protocol.Envelope, error) {
+	definition := NativeDesiredModel(ChangefeedProperties)
+	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: ChangefeedProperties, Owner: proto.CloneOf(owner)}, definition, intent, NormalizeDesired)
+}
+
 func topicSemantics(before, after *protocol.Envelope) (*protocol.ChangeSemantics, error) {
 	current, desired, err := topicOperandSpecs(before, after)
 	if err != nil {

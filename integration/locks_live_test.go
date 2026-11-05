@@ -103,6 +103,13 @@ func TestNativeLocksExcludeOtherProcessesAndReleaseOnClose(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(checked.Outcome, qt.Equals, protocol.LockResult_ACQUIRED)
 }
+
+// Ported from the host's TestYDBLock_ReportsALoss: a lock whose coordination
+// node an administrator drops is lost, and CheckLock reports
+// provider.ErrLockLost on every line, as the built-in engine reports the lock
+// lost. The session is then fenced: no statement, history write, metadata
+// write, commit or native operation runs, and a lock another session takes
+// afterwards does not lift the fence.
 func TestNativeLockLossFencesExecutionHistoryAndCommit(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -151,7 +158,7 @@ func TestNativeLockLossFencesExecutionHistoryAndCommit(t *testing.T) {
 	node := path.Join(database, locking.NodeName)
 	c.Assert(opened.Driver.Coordination().DropNode(c.Context(), node), qt.IsNil)
 	_, err = client.CheckLock(c.Context(), request)
-	c.Assert(err, qt.IsNotNil)
+	c.Assert(err, qt.ErrorIs, provider.ErrLockLost)
 	c.Assert(executeSQL(c, client, id, tx.Id, "UPSERT INTO `"+table+"` (id) VALUES (2u)").Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
 	txScope := proto.CloneOf(scope)
 	txScope.TransactionId = tx.Id
