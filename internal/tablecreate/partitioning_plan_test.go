@@ -185,18 +185,19 @@ func TestPartitioningPlan_FailurePath(t *testing.T) {
 			`the partition columns \["id" "ts"\] differ from the \["id"\] the table holds, and YDB sets them only when the table is created`},
 		{"a uniform layout the table was not created with",
 			partitioningCase(layoutTable(`"uniformPartitions":"4"`), partitionedTable(defaultPartitioning)),
-			"it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table .`UNIFORM_PARTITIONS alter is not supported`. and " +
-				"which gives a new table a minimum of 4 partitions, where this table holds 1. Declare auto_partitioning_min_partitions_count to change the minimum in place"},
+			`table "app/records": it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table ..UNIFORM_PARTITIONS alter is not supported.. and ` +
+				`which gives a new table a minimum of 4 partitions, where this table holds 1. Declare auto_partitioning_min_partitions_count to change the minimum in place; ` +
+				`YDB makes it by rebuilding the table, which Ptah plans when asked with a table rebuild request in the host's planning policy \(contract 25\.3\)`},
 		{"a layout by one split point the table was not created with",
 			partitioningCase(layoutTable(`"partitionAtKeys":[{"values":["10"]}]`), partitionedTable(defaultPartitioning)),
-			"it declares PARTITION_AT_KEYS with one split point, which YDB takes only when it creates a table .`PARTITION_AT_KEYS alter is not supported`. and " +
-				"which gives a new table a minimum of 2 partitions, where this table holds 1.*"},
+			`table "app/records": it declares PARTITION_AT_KEYS with one split point, which YDB takes only when it creates a table ..PARTITION_AT_KEYS alter is not supported.. and ` +
+				`which gives a new table a minimum of 2 partitions, where this table holds 1.*; YDB makes it by rebuilding the table.*`},
 		{"a layout by split points the table was not created with",
 			partitioningCase(layoutTable(`"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`), partitionedTable(`{"partitionBy":["id"],"minPartitionsCount":"2"}`)),
-			"it declares PARTITION_AT_KEYS with 2 split points, which YDB takes only when it creates a table .*a minimum of 3 partitions, where this table holds 2.*"},
+			`table "app/records": it declares PARTITION_AT_KEYS with 2 split points, which YDB takes only when it creates a table .*a minimum of 3 partitions, where this table holds 2.*`},
 		{"a layout beside a stated setting that could change",
 			partitioningCase(layoutTable(`"uniformPartitions":"4","partitioningSettings":{"maxPartitionsCount":"8"}`), partitionedTable(defaultPartitioning)),
-			"it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table.*"},
+			`table "app/records": it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table.*`},
 		{"partition columns with a setting that could change",
 			partitioningCase(partitionedTable(`{"partitionBy":["ts"],"maxPartitionsCount":"8"}`), partitionedTable(defaultPartitioning)),
 			`the partition columns \["ts"\] differ from the \["id"\] the table holds.*`},

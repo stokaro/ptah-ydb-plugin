@@ -74,7 +74,7 @@ func convertNativeProperties(c *qt.C, client *providerruntime.Client, inputs *pr
 			c.Assert(err, qt.IsNil)
 		}
 		if expected.Kind == schema.IndexProperties {
-			expected = withoutDefaultImplementationStorage(c, expected)
+			expected = indexesAsTheirDeclarationGivesThem(c, expected)
 		}
 		c.Assert(proto.Equal(expected, back.Values[i].Value), qt.IsTrue)
 	}
@@ -83,15 +83,19 @@ func convertNativeProperties(c *qt.C, client *providerruntime.Client, inputs *pr
 	c.Assert(proto.Equal(desired, again), qt.IsTrue)
 }
 
-// withoutDefaultImplementationStorage returns an observed index set as a round
+// indexesAsTheirDeclarationGivesThem returns an observed index set as a round
 // trip through its declaration gives it back. YDB reports store_external_blobs
 // DISABLED for every implementation table, the server's default, and the
 // declaration states no storage for such a table: no creation sets the storage
-// of an implementation table. Any other storage setting comes back.
-func withoutDefaultImplementationStorage(c *qt.C, value *protocol.Envelope) *protocol.Envelope {
+// of an implementation table. Any other storage setting comes back. The
+// descriptions of the indexes the common model describes do not come back
+// either: a declaration of the native index set states none of them, and
+// only a rebuild reads them.
+func indexesAsTheirDeclarationGivesThem(c *qt.C, value *protocol.Envelope) *protocol.Envelope {
 	c.Helper()
 	var indexes native.IndexObservations
 	c.Assert(protojson.Unmarshal(value.Payload, &indexes), qt.IsNil)
+	indexes.CommonIndexes = nil
 	serverDefault := &Ydb_Table.StorageSettings{StoreExternalBlobs: Ydb.FeatureFlag_DISABLED}
 	for _, index := range indexes.Indexes {
 		for _, table := range index.Tables {

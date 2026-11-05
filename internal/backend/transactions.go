@@ -159,9 +159,13 @@ func (p *Provider) FinishTransaction(ctx context.Context, request *protocol.Fini
 		return refused, nil
 	}
 	result := &protocol.TransactionResult{Outcome: record.outcome}
+	if record.failed && request.Action == protocol.FinishTransactionRequest_COMMIT && record.outcome == protocol.TransactionResult_ROLLED_BACK {
+		result.Diagnostic = &protocol.ProviderDiagnostic{Reason: "the transaction was rolled back because a statement in it failed"}
+	}
 	if record.outcome == protocol.TransactionResult_UNKNOWN {
 		result.DiagnosticCode = "ydb.transaction-unconfirmed"
 		result.Message = "The transaction outcome is unknown; commit or rollback was not retried"
+		result.Diagnostic = &protocol.ProviderDiagnostic{Reason: "YDB did not confirm the transaction's outcome, and the commit or rollback was not retried"}
 	}
 	return result, nil
 }
