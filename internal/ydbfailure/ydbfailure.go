@@ -52,6 +52,23 @@ type Answer struct {
 	// those of the last issue, in the order of Issues, that names one. They
 	// are 0 when no issue does.
 	Row, Column uint32
+	// Repeats reports an answer one of whose issues has a code a new attempt
+	// of the transaction answers again (see [RepeatedAbort]): YDB aborted it
+	// for its size, not for a conflict.
+	Repeats bool
+}
+
+// repeatedAborts are the issue codes of an ABORTED answer that YDB gives for
+// the transaction itself, not for a conflict with another one, so every new
+// attempt answers the same. Measured on 25.1.4.7, a transaction whose writes
+// do not fit one datashard program commits with ABORTED and issue 200509,
+// `Datashard program size limit exceeded (56281509 > 50331648)`.
+var repeatedAborts = map[uint32]bool{200509: true}
+
+// RepeatedAbort reports an issue code of an ABORTED answer that a new attempt
+// of the transaction answers again.
+func RepeatedAbort(code uint32) bool {
+	return repeatedAborts[code]
 }
 
 // operation is the SDK's error for an operation status YDB returned: the
@@ -81,6 +98,7 @@ func Read(err error) Answer {
 			if issue.GetIssueCode() != 0 {
 				answer.Code = issue.GetIssueCode()
 			}
+			answer.Repeats = answer.Repeats || RepeatedAbort(issue.GetIssueCode())
 			if issue.GetPosition().GetRow() > 0 {
 				positioned = true
 				answer.Row, answer.Column = issue.GetPosition().GetRow(), issue.GetPosition().GetColumn()
@@ -140,12 +158,14 @@ func (a Answer) Rejected(text string, inTransaction bool) bool {
 	return a.Confirmed(text) && (inTransaction || appliedWhole(text))
 }
 
-// Aborted reports a transaction YDB aborted without applying it, which YDB
-// answers with ABORTED. Measured on 26.2.1.14, a commit and a write that follow
-// a conflicting commit are both aborted with `Transaction locks invalidated`.
-// A new attempt may succeed.
+// Aborted reports a transaction YDB aborted for a conflict without applying
+// it, which YDB answers with ABORTED. Measured on 26.2.1.14, a commit and a
+// write that follow a conflicting commit are both aborted with `Transaction
+// locks invalidated`. A new attempt may succeed. An ABORTED answer that
+// [Answer.Repeats] is not one: nothing of the transaction was applied either,
+// and a new attempt answers the same.
 func (a Answer) Aborted() bool {
-	return a.Status == Ydb.StatusIds_ABORTED
+	return a.Status == Ydb.StatusIds_ABORTED && !a.Repeats
 }
 
 // PathBusy reports an answer that says another schema operation holds the
@@ -189,6 +209,9 @@ var issueMeanings = map[uint32]string{
 	2031: "a value it writes does not convert to its column's type",
 	// `Missing not null column in input: ...`.
 	2032: "it gives no value to a NOT NULL column",
+	// `Datashard program size limit exceeded (56281509 > 50331648)`, at the
+	// commit on 25.1.4.7.
+	200509: "its writes do not fit one datashard program, which holds about 48 MiB; write the rows in smaller transactions",
 }
 
 // WithoutLines is a with its position counted from the unit's own text, for
@@ -223,7 +246,11 @@ func (a Answer) detail() string {
 // means when the provider knows, and the detail, and names the feature flag
 // the refusal says is off (see [Answer.flagged]).
 func (a Answer) RefusedReason() string {
-	reason := "YDB refused the statement"
+	return a.refusedReason("YDB refused the statement")
+}
+
+// refusedReason is [Answer.RefusedReason] with the refusal said as reason.
+func (a Answer) refusedReason(reason string) string {
 	if a.Compiled {
 		reason += " while compiling it"
 	}
@@ -324,16 +351,23 @@ func Failed(answer Answer, unit Unit, applied uint32) *protocol.Execution {
 }
 
 // Commit is the outcome of a COMMIT that failed with answer, or nil when the
-// failure leaves the outcome unknown. A transaction YDB aborted for a conflict
-// applied nothing: it is ROLLED_BACK, with aborted set when the host
-// negotiated it.
+// failure leaves the outcome unknown. A transaction YDB aborted applied
+// nothing: it is ROLLED_BACK. One aborted for a conflict sets aborted when the
+// host negotiated it, so the host may run it again; one whose answer
+// [Answer.Repeats] is refused, since a new attempt answers the same.
 func Commit(answer Answer, aborts bool) *protocol.TransactionResult {
-	if !answer.Aborted() {
+	switch {
+	case answer.Aborted():
+		return &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, Aborted: aborts,
+			DiagnosticCode: "ydb.transaction-aborted", Message: answer.Message(abortedMessage),
+			Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.AbortedReason()}}
+	case answer.Status == Ydb.StatusIds_ABORTED:
+		return &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK,
+			DiagnosticCode: "ydb.transaction-rejected", Message: answer.Message(rejectedMessage),
+			Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.refusedReason("YDB refused the transaction at its commit")}}
+	default:
 		return nil
 	}
-	return &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, Aborted: aborts,
-		DiagnosticCode: "ydb.transaction-aborted", Message: answer.Message(abortedMessage),
-		Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.AbortedReason()}}
 }
 
 // appliedWhole reports a unit of text that YDB applies whole or not at all:

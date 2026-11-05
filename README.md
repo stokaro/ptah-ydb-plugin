@@ -544,7 +544,12 @@ caller transaction (`ABORTED`, `Transaction locks invalidated`) is
 `NOT_APPLIED` with `Execution.transaction_aborted`, and a commit YDB aborted is
 `ROLLED_BACK` with `TransactionResult.aborted`. Neither applied anything, and
 the host may run the transaction again. A host that does not list the feature
-gets the same outcomes without the flags.
+gets the same outcomes without the flags. An `ABORTED` answer YDB gives for the
+transaction itself, not for a conflict, sets neither flag, since every new
+attempt answers the same: measured on 25.1.4.7, a transaction whose writes do
+not fit one datashard program, such as the copy of a table rebuild over about
+48 MiB, commits with issue 200509 (`Datashard program size limit exceeded`),
+and the commit is `ROLLED_BACK` with the reason that says so.
 
 ## Text units
 

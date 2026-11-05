@@ -188,8 +188,8 @@ func (s *session) finishTransaction(ctx context.Context, record *transaction, ac
 		record.outcome = protocol.TransactionResult_UNKNOWN
 	}
 	if answer := ydbfailure.Read(err); action == protocol.FinishTransactionRequest_COMMIT && ydbfailure.Commit(answer, false) != nil {
-		// YDB aborted the transaction for a conflict and applied nothing
-		// (see ydbfailure.Commit).
+		// YDB aborted the transaction and applied nothing (see
+		// ydbfailure.Commit).
 		record.outcome, record.refusal = protocol.TransactionResult_ROLLED_BACK, answer
 	}
 	s.cleanupErr = errors.Join(s.cleanupErr, closeSQLConnection(record.conn))
