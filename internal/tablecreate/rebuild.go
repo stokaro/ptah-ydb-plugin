@@ -157,19 +157,19 @@ func requestedWith(policy *protocol.PlanningPolicy) string {
 // new table has, as the attributes YDB keeps them in. On the common wire a
 // comment is not a table setting, so the read of the table's properties
 // holds none, and the host plans no change for a comment it finds in place.
-func keepHeldComments(request *Ydb_Table.CreateTableRequest, owner *protocol.Reference, common *protocol.ObservedCommonObjects) {
-	comments := ydbcomment.Comments{Columns: map[string]string{}, Indexes: map[string]string{}}
-	for _, comment := range common.GetComments() {
-		object := comment.GetObject()
-		switch {
-		case object.GetSchema() != owner.GetSchema():
-		case object.GetKind() == "table" && object.GetName() == owner.GetName():
-			comments.Own = comment.GetText()
-		case len(object.GetPath()) != 1 || object.GetPath()[0] != owner.GetName():
-		case object.GetKind() == "column" && slices.ContainsFunc(request.GetColumns(), func(column *Ydb_Table.ColumnMeta) bool { return column.GetName() == object.GetName() }):
-			comments.Columns[object.GetName()] = comment.GetText()
-		case object.GetKind() == "index" && slices.ContainsFunc(request.GetIndexes(), func(index *Ydb_Table.TableIndex) bool { return index.GetName() == object.GetName() }):
-			comments.Indexes[object.GetName()] = comment.GetText()
+// The host carries them on the observed table, its columns and its indexes;
+// the planning request's observed common objects hold what lies beyond the
+// tables, and a host fills them for no table.
+func keepHeldComments(request *Ydb_Table.CreateTableRequest, current *protocol.ObservedTable) {
+	comments := ydbcomment.Comments{Own: current.GetComment(), Columns: map[string]string{}, Indexes: map[string]string{}}
+	for _, column := range current.GetColumns() {
+		if column.GetComment() != "" && slices.ContainsFunc(request.GetColumns(), func(created *Ydb_Table.ColumnMeta) bool { return created.GetName() == column.GetName() }) {
+			comments.Columns[column.GetName()] = column.GetComment()
+		}
+	}
+	for _, index := range current.GetIndexes() {
+		if index.GetComment() != "" && slices.ContainsFunc(request.GetIndexes(), func(created *Ydb_Table.TableIndex) bool { return created.GetName() == index.GetName() }) {
+			comments.Indexes[index.GetName()] = index.GetComment()
 		}
 	}
 	for key, value := range comments.Attributes() {
@@ -260,7 +260,7 @@ type rebuild struct {
 // steps, whose index renames name the old index a new one takes its settings
 // from.
 func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names map[string]bool,
-	common *protocol.ObservedCommonObjects, capabilities map[string]bool, steps []*protocol.CommonPlanningStep) (*rebuild, string, error) {
+	capabilities map[string]bool, steps []*protocol.CommonPlanningStep) (*rebuild, string, error) {
 	label := tableLabel(owner)
 	subject := fmt.Sprintf("rebuilding table %q", label)
 	current := table.GetCurrent()
@@ -288,7 +288,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	}
 	request := proto.CloneOf(desired)
 	keepHeldSettings(request, table)
-	keepHeldComments(request, owner, common)
+	keepHeldComments(request, table.GetCurrent())
 	indexSettings, reason := rebuiltIndexSettings(request, table, steps)
 	if reason != "" {
 		return nil, subject + ": " + reason, nil
