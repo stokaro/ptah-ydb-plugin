@@ -208,6 +208,14 @@ func TestFailed(t *testing.T) {
 		{"aborted outside a transaction", conflict, ydbfailure.Unit{Text: insert, Aborts: true}, 0,
 			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Transaction locks invalidated. Table: `/local/t`."}},
 		{"native", duplicate, ydbfailure.Unit{}, 0, unknown},
+		// A comment statement is one AlterTable, which YDB applies whole or
+		// not at all.
+		{"a call refused", answer(Ydb.StatusIds_BAD_REQUEST, "Error: user attributes too big: 10318"), ydbfailure.Unit{Call: true}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Error: user attributes too big: 10318"}},
+		{"a call refused after a prefix", answer(Ydb.StatusIds_SCHEME_ERROR), ydbfailure.Unit{Call: true}, 1,
+			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 1, DiagnosticCode: "ydb.statement-rejected", Message: "YDB rejected the unit"}},
+		{"a call that failed for a reason that proves nothing", answer(Ydb.StatusIds_GENERIC_ERROR, "Scheme operation failed"), ydbfailure.Unit{Call: true}, 0, unknown},
+		{"an unconfirmed call", answer(Ydb.StatusIds_UNAVAILABLE), ydbfailure.Unit{Call: true}, 0, unknown},
 		{"service statement in a transaction", duplicate, ydbfailure.Unit{Transaction: true, Aborts: true}, 0, unknown},
 		{"not applied whole", duplicate, ydbfailure.Unit{Text: "BATCH DELETE FROM t WHERE id > 0"}, 0, unknown},
 		{"unconfirmed", answer(Ydb.StatusIds_UNDETERMINED), ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0, unknown},

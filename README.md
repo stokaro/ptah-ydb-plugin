@@ -391,8 +391,13 @@ query or one scheme statement. Its message is YDB's own issue text on one line.
 Every other failed dispatched unit reports `UNKNOWN`, even when earlier units
 succeeded: a block or action call that runs scheme statements, a `BATCH`
 statement, a unit of several scheme statements, a native unit, a unit that
-holds a comment or coordination node statement, a unit that expands secret
-inputs, and a failure that carries no server status. Cancellation between
+holds a coordination node statement, a unit that expands secret inputs, and a
+failure that carries no server status. A unit that holds a comment statement
+runs as its statements one after another, and reads by the first one when that
+one fails, since nothing of the unit ran before it: a query by the rules above,
+and a comment statement, one `AlterTable` YDB applies whole, by a status that
+establishes the refusal, such as `BAD_REQUEST` for attributes past YDB's
+budget. A later one failing leaves the unit `UNKNOWN`. Cancellation between
 units reports the confirmed prefix. Diagnostics omit raw driver errors.
 
 A unit YDB refused in a caller transaction ends the transaction: measured on
