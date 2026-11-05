@@ -7,6 +7,15 @@ on:
   # host change that breaks this provider even when the provider is unchanged.
   schedule:
     - cron: "17 3 * * *"
+  # A manual run can add a host ref leg: a branch, tag or commit of
+  # stokaro/ptah, such as a host pull request's branch. A pull request names
+  # one in .github/host-ref instead (see scripts/live-lines.sh).
+  workflow_dispatch:
+    inputs:
+      host_ref:
+        description: A branch, tag or commit of stokaro/ptah to run the live suite against, beside the release and master hosts
+        required: false
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -71,33 +80,34 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go test ./internal/metadata ./internal/history ./internal/backend
+  # The lines the live job runs, each an image and a host, from
+  # scripts/live-lines.sh: the release and master legs on every run, and a
+  # host ref leg on each image when a manual run or .github/host-ref names one.
+  lines:
+    runs-on: ubuntu-latest
+    outputs:
+      lines: ${{ steps.lines.outputs.lines }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: lines
+        env:
+          HOST_REF: ${{ inputs.host_ref }}
+        run: scripts/live-lines.sh "$HOST_REF"
   # The provider is compatible with the provider contract, not with particular
   # Ptah versions. The release leg builds the newest published Ptah whose
   # contract this provider can run on and blocks the merge and the release. The
   # master leg builds Ptah's master to show a host change that breaks this
   # provider early; it does not block, because a red Ptah master is not this
-  # repository's defect.
+  # repository's defect. A host ref leg builds the host a run names, and blocks.
   live:
     name: live (${{ matrix.line.image }}, ${{ matrix.line.host }}, shard ${{ matrix.shard }}/3)
+    needs: lines
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.line.host == 'master' }}
     strategy:
       fail-fast: false
       matrix:
-        line:
-          # 25.1 keeps EnableTopicTransfer at its default, off, so the
-          # transfer tests check the refusal there: with the flag on,
-          # dropping a table a dropped transfer wrote into stops 25.1.4.7 on
-          # a schemeshard VERIFY (`AliveChildrenCount >= 1`).
-          - image: ydbplatform/local-ydb:25.1.4.7
-            features: enable_vector_index,enable_external_data_sources
-            host: release
-          - image: ydbplatform/local-ydb:26.2.1.14
-            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources,enable_streaming_queries
-            host: release
-          - image: ydbplatform/local-ydb:26.2.1.14
-            features: enable_vector_index,enable_add_unique_index,enable_external_data_sources,enable_streaming_queries
-            host: master
+        line: ${{ fromJSON(needs.lines.outputs.lines) }}
         # The suite outgrew one job's test timeout, so each line runs in
         # shards; scripts/live-shard.sh deals the tests out.
         shard: [1, 2, 3]
@@ -154,7 +164,8 @@ jobs:
         id: host
         env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/resolve-host.sh '${{ matrix.line.host }}'
+          HOST: ${{ matrix.line.host }}
+        run: scripts/resolve-host.sh "$HOST"
       - name: Check out the host
         if: steps.host.outputs.skip != 'true'
         uses: actions/checkout@v7
@@ -165,12 +176,19 @@ jobs:
       - name: Name the host commit
         if: steps.host.outputs.skip != 'true'
         run: git -C .host-contract log -1 --format='host %H %s'
+      # ptah-compat, the host's Atlas-compatible binary, is built from the same
+      # checkout. The compatibility tests run it with PTAH_PROVIDER_CONFIG
+      # naming this provider, and skip on a host that still builds in a YDB
+      # engine of its own, which refuses the provider's registration.
       - name: Build the external host binary
         if: steps.host.outputs.skip != 'true'
         run: |
           host_binary="$RUNNER_TEMP/ptah-contract"
+          compat_binary="$RUNNER_TEMP/ptah-compat-contract"
           CGO_ENABLED=0 go build -C .host-contract -o "$host_binary" ./cmd/ptah
+          CGO_ENABLED=0 go build -C .host-contract -o "$compat_binary" ./cmd/ptah-compat
           printf 'PTAH_HOST_TEST_BIN=%s\n' "$host_binary" >> "$GITHUB_ENV"
+          printf 'PTAH_HOST_COMPAT_TEST_BIN=%s\n' "$compat_binary" >> "$GITHUB_ENV"
       # The whole suite, the host-driven tests included, ran past its
       # 150-minute test timeout on a hosted runner, so a job runs one shard.
       - if: steps.host.outputs.skip != 'true'
