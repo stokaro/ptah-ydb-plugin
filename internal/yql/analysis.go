@@ -123,11 +123,12 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 		return nil, invalidSource()
 	}
 	if start >= 0 {
-		if len(words) > 0 {
+		switch {
+		case len(words) > 0:
 			emit(len(source))
-		} else if len(file.Statements) > 0 {
+		case len(file.Statements) > 0:
 			file.Statements[len(file.Statements)-1].End = uint32(len(source))
-		} else {
+		default:
 			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB SQL analysis requires an executable statement beside comments or terminators")
 		}
 	}

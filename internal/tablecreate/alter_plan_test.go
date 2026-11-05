@@ -476,25 +476,26 @@ func TestAlterOperation_RefusesAnotherModel(t *testing.T) {
 func jsonUnmarshal(text string, target any) error { return json.Unmarshal([]byte(text), target) }
 
 func TestAlterPlan_ExcludedAndForeignFacets(t *testing.T) {
+	c := testcheck.New(t)
 	base := alterCase{desiredTable: plainTable, heldTable: plainTable}
+	elsewhere := facet(c, schema.TableProperties, "", `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`)
+	elsewhere.Targets = []string{"postgres"}
 	for _, test := range []struct {
 		name   string
-		modify func(*qt.C, *protocol.PlanFeaturesRequest)
+		modify func(*protocol.PlanFeaturesRequest)
 	}{
-		{"excluded desired table facet", func(c *qt.C, r *protocol.PlanFeaturesRequest) {
+		{"excluded desired table facet", func(r *protocol.PlanFeaturesRequest) {
 			state := r.Tables[0].Desired.Features.Facets
 			state.Records = []*protocol.ComparisonRecord{{Kind: schema.TableProperties, Subject: tableSubject(), Targets: []string{"ydb"}}}
 		}},
-		{"desired facet for another target", func(c *qt.C, r *protocol.PlanFeaturesRequest) {
-			record := facet(c, schema.TableProperties, "", `{"primaryKey":["id"],"columnFamilies":[{"name":"archive"}]}`)
-			record.Targets = []string{"postgres"}
-			r.Tables[0].Desired.Features.Facets.Records = []*protocol.ComparisonRecord{record}
+		{"desired facet for another target", func(r *protocol.PlanFeaturesRequest) {
+			r.Tables[0].Desired.Features.Facets.Records = []*protocol.ComparisonRecord{elsewhere}
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			request := alterRequest(c, base)
-			test.modify(c, request)
+			test.modify(request)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -506,13 +507,13 @@ func TestAlterPlan_ExcludedAndForeignFacets(t *testing.T) {
 func TestAlterPlan_RefusesFacetsOfOtherOwners(t *testing.T) {
 	for _, test := range []struct {
 		name   string
-		modify func(*qt.C, *protocol.PlanFeaturesRequest)
+		modify func(*protocol.PlanFeaturesRequest)
 	}{
-		{"duplicate desired table facet", func(c *qt.C, r *protocol.PlanFeaturesRequest) {
+		{"duplicate desired table facet", func(r *protocol.PlanFeaturesRequest) {
 			state := r.Tables[0].Desired.Features.Facets
 			state.Records = append(state.Records, proto.CloneOf(state.Records[0]))
 		}},
-		{"desired facet of another table", func(c *qt.C, r *protocol.PlanFeaturesRequest) {
+		{"desired facet of another table", func(r *protocol.PlanFeaturesRequest) {
 			other := proto.CloneOf(r.Tables[0].Desired.Features.Facets.Records[0])
 			other.Value.Value.Owner.Name = "elsewhere"
 			other.Value.NormalizedOwner.Name = "elsewhere"
@@ -523,7 +524,7 @@ func TestAlterPlan_RefusesFacetsOfOtherOwners(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			request := alterRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable})
-			test.modify(c, request)
+			test.modify(request)
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(plan, qt.IsNil)

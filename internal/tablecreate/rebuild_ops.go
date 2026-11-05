@@ -118,8 +118,8 @@ func (r Rename) validate() error {
 }
 
 // CaptureCopy builds the copy of rows into owner.
-func CaptureCopy(id string, owner *protocol.Reference, copy Copy) (*protocol.NormalizedValue, error) {
-	return captureStatement(id, owner, CopyModel(), copy, NormalizeCopy)
+func CaptureCopy(id string, owner *protocol.Reference, request Copy) (*protocol.NormalizedValue, error) {
+	return captureStatement(id, owner, CopyModel(), request, NormalizeCopy)
 }
 
 // CaptureRename builds the rename of owner.
@@ -140,11 +140,11 @@ func captureStatement(id string, owner *protocol.Reference, definition *protocol
 
 // NormalizeCopy reconstructs a copy's safety facts from its payload.
 func NormalizeCopy(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
-	copy, err := decodeStatement[Copy](input, CopyModel())
+	decoded, err := decodeStatement[Copy](input, CopyModel())
 	if err != nil {
 		return nil, err
 	}
-	return normalizedStatement(input, CopyModel(), copy, &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE,
+	return normalizedStatement(input, CopyModel(), decoded, &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE,
 		Reason: "Copies the rows of a table into a new one", Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: "Rows are written into a table the plan created"})
 }
 
@@ -220,18 +220,18 @@ func normalizedStatement(input *protocol.ValueInput, definition *protocol.ValueM
 // convert, so the value is unwrapped and such a row fails the copy with a
 // message naming the table being rebuilt and the column; a NOT NULL column is
 // unwrapped too, which YQL requires of an optional value written to one.
-func CopyStatement(path string, copy *Copy) (string, error) {
+func CopyStatement(path string, request *Copy) (string, error) {
 	directory := path[:max(strings.LastIndex(path, "/"), 0)]
-	source := TextPath(directory, copy.Source)
+	source := TextPath(directory, request.Source)
 	// The embedded engine names the table as the host does, its schema and
 	// name joined by a dot.
-	label := copy.Source
+	label := request.Source
 	if directory != "" {
-		label = directory + "." + copy.Source
+		label = directory + "." + request.Source
 	}
-	names := make([]string, 0, len(copy.Columns))
-	values := make([]string, 0, len(copy.Columns))
-	for _, column := range copy.Columns {
+	names := make([]string, 0, len(request.Columns))
+	values := make([]string, 0, len(request.Columns))
+	for _, column := range request.Columns {
 		value, err := copiedValue(label, column)
 		if err != nil {
 			return "", err

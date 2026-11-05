@@ -172,44 +172,38 @@ func declaredFeed(c *qt.C, spec ydbdecl.Changefeed) *native.ChangefeedIntent {
 func allowed(context.Context) error { return nil }
 
 func TestChangefeedApply_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
 	updates := ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON", Consumers: []ydbdecl.Consumer{{Name: "c"}}}
 	longer := ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON", RetentionPeriod: "P2D"}
+	removal, recreation, retention := withFeed(), withFeed(), withFeed()
 	for _, test := range []struct {
 		name       string
 		server     *feedServer
-		changes    func(*qt.C, *feedServer) []changefeeds.Change
+		changes    []changefeeds.Change
 		statements []string
 		// held are the changefeeds the table holds afterward.
 		held []string
 	}{
 		{"an addition with a consumer", &feedServer{topics: make(map[string]*native.DescribeTopicResult)},
-			func(c *qt.C, _ *feedServer) []changefeeds.Change {
-				return []changefeeds.Change{{Name: "f", After: declaredFeed(c, updates)}}
-			},
+			[]changefeeds.Change{{Name: "f", After: declaredFeed(c, updates)}},
 			[]string{"ALTER TABLE `/local/app/records` ADD CHANGEFEED `f` WITH (MODE = 'UPDATES', FORMAT = 'JSON');",
 				"ALTER TOPIC `/local/app/records/f` ADD CONSUMER `c`;"}, []string{"f"}},
-		{"a removal", withFeed(),
-			func(c *qt.C, server *feedServer) []changefeeds.Change {
-				return []changefeeds.Change{{Name: "f", Before: readFeed(c, server)}}
-			},
+		{"a removal", removal,
+			[]changefeeds.Change{{Name: "f", Before: readFeed(c, removal)}},
 			[]string{"ALTER TABLE `/local/app/records` DROP CHANGEFEED `f`;"}, nil},
-		{"a recreation beside an addition, the removal first", withFeed(),
-			func(c *qt.C, server *feedServer) []changefeeds.Change {
-				return []changefeeds.Change{{Name: "a", After: declaredFeed(c, ydbdecl.Changefeed{Name: "a", Mode: "UPDATES", Format: "JSON"})},
-					{Name: "f", Before: readFeed(c, server), After: declaredFeed(c, ydbdecl.Changefeed{Name: "f", Mode: "KEYS_ONLY", Format: "JSON"})}}
-			},
+		{"a recreation beside an addition, the removal first", recreation,
+			[]changefeeds.Change{{Name: "a", After: declaredFeed(c, ydbdecl.Changefeed{Name: "a", Mode: "UPDATES", Format: "JSON"})},
+				{Name: "f", Before: readFeed(c, recreation), After: declaredFeed(c, ydbdecl.Changefeed{Name: "f", Mode: "KEYS_ONLY", Format: "JSON"})}},
 			[]string{"ALTER TABLE `/local/app/records` DROP CHANGEFEED `f`;",
 				"ALTER TABLE `/local/app/records` ADD CHANGEFEED `a` WITH (MODE = 'UPDATES', FORMAT = 'JSON');",
 				"ALTER TABLE `/local/app/records` ADD CHANGEFEED `f` WITH (MODE = 'KEYS_ONLY', FORMAT = 'JSON');"}, []string{"a", "f"}},
-		{"a longer retention", withFeed(),
-			func(c *qt.C, server *feedServer) []changefeeds.Change {
-				return []changefeeds.Change{{Name: "f", Before: readFeed(c, server), After: declaredFeed(c, longer)}}
-			},
+		{"a longer retention", retention,
+			[]changefeeds.Change{{Name: "f", Before: readFeed(c, retention), After: declaredFeed(c, longer)}},
 			[]string{"ALTER TOPIC `/local/app/records/f` SET (retention_period = Interval('P2D'));"}, []string{"f"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			dispatched, err := changefeedApplier(test.server).Apply(c.Context(), "/local", feedOperation(c, test.changes(c, test.server)...), allowed)
+			dispatched, err := changefeedApplier(test.server).Apply(c.Context(), "/local", feedOperation(c, test.changes...), allowed)
 			c.Assert(err, qt.IsNil)
 			c.Assert(dispatched, qt.IsTrue)
 			c.Assert(test.server.statements, qt.DeepEquals, test.statements)
@@ -224,56 +218,43 @@ func TestChangefeedApply_HappyPath(t *testing.T) {
 }
 
 func TestChangefeedApply_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
 	updates := ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON"}
-	keysOnly := func(c *qt.C) *native.ObservedChangefeed {
-		c.Helper()
+	keysOnly := func() *native.ObservedChangefeed {
 		other := withFeed()
 		other.feeds[0].Mode = Ydb_Table.ChangefeedMode_MODE_KEYS_ONLY
 		return readFeed(c, other)
 	}
+	addition := func() changefeeds.Change { return changefeeds.Change{Name: "f", After: declaredFeed(c, updates)} }
 	ignoring, failing := &feedServer{topics: make(map[string]*native.DescribeTopicResult), ignore: true}, &feedServer{topics: make(map[string]*native.DescribeTopicResult), fail: true}
 	for _, test := range []struct {
 		name       string
 		server     *feedServer
 		database   string
-		step       func(*qt.C) changefeeds.Change
+		step       changefeeds.Change
 		before     func(context.Context) error
 		dispatched bool
 		wantErr    string
 	}{
-		{"an addition of a changefeed the table holds", withFeed(), "/local",
-			func(c *qt.C) changefeeds.Change {
-				return changefeeds.Change{Name: "f", After: declaredFeed(c, updates)}
-			}, allowed, false,
+		{"an addition of a changefeed the table holds", withFeed(), "/local", addition(), allowed, false,
 			`changefeed "f" of table "app/records" exists, and the plan read none`},
 		{"a removal of a changefeed another writer changed", withFeed(), "/local",
-			func(c *qt.C) changefeeds.Change { return changefeeds.Change{Name: "f", Before: keysOnly(c)} }, allowed, false,
+			changefeeds.Change{Name: "f", Before: keysOnly()}, allowed, false,
 			`changefeed "f" of table "app/records" changed since the plan read it`},
 		{"a removal of a changefeed that is gone", &feedServer{topics: make(map[string]*native.DescribeTopicResult)}, "/local",
-			func(c *qt.C) changefeeds.Change { return changefeeds.Change{Name: "f", Before: keysOnly(c)} }, allowed, false,
+			changefeeds.Change{Name: "f", Before: keysOnly()}, allowed, false,
 			`changefeed "f" of table "app/records" is gone since the plan read it`},
-		{"a lock lost before the statement", &feedServer{topics: make(map[string]*native.DescribeTopicResult)}, "/local",
-			func(c *qt.C) changefeeds.Change {
-				return changefeeds.Change{Name: "f", After: declaredFeed(c, updates)}
-			},
+		{"a lock lost before the statement", &feedServer{topics: make(map[string]*native.DescribeTopicResult)}, "/local", addition(),
 			func(context.Context) error { return errors.New("lock lost") }, false, `lock lost`},
-		{"a statement the server refuses", failing, "/local",
-			func(c *qt.C) changefeeds.Change {
-				return changefeeds.Change{Name: "f", After: declaredFeed(c, updates)}
-			}, allowed, true, `statement failed`},
-		{"an addition the server did not make", ignoring, "/local",
-			func(c *qt.C) changefeeds.Change {
-				return changefeeds.Change{Name: "f", After: declaredFeed(c, updates)}
-			}, allowed, true,
+		{"a statement the server refuses", failing, "/local", addition(), allowed, true, `statement failed`},
+		{"an addition the server did not make", ignoring, "/local", addition(), allowed, true,
 			`changefeed "f" of table "app/records" is absent after the operation`},
-		{"a table of another database", &feedServer{topics: make(map[string]*native.DescribeTopicResult)}, "/other",
-			func(c *qt.C) changefeeds.Change {
-				return changefeeds.Change{Name: "f", After: declaredFeed(c, updates)}
-			}, allowed, false, `no such table`},
+		{"a table of another database", &feedServer{topics: make(map[string]*native.DescribeTopicResult)}, "/other", addition(), allowed, false,
+			`no such table`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			dispatched, err := changefeedApplier(test.server).Apply(c.Context(), test.database, feedOperation(c, test.step(c)), test.before)
+			dispatched, err := changefeedApplier(test.server).Apply(c.Context(), test.database, feedOperation(c, test.step), test.before)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(dispatched, qt.Equals, test.dispatched)
 			c.Assert(len(test.server.statements) > 0, qt.Equals, test.dispatched)

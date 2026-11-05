@@ -41,7 +41,7 @@ func with(set map[string]bool) map[string]bool {
 // and 25.1 does not list it. EnableMoveIndex is on by default on both, so an
 // index is renamed in place. A family cache mode is on with 26.2's default
 // EnableTableCacheModes, and 25.1 does not list the flag.
-func linePreset(autoPartitionedFeeds bool, secrets bool) map[string]bool {
+func linePreset(autoPartitionedFeeds, secrets bool) map[string]bool {
 	caps := preset()
 	caps["changefeed_topic_auto_partitioning"] = autoPartitionedFeeds
 	caps["wide_date_time_types"] = autoPartitionedFeeds

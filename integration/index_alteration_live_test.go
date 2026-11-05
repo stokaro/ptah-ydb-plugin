@@ -16,7 +16,7 @@ import (
 )
 
 // indexSpec states one declared index by its native fields.
-func indexSpec(name, kind string, keys, cover string) string {
+func indexSpec(name, kind, keys, cover string) string {
 	text := `"name":"` + name + `","indexColumns":` + keys + `,"` + kind + `":{}`
 	if cover != "" {
 		text += `,"dataColumns":` + cover

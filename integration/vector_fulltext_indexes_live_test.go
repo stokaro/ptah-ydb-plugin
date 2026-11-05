@@ -49,11 +49,11 @@ func nativeIndexSet(entries ...string) string {
 
 // vectorIndex states a vector index of float vectors of three elements
 // compared by cosine distance, on one level of clusters clusters.
-func vectorIndex(name string, keys, cover string, clusters int) string {
+func vectorIndex(name, keys, cover string, clusters int) string {
 	return vectorIndexWith(name, keys, cover, fmt.Sprintf(`{"settings":{"metric":"DISTANCE_COSINE","vectorType":"VECTOR_TYPE_FLOAT","vectorDimension":3},"levels":1,"clusters":%d}`, clusters))
 }
 
-func vectorIndexWith(name string, keys, cover, settings string) string {
+func vectorIndexWith(name, keys, cover, settings string) string {
 	text := `"name":"` + name + `","indexColumns":` + keys + `,"globalVectorKmeansTreeIndex":{"vectorSettings":` + settings + `}`
 	if cover != "" {
 		text += `,"dataColumns":` + cover

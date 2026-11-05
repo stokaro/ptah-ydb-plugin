@@ -224,7 +224,7 @@ func TestMigrationSplitUnitRejected_FailurePath(t *testing.T) {
 
 // conflictingWrite commits a write of key id from a transaction of another
 // session, which invalidates the locks of a transaction that read the key.
-func conflictingWrite(c *qt.C, client *providerruntime.Client, session, table string, id string) {
+func conflictingWrite(c *qt.C, client *providerruntime.Client, session, table, id string) {
 	c.Helper()
 	beginSerializable(c, client, session, "conflict-"+id)
 	c.Assert(executeSQL(c, client, session, "conflict-"+id, "UPSERT INTO `"+table+"` (id, v) VALUES ("+id+"u, \"other\"u)").Outcome, qt.Equals, protocol.Execution_APPLIED)

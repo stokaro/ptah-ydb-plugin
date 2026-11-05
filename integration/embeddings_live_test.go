@@ -410,13 +410,13 @@ func kindWrite(id string, kind protocol.EmbeddingWriteKind) *protocol.EmbeddingT
 
 // verification walks the whole of a generation's verification, page by page,
 // as key:ordinal:kind:dimension, with "-" for a side that is absent.
-func (f *embeddingFixture) verification(c *qt.C, spec *protocol.EmbeddingSpec, max uint32) []string {
+func (f *embeddingFixture) verification(c *qt.C, spec *protocol.EmbeddingSpec, limit uint32) []string {
 	c.Helper()
 	var walked []string
 	token := ""
 	for range 20 {
 		page, err := f.client.ReadEmbeddingVerification(c.Context(), &protocol.ReadEmbeddingVerificationRequest{SessionId: f.session, Spec: spec,
-			PageToken: token, MaxRows: max})
+			PageToken: token, MaxRows: limit})
 		c.Assert(err, qt.IsNil)
 		for _, row := range page.Rows {
 			stored := "-"

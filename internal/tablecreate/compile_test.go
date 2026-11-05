@@ -144,72 +144,80 @@ func TestCompilePrimaryKeySources(t *testing.T) {
 	}
 }
 func TestCompileRefusesUnimplementedOrForgedState(t *testing.T) {
+	c := testcheck.New(t)
+	missingColumn := facet(c, schema.ColumnProperties, "missing", `{}`)
+	access := facet(c, schema.TableProperties, "", `{"primaryKey":["second","first"],"access":{}}`)
+	temporary := facet(c, schema.TableProperties, "", `{"primaryKey":["second","first"],"temporary":true}`)
+	sequence := facet(c, schema.ColumnProperties, "value", `{"sequence":{"startValue":"10"}}`)
+	encoding := facet(c, schema.ColumnProperties, "value", `{"encoding":[{"dictionary":{}}]}`)
+	missingFamily := facet(c, schema.ColumnProperties, "value", `{"family":"missing"}`)
+	missingTTL := facet(c, schema.TableProperties, "", `{"primaryKey":["second","first"],"ttlSettings":{"dateTypeColumn":{"columnName":"missing","expireAfterSeconds":3600}}}`)
 	for _, test := range []struct {
 		name   string
-		change func(*qt.C, *protocol.Reference, *protocol.DeclaredTable)
+		change func(*protocol.Reference, *protocol.DeclaredTable)
 	}{
-		{"owner", func(_ *qt.C, o *protocol.Reference, _ *protocol.DeclaredTable) { o.Name = "other" }},
-		{"path traversal", func(_ *qt.C, o *protocol.Reference, d *protocol.DeclaredTable) {
+		{"owner", func(o *protocol.Reference, _ *protocol.DeclaredTable) { o.Name = "other" }},
+		{"path traversal", func(o *protocol.Reference, d *protocol.DeclaredTable) {
 			o.Schema = "../app"
 			d.Schema = o.Schema
 		}},
-		{"no columns", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) { d.Columns = nil }},
-		{"duplicate columns", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+		{"no columns", func(_ *protocol.Reference, d *protocol.DeclaredTable) { d.Columns = nil }},
+		{"duplicate columns", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.Columns = append(d.Columns, proto.CloneOf(d.Columns[0]))
 		}},
-		{"invalid type", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+		{"invalid type", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.Columns[0].Type = "Uint64;DROP TABLE x"
 		}},
-		{"common default", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) { d.Columns[2].DefaultExpression = "42" }},
-		{"foreign key", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+		{"common default", func(_ *protocol.Reference, d *protocol.DeclaredTable) { d.Columns[2].DefaultExpression = "42" }},
+		{"foreign key", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.Columns[2].ForeignReference = "x.id"
 		}},
-		{"checks", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) { d.Checks = []string{"true"} }},
-		{"comment", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) { d.Comment = "keep me" }},
-		{"partial index", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+		{"checks", func(_ *protocol.Reference, d *protocol.DeclaredTable) { d.Checks = []string{"true"} }},
+		{"comment", func(_ *protocol.Reference, d *protocol.DeclaredTable) { d.Comment = "keep me" }},
+		{"partial index", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.Indexes = []*protocol.DeclaredIndex{{Name: "keep", Fields: []string{"value"}, Condition: "value > 0"}}
 		}},
-		{"receipt", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+		{"receipt", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.Features.Facets.Records[0].Value.CanonicalProjection = []byte("{}")
 		}},
-		{"bound identity", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+		{"bound identity", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.Features.Facets.Records[0].Subject.Name = part("other")
 		}},
-		{"missing column", func(c *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
-			d.Features.Facets.Records = append(d.Features.Facets.Records, facet(c, schema.ColumnProperties, "missing", `{}`))
+		{"missing column", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
+			d.Features.Facets.Records = append(d.Features.Facets.Records, missingColumn)
 		}},
-		{"access", func(c *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
-			d.Features.Facets.Records[0] = facet(c, schema.TableProperties, "", `{"primaryKey":["second","first"],"access":{}}`)
+		{"access", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
+			d.Features.Facets.Records[0] = access
 		}},
-		{"temporary", func(c *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
-			d.Features.Facets.Records[0] = facet(c, schema.TableProperties, "", `{"primaryKey":["second","first"],"temporary":true}`)
+		{"temporary", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
+			d.Features.Facets.Records[0] = temporary
 		}},
-		{"sequence", func(c *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
-			d.Features.Facets.Records[1] = facet(c, schema.ColumnProperties, "value", `{"sequence":{"startValue":"10"}}`)
+		{"sequence", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
+			d.Features.Facets.Records[1] = sequence
 		}},
-		{"encoding", func(c *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
-			d.Features.Facets.Records[1] = facet(c, schema.ColumnProperties, "value", `{"encoding":[{"dictionary":{}}]}`)
+		{"encoding", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
+			d.Features.Facets.Records[1] = encoding
 		}},
-		{"missing family", func(c *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
-			d.Features.Facets.Records[1] = facet(c, schema.ColumnProperties, "value", `{"family":"missing"}`)
+		{"missing family", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
+			d.Features.Facets.Records[1] = missingFamily
 		}},
-		{"missing TTL column", func(c *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
-			d.Features.Facets.Records[0] = facet(c, schema.TableProperties, "", `{"primaryKey":["second","first"],"ttlSettings":{"dateTypeColumn":{"columnName":"missing","expireAfterSeconds":3600}}}`)
+		{"missing TTL column", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
+			d.Features.Facets.Records[0] = missingTTL
 		}},
-		{"duplicate facet", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+		{"duplicate facet", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.Features.Facets.Records = append(d.Features.Facets.Records, d.Features.Facets.Records[0])
 		}},
-		{"excluded facet", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+		{"excluded facet", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.Features.Facets.Records[0].Value = nil
 		}},
-		{"unknown wire field", func(_ *qt.C, _ *protocol.Reference, d *protocol.DeclaredTable) {
+		{"unknown wire field", func(_ *protocol.Reference, d *protocol.DeclaredTable) {
 			d.ProtoReflect().SetUnknown(protowire.AppendVarint(protowire.AppendTag(nil, 500, protowire.VarintType), 1))
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			o, d := owner(), withSettings(c)
-			test.change(c, o, d)
+			test.change(o, d)
 			before, _ := proto.Marshal(d)
 			result, err := tablecreate.Compile(o, d, nil)
 			c.Assert(err, qt.IsNotNil)

@@ -149,7 +149,7 @@ func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservatio
 // consumers of its topic; then every topic change. Each group keeps the order
 // of changes.
 func Statements(path string, changes []Change) ([]string, error) {
-	var drops, adds, topics []string
+	var drops, adds, topicStatements []string
 	for _, change := range changes {
 		action := change.Action()
 		if action == Drop || action == Recreate {
@@ -172,10 +172,10 @@ func Statements(path string, changes []Change) ([]string, error) {
 				return nil, err
 			}
 			written, _ := TopicStatements(path, desired.Changefeed, previous.Changefeed)
-			topics = append(topics, written...)
+			topicStatements = append(topicStatements, written...)
 		}
 	}
-	return slices.Concat(drops, adds, topics), nil
+	return slices.Concat(drops, adds, topicStatements), nil
 }
 
 // Declared reads the declared changefeeds of a table, in name order.

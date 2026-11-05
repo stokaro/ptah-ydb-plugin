@@ -254,15 +254,15 @@ func plannedCreationIndexes(owner *protocol.Reference, table *protocol.DeclaredT
 
 // creationStep is the planning step that adds the index to a table the step
 // created creates, ordered after it.
-func (index *indexStep) creationStep(number int, subject *protocol.ComparisonIdentity, created *protocol.StepIdentity) (*protocol.PlanningStep, *protocol.PlanningDependency) {
-	index.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-create-index/%06d", number)}
-	index.operation.Id = index.id.Name
-	facts := index.operation.OperationSemantics
-	step := &protocol.PlanningStep{Id: index.id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: index.operation},
+func (step *indexStep) creationStep(number int, subject *protocol.ComparisonIdentity, created *protocol.StepIdentity) (*protocol.PlanningStep, *protocol.PlanningDependency) {
+	step.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-create-index/%06d", number)}
+	step.operation.Id = step.id.Name
+	facts := step.operation.OperationSemantics
+	planned := &protocol.PlanningStep{Id: step.id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: step.operation},
 		Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
 			Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
-				{Subject: indexSubject(subject, index.change.name()), Action: protocol.PlanningEffect_CREATE}}}}
-	return step, &protocol.PlanningDependency{Before: proto.CloneOf(created), After: proto.CloneOf(index.id)}
+				{Subject: indexSubject(subject, step.change.name()), Action: protocol.PlanningEffect_CREATE}}}}
+	return planned, &protocol.PlanningDependency{Before: proto.CloneOf(created), After: proto.CloneOf(step.id)}
 }
 
 // rebuiltNativeIndex names a vector or full-text index the table of a rebuild

@@ -107,7 +107,7 @@ func EncodeTable(format protocol.SourceDocument_Format, table Table) (TableResul
 			return facets.result(parts), nil
 		}
 		for _, id := range lost {
-			facets.lose(id, "table %s: its YDB settings cannot be written so that a source reads them back unchanged", tableSubject(table.Binding))
+			facets.losef(id, "table %s: its YDB settings cannot be written so that a source reads them back unchanged", tableSubject(table.Binding))
 		}
 	}
 }
@@ -131,7 +131,7 @@ func (f *tableFacets) add(value *protocol.EncodeSourceValue) error {
 			return err
 		}
 		if setting := rowLoss(&intent); setting != "" {
-			f.lose(id, "table %s: %s", tableSubject(f.binding), setting)
+			f.losef(id, "table %s: %s", tableSubject(f.binding), setting)
 			return nil
 		}
 		f.row, f.rowID = &intent, id
@@ -154,7 +154,7 @@ func (f *tableFacets) add(value *protocol.EncodeSourceValue) error {
 		// nothing to it.
 		switch {
 		case intent.Compression != nil || len(intent.GetEncoding()) != 0:
-			f.lose(id, "column %s: its compression or encoding has no source spelling", Subject(owner))
+			f.losef(id, "column %s: its compression or encoding has no source spelling", Subject(owner))
 		case intent.GetFamily() == "" || intent.GetFamily() == defaultFamily:
 			// The default family holds every column no other family names,
 			// and a literal default is the common column's.
@@ -169,7 +169,7 @@ func (f *tableFacets) add(value *protocol.EncodeSourceValue) error {
 		}
 		feeds, reason := declaredFeeds(&intent)
 		if reason != "" {
-			f.lose(id, "table %s: its changefeeds have no source spelling: %s", tableSubject(f.binding), reason)
+			f.losef(id, "table %s: its changefeeds have no source spelling: %s", tableSubject(f.binding), reason)
 			return nil
 		}
 		f.feeds, f.feedsID = feeds, id
@@ -186,9 +186,9 @@ func (f *tableFacets) add(value *protocol.EncodeSourceValue) error {
 		for _, index := range intent.GetIndexes() {
 			names = append(names, index.GetSpecification().GetName())
 		}
-		f.lose(id, "table %s: its native indexes (%s) have no source spelling the provider writes", tableSubject(f.binding), strings.Join(names, ", "))
+		f.losef(id, "table %s: its native indexes (%s) have no source spelling the provider writes", tableSubject(f.binding), strings.Join(names, ", "))
 	default:
-		f.lose(id, "table %s: its %s have no source spelling", tableSubject(f.binding), strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/"), "-", " "))
+		f.losef(id, "table %s: its %s have no source spelling", tableSubject(f.binding), strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/"), "-", " "))
 	}
 	return nil
 }
@@ -242,8 +242,8 @@ func declaredFeeds(intent *native.ChangefeedSetIntent) ([]changefeeds.Feed, stri
 	return feeds, ""
 }
 
-// lose records a facet nothing writes and forgets the declaration it held.
-func (f *tableFacets) lose(id, format string, arguments ...any) {
+// losef records a facet nothing writes and forgets the declaration it held.
+func (f *tableFacets) losef(id, format string, arguments ...any) {
 	f.losses = append(f.losses, &protocol.EncodeLoss{ValueId: id, Message: fmt.Sprintf(format, arguments...)})
 	switch id {
 	case f.rowID:
@@ -263,7 +263,7 @@ func (f *tableFacets) lose(id, format string, arguments ...any) {
 func (f *tableFacets) dropPlacementsWithoutFamilies() {
 	for _, column := range slices.Clone(f.columns) {
 		if f.row == nil || !slices.ContainsFunc(f.row.GetColumnFamilies(), func(family *native.ColumnFamily) bool { return family.GetName() == column.family }) {
-			f.lose(column.id, "column %s/%s sits in family %s, which no family the source declares for the table holds", tableSubject(f.binding), column.name, column.family)
+			f.losef(column.id, "column %s/%s sits in family %s, which no family the source declares for the table holds", tableSubject(f.binding), column.name, column.family)
 		}
 	}
 }
@@ -726,7 +726,7 @@ func (f *tableFacets) verify(format protocol.SourceDocument_Format, parts []*pro
 
 // sameIntent reports a decoded intent equal to the wanted one, an absent one
 // standing for the empty intent a source states by writing nothing.
-func sameIntent[M proto.Message](want, got M, empty M) bool {
+func sameIntent[M proto.Message](want, got, empty M) bool {
 	if reflect.ValueOf(got).IsNil() {
 		return proto.Equal(want, empty)
 	}

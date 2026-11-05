@@ -21,7 +21,7 @@ import (
 
 // realmFixture names a dev realm in the test database and removes it, with the
 // directory of the realms when nothing else is left in it, once the test ends.
-func realmFixture(c *qt.C, opened *connection.Connection, base connection.Address) (address string, root string) {
+func realmFixture(c *qt.C, opened *connection.Connection, base connection.Address) (address, root string) {
 	c.Helper()
 	name := "r" + strings.ToLower(rand.Text())[:12]
 	parsed, err := url.Parse(os.Getenv("PTAH_YDB_TEST_URL"))

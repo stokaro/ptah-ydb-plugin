@@ -100,24 +100,23 @@ func TestAuthoredDeclarationsCreateEveryNativeFamily(t *testing.T) {
 }
 
 func TestAuthoredDeclarationRefusalDiscardsEveryPrefix(t *testing.T) {
+	c := testcheck.New(t)
+	private := declarationRequest(c, declaredNode(c, "private", &native.AccessIntent{Owner: new("user")})).Objects[0]
+	child := declaredNode(c, "child", nil)
+	child.Owner.Schema = "app/node"
+	collision := declarationRequest(c, child).Objects[0]
 	for _, test := range []struct {
 		name string
-		edit func(*qt.C, *protocol.PlanDeclarationsRequest)
+		edit func(*protocol.PlanDeclarationsRequest)
 	}{
-		{"unknown capability", func(_ *qt.C, r *protocol.PlanDeclarationsRequest) { delete(r.Capabilities, "coordination_nodes") }},
-		{"access requirement", func(c *qt.C, r *protocol.PlanDeclarationsRequest) {
-			r.Objects = append(r.Objects, declarationRequest(c, declaredNode(c, "private", &native.AccessIntent{Owner: new("user")})).Objects[0])
-		}},
-		{"native path collision", func(c *qt.C, r *protocol.PlanDeclarationsRequest) {
-			child := declaredNode(c, "child", nil)
-			child.Owner.Schema = "app/node"
-			r.Objects = append(r.Objects, declarationRequest(c, child).Objects[0])
-		}},
+		{"unknown capability", func(r *protocol.PlanDeclarationsRequest) { delete(r.Capabilities, "coordination_nodes") }},
+		{"access requirement", func(r *protocol.PlanDeclarationsRequest) { r.Objects = append(r.Objects, private) }},
+		{"native path collision", func(r *protocol.PlanDeclarationsRequest) { r.Objects = append(r.Objects, collision) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			request := declarationRequest(c, declaredNode(c, "node", nil))
-			test.edit(c, request)
+			test.edit(request)
 			for i, object := range request.Objects {
 				object.Value.Id = strconv.Itoa(i)
 			}

@@ -54,9 +54,9 @@ func selfConnection(c *qt.C, opened *connection.Connection) string {
 // alternateSelfConnection addresses the same single-node server from inside
 // its container through its other loopback spelling: a connection string
 // that differs and still reaches the database.
-func alternateSelfConnection(c *qt.C, connection string) string {
+func alternateSelfConnection(c *qt.C, connectionString string) string {
 	c.Helper()
-	address, err := url.Parse(connection)
+	address, err := url.Parse(connectionString)
 	c.Assert(err, qt.IsNil)
 	host := "127.0.0.1"
 	if address.Hostname() == host {
@@ -255,7 +255,7 @@ func TestReplicationLifecycleSubprocess(t *testing.T) {
 	c.Assert(f.session.Capabilities[replication.CapabilityReplication], qt.IsTrue)
 	f.exec(fmt.Sprintf("CREATE TABLE `%s` (id Int64 NOT NULL, note Utf8, PRIMARY KEY (id))", f.absolute("src")))
 	f.drop("DROP ASYNC REPLICATION `"+f.absolute("mirror")+"` CASCADE", "DROP TABLE `"+f.absolute("rep")+"`", "DROP TABLE `"+f.absolute("src")+"`")
-	connection := selfConnection(c, f.opened)
+	connectionString := selfConnection(c, f.opened)
 	declare := func(connectionString string) *protocol.Envelope {
 		c.Helper()
 		value, err := schema.CaptureReplicationIntent(&protocol.Reference{Engine: "ydb", Kind: schema.ReplicationProperties, Schema: f.directory, Name: "mirror"},
@@ -281,22 +281,22 @@ func TestReplicationLifecycleSubprocess(t *testing.T) {
 		}
 	}
 
-	units, refusal := plan(declare(connection))
+	units, refusal := plan(declare(connectionString))
 	c.Assert(refusal, qt.Equals, "")
 	f.execute("create", protocol.Execution_APPLIED, units...)
 	snapshot := f.await("the replication running with its item", running(replication.StateRunning))
-	for _, table := range snapshot.Tables {
-		c.Assert(table.Identity.Name, qt.Not(qt.Equals), "rep", qt.Commentf("the replica table is the replication's"))
+	for _, observed := range snapshot.Tables {
+		c.Assert(observed.Identity.Name, qt.Not(qt.Equals), "rep", qt.Commentf("the replica table is the replication's"))
 	}
 	spec, _, err := schema.ObservedReplication(object(snapshot, schema.ReplicationProperties, "mirror"))
 	c.Assert(err, qt.IsNil)
-	c.Assert(spec, qt.DeepEquals, replication.ReplicationSpec{Connection: replication.Connection{ConnectionString: connection},
+	c.Assert(spec, qt.DeepEquals, replication.ReplicationSpec{Connection: replication.Connection{ConnectionString: connectionString},
 		Items: []replication.Item{{Source: path.Join(f.directory, "src"), Target: path.Join(f.directory, "rep")}}})
-	units, refusal = plan(declare(connection))
+	units, refusal = plan(declare(connectionString))
 	c.Assert(refusal, qt.Equals, "")
 	c.Assert(units, qt.HasLen, 0)
 
-	moved := alternateSelfConnection(c, connection)
+	moved := alternateSelfConnection(c, connectionString)
 	_, refusal = plan(declare(moved))
 	c.Assert(refusal, qt.Matches, `async replication .*/mirror: its connection or credential differs, and YDB changes them only while the replication is paused .*it is running.*`)
 
@@ -334,8 +334,8 @@ func TestReplicationFailedOverSubprocess(t *testing.T) {
 	f := newReplicationFixture(c)
 	f.exec(fmt.Sprintf("CREATE TABLE `%s` (id Int64 NOT NULL, note Utf8, PRIMARY KEY (id))", f.absolute("src")))
 	f.drop("DROP ASYNC REPLICATION `"+f.absolute("mirror")+"` CASCADE", "DROP TABLE `"+f.absolute("rep")+"`", "DROP TABLE `"+f.absolute("src")+"`")
-	connection := selfConnection(c, f.opened)
-	f.exec(fmt.Sprintf("CREATE ASYNC REPLICATION `%s` FOR `%s` AS `%s` WITH (CONNECTION_STRING = '%s')", f.absolute("mirror"), f.absolute("src"), f.absolute("rep"), connection))
+	connectionString := selfConnection(c, f.opened)
+	f.exec(fmt.Sprintf("CREATE ASYNC REPLICATION `%s` FOR `%s` AS `%s` WITH (CONNECTION_STRING = '%s')", f.absolute("mirror"), f.absolute("src"), f.absolute("rep"), connectionString))
 	f.await("the replica created", func(snapshot *protocol.Schema) bool {
 		value := object(snapshot, schema.ReplicationProperties, "mirror")
 		if value == nil {
@@ -497,8 +497,8 @@ func TestTransferRefusedWithoutTheCapabilitySubprocess(t *testing.T) {
 // tableNames names the tables a snapshot holds, in the order it lists them.
 func tableNames(snapshot *protocol.Schema) []string {
 	names := make([]string, 0)
-	for _, table := range snapshot.Tables {
-		names = append(names, table.Identity.Name)
+	for _, observed := range snapshot.Tables {
+		names = append(names, observed.Identity.Name)
 	}
 	return names
 }
@@ -507,11 +507,11 @@ func tableNames(snapshot *protocol.Schema) []string {
 // captured them.
 func sourceChangefeeds(c *qt.C, snapshot *protocol.Schema, name string) []*native.ObservedChangefeed {
 	c.Helper()
-	for _, table := range snapshot.Tables {
-		if table.Identity.Name != name {
+	for _, observed := range snapshot.Tables {
+		if observed.Identity.Name != name {
 			continue
 		}
-		for _, facet := range table.Facets {
+		for _, facet := range observed.Facets {
 			if facet.Kind != schema.ChangefeedProperties {
 				continue
 			}
@@ -575,11 +575,11 @@ func TestReplicationReadsWhileReplicasComeAndGoSubprocess(t *testing.T) {
 	f := newReplicationFixture(c)
 	f.exec(fmt.Sprintf("CREATE TABLE `%s` (id Int64 NOT NULL, PRIMARY KEY (id))", f.absolute("src")))
 	f.drop("DROP ASYNC REPLICATION `"+f.absolute("cycle")+"` CASCADE", "DROP TABLE `"+f.absolute("cycle_rep")+"`", "DROP TABLE `"+f.absolute("src")+"`")
-	connection := selfConnection(c, f.opened)
+	connectionString := selfConnection(c, f.opened)
 	directory := path.Join(f.database, f.directory)
 
 	for range 5 {
-		f.exec(fmt.Sprintf("CREATE ASYNC REPLICATION `%s` FOR `%s` AS `%s` WITH (CONNECTION_STRING = '%s')", f.absolute("cycle"), f.absolute("src"), f.absolute("cycle_rep"), connection))
+		f.exec(fmt.Sprintf("CREATE ASYNC REPLICATION `%s` FOR `%s` AS `%s` WITH (CONNECTION_STRING = '%s')", f.absolute("cycle"), f.absolute("src"), f.absolute("cycle_rep"), connectionString))
 		created := f.inspect()
 		f.await("the replica created", func(*protocol.Schema) bool { return f.replicaWritten("cycle_rep") })
 		f.exec("DROP ASYNC REPLICATION `" + f.absolute("cycle") + "` CASCADE")

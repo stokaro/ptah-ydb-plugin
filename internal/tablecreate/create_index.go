@@ -128,17 +128,17 @@ func namesTable(name string, table *protocol.DeclaredTable) bool {
 // holds a dot, a double quote, a backquote or a bracket in double quotes,
 // with a double quote in it doubled. A dot in a YDB name is part of the name,
 // so the root table a.b is "a.b" and the table b of the directory a is a.b.
-func quotedReference(schema, name string) string {
+func quotedReference(directory, name string) string {
 	part := func(value string) string {
 		if !strings.ContainsAny(value, ".\"`[]") {
 			return value
 		}
 		return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
 	}
-	if schema == "" {
+	if directory == "" {
 		return part(name)
 	}
-	return part(schema) + "." + part(name)
+	return part(directory) + "." + part(name)
 }
 
 // indexKeyColumns are an index's key columns. A YDB index key is a list of

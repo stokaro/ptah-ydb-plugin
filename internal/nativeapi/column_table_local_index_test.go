@@ -52,13 +52,12 @@ func withoutIndex(names ...string) func([]any) []any {
 
 // withIndex adds an index the page describes as given.
 func withIndex(c *qt.C, entry string) func([]any) []any {
-	return func(indexes []any) []any {
-		decoder := json.NewDecoder(bytes.NewReader([]byte(entry)))
-		decoder.UseNumber()
-		var decoded any
-		c.Assert(decoder.Decode(&decoded), qt.IsNil)
-		return append(indexes, decoded)
-	}
+	c.Helper()
+	decoder := json.NewDecoder(bytes.NewReader([]byte(entry)))
+	decoder.UseNumber()
+	var decoded any
+	c.Assert(decoder.Decode(&decoded), qt.IsNil)
+	return func(indexes []any) []any { return append(indexes, decoded) }
 }
 
 // renamedIndex gives the index named from the name to.
@@ -75,9 +74,6 @@ func renamedIndex(from, to string) func([]any) []any {
 
 // unchanged leaves the page as it is.
 func unchanged(indexes []any) []any { return indexes }
-
-// asRead is the page as 26.2.1.14 described it.
-func asRead(*qt.C) func([]any) []any { return unchanged }
 
 // noChange leaves a fixture as it is.
 func noChange(*localIndexFixture) {}
@@ -156,23 +152,24 @@ const renameBloomStep = `{"add":{"name":"bf2","columns":["body"],"bloom":{"false
 // TestColumnTableLocalIndexStep_HappyPath reads the table, runs the step's
 // statement once, and confirms the local indexes the table reads back with.
 func TestColumnTableLocalIndexStep_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
 	read := []string{"describe /local/col_index_probe", "monitoring /local/col_index_probe"}
 	for _, test := range []struct {
 		name, payload string
-		after         func(*qt.C) func([]any) []any
+		after         func([]any) []any
 		statement     string
 	}{
-		{"a removal", heldBloomStep, func(*qt.C) func([]any) []any { return withoutIndex("bf") },
+		{"a removal", heldBloomStep, withoutIndex("bf"),
 			"ALTER TABLE `/local/col_index_probe` DROP INDEX `bf`;"},
 		{"an addition", `{"add":{"name":"bf2","columns":["body"],"bloom":{"falsePositiveProbability":0.05}}}`,
-			func(c *qt.C) func([]any) []any { return withIndex(c, addedBloomEntry) },
+			withIndex(c, addedBloomEntry),
 			"ALTER TABLE `/local/col_index_probe` ADD INDEX `bf2` LOCAL USING bloom_filter ON (`body`) WITH (false_positive_probability = 0.05);"},
-		{"a rename", renameBloomStep, func(*qt.C) func([]any) []any { return renamedIndex("bf", "bf2") },
+		{"a rename", renameBloomStep, renamedIndex("bf", "bf2"),
 			"ALTER TABLE `/local/col_index_probe` RENAME INDEX `bf` TO `bf2`;"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			fixture := &localIndexFixture{before: indexedPage(c, unchanged), after: indexedPage(c, test.after(c))}
+			fixture := &localIndexFixture{before: indexedPage(c, unchanged), after: indexedPage(c, test.after)}
 			dispatched, err := fixture.api().Apply(t.Context(), "/local", localIndexStep(c, test.payload), func(context.Context) error {
 				fixture.events = append(fixture.events, "locks")
 				return nil
@@ -186,48 +183,46 @@ func TestColumnTableLocalIndexStep_HappyPath(t *testing.T) {
 }
 
 func TestColumnTableLocalIndexStep_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
 	addBloom := `{"add":{"name":"bf2","columns":["body"],"bloom":{"falsePositiveProbability":0.05}}}`
 	for _, test := range []struct {
 		name, payload string
-		before, after func(*qt.C) func([]any) []any
+		before, after func([]any) []any
 		modify        func(*localIndexFixture)
 		wantErr       string
 		dispatched    bool
 	}{
 		{"a removal of an index the table holds otherwise", `{"drop":{"name":"bf","columns":["body"],"bloom":{"falsePositiveProbability":0.02}}}`,
-			asRead, asRead, noChange, `YDB column table local index "bf" differs from the plan`, false},
+			unchanged, unchanged, noChange, `YDB column table local index "bf" differs from the plan`, false},
 		{"a removal of an index the table no longer holds", heldBloomStep,
-			func(*qt.C) func([]any) []any { return withoutIndex("bf") }, asRead, noChange, `YDB column table local index "bf" differs from the plan`, false},
+			withoutIndex("bf"), unchanged, noChange, `YDB column table local index "bf" differs from the plan`, false},
 		{"an addition under a name the table holds", `{"add":{"name":"bf","columns":["body"],"bloom":{"falsePositiveProbability":0.05}}}`,
-			asRead, asRead, noChange, `YDB column table already holds local index "bf"`, false},
+			unchanged, unchanged, noChange, `YDB column table already holds local index "bf"`, false},
 		{"an addition over a column the table does not hold", `{"add":{"name":"bf2","columns":["gone"],"bloom":{"falsePositiveProbability":0.05}}}`,
-			asRead, asRead, noChange, `YDB local index column "gone" is absent`, false},
+			unchanged, unchanged, noChange, `YDB local index column "gone" is absent`, false},
 		{"an n-gram index over a number", `{"add":{"name":"ng2","columns":["id"],"ngram":{"falsePositiveProbability":0.1,"ngramSize":"3","caseSensitive":true}}}`,
-			asRead, asRead, noChange, `YDB n-gram index column "id" must be Utf8`, false},
-		{"no monitoring endpoint", heldBloomStep, asRead, asRead, func(f *localIndexFixture) { f.monitoringUnnamed = true },
+			unchanged, unchanged, noChange, `YDB n-gram index column "id" must be Utf8`, false},
+		{"no monitoring endpoint", heldBloomStep, unchanged, unchanged, func(f *localIndexFixture) { f.monitoringUnnamed = true },
 			`creating a column table or changing its TTL or local indexes requires monitoring=.*`, false},
-		{"a failed call", heldBloomStep, asRead, asRead, func(f *localIndexFixture) { f.executeFailure = true }, `lost reply`, true},
-		{"an addition that does not read back", addBloom, asRead, asRead, noChange,
+		{"a failed call", heldBloomStep, unchanged, unchanged, func(f *localIndexFixture) { f.executeFailure = true }, `lost reply`, true},
+		{"an addition that does not read back", addBloom, unchanged, unchanged, noChange,
 			`YDB column table local index "bf2" differs from the request after the change`, true},
-		{"an addition that reads back otherwise", addBloom, asRead,
-			func(c *qt.C) func([]any) []any {
-				return withIndex(c, strings.Replace(addedBloomEntry, "0.05", "0.1", 1))
-			}, noChange,
+		{"an addition that reads back otherwise", addBloom, unchanged,
+			withIndex(c, strings.Replace(addedBloomEntry, "0.05", "0.1", 1)), noChange,
 			`YDB column table local index "bf2" differs from the request after the change`, true},
-		{"a removal that does not read back", heldBloomStep, asRead, asRead, noChange, `YDB column table still holds local index "bf" after the change`, true},
-		{"a removal that takes another index along", heldBloomStep, asRead, func(*qt.C) func([]any) []any { return withoutIndex("bf", "ng") }, noChange,
+		{"a removal that does not read back", heldBloomStep, unchanged, unchanged, noChange, `YDB column table still holds local index "bf" after the change`, true},
+		{"a removal that takes another index along", heldBloomStep, unchanged, withoutIndex("bf", "ng"), noChange,
 			`YDB column table changed beyond local index "bf"`, true},
-		{"a rename onto a name the table holds", renameBloomStep, func(c *qt.C) func([]any) []any { return withIndex(c, addedBloomEntry) }, asRead, noChange,
+		{"a rename onto a name the table holds", renameBloomStep, withIndex(c, addedBloomEntry), unchanged, noChange,
 			`YDB column table already holds local index "bf2"`, false},
-		{"a rename that does not read back", renameBloomStep, asRead, asRead, noChange,
+		{"a rename that does not read back", renameBloomStep, unchanged, unchanged, noChange,
 			`YDB column table local index "bf2" differs from the request after the change`, true},
-		{"a rename that keeps the old name", renameBloomStep, asRead, func(c *qt.C) func([]any) []any {
-			return withIndex(c, strings.Replace(strings.Replace(addedBloomEntry, "0.05", "0.01", 1), `"Id":9`, `"Id":10`, 1))
-		}, noChange, `YDB column table still holds local index "bf" after the change`, true},
+		{"a rename that keeps the old name", renameBloomStep, unchanged,
+			withIndex(c, strings.Replace(strings.Replace(addedBloomEntry, "0.05", "0.01", 1), `"Id":9`, `"Id":10`, 1)), noChange, `YDB column table still holds local index "bf" after the change`, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			fixture := &localIndexFixture{before: indexedPage(c, test.before(c)), after: indexedPage(c, test.after(c))}
+			fixture := &localIndexFixture{before: indexedPage(c, test.before), after: indexedPage(c, test.after)}
 			test.modify(fixture)
 			dispatched, err := fixture.api().Apply(t.Context(), "/local", localIndexStep(c, test.payload), func(context.Context) error { return nil })
 			c.Assert(err, qt.ErrorMatches, test.wantErr)

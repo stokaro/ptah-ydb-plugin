@@ -260,7 +260,7 @@ type rebuild struct {
 // objects, whose comments on the table the new one keeps. steps are the host's
 // steps, whose index renames name the old index a new one takes its settings
 // from.
-func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names map[string]bool,
+func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names,
 	capabilities map[string]bool, steps []*protocol.CommonPlanningStep) (*rebuild, string, error) {
 	label := tableLabel(owner)
 	subject := fmt.Sprintf("rebuilding table %q", label)

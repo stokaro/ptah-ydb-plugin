@@ -43,7 +43,8 @@ func rejectNullSettings(raw []byte, descriptor protoreflect.MessageDescriptor) e
 			}
 			return fmt.Errorf("null YDB model setting")
 		}
-		if field.IsMap() {
+		switch {
+		case field.IsMap():
 			var entries map[string]json.RawMessage
 			if err := json.Unmarshal(raw, &entries); err != nil {
 				return err
@@ -58,7 +59,7 @@ func rejectNullSettings(raw []byte, descriptor protoreflect.MessageDescriptor) e
 					}
 				}
 			}
-		} else if field.IsList() {
+		case field.IsList():
 			var items []json.RawMessage
 			if err := json.Unmarshal(raw, &items); err != nil {
 				return err
@@ -73,7 +74,7 @@ func rejectNullSettings(raw []byte, descriptor protoreflect.MessageDescriptor) e
 					}
 				}
 			}
-		} else if field.Message() != nil {
+		case field.Message() != nil:
 			if err := rejectNullSettings(raw, field.Message()); err != nil {
 				return err
 			}

@@ -276,11 +276,11 @@ func gap(document int, text span, message string) *Refusal {
 }
 
 // ydbPath writes a directory and a name as one YDB path.
-func ydbPath(schema, name string) string {
-	if schema == "" {
+func ydbPath(directory, name string) string {
+	if directory == "" {
 		return name
 	}
-	return schema + "/" + name
+	return directory + "/" + name
 }
 
 // tableSettings names the YDB settings a table declares.

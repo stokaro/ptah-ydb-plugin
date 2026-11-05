@@ -29,9 +29,9 @@ func passwordVariable(user string) string {
 // password, and returns its path.
 func passwordSource(c *qt.C, user, password string) string {
 	c.Helper()
-	path := filepath.Join(c.TempDir(), "schema.yaml")
-	c.Assert(os.WriteFile(path, []byte("roles:\n  "+user+":\n    login: true\n    password: \""+password+"\"\n"), 0o600), qt.IsNil)
-	return path
+	file := filepath.Join(c.TempDir(), "schema.yaml")
+	c.Assert(os.WriteFile(file, []byte("roles:\n  "+user+":\n    login: true\n    password: \""+password+"\"\n"), 0o600), qt.IsNil)
+	return file
 }
 
 // Ported from the host's TestYDBBinary_KeepsAUsersPasswordOutOfEveryOutput:

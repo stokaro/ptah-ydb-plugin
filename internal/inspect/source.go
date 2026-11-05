@@ -47,8 +47,8 @@ func open(ctx context.Context, driver *ydb.Driver) (*source, error) {
 
 func (s *source) close() error { return s.owner.Close() }
 
-func (s *source) directory(ctx context.Context, path string) (*Ydb_Scheme.ListDirectoryResult, error) {
-	return nativeapi.SchemeLister(s.scheme)(ctx, path)
+func (s *source) directory(ctx context.Context, directoryPath string) (*Ydb_Scheme.ListDirectoryResult, error) {
+	return nativeapi.SchemeLister(s.scheme)(ctx, directoryPath)
 }
 
 type description struct {
@@ -108,8 +108,8 @@ func classifyTable(absolute string, result *native.DescribeTableResult) (*descri
 	return &description{reservation: purpose, table: result, indexes: indexes, changefeeds: feeds}, nil
 }
 
-func (s *source) describeTopic(ctx context.Context, path string) (*native.DescribeTopicResult, error) {
-	response, err := s.topic.DescribeTopic(ctx, &Ydb_Topic.DescribeTopicRequest{Path: path})
+func (s *source) describeTopic(ctx context.Context, topicPath string) (*native.DescribeTopicResult, error) {
+	response, err := s.topic.DescribeTopic(ctx, &Ydb_Topic.DescribeTopicRequest{Path: topicPath})
 	if err != nil {
 		return nil, fmt.Errorf("describe YDB topic: transport failed")
 	}
