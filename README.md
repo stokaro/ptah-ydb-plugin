@@ -855,6 +855,18 @@ result's message. A unit the provider refused before YDB answered, a statement
 timeout, a lost lock and a commit YDB did not confirm each give a fixed
 sentence.
 
+Where YDB's issues say a feature flag is off, the reason names the capability
+and the flag, as the host's embedded engine words such a refusal, around the
+provider's own reason where the host's engine quotes YDB's text. The plan took
+the capability from the release line's default, and the cluster runs with the
+flag off. The texts and the flags they name are the host's measured ones
+(`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and 26.2.1.14, where
+`EnableResourcePools` is off by default:
+
+```text
+provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans
+```
+
 ## Operational storage reservations
 
 Inspection recognizes history and metadata storage from exact ownership attributes and
