@@ -1,6 +1,7 @@
 package tablecreate_test
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -153,17 +155,102 @@ func TestRebuildPlan_HappyPath(t *testing.T) {
 	})
 }
 
-// A table holding changefeeds is not rebuilt: YDB moves no table with one.
-func TestRebuildPlanRefusesChangefeeds(t *testing.T) {
-	check := testcheck.New(t)
-	request := rebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
-	request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records,
-		observedFacet(check, schema.ChangefeedProperties, "",
-			`{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED"},"topic":{"partitioningSettings":{}}}]}`))
-	plan, err := backend.New().PlanFeatures(check.Context(), request)
-	check.Assert(err, qt.IsNil)
-	check.Assert(plan.Diagnostics, qt.HasLen, 1)
-	check.Assert(plan.Diagnostics[0].Message, qt.Matches, `rebuilding table "app/records": the table holds changefeeds, .*`)
+// heldUpdates is the changefeed updates a read finds on app.records, with
+// its consumer audit.
+const heldUpdates = `{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED"},` +
+	`"topic":{"partitioningSettings":{},"consumers":[{"name":"audit","important":true}]}}]}`
+
+// feedRebuildRequest is rebuildRequest on a table that holds changefeeds held,
+// whose declaration states desired, none for empty, on a target with
+// capabilities.
+func feedRebuildRequest(c *qt.C, desired, held string, capabilities map[string]bool) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	request := rebuildRequest(c, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+	request.Tables[0].Desired.Columns[1].Nullable = false
+	table := request.Tables[0]
+	table.Current.Features.Facets.Records = append(table.Current.Features.Facets.Records, observedFacet(c, schema.ChangefeedProperties, "", held))
+	if desired != "" {
+		table.Desired.Features.Facets.Records = append(table.Desired.Features.Facets.Records, facet(c, schema.ChangefeedProperties, "", desired))
+	}
+	maps.Copy(request.Capabilities, capabilities)
+	return request
+}
+
+// YDB moves no table that carries a changefeed, so a rebuild drops the old
+// table's changefeeds before it moves and gives the new table its changefeeds
+// once it is in place: the ones the declaration states, or the ones the old
+// table held where the declaration states none. The note says the stream
+// restarts and the consumer loses its position.
+func TestRebuildPlanCarriesChangefeeds_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, desired string
+		added         []string
+	}{
+		{name: "the changefeeds the old table held", added: []string{"ALTER TABLE `app/records` ADD CHANGEFEED `updates` WITH (MODE = 'UPDATES', FORMAT = 'JSON');",
+			"ALTER TOPIC `app/records/updates` ADD CONSUMER `audit` WITH (important = TRUE);"}},
+		{name: "the changefeeds the declaration states",
+			desired: `{"changefeeds":[{"name":"inserts","mode":"MODE_NEW_IMAGE","format":"FORMAT_JSON","topic":{"partitioningSettings":{}}}]}`,
+			added:   []string{"ALTER TABLE `app/records` ADD CHANGEFEED `inserts` WITH (MODE = 'NEW_IMAGE', FORMAT = 'JSON');"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			check := testcheck.New(t)
+			request := feedRebuildRequest(check, test.desired, heldUpdates, newest())
+			plan, err := backend.New().PlanFeatures(check.Context(), request)
+			check.Assert(err, qt.IsNil)
+			check.Assert(plan.Diagnostics, qt.HasLen, 0)
+			check.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
+			var names []string
+			for _, step := range plan.Contributions[0].Steps {
+				names = append(names, step.Id.Name)
+			}
+			check.Assert(names, qt.DeepEquals, []string{"table-rebuild/000000/create", "table-rebuild/000000/copy", "table-rebuild/000000/drop-changefeeds",
+				"table-rebuild/000000/rename-old", "table-rebuild/000000/rename-new", "table-rebuild/000000/add-changefeeds", "table-rebuild/000000/drop-old"})
+			check.Assert(plan.Contributions[0].Dependencies, qt.HasLen, 6)
+			check.Assert(plan.Rewrites[0].Replacement.Name, qt.Equals, "table-rebuild/000000/rename-new")
+			check.Assert(plan.Contributions[0].Steps[2].Operation.Notes, qt.DeepEquals, []string{"Changefeed updates of table app/records is dropped " +
+				"before the swap, because YDB moves no table that carries one, and added again to the new table. Its stream restarts: the records " +
+				"nobody read are lost, and consumer audit loses its position and starts again from the beginning of the new stream."})
+
+			dropped, err := schema.DecodeChangefeedOperation(plan.Contributions[0].Steps[2].Operation.Value.Value)
+			check.Assert(err, qt.IsNil)
+			drops, err := changefeeds.Statements("app/records", dropped)
+			check.Assert(err, qt.IsNil)
+			check.Assert(drops, qt.DeepEquals, []string{"ALTER TABLE `app/records` DROP CHANGEFEED `updates`;"})
+			added, err := schema.DecodeChangefeedOperation(plan.Contributions[0].Steps[5].Operation.Value.Value)
+			check.Assert(err, qt.IsNil)
+			adds, err := changefeeds.Statements("app/records", added)
+			check.Assert(err, qt.IsNil)
+			check.Assert(adds, qt.DeepEquals, test.added)
+		})
+	}
+}
+
+// A changefeed the rebuild cannot drop and add again refuses the rebuild: one
+// an asynchronous replication controls, which the old table would still carry
+// when it moves, and any changefeed on a target that has none.
+func TestRebuildPlanCarriesChangefeeds_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name, held   string
+		capabilities map[string]bool
+		want         string
+	}{
+		{name: "a changefeed a replication controls", capabilities: newest(),
+			held: `{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",` +
+				`"attributes":{"__async_replication":"{\"path\":\"/local/r\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},"topic":{"partitioningSettings":{}}}]}`,
+			want: `rebuilding table "app/records": the table holds a changefeed an asynchronous replication controls, and YDB moves no table that ` +
+				"carries one \\(`Cannot move table with cdc streams`\\); the rebuild cannot drop it and add it again"},
+		{name: "a target without changefeeds", held: heldUpdates,
+			want: `rebuilding table "app/records": changefeed "updates" of table "app/records", which requires target capability changefeeds, unavailable on this ydb target`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			check := testcheck.New(t)
+			plan, err := backend.New().PlanFeatures(check.Context(), feedRebuildRequest(check, "", test.held, test.capabilities))
+			check.Assert(err, qt.IsNil)
+			check.Assert(plan.Contributions, qt.HasLen, 0)
+			check.Assert(plan.Diagnostics, qt.HasLen, 1)
+			check.Assert(plan.Diagnostics[0].Message, qt.Matches, test.want)
+		})
+	}
 }
 
 // On the common wire a read reports the table's comments apart from its

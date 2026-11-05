@@ -183,7 +183,9 @@ func newHostReplication(c *qt.C) *hostReplication {
 }
 
 // absolute is the absolute path of name in the fixture's directory.
-func (h *hostReplication) absolute(name string) string { return path.Join(h.database, h.directory, name) }
+func (h *hostReplication) absolute(name string) string {
+	return path.Join(h.database, h.directory, name)
+}
 
 // tables is the YAML of the tables named, each keyed on id with a note.
 func (h *hostReplication) tables(names ...string) string {

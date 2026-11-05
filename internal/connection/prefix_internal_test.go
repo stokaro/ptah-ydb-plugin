@@ -50,7 +50,7 @@ func (fakeSDKConn) IsValid() bool                            { return true }
 type fakeConnector struct{ seen *recordedQueries }
 
 func (c fakeConnector) Connect(context.Context) (driver.Conn, error) {
-	return fakeSDKConn{seen: c.seen}, nil
+	return fakeSDKConn(c), nil
 }
 func (fakeConnector) Driver() driver.Driver { return nil }
 

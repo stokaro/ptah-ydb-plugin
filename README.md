@@ -92,6 +92,15 @@ GOWORK=off go test -race ./...
 GOWORK=off CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
 ```
 
+Lint both build contours with golangci-lint v2.15.0, as CI does. The
+configuration in `.golangci.yml` enables the gofmt formatter, so an unformatted
+file fails the run:
+
+```sh
+GOWORK=off golangci-lint run ./...
+GOWORK=off golangci-lint run --build-tags integration ./...
+```
+
 The executable requires the SDK's authenticated local subprocess bootstrap.
 Run it through a Ptah SDK client rather than invoking it as a command-line tool.
 The committed module has no `replace` directive or workspace file.

@@ -96,12 +96,6 @@ func (s indexSignature) scope() string {
 	return ""
 }
 
-// statesSettings reports a global index declared with a partitioning or read
-// replicas of its own.
-func (s indexSignature) statesSettings() bool {
-	return s.settings != nil && proto.Size(s.settings) != 0
-}
-
 func (s indexSignature) describe() string {
 	text := fmt.Sprintf("%s index on (%s)", s.kind, strings.Join(s.keys, ", "))
 	if len(s.covered) > 0 {
