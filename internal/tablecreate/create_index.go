@@ -115,11 +115,29 @@ func declaredIndex(declared *protocol.DeclaredTable, index *protocol.DeclaredInd
 }
 
 // namesTable reports whether an index's table name is the declared table:
-// empty, its name, or its name qualified with its directory, as the host
-// qualifies it with a dot.
+// empty, its name, its name qualified with its directory, as the host
+// qualifies it with a dot, or the host's quoted reference to it.
 func namesTable(name string, table *protocol.DeclaredTable) bool {
-	return name == "" || name == table.GetName() ||
+	return name == "" || name == table.GetName() || name == quotedReference(table.GetSchema(), table.GetName()) ||
 		(table.GetSchema() != "" && (name == table.GetSchema()+"."+table.GetName() || name == table.GetSchema()+"/"+table.GetName()))
+}
+
+// quotedReference is how the host names a table whose directory or name holds
+// a dot: the directory, if any, and the name joined by a dot, each part that
+// holds a dot, a double quote, a backquote or a bracket in double quotes,
+// with a double quote in it doubled. A dot in a YDB name is part of the name,
+// so the root table a.b is "a.b" and the table b of the directory a is a.b.
+func quotedReference(schema, name string) string {
+	part := func(value string) string {
+		if !strings.ContainsAny(value, ".\"`[]") {
+			return value
+		}
+		return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
+	}
+	if schema == "" {
+		return part(name)
+	}
+	return part(schema) + "." + part(name)
 }
 
 // indexKeyColumns are an index's key columns. A YDB index key is a list of

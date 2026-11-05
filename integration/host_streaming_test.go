@@ -80,7 +80,7 @@ func TestHostStreamingQueryGraph(t *testing.T) {
 	stopped := fmt.Sprintf("topics:\n  next:\n    schema: %s\n  sink:\n    schema: %s\nstreaming_queries:\n  copy:\n    schema: %s\n    text: %s\n    run: false\n", directory, directory, directory, strconv.Quote(changed))
 	output, err = hostApplySource(c, directory, "yaml", stopped)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
-	c.Assert(strings.Count(output, "Native operation: "+schema.StreamingQueryOperation), qt.Equals, 1)
+	c.Assert(unitCount(output, schema.StreamingQueryOperation), qt.Equals, 1)
 	held, err = nativeapi.ReadStreamingQuery(c.Context(), opened.DB, database, path.Join(database, directory, "copy"))
 	c.Assert(err, qt.IsNil)
 	c.Assert(held, qt.IsNotNil)
