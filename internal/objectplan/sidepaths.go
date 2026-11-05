@@ -29,15 +29,7 @@ func sidePaths(request *protocol.PlanFeaturesRequest, family Family, item change
 		return nil, nil, err
 	}
 	var effects []*protocol.PlanningEffect
-	var edges []*protocol.PlanningDependency
-	add := func(before, after *protocol.StepIdentity) {
-		for _, edge := range edges {
-			if proto.Equal(edge.Before, before) && proto.Equal(edge.After, after) {
-				return
-			}
-		}
-		edges = append(edges, &protocol.PlanningDependency{Before: proto.CloneOf(before), After: proto.CloneOf(after)})
-	}
+	var edges edgeList
 	for _, path := range paths {
 		if path.Subject != nil {
 			effects = append(effects, &protocol.PlanningEffect{Subject: proto.CloneOf(path.Subject), Action: path.Action})
@@ -48,33 +40,52 @@ func sidePaths(request *protocol.PlanFeaturesRequest, family Family, item change
 			continue
 		}
 		effects = append(effects, &protocol.PlanningEffect{Subject: subject, Action: path.Action})
-		for _, common := range request.CommonSteps {
-			for _, effect := range common.GetMetadata().GetEffects() {
-				if effect.GetSubject().GetParent().GetNormalized() != "" || !isSchemeSubject(effect.GetSubject()) || provider.CompareIdentities(slot(effect.Subject), subject) != 0 {
-					continue
-				}
-				switch {
-				case effect.Action == protocol.PlanningEffect_READ && path.Action == protocol.PlanningEffect_DROP:
-					add(common.Id, id)
-				case effect.Action == protocol.PlanningEffect_READ && path.Action == protocol.PlanningEffect_CREATE:
-					add(id, common.Id)
-				case effect.Action == protocol.PlanningEffect_READ:
-					// Two reads of one path need no order.
-				case path.Action == protocol.PlanningEffect_CREATE && effect.Action == protocol.PlanningEffect_DROP:
-					add(common.Id, id)
-				case path.Action == protocol.PlanningEffect_DROP && effect.Action == protocol.PlanningEffect_CREATE:
-					add(id, common.Id)
-				case path.Action == protocol.PlanningEffect_READ && item.action == protocol.PlanningEffect_DROP:
-					add(id, common.Id)
-				case path.Action == protocol.PlanningEffect_READ:
-					add(common.Id, id)
-				default:
-					return nil, nil, fmt.Errorf("%s %s path %s that a common step also changes", family.Noun, actionWord(path.Action), displayPath(path.Schema, path.Name))
-				}
-			}
+		if err := orderSidePath(request, family, item, id, path, subject, &edges); err != nil {
+			return nil, nil, err
 		}
 	}
 	return effects, edges, nil
+}
+
+// orderSidePath adds to edges the order of the step id against each common
+// step of request with an effect at subject, the scheme path of path, as
+// sidePaths describes. A common step that changes a path the step creates or
+// drops is refused.
+func orderSidePath(
+	request *protocol.PlanFeaturesRequest,
+	family Family,
+	item change,
+	id *protocol.StepIdentity,
+	path PathEffect,
+	subject *protocol.ComparisonIdentity,
+	edges *edgeList,
+) error {
+	for _, common := range request.CommonSteps {
+		for _, effect := range common.GetMetadata().GetEffects() {
+			if effect.GetSubject().GetParent().GetNormalized() != "" || !isSchemeSubject(effect.GetSubject()) || provider.CompareIdentities(slot(effect.Subject), subject) != 0 {
+				continue
+			}
+			switch {
+			case effect.Action == protocol.PlanningEffect_READ && path.Action == protocol.PlanningEffect_DROP:
+				edges.add(common.Id, id)
+			case effect.Action == protocol.PlanningEffect_READ && path.Action == protocol.PlanningEffect_CREATE:
+				edges.add(id, common.Id)
+			case effect.Action == protocol.PlanningEffect_READ:
+				// Two reads of one path need no order.
+			case path.Action == protocol.PlanningEffect_CREATE && effect.Action == protocol.PlanningEffect_DROP:
+				edges.add(common.Id, id)
+			case path.Action == protocol.PlanningEffect_DROP && effect.Action == protocol.PlanningEffect_CREATE:
+				edges.add(id, common.Id)
+			case path.Action == protocol.PlanningEffect_READ && item.action == protocol.PlanningEffect_DROP:
+				edges.add(id, common.Id)
+			case path.Action == protocol.PlanningEffect_READ:
+				edges.add(common.Id, id)
+			default:
+				return fmt.Errorf("%s %s path %s that a common step also changes", family.Noun, actionWord(path.Action), displayPath(path.Schema, path.Name))
+			}
+		}
+	}
+	return nil
 }
 
 func actionWord(action protocol.PlanningEffect_Action) string {

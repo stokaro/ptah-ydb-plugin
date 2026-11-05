@@ -72,7 +72,8 @@ var externalSourceChanges = newObjectChanges(objectChanges{kind: ExternalSourceP
 		"database":   "the database the comparison read, which a secret path or a data source path written absolute is read against",
 	},
 	execution: map[string]any{
-		"execution":    "YQL CREATE, CREATE OR REPLACE or DROP EXTERNAL DATA SOURCE statements, one query each, outside SQL transactions; recreate drops the data source, creates it again and gives the new one the owner and the access entries the old one held; no automatic retry",
+		"execution": "YQL CREATE, CREATE OR REPLACE or DROP EXTERNAL DATA SOURCE statements, one query each, outside SQL transactions; " +
+			"recreate drops the data source, creates it again and gives the new one the owner and the access entries the old one held; no automatic retry",
 		"precondition": "before is the complete normalized observation, REFERENCES aside, or established absence; verified immediately before dispatch; the API has no atomic compare-and-set",
 		"confirmation": "read back the declared data source, or absence after a drop",
 		"owner":        "a nonempty owner database or change database must equal the selected session database; empty selects that session database",
@@ -82,13 +83,15 @@ var externalTableChanges = newObjectChanges(objectChanges{kind: ExternalTablePro
 	semantics: externalSemantics("CREATE EXTERNAL TABLE adds an external table", dropExternalTableReason, "external table"),
 	database:  true, operations: []string{ExternalCreate, ExternalReplace, ExternalRestore, ExternalDrop}, allowed: externalAllowed,
 	definition: map[string]any{
-		"semantics":  "create: additive, access unchanged; drop: behavioral, the files stay, narrows access; a change of both sides: behavioral, access unchanged; never destructive; never replaces owner",
-		"comparison": "both operands read as the host's external table specification: the data source relative to the database, the location, the columns in order with their types and nullability, the options by upper-case name with PARTITIONED_BY as the list it holds; access metadata is not compared",
-		"operands":   "both operands may describe the same table, which a data source the plan drops and creates again takes along",
-		"database":   "the database the comparison read, which a data source path written absolute is read against",
+		"semantics": "create: additive, access unchanged; drop: behavioral, the files stay, narrows access; a change of both sides: behavioral, access unchanged; never destructive; never replaces owner",
+		"comparison": "both operands read as the host's external table specification: the data source relative to the database, the location, " +
+			"the columns in order with their types and nullability, the options by upper-case name with PARTITIONED_BY as the list it holds; access metadata is not compared",
+		"operands": "both operands may describe the same table, which a data source the plan drops and creates again takes along",
+		"database": "the database the comparison read, which a data source path written absolute is read against",
 	},
 	execution: map[string]any{
-		"execution":    "YQL CREATE, CREATE OR REPLACE or DROP EXTERNAL TABLE statements, one query each, outside SQL transactions; a table dropped and created again is two operations, a drop and a restore, which creates the table and gives it the owner and the access entries the old one held; no automatic retry",
+		"execution": "YQL CREATE, CREATE OR REPLACE or DROP EXTERNAL TABLE statements, one query each, outside SQL transactions; a table dropped and created again is two operations, " +
+			"a drop and a restore, which creates the table and gives it the owner and the access entries the old one held; no automatic retry",
 		"precondition": "before is the complete normalized observation or established absence, and absence for a restore; verified immediately before dispatch; the API has no atomic compare-and-set",
 		"confirmation": "read back the declared external table, or absence after a drop",
 		"owner":        "a nonempty owner database or change database must equal the selected session database; empty selects that session database",

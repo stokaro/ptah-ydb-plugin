@@ -104,18 +104,17 @@ type columnTableChange struct {
 // shard count is refused with the reason, and so is any common step of the
 // table: the provider carries out none for a column table.
 func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, capabilities map[string]bool) (bool, string, *columnTableChange, error) {
+	table, err := columnTableTTL(table)
+	if err != nil {
+		return false, "", nil, err
+	}
 	sides, err := readStorage(owner, table)
 	if err != nil || !sides.columnTable() {
 		return false, "", nil, err
 	}
 	subject := fmt.Sprintf("table %q", tableLabel(owner))
-	switch {
-	case sides.desired != nil && sides.held == nil && sides.rowRead:
-		return true, subject + ": " + kindChangeRefusal, nil, nil
-	case sides.desired != nil && sides.held == nil:
-		return true, "The table's current storage was not captured", nil, nil
-	case sides.desired == nil && (sides.rowStated || sides.known):
-		return true, subject + ": " + kindChangeRefusal, nil, nil
+	if reason := storageKindRefusal(sides, subject); reason != "" {
+		return true, reason, nil, nil
 	}
 	for _, step := range steps {
 		if step.Parent != nil && provider.CompareIdentities(step.Parent, table.Subject) == 0 {
@@ -156,6 +155,23 @@ func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTab
 	return true, "", change, nil
 }
 
+// storageKindRefusal says why the storage of a table that is a column table
+// on either side cannot be planned: a change between row and column storage,
+// which needs an explicit data migration, or a held storage that was not
+// read. subject names the table. It is empty when both sides are column
+// tables, or when the declaration leaves the storage to the table.
+func storageKindRefusal(sides storageSides, subject string) string {
+	switch {
+	case sides.desired != nil && sides.held == nil && sides.rowRead:
+		return subject + ": " + kindChangeRefusal
+	case sides.desired != nil && sides.held == nil:
+		return "The table's current storage was not captured"
+	case sides.desired == nil && (sides.rowStated || sides.known):
+		return subject + ": " + kindChangeRefusal
+	}
+	return ""
+}
+
 // enabledTTL returns ttl in the terms of a declaration when it is enabled, and
 // nil for none. The expiration the server derives from the tiers of a read TTL
 // is left out: no declaration states it, and the comparison does not read it.
@@ -180,6 +196,10 @@ func layoutDetail(desired *native.ColumnStorageIntent, held *native.ColumnStorag
 // columnRebuild reports a REBUILD of a table that is a column table on either
 // side.
 func columnRebuild(owner *protocol.Reference, table *protocol.PlanningTable) (bool, error) {
+	table, err := columnTableTTL(table)
+	if err != nil {
+		return false, err
+	}
 	sides, err := readStorage(owner, table)
 	if err != nil {
 		return false, err

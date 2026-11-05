@@ -52,11 +52,11 @@ func compatInspect(c *qt.C, directory string) (document, notes, reapplied string
 
 // Ported from the host's TestYDBCompatBinary_KeepsColumnFamiliesHCLCannotWrite,
 // TestYDBCompatBinary_KeepsTableSettingsHCLCannotWrite and the part of
-// TestYDBCompatBinary_InspectWritesTheTTLAsPlatformProperties and
 // TestYDBVectorIndexes_ApplyBackFromInspectedHCL that holds without HCL
 // blocks for this provider's table settings. HCL has no spelling for a column
-// family, a table's splitting settings, its TTL, its changefeeds or a vector
-// index's settings through this provider. `ptah-compat schema inspect` warns
+// family, a table's splitting settings, its changefeeds or a vector index's
+// settings through this provider. A TTL has one, its platform "ydb" block
+// (host_hcl_platform_test.go). `ptah-compat schema inspect` reports
 // that the table's settings are not in the document, and the document applied
 // back to the database it came from plans nothing: what a description leaves
 // out keeps what the table holds, so the table does not return to YDB's
@@ -79,10 +79,6 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 				"AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 4, KEY_BLOOM_FILTER = ENABLED)"},
 			want: heldTable{Storage: storedTable{Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=ENABLED min=4 max=0", KeyBloomFilter: "ENABLED"},
 				Changefeeds: make(map[string]feedShape), Indexes: make(map[string][2][]string)}},
-		{name: "a TTL", table: "events",
-			create: []string{"CREATE TABLE `{table}` (`id` Int64 NOT NULL, `created_at` Timestamp, PRIMARY KEY (`id`)) WITH (TTL = Interval('P1D') ON `created_at`)"},
-			want: heldTable{Storage: storedTable{TTL: "created_at 86400s", Families: plain, Partitioning: bySize},
-				Changefeeds: make(map[string]feedShape), Indexes: make(map[string][2][]string)}},
 		{name: "a changefeed and its consumer", table: "cf",
 			create: []string{"CREATE TABLE `{table}` (`id` Int64 NOT NULL, `v` Int32, PRIMARY KEY (`id`))",
 				"ALTER TABLE `{table}` ADD CHANGEFEED `feed` WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
@@ -100,6 +96,7 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			requireCapability(c, targetCapabilities(c), test.capability)
+			listLosses(c)
 			opened, directory, database := lockFixture(c)
 			absolute := path.Join(database, directory, test.table)
 			emptyAtCleanup(c, opened, path.Join(database, directory))
@@ -111,7 +108,7 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 			_, notes, reapplied := compatInspect(c, directory)
 
 			c.Assert(before, qt.DeepEquals, test.want)
-			c.Assert(notes, qt.Matches, `(?s).*\nwarning: table\.`+regexp.QuoteMeta(directory+"."+test.table)+`: [^\n]* is not represented in HCL\n.*`)
+			c.Assert(notes, qt.Matches, `(?s).*table\.`+regexp.QuoteMeta(directory+"."+test.table)+`: [^\n]* is not represented in HCL.*`)
 			c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
 			c.Assert(heldTableOf(c, opened, absolute), qt.DeepEquals, test.want)
 		})
@@ -135,7 +132,7 @@ func TestHostCompatRebuildFromHCLKeepsWhatTheDocumentLeavesOut_HappyPath(t *test
 			absolute := path.Join(database, directory, "items")
 			emptyAtCleanup(c, opened, path.Join(database, directory))
 			c.Assert(execFixtureSchema(c.Context(), opened.DB, strings.ReplaceAll(test.create, "{table}", absolute)), qt.IsNil)
-			_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, n, ts) VALUES (1l, 1, CurrentUtcTimestamp())")
+			_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, n, ts) VALUES (1l, 1, CurrentUtcTimestamp())") // #nosec G202 -- the path is a table under a directory this test generated
 			c.Assert(err, qt.IsNil)
 			desired := "file://" + compatFile(c, c.TempDir(), "desired.hcl", hclItems(directory, test.nType, test.nType == "Int64"))
 			apply := []string{"schema", "apply", "--url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema", directory, "--to", desired}
@@ -200,7 +197,7 @@ func TestHostCompatHCLKeepsTheChangefeedsItCannotSpell_HappyPath(t *testing.T) {
 	} {
 		c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil, qt.Commentf("%s", statement))
 	}
-	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, v) VALUES (1l, 10), (2l, NULL)")
+	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, v) VALUES (1l, 10), (2l, NULL)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	held, found := describedChangefeeds(c, opened, absolute)
 	kept := "file://" + compatFile(c, c.TempDir(), "kept.hcl", compatChangefeedDesired(directory, "Int32"))

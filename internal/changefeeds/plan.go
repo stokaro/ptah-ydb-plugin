@@ -111,15 +111,8 @@ func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservatio
 		}
 		wanted[name] = intent
 	}
-	names := slices.Collect(maps.Keys(wanted))
-	for name := range having {
-		if _, both := wanted[name]; !both {
-			names = append(names, name)
-		}
-	}
-	slices.Sort(names)
 	var changes []Change
-	for _, name := range names {
+	for _, name := range changeNames(wanted, having) {
 		want, declared := wantedFeeds[name]
 		have, present := havingFeeds[name]
 		switch {
@@ -140,6 +133,19 @@ func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservatio
 		}
 	}
 	return changes, ""
+}
+
+// changeNames returns the names of the declared and of the held changefeeds,
+// each once, sorted.
+func changeNames(wanted map[string]*native.ChangefeedIntent, having map[string]*native.ObservedChangefeed) []string {
+	names := slices.Collect(maps.Keys(wanted))
+	for name := range having {
+		if _, both := wanted[name]; !both {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return names
 }
 
 // Statements writes what moves the changefeeds of the table at path through

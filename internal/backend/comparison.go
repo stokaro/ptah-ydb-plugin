@@ -8,7 +8,6 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
@@ -32,7 +31,7 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 	if err := provider.ValidateComparisonRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if !proto.Equal(request.GetIdentifiers().GetRules(), identifierRules()) {
+	if !rulesMatch(request.GetIdentifiers().GetRules()) {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB comparison requires its negotiated identifier rules")
 	}
 	compare := coordinationcompare.Compare

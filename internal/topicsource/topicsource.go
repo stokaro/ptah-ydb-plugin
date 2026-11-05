@@ -85,10 +85,6 @@ type declared struct {
 // An invalid declaration refuses the whole document.
 func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	var topicsDeclared []declared
-	type pendingConsumer struct {
-		schema, topic string
-		consumer      ydbdecl.Consumer
-	}
 	var consumers []pendingConsumer
 	owned := make(map[int]bool)
 	for index, fragment := range document.GetFragments() {
@@ -114,77 +110,122 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			}
 			topicsDeclared = append(topicsDeclared, read...)
 		case document.Format == protocol.SourceDocument_GO_ANNOTATIONS && fragment.Selector == DirectiveTopic:
-			values, err := attributes(mapping)
+			topic, err := goTopic(index, mapping)
 			if err != nil {
 				return nil, err
 			}
-			spec, err := ydbdecl.ParseTopic(values)
-			if err != nil {
-				return nil, err
-			}
-			topicsDeclared = append(topicsDeclared, declared{fragment: index, schema: strings.TrimSpace(values[ydbdecl.TopicSchema]), name: strings.TrimSpace(values[ydbdecl.TopicName]), spec: spec})
+			topicsDeclared = append(topicsDeclared, topic)
 		case document.Format == protocol.SourceDocument_GO_ANNOTATIONS && fragment.Selector == DirectiveConsumer:
-			values, err := attributes(mapping)
+			pending, err := goConsumer(mapping)
 			if err != nil {
 				return nil, err
 			}
-			consumer, err := ydbdecl.ParseConsumer(values)
-			if err != nil {
-				return nil, err
-			}
-			topic := strings.TrimSpace(values[attributeTopic])
-			if topic == "" {
-				return nil, fmt.Errorf("%s needs the topic it reads", DirectiveConsumer)
-			}
-			// The directory is held to the rules of a topic's, as the host
-			// holds it.
-			if err := ydbdecl.CheckTopic(values[ydbdecl.TopicSchema], topic, ydbdecl.Topic{}); err != nil {
-				return nil, err
-			}
-			consumers = append(consumers, pendingConsumer{schema: strings.TrimSpace(values[ydbdecl.TopicSchema]), topic: topic, consumer: consumer})
+			consumers = append(consumers, pending)
 		default:
 			return nil, fmt.Errorf("unsupported YDB topic source format")
 		}
 	}
-	// A consumer of a topic the file does not declare is refused rather than
-	// dropped, because a reader nobody creates is a declaration with no
-	// effect, and so is a second consumer of one name, which YDB refuses.
-	for _, pending := range consumers {
-		index := slices.IndexFunc(topicsDeclared, func(topic declared) bool { return topic.name == pending.topic && topic.schema == pending.schema })
-		if index < 0 {
-			return nil, fmt.Errorf("the file declares no topic %q for consumer %q", topics.Display(pending.schema, pending.topic), pending.consumer.Name)
-		}
-		topic := &topicsDeclared[index]
-		if slices.ContainsFunc(topic.spec.Consumers, func(have ydbdecl.Consumer) bool { return have.Name == pending.consumer.Name }) {
-			return nil, fmt.Errorf("topic %q declares consumer %q twice", topics.Display(topic.schema, topic.name), pending.consumer.Name)
-		}
-		topic.spec.Consumers = append(topic.spec.Consumers, pending.consumer)
+	if err := attachConsumers(topicsDeclared, consumers); err != nil {
+		return nil, err
 	}
 	result := make(map[int][]*protocol.SourceModelValue, len(owned))
 	for index := range owned {
 		result[index] = nil
 	}
+	if err := addTopicValues(ctx, document, topicsDeclared, result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// pendingConsumer is a consumer directive held until every topic of the
+// document is known, since the topic it reads may come later in the file.
+type pendingConsumer struct {
+	schema, topic string
+	consumer      ydbdecl.Consumer
+}
+
+// goTopic reads the topic a Go topic directive at fragment declares.
+func goTopic(fragment int, mapping *protocol.SourceMapping) (declared, error) {
+	values, err := attributes(mapping)
+	if err != nil {
+		return declared{}, err
+	}
+	spec, err := ydbdecl.ParseTopic(values)
+	if err != nil {
+		return declared{}, err
+	}
+	return declared{fragment: fragment, schema: strings.TrimSpace(values[ydbdecl.TopicSchema]), name: strings.TrimSpace(values[ydbdecl.TopicName]), spec: spec}, nil
+}
+
+// goConsumer reads the consumer a Go consumer directive declares, with the
+// topic it reads.
+func goConsumer(mapping *protocol.SourceMapping) (pendingConsumer, error) {
+	values, err := attributes(mapping)
+	if err != nil {
+		return pendingConsumer{}, err
+	}
+	consumer, err := ydbdecl.ParseConsumer(values)
+	if err != nil {
+		return pendingConsumer{}, err
+	}
+	topic := strings.TrimSpace(values[attributeTopic])
+	if topic == "" {
+		return pendingConsumer{}, fmt.Errorf("%s needs the topic it reads", DirectiveConsumer)
+	}
+	// The directory is held to the rules of a topic's, as the host
+	// holds it.
+	if err := ydbdecl.CheckTopic(values[ydbdecl.TopicSchema], topic, ydbdecl.Topic{}); err != nil {
+		return pendingConsumer{}, err
+	}
+	return pendingConsumer{schema: strings.TrimSpace(values[ydbdecl.TopicSchema]), topic: topic, consumer: consumer}, nil
+}
+
+// attachConsumers adds each held consumer to the declared topic it reads, in
+// declaration order. A consumer of a topic the file does not declare is
+// refused rather than dropped, because a reader nobody creates is a
+// declaration with no effect, and so is a second consumer of one name, which
+// YDB refuses.
+func attachConsumers(topicsDeclared []declared, consumers []pendingConsumer) error {
+	for _, pending := range consumers {
+		index := slices.IndexFunc(topicsDeclared, func(topic declared) bool { return topic.name == pending.topic && topic.schema == pending.schema })
+		if index < 0 {
+			return fmt.Errorf("the file declares no topic %q for consumer %q", topics.Display(pending.schema, pending.topic), pending.consumer.Name)
+		}
+		topic := &topicsDeclared[index]
+		if slices.ContainsFunc(topic.spec.Consumers, func(have ydbdecl.Consumer) bool { return have.Name == pending.consumer.Name }) {
+			return fmt.Errorf("topic %q declares consumer %q twice", topics.Display(topic.schema, topic.name), pending.consumer.Name)
+		}
+		topic.spec.Consumers = append(topic.spec.Consumers, pending.consumer)
+	}
+	return nil
+}
+
+// addTopicValues checks each declared topic, refuses a second declaration of
+// one path, and appends the topic's value to the values of its fragment in
+// result, in declaration order.
+func addTopicValues(ctx context.Context, document *protocol.SourceDocument, topicsDeclared []declared, result map[int][]*protocol.SourceModelValue) error {
 	seen := make(map[string]bool)
 	for position, topic := range topicsDeclared {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
 		if err := ydbdecl.CheckTopic(topic.schema, topic.name, topic.spec); err != nil {
-			return nil, err
+			return err
 		}
 		path := topics.Display(topic.schema, topic.name)
 		if seen[path] {
-			return nil, fmt.Errorf("topic %s is declared twice", path)
+			return fmt.Errorf("topic %s is declared twice", path)
 		}
 		seen[path] = true
 		intent, err := topics.Intent(topic.spec)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		owner := &protocol.Reference{Engine: "ydb", Kind: schema.TopicProperties, Schema: topic.schema, Name: topic.name}
 		value, err := schema.CaptureTopicIntent(owner, intent)
 		if err != nil {
-			return nil, fmt.Errorf("topic %s: %w", path, err)
+			return fmt.Errorf("topic %s: %w", path, err)
 		}
 		fragment := document.Fragments[topic.fragment]
 		result[topic.fragment] = append(result[topic.fragment], &protocol.SourceModelValue{Placement: protocol.SourceModelValue_NATIVE_OBJECT,
@@ -192,7 +233,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 				CanonicalFormat: schema.NativeDesiredModel(schema.TopicProperties).CanonicalFormat, CanonicalProjection: bytes.Clone(value.Payload)},
 			Source: &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT, Path: topic.path}})
 	}
-	return result, nil
+	return nil
 }
 
 // yamlTopics reads the topics mapping of a YAML document: each entry a topic

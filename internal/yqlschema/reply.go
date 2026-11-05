@@ -39,7 +39,9 @@ func HeaderKinds() []string {
 // takes the facets of a reading (provider.SQLFacetsFeature). Their source
 // formats include SQL. Without that feature the reading cannot say a
 // changefeed, so it claims nothing about the changefeeds of its tables and
-// leaves those a table holds unmanaged.
+// leaves those a table holds unmanaged. A table's settings, a column's and a
+// column table's storage are claimed either way, as a YAML or Go source claims
+// them; without the feature a load that declares one is refused.
 func ClaimedModels(facets bool) []*protocol.ValueModel {
 	models := claimedModels()
 	if facets {
@@ -68,8 +70,9 @@ func claimedModels() []*protocol.ValueModel {
 
 // Reply reads the documents of a ReadSQLSchema request and answers with the
 // reading: the tables, views, principals, grants and coordination nodes the
-// load declares, what each document declares, the coverage the load claims,
-// and a trace for every object. A refused load, and a reading that declares
+// load declares, the facets of the tables' settings and changefeeds for a
+// host that takes them, what each document declares, the coverage the load
+// claims, and a trace for every object. A refused load, and a reading that declares
 // something a SQL schema reading has no home for, is answered with complete
 // false and diagnostics that name what is refused, and with no schema.
 func Reply(request *protocol.ReadSQLSchemaRequest) *protocol.SQLSchema {
@@ -164,54 +167,30 @@ func sourcePosition(text string, offset int) *protocol.SourcePosition {
 	before := text[:offset]
 	line := strings.Count(before, "\n") + 1
 	column := offset - (strings.LastIndexByte(before, '\n') + 1) + 1
+	// #nosec G115 -- the offset is within a request document, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.SourcePosition{ByteOffset: uint64(offset), Line: uint32(line), Column: uint32(column)}
 }
 
 // wire writes a reading as the reply's schema, and returns the refusals of
 // everything in it a SQL schema reading has no home for. facets says whether
-// the host takes the facets of a reading, which a table's changefeeds need.
+// the host takes the facets of a reading, which a table's settings, the family
+// of a column and a table's changefeeds need.
 func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool) (*protocol.SQLSchema, []*Refusal) {
-	reply := &protocol.SQLSchema{Complete: true}
-	var gaps []*Refusal
-	documents := request.GetDocuments()
-	trace := func(collection protocol.SQLObjectTrace_Collection, index int, document int, text span) {
-		source := documents[document]
-		reply.Traces = append(reply.Traces, &protocol.SQLObjectTrace{Collection: collection, Index: uint32(index),
-			Source: &protocol.SourceTrace{DocumentId: source.GetId(), Span: sourceSpan(source.GetText(), text.start, text.end)}})
-	}
-	for _, table := range reading.Tables {
-		declared, refused := declaredTable(reading, table)
-		gaps = append(gaps, refused...)
-		trace(protocol.SQLObjectTrace_TABLES, len(reply.Tables), table.document, table.span)
-		reply.Tables = append(reply.Tables, declared)
-	}
+	w := &wiring{request: request, reply: &protocol.SQLSchema{Complete: true}, facets: facets}
+	w.tables(reading)
 	for _, view := range reading.Views {
-		trace(protocol.SQLObjectTrace_VIEWS, len(reply.Views), view.document, view.span)
-		reply.Views = append(reply.Views, &protocol.SQLView{Schema: view.schema, Name: view.leaf, Body: view.Body, Comment: view.Comment})
+		w.trace(protocol.SQLObjectTrace_VIEWS, len(w.reply.Views), view.document, view.span)
+		w.reply.Views = append(w.reply.Views, &protocol.SQLView{Schema: view.schema, Name: view.leaf, Body: view.Body, Comment: view.Comment})
 	}
 	for _, role := range reading.Roles {
 		if role.passwordAt != nil {
-			gaps = append(gaps, gap(role.passwordDocument, *role.passwordAt, fmt.Sprintf("user %s declares a password, which a SQL schema reading has no home for: "+
+			w.gaps = append(w.gaps, gap(role.passwordDocument, *role.passwordAt, fmt.Sprintf("user %s declares a password, which a SQL schema reading has no home for: "+
 				"the host compares no secret a schema file holds", quoteName(role.Name))))
 		}
-		trace(protocol.SQLObjectTrace_ROLES, len(reply.Roles), role.document, role.span)
-		reply.Roles = append(reply.Roles, &protocol.SQLRole{Name: role.Name, Login: role.Login, Inherit: role.Inherit, Group: role.Group, MemberOf: slices.Clone(role.MemberOf)})
+		w.trace(protocol.SQLObjectTrace_ROLES, len(w.reply.Roles), role.document, role.span)
+		w.reply.Roles = append(w.reply.Roles, &protocol.SQLRole{Name: role.Name, Login: role.Login, Inherit: role.Inherit, Group: role.Group, MemberOf: slices.Clone(role.MemberOf)})
 	}
-	for _, revoked := range []bool{false, true} {
-		grants := reading.Grants
-		if revoked {
-			grants = reading.RevokedGrants
-		}
-		for _, grant := range grants {
-			if grant.target.kind == "resource pool" && strings.ContainsAny(grant.target.name, ".\"`[]") {
-				gaps = append(gaps, gap(grant.document, grant.span, fmt.Sprintf("a grant on resource pool %s has no home in a SQL schema reading: "+
-					"the host names a pool it reads from a provider as it names a table, which renames a pool whose name holds a dot, a quote or a bracket", quoteName(grant.target.name))))
-			}
-			trace(protocol.SQLObjectTrace_GRANTS, len(reply.Grants), grant.document, grant.span)
-			reply.Grants = append(reply.Grants, &protocol.SQLGrant{Role: grant.Role, Privileges: slices.Clone(grant.Privileges), Revoked: revoked,
-				Target: &protocol.Reference{Kind: grant.target.kind, Schema: grant.target.schema, Name: grant.target.name}})
-		}
-	}
+	w.grants(reading)
 	var feeds []Object
 	for _, object := range SortedObjects(reading) {
 		if object.Kind == KindChangefeed {
@@ -220,16 +199,95 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool)
 		}
 		envelope, refusal := nativeObject(object)
 		if refusal != nil {
-			gaps = append(gaps, refusal)
+			w.gaps = append(w.gaps, refusal)
 			continue
 		}
-		trace(protocol.SQLObjectTrace_NATIVE_OBJECTS, len(reply.NativeObjects), object.document, object.span)
-		reply.NativeObjects = append(reply.NativeObjects, envelope)
+		w.trace(protocol.SQLObjectTrace_NATIVE_OBJECTS, len(w.reply.NativeObjects), object.document, object.span)
+		w.reply.NativeObjects = append(w.reply.NativeObjects, envelope)
 	}
+	w.changefeeds(feeds)
+	for i, file := range reading.Files {
+		w.reply.Declarations = append(w.reply.Declarations, documentDeclarations(request.GetDocuments()[i].GetId(), file))
+	}
+	return w.reply, w.gaps
+}
+
+// wiring is the reply wire writes: the request it answers, the refusals it
+// collects, and whether the host takes the facets of a reading.
+type wiring struct {
+	request *protocol.ReadSQLSchemaRequest
+	reply   *protocol.SQLSchema
+	gaps    []*Refusal
+	facets  bool
+}
+
+// trace traces the object at index of a reply collection to the text of its
+// statement in a document of the request.
+func (w *wiring) trace(collection protocol.SQLObjectTrace_Collection, index, document int, text span) {
+	source := w.request.GetDocuments()[document]
+	// #nosec G115 -- index counts the objects read from the request's documents, which runtime.MaxMessageBytes bounds to 4 MiB
+	w.reply.Traces = append(w.reply.Traces, &protocol.SQLObjectTrace{Collection: collection, Index: uint32(index),
+		Source: &protocol.SourceTrace{DocumentId: source.GetId(), Span: sourceSpan(source.GetText(), text.start, text.end)}})
+}
+
+// tables writes the tables of the reading, and the facets of their settings
+// for a host that takes them. Settings a host without the facets has no home
+// for are refused.
+func (w *wiring) tables(reading *Reading) {
+	for _, table := range reading.Tables {
+		if settings := tableSettings(table.Facets); len(settings) != 0 && !w.facets {
+			w.gaps = append(w.gaps, gap(table.document, table.span, fmt.Sprintf("table %s declares %s, which a SQL schema reading has no home for: "+
+				"the host does not take the facets of a table in a SQL schema reading (%s)", quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "),
+				provider.SQLFacetsFeature)))
+		}
+		declared, refused := declaredTable(reading, table)
+		w.gaps = append(w.gaps, refused...)
+		w.trace(protocol.SQLObjectTrace_TABLES, len(w.reply.Tables), table.document, table.span)
+		w.reply.Tables = append(w.reply.Tables, declared)
+		if !w.facets {
+			continue
+		}
+		envelopes, err := tableFacets(table)
+		if err != nil {
+			w.gaps = append(w.gaps, &Refusal{Document: table.document, Start: table.span.start, End: table.span.end, Code: Invalid,
+				Message: fmt.Sprintf("table %s: %v", quoteName(ydbPath(table.Schema, table.Name)), err)})
+			continue
+		}
+		for _, envelope := range envelopes {
+			w.trace(protocol.SQLObjectTrace_FACETS, len(w.reply.Facets), table.document, table.span)
+			w.reply.Facets = append(w.reply.Facets, envelope)
+		}
+	}
+}
+
+// grants writes the grants of the reading, then its revocations. A grant on a
+// resource pool whose name the host would rename is refused.
+func (w *wiring) grants(reading *Reading) {
+	for _, revoked := range []bool{false, true} {
+		grants := reading.Grants
+		if revoked {
+			grants = reading.RevokedGrants
+		}
+		for _, grant := range grants {
+			if grant.target.kind == "resource pool" && strings.ContainsAny(grant.target.name, ".\"`[]") {
+				w.gaps = append(w.gaps, gap(grant.document, grant.span, fmt.Sprintf("a grant on resource pool %s has no home in a SQL schema reading: "+
+					"the host names a pool it reads from a provider as it names a table, which renames a pool whose name holds a dot, a quote or a bracket", quoteName(grant.target.name))))
+			}
+			w.trace(protocol.SQLObjectTrace_GRANTS, len(w.reply.Grants), grant.document, grant.span)
+			w.reply.Grants = append(w.reply.Grants, &protocol.SQLGrant{Role: grant.Role, Privileges: slices.Clone(grant.Privileges), Revoked: revoked,
+				Target: &protocol.Reference{Kind: grant.target.kind, Schema: grant.target.schema, Name: grant.target.name}})
+		}
+	}
+}
+
+// changefeeds writes the changefeeds of each table as one facet of the table
+// for a host that takes the facets of a reading, and refuses each of them for
+// a host that does not.
+func (w *wiring) changefeeds(feeds []Object) {
 	for _, table := range changefeedTables(feeds) {
-		if !facets {
+		if !w.facets {
 			for _, feed := range table {
-				gaps = append(gaps, gap(feed.document, feed.span, fmt.Sprintf("changefeed %s of table %s has no home in a SQL schema reading: "+
+				w.gaps = append(w.gaps, gap(feed.document, feed.span, fmt.Sprintf("changefeed %s of table %s has no home in a SQL schema reading: "+
 					"the host does not take the facets of a table in a SQL schema reading (%s)", quoteName(feed.Name), quoteName(ydbPath(feed.Schema, feed.Parent)),
 					provider.SQLFacetsFeature)))
 			}
@@ -237,27 +295,19 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool)
 		}
 		envelope, refusal := changefeedFacet(table)
 		if refusal != nil {
-			gaps = append(gaps, refusal)
+			w.gaps = append(w.gaps, refusal)
 			continue
 		}
-		trace(protocol.SQLObjectTrace_FACETS, len(reply.Facets), table[0].document, table[0].span)
-		reply.Facets = append(reply.Facets, envelope)
+		w.trace(protocol.SQLObjectTrace_FACETS, len(w.reply.Facets), table[0].document, table[0].span)
+		w.reply.Facets = append(w.reply.Facets, envelope)
 	}
-	for i, file := range reading.Files {
-		reply.Declarations = append(reply.Declarations, documentDeclarations(documents[i].GetId(), file))
-	}
-	return reply, gaps
 }
 
 // declaredTable writes a table of the reading as the reply declares it, with
-// its key parts, columns and indexes, and returns the refusals of the table
-// and index settings a SQL schema reading has no home for.
+// its key parts, columns and indexes, and returns the refusals of the index
+// settings a SQL schema reading has no home for.
 func declaredTable(reading *Reading, table Table) (*protocol.DeclaredTable, []*Refusal) {
 	var gaps []*Refusal
-	if settings := tableSettings(table.Facets); len(settings) != 0 {
-		gaps = append(gaps, gap(table.document, table.span, fmt.Sprintf("table %s declares %s, which a SQL schema reading has no home for: "+
-			"the host refuses the settings of a table in a SQL schema reading", quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "))))
-	}
 	declared := &protocol.DeclaredTable{Name: table.Name, Schema: table.Schema, Comment: table.Comment, PrimaryKey: slices.Clone(table.PrimaryKey)}
 	for _, part := range table.PrimaryKeyParts {
 		declared.PrimaryKeyParts = append(declared.PrimaryKeyParts, &protocol.DeclaredKeyPart{Column: part.Name, Prefix: part.Prefix, Descending: part.Desc})
@@ -274,7 +324,8 @@ func declaredTable(reading *Reading, table Table) (*protocol.DeclaredTable, []*R
 			continue
 		}
 		if settings := indexSettings(index); len(settings) != 0 {
-			gaps = append(gaps, gap(index.document, index.span, fmt.Sprintf("index %s of table %s declares %s, which a SQL schema reading has no home for",
+			gaps = append(gaps, gap(index.document, index.span, fmt.Sprintf("index %s of table %s declares %s, which a SQL schema reading has no home for: "+
+				"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes",
 				quoteName(index.Name), quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "))))
 		}
 		declared.Indexes = append(declared.Indexes, &protocol.DeclaredIndex{Name: index.Name, Fields: slices.Clone(index.Fields), Unique: index.Unique, Comment: index.Comment,

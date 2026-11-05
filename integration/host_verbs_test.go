@@ -33,7 +33,7 @@ func hostVerb(c *qt.C, args ...string) (stdout, stderr string, exit int) {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, append(args, "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"))...)
+	cmd := testCommand(ctx, host, append(args, "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"))...)
 	var out, diagnostics bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &diagnostics
 	err := cmd.Run()

@@ -106,9 +106,11 @@ func decodeDocument(ctx context.Context, document *protocol.SourceDocument) (*pr
 
 // sourceKinds holds what each kind's decoder reads out of one source
 // document: the values of the native objects by fragment index, and the
-// tables and the changefeeds the document declares.
+// tables, the indexes' own settings and the changefeeds the document
+// declares.
 type sourceKinds struct {
 	tables       []tablesource.Table
+	indexes      []tablesource.Index
 	secrets      map[int][]*protocol.SourceModelValue
 	topics       map[int][]*protocol.SourceModelValue
 	feeds        []changefeedsource.Table
@@ -125,6 +127,16 @@ func decodeKinds(ctx context.Context, document *protocol.SourceDocument) (*sourc
 	var err error
 	if kinds.tables, err = tablesource.Decode(ctx, document); err != nil {
 		return nil, sourceError(ctx, err)
+	}
+	if kinds.indexes, err = tablesource.DecodeIndexes(ctx, document); err != nil {
+		return nil, sourceError(ctx, err)
+	}
+	// Without the feature the host reads no index's settings, so the
+	// comparison could not see what an index holds, and a declared
+	// setting would be dropped on every index the table already has.
+	if len(kinds.indexes) != 0 && !slices.Contains(negotiatedFeatures(ctx), provider.ObservedIndexFacetsFeature) {
+		return nil, authored.Status(codes.InvalidArgument, fmt.Errorf("index %q declares its partitioning or read replicas, which this provider compares only with a host that negotiates %s",
+			kinds.indexes[0].Value.GetValue().GetOwner().GetName(), provider.ObservedIndexFacetsFeature))
 	}
 	if kinds.secrets, err = secretsource.Decode(ctx, document); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
@@ -169,7 +181,7 @@ func (k *sourceKinds) values(ctx context.Context, document *protocol.SourceDocum
 	case externalsource.Owns(fragment):
 		return k.externals[index], nil
 	default:
-		return fragmentValues(ctx, document, fragment, index, k.tables)
+		return fragmentValues(ctx, document, fragment, index, k.tables, k.indexes)
 	}
 }
 
@@ -185,7 +197,11 @@ func sourceError(ctx context.Context, err error) error {
 // limitedClaim leaves outside a document's claim what its ptah:not-described
 // limits name, when the host negotiated source.limits. Without the feature the
 // SDK lets a decoding claim only complete knowledge, and the limits change
-// nothing.
+// nothing. Nor does the SDK let a document without limits claim less, so an
+// HCL document without a coordination_node entry claims every node here,
+// where the host's embedded engine reads it as claiming none: an Atlas file
+// names none of the nodes it leaves out. A host keeps that rule by taking no
+// coverage from such a reply.
 func limitedClaim(ctx context.Context, document *protocol.SourceDocument, coverage *protocol.ModelCoverage) error {
 	if len(document.GetLimits()) == 0 || !slices.Contains(negotiatedFeatures(ctx), provider.SourceLimitsFeature) {
 		return nil
@@ -228,10 +244,18 @@ func changefeedValues(document *protocol.SourceDocument, fragment *protocol.Sour
 }
 
 // fragmentValues returns the values one fragment declares. A table's
-// fragments declare one facet together, which its first fragment returns.
-func fragmentValues(ctx context.Context, document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int, tables []tablesource.Table) ([]*protocol.SourceModelValue, error) {
+// fragments declare one facet together, which its first fragment returns, and
+// so do an index's.
+func fragmentValues(ctx context.Context, document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int, tables []tablesource.Table,
+	indexes []tablesource.Index) ([]*protocol.SourceModelValue, error) {
 	if !tablesource.Owns(fragment) {
 		return coordinationSource(ctx, document, fragment, index)
+	}
+	for _, declared := range indexes {
+		if declared.Fragment == index {
+			trace := &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}
+			return []*protocol.SourceModelValue{{Placement: protocol.SourceModelValue_FACET, Value: declared.Value, Source: trace}}, nil
+		}
 	}
 	for _, table := range tables {
 		trace := &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}

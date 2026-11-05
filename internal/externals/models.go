@@ -17,60 +17,54 @@ func Display(owner *protocol.Reference) string {
 
 // SourcePair reads a read data source and its declaration, either nil, as
 // the host's specifications, with paths relative to root.
-func SourcePair(current, desired *protocol.Envelope, root string) (*ydbdecl.ExternalDataSource, *ydbdecl.ExternalDataSource, error) {
-	var before, after *ydbdecl.ExternalDataSource
-	if current != nil {
-		observed, err := schema.ObservedExternalSource(current)
-		if err != nil {
-			return nil, nil, err
-		}
-		spec, err := SourceFromObserved(observed, schema.InterpretationRoot(current))
-		if err != nil {
-			return nil, nil, fmt.Errorf("external data source %s: %w", Display(current.GetOwner()), err)
-		}
-		before = &spec
+func SourcePair(current, desired *protocol.Envelope, root string) (before, after *ydbdecl.ExternalDataSource, err error) {
+	before, err = readSpec(current, "external data source", schema.ObservedExternalSource, SourceFromObserved)
+	if err != nil {
+		return nil, nil, err
 	}
-	if desired != nil {
-		intent, err := schema.DesiredExternalSource(desired)
-		if err != nil {
-			return nil, nil, err
-		}
-		spec, err := SourceFromIntent(intent, schema.InterpretationRoot(desired))
-		if err != nil {
-			return nil, nil, fmt.Errorf("external data source %s: %w", Display(desired.GetOwner()), err)
-		}
-		after = &spec
+	after, err = readSpec(desired, "external data source", schema.DesiredExternalSource, SourceFromIntent)
+	if err != nil {
+		return nil, nil, err
 	}
 	return before, after, nil
 }
 
 // TablePair reads a read external table and its declaration, either nil, as
 // the host's specifications, with paths relative to root.
-func TablePair(current, desired *protocol.Envelope, root string) (*ydbdecl.ExternalTable, *ydbdecl.ExternalTable, error) {
-	var before, after *ydbdecl.ExternalTable
-	if current != nil {
-		observed, err := schema.ObservedExternalTable(current)
-		if err != nil {
-			return nil, nil, err
-		}
-		spec, err := TableFromObserved(observed, schema.InterpretationRoot(current))
-		if err != nil {
-			return nil, nil, fmt.Errorf("external table %s: %w", Display(current.GetOwner()), err)
-		}
-		before = &spec
+func TablePair(current, desired *protocol.Envelope, root string) (before, after *ydbdecl.ExternalTable, err error) {
+	before, err = readSpec(current, "external table", schema.ObservedExternalTable, TableFromObserved)
+	if err != nil {
+		return nil, nil, err
 	}
-	if desired != nil {
-		intent, err := schema.DesiredExternalTable(desired)
-		if err != nil {
-			return nil, nil, err
-		}
-		spec, err := TableFromIntent(intent, schema.InterpretationRoot(desired))
-		if err != nil {
-			return nil, nil, fmt.Errorf("external table %s: %w", Display(desired.GetOwner()), err)
-		}
-		after = &spec
+	after, err = readSpec(desired, "external table", schema.DesiredExternalTable, TableFromIntent)
+	if err != nil {
+		return nil, nil, err
 	}
 	return before, after, nil
+}
+
+// readSpec reads one side of a pair, or nil for a nil value: decode reads
+// the envelope, and convert turns the result into a specification against
+// the value's interpretation root. A decode error is returned as it is; a
+// conversion error names the object as noun and its owner.
+func readSpec[V, S any](
+	value *protocol.Envelope,
+	noun string,
+	decode func(*protocol.Envelope) (V, error),
+	convert func(V, string) (S, error),
+) (*S, error) {
+	if value == nil {
+		return nil, nil
+	}
+	decoded, err := decode(value)
+	if err != nil {
+		return nil, err
+	}
+	spec, err := convert(decoded, schema.InterpretationRoot(value))
+	if err != nil {
+		return nil, fmt.Errorf("%s %s: %w", noun, Display(value.GetOwner()), err)
+	}
+	return &spec, nil
 }
 
 // Equal reports whether the read object current already holds desired, its

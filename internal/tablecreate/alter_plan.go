@@ -78,58 +78,61 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	if err != nil {
 		return alterationChanges{}, "", err
 	}
-	in := familyInput{placement: make(map[string]string), heldPlacement: make(map[string]string), existing: make(map[string]bool)}
-	var intent native.RowTableIntent
-	if env := desired.table; env != nil {
-		if err := protojson.Unmarshal(env.Payload, &intent); err != nil {
-			return alterationChanges{}, "", err
-		}
+	sides := &alterationSides{owner: owner, table: table, desired: desired, observed: observed, intent: &native.RowTableIntent{}, held: &native.DescribeTableResult{}}
+	change, reason, err := sides.families(capabilities)
+	if err != nil || reason != "" {
+		return alterationChanges{}, reason, err
 	}
-	in.desired = intent.ColumnFamilies
-	if reason := declaredCacheModeRefusal(tableLabel(owner), intent.ColumnFamilies, capabilities); reason != "" {
+	ttl, partitioning, reason := sides.settings()
+	if reason != "" {
 		return alterationChanges{}, reason, nil
 	}
-	for name, env := range desired.columns {
-		var column native.ColumnIntent
-		if err := protojson.Unmarshal(env.Payload, &column); err != nil {
-			return alterationChanges{}, "", err
-		}
-		in.placement[name] = column.Family
+	indexes, reason, err := sides.indexes(steps, capabilities)
+	if err != nil || reason != "" {
+		return alterationChanges{}, reason, err
 	}
-	for _, column := range table.Desired.GetColumns() {
-		in.columns = append(in.columns, column.Name)
-		if column.Primary {
-			in.key = append(in.key, column.Name)
-		}
+	feeds, reason, err := sides.feeds(indexes, capabilities)
+	if err != nil || reason != "" {
+		return alterationChanges{}, reason, err
 	}
-	in.key = append(in.key, table.Desired.GetPrimaryKey()...)
-	in.key = append(in.key, intent.PrimaryKey...)
-	for _, column := range table.Current.GetColumns() {
-		in.existing[column.Name] = true
+	return alterationChanges{family: change, ttl: ttl, partitioning: partitioning, indexes: indexes.changes, indexSettings: indexes.settings, changefeeds: feeds}, "", nil
+}
+
+// alterationSides are the facets both sides of one altered table carry, with
+// what planAlteration decodes from them on its way.
+type alterationSides struct {
+	owner    *protocol.Reference
+	table    *protocol.PlanningTable
+	desired  capturedFacets
+	observed capturedFacets
+	// intent is the declared table properties, empty where none are stated.
+	intent *native.RowTableIntent
+	// held is the table properties the table holds, empty where none were read.
+	held *native.DescribeTableResult
+	// family is what planFamilies reads.
+	family familyInput
+}
+
+// families decodes the column families and the column placements of both
+// sides and plans the family change.
+func (a *alterationSides) families(capabilities map[string]bool) (familyChange, string, error) {
+	in := &a.family
+	*in = familyInput{placement: make(map[string]string), heldPlacement: make(map[string]string), existing: make(map[string]bool)}
+	if reason, err := a.readDesiredFamilies(capabilities); err != nil || reason != "" {
+		return familyChange{}, reason, err
 	}
-	var held native.DescribeTableResult
-	if env := observed.table; env != nil {
-		if err := protojson.Unmarshal(env.Payload, &held); err != nil {
-			return alterationChanges{}, "", err
-		}
-	}
-	in.held = held.ColumnFamilies
-	for name, env := range observed.columns {
-		var column native.ColumnMeta
-		if err := protojson.Unmarshal(env.Payload, &column); err != nil {
-			return alterationChanges{}, "", err
-		}
-		in.heldPlacement[name] = column.Family
+	if err := a.readHeldFamilies(); err != nil {
+		return familyChange{}, "", err
 	}
 	stated := len(in.desired) != 0 || len(in.placement) != 0
-	if stated && observed.table == nil {
+	if stated && a.observed.table == nil {
 		// Without the table's own read, a family the table already holds would look
 		// missing, and adding it would fail after dispatch.
-		return alterationChanges{}, "The table's current column families were not captured", nil
+		return familyChange{}, "The table's current column families were not captured", nil
 	}
 	for name := range in.placement {
 		if !slices.Contains(in.columns, name) {
-			return alterationChanges{}, fmt.Sprintf("Column properties name column %q, which the table does not declare", name), nil
+			return familyChange{}, fmt.Sprintf("Column properties name column %q, which the table does not declare", name), nil
 		}
 	}
 	// A source that describes where every column sits places a column it
@@ -140,14 +143,73 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 			continue
 		}
 		if held, read := in.heldPlacement[name]; read && familyKey(held) != DefaultFamily &&
-			PlacedInDefault(table.Desired.GetFeatures().GetFacets().GetCoverage(), ColumnSubject(table.Subject, name)) {
+			PlacedInDefault(a.table.Desired.GetFeatures().GetFacets().GetCoverage(), ColumnSubject(a.table.Subject, name)) {
 			in.placement[name] = ""
 		}
 	}
-	change, reason := planFamilies(in)
-	if reason != "" {
-		return alterationChanges{}, reason, nil
+	change, reason := planFamilies(*in)
+	return change, reason, nil
+}
+
+// readDesiredFamilies decodes the declared table properties and column
+// properties into the family input: the declared families, the family each
+// column is placed in, the declared columns and key, and the columns the
+// table holds. A cache mode the target cannot take is refused.
+func (a *alterationSides) readDesiredFamilies(capabilities map[string]bool) (string, error) {
+	in := &a.family
+	if env := a.desired.table; env != nil {
+		if err := protojson.Unmarshal(env.Payload, a.intent); err != nil {
+			return "", err
+		}
 	}
+	in.desired = a.intent.ColumnFamilies
+	if reason := declaredCacheModeRefusal(tableLabel(a.owner), a.intent.ColumnFamilies, capabilities); reason != "" {
+		return reason, nil
+	}
+	for name, env := range a.desired.columns {
+		var column native.ColumnIntent
+		if err := protojson.Unmarshal(env.Payload, &column); err != nil {
+			return "", err
+		}
+		in.placement[name] = column.Family
+	}
+	for _, column := range a.table.Desired.GetColumns() {
+		in.columns = append(in.columns, column.Name)
+		if column.Primary {
+			in.key = append(in.key, column.Name)
+		}
+	}
+	in.key = append(in.key, a.table.Desired.GetPrimaryKey()...)
+	in.key = append(in.key, a.intent.PrimaryKey...)
+	for _, column := range a.table.Current.GetColumns() {
+		in.existing[column.Name] = true
+	}
+	return "", nil
+}
+
+// readHeldFamilies decodes the held table properties and column properties
+// into the family input: the families the table holds and the family each
+// column sits in.
+func (a *alterationSides) readHeldFamilies() error {
+	if env := a.observed.table; env != nil {
+		if err := protojson.Unmarshal(env.Payload, a.held); err != nil {
+			return err
+		}
+	}
+	a.family.held = a.held.ColumnFamilies
+	for name, env := range a.observed.columns {
+		var column native.ColumnMeta
+		if err := protojson.Unmarshal(env.Payload, &column); err != nil {
+			return err
+		}
+		a.family.heldPlacement[name] = column.Family
+	}
+	return nil
+}
+
+// settings plans the TTL change and the change of the automatic partitioning,
+// the read replicas and the key bloom filter.
+func (a *alterationSides) settings() (ttlChange, partitioningChange, string) {
 	// A declaration that states table properties manages the TTL. So does a
 	// source that describes the table properties of every table it declares
 	// (complete desired knowledge): a table it states no properties for then
@@ -156,93 +218,141 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	// read, a TTL the table already holds would look absent, and a removal or a
 	// set would be planned against the wrong state; a stated declaration is then
 	// refused, and a table known only by its coverage is left alone.
-	managed := desired.table != nil
-	if managed && observed.table == nil {
-		return alterationChanges{}, "The table's current TTL was not captured", nil
+	managed := a.desired.table != nil
+	if managed && a.observed.table == nil {
+		return ttlChange{}, partitioningChange{}, "The table's current TTL was not captured"
 	}
-	ttlManaged := managed || observed.table != nil &&
-		FacetKnown(table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.TableProperties, table.Subject, true)
-	ttl, reason := planTTL(ttlInput{managed: ttlManaged, desired: intent.TtlSettings, held: held.TtlSettings, declared: declaredTypes(table.Desired.GetColumns())})
+	ttlManaged := managed || a.observed.table != nil &&
+		FacetKnown(a.table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.TableProperties, a.table.Subject, true)
+	ttl, reason := planTTL(ttlInput{managed: ttlManaged, desired: a.intent.TtlSettings, held: a.held.TtlSettings, declared: declaredTypes(a.table.Desired.GetColumns())})
 	if reason != "" {
-		return alterationChanges{}, reason, nil
+		return ttlChange{}, partitioningChange{}, reason
 	}
-	partitioning, reason := planPartitioning(partitioningInput{managed: managed, desired: intent.PartitioningSettings, held: held.PartitioningSettings, layout: layoutOf(&intent),
-		desiredBloom: intent.KeyBloomFilter, heldBloom: held.KeyBloomFilter, desiredReplicas: intent.ReadReplicasSettings, heldReplicas: held.ReadReplicasSettings})
+	partitioning, reason := planPartitioning(partitioningInput{managed: managed, desired: a.intent.PartitioningSettings, held: a.held.PartitioningSettings, layout: layoutOf(a.intent),
+		desiredBloom: a.intent.KeyBloomFilter, heldBloom: a.held.KeyBloomFilter, desiredReplicas: a.intent.ReadReplicasSettings, heldReplicas: a.held.ReadReplicasSettings})
 	if reason != "" {
-		return alterationChanges{}, reason, nil
+		return ttlChange{}, partitioningChange{}, reason
 	}
+	return ttl, partitioning, ""
+}
+
+// alterationIndexes are the index changes of an altered table, with the index
+// sets of both sides they are planned from.
+type alterationIndexes struct {
+	wanted   *native.IndexSetIntent
+	held     *native.IndexObservations
+	changes  []indexChange
+	settings []indexSettingsChange
+}
+
+// indexes plans the index changes of the table: its global secondary indexes
+// and their settings, its vector and full-text indexes, and the host's common
+// index steps this service carries out, which come first.
+func (a *alterationSides) indexes(steps []*protocol.CommonPlanningStep, capabilities map[string]bool) (alterationIndexes, string, error) {
 	// The index set is managed only by a declaration that states one. Without
 	// the table's own read, an index the table already holds would look absent,
 	// and adding it would fail after dispatch.
-	var wantedIndexes native.IndexSetIntent
-	if env := desired.indexes; env != nil {
-		if err := protojson.Unmarshal(env.Payload, &wantedIndexes); err != nil {
-			return alterationChanges{}, "", err
+	result := alterationIndexes{wanted: &native.IndexSetIntent{}, held: &native.IndexObservations{}}
+	if env := a.desired.indexes; env != nil {
+		if err := protojson.Unmarshal(env.Payload, result.wanted); err != nil {
+			return alterationIndexes{}, "", err
 		}
 	}
-	var heldIndexes native.IndexObservations
-	if env := observed.indexes; env != nil {
-		if err := protojson.Unmarshal(env.Payload, &heldIndexes); err != nil {
-			return alterationChanges{}, "", err
+	if env := a.observed.indexes; env != nil {
+		if err := protojson.Unmarshal(env.Payload, result.held); err != nil {
+			return alterationIndexes{}, "", err
 		}
 	}
-	if desired.indexes != nil && observed.indexes == nil {
-		return alterationChanges{}, "The table's current indexes were not captured", nil
+	if a.desired.indexes != nil && a.observed.indexes == nil {
+		return alterationIndexes{}, "The table's current indexes were not captured", nil
 	}
-	indexes, indexSettings, reason := planIndexes(indexInput{managed: desired.indexes != nil, desired: &wantedIndexes, held: &heldIndexes, columns: in.columns})
+	indexes, indexSettings, reason := planIndexes(indexInput{managed: a.desired.indexes != nil, desired: result.wanted, held: result.held, columns: a.family.columns})
 	if reason != "" {
-		return alterationChanges{}, reason, nil
+		return alterationIndexes{}, reason, nil
 	}
 	// The vector and full-text indexes follow the rules of their own, with
 	// the column types and the key they read.
-	vectorAndText, reason := planNativeIndexes(nativeIndexInput{managed: desired.indexes != nil, desired: &wantedIndexes, held: &heldIndexes,
-		columns: declaredKeyTypes(table.Desired, &intent), capabilities: capabilities})
+	vectorAndText, reason := planNativeIndexes(nativeIndexInput{managed: a.desired.indexes != nil, desired: result.wanted, held: result.held,
+		columns: declaredKeyTypes(a.table.Desired, a.intent), capabilities: capabilities})
 	if reason != "" {
-		return alterationChanges{}, reason, nil
+		return alterationIndexes{}, reason, nil
 	}
 	indexes = append(indexes, vectorAndText...)
 	// The host adds and drops the common indexes it compares, and this
 	// service carries out each step. An index both sides would change, a
 	// vector or full-text index of the native set included, is declared twice.
-	claimed, reason, err := claimIndexSteps(owner, table, steps, &heldIndexes, capabilities)
+	claimed, reason, err := claimIndexSteps(a.owner, a.table, steps, result.held, capabilities)
 	if err != nil || reason != "" {
-		return alterationChanges{}, reason, err
+		return alterationIndexes{}, reason, err
 	}
 	for _, change := range claimed {
 		if slices.ContainsFunc(indexes, func(other indexChange) bool { return other.name() == change.name() }) {
-			return alterationChanges{}, fmt.Sprintf("Index %q is declared both in the native index set and as a common index", change.name()), nil
+			return alterationIndexes{}, fmt.Sprintf("Index %q is declared both in the native index set and as a common index", change.name()), nil
 		}
 	}
 	indexes = append(claimed, indexes...)
-	if reason := uniqueAdditionRefusal(table.Subject, indexes, capabilities); reason != "" {
-		return alterationChanges{}, reason, nil
+	if reason := uniqueAdditionRefusal(a.table.Subject, indexes, capabilities); reason != "" {
+		return alterationIndexes{}, reason, nil
 	}
+	own, reason, err := a.ownIndexSettings(indexes, indexSettings, result.held)
+	if err != nil || reason != "" {
+		return alterationIndexes{}, reason, err
+	}
+	indexSettings = append(indexSettings, own...)
+	result.changes, result.settings = indexes, indexSettings
+	return result, "", nil
+}
+
+// ownIndexSettings plans the partitioning and read replicas an index's own
+// facet declares, as a Go index directive or a YAML index entry writes them.
+// An index whose settings the native index set changes as well is refused.
+func (a *alterationSides) ownIndexSettings(indexes []indexChange, fromSet []indexSettingsChange, held *native.IndexObservations) ([]indexSettingsChange, string, error) {
+	declaredSettings, _, err := indexSettingsFacets(a.owner, a.table.Desired.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
+	if err != nil {
+		return nil, "", err
+	}
+	_, heldSettings, err := indexSettingsFacets(a.owner, a.table.Current.GetFeatures().GetFacets(), protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return nil, "", err
+	}
+	for _, change := range fromSet {
+		if _, declared := declaredSettings[change.held.GetName()]; declared {
+			return nil, fmt.Sprintf("Index %q declares its settings both in the native index set and as its own facet", change.held.GetName()), nil
+		}
+	}
+	own, reason := planDeclaredIndexSettings(a.table, declaredSettings, heldSettings, indexes, held)
+	return own, reason, nil
+}
+
+// feeds plans the changefeed changes of the table, against the indexes it
+// holds and the ones its index changes drop and add.
+func (a *alterationSides) feeds(indexes alterationIndexes, capabilities map[string]bool) ([]changefeeds.Change, string, error) {
 	// The changefeeds are managed by a declaration that states them, and by a
 	// source that describes the changefeeds of every table it declares. Without
 	// the table's own read, a changefeed the table already holds would look
 	// absent, and adding it would fail after dispatch.
-	if desired.changefeeds != nil && observed.changefeeds == nil {
-		return alterationChanges{}, "The table's current changefeeds were not captured", nil
+	if a.desired.changefeeds != nil && a.observed.changefeeds == nil {
+		return nil, "The table's current changefeeds were not captured", nil
 	}
-	indexNames := heldIndexNames(&heldIndexes)
-	if desired.indexes != nil {
+	indexNames := heldIndexNames(indexes.held)
+	if a.desired.indexes != nil {
 		indexNames = nil
-		for _, index := range wantedIndexes.GetIndexes() {
+		for _, index := range indexes.wanted.GetIndexes() {
 			indexNames = append(indexNames, index.GetSpecification().GetName())
 		}
 	}
 	// The table also holds the common indexes it declares, which the host
 	// keeps out of the native set.
-	for _, index := range table.Desired.GetIndexes() {
+	for _, index := range a.table.Desired.GetIndexes() {
 		if !slices.Contains(indexNames, index.GetName()) {
 			indexNames = append(indexNames, index.GetName())
 		}
 	}
 	// YDB never changes a table's key, so the declaration's first key column
 	// is the one the table holds.
-	keyType := firstKeyType(table.Desired)
+	keyType := firstKeyType(a.table.Desired)
 	var droppedIndexes, addedIndexes []string
-	for _, index := range indexes {
+	for _, index := range indexes.changes {
 		switch {
 		case index.rename != nil:
 			droppedIndexes = append(droppedIndexes, index.rename.held.Name)
@@ -253,13 +363,9 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 			droppedIndexes = append(droppedIndexes, index.name())
 		}
 	}
-	feeds, reason, err := planChangefeeds(changefeedInput{owner: owner, desired: desired.changefeeds, held: observed.changefeeds, indexes: indexNames,
+	return planChangefeeds(changefeedInput{owner: a.owner, desired: a.desired.changefeeds, held: a.observed.changefeeds, indexes: indexNames,
 		droppedIndexes: droppedIndexes, addedIndexes: addedIndexes, keyType: keyType, capabilities: capabilities,
-		managed: changefeedsManaged(table, desired, observed)})
-	if err != nil || reason != "" {
-		return alterationChanges{}, reason, err
-	}
-	return alterationChanges{family: change, ttl: ttl, partitioning: partitioning, indexes: indexes, indexSettings: indexSettings, changefeeds: feeds}, "", nil
+		managed: changefeedsManaged(a.table, a.desired, a.observed)})
 }
 
 // UniqueIndexOnExistingTableCapability is a unique index added to a table

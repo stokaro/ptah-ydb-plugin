@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"testing"
@@ -27,7 +26,7 @@ func hostApplySQL(c *qt.C, directory, schemaFile string) (string, error) {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := testCommand(ctx, host, "schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", schemaFile, "--schemas", directory)
 	var report, printed bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &report, &printed
@@ -120,14 +119,15 @@ func TestHostAppliesASQLSchema_HappyPath(t *testing.T) {
 
 // The host refuses a YQL schema this provider refuses, with the provider's
 // words and the position in the document, and changes nothing: a syntax
-// error the host's own reader reports the same way, and a table setting a SQL
+// error the host's own reader reports the same way, and an index setting a SQL
 // schema reading has no home for.
 func TestHostRefusesASQLSchema_FailurePath(t *testing.T) {
 	for _, test := range []struct{ name, text, want string }{
 		{name: "syntax", text: "CREATE TABLE `{dir}/items` (id Uint64, PRIMARY KEY (id));",
 			want: `(?s).*read SQL schema file .*schema\.sql: YQL schema: nullable primary key column "id" cannot be represented by a desired schema; declare NOT NULL \(got ";"\) at position \d+ \(line 1, column \d+\).*`},
-		{name: "table settings", text: "CREATE TABLE `{dir}/items` (id Uint64 NOT NULL, ts Timestamp, PRIMARY KEY (id)) WITH (TTL = Interval('PT1H') ON ts);",
-			want: "(?s).*table `[^`]+/items` declares a TTL, which a SQL schema reading has no home for.* at position 0 \\(line 1, column 1\\).*"},
+		{name: "index settings", text: "CREATE TABLE `{dir}/items` (id Uint64 NOT NULL, body Utf8, PRIMARY KEY (id), INDEX by_body GLOBAL SYNC ON (body) WITH (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2));",
+			want: "(?s).*index `by_body` of table `[^`]+/items` declares partitioning settings, which a SQL schema reading has no home for: " +
+				"an index states no settings of its own in the row-table model.* at position \\d+ \\(line 1, column \\d+\\).*"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

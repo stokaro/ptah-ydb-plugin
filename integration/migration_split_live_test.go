@@ -107,7 +107,7 @@ func seededTable(c *qt.C, opened *connection.Connection, table string) {
 	defer cancel()
 	c.Assert(execFixtureSchema(ctx, opened.DB, "CREATE TABLE `"+table+"` (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))"), qt.IsNil)
 	dropAtCleanup(c, opened, table)
-	_, err := opened.DB.ExecContext(ctx, "UPSERT INTO `"+table+"` (id, v) VALUES (1u, \"a\"u), (2u, \"a\"u)")
+	_, err := opened.DB.ExecContext(ctx, "UPSERT INTO `"+table+"` (id, v) VALUES (1u, \"a\"u), (2u, \"a\"u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 }
 
@@ -218,7 +218,7 @@ func TestMigrationSplitUnitRejected_FailurePath(t *testing.T) {
 	c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 	c.Assert(committed.Outcome, qt.Equals, protocol.TransactionResult_ROLLED_BACK)
 	c.Assert(committed.Aborted, qt.IsFalse)
-	_, err = opened.DB.ExecContext(c.Context(), "SELECT * FROM `"+path.Join(database, directory, "late")+"`")
+	_, err = opened.DB.ExecContext(c.Context(), "SELECT * FROM `"+path.Join(database, directory, "late")+"`") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNotNil)
 }
 

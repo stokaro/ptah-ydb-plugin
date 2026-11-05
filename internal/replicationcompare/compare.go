@@ -41,82 +41,90 @@ func CompareTransfers(ctx context.Context, request *protocol.CompareModelsReques
 
 // ReplicationFamily is the async replication's part of a comparison.
 func ReplicationFamily() objectcompare.Family {
-	return objectcompare.Family{
-		ServiceID: ReplicationServiceID, Kind: schema.ReplicationProperties, Capability: replication.CapabilityReplication, ChangeCapability: true,
-		Noun:         "async replication",
-		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(schema.ReplicationProperties) },
-		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
-			return schema.NativeBoundOwner(schema.ReplicationProperties, subject)
-		},
-		NormalizeDesired: schema.NormalizeDesired, NormalizeObserved: schema.Normalize,
-		Reserved:  func(*protocol.ComparisonIdentity) string { return "" },
-		Unsettled: func(*protocol.Envelope, *protocol.Envelope) error { return nil },
-		Equal: func(current, desired *protocol.Envelope) (bool, error) {
-			before, _, err := schema.ObservedReplication(current)
-			if err != nil {
-				return false, err
-			}
-			after, err := schema.DesiredReplication(desired)
-			return err == nil && replication.ReplicationsEqual(after, before), err
-		},
-		Change: schema.CaptureReplicationChange,
-		Preserve: func(owner *protocol.Reference, current *protocol.Envelope) (*protocol.Envelope, error) {
-			spec, _, err := schema.ObservedReplication(current)
-			if err != nil {
-				return nil, err
-			}
-			return schema.CaptureReplicationIntent(owner, spec)
-		},
-		Unkeepable: func(current *protocol.Envelope) (string, error) {
-			spec, state, err := schema.ObservedReplication(current)
-			if err != nil {
-				return "", err
-			}
-			if err := replication.ValidateReplication(spec); err != nil {
-				// A replication that failed before it resolved its tables
-				// reports none, and no declaration holds that.
-				return "The async replication (" + stateText(state) + ") has no declaration that keeps it: " + err.Error(), nil
-			}
-			return "", nil
-		},
-	}
+	return specFamily[replication.ReplicationSpec]{
+		serviceID: ReplicationServiceID, kind: schema.ReplicationProperties, changeKind: schema.ReplicationChange, capability: replication.CapabilityReplication,
+		noun:     "async replication",
+		observed: schema.ObservedReplication,
+		desired:  schema.DesiredReplication,
+		equal:    replication.ReplicationsEqual,
+		change:   schema.CaptureReplicationChange,
+		intent:   schema.CaptureReplicationIntent,
+		// A replication that failed before it resolved its tables reports
+		// none, and no declaration holds that.
+		validate: replication.ValidateReplication,
+	}.family()
 }
 
 // TransferFamily is the transfer's part of a comparison.
 func TransferFamily() objectcompare.Family {
+	return specFamily[replication.TransferSpec]{
+		serviceID: TransferServiceID, kind: schema.TransferProperties, changeKind: schema.TransferChange, capability: replication.CapabilityTransfers,
+		noun:     "transfer",
+		observed: schema.ObservedTransfer,
+		desired:  schema.DesiredTransfer,
+		equal:    replication.TransfersEqual,
+		change:   schema.CaptureTransferChange,
+		intent:   schema.CaptureTransferIntent,
+		validate: replication.ValidateTransfer,
+	}.family()
+}
+
+// specFamily is what one replication object kind contributes to its
+// comparison: its names, and how a spec of type S is decoded from each side,
+// compared, kept and validated. Both kinds share every other part.
+type specFamily[S any] struct {
+	serviceID, kind, changeKind, capability, noun string
+	// observed decodes the read object into its spec and reported state.
+	observed func(*protocol.Envelope) (S, string, error)
+	// desired decodes the declared object into its spec.
+	desired func(*protocol.Envelope) (S, error)
+	// equal reports whether the current spec already holds the desired one.
+	equal func(desired, current S) bool
+	// change captures the change from the current to the desired object.
+	change func(id string, owner *protocol.Reference, before, after *protocol.Envelope) (*protocol.NormalizedValue, error)
+	// intent captures the desired value that keeps a spec as it is.
+	intent func(*protocol.Reference, S) (*protocol.Envelope, error)
+	// validate refuses a read spec no declaration can hold.
+	validate func(S) error
+}
+
+// family builds the comparison family: a change needs the capability, no
+// subject is reserved or unsettled, and a read object whose spec fails
+// validation is reported as having no declaration that keeps it.
+func (f specFamily[S]) family() objectcompare.Family {
 	return objectcompare.Family{
-		ServiceID: TransferServiceID, Kind: schema.TransferProperties, Capability: replication.CapabilityTransfers, ChangeCapability: true,
-		Noun:         "transfer",
-		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(schema.TransferProperties) },
+		ServiceID: f.serviceID, Kind: f.kind, ChangeKind: f.changeKind, Capability: f.capability, ChangeCapability: true,
+		Noun:         f.noun,
+		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(f.kind) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
-			return schema.NativeBoundOwner(schema.TransferProperties, subject)
+			return schema.NativeBoundOwner(f.kind, subject)
 		},
 		NormalizeDesired: schema.NormalizeDesired, NormalizeObserved: schema.Normalize,
 		Reserved:  func(*protocol.ComparisonIdentity) string { return "" },
 		Unsettled: func(*protocol.Envelope, *protocol.Envelope) error { return nil },
 		Equal: func(current, desired *protocol.Envelope) (bool, error) {
-			before, _, err := schema.ObservedTransfer(current)
+			before, _, err := f.observed(current)
 			if err != nil {
 				return false, err
 			}
-			after, err := schema.DesiredTransfer(desired)
-			return err == nil && replication.TransfersEqual(after, before), err
+			after, err := f.desired(desired)
+			return err == nil && f.equal(after, before), err
 		},
-		Change: schema.CaptureTransferChange,
+		Change: f.change,
 		Preserve: func(owner *protocol.Reference, current *protocol.Envelope) (*protocol.Envelope, error) {
-			spec, _, err := schema.ObservedTransfer(current)
+			spec, _, err := f.observed(current)
 			if err != nil {
 				return nil, err
 			}
-			return schema.CaptureTransferIntent(owner, spec)
+			return f.intent(owner, spec)
 		},
 		Unkeepable: func(current *protocol.Envelope) (string, error) {
-			spec, state, err := schema.ObservedTransfer(current)
+			spec, state, err := f.observed(current)
 			if err != nil {
 				return "", err
 			}
-			if err := replication.ValidateTransfer(spec); err != nil {
-				return "The transfer (" + stateText(state) + ") has no declaration that keeps it: " + err.Error(), nil
+			if err := f.validate(spec); err != nil {
+				return "The " + f.noun + " (" + stateText(state) + ") has no declaration that keeps it: " + err.Error(), nil
 			}
 			return "", nil
 		},

@@ -98,7 +98,7 @@ func TestDevRealmSessionSubprocess(t *testing.T) {
 			c.Assert(result.DiagnosticCode, qt.Equals, "ydb.realm-escape")
 			c.Assert(result.AppliedCount, qt.Equals, uint32(0))
 		}
-		_, err := opened.DB.ExecContext(ctx, "SELECT * FROM `"+escape+"`")
+		_, err := opened.DB.ExecContext(ctx, "SELECT * FROM `"+escape+"`") // #nosec G202 G701 -- escape is a path this test made from the test database and random letters
 		c.Assert(err, qt.IsNotNil)
 	})
 }

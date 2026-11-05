@@ -47,10 +47,15 @@ type declaredFacets struct {
 	// indexes is the native index set of a row table, nil where the
 	// declaration states none.
 	indexes *native.IndexSetIntent
+	// indexSettings are the partitioning and read replicas the indexes'
+	// own facets declare, by index name. The creation request carries none of
+	// them: YDB takes an index's settings only once the index exists, so each
+	// is a step of its own after the creation (see plannedCreationIndexSettings).
+	indexSettings map[string]*native.IndexSettingsIntent
 }
 
 func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures) (declaredFacets, error) {
-	result := declaredFacets{table: &native.RowTableIntent{}, columns: make(map[string]*native.ColumnIntent)}
+	result := declaredFacets{table: &native.RowTableIntent{}, columns: make(map[string]*native.ColumnIntent), indexSettings: make(map[string]*native.IndexSettingsIntent)}
 	if captured == nil {
 		return result, nil
 	}
@@ -77,8 +82,11 @@ func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures)
 			return declaredFacets{}, err
 		}
 		identity := proto.CloneOf(owner)
-		if value.Kind == schema.ColumnProperties {
+		switch value.Kind {
+		case schema.ColumnProperties:
 			identity.Kind, identity.Path, identity.Name = "column", []string{owner.Name}, value.Owner.Name
+		case schema.IndexSettingsProperties:
+			identity.Kind, identity.Path, identity.Name = "index", []string{owner.Name}, value.Owner.Name
 		}
 		if !proto.Equal(identity, value.Owner) {
 			return declaredFacets{}, fmt.Errorf("YDB creation facet belongs to a different owner")
@@ -88,51 +96,89 @@ func tableFacets(owner *protocol.Reference, captured *protocol.CapturedFeatures)
 			return declaredFacets{}, fmt.Errorf("duplicate YDB creation facet")
 		}
 		seen[slot] = true
-		switch value.Kind {
-		case schema.TableProperties:
-			if err := protojson.Unmarshal(value.Payload, result.table); err != nil {
-				return declaredFacets{}, err
-			}
-			result.stated = true
-		case schema.ColumnProperties:
-			var column native.ColumnIntent
-			if err := protojson.Unmarshal(value.Payload, &column); err != nil {
-				return declaredFacets{}, err
-			}
-			result.columns[value.Owner.Name] = &column
-		case schema.ColumnStorageProperties:
-			result.storage = &native.ColumnStorageIntent{}
-			if err := protojson.Unmarshal(value.Payload, result.storage); err != nil {
-				return declaredFacets{}, err
-			}
-		case schema.IndexProperties:
-			// The native set holds the indexes the common model cannot
-			// describe, and the creation request carries none of it. A vector
-			// or full-text index is a step of its own after the creation (see
-			// plannedCreationIndexes). A global index the set states is
-			// refused: a new or rebuilt table takes its global indexes from
-			// the common declaration, and would come back without it. An empty
-			// set, which a read of a table with only global indexes converts
-			// to, states nothing to create.
-			result.indexes = &native.IndexSetIntent{}
-			if err := protojson.Unmarshal(value.Payload, result.indexes); err != nil {
-				return declaredFacets{}, err
-			}
-			for _, declaration := range result.indexes.GetIndexes() {
-				if spec := declaration.GetSpecification(); !nativeOnlyIndex(spec) {
-					return declaredFacets{}, unsupported("index %q: the native index set states a global index, and a new table takes its global indexes from the common declaration", spec.GetName())
-				}
-			}
-		case schema.ChangefeedProperties:
-			result.changefeeds = &native.ChangefeedSetIntent{}
-			if err := protojson.Unmarshal(value.Payload, result.changefeeds); err != nil {
-				return declaredFacets{}, err
-			}
-		default:
-			return declaredFacets{}, unsupported("YDB table creation does not yet support facet %s", value.Kind)
+		if err := result.decode(value); err != nil {
+			return declaredFacets{}, err
 		}
 	}
 	return result, nil
+}
+
+// decode decodes one declared facet into the facets of its kind. A kind a
+// table creation does not take is refused.
+func (f *declaredFacets) decode(value *protocol.Envelope) error {
+	switch value.Kind {
+	case schema.TableProperties:
+		if err := protojson.Unmarshal(value.Payload, f.table); err != nil {
+			return err
+		}
+		f.stated = true
+	case schema.ColumnProperties:
+		var column native.ColumnIntent
+		if err := protojson.Unmarshal(value.Payload, &column); err != nil {
+			return err
+		}
+		f.columns[value.Owner.Name] = &column
+	case schema.ColumnStorageProperties:
+		f.storage = &native.ColumnStorageIntent{}
+		if err := protojson.Unmarshal(value.Payload, f.storage); err != nil {
+			return err
+		}
+	case schema.IndexProperties:
+		// The native set holds the indexes the common model cannot
+		// describe, and the creation request carries none of it. A vector
+		// or full-text index is a step of its own after the creation (see
+		// plannedCreationIndexes). A global index the set states is
+		// refused: a new or rebuilt table takes its global indexes from
+		// the common declaration, and would come back without it. An empty
+		// set, which a read of a table with only global indexes converts
+		// to, states nothing to create.
+		f.indexes = &native.IndexSetIntent{}
+		if err := protojson.Unmarshal(value.Payload, f.indexes); err != nil {
+			return err
+		}
+		for _, declaration := range f.indexes.GetIndexes() {
+			if spec := declaration.GetSpecification(); !nativeOnlyIndex(spec) {
+				return unsupported("index %q: the native index set states a global index, and a new table takes its global indexes from the common declaration", spec.GetName())
+			}
+		}
+	case schema.ChangefeedProperties:
+		f.changefeeds = &native.ChangefeedSetIntent{}
+		if err := protojson.Unmarshal(value.Payload, f.changefeeds); err != nil {
+			return err
+		}
+	case schema.IndexSettingsProperties:
+		settings := &native.IndexSettingsIntent{}
+		if err := protojson.Unmarshal(value.Payload, settings); err != nil {
+			return err
+		}
+		f.indexSettings[value.Owner.Name] = settings
+	default:
+		return unsupported("YDB table creation does not yet support facet %s", value.Kind)
+	}
+	return nil
+}
+
+// inSubjectTerms returns a facet's value with its owner named as the host's
+// subject names it: an index's read settings under the name a rename gives
+// the index, and a table's facets without the session's database.
+func inSubjectTerms(value *protocol.Envelope, subject *protocol.ComparisonIdentity, representation protocol.ValueInput_Representation) *protocol.Envelope {
+	if representation == protocol.ValueInput_OBSERVED && value.Kind == schema.IndexSettingsProperties && subject.GetKind() == value.Owner.Kind &&
+		subject.GetName().GetSource() != value.Owner.Name {
+		// The host compares the settings of an index the plan renames under
+		// the name the declaration gives it (schema.observed-index-facets):
+		// the rename keeps them, and the read named them by the old name.
+		value = proto.CloneOf(value)
+		value.Owner.Name = subject.GetName().GetSource()
+	}
+	if subject.GetDatabase().GetSource() == "" && value.Owner.Database != "" {
+		// The host names a table and its columns without a database: they live
+		// in the session's, which a read owner names and a declared owner leaves
+		// out. The facet is read in the subject's terms, so both sides of one
+		// table name the same owner.
+		value = proto.CloneOf(value)
+		value.Owner.Database = ""
+	}
+	return value
 }
 
 func normalizedDesired(record *protocol.ComparisonRecord) (*protocol.Envelope, error) {
@@ -159,23 +205,16 @@ func normalizedFacet(record *protocol.ComparisonRecord, representation protocol.
 	if err := provider.ValidateComparisonIdentity(record.Subject); err != nil {
 		return nil, err
 	}
-	subject, owner := record.Subject, value.Owner
-	if subject.GetDatabase().GetSource() == "" && owner.Database != "" {
-		// The host names a table and its columns without a database: they live
-		// in the session's, which a read owner names and a declared owner leaves
-		// out. The facet is read in the subject's terms, so both sides of one
-		// table name the same owner.
-		value = proto.CloneOf(value)
-		value.Owner.Database = ""
-		owner = value.Owner
-	}
+	subject := record.Subject
+	value = inSubjectTerms(value, subject, representation)
+	owner := value.Owner
 	if subject.Kind != owner.Kind || subject.GetDatabase().GetSource() != owner.Database ||
 		subject.GetSchema().GetSource() != owner.Schema || subject.GetName().GetSource() != owner.Name ||
 		subject.GetCatalog().GetSource() != "" || len(subject.Path)+len(subject.Signature) != 0 {
 		return nil, fmt.Errorf("YDB creation facet has a different bound identity")
 	}
 	parent := ""
-	if owner.Kind == "column" && len(owner.Path) == 1 {
+	if (owner.Kind == "column" || owner.Kind == "index") && len(owner.Path) == 1 {
 		parent = owner.Path[0]
 	}
 	if subject.GetParent().GetSource() != parent {

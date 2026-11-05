@@ -59,7 +59,8 @@ func objectObservation(value proto.Message) (proto.Message, error) {
 	switch intent := value.(type) {
 	case *native.ViewIntent:
 		access = intent.Access
-		result = &native.ViewObservation{View: &Ydb_View.DescribeViewResult{QueryText: intent.QueryText, Self: accessObservation(access)}, Properties: &native.DescribeTableResult{Self: accessObservation(access), Attributes: maps.Clone(intent.Attributes)}}
+		result = &native.ViewObservation{View: &Ydb_View.DescribeViewResult{QueryText: intent.QueryText, Self: accessObservation(access)},
+			Properties: &native.DescribeTableResult{Self: accessObservation(access), Attributes: maps.Clone(intent.Attributes)}}
 	case *native.ExternalSourceIntent:
 		access = intent.Access
 		result = &Ydb_Table.DescribeExternalDataSourceResult{Self: accessObservation(access), SourceType: intent.SourceType, Location: intent.Location, Properties: maps.Clone(intent.Properties)}
@@ -71,7 +72,8 @@ func objectObservation(value proto.Message) (proto.Message, error) {
 		}
 		result = &native.DescribeExternalTableResult{Self: accessObservation(access), SourceType: intent.SourceType, DataSourcePath: intent.DataSourcePath, Location: intent.Location, Content: maps.Clone(intent.Content), Columns: columns}
 	case *native.ColumnStorageIntent:
-		observed := &native.ColumnStorageObservation{HashColumns: slices.Clone(intent.HashColumns), Partitions: intent.Partitions, DataChannelCount: intent.DataChannelCount, LocalIndexes: cloneIndexes(intent.LocalIndexes), Ttl: proto.CloneOf(intent.Ttl)}
+		observed := &native.ColumnStorageObservation{HashColumns: slices.Clone(intent.HashColumns), Partitions: intent.Partitions, DataChannelCount: intent.DataChannelCount,
+			LocalIndexes: cloneIndexes(intent.LocalIndexes), Ttl: proto.CloneOf(intent.Ttl)}
 		if err := normalizeColumnStorage(observed); err != nil {
 			return nil, err
 		}

@@ -14,11 +14,11 @@ const unprobedReason = "YDB publishes no support period for its open-source line
 func releaseLines() []*protocol.ReleaseLine {
 	certified := func(line, note string) *protocol.ReleaseLine {
 		return &protocol.ReleaseLine{Line: line, Label: "YDB " + line, Support: protocol.ReleaseLine_CERTIFIED,
-			Image: "ydbplatform/local-ydb:" + line, Note: note}
+			Image: "ydbplatform/local-ydb:" + line, Note: note, Capabilities: lineCapabilities(line)}
 	}
 	bestEffort := func(line, note string) *protocol.ReleaseLine {
 		return &protocol.ReleaseLine{Line: line, Label: "YDB " + line, Support: protocol.ReleaseLine_BEST_EFFORT,
-			Image: "ydbplatform/local-ydb:" + line, Unprobed: unprobedReason, Note: note}
+			Image: "ydbplatform/local-ydb:" + line, Unprobed: unprobedReason, Note: note, Capabilities: lineCapabilities(line)}
 	}
 	return []*protocol.ReleaseLine{
 		certified("26.2", "The current release, and the first line that sets and drops a column default in place."),

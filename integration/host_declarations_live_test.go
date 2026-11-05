@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"testing"
@@ -33,7 +32,7 @@ func TestHostAuthoredSchemaAppliesAndReplansSubprocess(t *testing.T) {
 		c.Helper()
 		ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 		defer cancel()
-		command := exec.CommandContext(ctx, host, append(arguments, "--provider-config", manifest, "--provider-engine", "ydb")...)
+		command := testCommand(ctx, host, append(arguments, "--provider-config", manifest, "--provider-engine", "ydb")...)
 		var stderr bytes.Buffer
 		command.Stderr = &stderr
 		output, err := command.Output()

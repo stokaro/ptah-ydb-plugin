@@ -88,6 +88,48 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if refused, err := checkAssignment(request, family); refused != nil || err != nil {
+		return refused, err
+	}
+	changes := make([]change, 0, len(request.Changes))
+	for i, input := range request.Changes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		item, refused, err := captureChange(request, family, i, input)
+		if refused != nil || err != nil {
+			return refused, err
+		}
+		changes = append(changes, item)
+	}
+	slices.SortFunc(changes, func(a, b change) int { return provider.CompareIdentities(a.input.Subject, b.input.Subject) })
+	result := &protocol.PlannedFeatures{Complete: true, Changes: make([]*protocol.PlanningReceipt, len(changes))}
+	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
+	for i, item := range changes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", family.StepPrefix, i)}
+		item.value.Id = id.Name
+		if refused := planStep(request, family, item, id, result, contribution); refused != nil {
+			return refused, nil
+		}
+	}
+	if len(contribution.Steps) > 0 {
+		result.Contributions = []*protocol.PlanningContribution{contribution}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// checkAssignment checks that request is the family's planning assignment
+// and that its identifier context is one YDB plans in. A target without the
+// family's capability or without nontransactional DDL, or one that did not
+// establish whether DDL is transactional, gets a refusal of the request; any
+// other mismatch is an error. It returns neither when planning can go on.
+func checkAssignment(request *protocol.PlanFeaturesRequest, family Family) (*protocol.PlannedFeatures, error) {
 	if request.PlanningId != family.ServiceID || len(request.ParentKinds) != 0 {
 		return nil, fmt.Errorf("invalid %s planning assignment", family.Noun)
 	}
@@ -106,114 +148,133 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 			return nil, fmt.Errorf("YDB planning requires exact identifiers")
 		}
 	}
-	changes := make([]change, 0, len(request.Changes))
-	for i, input := range request.Changes {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		owner, err := family.Owner(input.Subject)
-		if err != nil {
-			return nil, err
-		}
-		captured, err := family.NormalizeChange(&protocol.ValueInput{Id: input.Value.Id, Representation: protocol.ValueInput_CHANGE, Value: input.Value.Value})
-		if err != nil {
-			return nil, err
-		}
-		if !proto.Equal(captured, input.Value) || !proto.Equal(owner, captured.NormalizedOwner) {
-			return nil, fmt.Errorf("planning change has a forged normalization receipt or identity")
-		}
-		if request.DatabasePath != "" && owner.Database != "" && owner.Database != request.DatabasePath {
-			return nil, fmt.Errorf("%s change targets another database", family.Noun)
-		}
-		if family.Refuse != nil {
-			if err := family.Refuse(captured.Value, request.Capabilities); err != nil {
-				return refusal(family, i, err.Error()), nil
-			}
-		}
-		if family.RefuseInPlan != nil {
-			if err := family.RefuseInPlan(request, captured.Value); err != nil {
-				return refusal(family, i, err.Error()), nil
-			}
-		}
-		value, err := family.Operation("pending", captured.Value)
-		if err != nil {
-			return refusal(family, i, err.Error()), nil
-		}
-		before, after, err := family.Present(captured.Value)
-		if err != nil {
-			return nil, err
-		}
-		action := protocol.PlanningEffect_ALTER
-		if !before {
-			action = protocol.PlanningEffect_CREATE
-		} else if !after {
-			action = protocol.PlanningEffect_DROP
-		}
-		changes = append(changes, change{i, input, value, action})
+	return nil, nil
+}
+
+// captureChange re-normalizes input, the change at index i of request, and
+// lowers it to its operation with the action its operands imply: a creation
+// without a current operand, a drop without a desired one, an alteration
+// otherwise. A change the family refuses, or cannot lower, returns a refusal;
+// a forged receipt or a change of another database returns an error.
+func captureChange(request *protocol.PlanFeaturesRequest, family Family, i int, input *protocol.PlanningChange) (change, *protocol.PlannedFeatures, error) {
+	owner, err := family.Owner(input.Subject)
+	if err != nil {
+		return change{}, nil, err
 	}
-	slices.SortFunc(changes, func(a, b change) int { return provider.CompareIdentities(a.input.Subject, b.input.Subject) })
-	result := &protocol.PlannedFeatures{Complete: true, Changes: make([]*protocol.PlanningReceipt, len(changes))}
-	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
-	for i, item := range changes {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", family.StepPrefix, i)}
-		item.value.Id = id.Name
-		access, err := OrderAccess(request, family, item.input.Subject, item.action, id)
-		if err != nil {
-			return refusal(family, item.index, err.Error()), nil
-		}
-		access.Dependencies = append(access.Dependencies, BeforePrincipalChanges(request, item.action, id)...)
-		below, err := AfterCreationBelowDirectoryAccess(request, item.action, item.input.Subject, id)
-		if err != nil {
-			return refusal(family, item.index, err.Error()), nil
-		}
-		access.Dependencies = append(access.Dependencies, below...)
-		pathRequest, err := PathContext(request)
-		if err != nil {
-			return refusal(family, item.index, err.Error()), nil
-		}
-		edges, err := dependencies(pathRequest, family, item, id)
-		if err != nil {
-			return refusal(family, item.index, err.Error()), nil
-		}
-		// Native objects share the lifecycle window so a path can pass from
-		// a dropped table or another kind of object to its replacement.
-		facts := item.value.OperationSemantics
-		step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.value, Phase: protocol.PlanningOperation_LIFECYCLE}, Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.input.Subject), Action: item.action}, {Subject: slot(item.input.Subject), Action: item.action}}}}
-		if len(access.Dependencies)+len(access.Sources) != 0 {
-			if !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
-				return refusal(family, item.index, "Native access ordering requires planning.lifecycle"), nil
-			}
-			step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
-			step.Metadata.Effects = append(step.Metadata.Effects, access.Effects...)
-			contribution.Dependencies = append(contribution.Dependencies, access.Dependencies...)
-			if len(access.Sources) != 0 {
-				result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: access.Sources, Replacement: proto.CloneOf(id)})
-			}
-		}
-		if family.Paths != nil {
-			effects, ordered, err := sidePaths(pathRequest, family, item, id)
-			if err != nil {
-				return refusal(family, item.index, err.Error()), nil
-			}
-			step.Metadata.Effects = append(step.Metadata.Effects, effects...)
-			edges = append(edges, ordered...)
-		}
-		contribution.Steps = append(contribution.Steps, step)
-		contribution.Dependencies = append(contribution.Dependencies, edges...)
-		result.Changes[item.index] = &protocol.PlanningReceipt{Subject: proto.CloneOf(item.input.Subject), Kind: family.ChangeKind, Strategy: family.Strategy, Steps: []*protocol.StepIdentity{proto.CloneOf(id)}}
+	captured, err := family.NormalizeChange(&protocol.ValueInput{Id: input.Value.Id, Representation: protocol.ValueInput_CHANGE, Value: input.Value.Value})
+	if err != nil {
+		return change{}, nil, err
 	}
-	if len(contribution.Steps) > 0 {
-		result.Contributions = []*protocol.PlanningContribution{contribution}
+	if !proto.Equal(captured, input.Value) || !proto.Equal(owner, captured.NormalizedOwner) {
+		return change{}, nil, fmt.Errorf("planning change has a forged normalization receipt or identity")
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	if request.DatabasePath != "" && owner.Database != "" && owner.Database != request.DatabasePath {
+		return change{}, nil, fmt.Errorf("%s change targets another database", family.Noun)
 	}
-	return result, nil
+	if family.Refuse != nil {
+		if err := family.Refuse(captured.Value, request.Capabilities); err != nil {
+			return change{}, refusal(family, i, err.Error()), nil
+		}
+	}
+	if family.RefuseInPlan != nil {
+		if err := family.RefuseInPlan(request, captured.Value); err != nil {
+			return change{}, refusal(family, i, err.Error()), nil
+		}
+	}
+	value, err := family.Operation("pending", captured.Value)
+	if err != nil {
+		return change{}, refusal(family, i, err.Error()), nil
+	}
+	before, after, err := family.Present(captured.Value)
+	if err != nil {
+		return change{}, nil, err
+	}
+	action := protocol.PlanningEffect_ALTER
+	if !before {
+		action = protocol.PlanningEffect_CREATE
+	} else if !after {
+		action = protocol.PlanningEffect_DROP
+	}
+	return change{i, input, value, action}, nil, nil
+}
+
+// planStep adds the step id that carries out item to contribution, with its
+// effects and its dependencies on the common steps and captured tables of
+// request, and records the change's receipt in result. A step ordered against
+// access needs the planning.lifecycle target feature, and one that accounts
+// for revokes replaces them in a rewrite. A failure returns a refusal of the
+// change.
+func planStep(
+	request *protocol.PlanFeaturesRequest,
+	family Family,
+	item change,
+	id *protocol.StepIdentity,
+	result *protocol.PlannedFeatures,
+	contribution *protocol.PlanningContribution,
+) *protocol.PlannedFeatures {
+	access, err := OrderAccess(request, family, item.input.Subject, item.action, id)
+	if err != nil {
+		return refusal(family, item.index, err.Error())
+	}
+	access.Dependencies = append(access.Dependencies, BeforePrincipalChanges(request, item.action, id)...)
+	below, err := AfterCreationBelowDirectoryAccess(request, item.action, item.input.Subject, id)
+	if err != nil {
+		return refusal(family, item.index, err.Error())
+	}
+	access.Dependencies = append(access.Dependencies, below...)
+	pathRequest, err := PathContext(request)
+	if err != nil {
+		return refusal(family, item.index, err.Error())
+	}
+	edges, err := dependencies(pathRequest, family, item, id)
+	if err != nil {
+		return refusal(family, item.index, err.Error())
+	}
+	// Native objects share the lifecycle window so a path can pass from
+	// a dropped table or another kind of object to its replacement.
+	facts := item.value.OperationSemantics
+	step := &protocol.PlanningStep{
+		Id:        id,
+		Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.value, Phase: protocol.PlanningOperation_LIFECYCLE},
+		Metadata: &protocol.PlanningMetadata{
+			Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
+			Effects: []*protocol.PlanningEffect{
+				{Subject: proto.CloneOf(item.input.Subject), Action: item.action},
+				{Subject: slot(item.input.Subject), Action: item.action},
+			},
+		},
+	}
+	if len(access.Dependencies)+len(access.Sources) != 0 {
+		if !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
+			return refusal(family, item.index, "Native access ordering requires planning.lifecycle")
+		}
+		step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
+		step.Metadata.Effects = append(step.Metadata.Effects, access.Effects...)
+		contribution.Dependencies = append(contribution.Dependencies, access.Dependencies...)
+		if len(access.Sources) != 0 {
+			result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: access.Sources, Replacement: proto.CloneOf(id)})
+		}
+	}
+	if family.Paths != nil {
+		effects, ordered, err := sidePaths(pathRequest, family, item, id)
+		if err != nil {
+			return refusal(family, item.index, err.Error())
+		}
+		step.Metadata.Effects = append(step.Metadata.Effects, effects...)
+		edges = append(edges, ordered...)
+	}
+	contribution.Steps = append(contribution.Steps, step)
+	contribution.Dependencies = append(contribution.Dependencies, edges...)
+	result.Changes[item.index] = &protocol.PlanningReceipt{
+		Subject: proto.CloneOf(item.input.Subject), Kind: family.ChangeKind, Strategy: family.Strategy, Steps: []*protocol.StepIdentity{proto.CloneOf(id)},
+	}
+	return nil
 }
 
 func refusal(family Family, index int, message string) *protocol.PlannedFeatures {
-	return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: family.ChangeKind, Message: message, Input: &protocol.PlanningDiagnostic_Change{Change: uint32(index)}}}}
+	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
+	return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{
+		Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: family.ChangeKind, Message: message,
+		Input: &protocol.PlanningDiagnostic_Change{Change: uint32(index)},
+	}}}
 }

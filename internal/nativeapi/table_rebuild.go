@@ -37,6 +37,7 @@ func NewTableStatements(driver *ydb.Driver, execute func(context.Context, string
 	return &TableStatements{Scheme: Ydb_Scheme_V1.NewSchemeServiceClient(ydb.GRPCConn(driver)), Execute: execute,
 		Open: func(ctx context.Context) (TableDescriber, error) { return OpenTable(ctx, driver) },
 		Empty: func(ctx context.Context, absolute string) (bool, error) {
+			// #nosec G202 -- the only concatenated part is the table's path, quoted by tablecreate.QuoteIdentifier
 			rows, err := db.QueryContext(ctx, "SELECT 1 FROM "+tablecreate.QuoteIdentifier(absolute)+" LIMIT 1")
 			if err != nil {
 				return false, err

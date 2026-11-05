@@ -686,12 +686,6 @@
     },
     {
       "path": "internal/tablesource/decode_test.go",
-      "function": "TestClaims",
-      "kind": "switch",
-      "count": 1
-    },
-    {
-      "path": "internal/tablesource/decode_test.go",
       "function": "TestClaims_TableAttributesAreTheYAMLKeysAndMore",
       "kind": "if",
       "count": 2

@@ -142,7 +142,7 @@ type ObjectKind string
 // principals.
 const (
 	KindChangefeed       ObjectKind = "ptah.run/ydb/changefeed"
-	KindSecret           ObjectKind = "ptah.run/ydb/secret"
+	KindSecret           ObjectKind = "ptah.run/ydb/secret" // #nosec G101 -- a model kind name, not a credential
 	KindCoordinationNode ObjectKind = "ptah.run/ydb/coordination-node"
 	KindExternalSource   ObjectKind = "ptah.run/ydb/external-data-source"
 	KindExternalTable    ObjectKind = "ptah.run/ydb/external-table"

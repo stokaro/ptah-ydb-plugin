@@ -154,14 +154,14 @@ func TestCheck_FailurePath(t *testing.T) {
 
 func TestSecretPaths_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/local/ext/pw", "TOKEN_SECRET_PATH": "ext/pw", "AWS_SECRET_PATH": "ext/aws", "LOGIN": "reader"}, "/local")
+	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/local/ext/pw", "TOKEN_SECRET_PATH": "ext/pw", "AWS_SECRET_PATH": "ext/aws", "LOGIN": "reader"}, "/local") // #nosec G101 -- the options name secrets' paths, not their values
 	c.Assert(err, qt.IsNil)
 	c.Assert(got, qt.DeepEquals, []ydbdecl.Path{{Schema: "ext", Name: "aws"}, {Schema: "ext", Name: "pw"}})
 }
 
 func TestSecretPaths_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/other/ext/pw"}, "/local")
+	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/other/ext/pw"}, "/local") // #nosec G101 -- the option names a secret's path, not its value
 	c.Assert(err, qt.ErrorMatches, `option PASSWORD_SECRET_PATH names secret "/other/ext/pw", which is outside the database /local, so the data source cannot read it`)
 	c.Assert(got, qt.IsNil)
 }
@@ -213,6 +213,7 @@ func TestSameDataSource(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 		return spec
 	}
+	// #nosec G101 -- the options name a login and a secret's path, not a password
 	for _, test := range []struct {
 		name    string
 		current ydbdecl.ExternalDataSource

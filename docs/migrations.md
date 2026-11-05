@@ -1,3 +1,24 @@
+---
+title: Migrations on YDB
+description: How the provider splits a YDB migration into queries, holds the migration lock and applies statement timeouts.
+type: concept
+audience:
+  - database-engineer
+  - ci-operator
+readerQuestion: "How does a migration run on YDB, and what do the lock and the timeouts do there?"
+goal: "Predict how a YDB migration is split, locked and timed out, and resume one that stopped."
+sourceOfTruth:
+  - internal/migrationunits
+  - internal/locking
+  - internal/history
+  - stokaro/ptah#4204
+generated: false
+overlaps: []
+disposition: keep
+sidebar:
+  order: 3
+---
+
 # Migrations on YDB
 
 `ptah migrations up`, `down` and `baseline` run a YDB migration through this

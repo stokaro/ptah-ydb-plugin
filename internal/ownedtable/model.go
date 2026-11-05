@@ -79,12 +79,34 @@ func (s Definition) ValidateLayout(value *native.DescribeTableResult) error {
 	if err := schema.Known(value); err != nil {
 		return err
 	}
-	if value.GetSelf().GetName() != s.Name || value.GetSelf().GetType() != Ydb_Scheme.Entry_TABLE || (value.StoreType != Ydb_Table.StoreType_STORE_TYPE_ROW && value.StoreType != Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED) || len(value.Attributes) != 1 || value.Attributes[s.Attribute] != s.Marker {
+	if !s.owns(value) {
 		return fmt.Errorf("YDB storage ownership or table kind does not match")
 	}
-	if len(value.Columns) != len(s.Columns) || !slices.Equal(value.PrimaryKey, s.PrimaryKey) || len(value.Indexes) != 0 || len(value.Changefeeds) != 0 || value.TtlSettings != nil || value.Tiering != "" || value.Temporary {
+	if !s.plainLayout(value) {
 		return fmt.Errorf("YDB storage has incompatible layout or automatic behavior")
 	}
+	return s.validateColumns(value)
+}
+
+// owns reports whether the described entry is a row table of the definition's
+// name whose only attribute is the definition's ownership marker.
+func (s Definition) owns(value *native.DescribeTableResult) bool {
+	rowStore := value.StoreType == Ydb_Table.StoreType_STORE_TYPE_ROW || value.StoreType == Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED
+	return value.GetSelf().GetName() == s.Name && value.GetSelf().GetType() == Ydb_Scheme.Entry_TABLE && rowStore &&
+		len(value.Attributes) == 1 && value.Attributes[s.Attribute] == s.Marker
+}
+
+// plainLayout reports whether the table has the definition's column count and
+// primary key, and no index, changefeed, TTL, tiering or temporary lifetime.
+func (s Definition) plainLayout(value *native.DescribeTableResult) bool {
+	return len(value.Columns) == len(s.Columns) && slices.Equal(value.PrimaryKey, s.PrimaryKey) && len(value.Indexes) == 0 &&
+		len(value.Changefeeds) == 0 && value.TtlSettings == nil && value.Tiering == "" && !value.Temporary
+}
+
+// validateColumns refuses a described column the definition does not declare
+// with the same primitive type, a column with a default or a non-default
+// family, and a declared column the table lacks.
+func (s Definition) validateColumns(value *native.DescribeTableResult) error {
 	expected := make(map[string]Ydb.Type_PrimitiveTypeId, len(s.Columns))
 	for _, column := range s.Columns {
 		expected[column.Name] = column.Type

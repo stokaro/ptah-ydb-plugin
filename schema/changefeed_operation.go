@@ -54,8 +54,9 @@ func buildChangefeedOperationModel() *protocol.ValueModel {
 				"after":  map[string]any{"meaning": "the declared changefeed; absent for a removal", "model": json.RawMessage(NativeDesiredModel(ChangefeedProperties).DefinitionJson)}}},
 		"semantics": "additions and topic changes adding consumers only: additive, access unchanged; a removal, a recreation, or a topic change dropping or restarting a consumer: destructive, " +
 			"removes the records nobody read and every consumer's position; other topic changes: behavioral; never replaces the owner",
-		"comparison":   "both operands read as the host's changefeed specification; a pair that holds no change is refused; a pair whose option YDB changes in no other way drops the changefeed and adds it again",
-		"execution":    "YQL ALTER TABLE ... DROP CHANGEFEED for every removal, then ALTER TABLE ... ADD CHANGEFEED with the topic's consumers for every addition, then ALTER TOPIC for every topic change, one query each, outside SQL transactions; no automatic retry",
+		"comparison": "both operands read as the host's changefeed specification; a pair that holds no change is refused; a pair whose option YDB changes in no other way drops the changefeed and adds it again",
+		"execution": "YQL ALTER TABLE ... DROP CHANGEFEED for every removal, then ALTER TABLE ... ADD CHANGEFEED with the topic's consumers for every addition, " +
+			"then ALTER TOPIC for every topic change, one query each, outside SQL transactions; no automatic retry",
 		"precondition": "before is each changefeed as the plan read it, or its established absence; verified immediately before dispatch; the API has no atomic compare-and-set",
 		"confirmation": "read back each declared changefeed with its topic's retention and consumers, or its absence after a removal",
 		"database":     "a nonempty owner database must equal the selected session database; empty selects that session database",
@@ -195,48 +196,9 @@ func decodeChangefeedChanges(owner *protocol.Reference, raw []byte) ([]changefee
 	}
 	var changes []changefeeds.Change
 	for _, raw := range payload.Changefeeds {
-		if err := exactKeys(raw, "name", "before", "after"); err != nil {
+		change, err := decodeChangefeedEntry(owner, raw)
+		if err != nil {
 			return nil, err
-		}
-		var entry changefeedEntry
-		if err := json.Unmarshal(raw, &entry); err != nil || entry.Name == "" {
-			return nil, fmt.Errorf("changefeed operation requires a changefeed name")
-		}
-		change := changefeeds.Change{Name: entry.Name}
-		if entry.Before != nil {
-			var feed native.ObservedChangefeed
-			if err := protojson.Unmarshal(entry.Before, &feed); err != nil {
-				return nil, fmt.Errorf("invalid changefeed operation operand")
-			}
-			set := &native.ChangefeedObservations{Changefeeds: []*native.ObservedChangefeed{&feed}}
-			if err := Known(set); err != nil {
-				return nil, err
-			}
-			if err := normalizeChangefeeds(set); err != nil {
-				return nil, err
-			}
-			change.Before = set.Changefeeds[0]
-		}
-		if entry.After != nil {
-			var feed native.ChangefeedIntent
-			if err := protojson.Unmarshal(entry.After, &feed); err != nil {
-				return nil, fmt.Errorf("invalid changefeed operation operand")
-			}
-			encoded, err := protojson.Marshal(&native.ChangefeedSetIntent{Changefeeds: []*native.ChangefeedIntent{&feed}})
-			if err != nil {
-				return nil, err
-			}
-			model := NativeDesiredModel(ChangefeedProperties)
-			normalized, err := NormalizeDesired(&protocol.Envelope{ProviderId: ProviderID, Kind: ChangefeedProperties, Owner: proto.CloneOf(owner), SchemaVersion: model.SchemaVersion,
-				Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Payload: encoded})
-			if err != nil {
-				return nil, err
-			}
-			var set native.ChangefeedSetIntent
-			if err := protojson.Unmarshal(normalized.Payload, &set); err != nil || len(set.Changefeeds) != 1 {
-				return nil, fmt.Errorf("invalid changefeed operation operand")
-			}
-			change.After = set.Changefeeds[0]
 		}
 		switch {
 		case change.Before == nil && change.After == nil:
@@ -251,6 +213,73 @@ func decodeChangefeedChanges(owner *protocol.Reference, raw []byte) ([]changefee
 	return changes, nil
 }
 
+// decodeChangefeedEntry reads one change of a changefeed operation payload
+// with exact keys and validates each operand it holds as one changefeed of
+// its model's set.
+func decodeChangefeedEntry(owner *protocol.Reference, raw json.RawMessage) (changefeeds.Change, error) {
+	if err := exactKeys(raw, "name", "before", "after"); err != nil {
+		return changefeeds.Change{}, err
+	}
+	var entry changefeedEntry
+	if err := json.Unmarshal(raw, &entry); err != nil || entry.Name == "" {
+		return changefeeds.Change{}, fmt.Errorf("changefeed operation requires a changefeed name")
+	}
+	change := changefeeds.Change{Name: entry.Name}
+	var err error
+	if entry.Before != nil {
+		if change.Before, err = decodeHeldChangefeed(entry.Before); err != nil {
+			return changefeeds.Change{}, err
+		}
+	}
+	if entry.After != nil {
+		if change.After, err = decodeDeclaredChangefeed(owner, entry.After); err != nil {
+			return changefeeds.Change{}, err
+		}
+	}
+	return change, nil
+}
+
+// decodeHeldChangefeed reads the before operand of a changefeed change and
+// normalizes it as the one changefeed of an observed set.
+func decodeHeldChangefeed(raw json.RawMessage) (*native.ObservedChangefeed, error) {
+	var feed native.ObservedChangefeed
+	if err := protojson.Unmarshal(raw, &feed); err != nil {
+		return nil, fmt.Errorf("invalid changefeed operation operand")
+	}
+	set := &native.ChangefeedObservations{Changefeeds: []*native.ObservedChangefeed{&feed}}
+	if err := Known(set); err != nil {
+		return nil, err
+	}
+	if err := normalizeChangefeeds(set); err != nil {
+		return nil, err
+	}
+	return set.Changefeeds[0], nil
+}
+
+// decodeDeclaredChangefeed reads the after operand of a changefeed change and
+// normalizes it as the one changefeed of a desired set of the owner table.
+func decodeDeclaredChangefeed(owner *protocol.Reference, raw json.RawMessage) (*native.ChangefeedIntent, error) {
+	var feed native.ChangefeedIntent
+	if err := protojson.Unmarshal(raw, &feed); err != nil {
+		return nil, fmt.Errorf("invalid changefeed operation operand")
+	}
+	encoded, err := protojson.Marshal(&native.ChangefeedSetIntent{Changefeeds: []*native.ChangefeedIntent{&feed}})
+	if err != nil {
+		return nil, err
+	}
+	model := NativeDesiredModel(ChangefeedProperties)
+	normalized, err := NormalizeDesired(&protocol.Envelope{ProviderId: ProviderID, Kind: ChangefeedProperties, Owner: proto.CloneOf(owner), SchemaVersion: model.SchemaVersion,
+		Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Payload: encoded})
+	if err != nil {
+		return nil, err
+	}
+	var set native.ChangefeedSetIntent
+	if err := protojson.Unmarshal(normalized.Payload, &set); err != nil || len(set.Changefeeds) != 1 {
+		return nil, fmt.Errorf("invalid changefeed operation operand")
+	}
+	return set.Changefeeds[0], nil
+}
+
 // changefeedSemantics derives an operation's facts from its changes, and
 // refuses a change that holds none or that touches a stream a replication
 // controller owns.
@@ -261,75 +290,92 @@ func changefeedSemantics(owner *protocol.Reference, changes []changefeeds.Change
 	}
 	semantics := &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE, Access: protocol.ChangeSemantics_UNCHANGED,
 		AccessReason: "Changing a changefeed preserves the table's access metadata"}
-	var notes []string
-	destructive, behavioral, added := false, false, false
+	var effects changefeedEffects
 	for _, change := range changes {
-		subject := changefeeds.Subject(table, change.Name)
-		var current, desired changefeeds.Feed
-		var err error
-		if change.Before != nil {
-			if current, err = changefeeds.FromObserved(change.Before); err != nil {
-				return nil, fmt.Errorf("%s: %w", subject, err)
-			}
-		}
-		if change.After != nil {
-			if desired, err = changefeeds.FromIntent(change.After); err != nil {
-				return nil, err
-			}
-		}
-		if current.Replicated || desired.Replicated {
-			return nil, fmt.Errorf("%s: the retained replication-managed changefeed cannot be created, removed, or changed independently of its controller", subject)
-		}
-		switch change.Action() {
-		case changefeeds.Add:
-			added = true
-		case changefeeds.Drop:
-			destructive = true
-			notes = append(notes, changefeeds.DroppedNote(table, current))
-		case changefeeds.Recreate:
-			destructive, added = true, true
-			notes = append(notes, changefeeds.RecreatedNote(table, current))
-		default:
-			if !changefeeds.TopicChanged(desired, current) {
-				return nil, fmt.Errorf("%s: the changefeed operands contain no change", subject)
-			}
-			_, restarted := changefeeds.TopicStatements(table, desired.Changefeed, current.Changefeed)
-			if len(restarted) > 0 {
-				notes = append(notes, changefeeds.RestartedConsumersNote(table, change.Name, restarted))
-			}
-			switch {
-			case len(changefeeds.ConsumerPositionsLost(desired, current)) > 0:
-				destructive = true
-			case changefeeds.RetentionChanged(desired, current) || changefeeds.ConsumersChanged(desired, current):
-				behavioral = true
-			}
+		if err := effects.add(table, change); err != nil {
+			return nil, err
 		}
 	}
 	switch {
-	case destructive:
+	case effects.destructive:
 		semantics.Impact, semantics.Reason = protocol.ChangeSemantics_DESTRUCTIVE, dropChangefeedReason
 		if !slices.ContainsFunc(changes, func(change changefeeds.Change) bool {
 			return change.Action() == changefeeds.Drop || change.Action() == changefeeds.Recreate
 		}) {
 			semantics.Reason = changeChangefeedTopic
 		}
-	case behavioral:
+	case effects.behavioral:
 		semantics.Impact, semantics.Reason = protocol.ChangeSemantics_BEHAVIORAL, changeChangefeedTopic
 	default:
 		semantics.Reason = "ALTER TOPIC adds consumers to a changefeed's topic"
-		if added {
+		if effects.added {
 			semantics.Reason = addChangefeedReason
 		}
 	}
-	if len(notes) > 0 {
-		semantics.Reason += ". " + strings.Join(notes, " ")
+	if len(effects.notes) > 0 {
+		semantics.Reason += ". " + strings.Join(effects.notes, " ")
 	}
 	dropped := slices.ContainsFunc(changes, func(change changefeeds.Change) bool { return change.Action() == changefeeds.Drop })
 	switch {
-	case added:
+	case effects.added:
 		semantics.AccessReason = "A new changefeed's topic inherits the access of its table, and the table's access stays as it is"
 	case dropped:
 		semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_NARROWS, "Dropping a changefeed removes access to its topic"
 	}
 	return semantics, nil
+}
+
+// changefeedEffects collects what the changes of one changefeed operation do:
+// the notes its reason carries, and whether any change removes records or
+// consumer positions, changes a topic's retention or consumers, or adds a
+// changefeed.
+type changefeedEffects struct {
+	notes                          []string
+	destructive, behavioral, added bool
+}
+
+// add records the effect of one change of table, and refuses a change that
+// holds none or that touches a stream a replication controller owns.
+func (e *changefeedEffects) add(table string, change changefeeds.Change) error {
+	subject := changefeeds.Subject(table, change.Name)
+	var current, desired changefeeds.Feed
+	var err error
+	if change.Before != nil {
+		if current, err = changefeeds.FromObserved(change.Before); err != nil {
+			return fmt.Errorf("%s: %w", subject, err)
+		}
+	}
+	if change.After != nil {
+		if desired, err = changefeeds.FromIntent(change.After); err != nil {
+			return err
+		}
+	}
+	if current.Replicated || desired.Replicated {
+		return fmt.Errorf("%s: the retained replication-managed changefeed cannot be created, removed, or changed independently of its controller", subject)
+	}
+	switch change.Action() {
+	case changefeeds.Add:
+		e.added = true
+	case changefeeds.Drop:
+		e.destructive = true
+		e.notes = append(e.notes, changefeeds.DroppedNote(table, current))
+	case changefeeds.Recreate:
+		e.destructive, e.added = true, true
+		e.notes = append(e.notes, changefeeds.RecreatedNote(table, current))
+	default:
+		if !changefeeds.TopicChanged(desired, current) {
+			return fmt.Errorf("%s: the changefeed operands contain no change", subject)
+		}
+		_, restarted := changefeeds.TopicStatements(table, desired.Changefeed, current.Changefeed)
+		if len(restarted) > 0 {
+			e.notes = append(e.notes, changefeeds.RestartedConsumersNote(table, change.Name, restarted))
+		}
+		switch {
+		case len(changefeeds.ConsumerPositionsLost(desired, current)) > 0:
+			e.destructive = true
+		case changefeeds.RetentionChanged(desired, current) || changefeeds.ConsumersChanged(desired, current):
+			e.behavioral = true
+		}
+	}
+	return nil
 }

@@ -49,16 +49,8 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if request.PlanningId != ServiceID || len(request.ParentKinds) != 0 {
-		return nil, fmt.Errorf("invalid workload planning assignment")
-	}
-	if request.Identifiers.GetDefaultSchema() != "" || request.Identifiers.GetCatalogCollation() != "" {
-		return nil, fmt.Errorf("invalid YDB planning identifier context")
-	}
-	for _, name := range request.Identifiers.GetResolvedNames() {
-		if name.Name != name.Key {
-			return nil, fmt.Errorf("YDB planning requires exact identifiers")
-		}
+	if err := validateAssignment(request); err != nil {
+		return nil, err
 	}
 	if len(request.Changes) == 0 {
 		return &protocol.PlannedFeatures{Complete: true}, nil
@@ -126,6 +118,24 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	dependencies := append(principalDependencies(id, request.CommonSteps), accessDependencies...)
 	result.Contributions = []*protocol.PlanningContribution{{Owner: schema.ProviderID, Steps: []*protocol.PlanningStep{step}, Dependencies: dependencies}}
 	return result, ctx.Err()
+}
+
+// validateAssignment refuses a request addressed to another planner or naming
+// parent kinds, and an identifier context that sets a default schema or a
+// catalog collation or resolves a name to another spelling.
+func validateAssignment(request *protocol.PlanFeaturesRequest) error {
+	if request.PlanningId != ServiceID || len(request.ParentKinds) != 0 {
+		return fmt.Errorf("invalid workload planning assignment")
+	}
+	if request.Identifiers.GetDefaultSchema() != "" || request.Identifiers.GetCatalogCollation() != "" {
+		return fmt.Errorf("invalid YDB planning identifier context")
+	}
+	for _, name := range request.Identifiers.GetResolvedNames() {
+		if name.Name != name.Key {
+			return fmt.Errorf("YDB planning requires exact identifiers")
+		}
+	}
+	return nil
 }
 
 // capture validates one planning change and adds it to changes.
@@ -217,6 +227,7 @@ func principalDependencies(id *protocol.StepIdentity, common []*protocol.CommonP
 }
 
 func refusal(request *protocol.PlanFeaturesRequest, index int, message string) *protocol.PlannedFeatures {
+	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE,
 		Kind: request.Changes[index].GetValue().GetValue().GetKind(), Message: message, Input: &protocol.PlanningDiagnostic_Change{Change: uint32(index)}}}}
 }

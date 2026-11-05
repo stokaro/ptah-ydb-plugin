@@ -21,8 +21,22 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
+
+// directoryRegion is the namespace of one directory of database, below which
+// nothing is claimed: a nested directory is a namespace of its own.
+func directoryRegion(database, directory string) *protocol.ModelNamespaceKnowledge {
+	return &protocol.ModelNamespaceKnowledge{
+		Scope: &protocol.ModelNamespace{
+			Database: &protocol.NamespaceComponent{Source: database, Normalized: database},
+			Catalog:  &protocol.NamespaceComponent{},
+			Schema:   &protocol.NamespaceComponent{Source: directory, Normalized: directory},
+		},
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
+	}
+}
 
 // The pinned vendor protobuf does not name STREAMING_QUERY.
 const streamingQueryEntry = Ydb_Scheme.Entry_Type(26)
@@ -103,10 +117,16 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 			schemas = append(schemas, directories...)
 		}
 	}
+	if len(selectors) == 0 && slices.Contains(provider.HostFeatures(ctx), provider.SchemaSubtreeCoverageFeature) {
+		subtreeRegions(result, database, read.skipped, common.Views)
+	}
 	if err := read.streamingInventory(ctx, selectors); err != nil {
 		return nil, err
 	}
 	if err := markTransferReaders(result); err != nil {
+		return nil, err
+	}
+	if err := read.unreadTables(ctx, selectors); err != nil {
 		return nil, err
 	}
 	slices.SortFunc(result.Tables, func(a, b *protocol.Table) int {
@@ -139,6 +159,14 @@ type traversal struct {
 	leaveOut     []string
 	result       *protocol.Schema
 	skippedRealm bool
+	// replicas are the replica tables the read leaves out of its tables, and
+	// replicationsUnread reports a replication it left uninspected, whose
+	// replicas it cannot name.
+	replicas           []*protocol.Reference
+	replicationsUnread bool
+	// skipped are the directories an unscoped walk leaves out, below which a
+	// subtree claim of the root must stay unknown.
+	skipped []string
 }
 
 // directory reads every entry of the listed directory selected into the
@@ -166,10 +194,12 @@ func (t *traversal) directory(ctx context.Context, selected string) ([]string, e
 		}
 		names[name] = true
 		if strings.HasPrefix(name, ".") && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
+			t.skipped = append(t.skipped, path.Join(selected, name))
 			continue
 		}
 		if selected == "" && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY && slices.Contains(t.leaveOut, name) {
 			t.skippedRealm = true
+			t.skipped = append(t.skipped, name)
 			continue
 		}
 		if entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
@@ -188,22 +218,28 @@ func (t *traversal) directory(ctx context.Context, selected string) ([]string, e
 	return directories, nil
 }
 
-// completeDirectory records that the read knows every native object of the
-// directory selected. A successful list and complete child reads prove
-// native-object absence only in this exact directory, never in skipped
-// descendants.
+// completeDirectory records that the read knows every native object and every
+// table facet of the directory selected. A successful list and complete child
+// reads prove native-object absence only in this exact directory, never in
+// skipped descendants.
+//
+// The read describes every table of the directory with each facet its kind of
+// table has, a row table's settings, indexes, changefeeds and the settings of
+// its global indexes, a column table's storage and every column's properties,
+// so the facet kinds are known completely there too. A host that did not
+// negotiate schema.observed-index-facets has no place for an index's settings,
+// so none of them is missing either. Without that the kinds stay narrowed, and
+// an export the read knows completely could not be written: a source has no
+// limit that says a facet kind.
 func (t *traversal) completeDirectory(selected string) {
 	for _, record := range t.result.Coverage.Kinds {
+		if slices.Contains(tablecompare.Kinds(), record.Model.Kind) {
+			record.Regions = append(record.Regions, directoryRegion(t.database, selected))
+			continue
+		}
 		// Views the common wire carries are not read as native objects.
 		if schema.IsNativeObject(record.Model.Kind) && (record.Model.Kind != schema.ViewProperties || !t.common.Views) {
-			record.Regions = append(record.Regions, &protocol.ModelNamespaceKnowledge{
-				Scope: &protocol.ModelNamespace{
-					Database: &protocol.NamespaceComponent{Source: t.database, Normalized: t.database},
-					Catalog:  &protocol.NamespaceComponent{},
-					Schema:   &protocol.NamespaceComponent{Source: selected, Normalized: selected},
-				},
-				Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
-			})
+			record.Regions = append(record.Regions, directoryRegion(t.database, selected))
 		}
 	}
 }
@@ -222,7 +258,7 @@ func (t *traversal) entry(ctx context.Context, selected, name string, kind Ydb_S
 		if err != nil {
 			return err
 		}
-		t.addTable(table)
+		t.addColumnTable(table)
 	case Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP:
 		return t.readTopic(ctx, selected, name)
 	case Ydb_Scheme.Entry_REPLICATION, Ydb_Scheme.Entry_TRANSFER:
@@ -291,6 +327,7 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 	// The replication's items name it; the read leaves it out
 	// of the tables, as the host's embedded engine does.
 	if replication.IsReplica(description.table.GetAttributes()) {
+		t.replicas = append(t.replicas, &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: "table", Name: name})
 		return nil
 	}
 	table, err := readTable(t.database, selected, name, description.table)
@@ -305,7 +342,10 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 	if t.common.Indexes {
 		// The host holds what the common model describes; the
 		// native facet keeps only the rest.
-		table.Indexes = commonIndexes(table.Identity, indexes)
+		table.Indexes, err = commonIndexes(table.Identity, indexes, t.common.IndexFacets)
+		if err != nil {
+			return err
+		}
 		indexes = nativeIndexes(indexes)
 	}
 	facet, err := schema.CaptureIndexes(table.Identity, indexes)
@@ -356,6 +396,7 @@ func (t *traversal) readReplication(ctx context.Context, selected, name string, 
 	if reason := unreadReplication(err); reason != "" {
 		t.result.Coverage.Subjects = append(t.result.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner),
 			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: reason}})
+		t.replicationsUnread = t.replicationsUnread || kind == schema.ReplicationProperties
 		return nil
 	}
 	if err != nil {
@@ -386,14 +427,51 @@ func (t *traversal) readDescribed(ctx context.Context, selected, name string, en
 	return nil
 }
 
-// addTable adds a table to the schema, with the coverage of its facets and of
-// its columns' facets.
+// addTable adds a row table to the schema, with the coverage of its facets,
+// of its columns' facets and of its indexes' facets.
 func (t *traversal) addTable(table *protocol.Table) {
 	t.result.Tables = append(t.result.Tables, table)
 	observe(t.result, table.Facets)
 	for _, column := range table.Columns {
 		observe(t.result, column.Facets)
 	}
+	for _, index := range table.Indexes {
+		observe(t.result, index.Facets)
+	}
+}
+
+// addColumnTable adds a column table to the schema, with the coverage of its
+// facets, the absence of row-table properties, and the coverage of its
+// columns' facets.
+func (t *traversal) addColumnTable(table *protocol.Table) {
+	t.result.Tables = append(t.result.Tables, table)
+	observe(t.result, table.Facets)
+	absentRowProperties(t.result, table.Facets)
+	for _, column := range table.Columns {
+		observe(t.result, column.Facets)
+	}
+}
+
+// unreadTables names the replica tables the read left out that no replication
+// writes, when the read is asked for them: against the targets of the
+// replications the snapshot holds for a read of the whole database, and of
+// every replication of the database for a selected read.
+func (t *traversal) unreadTables(ctx context.Context, selectors []string) error {
+	if !t.common.UnreadTables || len(t.replicas) == 0 {
+		return nil
+	}
+	targets, complete := []string(nil), !t.replicationsUnread
+	var err error
+	if len(selectors) == 0 {
+		targets, err = snapshotTargets(t.result)
+	} else {
+		targets, complete, err = t.source.databaseTargets(ctx, t.database, t.leaveOut)
+	}
+	if err != nil {
+		return err
+	}
+	t.result.UnreadTables = unreadReplicas(t.replicas, targets, complete)
+	return nil
 }
 
 // addObject adds a native object to the schema, with its coverage.
@@ -519,5 +597,21 @@ func observe(snapshot *protocol.Schema, values []*protocol.Envelope) {
 			Kind: value.Kind, Subject: proto.CloneOf(value.Owner), NormalizedSubject: proto.CloneOf(value.Owner),
 			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
 		})
+	}
+}
+
+// absentRowProperties records that a column table holds no row-table
+// properties: a declaration that states a TTL alone, as an HCL platform block
+// does, is compared with such a table as its column storage's TTL, and the
+// change answers the row-table properties the declaration states (see
+// tablecompare.Compare).
+func absentRowProperties(snapshot *protocol.Schema, facets []*protocol.Envelope) {
+	for _, facet := range facets {
+		if facet.GetKind() == schema.ColumnStorageProperties {
+			snapshot.Coverage.Subjects = append(snapshot.Coverage.Subjects, &protocol.ModelSubjectCoverage{
+				Kind: schema.TableProperties, Subject: proto.CloneOf(facet.GetOwner()), NormalizedSubject: proto.CloneOf(facet.GetOwner()),
+				Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_ABSENT},
+			})
+		}
 	}
 }

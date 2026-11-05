@@ -84,7 +84,7 @@ func (f *seedsFixture) ledger(c *qt.C) *protocol.SeedLedger {
 
 func (f *seedsFixture) names(c *qt.C) []string {
 	c.Helper()
-	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT name FROM `"+path.Join(f.root, "regions")+"` ORDER BY id")
+	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT name FROM `"+path.Join(f.root, "regions")+"` ORDER BY id") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	defer func() { c.Check(rows.Close(), qt.IsNil) }()
 	var names []string

@@ -35,8 +35,9 @@ import (
 // classifier, and a streaming query. HCL declares a coordination node, in a
 // coordination_node block, and no other object. The facets of one table are
 // written together as the table declaration the table decoders read (see
-// sourceencode.EncodeTable); HCL has no spelling for any of them, as the
-// host's embedded engine reports. A Go export also gives each column the Go
+// sourceencode.EncodeTable); HCL spells a table's TTL alone, in the table's
+// platform "ydb" block where the host reads it, and reports the rest as the
+// host's embedded engine reports it (see sourceencode.EncodeTableHCL). A Go export also gives each column the Go
 // type of its YDB type, and loses a table with a nullable key column, which
 // no declaration can ask for.
 //
@@ -60,8 +61,11 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	format := request.GetFormat()
+	// A table's TTL has an HCL spelling, its platform "ydb" block, only when
+	// the host reads the block; see tablesource.HCLPlatformBlock.
+	platform := slices.Contains(description.GetEngines()[0].GetFeatures(), provider.HCLPlatformFeature)
 	result := &protocol.EncodedSource{Complete: true, Limits: limits}
-	encoding := &sourceEncoding{result: result, tables: make(map[string]*sourceencode.Table)}
+	encoding := &sourceEncoding{result: result, tables: make(map[string]*sourceencode.Table), platform: platform}
 	// subjects names each value as a loss line names it.
 	subjects := make(map[string]string, len(request.GetValues()))
 	for _, value := range request.GetValues() {
@@ -130,17 +134,28 @@ type sourceEncoding struct {
 	nodes  []encodedNode
 	tables map[string]*sourceencode.Table
 	order  []string
+	// platform is whether the host reads a table's platform "ydb" block in
+	// HCL, which spells the table's TTL.
+	platform bool
 }
 
 // add sorts one value of the request into the encoding: a facet joins its
-// table, or is a loss in HCL; a coordination node joins the nodes; any other
+// table, or in HCL is written alone where HCL spells it and is a loss
+// otherwise; a coordination node joins the nodes; any other
 // native object is written now, as a unit or a loss. Its error is the call's
 // status.
 func (e *sourceEncoding) add(request *protocol.EncodeSourceRequest, format protocol.SourceDocument_Format, value *protocol.EncodeSourceValue) error {
 	envelope := value.GetValue().GetValue()
 	id := value.GetValue().GetId()
 	switch {
-	case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL:
+	case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL && envelope.GetKind() == schema.IndexSettingsProperties:
+		parts, err := sourceencode.EncodeIndexHCL(value)
+		if err != nil {
+			return authored.Status(codes.InvalidArgument, err)
+		}
+		e.units = append(e.units, encodedUnit{ids: []string{id}, parts: parts})
+	case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL &&
+		(!e.platform || envelope.GetKind() != schema.TableProperties && envelope.GetKind() != schema.ColumnStorageProperties):
 		e.result.Losses = append(e.result.Losses, &protocol.EncodeLoss{ValueId: id, Message: lossMessage(format, envelope)})
 	case value.GetPlacement() == protocol.SourceModelValue_FACET:
 		table, bound := e.tables[value.GetBindingId()]
@@ -187,7 +202,13 @@ func (e *sourceEncoding) addTables(format protocol.SourceDocument_Format, refuse
 			delete(refused, binding)
 			continue
 		}
-		encoded, err := sourceencode.EncodeTable(format, *e.tables[binding])
+		encode := func(table sourceencode.Table) (sourceencode.TableResult, error) {
+			return sourceencode.EncodeTable(format, table)
+		}
+		if format == protocol.SourceDocument_HCL {
+			encode = sourceencode.EncodeTableHCL
+		}
+		encoded, err := encode(*e.tables[binding])
 		if err != nil {
 			return authored.Status(codes.InvalidArgument, err)
 		}

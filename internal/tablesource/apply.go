@@ -51,6 +51,11 @@ func apply(target *settings, fragment *protocol.SourceFragment) error {
 	if claim := fragment.GetYamlKey(); claim != nil {
 		return applyYAML(target, claim.GetKey(), fragment.GetValue())
 	}
+	if fragment.GetHclBlock() != nil {
+		// The overrides of a table's platform "ydb" block, which the YAML
+		// group of the same name holds too.
+		return applyPlatform(target, fragment.GetValue())
+	}
 	if fragment.GetGoDirective().GetDirective() == DirectiveTable {
 		return applyTable(target, fragment.GetValue())
 	}
@@ -164,30 +169,36 @@ func applyFamilies(target *settings, value *protocol.SourceValue) error {
 // as a sequence or as one comma-separated scalar. Null and an empty scalar
 // leave the membership undeclared; an empty sequence declares an invalid list.
 func familySetting(key string, value *protocol.SourceValue) (*string, error) {
-	if key == AttributeFields {
-		if sequence := value.GetSequence(); sequence != nil {
-			var fields []string
-			for _, item := range sequence.GetValues() {
-				field, err := optional(item)
-				if err != nil {
-					return nil, err
-				}
-				if field == nil {
-					fields = append(fields, "")
-				} else {
-					fields = append(fields, *field)
-				}
-			}
-			text := strings.Join(fields, ",")
-			return &text, nil
-		}
-		text, err := optional(value)
-		if text != nil && *text == "" {
+	if key != AttributeFields {
+		return optional(value)
+	}
+	if sequence := value.GetSequence(); sequence != nil {
+		return familyFieldList(sequence)
+	}
+	text, err := optional(value)
+	if text != nil && *text == "" {
+		return nil, err
+	}
+	return text, err
+}
+
+// familyFieldList joins the items of a YAML fields sequence with commas, the
+// form of the comma-separated scalar. A null item stands as an empty name.
+func familyFieldList(sequence *protocol.SourceSequence) (*string, error) {
+	var fields []string
+	for _, item := range sequence.GetValues() {
+		field, err := optional(item)
+		if err != nil {
 			return nil, err
 		}
-		return text, err
+		if field == nil {
+			fields = append(fields, "")
+		} else {
+			fields = append(fields, *field)
+		}
 	}
-	return optional(value)
+	text := strings.Join(fields, ",")
+	return &text, nil
 }
 
 // applyGo reads the attributes of one columnfamily directive.

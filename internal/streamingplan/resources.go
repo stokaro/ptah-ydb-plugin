@@ -69,54 +69,67 @@ func queryResources(request *protocol.PlanFeaturesRequest, subject *protocol.Com
 	}
 	var effects []*protocol.PlanningEffect
 	var dependencies []*protocol.PlanningDependency
-	addRead := func(subject *protocol.ComparisonIdentity) {
-		for _, effect := range effects {
-			if provider.CompareIdentities(effect.Subject, subject) == 0 {
-				return
-			}
-		}
-		effects = append(effects, &protocol.PlanningEffect{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ})
-	}
-	addDependency := func(edge *protocol.PlanningDependency) {
-		for _, known := range dependencies {
-			if proto.Equal(edge, known) {
-				return
-			}
-		}
-		dependencies = append(dependencies, edge)
-	}
 	for _, resource := range slots {
 		// The captured request need not contain every native family. A scheme
 		// slot states the physical dependency without inventing an object kind.
-		addRead(resource)
+		effects = appendRead(effects, resource)
 		for _, table := range request.Tables {
 			if provider.CompareIdentities(resource, objectplan.Slot(table.Subject)) != 0 {
 				continue
 			}
 			if early && table.Current != nil || !early && table.Desired != nil {
-				addRead(table.Subject)
+				effects = appendRead(effects, table.Subject)
 			}
 		}
 		for _, common := range request.CommonSteps {
-			writes, touches := false, false
-			for _, effect := range common.GetMetadata().GetEffects() {
-				writes = writes || effect.Action != protocol.PlanningEffect_READ
-				touches = touches || provider.CompareIdentities(resource, objectplan.Slot(effect.Subject)) == 0
-			}
-			if !writes || !touches {
+			if !writesSlot(common, resource) {
 				continue
 			}
 			edge := &protocol.PlanningDependency{Before: proto.CloneOf(common.Id), After: proto.CloneOf(id)}
 			if early {
 				edge.Before, edge.After = edge.After, edge.Before
 			}
-			addDependency(edge)
+			dependencies = appendDependency(dependencies, edge)
 		}
 	}
 	if pool := streaming.Pool(spec); pool != "default" {
 		effects = append(effects, &protocol.PlanningEffect{Subject: poolSubject(pool), Action: protocol.PlanningEffect_READ})
 	}
 	return effects, dependencies, nil
+}
+
+// appendRead appends a read of a copy of subject to effects, unless effects
+// already holds an effect on the same subject.
+func appendRead(effects []*protocol.PlanningEffect, subject *protocol.ComparisonIdentity) []*protocol.PlanningEffect {
+	for _, effect := range effects {
+		if provider.CompareIdentities(effect.Subject, subject) == 0 {
+			return effects
+		}
+	}
+	return append(effects, &protocol.PlanningEffect{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ})
+}
+
+// appendDependency appends edge to dependencies, unless an equal edge is there
+// already.
+func appendDependency(dependencies []*protocol.PlanningDependency, edge *protocol.PlanningDependency) []*protocol.PlanningDependency {
+	for _, known := range dependencies {
+		if proto.Equal(edge, known) {
+			return dependencies
+		}
+	}
+	return append(dependencies, edge)
+}
+
+// writesSlot reports whether the common step writes something and has an
+// effect on the scheme slot resource. A step that only reads, or that never
+// touches the slot, does not order against the query.
+func writesSlot(common *protocol.CommonPlanningStep, resource *protocol.ComparisonIdentity) bool {
+	writes, touches := false, false
+	for _, effect := range common.GetMetadata().GetEffects() {
+		writes = writes || effect.Action != protocol.PlanningEffect_READ
+		touches = touches || provider.CompareIdentities(resource, objectplan.Slot(effect.Subject)) == 0
+	}
+	return writes && touches
 }
 
 func queryPath(database, name string) (*protocol.ComparisonIdentity, error) {
