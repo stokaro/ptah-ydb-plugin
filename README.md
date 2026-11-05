@@ -921,15 +921,25 @@ sentence.
 
 Where YDB's issues say a feature flag is off, the reason names the capability
 and the flag, as the host's embedded engine words such a refusal, around the
-provider's own reason where the host's engine quotes YDB's text. The plan took
-the capability from the release line's default, and the cluster runs with the
-flag off. The texts and the flags they name are the host's measured ones
-(`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and 26.2.1.14, where
-`EnableResourcePools` is off by default:
+provider's own reason where the host's engine quotes YDB's text, then what to
+do. A session whose address names no monitoring endpoint took the capability
+from its release line's default, and is told to name the endpoint as well as
+to turn the flag on; one whose address names it read the flags already, and is
+told only to turn the flag on. The texts and the flags they name are the
+host's measured ones (`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and
+26.2.1.14, where `EnableResourcePools` is off by default, without the endpoint:
 
 ```text
 provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans
 ```
+
+and with it, the same sentence up to `Turn the flag on`.
+
+25.1.4.7 has no unique secondary index, and refuses one with `Unknown index
+type: syncGlobalUnique` inside its execution stage, before it proposes a
+schema operation. The unit is NOT_APPLIED (PARTIAL after an applied prefix),
+with the reason `YDB refused the statement: the YDB release the cluster runs
+has no unique secondary index (GENERIC_ERROR, issue 1060, line 1, column N)`.
 
 ## Operational storage reservations
 

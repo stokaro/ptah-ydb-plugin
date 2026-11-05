@@ -178,6 +178,7 @@ func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest
 			}
 		}
 		answer := ydbfailure.Read(err)
+		answer.FlagsRead = s.connection.HasMonitoring()
 		if s.realm {
 			answer = answer.WithoutLines(realmPrefixLines)
 		}
