@@ -1,4 +1,0 @@
-# A host adds the provider's indexes metric to its own count only with this
-# host change (stokaro/ptah#5378, branch fix/4204-g23-owner-indexes); a host
-# without it refuses `schema stats`. Remove this file once it is merged.
-fix/4204-g23-owner-indexes
