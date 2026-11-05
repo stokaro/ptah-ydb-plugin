@@ -28,6 +28,6 @@ permissions:
   contents: read
 jobs:
   pages:
-    uses: stokaro/ptah/.github/workflows/provider-docs.yml@docs/4204-provider-docs-import
+    uses: stokaro/ptah/.github/workflows/provider-docs.yml@master
     with:
       engine: ydb
