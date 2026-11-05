@@ -376,9 +376,18 @@ first, with the host's statements. A coordination node is dropped through the
 coordination service. An object there is no statement for, such as a resource
 pool, refuses the cleanup before anything is dropped, and the reply names it. A
 cleanup that stops after its first step is `UNKNOWN`, and the host treats the
-database as not clean. One difference from the host is deliberate: the host
-drops the lock node at the root of a realm, and the provider keeps it, because a
-provider session holds its locks there.
+database as not clean.
+
+A session on a dev realm takes its locks on a `ptah_locks` node at the realm's
+root, and the cleanup of the realm keeps that node, where the host's embedded
+engine dropped a node there. That engine took a realm session's locks on the
+node at the database root instead (`path.Join(driver.Name(), "ptah_locks")` in
+its `internal/dblockext/ydb`; measured on 25.1.4.7, a realm run creates the
+root's node), so the realm's node was no lock of its, and it created the root's
+node from inside a realm, which the realm's guard refuses for every other
+write. The provider keeps a realm session inside its realm: its lock node is
+there, and the read and the cleanup leave it alone as they leave the database
+root's node alone.
 
 `internal/devclean/testdata` holds scheme trees and what the host's embedded
 engine listed, dropped and removed for each, recorded by an oracle program; the
@@ -441,13 +450,19 @@ object and no row, or for a text YDB refused while compiling it, which its
 issues show by naming a position in the text and no execution stage) and a
 unit that ran in a caller transaction, which YDB
 applies only by its commit, or that is one query YDB applies whole: a data
-query or one scheme statement. Its message is YDB's own issue text on one line,
-which no host prints; its reason is the provider's (see
+query or one scheme statement. A native unit whose first statement YDB refused
+is judged by that statement: the service reads and checks before it writes, and
+writes only through its statements, so nothing of the unit was applied. That
+holds for every native unit but a column inventory, which alters a table through
+the table service first, a rebuild's copy, a table creation or alteration and a
+coordination node operation, which run no statement. Its message is YDB's own
+issue text on one line, which no host prints; its reason is the provider's (see
 [Error reasons](#error-reasons)).
 Every other failed dispatched unit reports `UNKNOWN`, even when earlier units
 succeeded: a block or action call that runs scheme statements, a `BATCH`
-statement, a unit of several scheme statements, a native unit, a unit that
-holds a coordination node statement, a unit that expands secret inputs, and a
+statement, a unit of several scheme statements, a native unit past its first
+statement, a unit that holds a coordination node statement, a unit that expands
+secret inputs, and a
 failure that carries no server status. A unit that holds a comment statement
 runs as its statements one after another, and reads by the first one when that
 one fails, since nothing of the unit ran before it: a query by the rules above,
@@ -519,10 +534,10 @@ receipts explicitly report `transactional_ddl=false`. Live tests verify that
 DDL and SQL transaction-control statements cannot escape an explicit data
 transaction. See [YDB transaction semantics](https://ydb.tech/docs/en/concepts/transactions).
 
-Coordination, external object, row-table creation, row-table alteration and changefeed operations use native envelopes, or
-YQL statements in the TEXT form; see [Text units](#text-units). Topic
-operations have native envelopes only. Other operation
-models remain to be extracted. A SQL unit that runs one of the host's
+Coordination, external object, row-table creation, row-table alteration,
+changefeed and topic operations use native envelopes, or YQL statements in the
+TEXT form; see [Text units](#text-units). Other operation models remain to be
+extracted. A SQL unit that runs one of the host's
 coordination node statements is run through the coordination service; the
 host's extended comment statements are not implemented here.
 
@@ -589,6 +604,7 @@ this provider's `Execute` does with it what the native call does:
 | Column table | The `CREATE TABLE ... STORE = COLUMN` and TTL statements the provider runs |
 | Coordination node | `CREATE COORDINATION NODE ... WITH (...)`, `ALTER ... SET (...)` naming the settings that change, `DROP COORDINATION NODE` |
 | External data source or external table | `CREATE`, `CREATE OR REPLACE` or `DROP EXTERNAL DATA SOURCE` or `EXTERNAL TABLE`, with the paths and options as the declaration writes them |
+| Topic | `CREATE TOPIC` with its consumers and the settings the declaration states, `DROP TOPIC`, or the `ALTER TOPIC` statements of an alteration, one to a line: the statements `Execute` runs natively for the change |
 | Changefeed change | One statement to a line: `ALTER TABLE ... DROP CHANGEFEED` for each removal, then `ALTER TABLE ... ADD CHANGEFEED` for each addition with one `ALTER TOPIC ... ADD CONSUMER` per consumer, then the `ALTER TOPIC` statements that change a topic in place |
 
 YQL has no coordination node statement, so `Execute` reads one as the host's
@@ -664,8 +680,8 @@ than what that declaration states. A host that does not list the feature gets
 no reversal service and refuses every such change, naming the change kind
 that has no reversal.
 
-A topic reverses like any other object, but no migration file holds a topic
-(see [Text units](#text-units)).
+A topic reverses like any other object, and a migration file holds its
+statements (see [Text units](#text-units)).
 
 ## Common objects
 
@@ -804,10 +820,28 @@ or `stokaro/ptah-ydb-plugin/history-v1/atlas`. This is a storage format version,
 not a stable SDK release. Reads and writes verify the marker, column types,
 primary key, and absence of automatic behavior such as TTL or changefeeds.
 Unknown fields, malformed records, altered layouts, and unmarked tables are
-refused. Older Ptah tables are left untouched. This changes storage behavior;
-pre-v1, so no compatibility is owed. The Atlas format preserves SDK revision
-semantics; it does not reproduce the legacy Atlas SQL column layout or promise
-interchange with external Atlas tools.
+refused, with one exception: the revision tables Ptah's built-in YDB engine
+wrote.
+
+That engine kept a database's migrations in tables of its own layout, with no
+attribute: the native `schema_migrations` (version, description, applied_at,
+state, applied, total, error, error_stmt, execution_time_ms, checksum), and
+the Atlas-compatible `atlas_schema_revisions` that `ptah-compat migrate apply`
+writes. A revision table with no attribute and exactly one of those layouts is
+read as history, and every revision written to it keeps that layout, so a
+dirty migration the engine left stays dirty with its progress, a resume
+continues it, and the engine still reads the table: a down run is suffixed
+`:down` in `state` as the engine wrote it, an empty error is NULL in the native
+table and an empty string in the Atlas one, and no partial hashes are the JSON
+`null`. Those layouts keep the time to the microsecond, the native run time to
+the millisecond, and no operator version or partial hashes in the native
+table, so a revision written there holds no finer part, and a native record
+with one is refused. Under the engine's default names such a table is also
+left out of a schema read, as the engine left it out, so a plan for its
+directory does not drop it. A table that is neither the provider's nor one of
+those layouts is still refused. The provider's own Atlas format preserves SDK
+revision semantics; it does not reproduce the Atlas SQL column layout or
+promise interchange with external Atlas tools.
 
 Mutations compare the complete expected record before inserting, replacing, or
 deleting it. The comparison and write share one native serializable transaction.
@@ -838,8 +872,13 @@ in one request. Its value is `stokaro/ptah-ydb-plugin/metadata-v1/log` for journ
 or `stokaro/ptah-ydb-plugin/metadata-v1/tags` for tags. Preparation and operations
 refuse unmarked tables, unknown markers, altered columns or keys, indexes,
 changefeeds, and automatic deletion settings. Reads also refuse unknown,
-noncanonical, corrupt, or mismatched record identities. Existing Ptah SQL stores
-are not adopted; pre-v1, so no compatibility is owed.
+noncanonical, corrupt, or mismatched record identities. The log and tag tables
+Ptah's built-in YDB engine wrote, `schema_migrations_log` (run_id, seq,
+operation, version, state, actor, actor_source, checksum, logged_at, error)
+and `ptah_migration_tags` (tag, version, recorded_at), are read and written in
+that layout, with no attribute, as its revision tables are; the time is kept to
+the microsecond, and an empty actor, checksum or error is NULL. Under those
+default names they are left out of a schema read too.
 
 Log writes use a separate serializable transaction and remain durable when an
 execution transaction rolls back. Log scopes cannot name that execution
@@ -881,17 +920,22 @@ exercise native file cleanup.
 The lock service uses exclusive ephemeral semaphores on the database-root
 `ptah_locks` coordination node. Each acquisition has its own native session.
 The provider creates a missing node with strict read and attach consistency.
-An existing node must have both settings explicitly strict; the provider refuses
-an incompatible configuration without changing it. The refusal is a
+Ptah's built-in YDB engine creates the node with neither setting, which YDB
+reads as relaxed reads, so every database that engine locked holds such a
+node: the provider alters a node that sets neither mode to strict reads and
+attachment before it takes a lock there, as a run of that engine took its
+locks there, and a session of that engine that still holds a lock keeps it. A
+user who may use the node but not alter it is refused with the right to grant.
+Any other node must have both settings explicitly strict; the provider refuses
+one someone set otherwise without changing it. The refusal is a
 `NOT_ACQUIRED` receipt that holds nothing, and its reason names the node and its
-two settings. Ptah's built-in YDB engine creates the node with neither setting,
-so a database that engine locked holds a node this provider refuses until it is
-made strict or removed.
+two settings.
 
 YDB's CLI (2.25.0 and 2.29.0, bundled with 25.1.4.7 and 26.2.1.14) and YQL have
-no command for a coordination node, so the fix goes through the coordination
-service. With [ydb-go-sdk](https://github.com/ydb-platform/ydb-go-sdk), alter
-the node in place:
+no command for a coordination node, so making such a node strict goes through
+the coordination service. With
+[ydb-go-sdk](https://github.com/ydb-platform/ydb-go-sdk), alter the node in
+place:
 
 ```go
 err := driver.Coordination().AlterNode(ctx, path.Join(driver.Name(), "ptah_locks"), coordination.NodeConfig{
@@ -905,8 +949,6 @@ it strict. Remove it only while no run holds a lock there: dropping the node end
 every lock session on it. YDB's default read mode can
 return stale state during leader changes; see the
 [YDB coordination documentation](https://ydb.tech/docs/en/reference/ydb-sdk/coordination).
-This changes the requirements for an older Ptah lock node; pre-v1, so no
-compatibility is owed. Configure that reserved node explicitly before using it.
 
 The provider finds the node by describing its path rather than by listing the
 database root, so a user granted the node takes the lock without the right to
@@ -1004,11 +1046,30 @@ showing whether it applied), followed by YDB's status, the most specific issue
 code and the position YDB named, counted in the unit's own text: on a dev
 realm, the realm's pragma YDB received first is not counted. For the issue
 codes 2003, 2012, 2031 and 2032
-it also says what the statement did, in the provider's words. It never quotes
-YDB's issue text: measured on 25.1.4.7 and 26.2.1.14, that text quotes the
+it also says what the statement did, in the provider's words. Apart from the
+paths of the objects a refused DROP leaves in place, it never quotes YDB's
+issue text: measured on 25.1.4.7 and 26.2.1.14, that text quotes the
 token YDB refused, a string literal of the statement and the table's path, and
 a statement can carry a password or a bound secret. The issue text stays in the
-result's message. A unit the provider refused before YDB answered, a statement
+result's message. The one sentence a reason takes from YDB's answer is the
+check a rebuild's copy fails with, which the provider wrote into the statement
+and which names the table and the column, as the host's embedded engine printed
+it:
+
+```text
+provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the statement: rebuilding table app.items: column n holds a value that does not convert to its new type (PRECONDITION_FAILED)
+```
+
+INTERNAL_ERROR shows nothing about a statement, with one measured exception:
+26.2.1.14 fails an `UPSERT` on a table with a unique index that names no column
+a synchronous index is keyed on while it plans the query
+(`verification=!hasUniqIndex || !usedIndexes.empty()` in
+`kqp_opt_phy_upsert_index.cpp`), and writes nothing; 25.1.4.7 runs the same
+statement. Such a data statement is refused rather than unknown: a unit is
+NOT_APPLIED with the reason that YDB cannot plan the `UPSERT` and that naming
+every column of the table, or `UPDATE` or `INSERT`, avoids it, and a statement
+the host runs for an operator, such as a check or a test assertion, FAILED
+with YDB's issues. A unit the provider refused before YDB answered, a statement
 timeout, a lost lock and a commit YDB did not confirm each give a fixed
 sentence.
 
@@ -1027,6 +1088,17 @@ provider execution: NOT_APPLIED (0 units confirmed applied): capability resource
 ```
 
 and with it, the same sentence up to `Turn the flag on`.
+
+YDB refuses a DROP of an object other objects depend on, such as an external
+data source an external table reads, with `SCHEME_ERROR` before it changes
+anything, and names the dependents inside issue 2019. Their paths are the one
+part of YDB's text a reason repeats, as Ptah's built-in YDB engine printed
+them, because the operator has to drop them first. Measured on 25.1.4.7 and
+26.2.1.14:
+
+```text
+provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the statement: other scheme objects depend on what it drops, /local/readers/tbl; drop them first (SCHEME_ERROR, issue 2019)
+```
 
 25.1.4.7 has no unique secondary index, and refuses one with `Unknown index
 type: syncGlobalUnique` inside its execution stage, before it proposes a
@@ -1079,9 +1151,16 @@ The observations carry their complete native field definitions and digests.
 Normalization works offline after the database session closes.
 
 Schema selectors name exact directories relative to the selected database.
-Use `/` for its root. An unfiltered read walks subdirectories. System
-(dot-prefixed) directories are excluded; user tables are not excluded merely
-because their names begin with a dot. Traversal and snapshot size are bounded.
+Use `/` for its root. An unfiltered read walks subdirectories. A directory
+whose name starts with a dot is not read, as the host's embedded engine read
+none: `.sys`, `.metadata` and the other directories YDB keeps for itself, and
+a user's directory such as `.hidden`. The read claims such a directory, and a
+selected path below one, as empty, so a declared object there is created, and
+nothing there is dropped. Measured on 26.2.1.14, that engine also plans the
+creation again on the next run, which YDB refuses (`path exist`); through the
+provider the next run is refused before the unit is sent.
+A table whose own name begins with a dot is read like any other. Traversal and
+snapshot size are bounded.
 Coverage names inspected subjects and records native-object completeness for
 each directory whose listing and child reads finished. These regions bind the
 exact database, empty catalog, and exact schema directory; an unfiltered read
@@ -1117,8 +1196,8 @@ A read with no selector claims more than the directories it lists. With a
 host that lists `schema.subtree-coverage` (contract 25.22, ADR 0064 in Ptah),
 the provider declares `/` as its schema separator, and the read sends one
 complete region over the root and every directory below it, and an unknown
-region over each directory the walk leaves out, the dot-prefixed directories
-and the dev realm directory, with everything below them. A native object in a
+region over the directory the walk leaves out, the dev realm directory, with
+everything below it. A native object in a
 directory that does not exist yet is then absent, and `schema apply` or
 `migrations generate` with no `--schemas` creates it, as the host's embedded
 engine does. One declared below a directory the walk leaves out stays
@@ -1381,10 +1460,14 @@ them: the read reports a sequence's start and increment as the column's
 `identity_start` and `identity_increment` beside `auto_increment`, and refuses a
 sequence with any other setting. A facet a source states
 by writing nothing, such as an empty changefeed set, an empty native index set
-or a column of the default family, is written by the table's own part. A Go
-export also gives each column the Go type of its YDB type, as the host's
-embedded engine does, and refuses a nullable key column, which no declaration
-can ask for.
+or a column of the default family, is written by the table's own part. The
+default family every row table holds is written only when it has a setting of
+its own, such as a compression or a storage pool, and a declaration that leaves
+it out keeps what the table holds. A Go export writes the table directive's
+attributes in the host's embedded engine's order: a column table's storage,
+with `store="column"`, then the TTL, then the partitioning and the starting
+layout. It also gives each column the Go type of its YDB type, as that engine
+does, and refuses a nullable key column, which no declaration can ask for.
 
 What no declaration states is a loss for its value, in one line that names it:
 an access requirement, table attributes, storage settings, tiering, a temporary
@@ -1603,7 +1686,9 @@ properties were not read, leaves the TTL alone.
 
 ### Column tables
 
-A column table is declared with `store="COLUMN"` in the Go table directive, or
+A column table is declared with `store="COLUMN"` in the Go table directive (in
+either case; an export writes `store="column"`, as the host's embedded engine
+did), or
 with the `column_store` mapping in YAML. The Go attributes `partition_by_hash`
 (a comma separated list of key columns), `column_shards` (a positive 32-bit
 count) and `column_ttl`, and the YAML keys `hash_columns`, `partitions` and
@@ -2056,9 +2141,16 @@ step that creates an object below it. That holds whichever planning service
 plans the other step: a drop records a `ydb.scheme-directory` creation at its
 path, a creation reads each directory above its own, and the host runs a
 creation before another service's read. A drop below a path where the plan
-creates an object is refused, since YDB keeps a directory after its last object
-goes and YQL has no statement that removes one. Any other overlap of parent and
-descendant paths, and an unsupported common footprint, is refused. The host's window markers (such as `common/feature-creations`) and the
+creates an object is refused before anything runs, since YDB keeps a directory
+after its last object goes and YQL has no statement that removes one. The
+refusal is the host's embedded engine's, `this plan drops app/holder/events and
+creates an object at app/holder, which is a directory in the database`, also
+where two planning services plan the two objects, and where both are tables. A
+service sees only its own changes, so the pair of two services is refused in
+the streaming query service's call, which the host asks on every plan with the
+desired and current objects of every kind and the subject of every change. Any
+other overlap of parent and descendant paths, and an unsupported common
+footprint, is refused. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
 the change is refused. A parent directory that does not exist holds no node,
@@ -3052,6 +3144,9 @@ The copy reads each column as the new table declares it. A changed type is
 converted with `CAST` and unwrapped, so a value that does not convert fails the
 copy with a message naming the table and the column instead of becoming NULL;
 a column made NOT NULL is unwrapped too, which fails the copy on a NULL row.
+The copy is one data query, so YDB's refusal shows that nothing of it applied:
+`schema apply` stops PARTIAL after the new table's creation, and the reason
+carries the message (see [Error reasons](#error-reasons)).
 The new table keeps the old table's attributes, and with them the comments Ptah
 keeps there, and each storage setting the declaration does not state, as the
 old table holds it: every column family, the default one and one no column
@@ -3059,7 +3154,8 @@ sits in included, with the settings the declaration leaves out (its cache mode
 among them, which a target without `column_family_cache_mode` refuses to
 write), the family each column sits in where the declaration does not say (see
 [Column families](#column-families)), the automatic partitioning, the read replicas, the key bloom
-filter, the TTL where the declaration states no table properties, and the run
+filter (`KEY_BLOOM_FILTER = DISABLED` for a table that states none, as the host's
+embedded engine names it), the TTL where the declaration states no table properties, and the run
 interval of the TTL it holds where the declaration states a TTL, which names
 none since YQL has no setting for one. A cluster's table profile may have
 given the old table any of them, and YQL drops neither a family nor a setting,
@@ -3098,8 +3194,12 @@ target. YDB renames no table that carries a changefeed, so a rebuild of a
 table that holds changefeeds drops them in a step before the old table moves
 and gives the new table its changefeeds in a step after it is in place: the
 ones the declaration states, or the ones the old table held where the
-declaration does not state them, with their consumers. Each stream restarts,
-and the plan's note says so. A changefeed an asynchronous replication
+declaration does not state them, with their consumers. Each stream restarts.
+The rebuild's first step carries the note, after the rebuild's own notes, in
+the host's embedded engine's words: `Changefeed feed of table app/cf is dropped
+before the swap and added again after it, because YDB moves no table that
+carries a changefeed`, and a changefeed the new table does not get is noted as
+dropped with its topic. A changefeed an asynchronous replication
 controls refuses the rebuild, as does a column table, whose rebuild needs an
 explicit data migration.
 The live tests rebuild a table natively and by text on both release lines,

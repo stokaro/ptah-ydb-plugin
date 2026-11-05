@@ -52,8 +52,9 @@ func hclItems(directory, nType string, tsNull bool) string {
 
 // hclRebuildCase is a table items created with a TTL, column families or
 // splitting settings HCL cannot state, the type HCL then declares its column
-// n with, and what the server holds of the table's storage before the
-// rebuild and after it. Declaring the Int32 column n again makes the
+// n with, and what the server holds of the table's storage after the
+// rebuild. Before it the table holds the same, with no key bloom filter
+// stated. Declaring the Int32 column n again makes the
 // nullable column ts NOT NULL instead (see hclItems).
 type hclRebuildCase struct {
 	name, create, nType string
@@ -61,22 +62,24 @@ type hclRebuildCase struct {
 }
 
 // hclRebuildCases are the tables the rebuilds from HCL start from, for native
-// ptah and for ptah-compat alike.
+// ptah and for ptah-compat alike. Each new table holds KEY_BLOOM_FILTER =
+// DISABLED, which the rebuild names where the old table states no filter, as
+// the host's embedded engine names it.
 func hclRebuildCases() []hclRebuildCase {
 	plain := []string{"default compression=off"}
 	return []hclRebuildCase{
 		{name: "a TTL, for a widened column", nType: "Int64",
 			create: "CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `ts` Timestamp, PRIMARY KEY (`id`)) WITH (TTL = Interval('P1D') ON `ts`)",
-			want:   storedTable{TTL: "ts 86400s", Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0", ReadReplicas: ""}},
+			want:   storedTable{TTL: "ts 86400s", Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0", ReadReplicas: "", KeyBloomFilter: "DISABLED"}},
 		{name: "column families, for a widened column", nType: "Int64",
 			create: "CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `ts` Timestamp FAMILY `cold`, PRIMARY KEY (`id`), " +
 				"FAMILY `default` (COMPRESSION = 'lz4'), FAMILY `cold` (DATA = '" + storagePool + "', COMPRESSION = 'lz4'))",
 			want: storedTable{Families: []string{"cold data=hdd compression=lz4 columns=ts", "default compression=lz4"},
-				Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0", ReadReplicas: ""}},
+				Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0", ReadReplicas: "", KeyBloomFilter: "DISABLED"}},
 		{name: "splitting settings and read replicas, for a column made NOT NULL", nType: "Int32",
 			create: "CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `ts` Timestamp, PRIMARY KEY (`id`)) WITH (" +
 				"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3, READ_REPLICAS_SETTINGS = 'PER_AZ:1')",
-			want: storedTable{Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=3 max=0", ReadReplicas: "PER_AZ:1"}},
+			want: storedTable{Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=3 max=0", ReadReplicas: "PER_AZ:1", KeyBloomFilter: "DISABLED"}},
 	}
 }
 
@@ -101,7 +104,11 @@ func TestHostRebuildFromHCLKeepsWhatTheDocumentLeavesOut_HappyPath(t *testing.T)
 			c.Assert(execFixtureSchema(c.Context(), opened.DB, strings.ReplaceAll(test.create, "{table}", absolute)), qt.IsNil)
 			_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, n, ts) VALUES (1l, 1, CurrentUtcTimestamp())") // #nosec G202 -- the path is a table under a directory this test generated
 			c.Assert(err, qt.IsNil)
-			c.Assert(heldStorage(c, opened, absolute), qt.DeepEquals, test.want)
+			// The old table states no key bloom filter; the new one names it
+			// DISABLED.
+			created := test.want
+			created.KeyBloomFilter = ""
+			c.Assert(heldStorage(c, opened, absolute), qt.DeepEquals, created)
 
 			rebuildRuns(c, directory, "hcl", hclItems(directory, test.nType, test.nType == "Int64"))
 

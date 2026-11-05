@@ -67,6 +67,15 @@ UPDATE `app/items` SET note = $name WHERE id = 1l;
 It runs as four queries: the `CREATE TABLE`, the definition with the `UPSERT`,
 the definition with the `ALTER TABLE`, and the definition with the `UPDATE`.
 
+YDB 26.2 fails an `UPSERT` on a table with a unique index when the statement
+names no column that a synchronous global index is keyed on. The server answers
+`INTERNAL_ERROR` with
+`verification=!hasUniqIndex || !usedIndexes.empty();fline=kqp_opt_phy_upsert_index.cpp:359`
+and writes nothing. This is a defect in the server: 25.1 runs the same
+statement. Ptah reports the query as refused, with the reason, and the run
+stops there. Name every column of the table in such an `UPSERT`, or use
+`UPDATE` or `INSERT`, which 26.2 runs.
+
 The queries are what the revision counts, what partial hashes digest and what a
 resume skips. Progress is recorded after each query. An interrupted schema query
 leaves its outcome unknown, as an interrupted statement does in a file whose
@@ -93,7 +102,13 @@ gives the provider's rules in full.
 
 The provider keeps the revision table, the migration log and the tag table, in
 the directory `--migrations-schema` names or at the database root; see
-[Migration history](../README.md#migration-history).
+[Migration history](../README.md#migration-history). A database Ptah's
+built-in YDB engine migrated keeps its tables: the provider reads and writes
+that engine's `schema_migrations`, `schema_migrations_log`,
+`ptah_migration_tags` and `atlas_schema_revisions` in their own layout, so
+`migrations status`, `up`, `down`, `--allow-dirty` resumes, tags and
+`ptah-compat migrate apply` continue where that engine stopped, and the
+engine can still read the tables.
 
 A primary key change, a column type change or `SET NOT NULL` is planned only as
 a table rebuild, and only when `migrations generate` is given
@@ -132,8 +147,9 @@ YQL has no advisory lock, so the provider takes Ptah's migration lock as a
 semaphore on the coordination node `ptah_locks` at the database root, one
 semaphore per lock name. It is exclusive and ephemeral: the server releases it
 when the session that holds it ends, whether the run released it or died. The
-provider creates a missing node with strict consistency and refuses a node that
-is not strict, as [Coordination locks](../README.md#coordination-locks)
+provider creates a missing node with strict consistency, makes strict the node
+Ptah's built-in YDB engine created with neither mode set, and refuses a node
+someone set otherwise, as [Coordination locks](../README.md#coordination-locks)
 describes. The node holds no data, so dropping it while no run is active is
 safe, and the next run creates it again. The provider's read leaves it out, so a
 plan never drops it. Like every advisory lock, it keeps Ptah runs apart; it does

@@ -54,7 +54,9 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	case coordinationplan.ServiceID:
 		result, err = coordinationplan.Plan(ctx, request)
 	case streamingplan.ServiceID:
-		result, err = streamingplan.Plan(ctx, request)
+		if result = directoryConflict(request); result == nil {
+			result, err = streamingplan.Plan(ctx, request)
+		}
 	case topicplan.ServiceID:
 		result, err = topicplan.Plan(ctx, request)
 	case externalplan.ServiceID:

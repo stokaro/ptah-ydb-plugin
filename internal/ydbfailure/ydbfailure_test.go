@@ -135,6 +135,60 @@ func TestReadKnowsNoStatusOfAnErrorYDBDidNotReturn(t *testing.T) {
 	}
 }
 
+// copyCheck is the issue 25.1.4.7 and 26.2.1.14 give a rebuild's copy whose
+// Unwrap meets a value that does not convert: PRECONDITION_FAILED with the
+// check's message after the server's own words, measured.
+func copyCheck(message string) *Ydb_Issue.IssueMessage {
+	return issue(0, 0, 0, "Terminate was called, reason(141): <main>:1:202: Failed to unwrap empty optional:\n\n"+message+"\n\n\n")
+}
+
+// The check a rebuild's copy failed with is the provider's own sentence, and
+// Read takes it from YDB's issue, nested or not, for each check the copy
+// writes.
+func TestReadTakesTheCheckARebuildCopyFailed_HappyPath(t *testing.T) {
+	for _, test := range []struct{ name, message string }{
+		{"a value that does not convert", "rebuilding table app.items: column n holds a value that does not convert to its new type"},
+		{"NULL or a value that does not convert", "rebuilding table app.items: column n holds NULL or a value that does not convert to its new type"},
+		{"NULL in a column made NOT NULL", "rebuilding table items: column id holds NULL, and the new table declares it NOT NULL"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			flat := ydbfailure.Read(&answered{status: Ydb.StatusIds_PRECONDITION_FAILED, issues: []*Ydb_Issue.IssueMessage{copyCheck(test.message)}})
+			nested := ydbfailure.Read(&answered{status: Ydb.StatusIds_PRECONDITION_FAILED,
+				issues: []*Ydb_Issue.IssueMessage{issue(1060, 0, 0, "Execution", copyCheck(test.message))}})
+			c.Assert(flat.Check, qt.Equals, test.message)
+			c.Assert(nested.Check, qt.Equals, test.message)
+		})
+	}
+}
+
+// Only a check the provider writes is taken: a sentence of the copy's grammar
+// in any other issue, a failed Unwrap of another message, and an Unwrap of a
+// sentence that is almost the copy's give no check.
+func TestReadTakesTheCheckARebuildCopyFailed_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		issue *Ydb_Issue.IssueMessage
+	}{
+		{"outside a failed Unwrap", issue(0, 0, 0, "rebuilding table app.items: column n holds a value that does not convert to its new type")},
+		{"another message", copyCheck("hunter2-secret")},
+		{"another ending", copyCheck("rebuilding table app.items: column n holds hunter2-secret")},
+		{"text after the check", copyCheck("rebuilding table app.items: column n holds a value that does not convert to its new type, hunter2-secret")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			read := ydbfailure.Read(&answered{status: Ydb.StatusIds_PRECONDITION_FAILED, issues: []*Ydb_Issue.IssueMessage{test.issue}})
+			c.Assert(read.Check, qt.Equals, "")
+		})
+	}
+}
+
+// upsertOn262 is 26.2.1.14's answer to an UPSERT that names no column a
+// synchronous index is keyed on, on a table with a unique index, as Read reads
+// it: INTERNAL_ERROR from the planner, measured.
+var upsertOn262 = located(answer(Ydb.StatusIds_INTERNAL_ERROR, "Execution", "Default error",
+	"ydb/library/actors/core/log.cpp:881: verification=!hasUniqIndex || !usedIndexes.empty();fline=kqp_opt_phy_upsert_index.cpp:359;"), 1, 1, 165)
+
 // uniqueIndexOn251 is 25.1.4.7's answer to a unique secondary index, as
 // Read reads it: YDB refuses the index type inside the execution stage,
 // before it proposes a schema operation.
@@ -161,6 +215,10 @@ func TestConfirmed(t *testing.T) {
 		{"generic block refused while compiling", compiled(Ydb.StatusIds_GENERIC_ERROR), "SELECT 1; DO BEGIN SELECT 1; END DO", true},
 		{"generic batch", answer(Ydb.StatusIds_GENERIC_ERROR), "BATCH UPDATE t SET v = 1", false},
 		{"generic statistics", answer(Ydb.StatusIds_GENERIC_ERROR), "ANALYZE `t` (v)", true},
+		{"internal while planning a data statement", upsertOn262, "UPSERT INTO t (id, plan) VALUES (2, 'trial'u)", true},
+		{"internal while planning a block", upsertOn262, "DO BEGIN UPSERT INTO t (id, plan) VALUES (2, 'trial'u); END DO", false},
+		{"internal while planning a batch", upsertOn262, "BATCH UPDATE t SET v = 1", false},
+		{"internal of another kind", answer(Ydb.StatusIds_INTERNAL_ERROR, "Execution", "Default error"), "UPSERT INTO t (id) VALUES (1)", false},
 		{"generic statistics after a definition", answer(Ydb.StatusIds_GENERIC_ERROR), "$t = 1; ANALYZE `t`", true},
 		{"generic statistics beside a scheme statement", answer(Ydb.StatusIds_GENERIC_ERROR), "ANALYZE `t`; DROP TABLE `t`", false},
 		{"generic scheme statement before statistics", answer(Ydb.StatusIds_GENERIC_ERROR), "CREATE TABLE t (id Int64, PRIMARY KEY (id)); ANALYZE `t`", false},
@@ -268,6 +326,17 @@ func TestFailed(t *testing.T) {
 			"YDB refused the statement (GENERIC_ERROR)"},
 		{"statistics unconfirmed", answer(Ydb.StatusIds_UNDETERMINED), ydbfailure.Unit{Text: "ANALYZE `t`"}, 0, unknown,
 			"the unit's outcome is unknown: YDB answered UNDETERMINED, which does not show whether the unit applied"},
+		{"a rebuild check whose reason would not fit", ydbfailure.Answer{Status: Ydb.StatusIds_PRECONDITION_FAILED, Issues: []string{"Terminate was called"},
+			Check: "rebuilding table " + strings.Repeat("t", 500) + ": column n holds a value that does not convert to its new type"},
+			ydbfailure.Unit{Text: insert}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Terminate was called"}, refusedDuplicate},
+		{"internal while planning", upsertOn262, ydbfailure.Unit{Text: "UPSERT INTO t (id, plan) VALUES (2, 'trial'u)"}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Execution; Default error; " +
+				"ydb/library/actors/core/log.cpp:881: verification=!hasUniqIndex || !usedIndexes.empty();fline=kqp_opt_phy_upsert_index.cpp:359;"},
+			"YDB refused the statement: YDB cannot plan an UPSERT on a table with a unique index when the statement names no column a synchronous index is keyed on; " +
+				"name every column of the table, or use UPDATE or INSERT (INTERNAL_ERROR, issue 1, line 1, column 165)"},
+		{"internal of another kind", answer(Ydb.StatusIds_INTERNAL_ERROR, "Execution"), ydbfailure.Unit{Text: insert}, 0, unknown,
+			"the unit's outcome is unknown: YDB answered INTERNAL_ERROR, which does not show whether the unit applied"},
 		{"rejected without issues", answer(Ydb.StatusIds_SCHEME_ERROR), ydbfailure.Unit{Text: "DROP TABLE t"}, 0,
 			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "YDB rejected the unit"},
 			"YDB refused the statement (SCHEME_ERROR)"},
@@ -417,6 +486,21 @@ func TestRefusedReasonQuotesNothingOfTheAnswer(t *testing.T) {
 			"DROP TABLE `g75/missing`",
 			"YDB refused the statement while compiling it: it names a scheme object that does not exist or that the connection may not read (SCHEME_ERROR, issue 2003, line 1, column 12)",
 			"/local"},
+		// The copy's check is the provider's own sentence, which names the
+		// table and the column, as the host's embedded engine printed it; the
+		// server's words around it stay in the message.
+		{"a rebuild copy's check", Ydb.StatusIds_PRECONDITION_FAILED,
+			[]*Ydb_Issue.IssueMessage{copyCheck("rebuilding table g75.items: column n holds a value that does not convert to its new type")},
+			"INSERT INTO `g75/__ptah_rebuild_items` (`id`, `n`) SELECT `id` AS `id`, IF(`n` IS NULL, NULL, Unwrap(CAST(`n` AS Int64), " +
+				"'rebuilding table g75.items: column n holds a value that does not convert to its new type'u)) AS `n` FROM `g75/items`;",
+			"YDB refused the statement: rebuilding table g75.items: column n holds a value that does not convert to its new type (PRECONDITION_FAILED)",
+			"Terminate was called"},
+		{"an UPSERT the planner fails, 26.2", Ydb.StatusIds_INTERNAL_ERROR, []*Ydb_Issue.IssueMessage{issue(1060, 0, 0, "Execution", issue(0, 0, 0, "Default error",
+			issue(1, 1, 165, "ydb/library/actors/core/log.cpp:881: verification=!hasUniqIndex || !usedIndexes.empty();fline=kqp_opt_phy_upsert_index.cpp:359;")))},
+			"UPSERT INTO `g75/accounts` (`id`, `plan`) VALUES (2l, 'hunter2-secret'u)",
+			"YDB refused the statement: YDB cannot plan an UPSERT on a table with a unique index when the statement names no column a synchronous index is keyed on; " +
+				"name every column of the table, or use UPDATE or INSERT (INTERNAL_ERROR, issue 1, line 1, column 165)",
+			"kqp_opt_phy_upsert_index"},
 		{"a password the server refuses", Ydb.StatusIds_PRECONDITION_FAILED, []*Ydb_Issue.IssueMessage{issue(2029, 0, 0, "Executing ESchemeOpAlterLogin",
 			issue(2029, 0, 0, "Kikimr precondition failed", issue(0, 0, 0, "Password contains unacceptable characters")))},
 			"CREATE USER g75u PASSWORD 'hunter2-secret'",
@@ -511,4 +595,55 @@ func TestRefusedReasonNamesTheFlag_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	refused := ydbfailure.Answer{Status: Ydb.StatusIds_PRECONDITION_FAILED, Code: 2012, Issues: []string{"Constraint violated", "Conflict with existing key."}}
 	c.Assert(refused.RefusedReason(), qt.Equals, "YDB refused the statement: it violates a constraint of the table, such as a key the table holds (PRECONDITION_FAILED, issue 2012)")
+}
+
+// YDB refuses a DROP of an object other objects depend on before it changes
+// anything, as 25.1.4.7 and 26.2.1.14 answered a DROP EXTERNAL DATA SOURCE an
+// external table reads: SCHEME_ERROR, with the dependents named inside issue
+// 2019. The unit is NOT_APPLIED, and the reason names the dependents, as the
+// built-in engine at host 74de0b65b printed them.
+func TestFailedRefusesADropOthersDependOn_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		issues []*Ydb_Issue.IssueMessage
+	}{
+		{"26.2", []*Ydb_Issue.IssueMessage{
+			issue(2003, 0, 0, `Executing operation with object "EXTERNAL_DATA_SOURCE"`,
+				issue(2003, 0, 0, "Failed to execute ESchemeOpDropExternalDataSource: <main>: Error: Other entities depend on this data source, "+
+					"please remove them at the beginning: /local/g134x/tbl, code: 2003\n")),
+			issue(2019, 0, 0, "Query invalidated on scheme/internal error during Scheme execution"),
+		}},
+		{"25.1", []*Ydb_Issue.IssueMessage{
+			issue(2003, 0, 0, "<main>: Error: Other entities depend on this data source, please remove them at the beginning: /local/g134x/tbl, code: 2003\n"),
+			issue(2019, 0, 0, "Query invalidated on scheme/internal error during Scheme execution"),
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			read := ydbfailure.Read(&answered{status: Ydb.StatusIds_SCHEME_ERROR, issues: test.issues})
+
+			result := ydbfailure.Failed(read, ydbfailure.Unit{Text: "DROP EXTERNAL DATA SOURCE `g134/src`"}, 0)
+
+			c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
+			c.Assert(result.GetDiagnostic().GetReason(), qt.Equals,
+				"YDB refused the statement: other scheme objects depend on what it drops, /local/g134x/tbl; drop them first (SCHEME_ERROR, issue 2019)")
+		})
+	}
+}
+
+// Without the statement the answer says nothing of what the unit applied: a
+// native unit that ran other statements first stays UNKNOWN, and its reason
+// gives the answer's status alone.
+func TestFailedRefusesADropOthersDependOn_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	read := ydbfailure.Read(&answered{status: Ydb.StatusIds_SCHEME_ERROR, issues: []*Ydb_Issue.IssueMessage{
+		issue(2003, 0, 0, "<main>: Error: Other entities depend on this data source, please remove them at the beginning: /local/g134x/tbl, code: 2003\n"),
+		issue(2019, 0, 0, "Query invalidated on scheme/internal error during Scheme execution"),
+	}})
+
+	result := ydbfailure.Failed(read, ydbfailure.Unit{}, 0)
+
+	c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(result.GetDiagnostic().GetReason(), qt.Equals,
+		"the unit's outcome is unknown: YDB answered SCHEME_ERROR, issue 2019, which does not show whether the unit applied")
 }
