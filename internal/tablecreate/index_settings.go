@@ -192,7 +192,7 @@ func NormalizeIndexSettings(input *protocol.ValueInput) (*protocol.NormalizedVal
 		CanonicalFormat: definition.CanonicalFormat, CanonicalProjection: bytes.Clone(payload),
 		OperationSemantics: &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_BEHAVIORAL,
 			Reason: "Changes when YDB splits and merges an index's partitions, or its read replicas; no value is rewritten",
-			Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Alteration inherits server access policy"}}, nil
+			Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: alteredAccess}}, nil
 }
 
 // DecodeIndexSettings returns independent native operands after validating

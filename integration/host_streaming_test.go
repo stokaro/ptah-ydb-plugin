@@ -67,7 +67,7 @@ func TestHostStreamingQueryGraph(t *testing.T) {
 	firstStop := strings.Index(output, "ALTER STREAMING QUERY changes")
 	removedSource := strings.Index(output, "DROP TOPIC removes")
 	removedTable := strings.Index(output, "Drops a table and its rows")
-	createdTopic := strings.Index(output, "Creation inherits server access policy")
+	createdTopic := strings.Index(output, "The topic is created by this plan")
 	restarted := strings.Index(output, "resets streaming-query checkpoint state")
 	c.Assert(firstStop >= 0 && removedSource > firstStop && removedTable > firstStop && createdTopic > removedTable && restarted > createdTopic, qt.IsTrue, qt.Commentf("%s", output))
 	held, err := nativeapi.ReadStreamingQuery(c.Context(), opened.DB, database, path.Join(database, directory, "copy"))
