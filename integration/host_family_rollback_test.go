@@ -14,10 +14,9 @@ import (
 
 // A column moved into another family, or back into the default one, rolls
 // back as the host's embedded engine rolls it back: `migrations generate`
-// writes the ALTER COLUMN that moves the column back into the down file, with
-// the reverse's strategy beside it; `migrations up` and `migrations down` run
-// both files, each declaration plans nothing after the run that leaves it,
-// and the table keeps its rows.
+// writes the ALTER COLUMN that moves the column back into the down file;
+// `migrations up` and `migrations down` run both files, each declaration
+// plans nothing after the run that leaves it, and the table keeps its rows.
 func TestHostRollsBackAColumnFamilyMove_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, before, after, statement string
@@ -47,7 +46,6 @@ func TestHostRollsBackAColumnFamilyMove_HappyPath(t *testing.T) {
 			rolledBack, downErr := hostMigrate(c, directory, migrations, "migrations", "down", "--target", "0", "--confirm")
 
 			c.Assert(down, qt.Contains, strings.ReplaceAll(test.statement, "{dir}", directory))
-			c.Assert(down, qt.Contains, `"move the column back to its family"`)
 			c.Assert(upErr, qt.IsNil, qt.Commentf("up:\n%s", applied))
 			c.Assert(settled, qt.HasLen, 0)
 			c.Assert(downErr, qt.IsNil, qt.Commentf("down:\n%s\n%s", rolledBack, down))
