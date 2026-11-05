@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"testing"
@@ -27,7 +26,7 @@ func hostApplySQL(c *qt.C, directory, schemaFile string) (string, error) {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := testCommand(ctx, host, "schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", schemaFile, "--schemas", directory)
 	var report, printed bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &report, &printed

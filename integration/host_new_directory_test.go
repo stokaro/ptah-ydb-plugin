@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -197,7 +196,7 @@ func hostApplyEverywhereAs(c *qt.C, address, name, text string) (string, error) 
 	c.Assert(os.WriteFile(file, []byte(text), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := testCommand(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", address, "--schema-file", file)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output

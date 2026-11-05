@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -40,7 +39,7 @@ func hostSource(c *qt.C, flag, name, content string) string {
 	}
 	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "plan", "--dry-run", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := testCommand(ctx, host, "schema", "plan", "--dry-run", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), flag, target)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output

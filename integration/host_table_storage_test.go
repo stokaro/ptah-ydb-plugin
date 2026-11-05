@@ -352,7 +352,7 @@ func TestHostKeepsWhatAColumnFamilyDeclarationLeavesOut_HappyPath(t *testing.T) 
 			created, err := hostApplySource(c, directory, "go", replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"cold\" data=\""+storagePool+
 				"\" fields=\"body\"\n//ptah:schema:columnfamily name=\"warm\" fields=\"blob\"\n", ""), directory))
 			c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
-			_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u)")
+			_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u)") // #nosec G202 -- the path is a table under a directory this test generated
 			c.Assert(err, qt.IsNil)
 			source := replaceDirectory(familyDocs(test.families, ""), directory)
 			want := map[bool][]string{true: {"row-table-alter-operation " + directory + ".docs"}, false: {}}[test.moves]
@@ -387,7 +387,7 @@ func TestHostChangesColumnFamiliesInPlace_HappyPath(t *testing.T) {
 	created, err := hostApplySource(c, directory, "go",
 		replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"cold\" compression=\"lz4\" fields=\"body,blob\"\n", ""), directory))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body, blob) VALUES (1l, 'a'u, 'one'u, 'x'), (2l, 'b'u, NULL, NULL)")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body, blob) VALUES (1l, 'a'u, 'one'u, 'x'), (2l, 'b'u, NULL, NULL)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 
 	for _, step := range []struct {

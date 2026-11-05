@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"testing"
@@ -86,7 +85,7 @@ func assertColumnFixedPoint(c *qt.C, host, manifest, directory, text string) {
 	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 	defer cancel()
 	// #nosec G204 G702 -- the external host binary is the explicit CI fixture input
-	command := exec.CommandContext(ctx, host, "schema", "diff", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", source, "--schemas", directory, "--format", "json", "--provider-config", manifest, "--provider-engine", "ydb")
+	command := testCommand(ctx, host, "schema", "diff", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", source, "--schemas", directory, "--format", "json", "--provider-config", manifest, "--provider-engine", "ydb")
 	var diagnostics bytes.Buffer
 	command.Stderr = &diagnostics
 	output, err := command.Output()
