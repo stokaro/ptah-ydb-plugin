@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -38,9 +39,13 @@ import (
 // copy is one data query, which commits whole or not at all. Rows written to
 // the old table between the copy and the swap are not in the new one.
 //
-// A table that holds changefeeds is refused: YDB moves no table that carries
-// one (`Cannot move table with cdc streams`), and the changefeeds would have to
-// be dropped and added again around the swap.
+// YDB moves no table that carries a changefeed (`Cannot move table with cdc
+// streams`), so a rebuild of a table that holds changefeeds drops them before
+// step 3 and gives the new table its changefeeds after step 4, as the host's
+// embedded engine does: the ones the declaration states, or the ones the old
+// table held where the declaration does not state them. Each stream starts
+// again, and its consumers lose their positions. A changefeed an asynchronous
+// replication controls, or one the read cannot represent, is refused.
 
 // rebuildPrefix and replacedPrefix name the scratch tables of a rebuild, as
 // the host's embedded engine names them.
@@ -218,7 +223,10 @@ func heldType(column *protocol.ObservedColumn) string {
 
 // rebuild is one table the plan recreates, and the steps it takes.
 type rebuild struct {
-	index    int
+	index int
+	// swap is the step that moves the new table into place, which a common
+	// step on the table is rewritten to.
+	swap     int
 	table    *protocol.PlanningTable
 	owner    *protocol.Reference
 	steps    []*protocol.PlanningStep
@@ -233,22 +241,19 @@ type rebuild struct {
 // a scratch name must not take. common is what the read reported of the common
 // objects, whose comments on the table the new one keeps.
 func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names map[string]bool,
-	common *protocol.ObservedCommonObjects) (*rebuild, string, error) {
+	common *protocol.ObservedCommonObjects, capabilities map[string]bool) (*rebuild, string, error) {
 	label := tableLabel(owner)
 	subject := fmt.Sprintf("rebuilding table %q", label)
 	current := table.GetCurrent()
 	if reason := serialRebuildRefusal(desired); reason != "" {
 		return nil, subject + ": " + reason, nil
 	}
-	for _, record := range current.GetFeatures().GetFacets().GetRecords() {
-		if record.GetKind() != schema.ChangefeedProperties {
-			continue
-		}
-		var held native.ChangefeedObservations
-		if err := protojson.Unmarshal(record.GetValue().GetValue().GetPayload(), &held); err == nil && len(held.GetChangefeeds()) != 0 {
-			return nil, subject + ": the table holds changefeeds, and YDB moves no table that carries one (`Cannot move table with cdc streams`); " +
-				"drop them, rebuild, and add them again", nil
-		}
+	feeds, reason, err := rebuildChangefeeds(owner, table, desired, capabilities)
+	if err != nil {
+		return nil, "", err
+	}
+	if reason != "" {
+		return nil, subject + ": " + reason, nil
 	}
 	if name := rebuiltNativeIndex(table); name != "" {
 		return nil, subject + fmt.Sprintf(": the table declares or holds the vector or full-text index %q, which the rebuild does not create; "+
@@ -311,32 +316,131 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 		return result
 	}
 	self, scratchSubject, replacedSubject := table.GetSubject(), subjectOf(scratch), subjectOf(replaced)
-	effects := [][]*protocol.PlanningEffect{
-		{{Subject: scratchSubject, Action: protocol.PlanningEffect_CREATE}, {Subject: slot(scratchSubject), Action: protocol.PlanningEffect_CREATE}},
-		{{Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_READ}, {Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_ALTER}},
-		{{Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_ALTER}, {Subject: replacedSubject, Action: protocol.PlanningEffect_CREATE},
-			{Subject: slot(replacedSubject), Action: protocol.PlanningEffect_CREATE}},
-		{{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_DROP}, {Subject: slot(scratchSubject), Action: protocol.PlanningEffect_DROP},
-			{Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_ALTER}},
-		{{Subject: proto.CloneOf(replacedSubject), Action: protocol.PlanningEffect_DROP}, {Subject: slot(replacedSubject), Action: protocol.PlanningEffect_DROP}},
+	type rebuildStep struct {
+		operation *protocol.NormalizedValue
+		effects   []*protocol.PlanningEffect
+		notes     []string
 	}
-	result := &rebuild{owner: owner, table: table, scratch: scratch, replaced: replaced}
-	for i, operation := range []*protocol.NormalizedValue{create, copyOperation, moveOld, moveNew, drop} {
-		facts := operation.OperationSemantics
-		result.steps = append(result.steps, &protocol.PlanningStep{Id: &protocol.StepIdentity{Owner: schema.ProviderID, Name: operation.Id},
-			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: operation, Phase: protocol.PlanningOperation_LIFECYCLE,
-				Notes: rebuildNotes(label, i)},
-			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects[i]}})
+	planned := []rebuildStep{
+		{operation: create, effects: []*protocol.PlanningEffect{{Subject: scratchSubject, Action: protocol.PlanningEffect_CREATE},
+			{Subject: slot(scratchSubject), Action: protocol.PlanningEffect_CREATE}}, notes: rebuildNotes(label)},
+		{operation: copyOperation, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_READ},
+			{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_ALTER}}},
 	}
+	if len(feeds.drops) != 0 {
+		operation, err := schema.CaptureChangefeedOperation(prefix+"drop-changefeeds", owner, feeds.drops)
+		if err != nil {
+			return nil, subject + ": " + err.Error(), nil
+		}
+		planned = append(planned, rebuildStep{operation: operation, effects: changefeedEffects(self, feeds.drops, protocol.PlanningEffect_DROP), notes: feeds.notes})
+	}
+	planned = append(planned,
+		rebuildStep{operation: moveOld, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_ALTER},
+			{Subject: replacedSubject, Action: protocol.PlanningEffect_CREATE}, {Subject: slot(replacedSubject), Action: protocol.PlanningEffect_CREATE}}},
+		rebuildStep{operation: moveNew, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_DROP},
+			{Subject: slot(scratchSubject), Action: protocol.PlanningEffect_DROP}, {Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_ALTER}}})
+	result := &rebuild{owner: owner, table: table, scratch: scratch, replaced: replaced, swap: len(planned) - 1}
+	if len(feeds.adds) != 0 {
+		operation, err := schema.CaptureChangefeedOperation(prefix+"add-changefeeds", owner, feeds.adds)
+		if err != nil {
+			return nil, subject + ": " + err.Error(), nil
+		}
+		planned = append(planned, rebuildStep{operation: operation, effects: changefeedEffects(self, feeds.adds, protocol.PlanningEffect_CREATE)})
+	}
+	planned = append(planned, rebuildStep{operation: drop, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(replacedSubject), Action: protocol.PlanningEffect_DROP},
+		{Subject: slot(replacedSubject), Action: protocol.PlanningEffect_DROP}}})
+	for _, step := range planned {
+		facts := step.operation.OperationSemantics
+		result.steps = append(result.steps, &protocol.PlanningStep{Id: &protocol.StepIdentity{Owner: schema.ProviderID, Name: step.operation.Id},
+			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: step.operation, Phase: protocol.PlanningOperation_LIFECYCLE,
+				Notes: step.notes},
+			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: step.effects}})
+	}
+	return result, "", nil
+}
+
+// changefeedEffects is the footprint of a rebuild step that changes the
+// changefeeds of table: it reads the table and takes action on each
+// changefeed changes names.
+func changefeedEffects(table *protocol.ComparisonIdentity, changes []changefeeds.Change, action protocol.PlanningEffect_Action) []*protocol.PlanningEffect {
+	effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(table), Action: protocol.PlanningEffect_READ}}
+	for _, change := range changes {
+		effects = append(effects, &protocol.PlanningEffect{Subject: changefeedSubject(table, change.Name), Action: action})
+	}
+	return effects
+}
+
+// rebuiltChangefeeds are the changefeed changes of a rebuild: the ones that
+// take every changefeed off the old table before it moves, the ones that give
+// the new table its changefeeds once it is in place, and the notes that say
+// what the operator loses.
+type rebuiltChangefeeds struct {
+	drops, adds []changefeeds.Change
+	notes       []string
+}
+
+// rebuildChangefeeds returns the changefeed changes of a rebuild of the table
+// owner names into the declaration desired compiles to, or the reason the
+// rebuild cannot carry the table's changefeeds. The new table gets the
+// changefeeds the declaration states, and the ones the old table held where
+// the declaration does not state them.
+func rebuildChangefeeds(owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, capabilities map[string]bool) (rebuiltChangefeeds, string, error) {
+	declared, err := facetEnvelopes(owner, table.GetDesired().GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
+	if err != nil {
+		return rebuiltChangefeeds{}, "", err
+	}
+	observed, err := facetEnvelopes(owner, table.GetCurrent().GetFeatures().GetFacets(), protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return rebuiltChangefeeds{}, "", err
+	}
+	_, held, err := changefeedSets(nil, observed.changefeeds)
+	if err != nil {
+		return rebuiltChangefeeds{}, "", err
+	}
+	var result rebuiltChangefeeds
+	label := tableLabel(owner)
+	if len(held.GetChangefeeds()) != 0 {
+		drops, undecided := changefeeds.Diff(&native.ChangefeedSetIntent{}, held)
+		if undecided != "" {
+			return rebuiltChangefeeds{}, undecided, nil
+		}
+		// Diff keeps a stream an asynchronous replication controls, which the
+		// old table then still carries when it moves.
+		if len(drops) != len(held.GetChangefeeds()) {
+			return rebuiltChangefeeds{}, "the table holds a changefeed an asynchronous replication controls, and YDB moves no table that carries one " +
+				"(`Cannot move table with cdc streams`); the rebuild cannot drop it and add it again", nil
+		}
+		for _, change := range drops {
+			feed, err := changefeeds.FromObserved(change.Before)
+			if err != nil {
+				return rebuiltChangefeeds{}, "", err
+			}
+			result.notes = append(result.notes, changefeeds.RebuiltNote(label, feed))
+		}
+		result.drops = drops
+	}
+	wanted := declared.changefeeds
+	if !changefeedsManaged(table, declared, observed) && observed.changefeeds != nil {
+		if wanted, err = schema.ConvertNative(observed.changefeeds, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED); err != nil {
+			return rebuiltChangefeeds{}, "", err
+		}
+	}
+	indexes := make([]string, 0, len(desired.GetIndexes()))
+	for _, index := range desired.GetIndexes() {
+		indexes = append(indexes, index.GetName())
+	}
+	adds, reason, err := planChangefeeds(changefeedInput{owner: owner, managed: true, desired: wanted, indexes: indexes,
+		keyType: firstKeyType(table.GetDesired()), capabilities: capabilities})
+	if err != nil || reason != "" {
+		return rebuiltChangefeeds{}, reason, err
+	}
+	result.adds = adds
 	return result, "", nil
 }
 
 // rebuildNotes are the notes the first step of a rebuild carries above it:
 // what the rebuild does, and what it cannot keep.
-func rebuildNotes(label string, step int) []string {
-	if step != 0 {
-		return nil
-	}
+func rebuildNotes(label string) []string {
 	return []string{
 		fmt.Sprintf("Rebuild of table %s: YDB cannot make this change in place, so the table is created anew, the rows are copied, and the two tables are swapped.", label),
 		fmt.Sprintf("The steps are not atomic. Rows written to %s between the copy and the swap are lost, and YDB has no lock to stop them: stop writing to the table until the last step has run.", label),
