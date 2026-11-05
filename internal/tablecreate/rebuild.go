@@ -65,14 +65,16 @@ type rebuildNeed struct {
 	// subject names the change, as the refusal words it.
 	subject string
 	// capability is the host capability key a target would need to make it in
-	// place.
+	// place, and empty for a change no key decides, which subject says why
+	// YDB cannot make in place.
 	capability string
 }
 
 // rebuildNeeds returns the changes of an altered row table that need a
-// rebuild: its key, a column's type, a column becoming NOT NULL. The
-// declaration is compiled with the creation rules; one that does not compile
-// needs no rebuild here, and the alteration refuses it in its own words.
+// rebuild: its key, a column's type, a column becoming NOT NULL, a starting
+// layout the table was not created with (see layoutRefusal). The declaration
+// is compiled with the creation rules; one that does not compile needs no
+// rebuild here, and the alteration refuses it in its own words.
 func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps map[string]bool) ([]rebuildNeed, *Ydb_Table.CreateTableRequest) {
 	desired, err := Compile(owner, table.GetDesired(), caps)
 	if err != nil {
@@ -114,6 +116,14 @@ func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps
 				subject: fmt.Sprintf("making column %q of table %q NOT NULL", column.GetName(), label)})
 		}
 	}
+	// A layout's witness is the minimum it gives a new table, which a rebuild
+	// creates the table with: keepHeldSettings keeps no held minimum beside
+	// a layout.
+	if wanted, err := layoutOfRequest(desired); err == nil {
+		if reason := layoutRefusal(wanted, desired.GetPartitioningSettings(), heldProperties(table.GetCurrent()).GetPartitioningSettings()); reason != "" {
+			needs = append(needs, rebuildNeed{subject: fmt.Sprintf("table %q: %s", label, reason)})
+		}
+	}
 	return needs, desired
 }
 
@@ -121,6 +131,9 @@ func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps
 // plan was not asked to rebuild: the embedded engine's words, naming how the
 // operator asks for one.
 func rebuildRefusal(need rebuildNeed, policy *protocol.PlanningPolicy) string {
+	if need.capability == "" {
+		return fmt.Sprintf("%s; YDB makes it by rebuilding the table, which Ptah plans when asked with %s", need.subject, requestedWith(policy))
+	}
 	return fmt.Sprintf("%s, which requires target capability %s, unavailable on this ydb target; YDB makes it by rebuilding the table, which Ptah plans when asked with %s",
 		need.subject, need.capability, requestedWith(policy))
 }

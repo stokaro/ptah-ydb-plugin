@@ -2542,8 +2542,9 @@ column table, and refuse a table a column was added to after planning.
 
 ## Native table rebuild
 
-YDB changes neither a table's key nor a column's type in place, and makes no
-column NOT NULL. With the host's planning policy asking for a rebuild (contract
+YDB changes neither a table's key nor a column's type in place, makes no
+column NOT NULL, and takes a starting layout only when it creates a table. With
+the host's planning policy asking for a rebuild (contract
 25.3, `planning.policy`; `--allow-table-rebuild` on the native CLI), the
 planner makes such a change the way the host's embedded engine does, in five
 steps: it creates the table anew from the declaration under a scratch name
@@ -2772,10 +2773,14 @@ partitioning, the filter, or the replicas. The settings are `AUTO_PARTITIONING_B
   it except the minimum partition count it sets from it: the count of the layout,
   unless the declaration states a minimum of its own. That minimum is the only
   witness an existing table has, so a declaration whose layout sets the minimum
-  and whose minimum differs from the table's is a change the planner refuses
-  with `UNIFORM_PARTITIONS alter is not supported` (or the `PARTITION_AT_KEYS`
-  spelling) and the two minimums. A layout beside a declared minimum leaves no
-  witness and is not compared. The comparison reports the refused layout as a
+  and whose minimum differs from the table's is a change only a
+  [rebuild](#native-table-rebuild) makes. The new table is created with the
+  layout and the held value of every other setting, the minimum aside, which
+  the layout sets. Without a rebuild asked for, the planner refuses it with
+  `UNIFORM_PARTITIONS alter is not supported` (or the `PARTITION_AT_KEYS`
+  spelling), the two minimums, and the request that asks for a rebuild, such
+  as `--allow-table-rebuild`. A layout beside a declared minimum leaves no
+  witness and is not compared. The comparison reports the layout as a
   difference, so that the plan reaches the planner.
 - A minimum count above a nonzero maximum is refused, checked against the value
   the table holds for a bound the declaration leaves out.

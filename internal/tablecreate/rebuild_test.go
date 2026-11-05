@@ -377,3 +377,58 @@ func TestRebuildPlanPlacesTheColumnsTheDeclarationPlaces(t *testing.T) {
 		})
 	}
 }
+
+// layoutRebuildRequest alters app.records, which holds partitioning by load
+// and a minimum of two partitions, into a declaration of the same columns
+// with the starting layout layout, which only a creation takes.
+func layoutRebuildRequest(c *qt.C, policy *protocol.PlanningPolicy, layout string) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	request := rebuildRequest(c, policy)
+	table := request.Tables[0]
+	table.Desired.Columns[2].Type = "Int32"
+	table.Desired.Features.Facets.Records = []*protocol.ComparisonRecord{facet(c, schema.TableProperties, "", `{"primaryKey":["id"],`+layout+`}`)}
+	request.CommonSteps = nil
+	return request
+}
+
+// Asked for a rebuild, a starting layout the table was not created with is
+// planned as one: the new table is created with the layout and the held value
+// of every setting the declaration leaves out but the minimum, which the
+// layout sets.
+func TestRebuildPlanCreatesAStartingLayout_HappyPath(t *testing.T) {
+	for _, tc := range []struct {
+		name, layout, want string
+	}{
+		{"uniform partitions", `"uniformPartitions":"4"`, "UNIFORM_PARTITIONS = 4"},
+		{"split points", `"partitionAtKeys":[{"values":["10"]},{"values":["20"]}]`, "PARTITION_AT_KEYS = ((10), (20))"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			check := testcheck.New(t)
+			request := layoutRebuildRequest(check, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"}, tc.layout)
+			plan, err := backend.New().PlanFeatures(check.Context(), request)
+			check.Assert(err, qt.IsNil)
+			check.Assert(plan.Diagnostics, qt.HasLen, 0)
+			check.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
+			check.Assert(plan.Contributions[0].Steps, qt.HasLen, 5)
+			rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
+			rendering.Form = protocol.RenderRequest_TEXT
+			rendered, err := backend.New().Render(check.Context(), rendering)
+			check.Assert(err, qt.IsNil)
+			check.Assert(rendered.Units[0].GetSql(), qt.Equals, "CREATE TABLE `app/__ptah_rebuild_records` (\n    `id` Uint64 NOT NULL,\n    `payload` Utf8,\n    `n` Int32,\n"+
+				"    PRIMARY KEY (`id`)\n) WITH (AUTO_PARTITIONING_BY_LOAD = ENABLED, "+tc.want+");")
+		})
+	}
+}
+
+// Without a rebuild in the policy the layout is refused with the embedded
+// engine's words, naming how to ask for the rebuild.
+func TestRebuildPlanCreatesAStartingLayout_FailurePath(t *testing.T) {
+	check := testcheck.New(t)
+	plan, err := backend.New().PlanFeatures(check.Context(), layoutRebuildRequest(check, &protocol.PlanningPolicy{TableRebuildRequest: "--allow-table-rebuild"}, `"uniformPartitions":"4"`))
+	check.Assert(err, qt.IsNil)
+	check.Assert(plan.Diagnostics, qt.HasLen, 1)
+	check.Assert(plan.Diagnostics[0].Message, qt.Equals, "table \"app/records\": it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table "+
+		"(`UNIFORM_PARTITIONS alter is not supported`) and which gives a new table a minimum of 4 partitions, where this table holds 2. Declare "+
+		"auto_partitioning_min_partitions_count to change the minimum in place; YDB makes it by rebuilding the table, which Ptah plans when asked with --allow-table-rebuild")
+	check.Assert(plan.Contributions, qt.HasLen, 0)
+}
