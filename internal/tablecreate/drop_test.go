@@ -117,3 +117,22 @@ func TestDecodeDrop_FailurePath(t *testing.T) {
 		})
 	}
 }
+
+// A table created at the path of a directory above a table the request drops
+// is refused before anything is planned, in the host's embedded engine's
+// words: YDB keeps the directory after the drop, so the creation can never
+// apply.
+func TestCreationOverADroppedTable_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := creationPlan(c)
+	dropped := dropRequest(c).Tables[0]
+	dropped.Subject.Schema, dropped.Subject.Name = part("app/records"), part("old")
+	request.Tables = append(request.Tables, dropped)
+
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].GetMessage(), qt.Matches, "this plan drops app/records/old and creates an object at app/records, which is a directory in the database. .*")
+	c.Assert(plan.Contributions, qt.HasLen, 0)
+}
