@@ -376,9 +376,18 @@ first, with the host's statements. A coordination node is dropped through the
 coordination service. An object there is no statement for, such as a resource
 pool, refuses the cleanup before anything is dropped, and the reply names it. A
 cleanup that stops after its first step is `UNKNOWN`, and the host treats the
-database as not clean. One difference from the host is deliberate: the host
-drops the lock node at the root of a realm, and the provider keeps it, because a
-provider session holds its locks there.
+database as not clean.
+
+A session on a dev realm takes its locks on a `ptah_locks` node at the realm's
+root, and the cleanup of the realm keeps that node, where the host's embedded
+engine dropped a node there. That engine took a realm session's locks on the
+node at the database root instead (`path.Join(driver.Name(), "ptah_locks")` in
+its `internal/dblockext/ydb`; measured on 25.1.4.7, a realm run creates the
+root's node), so the realm's node was no lock of its, and it created the root's
+node from inside a realm, which the realm's guard refuses for every other
+write. The provider keeps a realm session inside its realm: its lock node is
+there, and the read and the cleanup leave it alone as they leave the database
+root's node alone.
 
 `internal/devclean/testdata` holds scheme trees and what the host's embedded
 engine listed, dropped and removed for each, recorded by an oracle program; the
@@ -441,13 +450,19 @@ object and no row, or for a text YDB refused while compiling it, which its
 issues show by naming a position in the text and no execution stage) and a
 unit that ran in a caller transaction, which YDB
 applies only by its commit, or that is one query YDB applies whole: a data
-query or one scheme statement. Its message is YDB's own issue text on one line,
-which no host prints; its reason is the provider's (see
+query or one scheme statement. A native unit whose first statement YDB refused
+is judged by that statement: the service reads and checks before it writes, and
+writes only through its statements, so nothing of the unit was applied. That
+holds for every native unit but a column inventory, which alters a table through
+the table service first, a rebuild's copy, a table creation or alteration and a
+coordination node operation, which run no statement. Its message is YDB's own
+issue text on one line, which no host prints; its reason is the provider's (see
 [Error reasons](#error-reasons)).
 Every other failed dispatched unit reports `UNKNOWN`, even when earlier units
 succeeded: a block or action call that runs scheme statements, a `BATCH`
-statement, a unit of several scheme statements, a native unit, a unit that
-holds a coordination node statement, a unit that expands secret inputs, and a
+statement, a unit of several scheme statements, a native unit past its first
+statement, a unit that holds a coordination node statement, a unit that expands
+secret inputs, and a
 failure that carries no server status. A unit that holds a comment statement
 runs as its statements one after another, and reads by the first one when that
 one fails, since nothing of the unit ran before it: a query by the rules above,
@@ -881,17 +896,22 @@ exercise native file cleanup.
 The lock service uses exclusive ephemeral semaphores on the database-root
 `ptah_locks` coordination node. Each acquisition has its own native session.
 The provider creates a missing node with strict read and attach consistency.
-An existing node must have both settings explicitly strict; the provider refuses
-an incompatible configuration without changing it. The refusal is a
+Ptah's built-in YDB engine creates the node with neither setting, which YDB
+reads as relaxed reads, so every database that engine locked holds such a
+node: the provider alters a node that sets neither mode to strict reads and
+attachment before it takes a lock there, as a run of that engine took its
+locks there, and a session of that engine that still holds a lock keeps it. A
+user who may use the node but not alter it is refused with the right to grant.
+Any other node must have both settings explicitly strict; the provider refuses
+one someone set otherwise without changing it. The refusal is a
 `NOT_ACQUIRED` receipt that holds nothing, and its reason names the node and its
-two settings. Ptah's built-in YDB engine creates the node with neither setting,
-so a database that engine locked holds a node this provider refuses until it is
-made strict or removed.
+two settings.
 
 YDB's CLI (2.25.0 and 2.29.0, bundled with 25.1.4.7 and 26.2.1.14) and YQL have
-no command for a coordination node, so the fix goes through the coordination
-service. With [ydb-go-sdk](https://github.com/ydb-platform/ydb-go-sdk), alter
-the node in place:
+no command for a coordination node, so making such a node strict goes through
+the coordination service. With
+[ydb-go-sdk](https://github.com/ydb-platform/ydb-go-sdk), alter the node in
+place:
 
 ```go
 err := driver.Coordination().AlterNode(ctx, path.Join(driver.Name(), "ptah_locks"), coordination.NodeConfig{
@@ -905,8 +925,6 @@ it strict. Remove it only while no run holds a lock there: dropping the node end
 every lock session on it. YDB's default read mode can
 return stale state during leader changes; see the
 [YDB coordination documentation](https://ydb.tech/docs/en/reference/ydb-sdk/coordination).
-This changes the requirements for an older Ptah lock node; pre-v1, so no
-compatibility is owed. Configure that reserved node explicitly before using it.
 
 The provider finds the node by describing its path rather than by listing the
 database root, so a user granted the node takes the lock without the right to
@@ -1004,8 +1022,9 @@ showing whether it applied), followed by YDB's status, the most specific issue
 code and the position YDB named, counted in the unit's own text: on a dev
 realm, the realm's pragma YDB received first is not counted. For the issue
 codes 2003, 2012, 2031 and 2032
-it also says what the statement did, in the provider's words. It never quotes
-YDB's issue text: measured on 25.1.4.7 and 26.2.1.14, that text quotes the
+it also says what the statement did, in the provider's words. Apart from the
+paths of the objects a refused DROP leaves in place, it never quotes YDB's
+issue text: measured on 25.1.4.7 and 26.2.1.14, that text quotes the
 token YDB refused, a string literal of the statement and the table's path, and
 a statement can carry a password or a bound secret. The issue text stays in the
 result's message. A unit the provider refused before YDB answered, a statement
@@ -1027,6 +1046,17 @@ provider execution: NOT_APPLIED (0 units confirmed applied): capability resource
 ```
 
 and with it, the same sentence up to `Turn the flag on`.
+
+YDB refuses a DROP of an object other objects depend on, such as an external
+data source an external table reads, with `SCHEME_ERROR` before it changes
+anything, and names the dependents inside issue 2019. Their paths are the one
+part of YDB's text a reason repeats, as Ptah's built-in YDB engine printed
+them, because the operator has to drop them first. Measured on 25.1.4.7 and
+26.2.1.14:
+
+```text
+provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the statement: other scheme objects depend on what it drops, /local/readers/tbl; drop them first (SCHEME_ERROR, issue 2019)
+```
 
 25.1.4.7 has no unique secondary index, and refuses one with `Unknown index
 type: syncGlobalUnique` inside its execution stage, before it proposes a
@@ -2056,9 +2086,16 @@ step that creates an object below it. That holds whichever planning service
 plans the other step: a drop records a `ydb.scheme-directory` creation at its
 path, a creation reads each directory above its own, and the host runs a
 creation before another service's read. A drop below a path where the plan
-creates an object is refused, since YDB keeps a directory after its last object
-goes and YQL has no statement that removes one. Any other overlap of parent and
-descendant paths, and an unsupported common footprint, is refused. The host's window markers (such as `common/feature-creations`) and the
+creates an object is refused before anything runs, since YDB keeps a directory
+after its last object goes and YQL has no statement that removes one. The
+refusal is the host's embedded engine's, `this plan drops app/holder/events and
+creates an object at app/holder, which is a directory in the database`, also
+where two planning services plan the two objects, and where both are tables. A
+service sees only its own changes, so the pair of two services is refused in
+the streaming query service's call, which the host asks on every plan with the
+desired and current objects of every kind and the subject of every change. Any
+other overlap of parent and descendant paths, and an unsupported common
+footprint, is refused. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
 the change is refused. A parent directory that does not exist holds no node,
