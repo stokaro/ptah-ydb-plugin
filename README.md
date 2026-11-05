@@ -2136,6 +2136,21 @@ writes (attribute `__async_replica`) is left out of the tables: YDB refuses
 every write and ALTER on it, and a plan that read it as an ordinary table would
 drop or alter it.
 
+A replica no replication writes any more, left behind by a replication dropped
+without `CASCADE`, stays read-only for good, and YDB takes no table at its
+path. Where the host lists `schema.unread-tables`, the read names each such
+table in `unread_tables` with the reason the host's embedded engine gives, so
+the host refuses a schema that declares a table there before any step and
+prints a note on `db read` and `schema inspect`. A replica that a replication
+of the read writes is not named; the planner refuses a table declared there. A
+filtered read lists the database's replications to tell the two apart when its
+directories hold a replica, and a replication left uninspected makes the
+reason say only that the read cannot describe the replication that writes it.
+Without the feature, such a table is left out silently, and a declared table
+there is refused when its creation runs (`NOT_STARTED`). Either way the replica
+stays until an operator drops it by hand with `DROP TABLE`, which YDB accepts;
+a schema that leaves it out plans nothing for it.
+
 The comparison resolves both sides as YDB keeps them: the connection string in
 its canonical form, the consistency level `row` and a global commit interval of
 ten seconds where none is named, the batch size 8 MiB and the flush interval a

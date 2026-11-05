@@ -179,6 +179,10 @@ func providerFeatures() []string {
 		// The reverse migration of a standalone object's change is the
 		// change that undoes it; see ReverseChanges.
 		provider.ReverseChangesFeature,
+		// A read names each replica table no replication it describes
+		// writes, which YDB keeps read-only, so the host refuses a table
+		// declared there at planning; see inspect.unreadReplicas.
+		provider.UnreadTablesFeature,
 		// `ptah schema stats` counts topics, changefeeds, the other native
 		// objects and the table settings with the provider's counts; see
 		// ReportValues.
