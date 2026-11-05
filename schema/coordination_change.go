@@ -227,7 +227,8 @@ func NormalizeCoordinationChange(input *protocol.ValueInput) (*protocol.Normaliz
 	result.Payload = canonical
 	semantics := &protocol.ChangeSemantics{ReplacesOwner: new(false), RemovesState: new(false), Impact: protocol.ChangeSemantics_BEHAVIORAL, Reason: "Coordination settings change session behavior", Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: "Altering coordination settings preserves native access metadata"}
 	if !present["before"] {
-		semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ADDITIVE, "Creates a coordination node", protocol.ChangeSemantics_ACCESS_UNKNOWN, "Creation inherits server access policy"
+		semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ADDITIVE, "Creates a coordination node", protocol.ChangeSemantics_UNCHANGED,
+			"The coordination node is created by this plan, so no role could reach it before; it takes its directory's permissions"
 	}
 	if !present["after"] {
 		semantics.RemovesState, semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = new(true), protocol.ChangeSemantics_DESTRUCTIVE, "Drops the node and its runtime coordination state", protocol.ChangeSemantics_NARROWS, "Dropping the node removes access to it"

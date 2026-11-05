@@ -238,3 +238,20 @@ func TestHostCheckpointCarriesReferenceRows_HappyPath(t *testing.T) {
 	c.Assert(entryNames(heldEntries(c, fresh.opened, database)), qt.Not(qt.Contains), "ref")
 	c.Assert(heldEntries(c, fresh.opened, path.Join(database, connection.RealmDirectory)), qt.HasLen, 1)
 }
+
+// A table the plan creates is assessed safe and leaves access unchanged, as
+// the built-in engine assesses a CREATE TABLE: no role could read the table
+// before the plan, and it takes its directory's permissions. The host reads an
+// unknown access effect as destructive.
+func TestHostAssessesACreatedTableSafe_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	_, directory, _ := inspectionFixture(c)
+
+	units := hostPlannedUnits(c, directory, "yaml", "tables:\n  created_items:\n    schema: "+directory+"\n    columns:\n      id: {type: Uint64, primary: true}\n")
+
+	c.Assert(units, qt.HasLen, 1)
+	c.Assert(units[0].Native.Subject, qt.Equals, directory+".created_items")
+	c.Assert(units[0].Native.Severity, qt.Equals, "safe")
+	c.Assert(units[0].Native.Access, qt.Equals, "unchanged")
+	c.Assert(units[0].Native.AccessReason, qt.Equals, "The table is created by this plan, so no role could read it before; it takes its directory's permissions")
+}
