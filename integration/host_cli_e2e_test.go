@@ -149,8 +149,7 @@ func TestHostVerifiesChecks_FailurePath(t *testing.T) {
 // `schema apply` locks on the coordination node the first locking run creates,
 // and a dry run writes nothing to the database, the node included. The read
 // after the real run reserves the node rather than describing it, so no plan
-// offers to drop it. The preview labels the creation safe and its access
-// unchanged, as the built-in engine labels a CREATE TABLE.
+// offers to drop it.
 func TestHostSchemaApplyDryRunCreatesNoLockNode_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -177,8 +176,6 @@ func TestHostSchemaApplyDryRunCreatesNoLockNode_HappyPath(t *testing.T) {
 
 	c.Assert(previewErr, qt.IsNil, qt.Commentf("schema apply --dry-run:\n%s", previewed))
 	c.Assert(previewed, qt.Contains, "row-table-create-operation")
-	c.Assert(previewed, qt.Contains, directory+".lock_items: Creates a row table (safe)\n"+
-		"  Access unchanged: The table is created by this plan, so no role could read it before; it takes its directory's permissions\n")
 	c.Assert(afterPreview, qt.DeepEquals, before)
 	c.Assert(before, qt.Not(qt.Contains), locking.NodeName)
 	c.Assert(applyErr, qt.IsNil, qt.Commentf("schema apply:\n%s", applied))
@@ -239,4 +236,21 @@ func TestHostCheckpointCarriesReferenceRows_HappyPath(t *testing.T) {
 	c.Assert(read, qt.DeepEquals, []string{"red 0.25 2025-12-31T00:00:00Z", "blue 1.5 2026-01-02T03:04:05Z"})
 	c.Assert(entryNames(heldEntries(c, fresh.opened, database)), qt.Not(qt.Contains), "ref")
 	c.Assert(heldEntries(c, fresh.opened, path.Join(database, connection.RealmDirectory)), qt.HasLen, 1)
+}
+
+// A table the plan creates is assessed safe and leaves access unchanged, as
+// the built-in engine assesses a CREATE TABLE: no role could read the table
+// before the plan, and it takes its directory's permissions. The host reads an
+// unknown access effect as destructive.
+func TestHostAssessesACreatedTableSafe_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	_, directory, _ := inspectionFixture(c)
+
+	units := hostPlannedUnits(c, directory, "yaml", "tables:\n  created_items:\n    schema: "+directory+"\n    columns:\n      id: {type: Uint64, primary: true}\n")
+
+	c.Assert(units, qt.HasLen, 1)
+	c.Assert(units[0].Native.Subject, qt.Equals, directory+".created_items")
+	c.Assert(units[0].Native.Severity, qt.Equals, "safe")
+	c.Assert(units[0].Native.Access, qt.Equals, "unchanged")
+	c.Assert(units[0].Native.AccessReason, qt.Equals, "The table is created by this plan, so no role could read it before; it takes its directory's permissions")
 }
