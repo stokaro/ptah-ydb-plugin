@@ -215,12 +215,7 @@ func (t *traversal) directory(ctx context.Context, selected string) ([]string, e
 			return nil, fmt.Errorf("invalid or duplicate YDB directory entry")
 		}
 		names[name] = true
-		if dotted(name) && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
-			continue
-		}
-		if selected == "" && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY && slices.Contains(t.leaveOut, name) {
-			t.skippedRealm = true
-			t.skipped = append(t.skipped, name)
+		if t.leftOut(selected, entry) {
 			continue
 		}
 		if entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
@@ -544,6 +539,25 @@ func (t *traversal) streamingInventory(ctx context.Context, selectors []string) 
 		}
 	}
 	return nil
+}
+
+// leftOut reports a directory entry of the listed directory selected that the
+// walk neither reads nor returns: a directory whose name starts with a dot
+// (see dotted), and a directory at the root that leaveOut names, which the
+// walk records as skipped.
+func (t *traversal) leftOut(selected string, entry *Ydb_Scheme.Entry) bool {
+	if entry.GetType() != Ydb_Scheme.Entry_DIRECTORY {
+		return false
+	}
+	if dotted(entry.GetName()) {
+		return true
+	}
+	if selected == "" && slices.Contains(t.leaveOut, entry.GetName()) {
+		t.skippedRealm = true
+		t.skipped = append(t.skipped, entry.GetName())
+		return true
+	}
+	return false
 }
 
 // dotted reports a directory path one of whose names starts with a dot. The
