@@ -63,9 +63,12 @@ func assessUnchanged(request *protocol.PlanFeaturesRequest, builder *lifecycleBu
 		if !writes {
 			return nil, nil
 		}
+		// A name the provider's own storage occupies, such as the lock node
+		// at the root, holds no streaming query, so no query there reads an
+		// input the plan writes.
 		for _, state := range []*protocol.ComparisonState{request.CurrentObjects, request.DesiredObjects} {
 			known := objectcompare.Knowledge(state.GetCoverage(), subject.Kind, subject, request.DatabasePath)
-			if known.GetState() != protocol.ModelKnowledge_COMPLETE && known.GetState() != protocol.ModelKnowledge_ABSENT {
+			if known.GetState() != protocol.ModelKnowledge_COMPLETE && known.GetState() != protocol.ModelKnowledge_ABSENT && !objectcompare.ReservedName(known) {
 				return nil, fmt.Errorf("streaming query %q has no complete captured definition: %s", subject.GetName().GetSource(), known.GetReason())
 			}
 		}
