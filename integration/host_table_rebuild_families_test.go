@@ -52,8 +52,9 @@ func hclItems(directory, nType string, tsNull bool) string {
 
 // hclRebuildCase is a table items created with a TTL, column families or
 // splitting settings HCL cannot state, the type HCL then declares its column
-// n with, and what the server holds of the table's storage before the
-// rebuild and after it. Declaring the Int32 column n again makes the
+// n with, and what the server holds of the table's storage after the
+// rebuild. Before it the table holds the same, with no key bloom filter
+// stated. Declaring the Int32 column n again makes the
 // nullable column ts NOT NULL instead (see hclItems).
 type hclRebuildCase struct {
 	name, create, nType string
@@ -103,7 +104,11 @@ func TestHostRebuildFromHCLKeepsWhatTheDocumentLeavesOut_HappyPath(t *testing.T)
 			c.Assert(execFixtureSchema(c.Context(), opened.DB, strings.ReplaceAll(test.create, "{table}", absolute)), qt.IsNil)
 			_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, n, ts) VALUES (1l, 1, CurrentUtcTimestamp())") // #nosec G202 -- the path is a table under a directory this test generated
 			c.Assert(err, qt.IsNil)
-			c.Assert(heldStorage(c, opened, absolute), qt.DeepEquals, test.want)
+			// The old table states no key bloom filter; the new one names it
+			// DISABLED.
+			created := test.want
+			created.KeyBloomFilter = ""
+			c.Assert(heldStorage(c, opened, absolute), qt.DeepEquals, created)
 
 			rebuildRuns(c, directory, "hcl", hclItems(directory, test.nType, test.nType == "Int64"))
 
