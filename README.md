@@ -235,6 +235,7 @@ defaults of every supported line.
 | `unique_index_on_existing_table` | `EnableAddUniqueIndex` | `false` on every line; 25.1 and 25.2 do not list the flag |
 | `index_rename` | `EnableMoveIndex` | `true` on every line from 25.1 to 26.2, for a host that lists `planning.index-renames` |
 | `local_min_max_indexes` | `EnableLocalMinMaxIndex` | `false` on every line from 25.1 to 26.2 |
+| `column_family_cache_mode` | `EnableTableCacheModes` | `false` through 25.3, `true` from 25.4; 25.1 and 25.2 do not list the flag |
 
 The release line alone decides the other vector capabilities, as the host's
 line presets name them: `vector_index_maintained_on_write` from 25.3 (an index
@@ -1210,6 +1211,7 @@ tables:
     column_families:
       default: {compression: lz4}               # off or lz4
       cold: {data: hdd, compression: lz4, fields: [body]} # data is a storage pool kind, kept as written
+      hot: {cache_mode: in_memory}              # regular or in_memory, in either case
     platform:
       ydb:                                      # the TTL, spelled as the Go platform properties without the prefix
         row_deletion_column: created_at
@@ -1231,8 +1233,9 @@ In Go, the same settings are attributes of the host's own `ptah:schema:table`
 directive, spelled as the YAML keys are, and a TTL is written as the platform
 properties of the `ydb` engine. A family is a directive of its own,
 `//ptah:schema:columnfamily`, on the table's struct, with the attributes `name`,
-`data`, `compression` and `fields`. The `table` attribute names another table of
-the file (`name` or `schema.name`) and wins over the struct's own table.
+`data`, `compression`, `cache_mode` and `fields`. The `table` attribute names
+another table of the file (`name` or `schema.name`) and wins over the struct's
+own table.
 `fields` lists the columns the family holds, as a comma-separated list of the
 column names (`fields="body, notes"`). The provider returns one column facet for
 each name, owned by the column under the table, and the host attaches it to the
@@ -1246,8 +1249,15 @@ the host.
 //ptah:schema:table name="documents" auto_partitioning_by_load="ENABLED" read_replicas_settings="ANY_AZ:2" platform.ydb.row_deletion_column="created_at" platform.ydb.row_deletion_interval="P30D"
 //ptah:schema:columnfamily name="default" compression="lz4"
 //ptah:schema:columnfamily name="cold" data="hdd" compression="lz4" fields="body"
+//ptah:schema:columnfamily name="hot" cache_mode="in_memory"
 type Document struct { /* ... */ }
 ```
+
+A family's cache mode, `regular` or `in_memory`, needs a target that takes
+one: YDB 25.4 and later, or a cluster that turned `EnableTableCacheModes` on
+(see [Feature flags](#feature-flags)). A plan that declares one for any other
+target is refused with the flag's name, `regular` included, as the host's
+embedded engine refuses it.
 
 A TTL needs `row_deletion_column` and `row_deletion_interval`. The interval is an
 ISO 8601 duration of weeks, days, hours, minutes and seconds (`P30D`,
@@ -1288,7 +1298,6 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | Setting | Why |
 | --- | --- |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
-| `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
 | Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. The index set model takes an index's partitioning and read replicas, and the planner changes them on an index the table holds (see [Index alteration](#index-alteration)). A vector or full-text index is created and changed from the native index set (see [Vector and full-text indexes](#vector-and-full-text-indexes)). No Go or YAML source writes either into the index set yet, and neither does a pgvector operator class (`ops`) on a source index. |
 
 A table is managed for its TTL when its source states table properties for it,
@@ -1679,10 +1688,14 @@ database session, and live tests inspect column tables on both lines.
 
 ## Native protocol generation
 
-The upstream Go bindings lack some native index, sequence, changefeed, and consumer fields. The
-provider's typed definitions preserve their native wire numbers; attribution
-and the pinned upstream source are in `third_party/ydb/NOTICE.md`. Unsupported
-fields remain errors. Runtime statistics are omitted from schema observations.
+The upstream Go bindings lack some native index, sequence, changefeed, consumer
+and column family fields, such as a family's cache mode. The provider's typed
+definitions preserve their native wire numbers; attribution and the pinned
+upstream source are in `third_party/ydb/NOTICE.md`. Unsupported fields remain
+errors, a family's compression level among them. A table service request is
+built with the pinned bindings and carries a family's cache mode as an unknown
+field 6, the one unknown field the provider accepts. Runtime statistics are
+omitted from schema observations.
 
 With protoc 35.1 on `PATH`, regenerate with:
 
@@ -2430,7 +2443,11 @@ what planning would refuse: a missing or unknown key column, a type with no YDB
 counterpart, a table without columns, populated declaration fields and facets
 the provider does not carry (including common indexes), and invalid names. Access
 requirements and temporary tables are valid declarations that only CREATE
-refuses, so validation accepts them. Table paths that coincide or nest are refused
+refuses, so validation accepts them. A setting the target takes only with a
+capability is refused where the request's capabilities lack it: the settings of
+a Serial's sequence, and a family's cache mode, which the host's bundled
+validation refuses for `--server-version` 25.1 and 25.3 and accepts from 25.4.
+Table paths that coincide or nest are refused
 across the schema, because a YDB table holds no children. Directory names are
 checked as path elements. The native models in the whole-schema capture must
 normalize.
@@ -2466,6 +2483,14 @@ agree on order. A declaration that orders no key, such as a YAML table with
 two columns marked `primary: true`, is keyed by the columns it marks primary in
 the order it declares them, as the host's embedded engine keys it; one that
 marks none is refused.
+
+A family's cache mode travels as field 6 of the request's family, its upstream
+wire number, which the pinned Go bindings do not declare and keep as an unknown
+field; the operation payload writes it as the family's `cacheMode`, its
+upstream JSON name. The table service of 25.1.4.7 does not know the field and
+creates the table without it, so a creation that states one is refused where
+the session reports no `column_family_cache_mode`, and the creation is
+confirmed by the cache mode the table reads back with.
 
 A starting layout becomes the `partitions` of the CreateTable request, checked
 against the key columns: `uniform_partitions` needs a Uint32 or Uint64 first key
@@ -2643,8 +2668,9 @@ a column made NOT NULL is unwrapped too, which fails the copy on a NULL row.
 The new table keeps the old table's attributes, and with them the comments Ptah
 keeps there, and each storage setting the declaration does not state, as the
 old table holds it: every column family, the default one and one no column
-sits in included, with the settings the declaration leaves out, the family each
-column sits in where the declaration does not say (see
+sits in included, with the settings the declaration leaves out (its cache mode
+among them, which a target without `column_family_cache_mode` refuses to
+write), the family each column sits in where the declaration does not say (see
 [Column families](#column-families)), the automatic partitioning, the read replicas, the key bloom
 filter, and the TTL where the declaration states no table properties. A
 cluster's table profile may have given the old table any of them, and YQL
@@ -2758,6 +2784,14 @@ rules:
 - A setting the declaration leaves out is kept as the table holds it. A cluster
   profile gives new tables settings of their own, so the table is not reset.
   A declared `COMPRESSION_NONE` matches a family that reads back unspecified.
+- A cache mode the declaration states is set where the family holds another
+  one or none. A family that never had one reads back with none, so a declared
+  `regular` is set once and then holds, as the host's embedded engine sets it.
+  The request carries it as field 6 of the family, as a creation does (see
+  [Native row-table creation](#native-row-table-creation)). A declared cache
+  mode, `regular` included, is refused on a target without
+  `column_family_cache_mode`, with the flag's name, whatever the table holds:
+  the table service of 25.1.4.7 would alter the table without it.
 - A family only the table holds stays. No family is dropped, because YDB has no
   way to drop one.
 - A column sits where the declaration places it. A column property record

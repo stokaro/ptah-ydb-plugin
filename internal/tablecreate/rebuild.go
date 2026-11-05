@@ -289,6 +289,11 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	request := proto.CloneOf(desired)
 	keepHeldSettings(request, table)
 	keepHeldComments(request, table.GetCurrent())
+	// A cache mode the old table holds is written into the new table too, so
+	// the target must take one.
+	if reason := creationCacheModeRefusal(subject+" with column family cache mode", request, capabilities); reason != "" {
+		return nil, reason, nil
+	}
 	indexSettings, reason := rebuiltIndexSettings(request, table, steps)
 	if reason != "" {
 		return nil, subject + ": " + reason, nil
@@ -672,23 +677,32 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 	}
 	placements := heldColumnProperties(current)
 	families := map[string]bool{}
-	for _, family := range request.GetColumnFamilies() {
-		families[familyKey(family.GetName())] = true
-		if held := findFamily(held.GetColumnFamilies(), family.GetName()); held != nil {
-			if family.GetData().GetMedia() == "" && held.GetData().GetMedia() != "" {
-				family.Data = proto.CloneOf(held.GetData())
-			}
-			if family.GetCompression() == Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED {
-				family.Compression = held.GetCompression()
-			}
+	for i, requested := range request.GetColumnFamilies() {
+		families[familyKey(requested.GetName())] = true
+		held := findFamily(held.GetColumnFamilies(), requested.GetName())
+		family, err := schema.NativeFamily(requested)
+		if held == nil || err != nil {
+			// A family the request cannot read is refused when the creation
+			// is captured.
+			continue
 		}
+		if family.GetData().GetMedia() == "" && held.GetData().GetMedia() != "" {
+			family.Data = proto.CloneOf(held.GetData())
+		}
+		if family.GetCompression() == Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED {
+			family.Compression = held.GetCompression()
+		}
+		if family.GetCacheMode() == native.ColumnFamily_CACHE_MODE_UNSPECIFIED {
+			family.CacheMode = held.GetCacheMode()
+		}
+		request.ColumnFamilies[i] = schema.RequestFamily(family)
 	}
 	for _, family := range held.GetColumnFamilies() {
 		if families[familyKey(family.GetName())] {
 			continue
 		}
-		request.ColumnFamilies = append(request.ColumnFamilies, &Ydb_Table.ColumnFamily{Name: familyKey(family.GetName()), Data: proto.CloneOf(family.GetData()),
-			Compression: family.GetCompression()})
+		request.ColumnFamilies = append(request.ColumnFamilies, schema.RequestFamily(&native.ColumnFamily{Name: familyKey(family.GetName()),
+			Data: proto.CloneOf(family.GetData()), Compression: family.GetCompression(), CacheMode: family.GetCacheMode()}))
 		families[familyKey(family.GetName())] = true
 	}
 	placed := map[string]bool{}
