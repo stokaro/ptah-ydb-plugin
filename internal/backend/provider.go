@@ -178,7 +178,11 @@ func providerFeatures() []string {
 		provider.SQLFacetsFeature,
 		// The reverse migration of a standalone object's change is the
 		// change that undoes it; see ReverseChanges.
-		provider.ReverseChangesFeature}
+		provider.ReverseChangesFeature,
+		// `ptah schema stats` counts topics, changefeeds, the other native
+		// objects and the table settings with the provider's counts; see
+		// ReportValues.
+		provider.ReportCountsFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -556,6 +560,7 @@ func Description() *protocol.Description {
 					HeaderKinds: []string{"coordination_node"},
 				},
 				GoHeaderKinds: yqlschema.HeaderKinds(),
+				Reports:       schema.Reports(),
 			},
 		},
 	}
