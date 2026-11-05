@@ -158,6 +158,9 @@ func providerFeatures() []string {
 		// name as one rename step, which the table service claims with
 		// RENAME INDEX; see indexRenames.
 		provider.IndexRenamesFeature,
+		// A YQL reading carries a table's changefeeds as a facet of the
+		// table; see yqlschema.Reply.
+		provider.SQLFacetsFeature,
 		// The reverse migration of a standalone object's change is the
 		// change that undoes it; see ReverseChanges.
 		provider.ReverseChangesFeature}
