@@ -67,7 +67,7 @@ func accessTable(directory string) string {
 func accessDeclaration(directory string, names accessNames, userGroups []string, blockedLogin bool, tablePrivileges ...string) string {
 	return accessTable(directory) +
 		"roles:\n  " + names.group + ":\n    group: true\n" +
-		"  " + names.user + ":\n    login: true\n    password: \"Secret1!\"\n    member_of: [" + strings.Join(userGroups, ", ") + "]\n" +
+		"  " + names.user + ":\n    login: true\n    member_of: [" + strings.Join(userGroups, ", ") + "]\n" +
 		"  " + names.blocked + ":\n    login: " + fmt.Sprint(blockedLogin) + "\n    member_of: [" + names.group + "]\n" +
 		"grants:\n  table:\n    role: " + names.group + "\n    privileges: [" + strings.Join(tablePrivileges, ", ") + "]\n    on_table: " + directory + ".orders\n" +
 		"  directory:\n    role: " + names.group + "\n    privileges: [LIST]\n    on_schema: " + directory + "\n" +
