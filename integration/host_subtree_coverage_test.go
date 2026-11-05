@@ -72,10 +72,11 @@ func TestHostPlansASecretInANewDirectoryOfAnUnfilteredRead_HappyPath(t *testing.
 	c.Assert(downErr, qt.IsNil, qt.Commentf("down:\n%s", rolledBack))
 }
 
-// A directory the walk leaves out, here a dot-prefixed one the realm holds,
-// stays unknown below the root's complete claim: a secret declared in it is
-// left unplanned with the warning, and no migration is written.
-func TestHostLeavesASecretBelowASkippedDirectoryUnplanned_HappyPath(t *testing.T) {
+// A secret declared below a directory whose name starts with a dot is planned
+// with no schema selector, as the host's embedded engine plans it: the read
+// describes nothing there, and the root's complete claim establishes the
+// secret's absence, so the migration creates it.
+func TestHostPlansASecretBelowADotPrefixedDirectory_HappyPath(t *testing.T) {
 	variable := secretVariable(t, secretValue())
 	c := testcheck.New(t)
 	address, root, opened := subtreeRealm(c)
@@ -84,10 +85,9 @@ func TestHostLeavesASecretBelowASkippedDirectoryUnplanned_HappyPath(t *testing.T
 
 	generated, err := hostRunAt(c, address, "migrations", "generate", "--schema-file", declaredSecret(c, ".hidden", variable),
 		"--migrations-dir", migrations, "--name", "secret")
-	written, globErr := filepath.Glob(filepath.Join(migrations, "*.sql"))
+	up, _ := generatedPair(c, migrations)
 
 	c.Assert(err, qt.IsNil, qt.Commentf("migrations generate:\n%s", generated))
-	c.Assert(generated, qt.Contains, `secret ".hidden".pw could not be compared between the database and the desired schema: The current secret or its absence was not established`)
-	c.Assert(globErr, qt.IsNil)
-	c.Assert(written, qt.HasLen, 0)
+	c.Assert(generated, qt.Not(qt.Contains), "absence was not established")
+	c.Assert(up, qt.Contains, "CREATE SECRET `.hidden/pw`")
 }

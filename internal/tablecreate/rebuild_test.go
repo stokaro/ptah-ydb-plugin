@@ -147,7 +147,7 @@ func TestRebuildPlan_HappyPath(t *testing.T) {
 	}
 	check.Assert(statements, qt.DeepEquals, []string{
 		"CREATE TABLE `app/__ptah_rebuild_records` (\n    `id` Uint64 NOT NULL,\n    `payload` Utf8 NOT NULL,\n    `n` Int64,\n    PRIMARY KEY (`id`)\n) " +
-			"WITH (AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2);",
+			"WITH (AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2, KEY_BLOOM_FILTER = DISABLED);",
 		"INSERT INTO `app/__ptah_rebuild_records` (`id`, `payload`, `n`) SELECT " +
 			"Unwrap(`id`, 'rebuilding table app.records: column id holds NULL, and the new table declares it NOT NULL'u) AS `id`, " +
 			"Unwrap(`payload`, 'rebuilding table app.records: column payload holds NULL, and the new table declares it NOT NULL'u) AS `payload`, " +
@@ -183,18 +183,26 @@ func feedRebuildRequest(c *qt.C, desired, held string, capabilities map[string]b
 // YDB moves no table that carries a changefeed, so a rebuild drops the old
 // table's changefeeds before it moves and gives the new table its changefeeds
 // once it is in place: the ones the declaration states, or the ones the old
-// table held where the declaration states none. The note says the stream
-// restarts and the consumer loses its position.
+// table held where the declaration states none. The first step carries the
+// note the host's embedded engine writes among a rebuild's notes: the stream
+// of a changefeed added again restarts, and a changefeed the new table does
+// not get is lost with its consumers.
 func TestRebuildPlanCarriesChangefeeds_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, desired string
 		added         []string
+		// note is the one the first step carries after the three every
+		// rebuild carries.
+		note string
 	}{
 		{name: "the changefeeds the old table held", added: []string{"ALTER TABLE `app/records` ADD CHANGEFEED `updates` WITH (MODE = 'UPDATES', FORMAT = 'JSON');",
-			"ALTER TOPIC `app/records/updates` ADD CONSUMER `audit` WITH (important = TRUE);"}},
+			"ALTER TOPIC `app/records/updates` ADD CONSUMER `audit` WITH (important = TRUE);"},
+			note: "Changefeed updates of table app/records is dropped before the swap and added again after it, because YDB moves no table that " +
+				"carries a changefeed. Its stream restarts: the records nobody read are lost, and its consumers start again from the beginning of the new stream."},
 		{name: "the changefeeds the declaration states",
 			desired: `{"changefeeds":[{"name":"inserts","mode":"MODE_NEW_IMAGE","format":"FORMAT_JSON","topic":{"partitioningSettings":{}}}]}`,
-			added:   []string{"ALTER TABLE `app/records` ADD CHANGEFEED `inserts` WITH (MODE = 'NEW_IMAGE', FORMAT = 'JSON');"}},
+			added:   []string{"ALTER TABLE `app/records` ADD CHANGEFEED `inserts` WITH (MODE = 'NEW_IMAGE', FORMAT = 'JSON');"},
+			note:    "Changefeed updates of table app/records is dropped with its topic: the records nobody read are lost, and so is consumer audit."},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			check := testcheck.New(t)
@@ -211,9 +219,9 @@ func TestRebuildPlanCarriesChangefeeds_HappyPath(t *testing.T) {
 				"table-rebuild/000000/rename-old", "table-rebuild/000000/rename-new", "table-rebuild/000000/add-changefeeds", "table-rebuild/000000/drop-old"})
 			check.Assert(plan.Contributions[0].Dependencies, qt.HasLen, 6)
 			check.Assert(plan.Rewrites[0].Replacement.Name, qt.Equals, "table-rebuild/000000/rename-new")
-			check.Assert(plan.Contributions[0].Steps[2].Operation.Notes, qt.DeepEquals, []string{"Changefeed updates of table app/records is dropped " +
-				"before the swap, because YDB moves no table that carries one, and added again to the new table. Its stream restarts: the records " +
-				"nobody read are lost, and consumer audit loses its position and starts again from the beginning of the new stream."})
+			check.Assert(plan.Contributions[0].Steps[0].Operation.Notes, qt.HasLen, 4)
+			check.Assert(plan.Contributions[0].Steps[0].Operation.Notes[3], qt.Equals, test.note)
+			check.Assert(plan.Contributions[0].Steps[2].Operation.Notes, qt.HasLen, 0)
 
 			dropped, err := schema.DecodeChangefeedOperation(plan.Contributions[0].Steps[2].Operation.Value.Value)
 			check.Assert(err, qt.IsNil)
@@ -335,7 +343,7 @@ func TestRebuildPlanKeepsTheFamiliesTheTableHolds(t *testing.T) {
 
 	check.Assert(err, qt.IsNil)
 	check.Assert(rendered.Units[0].GetSql(), qt.Equals, "CREATE TABLE `app/__ptah_rebuild_records` (\n    `id` Uint64 NOT NULL,\n    `payload` Utf8 FAMILY `cold`,\n    `n` Int64,\n"+
-		"    PRIMARY KEY (`id`),\n    FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'off'),\n    FAMILY `default` (COMPRESSION = 'lz4'),\n    FAMILY `extra` (COMPRESSION = 'lz4')\n);")
+		"    PRIMARY KEY (`id`),\n    FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'off'),\n    FAMILY `default` (COMPRESSION = 'lz4'),\n    FAMILY `extra` (COMPRESSION = 'lz4')\n) WITH (KEY_BLOOM_FILTER = DISABLED);")
 }
 
 // heldPayloadIndex is the index set of a table holding a synchronous index on
@@ -708,7 +716,7 @@ func TestRebuildPlanPlacesTheColumnsTheDeclarationPlaces(t *testing.T) {
 			rendered, err := backend.New().Render(c.Context(), rendering)
 			c.Assert(err, qt.IsNil)
 			c.Assert(rendered.Units[0].GetSql(), qt.Equals, "CREATE TABLE `app/__ptah_rebuild_records` (\n    `id` Uint64 NOT NULL,\n    `payload` Utf8,\n    `n` Int64,\n"+
-				"    PRIMARY KEY (`id`),\n    FAMILY `cold` (COMPRESSION = 'lz4')\n);")
+				"    PRIMARY KEY (`id`),\n    FAMILY `cold` (COMPRESSION = 'lz4')\n) WITH (KEY_BLOOM_FILTER = DISABLED);")
 		})
 	}
 }
@@ -750,7 +758,7 @@ func TestRebuildPlanCreatesAStartingLayout_HappyPath(t *testing.T) {
 			rendered, err := backend.New().Render(check.Context(), rendering)
 			check.Assert(err, qt.IsNil)
 			check.Assert(rendered.Units[0].GetSql(), qt.Equals, "CREATE TABLE `app/__ptah_rebuild_records` (\n    `id` Uint64 NOT NULL,\n    `payload` Utf8,\n    `n` Int32,\n"+
-				"    PRIMARY KEY (`id`)\n) WITH (AUTO_PARTITIONING_BY_LOAD = ENABLED, "+tc.want+");")
+				"    PRIMARY KEY (`id`)\n) WITH (AUTO_PARTITIONING_BY_LOAD = ENABLED, KEY_BLOOM_FILTER = DISABLED, "+tc.want+");")
 		})
 	}
 }

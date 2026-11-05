@@ -159,7 +159,10 @@ func TestTableRebuildSubprocess(t *testing.T) {
 
 // TestTableRebuildKeepsTheOldTableSubprocess rebuilds a table one of whose
 // rows does not convert to the declared type: the copy fails whole, after the
-// new table was created, and the old table keeps every row.
+// new table was created, and the old table keeps every row. The copy is one
+// data query, so YDB's refusal proves that nothing of it applied: the run
+// stops PARTIAL after the creation, and YDB's answer names the column, as the
+// host's embedded engine printed it.
 func TestTableRebuildKeepsTheOldTableSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	f := newRebuildFixture(c, "id Uint64, payload Utf8, n Utf8", "(id, payload, n) VALUES (1ul, 'a'u, '5'u), (2ul, 'b'u, 'x'u)")
@@ -168,8 +171,9 @@ func TestTableRebuildKeepsTheOldTableSubprocess(t *testing.T) {
 	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
 	result, err := f.execute(c, plan, protocol.RenderRequest_ANY)
 	c.Assert(err, qt.ErrorAs, new(*provider.ExecutionError))
-	c.Assert(result.Outcome, qt.Equals, protocol.Execution_UNKNOWN)
+	c.Assert(result.Outcome, qt.Equals, protocol.Execution_PARTIAL)
 	c.Assert(result.AppliedCount, qt.Equals, uint32(1))
+	c.Assert(result.Message, qt.Contains, "rebuilding table "+f.directory+".records: column n holds a value that does not convert to its new type")
 	var count uint64
 	c.Assert(f.opened.DB.QueryRowContext(c.Context(), "SELECT COUNT(*) FROM `"+path.Join(f.database, f.directory, "records")+"`").Scan(&count), qt.IsNil)
 	c.Assert(count, qt.Equals, uint64(2))

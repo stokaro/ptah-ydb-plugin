@@ -22,6 +22,9 @@ const ownershipAttribute = "ptah.metadata"
 type Store struct {
 	ownedtable.Definition
 	Kind protocol.MetadataScope_Kind
+	// builtin reports a table in the layout Ptah's built-in YDB engine
+	// wrote, which [Store.Locate] sets (see builtin.go).
+	builtin bool
 }
 
 // Resolve validates the storage scope without rewriting path components.

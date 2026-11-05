@@ -9,7 +9,7 @@ import (
 )
 
 // skippedReason is the knowledge of a directory an unscoped read leaves out.
-const skippedReason = "The read leaves out dot-prefixed directories and the dev realm directory, and everything below them"
+const skippedReason = "The read leaves out the dev realm directory, and everything below it"
 
 // subtreeRegions replaces the exact directory regions of an unscoped read
 // with one complete region over the root and every directory below it, and
