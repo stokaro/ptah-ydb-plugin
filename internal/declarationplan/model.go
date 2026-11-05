@@ -24,7 +24,8 @@ const OperationKind = schema.ProviderID + "/authored-create"
 
 // Kinds are the desired standalone models this service creates.
 func Kinds() []string {
-	return []string{schema.CoordinationProperties, schema.TopicProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties, schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties, schema.SecretProperties}
+	return []string{schema.CoordinationProperties, schema.TopicProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties, schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties, schema.SecretProperties,
+		schema.StreamingQueryProperties}
 }
 
 // Model declares the desired-only CREATE operation and its text execution form.

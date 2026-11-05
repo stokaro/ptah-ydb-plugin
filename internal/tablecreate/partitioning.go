@@ -79,6 +79,17 @@ func partitioningDelta(want, held *Ydb_Table.PartitioningSettings) *Ydb_Table.Pa
 	return delta
 }
 
+// resetsUnnamedSettings reports whether a change that sets delta makes YDB
+// reset the splitting settings it does not name. Measured by the host's
+// embedded engine on 25.1.4.7 and 26.2.1.14, and on 26.2.1.14 through this
+// provider's AlterTable call: turning splitting by size or by load on resets
+// the minimum partition count to 1, and turning splitting by size on resets
+// the partition size to 2048 MB, unless the same change names them. A table
+// and an index take the same rule, so both planners ask this one predicate.
+func resetsUnnamedSettings(delta *Ydb_Table.PartitioningSettings) bool {
+	return delta.GetPartitioningBySize() == Ydb.FeatureFlag_ENABLED || delta.GetPartitioningByLoad() == Ydb.FeatureFlag_ENABLED
+}
+
 // defaultPartitionSizeMB is the partition size YDB gives a table when it
 // turns partitioning by size on without a size: measured on 25.1.4.7 and
 // 26.2.1.14, `SET (AUTO_PARTITIONING_BY_SIZE = ENABLED)` on a table that did
@@ -208,11 +219,10 @@ func planPartitioning(in partitioningInput) (partitioningChange, string) {
 	if reason := partitioningRefusal(in.held, delta); reason != "" {
 		return partitioningChange{}, reason
 	}
-	if delta.GetPartitioningBySize() == Ydb.FeatureFlag_ENABLED {
-		// Switching the size partitioning on resets the size and the minimum
-		// count the call does not name, so the call names every setting the
-		// table keeps: the stated ones and the held value of the others, as
-		// the host's embedded engine writes them.
+	if resetsUnnamedSettings(delta) {
+		// The call names every setting the table keeps: the stated ones and
+		// the held value of the others, as the host's embedded engine writes
+		// them.
 		delta = resolvedPartitioning(desired, in.held)
 	}
 	held := proto.CloneOf(in.held)

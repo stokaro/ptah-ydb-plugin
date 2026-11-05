@@ -197,7 +197,8 @@ func localIndexesManaged(desired *native.ColumnStorageIntent) bool {
 // declared name with another kind, column or setting is dropped and added
 // again, and an index the declaration renames is dropped under its old name
 // and added under its new one, as the host's embedded engine plans either on a
-// target without index_rename, which this provider never reports. An index to
+// target without index_rename: the host compares no local index, so it pairs
+// none for a rename. An index to
 // add is held to the rules of its creation. A non-empty reason refuses the
 // plan.
 func planLocalIndexes(desired *native.ColumnStorageIntent, held *native.ColumnStorageObservation, types map[string]string, capabilities map[string]bool) ([]localIndexChange, string) {

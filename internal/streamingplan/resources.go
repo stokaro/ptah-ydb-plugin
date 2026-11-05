@@ -3,6 +3,7 @@ package streamingplan
 import (
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
@@ -13,8 +14,55 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func queryResources(request *protocol.PlanFeaturesRequest, subject *protocol.ComparisonIdentity, spec streaming.Spec, early bool, id *protocol.StepIdentity) ([]*protocol.PlanningEffect, []*protocol.PlanningDependency, error) {
+// QueryReads are the subjects a streaming query reads to run: the scheme slot
+// of every topic and table its text reads or writes, as paths below database,
+// and its resource pool other than the default one. A plan orders the query
+// after the creation of each, since YDB compiles a query when it creates it.
+// The planner of a live plan and the planner of authored declarations read
+// the same set, so both take it from here. An absolute path names a database,
+// and with database empty it is refused.
+func QueryReads(database string, spec streaming.Spec) ([]*protocol.ComparisonIdentity, error) {
+	reads, err := querySlots(database, spec)
+	if err != nil {
+		return nil, err
+	}
+	if pool := streaming.Pool(spec); pool != "default" {
+		reads = append(reads, poolSubject(pool))
+	}
+	return reads, nil
+}
+
+// querySlots are the scheme slots of the paths a query's text reads or
+// writes, each once, in the order the text names them.
+func querySlots(database string, spec streaming.Spec) ([]*protocol.ComparisonIdentity, error) {
 	names, err := streaming.NamedPaths(spec.Text)
+	if err != nil {
+		return nil, err
+	}
+	var slots []*protocol.ComparisonIdentity
+	for _, name := range names {
+		resource, err := queryPath(database, name)
+		if err != nil {
+			return nil, err
+		}
+		if !slices.ContainsFunc(slots, func(slot *protocol.ComparisonIdentity) bool { return provider.CompareIdentities(slot, resource) == 0 }) {
+			slots = append(slots, resource)
+		}
+	}
+	return slots, nil
+}
+
+// poolSubject is the subject of the resource pool named pool, which belongs
+// to the whole database.
+func poolSubject(pool string) *protocol.ComparisonIdentity {
+	return &protocol.ComparisonIdentity{
+		Kind: schema.ResourcePoolProperties, Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: &protocol.ComparisonPart{}, Parent: &protocol.ComparisonPart{},
+		Name: &protocol.ComparisonPart{Source: pool, Normalized: pool},
+	}
+}
+
+func queryResources(request *protocol.PlanFeaturesRequest, subject *protocol.ComparisonIdentity, spec streaming.Spec, early bool, id *protocol.StepIdentity) ([]*protocol.PlanningEffect, []*protocol.PlanningDependency, error) {
+	slots, err := querySlots(request.DatabasePath, spec)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -36,11 +84,7 @@ func queryResources(request *protocol.PlanFeaturesRequest, subject *protocol.Com
 		}
 		dependencies = append(dependencies, edge)
 	}
-	for _, name := range names {
-		resource, err := queryPath(request.DatabasePath, name)
-		if err != nil {
-			return nil, nil, err
-		}
+	for _, resource := range slots {
 		// The captured request need not contain every native family. A scheme
 		// slot states the physical dependency without inventing an object kind.
 		addRead(resource)
@@ -69,10 +113,7 @@ func queryResources(request *protocol.PlanFeaturesRequest, subject *protocol.Com
 		}
 	}
 	if pool := streaming.Pool(spec); pool != "default" {
-		effects = append(effects, &protocol.PlanningEffect{Subject: &protocol.ComparisonIdentity{
-			Kind: schema.ResourcePoolProperties, Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: &protocol.ComparisonPart{}, Parent: &protocol.ComparisonPart{},
-			Name: &protocol.ComparisonPart{Source: pool, Normalized: pool},
-		}, Action: protocol.PlanningEffect_READ})
+		effects = append(effects, &protocol.PlanningEffect{Subject: poolSubject(pool), Action: protocol.PlanningEffect_READ})
 	}
 	return effects, dependencies, nil
 }
