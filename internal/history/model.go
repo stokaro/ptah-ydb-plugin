@@ -29,6 +29,9 @@ const ownershipAttribute = "ptah.history"
 type Store struct {
 	ownedtable.Identity
 	Format protocol.HistoryScope_Format
+	// builtin reports a table in the layout Ptah's built-in YDB engine
+	// wrote, which [Store.Locate] sets (see builtin.go).
+	builtin bool
 }
 
 // Resolve refuses namespace traversal instead of cleaning it into another store.
@@ -132,14 +135,14 @@ func (s Store) ValidateLayout(value *native.DescribeTableResult) error {
 	return s.definition().ValidateLayout(value)
 }
 
-// Check establishes history absence or validates its owned storage.
-func (s Store) Check(ctx context.Context, driver *ydb.Driver) (bool, error) {
-	return s.definition().Check(ctx, driver)
-}
-
-// Prepare creates absent history storage once and confirms its layout.
+// Prepare creates absent history storage once and confirms its layout. A
+// table in the built-in engine's layout is history already, and is kept as
+// it is.
 func (s Store) Prepare(ctx context.Context, driver *ydb.Driver, beforeCreate func(context.Context) error) (bool, error) {
-	return s.definition().Prepare(ctx, driver, beforeCreate)
+	return s.Identity.Prepare(ctx, driver, s.CreateRequest(), func(value *native.DescribeTableResult) error {
+		_, err := s.layoutOf(value)
+		return err
+	}, beforeCreate)
 }
 
 // Owned identifies history by its exact marker and complete native layout, never
