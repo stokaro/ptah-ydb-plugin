@@ -3166,7 +3166,14 @@ The equivalent Go annotation is
 A YQL schema declares
 `CREATE SECRET \`app/pg_password\` WITH (value = $PTAH_SECRET_PG_PASSWORD);`.
 Schema sources refuse inline values. Input names must start with `PTAH_SECRET_`
-and contain only ASCII letters, digits, and underscores.
+and contain only ASCII letters, digits, and underscores. A refused declaration
+gives the reason a host prints, in the words of Ptah's built-in YDB engine: the
+secret, by its YAML key, the attribute and what it takes. It never repeats the
+value a declaration wrote or the variable it names:
+
+```text
+provider decode source failed (InvalidArgument): secret "pw": invalid value_env: the variable it names does not start with PTAH_SECRET_ and a name after it; Ptah reads a secret's value only from a variable under that prefix, so a migration file cannot copy any other variable of the machine that applies it
+```
 
 An absent secret is created. An existing secret is unchanged unless the
 operator requests rotation with `--rotate-secret app/pg_password`. Rotation
