@@ -1,3 +1,0 @@
-# The host half of ADR 0072 (platform "ydb" blocks in HCL). Remove this file
-# when a Ptah release carries it.
-feat/4204-g15-host-hcl-platform
