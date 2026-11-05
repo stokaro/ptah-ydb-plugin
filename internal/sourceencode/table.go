@@ -243,7 +243,7 @@ func rowLoss(intent *native.RowTableIntent) string {
 	}
 	for _, family := range intent.GetColumnFamilies() {
 		if family.GetKeepInMemory() != Ydb.FeatureFlag_STATUS_UNSPECIFIED {
-			return "the cache mode of its column family " + family.GetName() + " has no source spelling"
+			return "the keep_in_memory of its column family " + family.GetName() + " has no source spelling"
 		}
 	}
 	return ""
@@ -289,7 +289,7 @@ func (f *tableFacets) lose(id, format string, arguments ...any) {
 // declare: the column is placed by its family's declaration.
 func (f *tableFacets) dropPlacementsWithoutFamilies() {
 	for _, column := range slices.Clone(f.columns) {
-		if f.row == nil || !slices.ContainsFunc(f.row.GetColumnFamilies(), func(family *Ydb_Table.ColumnFamily) bool { return family.GetName() == column.family }) {
+		if f.row == nil || !slices.ContainsFunc(f.row.GetColumnFamilies(), func(family *native.ColumnFamily) bool { return family.GetName() == column.family }) {
 			f.lose(column.id, "column %s/%s sits in family %s, which no family the source declares for the table holds", tableSubject(f.binding), column.name, column.family)
 		}
 	}
@@ -498,6 +498,12 @@ func (f *tableFacets) families() []family {
 		case Ydb_Table.ColumnFamily_COMPRESSION_LZ4:
 			written.compression = "lz4"
 		}
+		switch declared.GetCacheMode() {
+		case native.ColumnFamily_CACHE_MODE_REGULAR:
+			written.cacheMode = "regular"
+		case native.ColumnFamily_CACHE_MODE_IN_MEMORY:
+			written.cacheMode = "in_memory"
+		}
 		for _, column := range f.columns {
 			if column.family == declared.GetName() {
 				written.fields = append(written.fields, column.name)
@@ -509,8 +515,8 @@ func (f *tableFacets) families() []family {
 }
 
 type family struct {
-	name, data, compression string
-	fields                  []string
+	name, data, compression, cacheMode string
+	fields                             []string
 }
 
 func (f *tableFacets) goParts() []*protocol.EncodedSourcePart {
@@ -527,6 +533,9 @@ func (f *tableFacets) goParts() []*protocol.EncodedSourcePart {
 		}
 		if declared.compression != "" {
 			entries = append(entries, field(tablesource.AttributeCompression, declared.compression))
+		}
+		if declared.cacheMode != "" {
+			entries = append(entries, field(tablesource.AttributeCacheMode, declared.cacheMode))
 		}
 		if len(declared.fields) != 0 {
 			entries = append(entries, field(tablesource.AttributeFields, strings.Join(declared.fields, ",")))
@@ -612,6 +621,9 @@ func (f *tableFacets) yamlParts() []*protocol.EncodedSourcePart {
 			}
 			if declared.compression != "" {
 				settings = append(settings, field(tablesource.AttributeCompression, declared.compression))
+			}
+			if declared.cacheMode != "" {
+				settings = append(settings, field(tablesource.AttributeCacheMode, declared.cacheMode))
 			}
 			if len(declared.fields) != 0 {
 				var names []*protocol.SourceValue

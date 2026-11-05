@@ -39,11 +39,15 @@ func buildAlterModel() *protocol.ValueModel {
 	if err != nil {
 		panic(err)
 	}
+	family, err := protojson.Marshal(protodesc.ToDescriptorProto((&native.ColumnFamily{}).ProtoReflect().Descriptor()))
+	if err != nil {
+		panic(err)
+	}
 	raw, err := json.Marshal(map[string]any{
 		"kind": AlterOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
-		"request": json.RawMessage(descriptor), "allowed_request_fields": alterFields,
-		"payload":      "request: native AlterTableRequest without session or path; held_families: the touched families as the table held them; held_columns: the family each moved column sat in; held_ttl: the TTL the table held, absent for none; held_partitioning: the whole partitioning the table held; held_key_bloom_filter: the key bloom filter the table held; held_read_replicas: the read replicas the table held, empty for none; held_indexes: the index a removal drops or a rename renames, as the table held it",
-		"families":     "families are added or have only the settings the declaration states changed; a family is never dropped, a setting is never reset, keep_in_memory is never set",
+		"request": json.RawMessage(descriptor), "allowed_request_fields": alterFields, "column_family": json.RawMessage(family),
+		"payload":      "request: native AlterTableRequest without session or path, each family written as column_family describes it; held_families: the touched families as the table held them, written the same way; held_columns: the family each moved column sat in; held_ttl: the TTL the table held, absent for none; held_partitioning: the whole partitioning the table held; held_key_bloom_filter: the key bloom filter the table held; held_read_replicas: the read replicas the table held, empty for none; held_indexes: the index a removal drops or a rename renames, as the table held it",
+		"families":     "families are added or have only the settings the declaration states changed, the storage pool, the compression and the cache mode, which the request carries to the table service at its upstream field 6 and which requires the column_family_cache_mode capability; a family is never dropped, a setting is never reset, keep_in_memory is never set",
 		"columns":      "a column moves between families by name; key columns stay in the default family; a column the plan drops is never named",
 		"additions":    "add_columns names columns that are nullable, have no default and sit in the default family; a column that must be placed in another family is moved by a separate family operation after the addition",
 		"removals":     "drop_columns names columns that are not part of the key, an index, the TTL or the partitioning",
@@ -76,7 +80,7 @@ type Alteration struct {
 	// move, the columns to add, or the columns to drop.
 	Request *Ydb_Table.AlterTableRequest
 	// HeldFamilies are the families Request changes, as the table held them when planned.
-	HeldFamilies []*Ydb_Table.ColumnFamily
+	HeldFamilies []*native.ColumnFamily
 	// HeldColumns maps each moved column to the family it sat in; empty is the default family.
 	HeldColumns map[string]string
 	// HeldTTL is the TTL the table held when planned; nil is none. Only a TTL
@@ -118,7 +122,13 @@ type alterPayload struct {
 // CaptureAlteration builds the operation for a family change planned against a
 // table in owner.
 func CaptureAlteration(id string, owner *protocol.Reference, change familyChange) (*protocol.NormalizedValue, error) {
-	request := &Ydb_Table.AlterTableRequest{AddColumnFamilies: change.add, AlterColumnFamilies: change.alter, AlterColumns: change.move}
+	request := &Ydb_Table.AlterTableRequest{AlterColumns: change.move}
+	for _, family := range change.add {
+		request.AddColumnFamilies = append(request.AddColumnFamilies, schema.RequestFamily(family))
+	}
+	for _, family := range change.alter {
+		request.AlterColumnFamilies = append(request.AlterColumnFamilies, schema.RequestFamily(family))
+	}
 	return captureRequest(id, owner, &Alteration{Request: request, HeldFamilies: change.heldFamilies, HeldColumns: change.heldColumns})
 }
 
@@ -186,7 +196,7 @@ func captureRequest(id string, owner *protocol.Reference, alteration *Alteration
 }
 
 func encodeAlteration(alteration *Alteration) ([]byte, error) {
-	request, err := protojson.Marshal(alteration.Request)
+	request, err := marshalRequest(alteration.Request)
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +296,7 @@ func NormalizeAlteration(input *protocol.ValueInput) (*protocol.NormalizedValue,
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner),
 		CanonicalFormat: definition.CanonicalFormat, CanonicalProjection: bytes.Clone(payload),
 		OperationSemantics: &protocol.OperationSemantics{Impact: impact, Reason: reason,
-			Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Alteration inherits server access policy"}}, nil
+			Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: alteredAccess}}, nil
 }
 
 // DecodeAlteration returns independent native operands after validating the envelope.
@@ -314,18 +324,18 @@ func decodeAlteration(raw []byte) (*Alteration, error) {
 		return nil, fmt.Errorf("YDB alteration settings cannot be null")
 	}
 	alteration := &Alteration{Request: &Ydb_Table.AlterTableRequest{}, HeldColumns: map[string]string{}}
-	if err := protojson.Unmarshal(payload.Request, alteration.Request); err != nil {
+	if err := unmarshalRequest(payload.Request, alteration.Request); err != nil {
 		return nil, fmt.Errorf("invalid YDB table alteration request")
 	}
 	if err := only(alteration.Request, alterFields...); err != nil {
 		return nil, err
 	}
 	for _, encoded := range payload.HeldFamilies {
-		var family Ydb_Table.ColumnFamily
+		var family native.ColumnFamily
 		if err := protojson.Unmarshal(encoded, &family); err != nil {
 			return nil, fmt.Errorf("invalid held YDB column family")
 		}
-		if err := only(&family, "name", "data", "compression", "keep_in_memory"); err != nil {
+		if err := only(&family, "name", "data", "compression", "keep_in_memory", "cache_mode"); err != nil {
 			return nil, err
 		}
 		alteration.HeldFamilies = append(alteration.HeldFamilies, &family)
@@ -430,7 +440,12 @@ func validateAlteration(alteration *Alteration) error {
 		named[family.Name] = true
 	}
 	for _, family := range request.AlterColumnFamilies {
-		if family.Data.GetMedia() == "" && family.Compression == Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED {
+		changed, err := schema.NativeFamily(family)
+		if err != nil {
+			return err
+		}
+		if changed.Data.GetMedia() == "" && changed.Compression == Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED &&
+			changed.CacheMode == native.ColumnFamily_CACHE_MODE_UNSPECIFIED {
 			return fmt.Errorf("YDB family alteration states no setting")
 		}
 	}

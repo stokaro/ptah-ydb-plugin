@@ -287,6 +287,15 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"a family with another storage pool",
 			side{table: withFamily(`{"name":"archive","data":{"media":"ssd"}}`)},
 			side{table: withFamily(`{"name":"archive","data":{"media":"hdd"}}`)}, []string{"records"}},
+		{"a family with another cache mode",
+			side{table: withFamily(`{"name":"archive","cacheMode":"CACHE_MODE_REGULAR"}`)},
+			side{table: withFamily(`{"name":"archive","cacheMode":"CACHE_MODE_IN_MEMORY"}`)}, []string{"records"}},
+		// A family that never had a cache mode reads back with none, so a
+		// declared regular cache is written once, as the host's embedded
+		// engine writes it.
+		{"a cache mode on a family that holds none",
+			side{table: withFamily(`{"name":"archive","cacheMode":"CACHE_MODE_REGULAR"}`)},
+			side{table: withFamily(`{"name":"archive"}`)}, []string{"records"}},
 		{"a TTL and a family in one table change",
 			side{table: `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"archive"}],"ttlSettings":` + hourly + `}`}, side{table: plain}, []string{"records"}},
 		{"a column in another family",
@@ -375,6 +384,10 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 			side{table: withFamily(`{"name":"archive","compression":"COMPRESSION_LZ4"}`)},
 			side{table: withFamily(`{"name":"archive","compression":"COMPRESSION_LZ4"}`)}},
 		{"a family the declaration leaves out", side{table: plain}, side{table: withFamily(`{"name":"archive"}`)}},
+		{"the cache mode the family holds",
+			side{table: withFamily(`{"name":"archive","cacheMode":"CACHE_MODE_IN_MEMORY"}`)}, side{table: withFamily(`{"name":"archive","cacheMode":"CACHE_MODE_IN_MEMORY"}`)}},
+		{"a cache mode the declaration leaves out",
+			side{table: withFamily(`{"name":"archive"}`)}, side{table: withFamily(`{"name":"archive","cacheMode":"CACHE_MODE_IN_MEMORY"}`)}},
 		{"a declared none compression the table reads back as unspecified",
 			side{table: withFamily(`{"name":"archive","compression":"COMPRESSION_NONE"}`)}, side{table: withFamily(`{"name":"archive"}`)}},
 		{"a column in the family it declares",

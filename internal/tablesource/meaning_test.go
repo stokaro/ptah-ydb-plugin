@@ -71,8 +71,8 @@ type ttlMeaning struct {
 
 // familyMeaning is a family and the columns it holds, in the order the source lists them.
 type familyMeaning struct {
-	Name, Data, Compression string
-	Columns                 []string
+	Name, Data, Compression, CacheMode string
+	Columns                            []string
 }
 
 func (m meaning) empty() bool {
@@ -83,7 +83,9 @@ func (m meaning) empty() bool {
 // families sorts a family list and drops the default family when it states
 // nothing: a table has that family whether or not a declaration names it.
 func families(list []familyMeaning) []familyMeaning {
-	list = slices.DeleteFunc(slices.Clone(list), func(f familyMeaning) bool { return f.Name == "default" && f.Data == "" && f.Compression == "" })
+	list = slices.DeleteFunc(slices.Clone(list), func(f familyMeaning) bool {
+		return f.Name == "default" && f.Data == "" && f.Compression == "" && f.CacheMode == ""
+	})
 	slices.SortFunc(list, func(a, b familyMeaning) int { return strings.Compare(a.Name, b.Name) })
 	return list
 }
@@ -91,8 +93,8 @@ func families(list []familyMeaning) []familyMeaning {
 func tableKey(schema, name string) string { return schema + "." + name }
 
 // hostPartitioning and hostFamilies are the host's facet payloads. An unknown
-// field fails the decode, so an agreement row cannot carry a cache mode or any
-// other setting that the comparison would silently ignore.
+// field fails the decode, so an agreement row cannot carry a setting that the
+// comparison would silently ignore.
 type hostPartitioning struct {
 	BySize          *bool      `json:"by_size"`
 	PartitionSizeMB uint64     `json:"partition_size_mb"`
@@ -131,6 +133,7 @@ type hostFamilies struct {
 		Name        string   `json:"name"`
 		Data        string   `json:"data"`
 		Compression string   `json:"compression"`
+		CacheMode   string   `json:"cache_mode"`
 		Columns     []string `json:"columns"`
 	} `json:"families"`
 }
@@ -167,7 +170,8 @@ func hostMeaning(c *qt.C, recorded golden) map[string]meaning {
 				var f hostFamilies
 				strictJSON(c, payload, &f)
 				for _, family := range f.Families {
-					m.Families = append(m.Families, familyMeaning{Name: family.Name, Data: family.Data, Compression: family.Compression, Columns: family.Columns})
+					m.Families = append(m.Families, familyMeaning{Name: family.Name, Data: family.Data, Compression: family.Compression, CacheMode: family.CacheMode,
+						Columns: family.Columns})
 				}
 			case "ptah.run/ydb/column-store":
 				var store hostColumnStore
@@ -215,6 +219,10 @@ var switches = map[Ydb.FeatureFlag_Status]*bool{Ydb.FeatureFlag_ENABLED: new(tru
 
 var compressions = map[Ydb_Table.ColumnFamily_Compression]string{
 	Ydb_Table.ColumnFamily_COMPRESSION_NONE: "off", Ydb_Table.ColumnFamily_COMPRESSION_LZ4: "lz4",
+}
+
+var cacheModes = map[native.ColumnFamily_CacheMode]string{
+	native.ColumnFamily_CACHE_MODE_REGULAR: "regular", native.ColumnFamily_CACHE_MODE_IN_MEMORY: "in_memory",
 }
 
 // pluginMeaning reduces the facets the provider returned to a meaning for each
@@ -265,7 +273,8 @@ func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning 
 				}
 				m.TTL = ttlOf(intent.GetTtlSettings())
 				for _, family := range intent.GetColumnFamilies() {
-					m.Families = append(m.Families, familyMeaning{Name: family.GetName(), Data: family.GetData().GetMedia(), Compression: compressions[family.GetCompression()]})
+					m.Families = append(m.Families, familyMeaning{Name: family.GetName(), Data: family.GetData().GetMedia(), Compression: compressions[family.GetCompression()],
+						CacheMode: cacheModes[family.GetCacheMode()]})
 				}
 				m.Families = families(m.Families)
 				if !m.empty() {

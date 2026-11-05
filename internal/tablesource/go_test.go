@@ -55,6 +55,8 @@ func TestGoDirectives_HappyPath(t *testing.T) {
 			".items", `{"columnFamilies":[{"name":"cold"}]}`},
 		{"quoted parts", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "table": `"archive"."orders"`})},
 			"archive.orders", `{"columnFamilies":[{"name":"cold"}]}`},
+		{"a cache mode", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "hot", "cache_mode": "IN_MEMORY"})},
+			".items", `{"columnFamilies":[{"cacheMode":"CACHE_MODE_IN_MEMORY","name":"hot"}]}`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -153,8 +155,8 @@ func TestGoDirectives_FailurePath(t *testing.T) {
 			`fragment "0": invalid table "a.b.c": write the table as name or schema.name, quoting a part that holds a dot`},
 		{"a quote left open", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "table": `"shop.orders`})},
 			`fragment "0": invalid table "\\"shop.orders": a quoted name is not closed`},
-		{"a cache mode", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "cache_mode": "regular"})},
-			`table "items": column family "cold": cache_mode is not supported by the YDB provider yet: .*`},
+		{"an unknown cache mode", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "cache_mode": "ram"})},
+			`table "items": column family "cold": invalid cache_mode "ram": takes regular or in_memory`},
 		{"an empty column name", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "fields": "a,,b"})},
 			`table "items": column family "cold": invalid fields "a,,b": takes a comma-separated list of column names, none of them empty`},
 		{"an empty list", []testsource.GoDeclaration{declaration(2, "Item", map[string]string{"name": "cold", "fields": ""})},

@@ -23,7 +23,7 @@ func TestTableConversionPreservesConfigurationAndAccessRequirements(t *testing.T
 			EffectivePermissions: []*Ydb_Scheme.Permissions{{Subject: "reader", PermissionNames: []string{"ydb.generic.read"}}, {Subject: "writer", PermissionNames: []string{"ydb.generic.write"}}}},
 		TtlSettings:          &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_DateTypeColumn{DateTypeColumn: &Ydb_Table.DateTypeColumnModeSettings{ColumnName: "expires", ExpireAfterSeconds: 86400}}},
 		StorageSettings:      &Ydb_Table.StorageSettings{TabletCommitLog0: &Ydb_Table.StoragePool{Media: "ssd"}, TabletCommitLog1: &Ydb_Table.StoragePool{Media: "ssd"}, External: &Ydb_Table.StoragePool{Media: "hdd"}},
-		ColumnFamilies:       []*Ydb_Table.ColumnFamily{{Name: "cold", Data: &Ydb_Table.StoragePool{Media: "hdd"}, Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4}, {Name: "default", Data: &Ydb_Table.StoragePool{Media: "ssd"}}},
+		ColumnFamilies:       []*native.ColumnFamily{{Name: "cold", Data: &Ydb_Table.StoragePool{Media: "hdd"}, Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4, CacheMode: native.ColumnFamily_CACHE_MODE_IN_MEMORY}, {Name: "default", Data: &Ydb_Table.StoragePool{Media: "ssd"}}},
 		Attributes:           map[string]string{"comment": "Case-sensitive caption", "custom": ""},
 		PartitioningSettings: &Ydb_Table.PartitioningSettings{PartitionBy: []string{"tenant"}, PartitioningBySize: Ydb.FeatureFlag_ENABLED, PartitionSizeMb: 2048, PartitioningByLoad: Ydb.FeatureFlag_DISABLED, MinPartitionsCount: 2, MaxPartitionsCount: 16},
 		KeyBloomFilter:       Ydb.FeatureFlag_ENABLED, ReadReplicasSettings: &Ydb_Table.ReadReplicasSettings{Settings: &Ydb_Table.ReadReplicasSettings_AnyAzReadReplicasCount{AnyAzReadReplicasCount: 2}},

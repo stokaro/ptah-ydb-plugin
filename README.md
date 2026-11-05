@@ -51,7 +51,12 @@ minor version at least `min_contract.minor`. The document states the minimum the
 provider declares in its `Describe` reply, so the two cannot disagree. This
 provider requires contract 25.7. It negotiates `database.context` and
 `values.context` to resolve dependency paths, and `planning.lifecycle` to order
-native replacements around common table operations. `ptah providers install`
+native replacements around common table operations. It offers
+`planning.statement-style` (contract 25.8), which ptah-compat's `migrate diff`
+needs, because it plans in the exact statement style: no comment that only
+describes a statement, no guard the plan does not need and no CASCADE. The
+operations the provider plans carry none of these in either style, so an exact
+plan is the plan the annotated style gets. `ptah providers install`
 reads the document to choose the newest release the host can start, without
 downloading an archive. `release-lines.json` lists the release lines the provider declares.
 
@@ -71,10 +76,9 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.18.1-0.20261105062519-84bd25f6b021, a
-pseudo-version of the SDK that speaks provider contract 25.25. The provider
-still requires 25.7 of its host and offers each later feature to a host that
-lists it. Builds require neither the Ptah application source nor a local SDK
+The module pins `provider-sdk` v0.20.0, which speaks provider contract 25.22.
+The provider still requires 25.7 of its host and offers each later feature to a
+host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
 
 Database context is resolved without connecting or reading credentials. A dev
@@ -116,6 +120,10 @@ PTAH_YDB_TEST_URL='ydb://localhost:2136/local?go_balancer=disable' \
   GOWORK=off go test -race -tags integration ./integration -count=1 -v
 ```
 
+A test whose dev database must be on a server other than the target's reads a
+second isolated server from `PTAH_YDB_OTHER_TEST_URL` and skips without it. CI
+starts the second server beside the first.
+
 The test servers enable `enable_vector_index` and
 `enable_external_data_sources`; the 26.2 fixture also enables
 `enable_add_unique_index`. A full-text index is refused on 25.1, and the
@@ -151,7 +159,19 @@ The host and provider are built against the published SDK pin with
 run builds the newest published Ptah release whose provider contract this
 provider can run on (`scripts/resolve-host.sh`); it is skipped with a notice
 while no release speaks that contract. A second, non-blocking run builds Ptah's
-master branch, so a host change that breaks this provider shows up early. This
+master branch, so a host change that breaks this provider shows up early. A
+third run, on each image, builds a host a run names: a branch, tag or commit of
+stokaro/ptah, given as the `host_ref` input of a manual run or as the first line
+of `.github/host-ref` in a pull request whose tests need a host change master
+does not have yet (`scripts/live-lines.sh`). It blocks, because the run asked
+for that host, and a ref that names no commit fails it. Each run also builds
+the host's `ptah-compat` from the same checkout and names it in
+`PTAH_HOST_COMPAT_TEST_BIN`. The `TestHostCompat` tests run it with
+`PTAH_PROVIDER_CONFIG` naming this provider's manifest, which is how
+ptah-compat takes one. They skip, with the binary's answer, where ptah-compat
+still builds in a YDB engine of its own, which claims `ydb` and refuses this
+provider's registration; a host without the built-in engine
+(stokaro/ptah#5298) runs them. This
 repository owns the YDB end-to-end, live and parity tests; Ptah's own CI checks
 the provider contract only on its in-tree fixture provider. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
@@ -235,6 +255,7 @@ defaults of every supported line.
 | `unique_index_on_existing_table` | `EnableAddUniqueIndex` | `false` on every line; 25.1 and 25.2 do not list the flag |
 | `index_rename` | `EnableMoveIndex` | `true` on every line from 25.1 to 26.2, for a host that lists `planning.index-renames` |
 | `local_min_max_indexes` | `EnableLocalMinMaxIndex` | `false` on every line from 25.1 to 26.2 |
+| `column_family_cache_mode` | `EnableTableCacheModes` | `false` through 25.3, `true` from 25.4; 25.1 and 25.2 do not list the flag |
 
 The release line alone decides the other vector capabilities, as the host's
 line presets name them: `vector_index_maintained_on_write` from 25.3 (an index
@@ -572,6 +593,12 @@ YDB does, and writes each change as the host's embedded engine writes it. A
 host that does not list it gets none of this: views stay native objects, and a
 declared comment is refused as a table setting no creation states.
 
+The comments of a table the host creates, of its columns and of its indexes,
+and of a column or an index it adds to a table, reach the provider as comment
+steps after the step that creates the object, as for any comment change. The
+provider takes them off the declaration it creates the table from, and runs
+the steps after its own steps on that table, with the exceptions below.
+
 Views and comments use these shared stages:
 
 | Step | Views | Comments |
@@ -580,7 +607,7 @@ Views and comments use these shared stages:
 | PrepareCommonObjects | The query in the server's form: its tokens joined by single spaces, comments and terminators left out | As declared |
 | ValidateSchema | Refuses a view without a query, `WITH CHECK OPTION`, view attributes and materialized views | Refuses what an attribute cannot hold: a key over 100 bytes, a value over 4096 bytes, text that is not UTF-8, more than 10240 bytes on one table |
 | Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
-| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes |
+| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes; a comment on the table or a column also skips a step that changes only an index |
 
 The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
 two- or three-character operator is one token except `>>`, which YDB writes
@@ -592,6 +619,17 @@ A step that only removes, such as a column's removal, is ordered after the
 views and comments of the plan, not before them: the host places a removal
 after its views and comments, and what a removal drops is no longer declared,
 so no view the plan creates reads it and no comment the plan sets names it.
+The one comment step that names a dropped column removes its comment: YDB
+keeps the attribute once the column is gone and would give it to a column
+added later under that name. The host sends that step for each dropped column
+that held a comment (stokaro/ptah#5280), in its comment window, so it runs
+before the removal.
+
+A comment on a table or on one of its columns is not ordered after a step that
+changes only an index of the table, such as an index's addition. The host
+places the comment of a column it adds right after the column, before the
+index additions, and the index step changes nothing such a comment names. A
+comment on an index still follows the steps on its table.
 
 YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table
@@ -605,7 +643,9 @@ file is split into, one statement after another. A comment statement in a
 transaction, or one that cannot be read, refuses the batch before any unit
 runs. A comment is never a table property: the table facet leaves Ptah's
 comment keys out, a declared attribute under one of them is refused, and the
-new table of a rebuild takes the comments the read reported.
+new table of a rebuild takes the comments the read reported, which the host
+carries on the observed table, its columns and its indexes of a planning
+request.
 
 Users and groups share YDB's principal namespace. Creation accepts lower-case
 ASCII letters and digits. Groups have no login or password settings. Membership
@@ -1223,6 +1263,7 @@ tables:
     column_families:
       default: {compression: lz4}               # off or lz4
       cold: {data: hdd, compression: lz4, fields: [body]} # data is a storage pool kind, kept as written
+      hot: {cache_mode: in_memory}              # regular or in_memory, in either case
     platform:
       ydb:                                      # the TTL, spelled as the Go platform properties without the prefix
         row_deletion_column: created_at
@@ -1244,8 +1285,9 @@ In Go, the same settings are attributes of the host's own `ptah:schema:table`
 directive, spelled as the YAML keys are, and a TTL is written as the platform
 properties of the `ydb` engine. A family is a directive of its own,
 `//ptah:schema:columnfamily`, on the table's struct, with the attributes `name`,
-`data`, `compression` and `fields`. The `table` attribute names another table of
-the file (`name` or `schema.name`) and wins over the struct's own table.
+`data`, `compression`, `cache_mode` and `fields`. The `table` attribute names
+another table of the file (`name` or `schema.name`) and wins over the struct's
+own table.
 `fields` lists the columns the family holds, as a comma-separated list of the
 column names (`fields="body, notes"`). The provider returns one column facet for
 each name, owned by the column under the table, and the host attaches it to the
@@ -1259,8 +1301,15 @@ the host.
 //ptah:schema:table name="documents" auto_partitioning_by_load="ENABLED" read_replicas_settings="ANY_AZ:2" platform.ydb.row_deletion_column="created_at" platform.ydb.row_deletion_interval="P30D"
 //ptah:schema:columnfamily name="default" compression="lz4"
 //ptah:schema:columnfamily name="cold" data="hdd" compression="lz4" fields="body"
+//ptah:schema:columnfamily name="hot" cache_mode="in_memory"
 type Document struct { /* ... */ }
 ```
+
+A family's cache mode, `regular` or `in_memory`, needs a target that takes
+one: YDB 25.4 and later, or a cluster that turned `EnableTableCacheModes` on
+(see [Feature flags](#feature-flags)). A plan that declares one for any other
+target is refused with the flag's name, `regular` included, as the host's
+embedded engine refuses it.
 
 A TTL needs `row_deletion_column` and `row_deletion_interval`. The interval is an
 ISO 8601 duration of weeks, days, hours, minutes and seconds (`P30D`,
@@ -1301,7 +1350,6 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | Setting | Why |
 | --- | --- |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
-| `cache_mode` of a column family | The table service reports a cache mode in a family field that the pinned `ydb-go-genproto` lacks, and the provider refuses to read a table that holds one (`unknown fields in Ydb.Table.ColumnFamily`). It cannot be compared or set. Claimed and refused by name. |
 | Local, full-text and vector index options | The host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. These attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. A vector or full-text index is created and changed from the native index set (see [Vector and full-text indexes](#vector-and-full-text-indexes)). No Go or YAML source writes either into the index set yet, and neither does a pgvector operator class (`ops`) on a source index. A global index's partitioning and read replicas are read (see [Index settings from a source](#index-settings-from-a-source)). |
 
 A table is managed for its TTL when its source states table properties for it,
@@ -1692,10 +1740,14 @@ database session, and live tests inspect column tables on both lines.
 
 ## Native protocol generation
 
-The upstream Go bindings lack some native index, sequence, changefeed, and consumer fields. The
-provider's typed definitions preserve their native wire numbers; attribution
-and the pinned upstream source are in `third_party/ydb/NOTICE.md`. Unsupported
-fields remain errors. Runtime statistics are omitted from schema observations.
+The upstream Go bindings lack some native index, sequence, changefeed, consumer
+and column family fields, such as a family's cache mode. The provider's typed
+definitions preserve their native wire numbers; attribution and the pinned
+upstream source are in `third_party/ydb/NOTICE.md`. Unsupported fields remain
+errors, a family's compression level among them. A table service request is
+built with the pinned bindings and carries a family's cache mode as an unknown
+field 6, the one unknown field the provider accepts. Runtime statistics are
+omitted from schema observations.
 
 With protoc 35.1 on `PATH`, regenerate with:
 
@@ -2443,7 +2495,11 @@ what planning would refuse: a missing or unknown key column, a type with no YDB
 counterpart, a table without columns, populated declaration fields and facets
 the provider does not carry (including common indexes), and invalid names. Access
 requirements and temporary tables are valid declarations that only CREATE
-refuses, so validation accepts them. Table paths that coincide or nest are refused
+refuses, so validation accepts them. A setting the target takes only with a
+capability is refused where the request's capabilities lack it: the settings of
+a Serial's sequence, and a family's cache mode, which the host's bundled
+validation refuses for `--server-version` 25.1 and 25.3 and accepts from 25.4.
+Table paths that coincide or nest are refused
 across the schema, because a YDB table holds no children. Directory names are
 checked as path elements. The native models in the whole-schema capture must
 normalize.
@@ -2479,6 +2535,14 @@ agree on order. A declaration that orders no key, such as a YAML table with
 two columns marked `primary: true`, is keyed by the columns it marks primary in
 the order it declares them, as the host's embedded engine keys it; one that
 marks none is refused.
+
+A family's cache mode travels as field 6 of the request's family, its upstream
+wire number, which the pinned Go bindings do not declare and keep as an unknown
+field; the operation payload writes it as the family's `cacheMode`, its
+upstream JSON name. The table service of 25.1.4.7 does not know the field and
+creates the table without it, so a creation that states one is refused where
+the session reports no `column_family_cache_mode`, and the creation is
+confirmed by the cache mode the table reads back with.
 
 A starting layout becomes the `partitions` of the CreateTable request, checked
 against the key columns: `uniform_partitions` needs a Uint32 or Uint64 first key
@@ -2517,6 +2581,18 @@ table's key, a covered key column. A vector, full-text or local index is
 refused as a common index, since the pinned table protocol builds none of them
 with a table. Execution confirms each index by reading it back. In the TEXT
 form each index is an INDEX clause of the CREATE TABLE.
+
+YDB has no UNIQUE constraint: it refuses one as a parse error and holds the
+same rows with a global unique index, a second row with the same value refused
+and rows whose value is NULL not. A session reports `unique_constraints` as
+`false`, and a host that reads it so turns a declared UNIQUE constraint, and a
+column's UNIQUE, into that index before it compares and plans, under the name
+its YDB renderer gives it: the constraint's name, or `<table>_<columns>_key`.
+A UNIQUE over the key folds into the key. The provider then creates and reads
+an index, never a constraint. Schema validation and the creation projection
+read the source the operator wrote past its UNIQUE, since the index changes no
+column of the table; a UNIQUE the host does not turn into an index, such as a
+deferrable one, is refused when it is planned.
 
 The vector and full-text indexes of the table's native index set are built
 after the creation, one step each (`row-table-create-index/N`, ordered after
@@ -2584,14 +2660,18 @@ below), where a table the native call creates can change them.
 The planner refuses, in the embedded engine's words, an auto-increment column
 of a type YDB has no Serial for, `GENERATED ALWAYS`, identity options other than
 the start and the increment, a default on a Serial, a start or an increment
-below 1 or not a whole number, and a start or an increment on a 16-bit or
-32-bit Serial. Every line reports `serial_sequence_keeps_range` false: any
-`ALTER SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the
-column then stores the value after its own maximum as a negative number without
-an error. The native call could create such a sequence with its range kept,
-but no later change and no migration file could, so it is refused at creation
-too. A column table takes no Serial, and YDB adds no Serial column to a table
-that exists (`Column addition with serial data type is unsupported`).
+below 1 or not a whole number, and a start or an increment a creation or a
+change would give a 16-bit or 32-bit Serial, a change back to the defaults
+included. Every line reports `serial_sequence_keeps_range` false: any `ALTER
+SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the column
+then stores the value after its own maximum as a negative number without an
+error. The native call could create such a sequence with its range kept, but no
+later change and no migration file could, so it is refused at creation too. A
+table whose 16-bit or 32-bit Serial already holds the declared start and
+increment needs no statement and plans nothing, and validation, which cannot
+tell, takes the declaration, as the host's embedded engine does. A column table
+takes no Serial, and YDB adds no Serial column to a table that exists (`Column
+addition with serial data type is unsupported`).
 
 When the declared start or increment of an existing Serial differs from what
 the read reports, the planner writes one step, `serial-sequence/N`: one YQL
@@ -2656,8 +2736,9 @@ a column made NOT NULL is unwrapped too, which fails the copy on a NULL row.
 The new table keeps the old table's attributes, and with them the comments Ptah
 keeps there, and each storage setting the declaration does not state, as the
 old table holds it: every column family, the default one and one no column
-sits in included, with the settings the declaration leaves out, the family each
-column sits in where the declaration does not say (see
+sits in included, with the settings the declaration leaves out (its cache mode
+among them, which a target without `column_family_cache_mode` refuses to
+write), the family each column sits in where the declaration does not say (see
 [Column families](#column-families)), the automatic partitioning, the read replicas, the key bloom
 filter, and the TTL where the declaration states no table properties. A
 cluster's table profile may have given the old table any of them, and YQL
@@ -2771,6 +2852,14 @@ rules:
 - A setting the declaration leaves out is kept as the table holds it. A cluster
   profile gives new tables settings of their own, so the table is not reset.
   A declared `COMPRESSION_NONE` matches a family that reads back unspecified.
+- A cache mode the declaration states is set where the family holds another
+  one or none. A family that never had one reads back with none, so a declared
+  `regular` is set once and then holds, as the host's embedded engine sets it.
+  The request carries it as field 6 of the family, as a creation does (see
+  [Native row-table creation](#native-row-table-creation)). A declared cache
+  mode, `regular` included, is refused on a target without
+  `column_family_cache_mode`, with the flag's name, whatever the table holds:
+  the table service of 25.1.4.7 would alter the table without it.
 - A family only the table holds stays. No family is dropped, because YDB has no
   way to drop one.
 - A column sits where the declaration places it. A column property record
@@ -2974,7 +3063,7 @@ spellings a table directive takes. They decode into the index's own facet
 (`index-properties`), owned by the index, and a value an index cannot take,
 such as `auto_partitioning_by_load="true"` or a count of zero, is refused where
 it was written. For a host that lists `schema.observed-index-facets` (contract
-25.25, ADR 0068 in Ptah), inspection reports the same facet on each common
+25.21, ADR 0068 in Ptah), inspection reports the same facet on each common
 index, with every setting the server describes on it, defaults included, so
 the host compares one owner's facet on both sides. A host that does not list
 the feature reads no index's settings, and the provider refuses a declared

@@ -331,7 +331,8 @@ func replicationSemantics(before, after *protocol.Envelope) (*protocol.ChangeSem
 	switch {
 	case step.Before == nil:
 		semantics.Impact, semantics.Reason = protocol.ChangeSemantics_ADDITIVE, createReplicationReason
-		semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ACCESS_UNKNOWN, "Creation inherits server access policy"
+		semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ACCESS_UNKNOWN,
+			"Replica tables take their directory's permissions, not those of the source tables whose rows they receive"
 	case step.After == nil:
 		semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_NARROWS, "Dropping the replication removes access to it"
 		semantics.Impact, semantics.Reason = protocol.ChangeSemantics_BEHAVIORAL, keepReplicaTablesReason
@@ -356,7 +357,8 @@ func transferSemantics(before, after *protocol.Envelope) (*protocol.ChangeSemant
 	switch {
 	case step.Before == nil:
 		semantics.Impact, semantics.Reason = protocol.ChangeSemantics_ADDITIVE, createTransferReason
-		semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ACCESS_UNKNOWN, "Creation inherits server access policy"
+		semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ACCESS_UNKNOWN,
+			"The target table keeps its own permissions, not those of the topic whose messages it receives"
 	case step.After == nil:
 		semantics.RemovesState, semantics.Impact, semantics.Reason = new(true), protocol.ChangeSemantics_DESTRUCTIVE, dropTransferReason
 		semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_NARROWS, "Dropping the transfer removes access to it"

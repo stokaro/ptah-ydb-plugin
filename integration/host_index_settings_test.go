@@ -14,6 +14,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-sdk/v3/scheme"
 )
 
@@ -67,7 +68,8 @@ func tableExists(c *qt.C, opened *connection.Connection, absolute string) bool {
 	return slices.ContainsFunc(listing.Children, func(entry scheme.Entry) bool { return entry.Name == path.Base(absolute) })
 }
 
-// The host's YDB index partitioning tests through a Go source: the index
+// The host's YDB index partitioning tests through a Go source, with a host
+// that reads index facets (schema.observed-index-facets): the index
 // directive states a global index's partitioning and read replicas, the
 // creation gives each index its declared settings after the table, the next
 // run is synced, and a changed setting is altered in place while a setting
@@ -75,6 +77,7 @@ func tableExists(c *qt.C, opened *connection.Connection, absolute string) bool {
 // engine plans it.
 func TestHostIndexSettingsFromGo_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ObservedIndexFacetsFeature)
 	opened, directory, absolute := itemsFixture(c)
 	declared := indexSettingsItems(directory, ` auto_partitioning_by_load="ENABLED" auto_partitioning_min_partitions_count="2"`, "by_n", ` read_replicas_settings="PER_AZ:1"`, "")
 	for _, run := range []struct{ name, source, want string }{
@@ -108,6 +111,7 @@ func TestHostIndexSettingsFromGo_HappyPath(t *testing.T) {
 // then ALTER INDEX ... SET.
 func TestHostIndexSettingsOnAddedAndRenamedIndexes_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ObservedIndexFacetsFeature)
 	opened, directory, absolute := itemsFixture(c)
 	output, err := hostApply(c, directory, indexSettingsItems(directory, "", "by_n", "", ""))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
@@ -142,6 +146,7 @@ func TestHostIndexSettingsOnAddedAndRenamedIndexes_HappyPath(t *testing.T) {
 // host's TestParse_YDBGlobalIndex_HappyPath reads them.
 func TestHostIndexSettingsFromYAML_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ObservedIndexFacetsFeature)
 	opened, directory, absolute := itemsFixture(c)
 	source := "tables:\n  items:\n    schema: " + directory + "\n    columns:\n      id: {type: Uint64, primary: true, not_null: true}\n      body: {type: Utf8}\n" +
 		"      n: {type: Int64}\n    indexes:\n      by_body:\n        fields: [body]\n        include: [n]\n        auto_partitioning_by_load: ENABLED\n" +
@@ -178,6 +183,7 @@ func TestHostIndexSettingsFromGo_FailurePath(t *testing.T) {
 // HCL document that changes a setting alters the index.
 func TestHostExportsIndexSettings_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ObservedIndexFacetsFeature)
 	opened, directory, absolute := itemsFixture(c)
 	for _, statement := range []string{
 		"CREATE TABLE `" + absolute + "` (id Uint64 NOT NULL, body Utf8, n Int64, PRIMARY KEY (id), INDEX by_body GLOBAL SYNC ON (body) COVER (n), INDEX by_n GLOBAL ASYNC ON (n))",

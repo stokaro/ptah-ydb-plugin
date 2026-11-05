@@ -85,6 +85,9 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 		}
 	}
 	in.desired = intent.ColumnFamilies
+	if reason := declaredCacheModeRefusal(tableLabel(owner), intent.ColumnFamilies, capabilities); reason != "" {
+		return alterationChanges{}, reason, nil
+	}
 	for name, env := range desired.columns {
 		var column native.ColumnIntent
 		if err := protojson.Unmarshal(env.Payload, &column); err != nil {

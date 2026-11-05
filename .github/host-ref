@@ -1,0 +1,5 @@
+# The index settings tests of this pull request need the host branch below,
+# which reads the facets of a provider's inspected indexes
+# (schema.observed-index-facets, stokaro/ptah#5306). Remove this file once it
+# merges.
+feat/4204-index-settings-sources

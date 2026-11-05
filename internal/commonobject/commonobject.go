@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
@@ -30,6 +31,14 @@ var ErrUnsupported = errors.New("unsupported feature")
 
 func unsupported(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrUnsupported, fmt.Sprintf(format, args...))
+}
+
+// viewRefusal is [unsupported] as a reason the host prints: the refusal of a
+// view names the view and what YDB lacks, and never its query or comment.
+// Without it a refused view change reaches the host as its gRPC code alone,
+// "provider render failed (FailedPrecondition)".
+func viewRefusal(format string, args ...any) error {
+	return authored.Wrap(ErrUnsupported, ErrUnsupported.Error()+": "+fmt.Sprintf(format, args...))
 }
 
 // Support is the declaration of the kinds the ydb engine carries.
@@ -79,20 +88,20 @@ func Refusal(view *protocol.SQLView) error {
 	subject := "view " + qualified(view.GetSchema(), view.GetName())
 	switch {
 	case view.GetMaterialized():
-		return unsupported("%s: YDB has no materialized view", subject)
+		return viewRefusal("%s: YDB has no materialized view", subject)
 	case ydbview.QueryText(view.GetBody()) == "":
-		return unsupported("%s: a YDB view needs a query", subject)
+		return viewRefusal("%s: a YDB view needs a query", subject)
 	case view.GetWithCheck():
 		// Measured by the host on 25.1.4.7 and 26.2.1.14: a view cannot be
 		// written through, and WITH CHECK OPTION after the query is read as a
 		// table hint on its last table, which checks nothing.
-		return unsupported("WITH CHECK OPTION on %s: a YDB view cannot be written through, so there is nothing for the option to check", subject)
+		return viewRefusal("WITH CHECK OPTION on %s: a YDB view cannot be written through, so there is nothing for the option to check", subject)
 	case len(view.GetAttributes()) > 0:
-		return unsupported("WITH %s on %s: a YDB view takes the security_invoker option alone, which Ptah writes on every view",
+		return viewRefusal("WITH %s on %s: a YDB view takes the security_invoker option alone, which Ptah writes on every view",
 			strings.Join(view.GetAttributes(), ", "), subject)
 	}
 	if reason := ydbcomment.Refusal(ydbcomment.View, "", view.GetComment()); reason != "" {
-		return unsupported("the comment on %s: %s", subject, reason)
+		return viewRefusal("the comment on %s: %s", subject, reason)
 	}
 	return nil
 }
@@ -111,7 +120,7 @@ func Render(change *protocol.CommonObjectChange, capabilities map[string]bool) (
 	case *protocol.CommonObjectChange_DropView:
 		view := operation.DropView
 		if view.GetKind() != "view" {
-			return "", unsupported("DROP of %s %s: YDB has no materialized view", view.GetKind(), qualified(view.GetSchema(), view.GetName()))
+			return "", viewRefusal("DROP of %s %s: YDB has no materialized view", view.GetKind(), qualified(view.GetSchema(), view.GetName()))
 		}
 		// YDB's DROP VIEW has no CASCADE, and it needs none: YDB records no
 		// dependency on a view.
@@ -134,9 +143,11 @@ func Render(change *protocol.CommonObjectChange, capabilities map[string]bool) (
 func createView(creation *protocol.ViewCreation) (string, error) {
 	view := creation.GetView()
 	if creation.GetReplace() {
-		// YQL has neither CREATE OR REPLACE VIEW nor ALTER VIEW, so a changed
-		// view is dropped and created again.
-		return "", unsupported("CREATE OR REPLACE VIEW %s: YDB has no CREATE OR REPLACE VIEW", qualified(view.GetSchema(), view.GetName()))
+		// YQL has neither CREATE OR REPLACE VIEW nor ALTER VIEW. A session
+		// reports create_or_replace_view false, and a host that reads it
+		// drops a changed view and creates it again.
+		return "", viewRefusal("CREATE OR REPLACE VIEW %s: YDB has no CREATE OR REPLACE VIEW, and a host that reads the session's "+
+			"create_or_replace_view drops a changed view and creates it again", qualified(view.GetSchema(), view.GetName()))
 	}
 	if err := Refusal(view); err != nil {
 		return "", err

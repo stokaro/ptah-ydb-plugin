@@ -203,6 +203,25 @@ message ColumnMeta {
     repeated ColumnEncoding encoding = 9;
 }
 
+// ColumnFamily is Ydb.Table.ColumnFamily with the cache mode, which the pinned
+// Go bindings lack, at its upstream wire number. A table service request built
+// with the bindings carries the cache mode as field 6, which the bindings keep
+// as an unknown field and send. The compression level (field 5) is left out:
+// a row table takes none, and a description holding one arrives as an unknown
+// field and is refused.
+message ColumnFamily {
+    enum CacheMode {
+        CACHE_MODE_UNSPECIFIED = 0;
+        CACHE_MODE_REGULAR = 1;
+        CACHE_MODE_IN_MEMORY = 2;
+    }
+    string name = 1;
+    Ydb.Table.StoragePool data = 2;
+    Ydb.Table.ColumnFamily.Compression compression = 3;
+    Ydb.FeatureFlag.Status keep_in_memory = 4;
+    CacheMode cache_mode = 6;
+}
+
 message DescribeTableResult {
     Ydb.Scheme.Entry self = 1;
     repeated ColumnMeta columns = 2;
@@ -212,7 +231,7 @@ message DescribeTableResult {
     Ydb.Table.TableStats table_stats = 6;
     Ydb.Table.TtlSettings ttl_settings = 7;
     Ydb.Table.StorageSettings storage_settings = 8;
-    repeated Ydb.Table.ColumnFamily column_families = 9;
+    repeated ColumnFamily column_families = 9;
     map<string, string> attributes = 10;
     reserved 11;
     Ydb.Table.PartitioningSettings partitioning_settings = 12;
@@ -275,7 +294,7 @@ message RowTableIntent {
     AccessIntent access = 2;
     Ydb.Table.TtlSettings ttl_settings = 3;
     Ydb.Table.StorageSettings storage_settings = 4;
-    repeated Ydb.Table.ColumnFamily column_families = 5;
+    repeated ColumnFamily column_families = 5;
     map<string, string> attributes = 6;
     Ydb.Table.PartitioningSettings partitioning_settings = 7;
     Ydb.FeatureFlag.Status key_bloom_filter = 8;

@@ -13,14 +13,13 @@
 // facet of a kind for a table.
 //
 // What the bundled decoder in the host reads and this package does not is
-// listed in the package README of the provider and in the tests: column family
-// cache modes and index options. A
-// table's changefeeds are decoded by internal/changefeedsource. The host
-// refuses a YAML key that no provider claims, and reads a Go comment that none
-// claims as no declaration. So the provider leaves unclaimed the YAML keys it
-// cannot carry, and claims the Go directives and attributes it cannot carry in
-// order to refuse them by name. A claimed key or attribute that it cannot carry
-// yet is refused here by name too.
+// listed in the package README of the provider and in the tests: index
+// options. A table's changefeeds are decoded by internal/changefeedsource.
+// The host refuses a YAML key that no provider claims, and reads a Go comment
+// that none claims as no declaration. So the provider leaves unclaimed the
+// YAML keys it cannot carry, and claims the Go directives and attributes it
+// cannot carry in order to refuse them by name. A claimed key or attribute
+// that it cannot carry yet is refused here by name too.
 package tablesource
 
 import (
@@ -101,9 +100,9 @@ const (
 	AttributeTable       = "table"
 	AttributeData        = "data"
 	AttributeCompression = "compression"
-	// AttributeCacheMode is claimed so that the provider can refuse it by name:
-	// the row-table model has no cache mode. AttributeFields lists the columns
-	// of the family in either a Go directive or a YAML mapping.
+	// AttributeCacheMode is the family's cache mode, regular or in_memory in
+	// any case. AttributeFields lists the columns of the family in either a Go
+	// directive or a YAML mapping.
 	AttributeCacheMode = "cache_mode"
 	AttributeFields    = "fields"
 )
