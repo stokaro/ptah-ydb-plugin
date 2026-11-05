@@ -1987,7 +1987,17 @@ unit, which one query takes.
 
 Execution reads `.sys/resource_pools` and `.sys/resource_pool_classifiers`
 before the first statement and refuses objects that changed since the plan read
-them; it runs each statement once and reads both views back. Inspection reads
+them; it runs each statement once and reads both views back. The workload
+manager reads its classifiers from a cache, so for a while after a classifier
+and its pool are dropped it can still route a query to the pool, and YDB
+refuses that query with `Failed to resolve pool id` before it runs it. A read of
+the views refused so is sent again, for up to 20 seconds, for an inspection and
+for an execution's check and confirmation alike; a statement is never sent
+twice. A classifier with no member name routes every query of the database,
+the server's own included. Measured on 25.1.4.7: while such a classifier
+routed every query to a pool that admits none, a read of
+`.sys/resource_pool_classifiers` sent to the `default` pool ended in
+`System view: timeout`. Inspection reads
 the views on a target with resource pools, for a read of the whole database or
 one that selects the root, `/`: a read filtered to other directories cannot
 report what belongs to the database, so it leaves both kinds uninspected. A dev
