@@ -12,6 +12,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -528,17 +529,32 @@ func (p *planner) contributeCreations() (*protocol.PlannedFeatures, error) {
 
 // overlapRefusal refuses a creation whose path overlaps the path of another
 // table of the request, which needs a directory lifecycle this service does
-// not capture.
+// not capture. A creation at the path of a directory above a table the
+// request drops is refused in the words of objectplan.DirectoryKept, as the
+// host's embedded engine refused it: YDB keeps that directory after the drop.
 func (p *planner) overlapRefusal(item *creation) *protocol.PlannedFeatures {
 	for _, other := range p.request.Tables {
 		if provider.CompareIdentities(other.Subject, item.table.Subject) == 0 {
 			continue
 		}
 		if err := disjoint(item.table.Subject, other.Subject); err != nil {
+			created, held := tablePath(item.table.Subject), tablePath(other.Subject)
+			if other.Action == protocol.PlanningTable_DROP && strings.HasPrefix(held, created+"/") {
+				err = objectplan.DirectoryKept(held, created)
+			}
 			return refused(item.index, err.Error())
 		}
 	}
 	return nil
+}
+
+// tablePath is the path of the table subject names, relative to the
+// database, as YQL names the table there.
+func tablePath(subject *protocol.ComparisonIdentity) string {
+	if directory := subject.GetSchema().GetNormalized(); directory != "" {
+		return directory + "/" + subject.GetName().GetNormalized()
+	}
+	return subject.GetName().GetNormalized()
 }
 
 // creationStep is the lifecycle step of a creation: it creates the table, its
