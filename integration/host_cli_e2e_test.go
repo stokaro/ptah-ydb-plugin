@@ -176,6 +176,7 @@ func TestHostSchemaApplyDryRunCreatesNoLockNode_HappyPath(t *testing.T) {
 
 	c.Assert(previewErr, qt.IsNil, qt.Commentf("schema apply --dry-run:\n%s", previewed))
 	c.Assert(previewed, qt.Contains, "row-table-create-operation")
+	c.Assert(previewed, qt.Contains, directory+".lock_items")
 	c.Assert(afterPreview, qt.DeepEquals, before)
 	c.Assert(before, qt.Not(qt.Contains), locking.NodeName)
 	c.Assert(applyErr, qt.IsNil, qt.Commentf("schema apply:\n%s", applied))
