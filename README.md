@@ -1528,7 +1528,12 @@ ISO 8601 duration of weeks, days, hours, minutes and seconds (`P30D`,
 months and years are refused. A column that counts since the Unix epoch also
 needs `row_deletion_unit`, one of `SECONDS`, `MILLISECONDS`, `MICROSECONDS` and
 `NANOSECONDS` in any case. Which column types fit the unit is checked when the
-plan is made, where the table's columns are known.
+plan is made, where the table's columns are known. A refused interval or unit
+says why in the host's output, in the words of the host's embedded engine
+without the value the source wrote, which a provider's reason never quotes:
+`table "items": platform.ydb.row_deletion_interval: the interval has a fraction
+of a second, and YDB keeps whole seconds only (PT1.5S reads back as PT1S)`. A
+tier of a column table's TTL is refused the same way.
 
 All the keys, attributes and directives of one table become one desired
 row-table facet, because a document may hold only one facet of a kind for a
@@ -1712,17 +1717,21 @@ after the call it requires the added or renamed index to read back as
 requested under its name, the dropped or renamed one to be gone under its old
 name, and every other local index, the layout and the TTL to be unchanged.
 
-The TTL changes in place, as the host's embedded engine changes it: `ALTER
-TABLE ... RESET (TTL)` removes the TTL the table holds and `ALTER TABLE ... SET
-(TTL = ...)` installs the declared one, each a step of its own
-(`column-table-ttl/<n>/reset` and `.../set`, the RESET placed early and ordered
-before the SET). YDB keeps no external data source a TTL names, so the held TTL
-lets go of its sources before their owner drops or replaces them, and the
-declared one is set once they exist. A table without a TTL takes the SET alone,
-and a declaration without one the RESET alone. A lone RESET drops the table's
-TTL setting and a lone SET creates it; a pair alters it twice, because the host
+The TTL changes in place, as the host's embedded engine changes it. `ALTER
+TABLE ... SET (TTL = ...)` replaces the TTL a column table holds, whatever
+either one moves rows to (measured on 25.1.4.7 and 26.2.1.14), so a held TTL
+that moves no row is replaced by the SET alone (`column-table-ttl/<n>/set`). A
+held TTL that moves rows to an external data source is removed first with
+`ALTER TABLE ... RESET (TTL)` (`column-table-ttl/<n>/reset`, placed early and
+ordered before the SET): YDB refuses to drop or replace a data source a TTL
+names (`Other entities depend on this data source`), so the held TTL lets go of
+its sources before their owner drops or replaces them, and the declared one is
+set once they exist. Each step reads the data sources its TTL names, which
+orders it against their owner. A table without a TTL takes the SET alone, and a
+declaration without one the RESET alone. A lone RESET drops the table's TTL
+setting and a lone SET creates it; any other step alters it, because the host
 refuses a provider step that creates what another provider step drops (it runs
-every creation of a phase before every drop), and the dependency orders the
+every creation of a phase before every drop), and the dependency orders a
 pair. The declaration is held to the
 rules of a creation, and a tier that moves rows needs `tiered_ttl`. Each step
 reads the table from the table service and the monitoring endpoint, refuses
@@ -2310,13 +2319,6 @@ its object, and a drop replaces the REVOKE the host planned, since YDB drops an
 object's access list with it and a REVOKE after the drop would name a path that
 is gone. A change in place, such as a new lambda, keeps the entries.
 
-A grant names a replication or a transfer by its directory and name
-(`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
-path. The planner puts a GRANT or a REVOKE after the creation or the change of
-its object, and a drop replaces the REVOKE the host planned, since YDB drops an
-object's access list with it and a REVOKE after the drop would name a path that
-is gone. A change in place, such as a new lambda, keeps the entries.
-
 Execution reads the object before the statement and refuses one that changed
 since the plan read it, runs the statement once, and reads the object back. The
 statement names the object, the replica targets, the transfer's table and a
@@ -2645,7 +2647,13 @@ a DROP and a CREATE. A data source dropped and created again is one operation;
 a table is a drop before the statement on its data source and a restore after
 it. Tables are dropped before the data sources they read and created after,
 and every step asks for the host's dependent phase, the one window creations
-and drops share. The planner refuses, with the host's words, every statement
+and drops share. YDB refuses to drop or replace a data source a column table's
+TTL names, so the TTL of a column table the plan keeps is reset before a
+replacement of such a source and set again after it, as the host's embedded
+engine carries it (a target without `tiered_ttl` refuses the replacement), a
+column table the plan drops is dropped before the sources its TTL names, and a
+plan that leaves a table with a TTL naming a data source it drops is refused
+(`its TTL reads external data source ..., which the plan drops`). The planner refuses, with the host's words, every statement
 on a target without `external_data_sources`, an option ending in
 `_SECRET_PATH` before 25.4, where the session reports
 `external_data_source_secret_paths` false, a secret path outside the

@@ -2,6 +2,8 @@ package tablecreate_test
 
 import (
 	"maps"
+	"path"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -33,74 +35,108 @@ func columnTTLRequest(c *qt.C, declared, held string, capabilities map[string]bo
 	return request
 }
 
+// heldTiered is heldStorage with a TTL that moves rows to the data source ext
+// after a day and deletes them after a week.
+const heldTiered = `{"hashColumns":["id"],"partitions":"3","dataChannelCount":"64","ttl":{"enabled":{"column":"ts","expireAfterSeconds":"604800",` +
+	`"tiers":[{"applyAfterSeconds":"86400","externalStorage":"/local/ext"},{"applyAfterSeconds":"604800","delete":{}}]}}}`
+
 // TestColumnTablePlan_TTLChange_HappyPath changes a column table's TTL in
-// place, as the host's embedded engine plans it: a RESET of the TTL the table
-// holds, placed early, then a SET of the declared one. A table without a TTL
-// takes the SET alone, and a declaration without one the RESET alone.
+// place, as the host's embedded engine plans it. A TTL that moves no row is
+// replaced by a SET alone. A tiered TTL is reset first, placed early, and the
+// declared one set after it, each step reading the data sources its TTL
+// names. A table without a TTL takes the SET alone, and a declaration without
+// one the RESET alone.
 func TestColumnTablePlan_TTLChange_HappyPath(t *testing.T) {
-	const heldDaily = `{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}}`
+	const (
+		heldDaily      = `{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}}`
+		tieredTwoDays  = `{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"172800","externalStorage":"/local/ext"},{"applyAfterSeconds":"604800","delete":{}}]}}`
+		tieringTarget  = true
+		deletingTarget = false
+	)
 	for _, test := range []struct {
 		name, declared, held string
-		capabilities         map[string]bool
+		tiering              bool
 		steps, payloads      []string
 		placements           []protocol.PlanningMetadata_Placement
-		// actions are what each step does to the table's TTL setting.
+		// actions are what each step does to the table's TTL setting, and
+		// reads the data sources each step reads.
 		actions      []protocol.PlanningEffect_Action
+		reads        []string
 		dependencies int
 	}{
-		{"another interval", `{"ttl":` + deleteTwoDays + `}`, heldStorage, nil,
-			[]string{"column-table-ttl/000000/reset", "column-table-ttl/000000/set"}, []string{`{"held":` + heldDaily + `}`, `{"set":` + deleteTwoDays + `}`},
-			[]protocol.PlanningMetadata_Placement{protocol.PlanningMetadata_EARLY, protocol.PlanningMetadata_DEFAULT},
-			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_ALTER, protocol.PlanningEffect_ALTER}, 1},
-		{"a TTL on a table without one", `{"ttl":` + deleteDaily + `}`, heldNoTTL, nil,
+		{"another interval", `{"ttl":` + deleteTwoDays + `}`, heldStorage, deletingTarget,
+			[]string{"column-table-ttl/000000/set"}, []string{`{"held":` + heldDaily + `,"set":` + deleteTwoDays + `}`},
+			[]protocol.PlanningMetadata_Placement{protocol.PlanningMetadata_DEFAULT}, []protocol.PlanningEffect_Action{protocol.PlanningEffect_ALTER}, []string{""}, 0},
+		{"a TTL on a table without one", `{"ttl":` + deleteDaily + `}`, heldNoTTL, deletingTarget,
 			[]string{"column-table-ttl/000000/set"}, []string{`{"set":` + deleteDaily + `}`}, []protocol.PlanningMetadata_Placement{protocol.PlanningMetadata_DEFAULT},
-			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_CREATE}, 0},
-		{"no TTL", `{}`, heldStorage, nil,
+			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_CREATE}, []string{""}, 0},
+		{"no TTL", `{}`, heldStorage, deletingTarget,
 			[]string{"column-table-ttl/000000/reset"}, []string{`{"held":` + heldDaily + `}`}, []protocol.PlanningMetadata_Placement{protocol.PlanningMetadata_EARLY},
-			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_DROP}, 0},
-		{"a disabled TTL", `{"ttl":{"disabled":{}}}`, heldStorage, nil,
+			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_DROP}, []string{""}, 0},
+		{"a disabled TTL", `{"ttl":{"disabled":{}}}`, heldStorage, deletingTarget,
 			[]string{"column-table-ttl/000000/reset"}, []string{`{"held":` + heldDaily + `}`}, []protocol.PlanningMetadata_Placement{protocol.PlanningMetadata_EARLY},
-			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_DROP}, 0},
-		{"a tiered TTL on a target with tiering", `{"ttl":` + tiered + `}`, heldStorage, map[string]bool{tablecreate.TieredTTLCapability: true},
-			[]string{"column-table-ttl/000000/reset", "column-table-ttl/000000/set"}, []string{`{"held":` + heldDaily + `}`, `{"set":` + tiered + `}`},
+			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_DROP}, []string{""}, 0},
+		{"a tiered TTL in place of one that deletes", `{"ttl":` + tiered + `}`, heldStorage, tieringTarget,
+			[]string{"column-table-ttl/000000/set"}, []string{`{"held":` + heldDaily + `,"set":` + tiered + `}`},
+			[]protocol.PlanningMetadata_Placement{protocol.PlanningMetadata_DEFAULT}, []protocol.PlanningEffect_Action{protocol.PlanningEffect_ALTER}, []string{"ext"}, 0},
+		{"a TTL that deletes in place of a tiered one", `{"ttl":` + deleteDaily + `}`, heldTiered, tieringTarget,
+			[]string{"column-table-ttl/000000/reset", "column-table-ttl/000000/set"}, []string{`{"held":` + tiered + `}`, `{"set":` + deleteDaily + `}`},
 			[]protocol.PlanningMetadata_Placement{protocol.PlanningMetadata_EARLY, protocol.PlanningMetadata_DEFAULT},
-			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_ALTER, protocol.PlanningEffect_ALTER}, 1},
+			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_ALTER, protocol.PlanningEffect_ALTER}, []string{"ext", ""}, 1},
+		{"another tiered TTL", `{"ttl":` + tieredTwoDays + `}`, heldTiered, tieringTarget,
+			[]string{"column-table-ttl/000000/reset", "column-table-ttl/000000/set"}, []string{`{"held":` + tiered + `}`, `{"set":` + tieredTwoDays + `}`},
+			[]protocol.PlanningMetadata_Placement{protocol.PlanningMetadata_EARLY, protocol.PlanningMetadata_DEFAULT},
+			[]protocol.PlanningEffect_Action{protocol.PlanningEffect_ALTER, protocol.PlanningEffect_ALTER}, []string{"ext", "ext"}, 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := columnTTLRequest(c, test.declared, test.held, test.capabilities)
+			request := columnTTLRequest(c, test.declared, test.held, map[string]bool{tablecreate.TieredTTLCapability: test.tiering})
 			original := proto.CloneOf(request)
 			plan, err := backend.New().PlanFeatures(t.Context(), request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(plan.Contributions, qt.HasLen, 1)
-			var steps, payloads []string
+			var steps, payloads, reads []string
 			var placements []protocol.PlanningMetadata_Placement
 			var actions []protocol.PlanningEffect_Action
 			for _, step := range plan.Contributions[0].Steps {
 				steps = append(steps, step.Id.Name)
 				payloads = append(payloads, string(step.Operation.Value.Value.Payload))
 				placements = append(placements, step.Metadata.Placement)
-				c.Assert(step.Metadata.Effects, qt.HasLen, 2)
+				c.Assert(step.Metadata.Effects[0].Subject.Kind, qt.Equals, "table")
 				c.Assert(step.Metadata.Effects[1].Subject.Kind, qt.Equals, "ydb.ttl")
 				actions = append(actions, step.Metadata.Effects[1].Action)
+				reads = append(reads, sourceReads(step))
 				c.Assert(step.Operation.Value.Value.Kind, qt.Equals, tablecreate.ColumnTTLOperationKind)
 				c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
 			}
 			c.Assert(steps, qt.DeepEquals, test.steps)
 			c.Assert(placements, qt.DeepEquals, test.placements)
 			c.Assert(actions, qt.DeepEquals, test.actions)
+			c.Assert(reads, qt.DeepEquals, test.reads)
 			c.Assert(payloads, qt.HasLen, len(test.payloads))
 			for i, payload := range payloads {
 				c.Assert(jsonValue(c, payload), qt.DeepEquals, jsonValue(c, test.payloads[i]))
 			}
 			c.Assert(plan.Contributions[0].Dependencies, qt.HasLen, test.dependencies)
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, len(test.steps))
-			c.Assert(plan.Parents[0].Receipt.Strategy, qt.Matches, `Drop and add the column table's local indexes, and reset its TTL and set the declared one, .*`)
+			c.Assert(plan.Parents[0].Receipt.Strategy, qt.Matches, `Drop and add the column table's local indexes, and set its declared TTL in place of the one it holds, .*`)
 			c.Assert(proto.Equal(request, original), qt.IsTrue)
 		})
 	}
+}
+
+// sourceReads names the external data sources a step reads after the table
+// and its TTL setting, joined by commas.
+func sourceReads(step *protocol.PlanningStep) string {
+	var names []string
+	for _, effect := range step.GetMetadata().GetEffects()[2:] {
+		if effect.GetSubject().GetKind() == schema.ExternalSourceProperties && effect.GetAction() == protocol.PlanningEffect_READ {
+			names = append(names, path.Join(effect.GetSubject().GetSchema().GetNormalized(), effect.GetSubject().GetName().GetNormalized()))
+		}
+	}
+	return strings.Join(names, ",")
 }
 
 // TestColumnTablePlan_TTLChangeAccountsForTheComparison carries out the change
@@ -123,10 +159,9 @@ func TestColumnTablePlan_TTLChangeAccountsForTheComparison(t *testing.T) {
 	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
 	c.Assert(plan.Changes, qt.HasLen, 1)
 	c.Assert(plan.Changes[0].Kind, qt.Equals, schema.ColumnStorageChange)
-	c.Assert(plan.Changes[0].Strategy, qt.Matches, `The column table alteration resets the TTL .*`)
-	c.Assert(plan.Changes[0].Steps, qt.HasLen, 2)
-	c.Assert(plan.Changes[0].Steps[0].Name, qt.Equals, "column-table-ttl/000000/reset")
-	c.Assert(plan.Changes[0].Steps[1].Name, qt.Equals, "column-table-ttl/000000/set")
+	c.Assert(plan.Changes[0].Strategy, qt.Matches, `The column table alteration sets the declared TTL in place of the one the table holds .*`)
+	c.Assert(plan.Changes[0].Steps, qt.HasLen, 1)
+	c.Assert(plan.Changes[0].Steps[0].Name, qt.Equals, "column-table-ttl/000000/set")
 }
 
 // TestColumnTablePlan_TTLChange_FailurePath refuses a TTL the table cannot

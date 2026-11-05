@@ -2,8 +2,9 @@
 // external tables into the host's shared graph, in one batch, as Ptah's
 // embedded YDB engine plans them: a data source the plan drops and creates
 // again takes the external tables over it along, tables are dropped before
-// the data sources they read and created after, and a statement the target
-// cannot take refuses the whole batch.
+// the data sources they read and created after, the TTL of a column table the
+// plan keeps lets go of a data source the batch replaces and is set again
+// after, and a statement the target cannot take refuses the whole batch.
 //
 // YDB alters neither object (`Alter operation for EXTERNAL_DATA_SOURCE
 // objects is not implemented`), so a changed one is replaced: by CREATE OR
@@ -24,7 +25,9 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -37,7 +40,7 @@ func ChangeKinds() []string { return []string{schema.ExternalSourceChange, schem
 
 // OperationKinds are the operation models the planner returns.
 func OperationKinds() []string {
-	return []string{schema.ExternalSourceOperation, schema.ExternalTableOperation}
+	return []string{schema.ExternalSourceOperation, schema.ExternalTableOperation, tablecreate.ColumnTTLOperationKind}
 }
 
 // group orders the statements of one batch: tables are dropped before the
@@ -110,14 +113,14 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			Kind: request.Changes[0].GetValue().GetValue().GetKind(), Message: "Planning an external object requires established nontransactional DDL",
 			Input: &protocol.PlanningDiagnostic_Change{Change: 0}}}}, nil
 	}
-	changes, err := lower(ctx, request)
+	changes, root, err := lower(ctx, request)
 	if err != nil {
 		return nil, err
 	}
 	if diagnostics := refusals(request.Capabilities, changes); len(diagnostics) > 0 {
 		return &protocol.PlannedFeatures{Complete: true, Diagnostics: diagnostics}, nil
 	}
-	return contribute(ctx, request, changes)
+	return contribute(ctx, request, root, changes)
 }
 
 // read is one change of the request, read.
@@ -127,18 +130,19 @@ type read struct {
 	specs   externals.ChangeSpecs
 }
 
-// lower reads the batch's changes and lowers each, in input order. An error
-// is a request no owner could answer.
-func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowered, error) {
+// lower reads the batch's changes and lowers each, in input order, and
+// returns the database the batch runs in. An error is a request no owner
+// could answer.
+func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowered, string, error) {
 	root := request.DatabasePath
 	inputs := make([]read, 0, len(request.Changes))
 	for _, input := range request.Changes {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		item, next, err := readInput(input, inputs, root)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		root = next
 		inputs = append(inputs, item)
@@ -148,11 +152,11 @@ func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowere
 		// the request or one of its changes names.
 		specs, err := externals.ReadChange(inputs[i].change)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		if specs.Database != root {
 			if specs, err = readAgainst(inputs[i].change, root); err != nil {
-				return nil, err
+				return nil, "", err
 			}
 		}
 		inputs[i].specs = specs
@@ -172,7 +176,7 @@ func lower(ctx context.Context, request *protocol.PlanFeaturesRequest) ([]lowere
 		}
 		result = append(result, lowerTable(index, input, replace, displaced, root))
 	}
-	return result, nil
+	return result, root, nil
 }
 
 // readInput checks input, one change of the request, against its normalization
@@ -440,8 +444,8 @@ func replaceRefusal(planned step, subject string, capabilities map[string]bool) 
 }
 
 // contribute orders the batch's statements and returns one receipt per
-// change.
-func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, changes []lowered) (*protocol.PlannedFeatures, error) {
+// change. root is the database the batch runs in.
+func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, root string, changes []lowered) (*protocol.PlannedFeatures, error) {
 	var steps []step
 	for _, change := range changes {
 		steps = append(steps, change.steps...)
@@ -465,6 +469,9 @@ func contribute(ctx context.Context, request *protocol.PlanFeaturesRequest, chan
 		byInput[planned.input] = append(byInput[planned.input], proto.CloneOf(id))
 	}
 	contribution.Dependencies = append(contribution.Dependencies, order(steps, ids)...)
+	if refusal, err := keepTieredTTLs(request, root, steps, ids, changes, contribution, byInput); refusal != nil || err != nil {
+		return refusal, err
+	}
 	for _, change := range changes {
 		result.Changes[change.input] = &protocol.PlanningReceipt{Subject: proto.CloneOf(change.subject), Kind: change.kind, Strategy: change.strategy, Steps: byInput[change.input]}
 	}
@@ -552,14 +559,14 @@ func contributeStep(
 func stepEffects(planned step) []*protocol.PlanningEffect {
 	effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(planned.subject), Action: planned.action}, {Subject: objectplan.Slot(planned.subject), Action: planned.action}}
 	for _, path := range planned.secrets {
-		secret := sourceSubject(path)
+		secret := schema.ExternalSourceSubject(path)
 		secret.Kind = schema.SecretProperties
 		effects = append(effects, &protocol.PlanningEffect{Subject: secret, Action: protocol.PlanningEffect_READ},
 			&protocol.PlanningEffect{Subject: objectplan.Slot(secret), Action: protocol.PlanningEffect_READ})
 	}
 	if !planned.source() && planned.action != protocol.PlanningEffect_DROP {
 		for _, source := range planned.sources {
-			effects = append(effects, &protocol.PlanningEffect{Subject: sourceSubject(source), Action: protocol.PlanningEffect_READ})
+			effects = append(effects, &protocol.PlanningEffect{Subject: schema.ExternalSourceSubject(source), Action: protocol.PlanningEffect_READ})
 		}
 	}
 	return effects
@@ -571,6 +578,115 @@ func refused(change lowered, err error) *protocol.PlannedFeatures {
 		Message: err.Error(), Input: &protocol.PlanningDiagnostic_Change{Change: uint32(change.input)}}}}
 }
 
+// keepTieredTTLs carries the TTL of each column table the plan keeps past
+// every data source the batch replaces that the TTL moves rows to: the TTL is
+// reset before the first replacement and set again after the last, as the
+// host's embedded engine carries it. YDB refuses to drop or replace a data
+// source a table's TTL names (`Other entities depend on this data source`,
+// measured on 25.1.4.7 and 26.2.1.14). A replacement by CREATE OR REPLACE is
+// treated alike. The steps join the receipt of the first replaced source the
+// TTL names, and the source's strategy says so. A table whose TTL the plan
+// changes is left to the table's own steps, which read the sources their TTLs
+// name, and a table the plan drops reads the sources of its TTL itself. A
+// target without the tiered_ttl capability refuses the replacement, since it
+// could not set the TTL again, and a table left with a TTL that names a data
+// source the batch drops refuses the drop, in the embedded engine's words.
+func keepTieredTTLs(request *protocol.PlanFeaturesRequest, root string, steps []step, ids []*protocol.StepIdentity, changes []lowered,
+	contribution *protocol.PlanningContribution, byInput map[int][]*protocol.StepIdentity,
+) (*protocol.PlannedFeatures, error) {
+	replaced, dropped := sourceSteps(steps)
+	if len(replaced)+len(dropped) == 0 {
+		return nil, nil
+	}
+	if refusal, err := refuseDroppedTTLSources(request, root, steps, changes, dropped); refusal != nil || err != nil {
+		return refusal, err
+	}
+	number := 0
+	for _, table := range request.GetTables() {
+		kept, err := tablecreate.KeptTieredTTL(number, root, table)
+		if err != nil {
+			return nil, err
+		}
+		around := replacedSources(kept, replaced)
+		if len(around) == 0 {
+			continue
+		}
+		if !request.GetCapabilities()[tablecreate.TieredTTLCapability] {
+			return refused(changes[steps[around[0]].input], fmt.Errorf("replacing external data source %s means setting the TTL of column table %s again, "+
+				"which requires target capability %s, unavailable on this ydb target%s", display(steps[around[0]].subject),
+				ydbdecl.ExternalDisplay(kept.Table.GetSchema().GetSource(), kept.Table.GetName().GetSource()), tablecreate.TieredTTLCapability,
+				featureflags.Clause(tablecreate.TieredTTLCapability))), nil
+		}
+		number++
+		contribution.Steps = append(contribution.Steps, kept.Reset, kept.Set)
+		for _, index := range around {
+			contribution.Dependencies = append(contribution.Dependencies,
+				&protocol.PlanningDependency{Before: proto.CloneOf(kept.Reset.Id), After: proto.CloneOf(ids[index])},
+				&protocol.PlanningDependency{Before: proto.CloneOf(ids[index]), After: proto.CloneOf(kept.Set.Id)})
+			change := &changes[steps[index].input]
+			if !strings.Contains(change.strategy, keptTTLStrategy) {
+				change.strategy += keptTTLStrategy
+			}
+		}
+		input := steps[around[0]].input
+		byInput[input] = append(byInput[input], proto.CloneOf(kept.Reset.Id), proto.CloneOf(kept.Set.Id))
+	}
+	return nil, nil
+}
+
+// sourceSteps are the data sources the batch replaces and the ones it drops,
+// each by the position of its step.
+func sourceSteps(steps []step) (replaced, dropped map[ydbdecl.Path]int) {
+	replaced, dropped = make(map[ydbdecl.Path]int), make(map[ydbdecl.Path]int)
+	for index, planned := range steps {
+		switch {
+		case planned.source() && planned.action == protocol.PlanningEffect_ALTER:
+			replaced[planned.path()] = index
+		case planned.source() && planned.action == protocol.PlanningEffect_DROP:
+			dropped[planned.path()] = index
+		}
+	}
+	return replaced, dropped
+}
+
+// replacedSources are the positions of the steps that replace a data source
+// kept, the TTL of a table the plan keeps, names, in the order the TTL names
+// them. A nil kept names none.
+func replacedSources(kept *tablecreate.KeptTTL, replaced map[ydbdecl.Path]int) []int {
+	if kept == nil {
+		return nil
+	}
+	var around []int
+	for _, source := range kept.Sources {
+		if index, found := replaced[source]; found {
+			around = append(around, index)
+		}
+	}
+	return around
+}
+
+// refuseDroppedTTLSources refuses the drop of a data source that a TTL the
+// plan leaves a table with names, in the embedded engine's words.
+func refuseDroppedTTLSources(request *protocol.PlanFeaturesRequest, root string, steps []step, changes []lowered, dropped map[ydbdecl.Path]int) (*protocol.PlannedFeatures, error) {
+	for _, table := range request.GetTables() {
+		ttl, err := tablecreate.PlannedColumnTTL(table)
+		if err != nil {
+			return nil, err
+		}
+		for _, source := range tablecreate.TTLSources(root, ttl) {
+			if index, found := dropped[source]; found {
+				return refused(changes[steps[index].input], fmt.Errorf("table %s: its TTL reads external data source %s, which the plan drops",
+					ydbdecl.ExternalDisplay(table.GetSubject().GetSchema().GetSource(), table.GetSubject().GetName().GetSource()), display(steps[index].subject))), nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+// keptTTLStrategy ends the strategy of a data source replacement around which
+// the plan carries a column table's TTL.
+const keptTTLStrategy = "; the TTL of each column table that moves rows to it is reset before and set again after"
+
 // family is what objectplan needs to order a step on an object of kind
 // against the common steps at its path.
 func family(kind string) objectplan.Family {
@@ -581,12 +697,6 @@ func family(kind string) objectplan.Family {
 	return objectplan.Family{ServiceID: ServiceID, Kind: kind, Noun: noun, Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 		return schema.NativeBoundOwner(kind, subject)
 	}}
-}
-
-// sourceSubject names the data source at a path as a step's effect names it.
-func sourceSubject(source ydbdecl.Path) *protocol.ComparisonIdentity {
-	return &protocol.ComparisonIdentity{Kind: schema.ExternalSourceProperties, Database: &protocol.ComparisonPart{},
-		Schema: &protocol.ComparisonPart{Source: source.Schema, Normalized: source.Schema}, Name: &protocol.ComparisonPart{Source: source.Name, Normalized: source.Name}}
 }
 
 // order orders the batch's own statements: a drop before a creation at its
