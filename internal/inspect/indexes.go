@@ -81,13 +81,18 @@ func commonIndexes(table *protocol.Reference, observed *native.IndexObservations
 	return result
 }
 
-// nativeIndexes are the indexes of observed the common model cannot describe.
+// nativeIndexes are the indexes of observed the common model cannot describe,
+// with the description of each one it describes: the common model has no
+// place for an index's partitioning and read replicas, which a rebuild gives
+// the new table's index.
 func nativeIndexes(observed *native.IndexObservations) *native.IndexObservations {
 	result := &native.IndexObservations{}
 	for _, index := range observed.GetIndexes() {
 		if !schema.CommonIndex(index.GetDescription()) {
 			result.Indexes = append(result.Indexes, index)
+			continue
 		}
+		result.CommonIndexes = append(result.CommonIndexes, index.GetDescription())
 	}
 	return result
 }

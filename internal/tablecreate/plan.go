@@ -109,7 +109,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			if err != nil {
 				return refused(i, fmt.Sprintf("table %q: %v", tableLabel(owner), err)), nil
 			}
-			item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon(), request.Capabilities)
+			item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon(), request.Capabilities, request.CommonSteps)
 			if err != nil {
 				return nil, err
 			}
@@ -177,7 +177,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 				if !request.GetPolicy().GetAllowTableRebuild() {
 					return refused(i, rebuildRefusal(needs[0], request.GetPolicy())), nil
 				}
-				item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon(), request.Capabilities)
+				item, reason, err := planRebuild(len(rebuilds), owner, table, desired, names, request.GetCurrentCommon(), request.Capabilities, request.CommonSteps)
 				if err != nil {
 					return nil, err
 				}

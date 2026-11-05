@@ -246,3 +246,40 @@ func TestClause_HappyPath(t *testing.T) {
 		})
 	}
 }
+
+// Each refusal text the host's embedded engine measured names its gate: the
+// capability and the flag YDB keeps it behind. Streaming queries need two
+// flags, and YDB's refusal names the one it was refused for.
+func TestRefused_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		issue, key, flag string
+	}{
+		{"Secrets are disabled", "secrets", "EnableSchemaSecrets"},
+		{"Adding a unique index to an existing table is disabled", "unique_index_on_existing_table", "EnableAddUniqueIndex"},
+		{"Move index is not supported yet", "index_rename", "EnableMoveIndex"},
+		{"Set/drop default value is not enabled", "alter_column_default", "EnableSetDropDefaultValue"},
+		{"Column addition with default value is not supported now", "add_column_with_default", "EnableAddColumsWithDefaults"},
+		{"EnableTableDatetime64 feature flag is off", "wide_date_time_types", "EnableTableDatetime64"},
+		{"Tiering functionality is disabled for OLAP tables", "tiered_ttl", "EnableTieringInColumnShard"},
+		{"Resource pool classifiers are disabled", "resource_pools", "EnableResourcePools"},
+		{"Local min_max index is disabled with EnableLocalMinMaxIndex feature flag", "local_min_max_indexes", "EnableLocalMinMaxIndex"},
+		{"Asynchronous replication is disabled", "async_replication", "EnableReplication"},
+		{"Streaming queries are disabled", "streaming_queries", "EnableStreamingQueries"},
+	} {
+		t.Run(test.issue, func(t *testing.T) {
+			c := testcheck.New(t)
+			gate, off := featureflags.Refused([]string{"Execution failed", test.issue})
+			c.Assert(off, qt.IsTrue)
+			c.Assert(gate.Key, qt.Equals, test.key)
+			c.Assert(gate.Flag, qt.Equals, test.flag)
+		})
+	}
+}
+
+// A refusal for another reason names no gate.
+func TestRefused_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	gate, off := featureflags.Refused([]string{"Cannot find table 'db.[/local/t]' because it does not exist or you do not have access permissions."})
+	c.Assert(off, qt.IsFalse)
+	c.Assert(gate.Key+gate.Flag, qt.Equals, "")
+}

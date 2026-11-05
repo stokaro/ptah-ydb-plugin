@@ -60,6 +60,18 @@ func withIndex(c *qt.C, entry string) func([]any) []any {
 	}
 }
 
+// renamedIndex gives the index named from the name to.
+func renamedIndex(from, to string) func([]any) []any {
+	return func(indexes []any) []any {
+		for _, index := range indexes {
+			if entry := index.(map[string]any); entry["Name"] == from {
+				entry["Name"] = to
+			}
+		}
+		return indexes
+	}
+}
+
 // unchanged leaves the page as it is.
 func unchanged(indexes []any) []any { return indexes }
 
@@ -136,6 +148,10 @@ func localIndexStep(c *qt.C, payload string) *protocol.Envelope {
 const heldBloomStep = `{"drop":{"name":"bf","columns":["body"],"storageId":"__DEFAULT","inheritPortionStorage":true,` +
 	`"bloom":{"dataExtractor":"DEFAULT","bitsStorage":"SIMPLE_STRING","falsePositiveProbability":0.01}}}`
 
+// renameBloomStep renames the bloom index bf on body to bf2.
+const renameBloomStep = `{"add":{"name":"bf2","columns":["body"],"bloom":{"falsePositiveProbability":0.01}},"drop":{"name":"bf","columns":["body"],` +
+	`"storageId":"__DEFAULT","inheritPortionStorage":true,"bloom":{"dataExtractor":"DEFAULT","bitsStorage":"SIMPLE_STRING","falsePositiveProbability":0.01}}}`
+
 // TestColumnTableLocalIndexStep_HappyPath reads the table, runs the step's
 // statement once, and confirms the local indexes the table reads back with.
 func TestColumnTableLocalIndexStep_HappyPath(t *testing.T) {
@@ -150,6 +166,8 @@ func TestColumnTableLocalIndexStep_HappyPath(t *testing.T) {
 		{"an addition", `{"add":{"name":"bf2","columns":["body"],"bloom":{"falsePositiveProbability":0.05}}}`,
 			func(c *qt.C) func([]any) []any { return withIndex(c, addedBloomEntry) },
 			"ALTER TABLE `/local/col_index_probe` ADD INDEX `bf2` LOCAL USING bloom_filter ON (`body`) WITH (false_positive_probability = 0.05);"},
+		{"a rename", renameBloomStep, func(*qt.C) func([]any) []any { return renamedIndex("bf", "bf2") },
+			"ALTER TABLE `/local/col_index_probe` RENAME INDEX `bf` TO `bf2`;"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -198,6 +216,13 @@ func TestColumnTableLocalIndexStep_FailurePath(t *testing.T) {
 		{"a removal that does not read back", heldBloomStep, asRead, asRead, noChange, `YDB column table still holds local index "bf" after the change`, true},
 		{"a removal that takes another index along", heldBloomStep, asRead, func(*qt.C) func([]any) []any { return withoutIndex("bf", "ng") }, noChange,
 			`YDB column table changed beyond local index "bf"`, true},
+		{"a rename onto a name the table holds", renameBloomStep, func(c *qt.C) func([]any) []any { return withIndex(c, addedBloomEntry) }, asRead, noChange,
+			`YDB column table already holds local index "bf2"`, false},
+		{"a rename that does not read back", renameBloomStep, asRead, asRead, noChange,
+			`YDB column table local index "bf2" differs from the request after the change`, true},
+		{"a rename that keeps the old name", renameBloomStep, asRead, func(c *qt.C) func([]any) []any {
+			return withIndex(c, strings.Replace(strings.Replace(addedBloomEntry, "0.05", "0.01", 1), `"Id":9`, `"Id":10`, 1))
+		}, noChange, `YDB column table still holds local index "bf" after the change`, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
