@@ -20,9 +20,11 @@ through the public Ptah SDK. It supports anonymous, URL user/password, and URL t
 Session receipts contain the selected database and measured server version.
 The implementation does not import the Ptah application module.
 
-The [documentation](docs/README.md) says what YDB does in Ptah, from installing
-and selecting the provider to the objects it declares and how it runs a
-migration.
+Install it with `ptah providers install ydb`. The documentation says what YDB
+does in Ptah, from installing and selecting the provider to the objects it
+declares and how it runs a migration. It is published on
+[docs.ptah.run](https://docs.ptah.run/edge/extend/providers/ydb/), and its pages
+live in [docs/](docs/README.md).
 
 The provider ID is `github.com/stokaro/ptah-ydb-plugin`. Model kinds use the `github.com/stokaro/ptah-ydb-plugin/` namespace. This changes
 the experimental model identities; pre-v1, no compatibility with the earlier
