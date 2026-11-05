@@ -58,7 +58,8 @@ func buildNativeIndexModel() *protocol.ValueModel {
 		"kind": NativeIndexOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
 		"payload": "index: the native index specification of one vector_kmeans_tree, fulltext_plain or fulltext_relevance index: its name, ordered key columns, " +
 			"covered columns and its vector or full-text settings; the settings of the tables that implement it are never stated",
-		"vector":       "one metric, distance or similarity, a vector type, a dimension from 1 to 16384, levels from 1 to 16 and clusters from 2 to 2048 with clusters to the power of levels at most 2^30; no overlap settings; the last key column is the vector, the others its prefix",
+		"vector": "one metric, distance or similarity, a vector type, a dimension from 1 to 16384, levels from 1 to 16 and clusters from 2 to 2048 " +
+			"with clusters to the power of levels at most 2^30; no overlap settings; the last key column is the vector, the others its prefix",
 		"fulltext":     "one key column, analyzed by the one column entry of the settings, with a tokenizer; an n-gram filter names both its lengths; a language goes with the snowball filter, which goes with no n-gram filter",
 		"execution":    "YQL ALTER TABLE ... ADD INDEX through the query service once, outside SQL transactions; no retries; session and absolute path bound at dispatch",
 		"precondition": "the table must exist as a row table, hold no index of that name, and hold every column the index reads",
@@ -228,6 +229,26 @@ func nativeIndexRefusal(spec *native.IndexIntent, table nativeIndexColumns, capa
 	if len(keys) == 0 {
 		return subject + ": the index names no column"
 	}
+	if reason := nativeIndexColumnRefusal(subject, keys, covered, table); reason != "" {
+		return reason
+	}
+	for _, settings := range implementationSettings(spec) {
+		if settings != nil && proto.Size(settings) != 0 && !proto.Equal(settings, implementationDefaults) {
+			return subject + ": it states the partitioning of a table that implements it, which this provider does not write; " +
+				"YDB gives each table of a new vector or full-text index its default partitioning"
+		}
+	}
+	if vector := spec.GetGlobalVectorKmeansTreeIndex(); vector != nil {
+		return vectorIndexRefusal(subject, vector, keys, table, capabilities)
+	}
+	return fullTextIndexRefusal(subject, spec, keys, table, capabilities)
+}
+
+// nativeIndexColumnRefusal returns why the key columns and the covered
+// columns of a vector or full-text index cannot be added, or the empty
+// string: each is declared and named once, and a covered column is neither a
+// key column of the index nor of the table.
+func nativeIndexColumnRefusal(subject string, keys, covered []string, table nativeIndexColumns) string {
 	for i, name := range keys {
 		switch {
 		case slices.Contains(keys[:i], name):
@@ -248,38 +269,45 @@ func nativeIndexRefusal(spec *native.IndexIntent, table nativeIndexColumns, capa
 			return fmt.Sprintf("%s reads column %q, which the declaration does not state", subject, name)
 		}
 	}
-	for _, settings := range implementationSettings(spec) {
-		if settings != nil && proto.Size(settings) != 0 && !proto.Equal(settings, implementationDefaults) {
-			return subject + ": it states the partitioning of a table that implements it, which this provider does not write; " +
-				"YDB gives each table of a new vector or full-text index its default partitioning"
+	return ""
+}
+
+// vectorIndexRefusal returns why a vector index cannot be added, or the empty
+// string: the target must take vector indexes, and bit vectors where the index
+// stores them, its settings must be within YDB's limits, its last key column
+// must be a String vector and every other key column comparable.
+func vectorIndexRefusal(subject string, index *native.GlobalVectorKMeansTreeIndex, keys []string, table nativeIndexColumns, capabilities map[string]bool) string {
+	if !capabilities[VectorIndexesCapability] {
+		return fmt.Sprintf("%s declares vector settings, which requires target capability %s, unavailable on this ydb target "+
+			"(YDB 25.1 keeps vector indexes behind the EnableVectorIndex feature flag; a session reads the flag when the address names the monitoring endpoint)",
+			subject, VectorIndexesCapability)
+	}
+	if reason := vectorRefusal(index.GetVectorSettings()); reason != "" {
+		return subject + ": " + reason
+	}
+	if index.GetVectorSettings().GetSettings().GetVectorType() == native.VectorIndexSettings_VECTOR_TYPE_BIT && !capabilities[VectorBitTypeCapability] {
+		return fmt.Sprintf("%s stores bit vectors, which requires target capability %s, unavailable on this ydb target "+
+			"(before 26.1 YDB does not build such an index over rows: `bit vector type is not supported`, `Unsupported vector_type: VECTOR_TYPE_BIT`)",
+			subject, VectorBitTypeCapability)
+	}
+	vector, prefix := keys[len(keys)-1], keys[:len(keys)-1]
+	if kind := table.types[vector]; kind != "String" {
+		return fmt.Sprintf("%s: its vector column %q is %s, and a YDB vector index reads a String column (`Embedding column '%s' expected type 'String'`)",
+			subject, vector, kind, vector)
+	}
+	for _, name := range prefix {
+		if !keyComparable(table.types[name]) {
+			return fmt.Sprintf("%s: column %q is %s, which YDB refuses as an index key", subject, name, table.types[name])
 		}
 	}
-	if vector := spec.GetGlobalVectorKmeansTreeIndex(); vector != nil {
-		if !capabilities[VectorIndexesCapability] {
-			return fmt.Sprintf("%s declares vector settings, which requires target capability %s, unavailable on this ydb target "+
-				"(YDB 25.1 keeps vector indexes behind the EnableVectorIndex feature flag; a session reads the flag when the address names the monitoring endpoint)",
-				subject, VectorIndexesCapability)
-		}
-		if reason := vectorRefusal(vector.GetVectorSettings()); reason != "" {
-			return subject + ": " + reason
-		}
-		if vector.GetVectorSettings().GetSettings().GetVectorType() == native.VectorIndexSettings_VECTOR_TYPE_BIT && !capabilities[VectorBitTypeCapability] {
-			return fmt.Sprintf("%s stores bit vectors, which requires target capability %s, unavailable on this ydb target "+
-				"(before 26.1 YDB does not build such an index over rows: `bit vector type is not supported`, `Unsupported vector_type: VECTOR_TYPE_BIT`)",
-				subject, VectorBitTypeCapability)
-		}
-		vector, prefix := keys[len(keys)-1], keys[:len(keys)-1]
-		if kind := table.types[vector]; kind != "String" {
-			return fmt.Sprintf("%s: its vector column %q is %s, and a YDB vector index reads a String column (`Embedding column '%s' expected type 'String'`)",
-				subject, vector, kind, vector)
-		}
-		for _, name := range prefix {
-			if !keyComparable(table.types[name]) {
-				return fmt.Sprintf("%s: column %q is %s, which YDB refuses as an index key", subject, name, table.types[name])
-			}
-		}
-		return ""
-	}
+	return ""
+}
+
+// fullTextIndexRefusal returns why the full-text index spec states cannot be
+// added, or the empty string: the target must take full-text indexes, the
+// index reads one String or Utf8 column of a table keyed by one Uint64
+// column, and its analyzers follow YDB's rules.
+func fullTextIndexRefusal(subject string, spec *native.IndexIntent, keys []string, table nativeIndexColumns, capabilities map[string]bool) string {
 	if !capabilities[FullTextIndexesCapability] {
 		return fmt.Sprintf("%s is a full-text index, which requires target capability %s, unavailable on this ydb target "+
 			"(YDB keeps full-text indexes behind the EnableFulltextIndex feature flag, on from 26.2; a session reads the flag when the address names the monitoring endpoint)",
