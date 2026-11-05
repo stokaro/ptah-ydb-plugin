@@ -149,7 +149,8 @@ func TestHostVerifiesChecks_FailurePath(t *testing.T) {
 // `schema apply` locks on the coordination node the first locking run creates,
 // and a dry run writes nothing to the database, the node included. The read
 // after the real run reserves the node rather than describing it, so no plan
-// offers to drop it.
+// offers to drop it. The preview labels the creation safe and its access
+// unchanged, as the built-in engine labels a CREATE TABLE.
 func TestHostSchemaApplyDryRunCreatesNoLockNode_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -176,7 +177,8 @@ func TestHostSchemaApplyDryRunCreatesNoLockNode_HappyPath(t *testing.T) {
 
 	c.Assert(previewErr, qt.IsNil, qt.Commentf("schema apply --dry-run:\n%s", previewed))
 	c.Assert(previewed, qt.Contains, "row-table-create-operation")
-	c.Assert(previewed, qt.Contains, directory+".lock_items")
+	c.Assert(previewed, qt.Contains, directory+".lock_items: Creates a row table (safe)\n"+
+		"  Access unchanged: The table is created by this plan, so no role could read it before; it takes its directory's permissions\n")
 	c.Assert(afterPreview, qt.DeepEquals, before)
 	c.Assert(before, qt.Not(qt.Contains), locking.NodeName)
 	c.Assert(applyErr, qt.IsNil, qt.Commentf("schema apply:\n%s", applied))
