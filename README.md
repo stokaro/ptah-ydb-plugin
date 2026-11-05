@@ -2308,13 +2308,6 @@ its object, and a drop replaces the REVOKE the host planned, since YDB drops an
 object's access list with it and a REVOKE after the drop would name a path that
 is gone. A change in place, such as a new lambda, keeps the entries.
 
-A grant names a replication or a transfer by its directory and name
-(`on_async_replication`, `on_transfer`), and GRANT and REVOKE name it by its
-path. The planner puts a GRANT or a REVOKE after the creation or the change of
-its object, and a drop replaces the REVOKE the host planned, since YDB drops an
-object's access list with it and a REVOKE after the drop would name a path that
-is gone. A change in place, such as a new lambda, keeps the entries.
-
 Execution reads the object before the statement and refuses one that changed
 since the plan read it, runs the statement once, and reads the object back. The
 statement names the object, the replica targets, the transfer's table and a
