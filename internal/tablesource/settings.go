@@ -251,7 +251,7 @@ func (s *settings) addFamily(declared family) error {
 	if name == "" {
 		return &DeclarationError{Attribute: AttributeName, Reason: "a column family needs a name"}
 	}
-	result := &Ydb_Table.ColumnFamily{Name: name}
+	result := &native.ColumnFamily{Name: name}
 	if declared.data != nil {
 		data := strings.TrimSpace(*declared.data)
 		if data == "" {
@@ -274,7 +274,14 @@ func (s *settings) addFamily(declared family) error {
 		}
 	}
 	if declared.cacheMode != nil {
-		return &UnsupportedError{Setting: AttributeCacheMode, Reason: "the row-table model carries no family cache mode"}
+		switch strings.ToLower(strings.TrimSpace(*declared.cacheMode)) {
+		case "regular":
+			result.CacheMode = native.ColumnFamily_CACHE_MODE_REGULAR
+		case "in_memory":
+			result.CacheMode = native.ColumnFamily_CACHE_MODE_IN_MEMORY
+		default:
+			return &DeclarationError{Attribute: AttributeCacheMode, Value: *declared.cacheMode, Reason: "takes regular or in_memory"}
+		}
 	}
 	var columns []string
 	if declared.fields != nil {
@@ -287,7 +294,7 @@ func (s *settings) addFamily(declared family) error {
 				Reason: "the default family holds the key and every column no other family names, so it lists none"}
 		}
 	}
-	if slices.ContainsFunc(s.intent.ColumnFamilies, func(have *Ydb_Table.ColumnFamily) bool { return have.GetName() == name }) {
+	if slices.ContainsFunc(s.intent.ColumnFamilies, func(have *native.ColumnFamily) bool { return have.GetName() == name }) {
 		return fmt.Errorf("it declares column family %q twice", name)
 	}
 	for _, column := range columns {

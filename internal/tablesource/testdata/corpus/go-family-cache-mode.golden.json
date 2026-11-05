@@ -27,7 +27,7 @@
     "name": "cold"
    },
    "struct": "Item",
-   "file": "go-deferred-family-cache-mode.go",
+   "file": "go-family-cache-mode.go",
    "file_size": 204,
    "start": {
     "offset": 51,

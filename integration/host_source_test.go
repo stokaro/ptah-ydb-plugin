@@ -55,15 +55,31 @@ func hostManifest(c *qt.C) (string, string) {
 	if host == "" {
 		c.Skip("PTAH_HOST_TEST_BIN is required for the external host contract")
 	}
+	return host, providerManifest(c)
+}
+
+// providerManifest writes a provider manifest that selects this provider for
+// ydb and returns its path, for native ptah's --provider-config and for
+// ptah-compat's PTAH_PROVIDER_CONFIG alike.
+func providerManifest(c *qt.C) string {
+	c.Helper()
+	return providerManifestWith(c, []string{})
+}
+
+// providerManifestWith is providerManifest whose provider starts with the
+// NAME=value entries of environment, such as the variables the docker command
+// needs.
+func providerManifestWith(c *qt.C, environment []string) string {
+	c.Helper()
 	binary, digest := providerBinary(c)
 	configuration := map[string]any{"format_version": 2, "providers": []any{map[string]any{
-		"executable": binary, "sha256": digest, "provider_id": schema.ProviderID, "engines": []any{map[string]any{"id": "ydb", "aliases": []string{"ydbs"}}}, "environment": []string{},
+		"executable": binary, "sha256": digest, "provider_id": schema.ProviderID, "engines": []any{map[string]any{"id": "ydb", "aliases": []string{"ydbs"}}}, "environment": environment,
 	}}}
 	encoded, err := json.Marshal(configuration)
 	c.Assert(err, qt.IsNil)
 	manifest := filepath.Join(c.TempDir(), "providers.json")
 	c.Assert(os.WriteFile(manifest, encoded, 0o600), qt.IsNil)
-	return host, manifest
+	return manifest
 }
 
 const (
@@ -160,8 +176,6 @@ func TestHostRefusesTableDeclarationsTheProviderCannotCarry_FailurePath(t *testi
 	for _, test := range []struct{ name, flag, file, content, want string }{
 		{"a changefeed without its mode in YAML", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    changefeeds:\n      updates: {format: JSON}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
-		{"a family cache mode", "--schema-file", "schema.yaml",
-			"tables:\n  host_source_items:\n    column_families:\n      cold: {cache_mode: regular}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a zstd family", "--schema-file", "schema.yaml",
 			"tables:\n  host_source_items:\n    column_families:\n      cold: {compression: zstd}\n    columns:\n      id: {type: Uint64, primary: true}\n", `decode source failed`},
 		{"a consumer of a changefeed the table does not declare in Go", "--root-dir", "entities.go",
