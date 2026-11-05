@@ -286,7 +286,7 @@ func (p *planner) planTableAlteration(i int, table *protocol.PlanningTable, owne
 // planRowAlteration plans the native alteration of row table i: the changes
 // planAlteration finds, their operations, and the column steps of the table.
 func (p *planner) planRowAlteration(i int, table *protocol.PlanningTable, owner *protocol.Reference) (*protocol.PlannedFeatures, error) {
-	changes, reason, err := planAlteration(owner, table, p.request.CommonSteps, p.request.Changes, p.request.Capabilities)
+	changes, reason, err := planAlteration(owner, table, p.request.CommonSteps, p.request.Changes, p.request.Capabilities, p.request.TargetFeatures)
 	if err != nil {
 		return nil, err
 	}

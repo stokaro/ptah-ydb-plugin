@@ -79,8 +79,10 @@ func buildNativeIndexModel() *protocol.ValueModel {
 		DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(sum[:]), CanonicalFormat: NativeIndexOperationKind + "/json-v1"}
 }
 
-// nativeOnlyIndex reports a vector or full-text index: one the native index
+// NativeOnlyIndex reports a vector or full-text index: one the native index
 // facet alone describes, since the common model has no place for its settings.
+func NativeOnlyIndex(spec *native.IndexIntent) bool { return nativeOnlyIndex(spec) }
+
 func nativeOnlyIndex(spec *native.IndexIntent) bool {
 	switch spec.GetType().(type) {
 	case *native.IndexIntent_GlobalVectorKmeansTreeIndex, *native.IndexIntent_GlobalFulltextPlainIndex, *native.IndexIntent_GlobalFulltextRelevanceIndex:

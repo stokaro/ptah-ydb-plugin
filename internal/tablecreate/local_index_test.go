@@ -250,6 +250,9 @@ func TestColumnTableLocalIndexPlan_HappyPath(t *testing.T) {
 			[]string{"ALTER TABLE `/local/app/records` ADD INDEX `bf_count` LOCAL USING bloom_filter ON (`count`) WITH (false_positive_probability = 0.1);"}, nil},
 		{"an index dropped", withLocalIndexes(declaredBloom), heldWithLocalIndexes(heldLocalBloom, heldLocalNgram),
 			[]string{"column-table-drop-local-index/000000"}, []string{"ALTER TABLE `/local/app/records` DROP INDEX `ng`;"}, nil},
+		{"every index dropped by a declaration that states it lists them all", `{"ttl":` + deleteDaily + `,"localIndexesStated":true}`,
+			heldWithLocalIndexes(heldLocalBloom, heldLocalNgram), []string{"column-table-drop-local-index/000000", "column-table-drop-local-index/000001"},
+			[]string{"ALTER TABLE `/local/app/records` DROP INDEX `bf`;", "ALTER TABLE `/local/app/records` DROP INDEX `ng`;"}, nil},
 		{"an index whose probability changes", withLocalIndexes(bloomTwo, declaredNgram), heldWithLocalIndexes(heldLocalBloom, heldLocalNgram),
 			[]string{"column-table-drop-local-index/000000", "column-table-add-local-index/000000"},
 			[]string{"ALTER TABLE `/local/app/records` DROP INDEX `bf`;",
@@ -388,6 +391,8 @@ func TestColumnTableLocalIndexComparison(t *testing.T) {
 		{"an index the declaration adds", withLocalIndexes(declaredBloom, declaredNgram), heldWithLocalIndexes(heldLocalBloom), true},
 		{"another probability", withLocalIndexes(`{"name":"bf","columns":["body"],"bloom":{"falsePositiveProbability":0.5}}`), heldWithLocalIndexes(heldLocalBloom), true},
 		{"no local index declared", `{"ttl":` + deleteDaily + `}`, heldWithLocalIndexes(heldLocalBloom, heldLocalNgram), false},
+		{"none declared by a declaration that states it lists them all", `{"ttl":` + deleteDaily + `,"localIndexesStated":true}`,
+			heldWithLocalIndexes(heldLocalBloom, heldLocalNgram), true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.20.0, which speaks provider contract 25.22.
+The module pins `provider-sdk` v0.21.0, which speaks provider contract 25.24.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -1589,7 +1589,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | Setting | Why |
 | --- | --- |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
-| Local, full-text and vector index options | The host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. These attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. A vector or full-text index is created and changed from the native index set (see [Vector and full-text indexes](#vector-and-full-text-indexes)). No Go or YAML source writes either into the index set yet, and neither does a pgvector operator class (`ops`) on a source index. A global index's partitioning and read replicas are read (see [Index settings from a source](#index-settings-from-a-source)). |
+| Local, full-text and vector index options on an index of another type | A host that lists `source.index-kinds` sends an index of a vector, full-text or local type whole (see [Index declarations of the provider's types](#index-declarations-of-the-providers-types)). On an index of any other type, and on every index for a host without the feature, these attributes of `ptah:schema:index` and the same keys of a YAML index entry are claimed and refused by name. A global index's partitioning and read replicas are read (see [Index settings from a source](#index-settings-from-a-source)). |
 
 A table is managed for its TTL when its source states table properties for it,
 or when the host reports complete knowledge of the table properties of the
@@ -1692,9 +1692,19 @@ needs its capability (see [Feature flags](#feature-flags)); 25.1 has no local
 index grammar at all (`local: alternative is not implemented yet`). A new
 table's local indexes are written inside its CREATE TABLE, as ``INDEX `bf`
 LOCAL USING bloom_filter ON (`body`) WITH (false_positive_probability =
-0.01)``, every setting named. No Go or YAML source declares a local index yet: the host turns
-an index directive into a common index, whose model has no place for a local
-index's options, and the provider refuses those options where it decodes them.
+0.01)``, every setting named. A Go or YAML source declares a local index as an
+index directive or entry of its type, which a host that lists
+`source.index-kinds` sends whole (see [Index declarations of the provider's
+types](#index-declarations-of-the-providers-types)); an HCL document declares
+none, since HCL cannot state the column table it belongs to.
+
+Export. A Go or YAML export of a column table writes its hash key, its shard
+count and its TTL, and on a host that lists `source.index-kinds` each local
+index as a declaration of its type with its settings. A source writes no data
+channel count, and the 64 YDB gives every column table the provider creates is
+what a declaration without one creates, so a read's count of 64 is no loss; any
+other count is. The storage and the encodings YDB gives a local index are not
+part of a declaration either.
 
 Comparison and planning. The comparison `ydb-row-table-properties` compares the
 column-storage facet of a table that exists on both sides, and reports a
@@ -1711,10 +1721,12 @@ table's hash key or shard count requires an explicit data migration`, with both
 values; `column-table rebuilds require an explicit data migration`). A column step of
 a column table is refused as not planned yet.
 
-The local indexes are managed when the declaration states at least one: an
-index the table holds and the declaration leaves out is dropped, and a
-declaration that states none leaves the table's own alone, since no other
-source declares them. Each change is one step in the lifecycle phase,
+The local indexes are managed when the declaration states that it lists every
+one, as a read does and as a Go or YAML source of a host that lists
+`source.index-kinds` does (`localIndexesStated`), or when it states at least
+one: an index the table holds and the declaration leaves out is dropped. Any
+other declaration that states none leaves the table's own alone, since its
+source cannot declare one. Each change is one step in the lifecycle phase,
 `column-table-add-local-index/N`, `column-table-drop-local-index/N` or
 `column-table-rename-local-index/N`, of the operation kind
 `column-table-local-index-operation`, running `ALTER TABLE ... ADD INDEX ...
@@ -3542,6 +3554,50 @@ embedded engine for them:
   to be unchanged.
 - A table rebuild of a table that declares or holds a vector or full-text index
   is refused: the new table is created with its global indexes alone.
+
+#### Index declarations of the provider's types
+
+The host's frontends build a common index from every index declaration. For a
+host that lists `source.index-kinds` (contract 25.24), the provider claims the
+index types it models outside the common model, and the host sends a
+declaration of one of them whole, as one fragment, and builds no common index
+for it: `vector_kmeans_tree`, `fulltext_plain` and `fulltext_relevance`, which
+declare the table's native index set, and `bloom_filter`, `bloom_ngram_filter`
+and `min_max`, which declare a column table's local indexes in its storage. A
+type may be written with a space for each underscore and with `GLOBAL USING` or
+`LOCAL USING` in front, in any case. The fragment carries the index's columns,
+the columns it covers and a pgvector operator class (`ops`, which names a vector
+index's metric as the host's embedded engine reads it: `vector_cosine_ops` is
+`distance=cosine`, `vector_ip_ops` `similarity=inner_product`), and the
+settings the index's own directive, entry or block writes:
+
+```go
+//ptah:schema:index name="docs_emb" fields="gen,emb" include="body" type="vector_kmeans_tree" distance="cosine" vector_type="float" vector_dimension="3" levels="1" clusters="2"
+//ptah:schema:index name="ft" fields="body" type="fulltext_relevance" tokenizer="standard" use_filter_lowercase="true"
+//ptah:schema:index name="bf" fields="body" type="bloom_filter" false_positive_probability="0.01"
+```
+
+A YAML index entry takes the same keys, and an HCL `index` block the same
+attributes, a count as a number. Every vector or full-text declaration of a
+table makes one native index set, and every local one joins the column
+storage its table directive or entry states. Refused by name: a unique index,
+an index comment, a setting of another kind of index, an operator class on an
+index other than a vector one, a local index of a row table, a vector or
+full-text index of a column table, and an index declared twice. A setting the
+index cannot take is refused with the host's embedded engine's words, at the
+source for its grammar and at planning for its limits.
+
+A Go or YAML source of such a host states the native index set of every table
+it declares, so a table that writes none of these indexes is declared to have
+none, and one the table holds is dropped; a column table's local indexes are
+managed likewise. Without the feature a source cannot declare them, and a table
+keeps the ones it holds. An export writes each index back as a declaration of
+its type, spelled as the host's embedded engine wrote it in HCL: `type =
+"GLOBAL USING vector_kmeans_tree"` with the columns, the covered columns and
+the settings, and a local index's method alone, `type = "bloom_filter"`. The
+embedded engine wrote no full-text or local setting in HCL, and refused the
+full-text document it wrote; the provider writes and reads the full-text
+settings there. HCL loses a column table's local indexes with its storage.
 
 ### Execution
 

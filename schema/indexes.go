@@ -130,6 +130,35 @@ func CaptureIndexes(owner *protocol.Reference, observed *native.IndexObservation
 	return capture(IndexProperties, owner, value)
 }
 
+// validateImplementationTables checks the tables that implement an index:
+// each one YDB uses for its kind, once, or none for a vector or full-text
+// index (see normalizeIndexes).
+func validateImplementationTables(index *native.ObservedIndex) error {
+	names, err := ImplementationNames(index.Description)
+	if err != nil {
+		return err
+	}
+	if len(names) != len(index.Tables) && (len(index.Tables) != 0 || CommonIndex(index.Description)) {
+		return fmt.Errorf("incomplete YDB index implementation tables")
+	}
+	tables := make(map[string]bool)
+	for _, table := range index.Tables {
+		if !slices.Contains(names, table.GetName()) || tables[table.GetName()] {
+			return fmt.Errorf("unexpected or duplicate YDB index implementation table")
+		}
+		tables[table.GetName()] = true
+		if err := validateImplementation(table.GetDescription()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// normalizeIndexes validates and sorts an index set. A read describes every
+// table that implements each index. A declaration, and the observation the
+// host predicts from one, may state none of them for a vector or full-text
+// index: a source declares one without the tables YDB gives it, and the
+// planner writes none.
 func normalizeIndexes(value *native.IndexObservations) error {
 	seen := make(map[string]bool)
 	for _, index := range value.GetIndexes() {
@@ -143,22 +172,8 @@ func normalizeIndexes(value *native.IndexObservations) error {
 		if index.Description.SizeBytes != 0 {
 			return fmt.Errorf("index properties cannot contain runtime statistics")
 		}
-		names, err := ImplementationNames(index.Description)
-		if err != nil {
+		if err := validateImplementationTables(index); err != nil {
 			return err
-		}
-		if len(names) != len(index.Tables) {
-			return fmt.Errorf("incomplete YDB index implementation tables")
-		}
-		tables := make(map[string]bool)
-		for _, table := range index.Tables {
-			if !slices.Contains(names, table.GetName()) || tables[table.GetName()] {
-				return fmt.Errorf("unexpected or duplicate YDB index implementation table")
-			}
-			tables[table.GetName()] = true
-			if err := validateImplementation(table.GetDescription()); err != nil {
-				return err
-			}
 		}
 		slices.SortFunc(index.Tables, func(a, b *native.ImplementationTable) int { return strings.Compare(a.Name, b.Name) })
 	}

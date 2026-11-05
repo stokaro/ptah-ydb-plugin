@@ -78,7 +78,7 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		"message": string(target.ProtoReflect().Descriptor().FullName()), "messages": graph,
 		"unknown_fields_and_enum_values": "refused", "null_settings": "refused recursively except native typed null literals",
 		"canonicalization":     "protojson followed by modeljson canonical JSON; indexes, implementations, feeds and consumers sorted by name; columns and keys retain order",
-		"index_implementation": "complete typed requirements on server-owned implementation tables, including columns and native settings; not independent table declarations; mutable internal sequence positions are excluded",
+		"index_implementation": "complete typed requirements on server-owned implementation tables, with columns and native settings, or none for a declared vector or full-text index; not independent tables; mutable sequence positions excluded",
 		"index_status":         "declarations require a ready implementation; conversion to observed form predicts readiness without establishing coverage",
 		"streams":              "all topic and consumer configuration retained without partition topology or statistics; access uses separate direct-grant and effective-access requirements",
 		"initial_scan":         "initialScan retains creation intent; disabled is independent; observed INITIAL_SCAN converts to enabled intent with initialScan true, never to a claim that scanning finished",
@@ -140,9 +140,11 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		// (provider.SQLFacetsFeature).
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}
 	case IndexProperties:
-		// A YAML or Go source spells no native index, so the native index set
-		// a table it declares states is empty; an export writes an empty set
-		// with the table's declaration.
+		// A YAML or Go source declares the vector and full-text indexes of a
+		// table it declares as index directives or entries of their types,
+		// which a host that negotiates source.index-kinds sends whole; a
+		// table that declares none states an empty set, which an export
+		// writes with the table's declaration.
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
 	case IndexSettingsProperties:
 		// The index directive of a Go source, the index entry of a YAML

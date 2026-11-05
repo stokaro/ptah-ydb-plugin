@@ -175,6 +175,13 @@ func TestEncodeTable_HappyPath(t *testing.T) {
 		storage: `{"hashColumns":["id","at"],"partitions":"8","ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"3600","externalStorage":"/local/app/cold"},{"applyAfterSeconds":"86400","delete":{}}]}}}`,
 		columns: make(map[string]string), written: []string{"storage", "id"},
 	}, {
+		// A read reports the data channels YDB gives every column table the
+		// provider creates, which a declaration without a count creates.
+		name:    "column table as a read reports it",
+		facets:  []facet{{"storage", schema.ColumnStorageProperties, "", `{"hashColumns":["id"],"partitions":"1","dataChannelCount":"64"}`}},
+		storage: `{"hashColumns":["id"],"partitions":"1"}`,
+		columns: make(map[string]string), written: []string{"storage"},
+	}, {
 		name:    "column table with a TTL that only deletes",
 		facets:  []facet{{"storage", schema.ColumnStorageProperties, "", `{"ttl":{"enabled":{"column":"at","columnUnit":"1","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`}},
 		storage: `{"ttl":{"enabled":{"column":"at","columnUnit":"1","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`,

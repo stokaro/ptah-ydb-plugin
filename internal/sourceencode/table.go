@@ -18,6 +18,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -29,6 +30,10 @@ import (
 type Table struct {
 	Binding *protocol.SourceBinding
 	Values  []*protocol.EncodeSourceValue
+	// IndexKinds is whether the host reads the provider's index kinds
+	// (source.index-kinds): a vector, full-text or local index is then
+	// written as a declaration of its type, and is a loss otherwise.
+	IndexKinds bool
 }
 
 // TableResult is how the facets of one table are written: Written are the IDs
@@ -43,6 +48,12 @@ type TableResult struct {
 // tableFacets are the facets of one table as a source declares them.
 type tableFacets struct {
 	binding *protocol.SourceBinding
+	// indexKinds is Table.IndexKinds.
+	indexKinds bool
+	// natives are the vector and full-text indexes of the table's native
+	// index set, nativesID the value that holds them.
+	natives   []*native.IndexIntent
+	nativesID string
 	// row and storage are the row-table settings and the column-table
 	// storage, with the IDs of their values.
 	row              *native.RowTableIntent
@@ -104,7 +115,7 @@ func EncodeTable(format protocol.SourceDocument_Format, table Table) (TableResul
 	if format != protocol.SourceDocument_YAML && format != protocol.SourceDocument_GO_ANNOTATIONS {
 		return TableResult{}, fmt.Errorf("unsupported table source format")
 	}
-	facets := &tableFacets{binding: table.Binding}
+	facets := &tableFacets{binding: table.Binding, indexKinds: table.IndexKinds}
 	for _, value := range table.Values {
 		if err := facets.add(value); err != nil {
 			return TableResult{}, err
@@ -201,8 +212,9 @@ func (f *tableFacets) add(value *protocol.EncodeSourceValue) error {
 }
 
 // addIndexSet records a native index set facet: an empty one, which a read of
-// a table with only global indexes converts to, adds nothing, and any other is
-// lost, since the provider writes no source spelling of a native index.
+// a table with only global indexes converts to, adds nothing; one of vector
+// and full-text indexes is written as their declarations where the host reads
+// the provider's index kinds; and any other is lost.
 func (f *tableFacets) addIndexSet(id string, normalized *protocol.Envelope) error {
 	var intent native.IndexSetIntent
 	if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
@@ -213,10 +225,19 @@ func (f *tableFacets) addIndexSet(id string, normalized *protocol.Envelope) erro
 		return nil
 	}
 	names := make([]string, 0, len(intent.GetIndexes()))
+	writable := f.indexKinds
 	for _, index := range intent.GetIndexes() {
 		names = append(names, index.GetSpecification().GetName())
+		writable = writable && tablecreate.NativeOnlyIndex(index.GetSpecification())
 	}
-	f.losef(id, "table %s: its native indexes (%s) have no source spelling the provider writes", tableSubject(f.binding), strings.Join(names, ", "))
+	if !writable {
+		f.losef(id, "table %s: its native indexes (%s) have no source spelling the provider writes", tableSubject(f.binding), strings.Join(names, ", "))
+		return nil
+	}
+	for _, index := range intent.GetIndexes() {
+		f.natives = append(f.natives, index.GetSpecification())
+	}
+	f.nativesID = id
 	return nil
 }
 
@@ -296,6 +317,8 @@ func (f *tableFacets) losef(id, format string, arguments ...any) {
 		f.storage, f.storageID = nil, ""
 	case f.feedsID:
 		f.feeds, f.feedsID = nil, ""
+	case f.nativesID:
+		f.natives, f.nativesID = nil, ""
 	}
 	f.columns = slices.DeleteFunc(f.columns, func(column placedColumn) bool { return column.id == id })
 	f.indexes = slices.DeleteFunc(f.indexes, func(index indexSettings) bool { return index.id == id })
@@ -315,7 +338,7 @@ func (f *tableFacets) dropPlacementsWithoutFamilies() {
 // written are the IDs the parts write, in a fixed order.
 func (f *tableFacets) written() []string {
 	var ids []string
-	for _, id := range []string{f.rowID, f.storageID, f.feedsID} {
+	for _, id := range []string{f.rowID, f.storageID, f.feedsID, f.nativesID} {
 		if id != "" {
 			ids = append(ids, id)
 		}
@@ -342,10 +365,26 @@ func (f *tableFacets) parts(format protocol.SourceDocument_Format) []*protocol.E
 	if len(f.written()) == 0 {
 		return nil
 	}
+	parts := f.goParts()
 	if format == protocol.SourceDocument_YAML {
-		return f.yamlParts()
+		parts = f.yamlParts()
 	}
-	return f.goParts()
+	return append(parts, f.ownedParts(format)...)
+}
+
+// ownedParts declares the table's vector and full-text indexes and a column
+// table's local indexes, each as the declaration of its type.
+func (f *tableFacets) ownedParts(format protocol.SourceDocument_Format) []*protocol.EncodedSourcePart {
+	var parts []*protocol.EncodedSourcePart
+	for _, spec := range f.natives {
+		parts = append(parts, nativeOwned(spec).part(f.binding, format))
+	}
+	if f.indexKinds && f.storage != nil {
+		for _, local := range f.storage.GetLocalIndexes() {
+			parts = append(parts, localOwned(local).part(f.binding, format))
+		}
+	}
+	return parts
 }
 
 // fragmentID names a part of the table's group.
@@ -795,8 +834,11 @@ func (f *tableFacets) verify(format protocol.SourceDocument_Format, parts []*pro
 			lost = append(lost, f.rowID)
 		}
 	}
-	if f.storage != nil && !proto.Equal(f.storage, decoded.storage) {
+	if f.storage != nil && !sameStorage(f.storage, decoded.storage) {
 		lost = append(lost, f.storageID)
+	}
+	if f.nativesID != "" && !sameNatives(f.natives, document, tables) {
+		lost = append(lost, f.nativesID)
 	}
 	for _, column := range f.columns {
 		if decoded.placed[column.name] != column.family {
@@ -875,6 +917,47 @@ func readDecodedTables(tables []tablesource.Table) (decodedTable, error) {
 	return decoded, nil
 }
 
+// sameStorage reports a decoded column storage equal to the wanted one: the
+// same storage, and local indexes the comparison reads as the same ones, in
+// the same order. Whether the declaration states that it lists every local
+// index is the host's negotiation, which a source does not write. A source
+// writes no data channel count either, and the one YDB gives every table the
+// provider creates is what a declaration without one creates; any other count
+// is a loss.
+func sameStorage(want, got *native.ColumnStorageIntent) bool {
+	if got == nil {
+		return false
+	}
+	strip := func(storage *native.ColumnStorageIntent) *native.ColumnStorageIntent {
+		result := proto.CloneOf(storage)
+		result.LocalIndexes, result.LocalIndexesStated = nil, false
+		if result.DataChannelCount == tablecreate.CreatedDataChannelCount {
+			result.DataChannelCount = 0
+		}
+		return result
+	}
+	return proto.Equal(strip(want), strip(got)) && slices.EqualFunc(want.GetLocalIndexes(), got.GetLocalIndexes(), tablecreate.LocalIndexEqual)
+}
+
+// sameNatives reports whether the document's declarations give back the
+// vector and full-text indexes want holds, as the comparison reads them.
+func sameNatives(want []*native.IndexIntent, document *protocol.SourceDocument, tables []tablesource.Table) bool {
+	decoded, err := tablesource.DecodeNativeIndexes(context.Background(), document, tables)
+	if err != nil || len(decoded) != 1 {
+		return false
+	}
+	var set native.IndexSetIntent
+	if err := protojson.Unmarshal(decoded[0].Value.GetValue().GetPayload(), &set); err != nil || len(set.GetIndexes()) != len(want) {
+		return false
+	}
+	for i, declaration := range set.GetIndexes() {
+		if !tablecreate.SameNativeIndex(want[i], declaration.GetSpecification()) {
+			return false
+		}
+	}
+	return true
+}
+
 // sameIntent reports a decoded intent equal to the wanted one, an absent one
 // standing for the empty intent a source states by writing nothing.
 func sameIntent[M proto.Message](want, got, empty M) bool {
@@ -906,7 +989,7 @@ func sameFeeds(want []changefeeds.Feed, decoded []changefeedsource.Table) bool {
 // refuses the parts.
 func (f *tableFacets) tableSourceIDs() []string {
 	var ids []string
-	for _, id := range []string{f.rowID, f.storageID} {
+	for _, id := range []string{f.rowID, f.storageID, f.nativesID} {
 		if id != "" {
 			ids = append(ids, id)
 		}

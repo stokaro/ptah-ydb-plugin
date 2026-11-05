@@ -8,6 +8,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -166,6 +167,8 @@ func TestNativeIndexPlan_HappyPath(t *testing.T) {
 			[]string{"ALTER TABLE `app/records` DROP INDEX `docs_emb`;", strings.Replace(addDocsEmbSQL, "`docs_emb`", "`docs_emb_cosine`", 1)}},
 		{"a vector index the declaration leaves out is dropped", documents(indexSet(), indexSet(nativeHeld(docsEmbRead, prefixedTables))),
 			[]string{"row-table-drop-index/000000 row-table-alter-operation"}, nil, []string{"ALTER TABLE `app/records` DROP INDEX `docs_emb`;"}},
+		{"a vector index a source of index kinds states none for is dropped", statedNone(documents("", indexSet(nativeHeld(docsEmbRead, prefixedTables)))),
+			[]string{"row-table-drop-index/000000 row-table-alter-operation"}, nil, []string{"ALTER TABLE `app/records` DROP INDEX `docs_emb`;"}},
 		{"another tokenizer rebuilds a full-text index", documents(indexSet(nativeDeclared(keywordBody, relevanceTables)), indexSet(nativeHeld(standardBody, relevanceTables))),
 			[]string{"row-table-drop-index/000000 row-table-alter-operation", "row-table-add-index/000000 row-table-native-index-operation"},
 			[]string{"row-table-drop-index/000000 -> row-table-add-index/000000"},
@@ -203,6 +206,9 @@ func TestNativeIndexPlan_NoChange(t *testing.T) {
 		{"a filter switched off and one left out", documents(indexSet(nativeDeclared(plainKeyword, plainTables)),
 			indexSet(nativeHeld(fullTextJSON("globalFulltextPlainIndex", "ft", "body", `{"tokenizer":"KEYWORD","useFilterLowercase":true}`), plainTables)))},
 		{"a declaration without an index set leaves a vector index alone", documents("", indexSet(nativeHeld(docsEmbRead, prefixedTables)))},
+		{"a source of a host without index kinds leaves a vector index alone", withoutFeatures(statedNone(documents("", indexSet(nativeHeld(docsEmbRead, prefixedTables)))))},
+		{"a source that could not describe native index sets leaves a vector index alone",
+			unknownNative(statedNone(documents("", indexSet(nativeHeld(docsEmbRead, prefixedTables)))))},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -212,6 +218,28 @@ func TestNativeIndexPlan_NoChange(t *testing.T) {
 			c.Assert(plan.Contributions, qt.HasLen, 0)
 		})
 	}
+}
+
+// statedNone is a case whose source states the native index set of every
+// table it declares, for a host that negotiates source.index-kinds, and
+// declares none for the table.
+func statedNone(in alterCase) alterCase {
+	in.nativeKnowledge, in.features = protocol.ModelKnowledge_COMPLETE, []string{provider.IndexKindsFeature}
+	return in
+}
+
+// withoutFeatures is a case of a host that negotiates no target feature
+// beside planning lifecycle.
+func withoutFeatures(in alterCase) alterCase {
+	in.features = nil
+	return in
+}
+
+// unknownNative is a case whose source could not describe the native index
+// sets of the tables it declares.
+func unknownNative(in alterCase) alterCase {
+	in.nativeKnowledge = protocol.ModelKnowledge_UNINSPECTED
+	return in
 }
 
 // withCapabilities is a case on a target that has every vector and full-text

@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -296,4 +297,38 @@ func rebuiltNativeIndex(table *protocol.PlanningTable) string {
 		}
 	}
 	return ""
+}
+
+// SourcesStateNativeIndexes reports whether the sources of a host with the
+// target features features declare the vector and full-text indexes of a
+// table: a host that negotiates source.index-kinds sends each such
+// declaration to this provider. A source that describes the native index sets
+// of every table it declares then declares a table that writes none to have
+// none. Without the feature a source cannot declare one, and a table keeps
+// the native indexes it holds.
+func SourcesStateNativeIndexes(features []string) bool {
+	return slices.Contains(features, provider.IndexKindsFeature)
+}
+
+// UnstatedIndexFacet returns the desired native index set of a table whose
+// source states none: the empty set (see SourcesStateNativeIndexes).
+func UnstatedIndexFacet(owner *protocol.Reference) (*protocol.Envelope, error) {
+	payload, err := protojson.Marshal(&native.IndexSetIntent{})
+	if err != nil {
+		return nil, err
+	}
+	model := schema.NativeDesiredModel(schema.IndexProperties)
+	return schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion,
+		Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: proto.CloneOf(owner), Payload: payload})
+}
+
+// nativeIndexesManaged reports whether the declaration of table states its
+// vector and full-text indexes: it carries the native index set, or its
+// source states the native index sets of every table it declares (see
+// SourcesStateNativeIndexes) and the read holds the table's. The comparison
+// reports such a table's native indexes through compareUnstatedIndexes, and
+// this is the planner's side of the same rule.
+func nativeIndexesManaged(table *protocol.PlanningTable, desired, observed capturedFacets, features []string) bool {
+	return desired.indexes != nil || observed.indexes != nil && SourcesStateNativeIndexes(features) &&
+		FacetKnown(table.GetDesired().GetFeatures().GetFacets().GetCoverage(), schema.IndexProperties, table.GetSubject(), DesiredSide)
 }

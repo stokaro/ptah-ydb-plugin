@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
@@ -136,7 +137,9 @@ type GoDeclaration struct {
 // and one fragment for each declaration whose attributes are text. A directive
 // of table scope is bound to the table of the struct it is written on, and the
 // provider reads a table attribute itself. A directive of document scope, such
-// as a coordination node's, is bound to nothing.
+// as a coordination node's, is bound to nothing. An index directive whose type
+// is one of the provider's index kinds is sent whole, as the host sends it
+// under source.index-kinds (see indexKindFragment).
 func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.DecodeSourceRequest, error) {
 	document := &protocol.SourceDocument{Id: "document", Format: protocol.SourceDocument_GO_ANNOTATIONS, File: "<unnamed Go>",
 		Models: desiredModels(protocol.SourceDocument_GO_ANNOTATIONS)}
@@ -175,6 +178,11 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 			mapping.Entries = append(mapping.Entries, &protocol.SourceEntry{Key: key, KeySpan: span,
 				Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Text{Text: declaration.Attributes[key]}}})
 		}
+		if owned := provider.IndexKindClaim(&protocol.Engine{IndexKinds: tablesource.IndexKinds()}, declaration.Attributes["type"]); owned != nil &&
+			declaration.Directive == tablesource.DirectiveIndex {
+			document.Fragments = append(document.Fragments, indexKindFragment(strconv.Itoa(i), owned, directive, bindings[owning], tables[owning], declaration, span))
+			continue
+		}
 		fragment := &protocol.SourceFragment{Id: strconv.Itoa(i), GoDirective: directive, Selector: directive.Selector,
 			Span: span, Content: &protocol.SourceFragment_Value{Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Mapping{Mapping: mapping}}}}
 		if directive.Scope != protocol.GoSourceDirective_DOCUMENT {
@@ -186,4 +194,47 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 		document.Fragments = append(document.Fragments, fragment)
 	}
 	return &protocol.DecodeSourceRequest{Engine: "ydb", Documents: []*protocol.SourceDocument{document}}, nil
+}
+
+// indexKindFragment is the fragment the host sends for an index directive of
+// one of the provider's index kinds: bound to the index's table, with the
+// index as its subject, the directive's own attributes in the inherited
+// attributes, the key and covered columns split at their commas, and the
+// attributes the provider claims on the directive as its content.
+func indexKindFragment(id string, claim *protocol.SourceIndexKind, directive *protocol.GoSourceDirective, binding string, table GoTable, declaration GoDeclaration,
+	span *protocol.SourceSpan) *protocol.SourceFragment {
+	value := func(text string) *protocol.SourceValue {
+		return &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Text{Text: text}}
+	}
+	list := func(written string) *protocol.SourceValue {
+		sequence := &protocol.SourceSequence{}
+		for name := range strings.SplitSeq(written, ",") {
+			sequence.Values = append(sequence.Values, value(strings.TrimSpace(name)))
+		}
+		return &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Sequence{Sequence: sequence}}
+	}
+	attributes := declaration.Attributes
+	inherited := &protocol.SourceMapping{Entries: []*protocol.SourceEntry{{Key: provider.IndexKindType, KeySpan: span, Value: value(attributes["type"])},
+		{Key: provider.IndexKindColumns, KeySpan: span, Value: list(attributes["fields"])}}}
+	if include, written := attributes["include"]; written {
+		inherited.Entries = append(inherited.Entries, &protocol.SourceEntry{Key: provider.IndexKindInclude, KeySpan: span, Value: list(include)})
+	}
+	if attributes["unique"] == "true" {
+		inherited.Entries = append(inherited.Entries, &protocol.SourceEntry{Key: provider.IndexKindUnique, KeySpan: span,
+			Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Boolean{Boolean: true}}})
+	}
+	for _, key := range []string{provider.IndexKindComment, provider.IndexKindOps} {
+		if text, written := attributes[key]; written {
+			inherited.Entries = append(inherited.Entries, &protocol.SourceEntry{Key: key, KeySpan: span, Value: value(text)})
+		}
+	}
+	content := &protocol.SourceMapping{}
+	for _, key := range slices.Sorted(maps.Keys(attributes)) {
+		if slices.Contains(directive.Attributes, key) {
+			content.Entries = append(content.Entries, &protocol.SourceEntry{Key: key, KeySpan: span, Value: value(attributes[key])})
+		}
+	}
+	return &protocol.SourceFragment{Id: id, IndexKind: proto.CloneOf(claim), Selector: claim.Selector, BindingId: binding, Span: span,
+		Subject:             &protocol.Reference{Engine: "ydb", Kind: "index", Schema: table.Schema, Path: []string{table.Name}, Name: attributes["name"]},
+		InheritedAttributes: inherited, Content: &protocol.SourceFragment_Value{Value: &protocol.SourceValue{Span: span, Value: &protocol.SourceValue_Mapping{Mapping: content}}}}
 }

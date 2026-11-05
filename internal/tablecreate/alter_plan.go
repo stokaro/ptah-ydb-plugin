@@ -69,9 +69,10 @@ func stepKey(id *protocol.StepIdentity) string { return id.GetOwner() + "\x00" +
 
 // planAlteration reads the families, column placements and TTL a captured ALTER
 // carries on both sides and returns the changes that give the table what the
-// declaration states. A non-empty reason refuses the whole request.
+// declaration states. features are the request's target features. A
+// non-empty reason refuses the whole request.
 func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, changes []*protocol.PlanningChange,
-	capabilities map[string]bool,
+	capabilities map[string]bool, features []string,
 ) (alterationChanges, string, error) {
 	desired, err := facetEnvelopes(owner, table.Desired.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
 	if err != nil {
@@ -81,7 +82,8 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	if err != nil {
 		return alterationChanges{}, "", err
 	}
-	sides := &alterationSides{owner: owner, table: table, changes: changes, desired: desired, observed: observed, intent: &native.RowTableIntent{}, held: &native.DescribeTableResult{}}
+	sides := &alterationSides{owner: owner, table: table, changes: changes, desired: desired, observed: observed, intent: &native.RowTableIntent{},
+		held: &native.DescribeTableResult{}, features: features}
 	change, reason, err := sides.families(capabilities)
 	if err != nil || reason != "" {
 		return alterationChanges{}, reason, err
@@ -118,6 +120,8 @@ type alterationSides struct {
 	held *native.DescribeTableResult
 	// family is what planFamilies reads.
 	family familyInput
+	// features are the request's target features.
+	features []string
 }
 
 // families decodes the column families and the column placements of both
@@ -279,7 +283,7 @@ func (a *alterationSides) indexes(steps []*protocol.CommonPlanningStep, capabili
 	}
 	// The vector and full-text indexes follow the rules of their own, with
 	// the column types and the key they read.
-	vectorAndText, reason := planNativeIndexes(nativeIndexInput{managed: a.desired.indexes != nil, desired: result.wanted, held: result.held,
+	vectorAndText, reason := planNativeIndexes(nativeIndexInput{managed: nativeIndexesManaged(a.table, a.desired, a.observed, a.features), desired: result.wanted, held: result.held,
 		columns: declaredKeyTypes(a.table.Desired, a.intent), capabilities: capabilities})
 	if reason != "" {
 		return alterationIndexes{}, reason, nil

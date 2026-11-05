@@ -229,11 +229,13 @@ func localIndexRenames(wanted, have map[string]*native.LocalIndexObservation) ma
 }
 
 // localIndexesManaged reports whether a declaration manages the local
-// indexes of its table: it states at least one. No source declares local
-// indexes but the native column-storage facet, so one that states none leaves
-// the indexes the table holds alone rather than dropping them.
+// indexes of its table: it states that it lists every one, as a read and a
+// source of a host that negotiates source.index-kinds do, or it states at
+// least one. A declaration of any other source that states none leaves the
+// indexes the table holds alone rather than dropping them: such a source
+// cannot declare one.
 func localIndexesManaged(desired *native.ColumnStorageIntent) bool {
-	return len(desired.GetLocalIndexes()) != 0
+	return desired.GetLocalIndexesStated() || len(desired.GetLocalIndexes()) != 0
 }
 
 // planLocalIndexes returns the changes that give a column table the local

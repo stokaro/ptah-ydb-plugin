@@ -36,12 +36,24 @@ import (
 // leaves a setting out keeps what the table holds.
 //
 // The table's written facets share one part. Only the facets the platform
-// block claims have a place in HCL; any other facet is a loss.
+// block claims have a place in HCL; any other facet is a loss. Where the host
+// reads the provider's index kinds, a native index set of vector and
+// full-text indexes is written as an index block of each, with the settings
+// the host's embedded engine writes there; a local index has no HCL
+// declaration, since HCL cannot state the column table it belongs to.
 func EncodeTableHCL(table Table) (TableResult, error) {
 	var result TableResult
 	var entries []*protocol.SourceEntry
+	var owned []*protocol.EncodedSourcePart
 	for _, value := range table.Values {
 		id := value.GetValue().GetId()
+		if parts, err := hclNativeIndexes(table, value.GetValue().GetValue()); err != nil || parts != nil {
+			if err != nil {
+				return TableResult{}, err
+			}
+			result.Written, owned = append(result.Written, id), append(owned, parts...)
+			continue
+		}
 		written, losses, err := hclTableValue(value.GetValue().GetValue())
 		if err != nil {
 			return TableResult{}, err
@@ -62,7 +74,33 @@ func EncodeTableHCL(table Table) (TableResult, error) {
 	result.Parts = []*protocol.EncodedSourcePart{{Fragment: &protocol.SourceFragment{Id: "table." + table.Binding.GetId() + ".platform",
 		Selector: claim.GetSelector(), HclBlock: claim, BindingId: table.Binding.GetId(),
 		Content: &protocol.SourceFragment_Value{Value: mapping(entries...)}}}}
+	result.Parts = append(result.Parts, owned...)
 	return result, nil
+}
+
+// hclNativeIndexes writes a native index set of vector and full-text indexes
+// as their index blocks, where the host reads the provider's index kinds, and
+// returns nil for any other facet and any other set.
+func hclNativeIndexes(table Table, envelope *protocol.Envelope) ([]*protocol.EncodedSourcePart, error) {
+	if !table.IndexKinds || envelope.GetKind() != schema.IndexProperties {
+		return nil, nil
+	}
+	normalized, err := schema.NormalizeDesired(envelope)
+	if err != nil {
+		return nil, err
+	}
+	var intent native.IndexSetIntent
+	if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
+		return nil, err
+	}
+	var parts []*protocol.EncodedSourcePart
+	for _, declaration := range intent.GetIndexes() {
+		if !tablecreate.NativeOnlyIndex(declaration.GetSpecification()) {
+			return nil, nil
+		}
+		parts = append(parts, nativeOwned(declaration.GetSpecification()).part(table.Binding, protocol.SourceDocument_HCL))
+	}
+	return parts, nil
 }
 
 // hclTableValue is what the platform block writes of one facet, and what the
@@ -97,7 +135,15 @@ func hclTableValue(envelope *protocol.Envelope) ([]*protocol.SourceEntry, []stri
 		if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
 			return nil, nil, err
 		}
-		return ttlEntries(nil, &intent), []string{"YDB column storage, hash partitioning and tiered TTL are not represented in HCL"}, nil
+		losses := []string{"YDB column storage, hash partitioning and tiered TTL are not represented in HCL"}
+		names := make([]string, 0, len(intent.GetLocalIndexes()))
+		for _, index := range intent.GetLocalIndexes() {
+			names = append(names, index.GetName())
+		}
+		if _, lost, err := neutralOrLost(names, "local index", "local indexes"); err == nil {
+			losses = append(losses, lost...)
+		}
+		return ttlEntries(nil, &intent), losses, nil
 	case schema.ChangefeedProperties, schema.IndexProperties:
 		return hclSetValue(envelope.GetKind(), normalized.GetPayload())
 	case schema.ColumnProperties:

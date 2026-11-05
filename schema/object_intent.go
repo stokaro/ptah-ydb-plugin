@@ -47,7 +47,9 @@ func objectIntent(value proto.Message) (proto.Message, error) {
 		if enabled := ttl.GetEnabled(); enabled != nil {
 			enabled.ExpireAfterSeconds = nil
 		}
-		return &native.ColumnStorageIntent{HashColumns: slices.Clone(observed.HashColumns), Partitions: observed.Partitions, DataChannelCount: observed.DataChannelCount, LocalIndexes: cloneIndexes(observed.LocalIndexes), Ttl: ttl}, nil
+		// A read states every local index the table holds.
+		return &native.ColumnStorageIntent{HashColumns: slices.Clone(observed.HashColumns), Partitions: observed.Partitions, DataChannelCount: observed.DataChannelCount,
+			LocalIndexes: cloneIndexes(observed.LocalIndexes), Ttl: ttl, LocalIndexesStated: true}, nil
 	default:
 		return nil, fmt.Errorf("unsupported native YDB observation")
 	}
@@ -73,7 +75,7 @@ func objectObservation(value proto.Message) (proto.Message, error) {
 		result = &native.DescribeExternalTableResult{Self: accessObservation(access), SourceType: intent.SourceType, DataSourcePath: intent.DataSourcePath, Location: intent.Location, Content: maps.Clone(intent.Content), Columns: columns}
 	case *native.ColumnStorageIntent:
 		observed := &native.ColumnStorageObservation{HashColumns: slices.Clone(intent.HashColumns), Partitions: intent.Partitions, DataChannelCount: intent.DataChannelCount,
-			LocalIndexes: cloneIndexes(intent.LocalIndexes), Ttl: proto.CloneOf(intent.Ttl)}
+			LocalIndexes: predictedStorage(cloneIndexes(intent.LocalIndexes)), Ttl: proto.CloneOf(intent.Ttl)}
 		if err := normalizeColumnStorage(observed); err != nil {
 			return nil, err
 		}
@@ -88,6 +90,23 @@ func objectObservation(value proto.Message) (proto.Message, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+// predictedStorage gives each declared local index that states no storage
+// the one YDB places a new index of its kind in: the local metadata for a
+// min/max index and the default storage for any other, as a read describes
+// them. A comparison leaves the storage out.
+func predictedStorage(indexes []*native.LocalIndexObservation) []*native.LocalIndexObservation {
+	for _, index := range indexes {
+		if index.GetStorageId() != "" || index.GetInheritPortionStorage() {
+			continue
+		}
+		index.StorageId = "__DEFAULT"
+		if index.GetMinMax() != nil {
+			index.StorageId = "__LOCAL_METADATA"
+		}
+	}
+	return indexes
 }
 
 func cloneIndexes(values []*native.LocalIndexObservation) []*native.LocalIndexObservation {
