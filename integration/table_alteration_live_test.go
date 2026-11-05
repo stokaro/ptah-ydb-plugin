@@ -102,7 +102,7 @@ func TestRowTableFamilyAlterationSubprocess(t *testing.T) {
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, payload, extra, keep) VALUES (1u, \"a\"u, \"b\"u, \"c\"u)")
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, payload, extra, keep) VALUES (1u, \"a\"u, \"b\"u, \"c\"u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
@@ -249,7 +249,7 @@ func TestRowTableColumnAlterationSubprocess(t *testing.T) {
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, keep, old, stale, marker) VALUES (1u, \"k\"u, \"o\"u, \"s\"u, \"t\"u)")
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, keep, old, stale, marker) VALUES (1u, \"k\"u, \"o\"u, \"s\"u, \"t\"u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
@@ -390,7 +390,7 @@ func TestRowTableTTLAlterationSubprocess(t *testing.T) {
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, keep) VALUES (1u, \"kept\"u)")
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, keep) VALUES (1u, \"kept\"u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)

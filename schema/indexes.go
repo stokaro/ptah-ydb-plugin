@@ -195,7 +195,7 @@ func validateImplementation(table *native.DescribeTableResult) error {
 	if len(table.GetIndexes()) != 0 || len(table.GetChangefeeds()) != 0 {
 		return fmt.Errorf("unexpected nested YDB index implementation objects")
 	}
-	if table.GetTableStats() != nil || table.GetSelf().GetName() != "" || table.GetSelf().GetType() != 0 || table.GetSelf().GetSizeBytes() != 0 || table.GetSelf().GetCreatedAt() != nil {
+	if table.GetTableStats() != nil || transientSelf(table.GetSelf()) {
 		return fmt.Errorf("index implementation properties contain transient metadata")
 	}
 	if table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED && table.GetStoreType() != Ydb_Table.StoreType_STORE_TYPE_ROW {

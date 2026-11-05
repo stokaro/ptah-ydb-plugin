@@ -51,6 +51,11 @@ func apply(target *settings, fragment *protocol.SourceFragment) error {
 	if claim := fragment.GetYamlKey(); claim != nil {
 		return applyYAML(target, claim.GetKey(), fragment.GetValue())
 	}
+	if fragment.GetHclBlock() != nil {
+		// The overrides of a table's platform "ydb" block, which the YAML
+		// group of the same name holds too.
+		return applyPlatform(target, fragment.GetValue())
+	}
 	if fragment.GetGoDirective().GetDirective() == DirectiveTable {
 		return applyTable(target, fragment.GetValue())
 	}

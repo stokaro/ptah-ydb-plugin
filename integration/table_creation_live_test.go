@@ -89,7 +89,7 @@ func TestRowTableCreationSubprocess(t *testing.T) {
 	c.Assert(observed.Tables[0].Columns[0].Observed.ColumnType, qt.Equals, "Uint64")
 	c.Assert(observed.Tables[0].Columns[2].Observed.IsNullable, qt.Equals, "YES")
 	// An already occupied path cannot turn a captured CREATE into replacement.
-	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (first,second) VALUES (1u,\"key\"u)")
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (first,second) VALUES (1u,\"key\"u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	result, err = client.Execute(ctx, &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "stale-create", Units: rendered.Units})
 	c.Assert(err, qt.ErrorIs, provider.ErrExecution)

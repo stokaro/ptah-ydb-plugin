@@ -26,10 +26,12 @@ func NativeDesiredModel(kind string) *protocol.ValueModel {
 var nativeIntentDefinitions = map[string]*protocol.ValueModel{
 	SecretProperties: buildNativeIntentModel(SecretProperties),
 	IndexProperties:  buildNativeIntentModel(IndexProperties), ChangefeedProperties: buildNativeIntentModel(ChangefeedProperties), TopicProperties: buildNativeIntentModel(TopicProperties),
-	ViewProperties: buildNativeIntentModel(ViewProperties), ExternalSourceProperties: buildNativeIntentModel(ExternalSourceProperties), ExternalTableProperties: buildNativeIntentModel(ExternalTableProperties), ColumnStorageProperties: buildNativeIntentModel(ColumnStorageProperties),
+	ViewProperties: buildNativeIntentModel(ViewProperties), ExternalSourceProperties: buildNativeIntentModel(ExternalSourceProperties),
+	ExternalTableProperties: buildNativeIntentModel(ExternalTableProperties), ColumnStorageProperties: buildNativeIntentModel(ColumnStorageProperties),
 	ResourcePoolProperties: buildNativeIntentModel(ResourcePoolProperties), ResourcePoolClassifierProperties: buildNativeIntentModel(ResourcePoolClassifierProperties),
 	StreamingQueryProperties: buildNativeIntentModel(StreamingQueryProperties),
 	ReplicationProperties:    buildNativeIntentModel(ReplicationProperties), TransferProperties: buildNativeIntentModel(TransferProperties),
+	IndexSettingsProperties: buildNativeIntentModel(IndexSettingsProperties),
 }
 
 func nativeIntentMessage(kind string) proto.Message {
@@ -38,6 +40,8 @@ func nativeIntentMessage(kind string) proto.Message {
 		return &native.SecretIntent{}
 	case IndexProperties:
 		return &native.IndexSetIntent{}
+	case IndexSettingsProperties:
+		return &native.IndexSettingsIntent{}
 	case ChangefeedProperties:
 		return &native.ChangefeedSetIntent{}
 	case TopicProperties:
@@ -82,10 +86,16 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		"access":               "missing access leaves ownership and permissions unmanaged; present access retains complete direct grants and effective-permission requirements without granting permissions",
 		"native_objects":       "views require matching access from view and table APIs; external options, references and column order remain exact; no network access to external sources",
 		"topic_declarations":   "a topic setting or consumer setting left at zero is one the declaration leaves out, which requests the value YDB gives a new topic; attributes and access are not declared",
-		"column_storage":       "preserves hash order, partition and data-channel counts, local indexes and TTL tiers; excludes native IDs and runtime topology; a declaration may omit the hash key, the shard count and the data channels, which the server then chooses, and states the whole TTL of the table, a TTL that only deletes as one deleting tier; the server's derived expiration is not declared",
+		"column_storage": "preserves hash order, partition and data-channel counts, local indexes and TTL tiers; excludes native IDs and runtime topology; " +
+			"a declaration may omit the hash key, the shard count and the data channels, which the server then chooses, and states the whole TTL of the table, " +
+			"a TTL that only deletes as one deleting tier; the server's derived expiration is not declared",
+	}
+	if kind == IndexSettingsProperties {
+		definition["index_settings"] = indexSettingsDeclaration
 	}
 	if kind == SecretProperties {
-		definition["secrets"] = "value_env is a required PTAH_SECRET_ approved-input reference; observed presence carries no value or value reference; conversions derive a deterministic reference from the exact path; rotations require an explicit comparison request"
+		definition["secrets"] = "value_env is a required PTAH_SECRET_ approved-input reference; observed presence carries no value or value reference; " +
+			"conversions derive a deterministic reference from the exact path; rotations require an explicit comparison request"
 	}
 	if IsWorkloadObject(kind) {
 		definition["workload_objects"] = workloadDefinition
@@ -105,7 +115,8 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		panic(err)
 	}
 	digest := sha256.Sum256(canonical)
-	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
+	result := &protocol.ValueModel{Kind: kind, DisplayName: modelDisplayName(kind), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1, Encoding: "ydb-protojson",
+		DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: kind + "/desired-json-v1"}
 	switch kind {
 	case ReplicationProperties, TransferProperties:
 		// A YAML, Go or SQL source declares replications and transfers at
@@ -133,6 +144,11 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		// a table it declares states is empty; an export writes an empty set
 		// with the table's declaration.
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
+	case IndexSettingsProperties:
+		// The index directive of a Go source, the index entry of a YAML
+		// source and the index block of an HCL document write the settings as
+		// the host's embedded engine reads them.
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_HCL}
 	}
 	return result
 }
@@ -174,6 +190,25 @@ func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error)
 	} else if _, err := nativeObservation(target); err != nil {
 		return nil, err
 	}
+	sortNativeIntent(target)
+	payload, err := protojson.Marshal(target)
+	if err != nil {
+		return nil, err
+	}
+	payload, err = modeljson.Canonical(payload)
+	if err != nil {
+		return nil, err
+	}
+	result := proto.CloneOf(value)
+	requireStreamingContext(result)
+	result.Payload = payload
+	return result, nil
+}
+
+// sortNativeIntent sorts by name the lists the canonical form of a
+// declaration keeps in name order: indexes and their implementation tables,
+// changefeeds and topic consumers, and local indexes.
+func sortNativeIntent(target proto.Message) {
 	switch intent := target.(type) {
 	case *native.IndexSetIntent:
 		slices.SortFunc(intent.Indexes, func(a, b *native.IndexDeclaration) int {
@@ -192,18 +227,6 @@ func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error)
 	case *native.ColumnStorageIntent:
 		slices.SortFunc(intent.LocalIndexes, func(a, b *native.LocalIndexObservation) int { return strings.Compare(a.Name, b.Name) })
 	}
-	payload, err := protojson.Marshal(target)
-	if err != nil {
-		return nil, err
-	}
-	payload, err = modeljson.Canonical(payload)
-	if err != nil {
-		return nil, err
-	}
-	result := proto.CloneOf(value)
-	requireStreamingContext(result)
-	result.Payload = payload
-	return result, nil
 }
 
 func sortTopicIntent(intent *native.TopicIntent) {
@@ -264,6 +287,8 @@ func nativeIntent(value proto.Message) (proto.Message, error) {
 		return &native.SecretIntent{}, nil
 	case *native.IndexObservations:
 		return indexIntents(v)
+	case *native.IndexSettingsObservation:
+		return indexSettingsIntent(v), nil
 	case *native.ChangefeedObservations:
 		return changefeedIntents(v), nil
 	case *native.DescribeTopicResult:
@@ -289,6 +314,11 @@ func nativeObservation(value proto.Message) (proto.Message, error) {
 		return &native.SecretPresence{}, nil
 	case *native.IndexSetIntent:
 		return indexObservations(v)
+	case *native.IndexSettingsIntent:
+		if err := validateIndexSettings(v.GetPartitioningSettings(), v.GetReadReplicasSettings(), false); err != nil {
+			return nil, err
+		}
+		return indexSettingsObservation(v), nil
 	case *native.ChangefeedSetIntent:
 		return changefeedObservations(v)
 	case *native.TopicIntent:

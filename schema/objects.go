@@ -101,27 +101,10 @@ func normalizeObject(described proto.Message) error {
 	case *native.SecretPresence:
 		return nil
 	case *native.ViewObservation:
-		if value.View == nil || value.Properties == nil || strings.TrimSpace(value.View.QueryText) == "" {
-			return fmt.Errorf("incomplete YDB view observation")
+		if err := normalizeView(value); err != nil {
+			return err
 		}
 		self = value.View.Self
-		properties := value.Properties
-		// DescribeTable returns these disabled switches for views on YDB 25.1
-		// and 26.2. They describe no view partition policy. Refuse any other
-		// table partition configuration instead of silently losing it.
-		if partitioning := properties.PartitioningSettings; partitioning != nil {
-			disabled := &Ydb_Table.PartitioningSettings{PartitioningBySize: Ydb.FeatureFlag_DISABLED, PartitioningByLoad: Ydb.FeatureFlag_DISABLED}
-			if !proto.Equal(partitioning, disabled) {
-				return fmt.Errorf("view table response has unsupported partitioning settings")
-			}
-			properties.PartitioningSettings = nil
-		}
-		if transientSelf(properties.Self) || properties.TableStats != nil {
-			return fmt.Errorf("view properties contain transient metadata")
-		}
-		if len(properties.Columns)+len(properties.PrimaryKey)+len(properties.Indexes)+len(properties.Changefeeds) != 0 {
-			return fmt.Errorf("view properties contain table child objects")
-		}
 	case *Ydb_Coordination.DescribeNodeResult:
 		self = value.Self
 		if value.Config == nil {
@@ -140,15 +123,8 @@ func normalizeObject(described proto.Message) error {
 		if value.GetSourceType() == "" || value.GetDataSourcePath() == "" || value.Location == nil || len(value.Columns) == 0 {
 			return fmt.Errorf("incomplete YDB external table")
 		}
-		names := make(map[string]bool)
-		for _, column := range value.Columns {
-			if column.Name == "" || names[column.Name] {
-				return fmt.Errorf("invalid YDB external column identity")
-			}
-			names[column.Name] = true
-			if _, _, err := ColumnType(column.Type); err != nil {
-				return err
-			}
+		if err := validateExternalColumns(value.Columns); err != nil {
+			return err
 		}
 	case *native.DescribeTopicResult:
 		return normalizeTopic(value)
@@ -161,6 +137,50 @@ func normalizeObject(described proto.Message) error {
 	}
 	if transientSelf(self) {
 		return fmt.Errorf("native object properties contain transient identity")
+	}
+	return nil
+}
+
+// normalizeView checks a view observation: a query text, and table API
+// properties without transient metadata or table child objects. It drops the
+// disabled partitioning switches the table API reports for a view and refuses
+// any other partition settings.
+func normalizeView(value *native.ViewObservation) error {
+	if value.View == nil || value.Properties == nil || strings.TrimSpace(value.View.QueryText) == "" {
+		return fmt.Errorf("incomplete YDB view observation")
+	}
+	properties := value.Properties
+	// DescribeTable returns these disabled switches for views on YDB 25.1
+	// and 26.2. They describe no view partition policy. Refuse any other
+	// table partition configuration instead of silently losing it.
+	if partitioning := properties.PartitioningSettings; partitioning != nil {
+		disabled := &Ydb_Table.PartitioningSettings{PartitioningBySize: Ydb.FeatureFlag_DISABLED, PartitioningByLoad: Ydb.FeatureFlag_DISABLED}
+		if !proto.Equal(partitioning, disabled) {
+			return fmt.Errorf("view table response has unsupported partitioning settings")
+		}
+		properties.PartitioningSettings = nil
+	}
+	if transientSelf(properties.Self) || properties.TableStats != nil {
+		return fmt.Errorf("view properties contain transient metadata")
+	}
+	if len(properties.Columns)+len(properties.PrimaryKey)+len(properties.Indexes)+len(properties.Changefeeds) != 0 {
+		return fmt.Errorf("view properties contain table child objects")
+	}
+	return nil
+}
+
+// validateExternalColumns checks the columns of an external table: distinct
+// nonempty names and types a YDB column takes.
+func validateExternalColumns(columns []*native.ColumnMeta) error {
+	names := make(map[string]bool)
+	for _, column := range columns {
+		if column.Name == "" || names[column.Name] {
+			return fmt.Errorf("invalid YDB external column identity")
+		}
+		names[column.Name] = true
+		if _, _, err := ColumnType(column.Type); err != nil {
+			return err
+		}
 	}
 	return nil
 }

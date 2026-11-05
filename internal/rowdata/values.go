@@ -202,7 +202,7 @@ func moment(ydbType string, value time.Time) *protocol.DataValue {
 		return &protocol.DataValue{Value: &protocol.DataValue_DateValue{DateValue: days}}
 	}
 	return &protocol.DataValue{Value: &protocol.DataValue_TimestampValue{TimestampValue: &protocol.TimestampValue{
-		Seconds: utc.Unix(), Nanos: int32(utc.Nanosecond()),
+		Seconds: utc.Unix(), Nanos: int32(utc.Nanosecond()), // #nosec G115 -- Nanosecond is in [0, 1e9)
 	}}}
 }
 
@@ -218,7 +218,7 @@ func text(ydbType, value string) (*protocol.DataValue, error) {
 			return nil, err
 		}
 		return &protocol.DataValue{Value: &protocol.DataValue_DecimalValue{DecimalValue: &protocol.DecimalValue{
-			Digits: digits, Precision: uint32(precision), Scale: uint32(scale),
+			Digits: digits, Precision: uint32(precision), Scale: uint32(scale), // #nosec G115 -- YDB and ydbtype.Map keep a Decimal's precision and scale at most 35
 		}}}, nil
 	case protocol.DataKind_DATA_KIND_JSON:
 		return &protocol.DataValue{Value: &protocol.DataValue_JsonValue{JsonValue: value}}, nil

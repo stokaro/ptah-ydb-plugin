@@ -29,7 +29,8 @@ func buildColumnStorageChangeModel() *protocol.ValueModel {
 		"payload": map[string]any{"additionalProperties": false,
 			"before": json.RawMessage(model(ColumnStorageProperties).DefinitionJson),
 			"after":  json.RawMessage(NativeDesiredModel(ColumnStorageProperties).DefinitionJson)},
-		"operands":   "the owner is a table; before is the complete observed column storage, omitted when the table is a row table; after is the complete desired column storage, omitted when the declaration asks for a row table; at least one is present and neither is null",
+		"operands": "the owner is a table; before is the complete observed column storage, omitted when the table is a row table; " +
+			"after is the complete desired column storage, omitted when the declaration asks for a row table; at least one is present and neither is null",
 		"semantics":  "behavioral; YDB fixes a table's storage kind, hash key and shard count when it creates the table, so only the TTL changes in place",
 		"validation": "exact lowercase keys; each operand is validated against its model",
 	})

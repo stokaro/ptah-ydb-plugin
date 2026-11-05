@@ -161,6 +161,7 @@ func streamingQueryReads(index int, object *protocol.ComparisonRecord, desired *
 }
 
 func refused(index int, kind, message string) *protocol.PlannedDeclarations {
+	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedDeclarations{Complete: true, Diagnostics: []*protocol.DeclarationDiagnostic{{
 		Object:  new(uint32(index)),
 		Problem: &protocol.SchemaDiagnostic{Code: protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, Kind: kind, Message: message},

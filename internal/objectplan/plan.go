@@ -272,6 +272,7 @@ func planStep(
 }
 
 func refusal(family Family, index int, message string) *protocol.PlannedFeatures {
+	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{
 		Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: family.ChangeKind, Message: message,
 		Input: &protocol.PlanningDiagnostic_Change{Change: uint32(index)},

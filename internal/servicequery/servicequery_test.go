@@ -64,6 +64,7 @@ func TestLocate_FailurePath(t *testing.T) {
 }
 
 func TestStringValue(t *testing.T) {
+	// #nosec G101 -- token is a lexer token, not a credential
 	for _, tc := range []struct {
 		token string
 		want  string

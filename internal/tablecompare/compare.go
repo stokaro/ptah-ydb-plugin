@@ -24,7 +24,7 @@ const ServiceID = "ydb-row-table-properties"
 
 // Kinds lists the facet models this comparison owns.
 func Kinds() []string {
-	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.IndexSettingsProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
 }
 
 // ChangeKinds lists the changes this comparison reports.
@@ -33,7 +33,7 @@ func ChangeKinds() []string {
 }
 
 // OwnerKinds lists the subject kinds that carry those facets.
-func OwnerKinds() []string { return []string{"table", "column"} }
+func OwnerKinds() []string { return []string{"table", "column", "index"} }
 
 // Compare reports every table or column whose declared facet differs from the
 // one the existing table holds. A facet on only one side states nothing to
@@ -193,10 +193,13 @@ func compareUnstatedParts(ctx context.Context, request *protocol.CompareModelsRe
 // compareStorages compares the storage of every table both sides hold, when
 // the request compares column storage.
 func compareStorages(ctx context.Context, request *protocol.CompareModelsRequest, result *protocol.ComparedModels, held map[string]*protocol.ComparisonRecord) error {
-	// desiredStorage holds the declared column storage of each table, and
-	// rowStated every table the declaration states row-table settings for.
+	// desiredStorage holds the declared column storage of each table,
+	// rowStated every table the declaration states row-table settings for, and
+	// statedTTL the TTL alone a source that cannot say a table's storage
+	// states for one.
 	desiredStorage := make(map[string]*protocol.ComparisonRecord)
 	rowStated := make(map[string]bool)
+	statedTTL := make(map[string]*protocol.Envelope)
 	for _, record := range request.GetDesired().GetRecords() {
 		if !compared(request, record) {
 			continue
@@ -205,6 +208,14 @@ func compareStorages(ctx context.Context, request *protocol.CompareModelsRequest
 		case schema.ColumnStorageProperties:
 			desiredStorage[recordKey(record.GetKind(), record.GetSubject())] = record
 		case schema.TableProperties:
+			storage, err := ttlAloneStorage(request, record)
+			if err != nil {
+				return err
+			}
+			if storage != nil {
+				statedTTL[recordKey(schema.ColumnStorageProperties, record.GetSubject())] = storage
+				continue
+			}
 			rowStated[recordKey(record.GetKind(), record.GetSubject())] = true
 		}
 	}
@@ -215,11 +226,21 @@ func compareStorages(ctx context.Context, request *protocol.CompareModelsRequest
 		if parent.GetSubject().GetKind() != "table" || !parent.GetDesired() || !parent.GetCurrent() || !slices.Contains(request.GetKinds(), schema.ColumnStorageProperties) {
 			continue
 		}
-		if err := compareStorage(request, result, parent.GetSubject(), desiredStorage, held, rowStated); err != nil {
+		if err := compareStorage(request, result, parent.GetSubject(), storageSides{desired: desiredStorage, held: held, rowStated: rowStated, ttl: statedTTL}); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// storageSides are what compareStorage reads of both sides: the declared
+// column storage and the held facets of each table, every table the
+// declaration states row-table settings for, and the column storage the TTL
+// alone a source states asks for.
+type storageSides struct {
+	desired, held map[string]*protocol.ComparisonRecord
+	rowStated     map[string]bool
+	ttl           map[string]*protocol.Envelope
 }
 
 // compareStorage compares the storage of a table both sides hold. A column
@@ -229,16 +250,18 @@ func compareStorages(ctx context.Context, request *protocol.CompareModelsRequest
 // read as a row table, or a column table where the declaration asks for a row
 // table, which it does when the source describes the column storage of every
 // table it declares and states none for this one, or states row-table
-// settings for it. A side the comparison cannot establish states nothing.
-func compareStorage(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, subject *protocol.ComparisonIdentity,
-	desiredStorage, held map[string]*protocol.ComparisonRecord, rowStated map[string]bool) error {
-	wanted := desiredStorage[recordKey(schema.ColumnStorageProperties, subject)]
-	holding := held[recordKey(schema.ColumnStorageProperties, subject)]
+// settings for it. A source that cannot say a table's storage, such as an HCL
+// platform group, and states a TTL alone, states the TTL of a column table it
+// holds: the table keeps its storage and takes that TTL, a change of the
+// column storage the row-table properties the source states answer, since the
+// source states no column storage the host could hold a change of. A side the
+// comparison cannot establish states nothing.
+func compareStorage(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, subject *protocol.ComparisonIdentity, sides storageSides) error {
+	wanted := sides.desired[recordKey(schema.ColumnStorageProperties, subject)]
+	holding := sides.held[recordKey(schema.ColumnStorageProperties, subject)]
 	if holding != nil && !compared(request, holding) {
 		holding = nil
 	}
-	row := held[recordKey(schema.TableProperties, subject)]
-	rowRead := row != nil && compared(request, row)
 	var before, after *protocol.Envelope
 	var err error
 	if wanted != nil {
@@ -246,22 +269,20 @@ func compareStorage(request *protocol.CompareModelsRequest, result *protocol.Com
 			return err
 		}
 	}
+	// compared is the facet the change answers: the declared column storage,
+	// or the row-table properties whose TTL alone a column table takes.
+	compared := schema.ColumnStorageProperties
+	if stated := sides.ttl[recordKey(schema.ColumnStorageProperties, subject)]; wanted == nil && holding != nil && stated != nil {
+		after, compared = stated, schema.TableProperties
+	}
 	if holding != nil {
 		if before, err = tablecreate.NormalizedFacet(holding, protocol.ValueInput_OBSERVED); err != nil {
 			return err
 		}
 	}
-	switch {
-	case after != nil && before != nil:
-		differs, err := tablecreate.StorageFacetDiffers(after, before)
-		if err != nil || !differs {
-			return err
-		}
-	case after != nil && rowRead:
-	case before != nil && (rowStated[recordKey(schema.TableProperties, subject)] ||
-		tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.ColumnStorageProperties, subject, true)):
-	default:
-		return nil
+	changed, err := storageChanged(request, subject, sides, before, after)
+	if err != nil || !changed {
+		return err
 	}
 	owner := after.GetOwner()
 	if owner == nil {
@@ -271,8 +292,34 @@ func compareStorage(request *protocol.CompareModelsRequest, result *protocol.Com
 	if err != nil {
 		return err
 	}
-	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: schema.ColumnStorageProperties, Subject: proto.CloneOf(subject), Value: change})
+	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: compared, Subject: proto.CloneOf(subject), Value: change})
 	return nil
+}
+
+// storageChanged reports whether the column storage of a table changes: both
+// sides hold a storage and they differ, a declared storage meets a read row
+// table, or a held storage meets a declaration of row-table settings or a
+// source that knows the table's column storage.
+func storageChanged(request *protocol.CompareModelsRequest, subject *protocol.ComparisonIdentity, sides storageSides, before, after *protocol.Envelope) (bool, error) {
+	row := sides.held[recordKey(schema.TableProperties, subject)]
+	switch {
+	case after != nil && before != nil:
+		return tablecreate.StorageFacetDiffers(after, before)
+	case after != nil && row != nil && compared(request, row):
+		return true, nil
+	case before != nil && (sides.rowStated[recordKey(schema.TableProperties, subject)] ||
+		tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.ColumnStorageProperties, subject, true)):
+		return true, nil
+	}
+	return false, nil
+}
+
+// ttlAloneStorage is the column storage a desired row-table record that
+// states a TTL alone asks of a column table, and nil for any other record;
+// see tablecreate.TTLAloneStorage.
+func ttlAloneStorage(request *protocol.CompareModelsRequest, record *protocol.ComparisonRecord) (*protocol.Envelope, error) {
+	storage, err := tablecreate.TTLAloneStorage(request.GetDesired().GetCoverage(), record)
+	return storage.GetValue(), err
 }
 
 // compareUnstated compares a table the desired side carries no table properties

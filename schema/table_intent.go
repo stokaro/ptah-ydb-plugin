@@ -36,13 +36,14 @@ func buildTableDesiredModel() *protocol.ValueModel {
 		"unknown_fields_and_enum_values": "refused", "null_settings": "refused recursively, including map entries",
 		"canonicalization": "protojson followed by modeljson canonical JSON; key, family and grant order retained",
 		"settings":         "ordered primary key, TTL, storage, column families, attributes, partitioning policy, bloom filter, read replicas, tiering, temporary lifetime and the starting layout of a new table",
-		"starting_layout":  "uniform_partitions is a count of at least 1; partition_at_keys lists split points of source text values; at most one of them; YDB takes a layout only when it creates a table and keeps no record of it, so it is never observed",
-		"access":           "present access declares the complete direct-grant set and requires the complete effective-permission set; owner omission leaves ownership unmanaged; constraints never grant permissions or infer inheritance settings",
-		"omission":         "missing settings request native defaults and remain absent during normalization; missing access leaves access unmanaged",
-		"primary_key":      "a declaration that states settings only, such as a YAML or Go source, omits the key and the effective key comes from the common columns; a stated key is distinct, ordered, and must agree with them",
-		"runtime_state":    "physical shard boundaries refuse conversion; statistics and transient identity are not allowed in either property model",
-		"row_storage":      "this model requests row storage; observed unspecified storage is interpreted as row storage",
-		"conversion":       "offline representation conversion establishes no observation coverage; permission planning is not advertised",
+		"starting_layout": "uniform_partitions is a count of at least 1; partition_at_keys lists split points of source text values; at most one of them; " +
+			"YDB takes a layout only when it creates a table and keeps no record of it, so it is never observed",
+		"access":        "present access declares the complete direct-grant set and requires the complete effective-permission set; owner omission leaves ownership unmanaged; constraints never grant permissions or infer inheritance settings",
+		"omission":      "missing settings request native defaults and remain absent during normalization; missing access leaves access unmanaged",
+		"primary_key":   "a declaration that states settings only, such as a YAML or Go source, omits the key and the effective key comes from the common columns; a stated key is distinct, ordered, and must agree with them",
+		"runtime_state": "physical shard boundaries refuse conversion; statistics and transient identity are not allowed in either property model",
+		"row_storage":   "this model requests row storage; observed unspecified storage is interpreted as row storage",
+		"conversion":    "offline representation conversion establishes no observation coverage; permission planning is not advertised",
 	}
 	encoded, err := json.Marshal(definition)
 	if err != nil {
@@ -56,6 +57,13 @@ func buildTableDesiredModel() *protocol.ValueModel {
 	return &protocol.ValueModel{Kind: TableProperties, DisplayName: modelDisplayName(TableProperties), Representation: protocol.ValueInput_DESIRED, SchemaVersion: 1,
 		Encoding: "ydb-protojson", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: TableProperties + "/desired-json-v1",
 		SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}}
+}
+
+// CaptureTableIntent writes the settings a source declares for a row table as
+// the provider's desired facet of that table, normalized as a YAML or Go
+// source's facet is.
+func CaptureTableIntent(owner *protocol.Reference, intent *native.RowTableIntent) (*protocol.Envelope, error) {
+	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: TableProperties, Owner: proto.CloneOf(owner)}, TableDesiredModel(), intent, NormalizeDesired)
 }
 
 func normalizeTableIntent(value *protocol.Envelope) (*protocol.Envelope, error) {
@@ -120,7 +128,19 @@ func validateTableIntent(intent *native.RowTableIntent) error {
 		return fmt.Errorf("uniform_partitions and partition_at_keys are both declared, which YDB refuses " +
 			"(`Uniform partitions and partitions at keys settings are mutually exclusive`)")
 	}
-	for _, point := range intent.PartitionAtKeys {
+	if err := validateSplitPoints(intent.PartitionAtKeys); err != nil {
+		return err
+	}
+	if err := validateTableTTL(intent.TtlSettings); err != nil {
+		return err
+	}
+	return validateAccessIntent(intent.Access)
+}
+
+// validateSplitPoints checks the split points of partition_at_keys: each
+// holds a value, and every value is valid UTF-8 without NUL.
+func validateSplitPoints(points []*native.SplitPoint) error {
+	for _, point := range points {
 		if len(point.GetValues()) == 0 {
 			return fmt.Errorf("a split point of partition_at_keys holds no value")
 		}
@@ -130,21 +150,28 @@ func validateTableIntent(intent *native.RowTableIntent) error {
 			}
 		}
 	}
-	if ttl := intent.TtlSettings; ttl != nil {
-		switch mode := ttl.Mode.(type) {
-		case *Ydb_Table.TtlSettings_DateTypeColumn:
-			if mode.DateTypeColumn.GetColumnName() == "" {
-				return fmt.Errorf("YDB TTL requires a column")
-			}
-		case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
-			if mode.ValueSinceUnixEpoch.GetColumnName() == "" || mode.ValueSinceUnixEpoch.GetColumnUnit() == 0 {
-				return fmt.Errorf("YDB epoch TTL requires a column and unit")
-			}
-		default:
-			return fmt.Errorf("YDB TTL requires an explicit mode")
-		}
+	return nil
+}
+
+// validateTableTTL checks a declared row-table TTL, nil for none: an explicit
+// mode with its column, and the unit of an epoch column.
+func validateTableTTL(ttl *Ydb_Table.TtlSettings) error {
+	if ttl == nil {
+		return nil
 	}
-	return validateAccessIntent(intent.Access)
+	switch mode := ttl.Mode.(type) {
+	case *Ydb_Table.TtlSettings_DateTypeColumn:
+		if mode.DateTypeColumn.GetColumnName() == "" {
+			return fmt.Errorf("YDB TTL requires a column")
+		}
+	case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
+		if mode.ValueSinceUnixEpoch.GetColumnName() == "" || mode.ValueSinceUnixEpoch.GetColumnUnit() == 0 {
+			return fmt.Errorf("YDB epoch TTL requires a column and unit")
+		}
+	default:
+		return fmt.Errorf("YDB TTL requires an explicit mode")
+	}
+	return nil
 }
 
 func validatePermissionSet(grants []*Ydb_Scheme.Permissions) error {

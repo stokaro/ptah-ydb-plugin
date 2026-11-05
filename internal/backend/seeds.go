@@ -233,7 +233,7 @@ func (p *Provider) ReadSeedLedger(ctx context.Context, request *protocol.ReadSee
 		if len(ledger.Entries) == int(request.GetMaxEntries()) {
 			return nil, runtime.ErrorWithReason(codes.ResourceExhausted, fmt.Sprintf("the seed ledger holds more than %d entries", request.GetMaxEntries()))
 		}
-		entry.AppliedAtSeconds, entry.AppliedAtNanos = applied.Unix(), int32(applied.Nanosecond())
+		entry.AppliedAtSeconds, entry.AppliedAtNanos = applied.Unix(), int32(applied.Nanosecond()) // #nosec G115 -- Nanosecond is in [0, 1e9)
 		ledger.Entries = append(ledger.Entries, &entry)
 	}
 	if err := rows.Err(); err != nil {
@@ -248,6 +248,7 @@ func refuseSeed(result *protocol.SeedResult, text string, offset int, reason str
 	offset = min(max(offset, 0), len(text))
 	line := strings.Count(text[:offset], "\n") + 1
 	column := utf8.RuneCountInString(text[strings.LastIndexByte(text[:offset], '\n')+1:offset]) + 1
+	// #nosec G115 -- the position is within one request's seed text, and runtime.MaxMessageBytes bounds a request to 4 MiB
 	result.Position = &protocol.SourcePosition{ByteOffset: uint64(offset), Line: uint32(line), Column: uint32(column)}
 	return result
 }

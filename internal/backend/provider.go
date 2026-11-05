@@ -15,6 +15,7 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/buildversion"
@@ -99,6 +100,11 @@ type session struct {
 func providerFeatures() []string {
 	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
 		provider.IndexMethodsFeature,
+		// A read with no selector claims every directory below the root
+		// complete in one region, and each directory it leaves out unknown,
+		// so an object declared in a new directory is planned; see
+		// inspect.subtreeRegions.
+		provider.SchemaSubtreeCoverageFeature,
 		// A refusal reaches the host with the reason the provider wrote, and a
 		// driver's error with its code alone; see package authored.
 		provider.ErrorReasonsFeature,
@@ -111,6 +117,11 @@ func providerFeatures() []string {
 		provider.PlanFeaturesFeature,
 		provider.RenderFeature,
 		provider.CompareModelsFeature,
+		// An object comparison counts what it compares, so a drift inventory
+		// reports the provider's native kinds; see objectcompare.countDecided.
+		// The row-table facet comparison counts nothing: a table's settings
+		// stand for no object, and a table's changefeeds change as one set.
+		provider.ComparisonCountsFeature,
 		provider.DecodeSourceFeature,
 		// A table's facets, a topic with its consumers and a changefeed set
 		// are each written by several declarations; see EncodeSource.
@@ -124,6 +135,11 @@ func providerFeatures() []string {
 		provider.LocksFeature,
 		provider.MetadataFeature,
 		provider.AnalyzeSQLFeature,
+		// The host reads YQL text by the provider's scanner; see ScanSQL.
+		provider.ScanSQLFeature,
+		// An offline command plans with the facts of the newest line; see
+		// defaultCapabilities.
+		provider.DefaultCapabilitiesFeature,
 		provider.DevDatabaseFeature,
 		provider.LintFeature,
 		provider.TypeRowsFeature,
@@ -154,6 +170,9 @@ func providerFeatures() []string {
 		provider.PlanningContextInventoryFeature,
 		provider.EntryKeysFeature,
 		provider.HCLSourceFeature,
+		// A table's TTL is read from and written to its platform "ydb"
+		// block in HCL; see tablesource.HCLPlatformBlock.
+		provider.HCLPlatformFeature,
 		provider.EncodeSourceFeature,
 		// A Go or HCL source leaves a native kind unmanaged with a
 		// not-described entry; see EncodeSource and DecodeSource.
@@ -163,12 +182,29 @@ func providerFeatures() []string {
 		// name as one rename step, which the table service claims with
 		// RENAME INDEX; see indexRenames.
 		provider.IndexRenamesFeature,
+		// A read reports a global index's partitioning and read replicas as
+		// the index's own facet, which a source's index directive or entry
+		// declares; see inspect.Common.IndexFacets.
+		provider.ObservedIndexFacetsFeature,
 		// A YQL reading carries a table's changefeeds as a facet of the
 		// table; see yqlschema.Reply.
 		provider.SQLFacetsFeature,
 		// The reverse migration of a standalone object's change is the
 		// change that undoes it; see ReverseChanges.
-		provider.ReverseChangesFeature}
+		provider.ReverseChangesFeature,
+		// Resource pools and their classifiers belong to the database, so a
+		// read of directories reports them beside its scope; see
+		// inspect.Workload.
+		provider.DatabaseKindsFeature,
+		// A read names each replica table no replication it describes
+		// writes, which YDB keeps read-only, so the host refuses a table
+		// declared there at planning; see inspect.unreadReplicas.
+		provider.UnreadTablesFeature,
+		// `ptah schema stats` counts topics, changefeeds, the other native
+		// objects and the table settings with the provider's counts; see
+		// ReportValues.
+		provider.ReportCountsFeature,
+	}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
@@ -278,24 +314,58 @@ func negotiatedFeatures(ctx context.Context) []string {
 // measured. The flag decides it where the address names the monitoring
 // endpoint.
 func sessionCapabilities(version string) map[string]bool {
-	return map[string]bool{"wide_date_time_types": releaseline.AtLeast(version, 25, 2), "parameterized_decimal": releaseline.AtLeast(version, 25, 2),
-		"alter_column_default":    releaseline.AtLeast(version, 26, 2),
-		"add_column_with_default": releaseline.AtLeast(version, 26, 1),
-		"small_integer_defaults":  releaseline.AtLeast(version, 25, 2), "document_type_defaults": releaseline.AtLeast(version, 25, 3),
-		"transactional_ddl": false, "ddl_inside_transaction": false, "secrets": releaseline.AtLeast(version, 25, 4), "coordination_nodes": true, "migration_statement_timeout": true, "tiered_ttl": false,
-		"role_management": true, "role_membership": true, "group_principals": true, "database_grants": true,
-		"relative_grant_paths": releaseline.AtLeast(version, 26, 1), "topics": true, "topic_consumer_availability_period": releaseline.AtLeast(version, 25, 4), workload.CapabilityResourcePools: false, streaming.Capability: false,
-		changefeeds.CapabilityChangefeeds: true, changefeeds.CapabilityUserSIDs: releaseline.AtLeast(version, 26, 1),
-		changefeeds.CapabilitySchemaChanges: releaseline.AtLeast(version, 25, 3), changefeeds.CapabilityTopicAutoPartitioning: releaseline.AtLeast(version, 25, 2),
-		"external_data_sources": false, "external_object_replace": false, "external_data_source_secret_paths": releaseline.AtLeast(version, 25, 4),
-		tablecreate.VectorIndexesCapability: releaseline.AtLeast(version, 25, 2), tablecreate.VectorMaintainedOnWriteCapability: releaseline.AtLeast(version, 25, 3),
-		tablecreate.VectorBitTypeCapability: releaseline.AtLeast(version, 26, 1), tablecreate.FullTextIndexesCapability: releaseline.AtLeast(version, 26, 2),
-		tablecreate.LocalBloomIndexesCapability: releaseline.AtLeast(version, 26, 2), tablecreate.LocalNgramIndexesCapability: releaseline.AtLeast(version, 26, 2),
-		tablecreate.LocalMinMaxIndexesCapability: false,
-		replication.CapabilityReplication:        true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
-		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, "unique_constraints": false, tablecreate.UniqueIndexOnExistingTableCapability: false, tablecreate.IndexRenameCapability: true,
-		"returning_clause": releaseline.AtLeast(version, 25, 3), "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
-		tablecreate.CacheModeCapability: releaseline.AtLeast(version, 25, 4)}
+	return map[string]bool{
+		"wide_date_time_types":                           releaseline.AtLeast(version, 25, 2),
+		"parameterized_decimal":                          releaseline.AtLeast(version, 25, 2),
+		"alter_column_default":                           releaseline.AtLeast(version, 26, 2),
+		"add_column_with_default":                        releaseline.AtLeast(version, 26, 1),
+		"small_integer_defaults":                         releaseline.AtLeast(version, 25, 2),
+		"document_type_defaults":                         releaseline.AtLeast(version, 25, 3),
+		"transactional_ddl":                              false,
+		"ddl_inside_transaction":                         false,
+		"secrets":                                        releaseline.AtLeast(version, 25, 4),
+		"coordination_nodes":                             true,
+		"migration_statement_timeout":                    true,
+		"tiered_ttl":                                     false,
+		"role_management":                                true,
+		"role_membership":                                true,
+		"group_principals":                               true,
+		"database_grants":                                true,
+		"relative_grant_paths":                           releaseline.AtLeast(version, 26, 1),
+		"topics":                                         true,
+		"topic_consumer_availability_period":             releaseline.AtLeast(version, 25, 4),
+		workload.CapabilityResourcePools:                 false,
+		streaming.Capability:                             false,
+		changefeeds.CapabilityChangefeeds:                true,
+		changefeeds.CapabilityUserSIDs:                   releaseline.AtLeast(version, 26, 1),
+		changefeeds.CapabilitySchemaChanges:              releaseline.AtLeast(version, 25, 3),
+		changefeeds.CapabilityTopicAutoPartitioning:      releaseline.AtLeast(version, 25, 2),
+		"external_data_sources":                          false,
+		"external_object_replace":                        false,
+		"external_data_source_secret_paths":              releaseline.AtLeast(version, 25, 4),
+		tablecreate.VectorIndexesCapability:              releaseline.AtLeast(version, 25, 2),
+		tablecreate.VectorMaintainedOnWriteCapability:    releaseline.AtLeast(version, 25, 3),
+		tablecreate.VectorBitTypeCapability:              releaseline.AtLeast(version, 26, 1),
+		tablecreate.FullTextIndexesCapability:            releaseline.AtLeast(version, 26, 2),
+		tablecreate.LocalBloomIndexesCapability:          releaseline.AtLeast(version, 26, 2),
+		tablecreate.LocalNgramIndexesCapability:          releaseline.AtLeast(version, 26, 2),
+		tablecreate.LocalMinMaxIndexesCapability:         false,
+		replication.CapabilityReplication:                true,
+		replication.CapabilityTransfers:                  releaseline.AtLeast(version, 25, 2),
+		replication.CapabilitySecretPaths:                releaseline.AtLeast(version, 25, 4),
+		ydbtype.SerialColumns:                            true,
+		ydbsequence.Options:                              true,
+		ydbsequence.KeepsRange:                           false,
+		"unique_constraints":                             false,
+		tablecreate.UniqueIndexOnExistingTableCapability: false,
+		tablecreate.IndexRenameCapability:                true,
+		"returning_clause":                               releaseline.AtLeast(version, 25, 3),
+		"common_table_expressions":                       false,
+		"correlated_subqueries":                          false,
+		"non_equi_joins":                                 false,
+		"offset_without_limit":                           false,
+		tablecreate.CacheModeCapability:                  releaseline.AtLeast(version, 25, 4),
+	}
 }
 
 // indexRenames returns capabilities with index_rename true only for a host
@@ -351,10 +421,215 @@ func Description() *protocol.Description {
 		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: buildversion.Version(), SemanticIdentity: "ydb-table-lifecycle-2",
 		Features: providerFeatures(),
-		Engines:  []*protocol.Engine{{Id: "ydb", Aliases: []string{"ydbs"}, Identifiers: identifierRules(), ReleaseLines: releaseLines(), ValueModels: append(schema.Models(), tablecreate.Model(), tablecreate.AlterModel(), tablecreate.IndexSettingsModel(), tablecreate.DefaultModel(), tablecreate.InventoryModel(), tablecreate.ColumnModel(), tablecreate.ColumnTTLModel(), tablecreate.ColumnLocalIndexModel(), tablecreate.DropModel(), tablecreate.CopyModel(), tablecreate.RenameModel(), tablecreate.NativeIndexModel(), declarationplan.Model()), Declarations: []*protocol.ModelDeclarations{{Id: declarationplan.ServiceID, Kinds: declarationplan.Kinds(), OperationKinds: []string{declarationplan.OperationKind}}}, Planning: []*protocol.ModelPlanning{{Id: secretplan.ServiceID, ChangeKinds: []string{schema.SecretChange}, OperationKinds: []string{schema.SecretOperation}}, {Id: streamingplan.ServiceID, ContextKinds: []string{schema.StreamingQueryProperties}, ChangeKinds: []string{schema.StreamingQueryChange}, OperationKinds: []string{schema.StreamingQueryOperation}}, {Id: coordinationplan.ServiceID, ChangeKinds: []string{schema.CoordinationChange}, OperationKinds: []string{schema.CoordinationOperation}}, {Id: topicplan.ServiceID, ChangeKinds: []string{schema.TopicChange}, OperationKinds: []string{schema.TopicOperation}}, {Id: externalplan.ServiceID, ChangeKinds: externalplan.ChangeKinds(), OperationKinds: externalplan.OperationKinds()}, {Id: workloadplan.ServiceID, ChangeKinds: workloadplan.ChangeKinds(), OperationKinds: []string{schema.WorkloadOperation}}, {Id: replicationplan.ReplicationServiceID, ContextKinds: []string{schema.ReplicationProperties}, ChangeKinds: []string{schema.ReplicationChange}, OperationKinds: []string{schema.ReplicationOperation}}, {Id: replicationplan.TransferServiceID, ChangeKinds: []string{schema.TransferChange}, OperationKinds: []string{schema.TransferOperation}}, {Id: tablecreate.ServiceID, ChangeKinds: tablecreate.ChangeKinds(), ParentKinds: tablecreate.ParentKinds(), OperationKinds: []string{tablecreate.OperationKind, tablecreate.AlterOperationKind, tablecreate.IndexSettingsOperationKind, tablecreate.DefaultOperationKind, tablecreate.InventoryOperationKind, tablecreate.ColumnOperationKind, tablecreate.ColumnTTLOperationKind, tablecreate.ColumnLocalIndexOperationKind, tablecreate.DropOperationKind, tablecreate.CopyOperationKind, tablecreate.RenameOperationKind, tablecreate.NativeIndexOperationKind, schema.ChangefeedOperation}}}, Reversals: []*protocol.ModelReversal{{Id: reversal.ServiceID, ChangeKinds: reversal.ChangeKinds()}}, Comparisons: []*protocol.ModelComparison{{Id: secretcompare.ServiceID, Actions: []string{"rotate"}, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.SecretProperties}, ChangeKinds: []string{schema.SecretChange}}, {Id: streamingcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.StreamingQueryProperties}, ChangeKinds: []string{schema.StreamingQueryChange}}, {Id: coordinationcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.CoordinationProperties}, ChangeKinds: []string{schema.CoordinationChange}}, {Id: topiccompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.TopicProperties}, ChangeKinds: []string{schema.TopicChange}}, {Id: externalcompare.ServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: externalcompare.Kinds(), ChangeKinds: externalcompare.ChangeKinds()}, {Id: workloadcompare.PoolServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolProperties}, ChangeKinds: []string{schema.ResourcePoolChange}}, {Id: workloadcompare.ClassifierServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ResourcePoolClassifierProperties}, ChangeKinds: []string{schema.ResourcePoolClassifierChange}}, {Id: replicationcompare.ReplicationServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.ReplicationProperties}, ChangeKinds: []string{schema.ReplicationChange}}, {Id: replicationcompare.TransferServiceID, Placement: protocol.ModelComparison_OBJECTS, Kinds: []string{schema.TransferProperties}, ChangeKinds: []string{schema.TransferChange}}, {Id: tablecompare.ServiceID, Placement: protocol.ModelComparison_FACETS, Kinds: tablecompare.Kinds(), ChangeKinds: tablecompare.ChangeKinds(), OwnerKinds: tablecompare.OwnerKinds()}}, YamlSourceKeys: slices.Concat([]*protocol.YAMLSourceKey{secretsource.YAMLKey(), schema.CoordinationYAMLKey(), streamingsource.YAMLKey(), topicsource.YAMLKey(), changefeedsource.YAMLKey()}, externalsource.YAMLKeys(), replicationsource.YAMLKeys(), tablesource.YAMLKeys(), tablesource.IndexYAMLKeys(), workloadsource.YAMLKeys()), GoSourceDirectives: slices.Concat(streamingsource.GoDirectives(), tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{secretsource.GoDirective(), schema.CoordinationGoDirective()}, topicsource.GoDirectives(), replicationsource.GoDirectives(), externalsource.GoDirectives(), workloadsource.GoDirectives()), LintRules: migrationlint.Rules(), QueryDialect: queryDialect(), SqlSchema: sqlSchemaDeclaration(), Features: engineFeatures(), Embeddings: &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes}, CommonObjects: commonobject.Support(), ScopeSelections: scopeSelections(), HclSource: &protocol.HCLSourceDeclaration{Blocks: []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock()}, HeaderKinds: []string{"coordination_node"}}, GoHeaderKinds: yqlschema.HeaderKinds()}},
+		Engines: []*protocol.Engine{
+			{
+				Id:           "ydb",
+				Aliases:      []string{"ydbs"},
+				Identifiers:  identifierRules(),
+				ReleaseLines: releaseLines(),
+				ValueModels: append(
+					schema.Models(),
+					tablecreate.Model(),
+					tablecreate.AlterModel(),
+					tablecreate.IndexSettingsModel(),
+					tablecreate.DefaultModel(),
+					tablecreate.InventoryModel(),
+					tablecreate.ColumnModel(),
+					tablecreate.ColumnTTLModel(),
+					tablecreate.ColumnLocalIndexModel(),
+					tablecreate.DropModel(),
+					tablecreate.CopyModel(),
+					tablecreate.RenameModel(),
+					tablecreate.NativeIndexModel(),
+					declarationplan.Model(),
+				),
+				Declarations: []*protocol.ModelDeclarations{
+					{
+						Id:             declarationplan.ServiceID,
+						Kinds:          declarationplan.Kinds(),
+						OperationKinds: []string{declarationplan.OperationKind},
+					},
+				},
+				Planning: []*protocol.ModelPlanning{
+					{
+						Id:             secretplan.ServiceID,
+						ChangeKinds:    []string{schema.SecretChange},
+						OperationKinds: []string{schema.SecretOperation},
+					},
+					{
+						Id:             streamingplan.ServiceID,
+						ContextKinds:   []string{schema.StreamingQueryProperties},
+						ChangeKinds:    []string{schema.StreamingQueryChange},
+						OperationKinds: []string{schema.StreamingQueryOperation},
+					},
+					{
+						Id:             coordinationplan.ServiceID,
+						ChangeKinds:    []string{schema.CoordinationChange},
+						OperationKinds: []string{schema.CoordinationOperation},
+					},
+					{
+						Id:             topicplan.ServiceID,
+						ChangeKinds:    []string{schema.TopicChange},
+						OperationKinds: []string{schema.TopicOperation},
+					},
+					{
+						Id:             externalplan.ServiceID,
+						ChangeKinds:    externalplan.ChangeKinds(),
+						OperationKinds: externalplan.OperationKinds(),
+					},
+					{
+						Id:             workloadplan.ServiceID,
+						ChangeKinds:    workloadplan.ChangeKinds(),
+						OperationKinds: []string{schema.WorkloadOperation},
+					},
+					{
+						Id:             replicationplan.ReplicationServiceID,
+						ContextKinds:   []string{schema.ReplicationProperties},
+						ChangeKinds:    []string{schema.ReplicationChange},
+						OperationKinds: []string{schema.ReplicationOperation},
+					},
+					{
+						Id:             replicationplan.TransferServiceID,
+						ChangeKinds:    []string{schema.TransferChange},
+						OperationKinds: []string{schema.TransferOperation},
+					},
+					{
+						Id:          tablecreate.ServiceID,
+						ChangeKinds: tablecreate.ChangeKinds(),
+						ParentKinds: tablecreate.ParentKinds(),
+						OperationKinds: []string{
+							tablecreate.OperationKind,
+							tablecreate.AlterOperationKind,
+							tablecreate.IndexSettingsOperationKind,
+							tablecreate.DefaultOperationKind,
+							tablecreate.InventoryOperationKind,
+							tablecreate.ColumnOperationKind,
+							tablecreate.ColumnTTLOperationKind,
+							tablecreate.ColumnLocalIndexOperationKind,
+							tablecreate.DropOperationKind,
+							tablecreate.CopyOperationKind,
+							tablecreate.RenameOperationKind,
+							tablecreate.NativeIndexOperationKind,
+							schema.ChangefeedOperation,
+						},
+					},
+				},
+				Reversals: []*protocol.ModelReversal{{Id: reversal.ServiceID, ChangeKinds: reversal.ChangeKinds()}},
+				Comparisons: []*protocol.ModelComparison{
+					{
+						Id:          secretcompare.ServiceID,
+						Actions:     []string{"rotate"},
+						Placement:   protocol.ModelComparison_OBJECTS,
+						Kinds:       []string{schema.SecretProperties},
+						ChangeKinds: []string{schema.SecretChange},
+					},
+					{
+						Id:          streamingcompare.ServiceID,
+						Placement:   protocol.ModelComparison_OBJECTS,
+						Kinds:       []string{schema.StreamingQueryProperties},
+						ChangeKinds: []string{schema.StreamingQueryChange},
+					},
+					{
+						Id:          coordinationcompare.ServiceID,
+						Placement:   protocol.ModelComparison_OBJECTS,
+						Kinds:       []string{schema.CoordinationProperties},
+						ChangeKinds: []string{schema.CoordinationChange},
+					},
+					{
+						Id:          topiccompare.ServiceID,
+						Placement:   protocol.ModelComparison_OBJECTS,
+						Kinds:       []string{schema.TopicProperties},
+						ChangeKinds: []string{schema.TopicChange},
+					},
+					{
+						Id:          externalcompare.ServiceID,
+						Placement:   protocol.ModelComparison_OBJECTS,
+						Kinds:       externalcompare.Kinds(),
+						ChangeKinds: externalcompare.ChangeKinds(),
+					},
+					{
+						Id:          workloadcompare.PoolServiceID,
+						Placement:   protocol.ModelComparison_OBJECTS,
+						Kinds:       []string{schema.ResourcePoolProperties},
+						ChangeKinds: []string{schema.ResourcePoolChange},
+					},
+					{
+						Id:          workloadcompare.ClassifierServiceID,
+						Placement:   protocol.ModelComparison_OBJECTS,
+						Kinds:       []string{schema.ResourcePoolClassifierProperties},
+						ChangeKinds: []string{schema.ResourcePoolClassifierChange},
+					},
+					{
+						Id:          replicationcompare.ReplicationServiceID,
+						Placement:   protocol.ModelComparison_OBJECTS,
+						Kinds:       []string{schema.ReplicationProperties},
+						ChangeKinds: []string{schema.ReplicationChange},
+					},
+					{
+						Id:          replicationcompare.TransferServiceID,
+						Placement:   protocol.ModelComparison_OBJECTS,
+						Kinds:       []string{schema.TransferProperties},
+						ChangeKinds: []string{schema.TransferChange},
+					},
+					{
+						Id:          tablecompare.ServiceID,
+						Placement:   protocol.ModelComparison_FACETS,
+						Kinds:       tablecompare.Kinds(),
+						ChangeKinds: tablecompare.ChangeKinds(),
+						OwnerKinds:  tablecompare.OwnerKinds(),
+					},
+				},
+				YamlSourceKeys: slices.Concat(
+					[]*protocol.YAMLSourceKey{
+						secretsource.YAMLKey(),
+						schema.CoordinationYAMLKey(),
+						streamingsource.YAMLKey(),
+						topicsource.YAMLKey(),
+						changefeedsource.YAMLKey(),
+					},
+					externalsource.YAMLKeys(),
+					replicationsource.YAMLKeys(),
+					tablesource.YAMLKeys(),
+					tablesource.IndexYAMLKeys(),
+					workloadsource.YAMLKeys(),
+				),
+				GoSourceDirectives: slices.Concat(
+					streamingsource.GoDirectives(),
+					tablesource.GoDirectives(),
+					changefeedsource.GoDirectives(),
+					[]*protocol.GoSourceDirective{secretsource.GoDirective(), schema.CoordinationGoDirective()},
+					topicsource.GoDirectives(),
+					replicationsource.GoDirectives(),
+					externalsource.GoDirectives(),
+					workloadsource.GoDirectives(),
+				),
+				LintRules:           migrationlint.Rules(),
+				QueryDialect:        queryDialect(),
+				DefaultCapabilities: defaultCapabilities(),
+				SqlSchema:           sqlSchemaDeclaration(),
+				Features:            engineFeatures(),
+				Embeddings:          &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes},
+				CommonObjects:       commonobject.Support(),
+				ScopeSelections:     scopeSelections(),
+				DatabaseKinds:       databaseKinds(),
+				HclSource: &protocol.HCLSourceDeclaration{
+					Blocks:      []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock(), tablesource.HCLIndexBlock(), tablesource.HCLPlatformBlock()},
+					HeaderKinds: []string{"coordination_node"},
+				},
+				GoHeaderKinds: yqlschema.HeaderKinds(),
+				Reports:       schema.Reports(),
+			},
+		},
 	}
 	withSerialSequences(description.Engines[0])
 	return description
+}
+
+// databaseKinds are the kinds whose objects belong to the database rather
+// than to a directory of it: resource pools and their classifiers, which
+// YDB names by name alone.
+func databaseKinds() []string {
+	return []string{schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties}
 }
 
 // withSerialSequences adds the change of a Serial column's sequence to the
@@ -369,11 +644,44 @@ func withSerialSequences(engine *protocol.Engine) {
 	}
 }
 
+// identifierRules are the engine's identifier rules. A directory path is one
+// schema, so its components nest under /, and a coverage region can cover a
+// directory and everything below it (schema.subtree-coverage).
 func identifierRules() *protocol.IdentifierRules {
 	return &protocol.IdentifierRules{
 		TableNames: protocol.IdentifierRules_EXACT, ColumnNames: protocol.IdentifierRules_EXACT,
 		IndexNames: protocol.IdentifierRules_EXACT, IndexNamespace: protocol.IdentifierRules_TABLE,
+		SchemaSeparator: schema.SchemaSeparator,
 	}
+}
+
+// negotiatedRules are the identifier rules as the host holds them: without
+// the schema separator for a host that does not list
+// schema.subtree-coverage, as the SDK leaves it out of the description that
+// host reads. A request a host sends carries these rules back.
+func negotiatedRules(ctx context.Context) *protocol.IdentifierRules {
+	rules := identifierRules()
+	if !slices.Contains(provider.HostFeatures(ctx), provider.SchemaSubtreeCoverageFeature) {
+		rules.SchemaSeparator = ""
+	}
+	return rules
+}
+
+// rulesMatch reports whether rules a host sent are the engine's. The
+// separator may be absent: a host that does not list schema.subtree-coverage
+// sends none, and a host that does may still build a request's rules from an
+// identity that does not carry it. It decides only subtree regions, which the
+// SDK refuses in a comparison whose rules carry no separator, so an absent
+// separator is accepted and a different one is not.
+func rulesMatch(rules *protocol.IdentifierRules) bool {
+	sent, want := proto.CloneOf(rules), identifierRules()
+	if sent == nil {
+		return false
+	}
+	if sent.SchemaSeparator == "" {
+		want.SchemaSeparator = ""
+	}
+	return proto.Equal(sent, want)
 }
 
 // Open verifies a native connection and server version before publishing its
@@ -423,7 +731,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	p.mu.Lock()
 	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != "", version: version, capabilities: maps.Clone(capabilities)}
 	p.mu.Unlock()
-	result := &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: commonCapabilities(ctx, capabilities), Features: negotiatedFeatures(ctx)}
+	result := &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: negotiatedRules(ctx), Capabilities: commonCapabilities(ctx, capabilities), Features: negotiatedFeatures(ctx)}
 	if slices.Contains(result.Features, provider.DatabaseContextFeature) {
 		result.Context = databaseContext(address)
 	}

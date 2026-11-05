@@ -64,3 +64,29 @@ func TestCoordinationComparisonOfflineSubprocess(t *testing.T) {
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(refused, qt.IsNil)
 }
+
+// A provider process counts what it compares for a host that lists the feature,
+// and the same comparison for a host that does not carries no count, which that
+// host cannot ask for.
+func TestComparisonCountsOfflineSubprocess(t *testing.T) {
+	c := testcheck.New(t)
+	request, err := testcomparison.Request(&schema.CoordinationIntent{}, &Ydb_Coordination.DescribeNodeResult{Config: &Ydb_Coordination.Config{}, Self: &Ydb_Scheme.Entry{Owner: "owner"}})
+	c.Assert(err, qt.IsNil)
+
+	counting := startProviderFor(c, provider.ComparisonCountsFeature)
+	request.TargetFeatures = []string{provider.ComparisonCountsFeature}
+	compared, err := counting.CompareModels(t.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(compared.GetCounts(), qt.HasLen, 1)
+	c.Assert(compared.GetCounts()[0].GetKind(), qt.Equals, schema.CoordinationChange)
+	c.Assert(compared.GetCounts()[0].GetMatched(), qt.Equals, uint32(1))
+
+	plain := startProviderFor(c)
+	refused, err := plain.CompareModels(t.Context(), request)
+	c.Assert(err, qt.ErrorIs, provider.ErrProtocol)
+	c.Assert(refused, qt.IsNil)
+	request.TargetFeatures = nil
+	compared, err = plain.CompareModels(t.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(compared.GetCounts(), qt.HasLen, 0)
+}

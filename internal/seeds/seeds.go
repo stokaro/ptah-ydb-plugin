@@ -288,6 +288,7 @@ func Retryable(err error) bool {
 	}
 	deterministic := false
 	ydb.IterateByIssues(err, func(_ string, code Ydb.StatusIds_StatusCode, _ uint32) {
+		// #nosec G115 -- the SDK passes the issue's uint32 issue_code as this int32 type, and the conversion restores it
 		deterministic = deterministic || ydbfailure.RepeatedAbort(uint32(code))
 	})
 	return !deterministic

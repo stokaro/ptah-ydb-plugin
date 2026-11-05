@@ -40,8 +40,16 @@ func runHost(c *qt.C, host string, args ...string) (string, error) {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), 5*time.Minute)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, host, args...).CombinedOutput()
+	output, err := testCommand(ctx, host, args...).CombinedOutput()
 	return string(output), err
+}
+
+// testCommand is the process that runs binary with args, killed when ctx
+// ends. Every program an integration test starts goes through it: the pinned
+// host, ptah-compat, docker and the go tool.
+func testCommand(ctx context.Context, binary string, args ...string) *exec.Cmd {
+	// #nosec G702 -- binary is the host or ptah-compat the test environment names, docker or go, and args are the test's own flags, fixture paths and database addresses; exec passes them as argv, not through a shell
+	return exec.CommandContext(ctx, binary, args...)
 }
 
 // writeFiles writes each body into dir under its name and returns dir.

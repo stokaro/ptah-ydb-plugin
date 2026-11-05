@@ -23,6 +23,9 @@ type Family struct {
 	ServiceID string
 	// Kind is the model kind of both representations of the object.
 	Kind string
+	// ChangeKind is the model kind of the changes Change captures, which the
+	// comparison counts the family's objects under.
+	ChangeKind string
 	// Capability is the session fact that a present object requires, or ""
 	// for a family that checks its capabilities itself.
 	Capability string
@@ -130,8 +133,13 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest, family
 	if request.GetComparisonId() != family.ServiceID || !slices.Equal(request.Kinds, []string{family.Kind}) {
 		return nil, fmt.Errorf("unknown %s comparison", family.Noun)
 	}
-	result, _, err := compare(ctx, request, []Family{family})
-	return result, err
+	families := []Family{family}
+	result, decided, err := compare(ctx, request, families)
+	if err != nil {
+		return nil, err
+	}
+	countDecided(request, result, families, decided)
+	return result, nil
 }
 
 // Decided is one object a comparison of several families decided: both
@@ -169,7 +177,44 @@ func Families(ctx context.Context, request *protocol.CompareModelsRequest, famil
 	if len(selected) == 0 || len(selected) != len(request.Kinds) || !slices.IsSortedFunc(request.Kinds, strings.Compare) || len(slices.Compact(slices.Clone(request.Kinds))) != len(request.Kinds) {
 		return nil, nil, fmt.Errorf("unknown %s comparison", families[0].Noun)
 	}
-	return compare(ctx, request, selected)
+	result, decided, err := compare(ctx, request, selected)
+	if err != nil {
+		return nil, nil, err
+	}
+	countDecided(request, result, families, decided)
+	return result, decided, nil
+}
+
+// countDecided states, for a request whose target features ask, how many
+// objects each family of the service holds on each side of the comparison.
+// Every family gets an entry, whether or not the request names its kind: a
+// change kind a service does not count has no inventory entry at all, and a
+// family the batch holds nothing of has zeros.
+//
+// An object counts as matched where both sides hold it, whether or not it
+// differs and however the plan makes its change, as added where only the
+// desired side holds it, and as removed where only the current side does. An
+// object compareObject excludes, reserves, keeps or leaves undecided is no
+// Decided, so it counts on neither side.
+func countDecided(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, families []Family, decided []Decided) {
+	if !slices.Contains(request.GetTargetFeatures(), provider.ComparisonCountsFeature) {
+		return
+	}
+	for _, family := range families {
+		count := &protocol.ComparisonCount{Kind: family.ChangeKind}
+		for _, pair := range decided {
+			switch {
+			case pair.Kind != family.Kind:
+			case pair.Desired != nil && pair.Current != nil:
+				count.Matched++
+			case pair.Desired != nil:
+				count.Added++
+			default:
+				count.Removed++
+			}
+		}
+		result.Counts = append(result.Counts, count)
+	}
 }
 
 func compare(ctx context.Context, request *protocol.CompareModelsRequest, families []Family) (*protocol.ComparedModels, []Decided, error) {

@@ -147,7 +147,7 @@ func TestNativeExecutionFailureAndBatchPreflight(t *testing.T) {
 	result, err := client.Execute(c.Context(), request)
 	c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
-	_, err = opened.DB.ExecContext(c.Context(), "SELECT * FROM `"+table+"`")
+	_, err = opened.DB.ExecContext(c.Context(), "SELECT * FROM `"+table+"`") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNotNil)
 
 	// YDB refuses the third unit while it parses it, so nothing of it was
@@ -240,7 +240,7 @@ func TestNativeTransactionRefusesDDLAndControlEscape(t *testing.T) {
 			c.Assert(finished.Outcome, qt.Equals, protocol.TransactionResult_ROLLED_BACK)
 		}
 	}
-	_, err = opened.DB.ExecContext(c.Context(), "SELECT * FROM `"+table+"`")
+	_, err = opened.DB.ExecContext(c.Context(), "SELECT * FROM `"+table+"`") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Check(err, qt.IsNotNil)
 	if err == nil {
 		_, cleanupErr := opened.DB.ExecContext(c.Context(), "DROP TABLE `"+table+"`")
@@ -295,7 +295,7 @@ func TestNativeSerializableTransactionRejectsRangeConflict(t *testing.T) {
 	// Both transactions observe the absent range and then write distinct rows.
 	// Committing both would admit a cycle in the serialization order.
 	c.Assert(executeSQL(c, client, session.Id, tx.Id, "SELECT id FROM `"+table+"` WHERE id >= 1u").Outcome, qt.Equals, protocol.Execution_APPLIED)
-	_, err = opened.DB.ExecContext(c.Context(), "SELECT id FROM `"+table+"` WHERE id >= 1u; UPSERT INTO `"+table+"` (id) VALUES (2u)")
+	_, err = opened.DB.ExecContext(c.Context(), "SELECT id FROM `"+table+"` WHERE id >= 1u; UPSERT INTO `"+table+"` (id) VALUES (2u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	// YDB aborts the transaction at the write or at its commit, and either
 	// way it applies nothing.

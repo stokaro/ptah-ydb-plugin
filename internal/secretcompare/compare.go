@@ -31,7 +31,7 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 		return nil, err
 	}
 	family := objectcompare.Family{
-		ServiceID: ServiceID, Kind: schema.SecretProperties, Capability: secrets.Capability, ChangeCapability: true, Noun: "secret", DottedLimits: true,
+		ServiceID: ServiceID, Kind: schema.SecretProperties, ChangeKind: schema.SecretChange, Capability: secrets.Capability, ChangeCapability: true, Noun: "secret", DottedLimits: true,
 		// YDB drops a secret a data source reads by its path and keeps the
 		// source, which then names a secret that is gone.
 		RequiredRemoval: "is dropped while a declared object reads it by its path",

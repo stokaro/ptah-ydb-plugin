@@ -42,7 +42,7 @@ func CompareTransfers(ctx context.Context, request *protocol.CompareModelsReques
 // ReplicationFamily is the async replication's part of a comparison.
 func ReplicationFamily() objectcompare.Family {
 	return specFamily[replication.ReplicationSpec]{
-		serviceID: ReplicationServiceID, kind: schema.ReplicationProperties, capability: replication.CapabilityReplication,
+		serviceID: ReplicationServiceID, kind: schema.ReplicationProperties, changeKind: schema.ReplicationChange, capability: replication.CapabilityReplication,
 		noun:     "async replication",
 		observed: schema.ObservedReplication,
 		desired:  schema.DesiredReplication,
@@ -58,7 +58,7 @@ func ReplicationFamily() objectcompare.Family {
 // TransferFamily is the transfer's part of a comparison.
 func TransferFamily() objectcompare.Family {
 	return specFamily[replication.TransferSpec]{
-		serviceID: TransferServiceID, kind: schema.TransferProperties, capability: replication.CapabilityTransfers,
+		serviceID: TransferServiceID, kind: schema.TransferProperties, changeKind: schema.TransferChange, capability: replication.CapabilityTransfers,
 		noun:     "transfer",
 		observed: schema.ObservedTransfer,
 		desired:  schema.DesiredTransfer,
@@ -73,7 +73,7 @@ func TransferFamily() objectcompare.Family {
 // comparison: its names, and how a spec of type S is decoded from each side,
 // compared, kept and validated. Both kinds share every other part.
 type specFamily[S any] struct {
-	serviceID, kind, capability, noun string
+	serviceID, kind, changeKind, capability, noun string
 	// observed decodes the read object into its spec and reported state.
 	observed func(*protocol.Envelope) (S, string, error)
 	// desired decodes the declared object into its spec.
@@ -93,7 +93,7 @@ type specFamily[S any] struct {
 // validation is reported as having no declaration that keeps it.
 func (f specFamily[S]) family() objectcompare.Family {
 	return objectcompare.Family{
-		ServiceID: f.serviceID, Kind: f.kind, Capability: f.capability, ChangeCapability: true,
+		ServiceID: f.serviceID, Kind: f.kind, ChangeKind: f.changeKind, Capability: f.capability, ChangeCapability: true,
 		Noun:         f.noun,
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(f.kind) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {

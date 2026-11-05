@@ -334,13 +334,18 @@ func ColumnLocalIndexModel() *protocol.ValueModel {
 func buildColumnLocalIndexOperationModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": ColumnLocalIndexOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
-		"message":      string((&native.ColumnTableLocalIndexAlteration{}).ProtoReflect().Descriptor().FullName()),
-		"index":        "add, drop, or both for a rename; add names one column, its kind and every setting, defaults included, and no storage; drop is the index as the table held it; a rename's add is drop under another name",
-		"render":       "YQL ALTER TABLE ... ADD INDEX `name` LOCAL USING kind ON (`column`) WITH (...) for add, ALTER TABLE ... DROP INDEX `name` for drop, ALTER TABLE ... RENAME INDEX `old` TO `new` for a rename, as the host's embedded engine writes them",
-		"execution":    "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
-		"precondition": "the table is a column table; for add it holds no index of that name and holds the column, Utf8 for an n-gram index; for drop and a rename it holds the index as captured, and for a rename no index under the new name; the session must name the monitoring endpoint, which the read uses",
-		"confirmation": "read the table service's and the monitoring endpoint's descriptions back: the added index is held as requested, the dropped one is gone, or the renamed one is gone under its old name and held as captured under its new one, and every other local index, the layout and the TTL are unchanged",
-		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
+		"message": string((&native.ColumnTableLocalIndexAlteration{}).ProtoReflect().Descriptor().FullName()),
+		"index":   "add, drop, or both for a rename; add names one column, its kind and every setting, defaults included, and no storage; drop is the index as the table held it; a rename's add is drop under another name",
+		"render": "YQL ALTER TABLE ... ADD INDEX `name` LOCAL USING kind ON (`column`) WITH (...) for add, ALTER TABLE ... DROP INDEX `name` for " +
+			"drop, ALTER TABLE ... RENAME INDEX `old` TO `new` for a rename, as the host's embedded engine writes them",
+		"execution": "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
+		"precondition": "the table is a column table; for add it holds no index of that name and holds the column, Utf8 for an n-gram index; for drop " +
+			"and a rename it holds the index as captured, and for a rename no index under the new name; the session must name the monitoring endpoint, " +
+			"which the read uses",
+		"confirmation": "read the table service's and the monitoring endpoint's descriptions back: the added index is held as requested, the dropped one " +
+			"is gone, or the renamed one is gone under its old name and held as captured under its new one, and every other local index, the layout and the " +
+			"TTL are unchanged",
+		"database": "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
 		panic(err)

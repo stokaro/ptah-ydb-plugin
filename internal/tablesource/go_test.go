@@ -1,6 +1,7 @@
 package tablesource_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -356,16 +357,77 @@ func TestTableDirective_FailurePath(t *testing.T) {
 	}
 }
 
-// The provider claims the attributes of an index directive in order to refuse
-// them by name: the row-table model holds no index option, so one accepted
-// would be dropped.
-func TestIndexDirective_RefusedByName(t *testing.T) {
-	for _, attribute := range []string{"auto_partitioning_by_load", "read_replicas_settings", "tokenizer", "false_positive_probability", "distance", "clusters"} {
-		t.Run(attribute, func(t *testing.T) {
+// indexFacetsContext is the context of a call from a host that reads index
+// facets, without which the provider refuses a declared index setting.
+func indexFacetsContext(c *qt.C) context.Context {
+	return provider.ContextWithHostFeatures(c.Context(), []string{provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.ObservedIndexFacetsFeature})
+}
+
+// TestIndexDirective_HappyPath reads the partitioning and the read replicas
+// an index directive writes into the facet of the index it describes, with
+// the spellings a table directive takes, as the host's embedded engine reads
+// them.
+func TestIndexDirective_HappyPath(t *testing.T) {
+	tests := []struct {
+		name        string
+		attributes  map[string]string
+		wantPayload string
+	}{
+		{"partitioning", map[string]string{"auto_partitioning_by_load": "enabled", "auto_partitioning_min_partitions_count": "2"},
+			`{"partitioningSettings":{"minPartitionsCount":"2","partitioningByLoad":"ENABLED"}}`},
+		{"every setting", map[string]string{"auto_partitioning_by_size": "DISABLED", "auto_partitioning_partition_size_mb": "512", "auto_partitioning_by_load": "ENABLED",
+			"auto_partitioning_min_partitions_count": "3", "auto_partitioning_max_partitions_count": "9", "read_replicas_settings": "any_az:2"},
+			`{"partitioningSettings":{"maxPartitionsCount":"9","minPartitionsCount":"3","partitionSizeMb":"512","partitioningByLoad":"ENABLED","partitioningBySize":"DISABLED"},` +
+				`"readReplicasSettings":{"anyAzReadReplicasCount":"2"}}`},
+		{"no read replicas", map[string]string{"read_replicas_settings": "PER_AZ:0"}, `{"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := goRequest(c, indexDeclaration(2, "Item", map[string]string{attribute: "x"}))
-			decoded, err := backend.New().DecodeSource(c.Context(), request)
-			c.Assert(err, qt.ErrorMatches, `(?s).*`+attribute+` is not supported by the YDB provider yet: an index states no settings of its own.*`)
+			decoded, err := backend.New().DecodeSource(indexFacetsContext(c), goRequest(c, indexDeclaration(2, "Item", test.attributes)))
+			c.Assert(err, qt.IsNil)
+			values := decoded.Documents[0].Fragments[0].Values
+			c.Assert(values, qt.HasLen, 1)
+			c.Assert(values[0].Value.Value.Kind, qt.Equals, schema.IndexSettingsProperties)
+			c.Assert(string(values[0].Value.Value.Payload), qt.Equals, test.wantPayload)
+			owner := values[0].Value.Value.Owner
+			c.Assert([]string{owner.Kind, owner.Schema, strings.Join(owner.Path, "/"), owner.Name}, qt.DeepEquals, []string{"index", "", "items", "by_body"})
+		})
+	}
+}
+
+// TestIndexDirective_FailurePath refuses by name an index option the
+// provider does not carry from a source, a value a setting cannot take where
+// it was written, and a declared setting from a host that reads no index's
+// settings, whose comparison could not see what an index holds.
+func TestIndexDirective_FailurePath(t *testing.T) {
+	facets := []string{provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.ObservedIndexFacetsFeature}
+	tests := []struct {
+		name       string
+		attributes map[string]string
+		features   []string
+		wantErr    string
+	}{
+		{"a full-text option", map[string]string{"tokenizer": "x"}, facets, `(?s).*tokenizer is not supported by the YDB provider yet: an index directive or entry declares the partitioning and read replicas of a global index here.*`},
+		{"a local index option", map[string]string{"false_positive_probability": "0.1"}, facets, `(?s).*false_positive_probability is not supported by the YDB provider yet.*`},
+		{"a vector setting", map[string]string{"distance": "cosine"}, facets, `(?s).*distance is not supported by the YDB provider yet.*`},
+		{"a vector cluster count", map[string]string{"clusters": "4"}, facets, `(?s).*clusters is not supported by the YDB provider yet.*`},
+		{"a boolean for a switch", map[string]string{"auto_partitioning_by_load": "true"}, facets,
+			`(?s).*index "by_body": invalid auto_partitioning_by_load "true": write ENABLED or DISABLED.*`},
+		{"a count of zero", map[string]string{"auto_partitioning_min_partitions_count": "0"}, facets,
+			`(?s).*index "by_body": invalid auto_partitioning_min_partitions_count "0": write a whole number of at least 1.*`},
+		{"read replicas with no mode", map[string]string{"read_replicas_settings": "2"}, facets, `(?s).*index "by_body": invalid read_replicas_settings "2": write PER_AZ:<n>.*`},
+		{"a minimum above the maximum", map[string]string{"auto_partitioning_min_partitions_count": "5", "auto_partitioning_max_partitions_count": "2"}, facets,
+			`(?s).*index "by_body": YDB minimum partitions exceed maximum.*`},
+		{"a host that reads no index settings", map[string]string{"auto_partitioning_by_load": "ENABLED"}, make([]string, 0),
+			`(?s).*index "by_body" declares its partitioning or read replicas, which this provider compares only with a host that negotiates schema.observed-index-facets.*`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			ctx := provider.ContextWithHostFeatures(c.Context(), test.features)
+			decoded, err := backend.New().DecodeSource(ctx, goRequest(c, indexDeclaration(2, "Item", test.attributes)))
+			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
 			c.Assert(decoded, qt.IsNil)
 		})

@@ -54,6 +54,13 @@ func normalizeColumnStorage(value *native.ColumnStorageObservation) error {
 	return validateColumnTTL(value.Ttl)
 }
 
+// CaptureColumnStorageIntent writes the storage a source declares for a column
+// table as the provider's desired facet of that table.
+func CaptureColumnStorageIntent(owner *protocol.Reference, intent *native.ColumnStorageIntent) (*protocol.Envelope, error) {
+	definition := NativeDesiredModel(ColumnStorageProperties)
+	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: ColumnStorageProperties, Owner: proto.CloneOf(owner)}, definition, intent, NormalizeDesired)
+}
+
 // validateColumnStorageIntent checks a declaration of column storage. A
 // declaration may leave the hash key (the server hashes by the primary key),
 // the shard count and the data channel count to the server, and states the
@@ -131,29 +138,8 @@ func validateLocalIndexes(indexes []*native.LocalIndexObservation, declared bool
 			return fmt.Errorf("invalid or duplicate YDB local index")
 		}
 		names[index.Name] = true
-		var extractor, bits string
-		var probability *float64
-		switch kind := index.Kind.(type) {
-		case *native.LocalIndexObservation_Bloom:
-			extractor, bits, probability = kind.Bloom.DataExtractor, kind.Bloom.BitsStorage, kind.Bloom.FalsePositiveProbability
-		case *native.LocalIndexObservation_Ngram:
-			if len(index.Columns) != 1 || (kind.Ngram.NgramSize != nil && kind.Ngram.GetNgramSize() == 0) {
-				return fmt.Errorf("invalid YDB ngram index")
-			}
-			extractor, bits, probability = kind.Ngram.DataExtractor, kind.Ngram.BitsStorage, kind.Ngram.FalsePositiveProbability
-		case *native.LocalIndexObservation_MinMax:
-			if len(index.Columns) != 1 {
-				return fmt.Errorf("invalid YDB min/max index")
-			}
-			extractor = kind.MinMax.DataExtractor
-		default:
-			return fmt.Errorf("missing YDB local index kind")
-		}
-		if (extractor != "" && extractor != "DEFAULT") || (bits != "" && bits != "SIMPLE_STRING") {
-			return fmt.Errorf("unsupported YDB local index encoding")
-		}
-		if probability != nil && (math.IsNaN(*probability) || math.IsInf(*probability, 0) || *probability <= 0 || *probability >= 1) {
-			return fmt.Errorf("invalid YDB local index probability")
+		if err := validateLocalIndexKind(index); err != nil {
+			return err
 		}
 		if declared && index.StorageId == "" && !index.InheritPortionStorage {
 			continue
@@ -165,6 +151,38 @@ func validateLocalIndexes(indexes []*native.LocalIndexObservation, declared bool
 		} else if index.StorageId != "__DEFAULT" && (index.StorageId != "" || !index.InheritPortionStorage) {
 			return fmt.Errorf("unsupported YDB bloom storage")
 		}
+	}
+	return nil
+}
+
+// validateLocalIndexKind checks the kind of one local index of a column
+// table: a kind is present, an ngram or min/max index covers one column, an
+// ngram size is not zero, the encodings are the ones YDB writes and a false
+// positive probability lies strictly between 0 and 1.
+func validateLocalIndexKind(index *native.LocalIndexObservation) error {
+	var extractor, bits string
+	var probability *float64
+	switch kind := index.Kind.(type) {
+	case *native.LocalIndexObservation_Bloom:
+		extractor, bits, probability = kind.Bloom.DataExtractor, kind.Bloom.BitsStorage, kind.Bloom.FalsePositiveProbability
+	case *native.LocalIndexObservation_Ngram:
+		if len(index.Columns) != 1 || (kind.Ngram.NgramSize != nil && kind.Ngram.GetNgramSize() == 0) {
+			return fmt.Errorf("invalid YDB ngram index")
+		}
+		extractor, bits, probability = kind.Ngram.DataExtractor, kind.Ngram.BitsStorage, kind.Ngram.FalsePositiveProbability
+	case *native.LocalIndexObservation_MinMax:
+		if len(index.Columns) != 1 {
+			return fmt.Errorf("invalid YDB min/max index")
+		}
+		extractor = kind.MinMax.DataExtractor
+	default:
+		return fmt.Errorf("missing YDB local index kind")
+	}
+	if (extractor != "" && extractor != "DEFAULT") || (bits != "" && bits != "SIMPLE_STRING") {
+		return fmt.Errorf("unsupported YDB local index encoding")
+	}
+	if probability != nil && (math.IsNaN(*probability) || math.IsInf(*probability, 0) || *probability <= 0 || *probability >= 1) {
+		return fmt.Errorf("invalid YDB local index probability")
 	}
 	return nil
 }

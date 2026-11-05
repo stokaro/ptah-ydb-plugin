@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/rand"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -82,7 +81,7 @@ func hostExport(c *qt.C, arguments ...string) (string, string) {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, append(arguments, "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"))...)
+	cmd := testCommand(ctx, host, append(arguments, "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"))...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	c.Assert(cmd.Run(), qt.IsNil, qt.Commentf("%s\n%s", stdout.String(), stderr.String()))
