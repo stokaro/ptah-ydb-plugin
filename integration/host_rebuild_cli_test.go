@@ -79,6 +79,28 @@ func TestHostSchemaApplyRebuildsWhenAsked_HappyPath(t *testing.T) {
 	c.Assert(f.names(c), qt.DeepEquals, []string{"items"})
 }
 
+// Ported from the `schema apply` half of the host's
+// TestYDBRebuild_AConversionFailureLeavesTheOldTable: a value the new type
+// cannot hold fails the copy, which is one data query, so nothing is copied
+// and the old table keeps its type and its rows. The host's embedded engine
+// printed YDB's answer, the copy's check that names the table and the column;
+// through a provider the run stops after the creation of the new table, with
+// the same sentence in the reason.
+func TestHostSchemaApplyNamesTheColumnARebuildCannotConvert_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	directory, absolute, after, f := hostRebuildFixtureOf(c, "TEXT", "BIGINT", "(1l, 'x'u), (2l, '5'u)")
+
+	failure, err := hostCommand(c, "schema", "apply", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", after, "--schemas", directory,
+		"--auto-approve", "--tx-mode", "none", "--allow-table-rebuild")
+
+	c.Assert(err, qt.IsNotNil, qt.Commentf("schema apply --allow-table-rebuild:\n%s", failure))
+	c.Assert(failure, qt.Contains, "provider execution: PARTIAL (1 units confirmed applied): YDB refused the statement: "+
+		"rebuilding table "+directory+".items: column n holds a value that does not convert to its new type (PRECONDITION_FAILED)")
+	c.Assert(heldColumnTypes(c, f.opened, absolute)["n"], qt.Equals, "Optional<Utf8>")
+	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+absolute+"` WHERE `n` = 'x'u"), qt.Equals, int64(1))
+	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+path.Join(f.database, directory, "__ptah_rebuild_items")+"`"), qt.Equals, int64(0))
+}
+
 // Without --allow-table-rebuild the apply is refused, names the flag, and
 // changes nothing.
 func TestHostSchemaApplyRefusesARebuildNotAskedFor_FailurePath(t *testing.T) {

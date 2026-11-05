@@ -242,6 +242,14 @@ func (s *session) unitFailure(ctx context.Context, request *protocol.ExecuteRequ
 				}
 			}
 		}
+		if unit.GetNative() != nil {
+			// A native unit that runs one query after its reads, such as a
+			// rebuild's copy, failed whole at that query when it failed
+			// there; its text says what YDB's answer proves.
+			if query, ok := errors.AsType[*nativeapi.QueryFailure](err); ok {
+				failure.Text = query.Text
+			}
+		}
 		answer := ydbfailure.Read(err)
 		answer.FlagsRead = s.connection.HasMonitoring()
 		if s.realm {
