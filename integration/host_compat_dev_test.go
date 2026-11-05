@@ -80,7 +80,9 @@ table "orders" {
 `
 
 // devContainers lists the containers a provider started for a dev database,
-// by the label it gives each one.
+// by the label it gives each one. The daemon may be shared, so a test compares
+// what a run leaves with what was there before it (see leftContainers) rather
+// than the whole list: another run may remove its own container meanwhile.
 func devContainers(c *qt.C) []string {
 	c.Helper()
 	listed, err := exec.CommandContext(c.Context(), "docker", "ps", "-aq", "--no-trunc", "--filter", "label="+devdatabase.ContainerLabel).Output()
@@ -94,8 +96,9 @@ func devContainers(c *qt.C) []string {
 // on the compatibility surface docker://ydb is a Ptah extension. The default
 // profile hands it to this provider, which starts the dev database; migrate
 // diff replays the directory there and writes a migration of only the table
-// the directory lacks, and no container is left. migrate diff plans in the
-// exact statement style, which the provider honors (planning.statement-style).
+// the directory lacks, and the run leaves no container. migrate diff plans in
+// the exact statement style, which the provider honors
+// (planning.statement-style).
 func TestHostCompatMigrateDiffOnADockerDevDatabase_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	binary, _ := hostCompat(c)
@@ -119,5 +122,10 @@ func TestHostCompatMigrateDiffOnADockerDevDatabase_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(string(body), qt.Contains, "CREATE TABLE `app/orders`")
 	c.Assert(string(body), qt.Not(qt.Contains), "`app/users`")
-	c.Assert(devContainers(c), qt.DeepEquals, before)
+	c.Assert(leftContainers(before, devContainers(c)), qt.HasLen, 0)
+}
+
+// leftContainers is the containers of after that before did not list.
+func leftContainers(before, after []string) []string {
+	return slices.DeleteFunc(slices.Clone(after), func(container string) bool { return slices.Contains(before, container) })
 }

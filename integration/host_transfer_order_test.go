@@ -10,7 +10,6 @@ import (
 	"path"
 	"slices"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -21,21 +20,9 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
-// operationOrder lists the native operations an apply printed, in plan
+// operationOrder lists the native operations an apply planned, in plan
 // order, each as its kind and subject.
-func operationOrder(output string) []string {
-	var listed []string
-	lines := strings.Split(output, "\n")
-	for i, line := range lines {
-		kind, found := strings.CutPrefix(line, "Native operation: github.com/stokaro/ptah-ydb-plugin/")
-		if !found || i+1 >= len(lines) {
-			continue
-		}
-		subject, _, _ := strings.Cut(strings.TrimSpace(lines[i+1]), ":")
-		listed = append(listed, kind+" "+subject[strings.LastIndex(subject, " ")+1:])
-	}
-	return listed
-}
+func operationOrder(output string) []string { return pluginUnits(output) }
 
 // The host plans an async replication and its source table from one YAML
 // document: the table is created first and the replication after it, which

@@ -20,8 +20,12 @@ func slot(subject *protocol.ComparisonIdentity) *protocol.ComparisonIdentity {
 	value.Database = &protocol.ComparisonPart{}
 	return value
 }
+
+// isSchemeSubject reports whether subject occupies a scheme path of its own:
+// a path, a table, a view or a native object. A view the host creates or
+// drops is an entry of its directory, as a table is.
 func isSchemeSubject(subject *protocol.ComparisonIdentity) bool {
-	return subject.GetKind() == PathKind || subject.GetKind() == "table" || schema.IsNativeObject(subject.GetKind())
+	return subject.GetKind() == PathKind || subject.GetKind() == "table" || subject.GetKind() == "view" || schema.IsNativeObject(subject.GetKind())
 }
 func samePath(a, b *protocol.ComparisonIdentity) bool {
 	return isSchemeSubject(a) && isSchemeSubject(b) && provider.CompareIdentities(slot(a), slot(b)) == 0
