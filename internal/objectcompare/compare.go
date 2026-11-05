@@ -80,6 +80,13 @@ type Family struct {
 	// it, which leaves it undecided rather than preserved, or "". A nil
 	// Unkeepable keeps every object.
 	Unkeepable func(current *protocol.Envelope) (string, error)
+	// RequiredRemoval refuses a comparison that would drop an object a
+	// declared object requires, with this text after the family's noun and
+	// the object's path. It is for a family whose object the server lets go
+	// while a reader still names it, so the drop the source asks for leaves
+	// the reader naming nothing. Empty leaves such an object undecided, and
+	// the current one stays.
+	RequiredRemoval string
 }
 
 type object struct {
@@ -454,10 +461,14 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 	}
 	if item.desired == nil {
 		for _, required := range request.Required {
-			if provider.CompareIdentities(required, item.subject) == 0 {
-				undecided(result, family, item, "A declared dependency requires the "+family.Noun)
-				return nil, nil
+			if provider.CompareIdentities(required, item.subject) != 0 {
+				continue
 			}
+			if family.RequiredRemoval != "" {
+				return nil, authored.New(family.Noun + " " + name + " " + family.RequiredRemoval)
+			}
+			undecided(result, family, item, "A declared dependency requires the "+family.Noun)
+			return nil, nil
 		}
 	}
 	if err := family.Unsettled(item.current, item.desired); err != nil {

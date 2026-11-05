@@ -2613,7 +2613,10 @@ An absent secret is created. An existing secret is unchanged unless the
 operator requests rotation with `--rotate-secret app/pg_password`. Rotation
 of an absent declared secret creates it. A rotation request must name a
 secret retained by the selected desired schema. An omitted secret is removed
-only when desired and current coverage establish that removal.
+only when desired and current coverage establish that removal. A declaration
+that omits a secret a declared object still reads by its path is refused: YDB
+drops a secret an external data source names and keeps the source, which then
+names a secret that is gone.
 
 The `units.sensitive-inputs` service reports input names before approval.
 Previews and saved operations contain references only. Immediately before
