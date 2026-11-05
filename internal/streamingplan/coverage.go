@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"slices"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // dependencyWrites reports whether the plan writes an object a streaming

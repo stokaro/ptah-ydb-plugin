@@ -12,10 +12,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // storagePool is the storage pool kind local-ydb has, the only one its
@@ -72,7 +73,7 @@ func ttlText(ttl *options.TimeToLiveSettings) string {
 // compression and the columns placed in it, in name order. The columns of the
 // default family are not listed, as the host's reader does not list them.
 func familyTexts(described options.Description) []string {
-	placed := map[string][]string{}
+	placed := make(map[string][]string)
 	for _, column := range described.Columns {
 		if column.Family != "" && column.Family != "default" {
 			placed[column.Family] = append(placed[column.Family], column.Name)
@@ -351,7 +352,7 @@ func TestHostKeepsWhatAColumnFamilyDeclarationLeavesOut_HappyPath(t *testing.T) 
 			created, err := hostApplySource(c, directory, "go", replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"cold\" data=\""+storagePool+
 				"\" fields=\"body\"\n//ptah:schema:columnfamily name=\"warm\" fields=\"blob\"\n", ""), directory))
 			c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
-			_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u)")
+			_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u)") // #nosec G202 -- the path is a table under a directory this test generated
 			c.Assert(err, qt.IsNil)
 			source := replaceDirectory(familyDocs(test.families, ""), directory)
 			want := map[bool][]string{true: {"row-table-alter-operation " + directory + ".docs"}, false: {}}[test.moves]
@@ -386,7 +387,7 @@ func TestHostChangesColumnFamiliesInPlace_HappyPath(t *testing.T) {
 	created, err := hostApplySource(c, directory, "go",
 		replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"cold\" compression=\"lz4\" fields=\"body,blob\"\n", ""), directory))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body, blob) VALUES (1l, 'a'u, 'one'u, 'x'), (2l, 'b'u, NULL, NULL)")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body, blob) VALUES (1l, 'a'u, 'one'u, 'x'), (2l, 'b'u, NULL, NULL)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 
 	for _, step := range []struct {

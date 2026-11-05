@@ -5,11 +5,12 @@ import (
 	"context"
 	"slices"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // ServiceID names the secret planning owner.

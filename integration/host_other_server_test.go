@@ -10,9 +10,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 )
 
 // otherServerVariable names a second YDB server, for the tests whose dev

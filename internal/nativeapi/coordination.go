@@ -7,9 +7,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
@@ -19,6 +16,10 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Coordination owns raw native calls without mutation retry wrappers.

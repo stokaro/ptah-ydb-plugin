@@ -11,13 +11,14 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 )
 
 const (
@@ -380,8 +381,9 @@ func buildWorkloadOperationModel() *protocol.ValueModel {
 				"name": "the classifier's name", "before": map[string]any{"meaning": "the classifier as the database holds it; absent for a creation", "model": json.RawMessage(model(ResourcePoolClassifierProperties).DefinitionJson)},
 				"after": map[string]any{"meaning": "the declared classifier; absent for a removal", "model": json.RawMessage(NativeDesiredModel(ResourcePoolClassifierProperties).DefinitionJson)}},
 			"changes": "at least one change in all"},
-		"semantics":    "a pool creation alone: additive; any other change: behavioral; never removes state; access unchanged; never replaces the owner",
-		"execution":    "YQL classifier removals, pool removals, pool creations and changes, classifier changes, then classifier creations, each in name order, one query each, outside SQL transactions; a classifier moving to a rank another changed classifier leaves is dropped and created; no automatic retry",
+		"semantics": "a pool creation alone: additive; any other change: behavioral; never removes state; access unchanged; never replaces the owner",
+		"execution": "YQL classifier removals, pool removals, pool creations and changes, classifier changes, then classifier creations, each in name order, " +
+			"one query each, outside SQL transactions; a classifier moving to a rank another changed classifier leaves is dropped and created; no automatic retry",
 		"precondition": "before is each object as the plan read it, or its established absence; verified from .sys/resource_pools and .sys/resource_pool_classifiers immediately before dispatch; the API has no atomic compare-and-set",
 		"confirmation": "read back each declared object, or its absence after a removal",
 		"database":     "a nonempty owner database must equal the selected session database; empty selects that session database",
@@ -435,7 +437,7 @@ func CaptureWorkloadOperation(id, database string, changes WorkloadChanges) (*pr
 }
 
 func encodeWorkload(changes WorkloadChanges) ([]byte, error) {
-	payload := workloadPayload{Pools: []workloadEntry{}, Classifiers: []workloadEntry{}}
+	payload := workloadPayload{Pools: make([]workloadEntry, 0), Classifiers: make([]workloadEntry, 0)}
 	for _, change := range changes.Pools {
 		entry := workloadEntry{Name: change.Name}
 		var err error
@@ -536,71 +538,82 @@ func decodeWorkload(database string, raw []byte) (WorkloadChanges, error) {
 		return WorkloadChanges{}, fmt.Errorf("workload operation requires at least one change")
 	}
 	var changes WorkloadChanges
-	pool := func(name string, raw json.RawMessage, representation protocol.ValueInput_Representation) (*workload.PoolSpec, error) {
-		settings, err := workloadOperand(database, ResourcePoolProperties, name, raw, representation, &native.ResourcePoolSettings{})
-		if err != nil || settings == nil {
-			return nil, err
-		}
-		spec := PoolSpec(settings.(*native.ResourcePoolSettings))
-		return &spec, nil
-	}
-	classifier := func(name string, raw json.RawMessage, representation protocol.ValueInput_Representation) (*workload.ClassifierSpec, error) {
-		settings, err := workloadOperand(database, ResourcePoolClassifierProperties, name, raw, representation, &native.ResourcePoolClassifierSettings{})
-		if err != nil || settings == nil {
-			return nil, err
-		}
-		spec := ClassifierSpec(settings.(*native.ResourcePoolClassifierSettings))
-		return &spec, nil
-	}
-	names := func(entries []json.RawMessage) ([]workloadEntry, error) {
-		var decoded []workloadEntry
-		for _, raw := range entries {
-			if err := workloadKeys(raw, false, "name", "before", "after"); err != nil {
-				return nil, err
-			}
-			var entry workloadEntry
-			if err := json.Unmarshal(raw, &entry); err != nil || entry.Name == "" {
-				return nil, fmt.Errorf("workload operation requires an object name")
-			}
-			if entry.Before == nil && entry.After == nil {
-				return nil, fmt.Errorf("workload operation change of %q has no operand", entry.Name)
-			}
-			if len(decoded) > 0 && strings.Compare(decoded[len(decoded)-1].Name, entry.Name) >= 0 {
-				return nil, fmt.Errorf("workload operation changes must name each object once, in name order")
-			}
-			decoded = append(decoded, entry)
-		}
-		return decoded, nil
-	}
-	pools, err := names(payload.Pools)
+	pools, err := workloadEntries(payload.Pools)
 	if err != nil {
 		return WorkloadChanges{}, err
 	}
 	for _, entry := range pools {
 		change := workload.PoolChange{Name: entry.Name}
-		if change.Before, err = pool(entry.Name, entry.Before, protocol.ValueInput_OBSERVED); err != nil {
+		if change.Before, err = operationPoolSpec(database, entry.Name, entry.Before, protocol.ValueInput_OBSERVED); err != nil {
 			return WorkloadChanges{}, err
 		}
-		if change.After, err = pool(entry.Name, entry.After, protocol.ValueInput_DESIRED); err != nil {
+		if change.After, err = operationPoolSpec(database, entry.Name, entry.After, protocol.ValueInput_DESIRED); err != nil {
 			return WorkloadChanges{}, err
 		}
 		changes.Pools = append(changes.Pools, change)
 	}
-	classifiers, err := names(payload.Classifiers)
+	classifiers, err := workloadEntries(payload.Classifiers)
 	if err != nil {
 		return WorkloadChanges{}, err
 	}
 	for _, entry := range classifiers {
 		change := workload.ClassifierChange{Name: entry.Name}
-		if change.Before, err = classifier(entry.Name, entry.Before, protocol.ValueInput_OBSERVED); err != nil {
+		if change.Before, err = operationClassifierSpec(database, entry.Name, entry.Before, protocol.ValueInput_OBSERVED); err != nil {
 			return WorkloadChanges{}, err
 		}
-		if change.After, err = classifier(entry.Name, entry.After, protocol.ValueInput_DESIRED); err != nil {
+		if change.After, err = operationClassifierSpec(database, entry.Name, entry.After, protocol.ValueInput_DESIRED); err != nil {
 			return WorkloadChanges{}, err
 		}
 		changes.Classifiers = append(changes.Classifiers, change)
 	}
 	return changes, nil
+}
+
+// workloadEntries reads the changes of one list of a workload operation with
+// exact keys: each names an object, holds an operand and follows the one
+// before it in name order.
+func workloadEntries(entries []json.RawMessage) ([]workloadEntry, error) {
+	var decoded []workloadEntry
+	for _, raw := range entries {
+		if err := workloadKeys(raw, false, "name", "before", "after"); err != nil {
+			return nil, err
+		}
+		var entry workloadEntry
+		if err := json.Unmarshal(raw, &entry); err != nil || entry.Name == "" {
+			return nil, fmt.Errorf("workload operation requires an object name")
+		}
+		if entry.Before == nil && entry.After == nil {
+			return nil, fmt.Errorf("workload operation change of %q has no operand", entry.Name)
+		}
+		if len(decoded) > 0 && strings.Compare(decoded[len(decoded)-1].Name, entry.Name) >= 0 {
+			return nil, fmt.Errorf("workload operation changes must name each object once, in name order")
+		}
+		decoded = append(decoded, entry)
+	}
+	return decoded, nil
+}
+
+// operationPoolSpec reads one operand of a resource pool change of a workload
+// operation of database, in representation, nil for an absent one.
+func operationPoolSpec(database, name string, raw json.RawMessage, representation protocol.ValueInput_Representation) (*workload.PoolSpec, error) {
+	settings, err := workloadOperand(database, ResourcePoolProperties, name, raw, representation, &native.ResourcePoolSettings{})
+	if err != nil || settings == nil {
+		return nil, err
+	}
+	spec := PoolSpec(settings.(*native.ResourcePoolSettings))
+	return &spec, nil
+}
+
+// operationClassifierSpec reads one operand of a resource pool classifier
+// change of a workload operation of database, in representation, nil for an
+// absent one.
+func operationClassifierSpec(database, name string, raw json.RawMessage, representation protocol.ValueInput_Representation) (*workload.ClassifierSpec, error) {
+	settings, err := workloadOperand(database, ResourcePoolClassifierProperties, name, raw, representation, &native.ResourcePoolClassifierSettings{})
+	if err != nil || settings == nil {
+		return nil, err
+	}
+	spec := ClassifierSpec(settings.(*native.ResourcePoolClassifierSettings))
+	return &spec, nil
 }
 
 // workloadOperand normalizes one operand of a workload operation through the

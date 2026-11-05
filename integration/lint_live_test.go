@@ -13,13 +13,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The tests in this file run what the provider's YD rules judge on the server
@@ -88,7 +89,7 @@ func (s lintSession) reported(c *qt.C, setup []string, statement string) []strin
 		},
 	})
 	c.Assert(err, qt.IsNil)
-	rules := []string{}
+	rules := make([]string, 0)
 	for _, finding := range checked.Findings {
 		if finding.File == 1 {
 			rules = append(rules, finding.Code)
@@ -305,10 +306,10 @@ func TestLintUniqueIndexRuleFollowsTheFlag(t *testing.T) {
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	newClusterFlags(c, opened).set(c, map[string]bool{"EnableAddUniqueIndex": false})
 	lint := newLintSession(c)
-	table := path.Join(database, directory, "t")
-	setup := []string{"CREATE TABLE `" + table + "` (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))"}
+	tablePath := path.Join(database, directory, "t")
+	setup := []string{"CREATE TABLE `" + tablePath + "` (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))"}
 	runSetup(c, opened, setup)
-	statement := "ALTER TABLE `" + table + "` ADD INDEX t_v GLOBAL UNIQUE SYNC ON (v)"
+	statement := "ALTER TABLE `" + tablePath + "` ADD INDEX t_v GLOBAL UNIQUE SYNC ON (v)"
 
 	reported := lint.reported(c, setup, statement)
 	err := execFixtureSchema(c.Context(), opened.DB, statement)
@@ -467,7 +468,7 @@ func TestLintPartitioningChangeResetsTheSize(t *testing.T) {
 // holds, in name order, read back without the provider.
 func familyNames(c *qt.C, opened *connection.Connection, absolute string) []string {
 	c.Helper()
-	names := []string{}
+	names := make([]string, 0)
 	for _, family := range heldStorage(c, opened, absolute).Families {
 		names = append(names, strings.Fields(family)[0])
 	}

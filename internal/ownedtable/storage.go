@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"path"
+	"slices"
+	"strings"
+
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
-	"path"
-	"slices"
-	"strings"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // Check establishes absence through complete parent listings, or validates the
@@ -67,7 +69,7 @@ func (s Identity) Find(ctx context.Context, driver *ydb.Driver) (result *native.
 // an object of one of kinds.
 func (s Identity) listed(ctx context.Context, driver *ydb.Driver, kinds ...Ydb_Scheme.Entry_Type) (bool, error) {
 	client := Ydb_Scheme_V1.NewSchemeServiceClient(ydb.GRPCConn(driver))
-	parts := []string{}
+	parts := make([]string, 0)
 	if s.Directory != "" {
 		parts = strings.Split(s.Directory, "/")
 	}
@@ -88,7 +90,7 @@ func (s Identity) listed(ctx context.Context, driver *ydb.Driver, kinds ...Ydb_S
 			return false, fmt.Errorf("invalid or oversized YDB storage namespace listing")
 		}
 		var found *Ydb_Scheme.Entry
-		seen := map[string]bool{}
+		seen := make(map[string]bool)
 		for _, entry := range value.Children {
 			if !component(entry.Name) || seen[entry.Name] {
 				return false, fmt.Errorf("invalid YDB storage namespace entry")

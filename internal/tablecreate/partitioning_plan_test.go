@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // partitionedTable is a table whose partitioning is the given JSON object.

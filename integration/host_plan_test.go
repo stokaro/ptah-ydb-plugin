@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -70,7 +69,7 @@ func appliedUnits(report []byte, printed string) string {
 // the object it changes.
 func pluginUnits(output string) []string {
 	var listed []string
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		unit, found := strings.CutPrefix(line, unitPrefix+"github.com/stokaro/ptah-ydb-plugin/")
 		if !found {
 			continue
@@ -85,7 +84,7 @@ func pluginUnits(output string) []string {
 // such as the reason of an operation's assessment.
 func unitsSaying(output, text string) int {
 	count := 0
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		if strings.HasPrefix(line, unitPrefix) && strings.Contains(line, text) {
 			count++
 		}
@@ -159,7 +158,7 @@ func hostPlannedUnitsAt(c *qt.C, address, selectors, format, text string, flags 
 		arguments = append(arguments, "--schemas", selectors)
 	}
 	arguments = append(arguments, slices.Concat(flags, source)...)
-	cmd := exec.CommandContext(ctx, host, arguments...)
+	cmd := testCommand(ctx, host, arguments...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	c.Assert(cmd.Run(), qt.IsNil, qt.Commentf("%s\n%s", stdout.String(), stderr.String()))

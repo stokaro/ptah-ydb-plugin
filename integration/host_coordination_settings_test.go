@@ -12,12 +12,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 )
 
 // heldNode reads every setting of the node at absolute back through the

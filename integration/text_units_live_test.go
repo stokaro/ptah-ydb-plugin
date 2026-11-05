@@ -7,19 +7,11 @@ import (
 	"encoding/json"
 	"os"
 	"path"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -28,6 +20,14 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // heldSettings are the settings of the fixture's table the provider reads
@@ -249,7 +249,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 	c.Assert(snapshot.Tables, qt.HasLen, 2)
 	values, err := provider.InspectionValues(client.Description(), &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}}, snapshot)
 	c.Assert(err, qt.IsNil)
-	held := map[string][]any{}
+	held := make(map[string][]any)
 	for _, table := range snapshot.Tables {
 		var columns []any
 		for _, column := range table.Columns {
@@ -270,7 +270,7 @@ func TestTextUnitsCreateAsTheNativeCallSubprocess(t *testing.T) {
 	c.Assert(held["by_text"], qt.DeepEquals, held["by_call"])
 	c.Assert(len(held["by_call"]) > 2, qt.IsTrue)
 	var hits uint64
-	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+path.Join(database, directory, "by_text")+"` (first, second) VALUES (1u, 'a'u)")
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+path.Join(database, directory, "by_text")+"` (first, second) VALUES (1u, 'a'u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	c.Assert(opened.DB.QueryRowContext(ctx, "SELECT hits FROM `"+path.Join(database, directory, "by_text")+"`").Scan(&hits), qt.IsNil)
 	c.Assert(hits, qt.Equals, uint64(7))
@@ -301,7 +301,7 @@ type coordinationText struct {
 // empty mode declares the node with its defaults, and drop declares none.
 func (f *coordinationText) plan(c *qt.C, mode string, drop bool) *protocol.ComparedModels {
 	c.Helper()
-	nodes := map[string]any{}
+	nodes := make(map[string]any)
 	if !drop {
 		fields := map[string]any{"schema": f.directory}
 		if mode != "" {
@@ -466,7 +466,7 @@ func TestCoordinationStatementsOfAMigrationFileSubprocess(t *testing.T) {
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", result))
 	c.Assert(result.AppliedCount, qt.Equals, uint32(2))
 	listing := childNames(c, opened, prefix)
-	c.Assert(slices.Contains(listing, "limits"), qt.IsFalse)
+	c.Assert(listing, qt.Not(qt.Contains), "limits")
 
 	// A relative path names a node inside the realm, as it names a table there.
 	realm, root, _ := realmSession(c, client)

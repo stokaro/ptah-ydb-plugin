@@ -5,8 +5,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/yqlddl"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/yqlddl"
 )
 
 // defaultResourcePool is the pool YDB runs every query in that no classifier

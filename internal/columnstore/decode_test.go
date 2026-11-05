@@ -8,15 +8,15 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 //go:embed testdata/25-1.json
@@ -129,7 +129,7 @@ func TestCapturedTTLRetainsUnitsActionsAndPresence(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			ttl := result.Ttl.GetEnabled()
 			c.Assert(ttl.Column, qt.Equals, "at")
-			c.Assert(ttl.ColumnUnit, qt.Equals, uint64(test.unit))
+			c.Assert(ttl.ColumnUnit, qt.Equals, uint64(test.unit)) // #nosec G115 -- the rows name YDB's units, which are 0 to 4
 			c.Assert(ttl.ExpireAfterSeconds != nil, qt.Equals, test.hasExpiration)
 			c.Assert(ttl.Tiers, qt.HasLen, 2)
 			c.Assert(ttl.Tiers[0].ApplyAfterSeconds, qt.Equals, uint64(86400))
@@ -304,7 +304,7 @@ func TestMonitoringRefusesUnknownIncompleteOrConflictingSettings(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			c.Assert(strings.Contains(string(indexDescription), test.old), qt.IsTrue)
+			c.Assert(string(indexDescription), qt.Contains, test.old)
 			body := strings.Replace(string(indexDescription), test.old, test.replacement, 1)
 			result, err := columnstore.Decode([]byte(body), "/local/col_index_probe", indexTable())
 			c.Assert(result, qt.IsNil)
@@ -319,7 +319,7 @@ func TestMonitoringRefusesUnknownIncompleteOrConflictingSettings(t *testing.T) {
 func TestMonitoringPageMayHoldBytesOutsideTheDescription(t *testing.T) {
 	c := testcheck.New(t)
 	body, described := captured(c, "26-2-hash")
-	c.Assert(strings.ToValidUTF8(string(body), "") != string(body), qt.IsTrue, qt.Commentf("the capture holds no raw bytes"))
+	c.Assert(strings.ToValidUTF8(string(body), ""), qt.Not(qt.Equals), string(body), qt.Commentf("the capture holds no raw bytes"))
 	result, err := columnstore.Decode(body, "/local/probe/c1", described)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Partitions, qt.Equals, uint64(3))
@@ -337,7 +337,7 @@ func TestNativeDisagreementReturnsNoFacet(t *testing.T) {
 		{"different column order", func(v *native.ColumnTableDescribeResult) { v.Columns[0], v.Columns[1] = v.Columns[1], v.Columns[0] }},
 		{"missing column", func(v *native.ColumnTableDescribeResult) { v.Columns = v.Columns[:1] }},
 		{"nil column", func(v *native.ColumnTableDescribeResult) { v.Columns[0] = nil }},
-		{"not null override", func(v *native.ColumnTableDescribeResult) { v.Columns[1].NotNull = proto.Bool(true) }},
+		{"not null override", func(v *native.ColumnTableDescribeResult) { v.Columns[1].NotNull = new(true) }},
 		{"different hash", func(v *native.ColumnTableDescribeResult) {
 			v.PartitioningSettings = &Ydb_Table.PartitioningSettings{PartitionBy: []string{"body"}}
 		}},

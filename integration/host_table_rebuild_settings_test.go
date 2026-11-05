@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -47,7 +48,7 @@ func TestHostRebuildCarriesTheDeclaredSettings_HappyPath(t *testing.T) {
 	settings := ` auto_partitioning_by_load="ENABLED" auto_partitioning_min_partitions_count="3" read_replicas_settings="ANY_AZ:1"`
 	created, err := hostApplySource(c, directory, "go", replaceDirectory(rebuiltItems(settings, "Int32", ""), directory))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, code, n) VALUES (1ul, 'a'u, 7)")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, code, n) VALUES (1ul, 'a'u, 7)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 
 	rebuildRuns(c, directory, "go", replaceDirectory(rebuiltItems(settings, "Int64", ""), directory))
@@ -73,7 +74,7 @@ func TestHostRebuildKeepsTheTableSettingsADeclarationLeavesOut_HappyPath(t *test
 		` auto_partitioning_max_partitions_count="9" read_replicas_settings="ANY_AZ:1" key_bloom_filter="ENABLED"`
 	created, err := hostApplySource(c, directory, "go", replaceDirectory(rebuiltItems(tuned, "Int32", ""), directory))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, code, n) VALUES (1ul, 'a'u, 7)")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, code, n) VALUES (1ul, 'a'u, 7)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	want := storedTable{Families: []string{"default compression=off"}, Partitioning: "by_size=DISABLED size=0 by_load=ENABLED min=3 max=9",
 		ReadReplicas: "ANY_AZ:1", KeyBloomFilter: "ENABLED"}
@@ -154,7 +155,7 @@ func TestHostRebuildKeepsTheIndexSettingsADeclarationLeavesOut_HappyPath(t *test
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "ALTER TABLE `"+absolute+"` ALTER INDEX `items_label` SET (AUTO_PARTITIONING_BY_LOAD = ENABLED, "+
 		"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2)"), qt.IsNil)
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, code, n, label) VALUES (1ul, 'a'u, 7, 'tool'u)")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, code, n, label) VALUES (1ul, 'a'u, 7, 'tool'u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	wantTable := storedTable{Families: []string{"default compression=off"}, Partitioning: "by_size=DISABLED size=0 by_load=ENABLED min=3 max=9",
 		ReadReplicas: "ANY_AZ:1", KeyBloomFilter: "ENABLED"}

@@ -8,8 +8,9 @@ import (
 	"slices"
 	"time"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // ListedSettleBudget is how long [DescribeListed] waits for an object that a

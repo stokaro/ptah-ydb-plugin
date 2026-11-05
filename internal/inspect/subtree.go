@@ -3,8 +3,9 @@ package inspect
 import (
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // skippedReason is the knowledge of a directory an unscoped read leaves out.

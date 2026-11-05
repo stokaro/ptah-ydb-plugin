@@ -16,8 +16,6 @@ import (
 	"path"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -26,6 +24,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Page is the monitoring page a column table's description is read from, with
@@ -104,7 +105,7 @@ func Decode(body []byte, fullPath string, table *native.ColumnTableDescribeResul
 		HashColumns: slices.Clone(hash.Columns), Partitions: source.ColumnShardCount,
 		DataChannelCount: source.GetStorageConfig().GetDataChannelCount(),
 	}
-	indexIDs := map[uint64]bool{}
+	indexIDs := make(map[uint64]bool)
 	for _, index := range source.GetSchema().GetIndexes() {
 		if index.Id == 0 || indexIDs[index.Id] {
 			return nil, fmt.Errorf("invalid or duplicate YDB local index ID")
@@ -145,7 +146,7 @@ func object(data []byte) (map[string]json.RawMessage, error) {
 	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
 		return nil, fmt.Errorf("expected a JSON object")
 	}
-	members := map[string]json.RawMessage{}
+	members := make(map[string]json.RawMessage)
 	for decoder.More() {
 		token, err := decoder.Token()
 		if err != nil {
@@ -196,7 +197,7 @@ func checkColumns(source *native.MonitoringColumnSchema, table *native.ColumnTab
 		!slices.Equal(source.KeyColumnNames, table.PrimaryKey) {
 		return nil, nil, fmt.Errorf("YDB columns or primary key disagree across descriptions")
 	}
-	ids, names := map[uint64]string{}, map[string]bool{}
+	ids, names := make(map[uint64]string), make(map[string]bool)
 	for i, column := range source.Columns {
 		if column.Id == 0 || ids[column.Id] != "" || column.Name == "" || names[column.Name] {
 			return nil, nil, fmt.Errorf("invalid or duplicate YDB column identity")
@@ -217,6 +218,7 @@ func checkColumns(source *native.MonitoringColumnSchema, table *native.ColumnTab
 			typeValue = typeValue.GetOptionalType().GetItem()
 		}
 		_, primitive := typeValue.GetType().(*Ydb.Type_TypeId)
+		// #nosec G115 -- a primitive type id is one of YDB's positive enum numbers
 		if err != nil || !primitive || column.Name != nativeColumn.Name || column.Type != spelling ||
 			column.NotNull == nullable || column.TypeId != uint64(typeValue.GetTypeId()) {
 			return nil, nil, fmt.Errorf("YDB column type or nullability disagrees across descriptions")
@@ -241,7 +243,7 @@ func referencesKnown(columns []string, known map[string]bool) bool {
 	if len(columns) == 0 {
 		return false
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, name := range columns {
 		if !known[name] || seen[name] {
 			return false
@@ -344,6 +346,7 @@ func checkTTL(described *native.TtlSettings, observed *native.ColumnTTLPolicy) e
 	case *native.TtlSettings_DateTypeColumn:
 		held = []tier{{column: mode.DateTypeColumn.GetColumnName(), seconds: uint64(mode.DateTypeColumn.GetExpireAfterSeconds()), delete: true}}
 	case *native.TtlSettings_ValueSinceUnixEpoch:
+		// #nosec G115 -- a column unit is one of YDB's enum numbers, 0 to 4
 		held = []tier{{column: mode.ValueSinceUnixEpoch.GetColumnName(), unit: uint64(mode.ValueSinceUnixEpoch.GetColumnUnit()),
 			seconds: uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds()), delete: true}}
 	case *native.TtlSettings_TieredTtl:
@@ -353,6 +356,7 @@ func checkTTL(described *native.TtlSettings, observed *native.ColumnTTLPolicy) e
 			case *native.TtlTier_DateTypeColumn:
 				read = tier{column: expression.DateTypeColumn.GetColumnName(), seconds: uint64(expression.DateTypeColumn.GetExpireAfterSeconds())}
 			case *native.TtlTier_ValueSinceUnixEpoch:
+				// #nosec G115 -- a column unit is one of YDB's enum numbers, 0 to 4
 				read = tier{column: expression.ValueSinceUnixEpoch.GetColumnName(), unit: uint64(expression.ValueSinceUnixEpoch.GetColumnUnit()),
 					seconds: uint64(expression.ValueSinceUnixEpoch.GetExpireAfterSeconds())}
 			default:

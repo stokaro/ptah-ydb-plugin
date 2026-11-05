@@ -13,6 +13,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
@@ -21,9 +25,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadplan"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 // heldPool is a pool as .sys/resource_pools reports it, -1 for no limit.
@@ -43,7 +44,7 @@ type heldClassifier struct {
 // system views; one the database does not hold is left out.
 func readHeldWorkload(c *qt.C, ctx context.Context, db *sql.DB, database string, pools, classifiers []string) (map[string]heldPool, map[string]heldClassifier) {
 	c.Helper()
-	heldPools, heldClassifiers := map[string]heldPool{}, map[string]heldClassifier{}
+	heldPools, heldClassifiers := make(map[string]heldPool), make(map[string]heldClassifier)
 	for _, name := range pools {
 		var held heldPool
 		err := db.QueryRowContext(ctx, "SELECT ConcurrentQueryLimit, QueueSize, ResourceWeight FROM `"+path.Join(database, ".sys/resource_pools")+"` WHERE Name = $name",
@@ -250,7 +251,7 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 }
 
 func poolSettings(specs map[string]workload.PoolSpec) map[string]proto.Message {
-	result := map[string]proto.Message{}
+	result := make(map[string]proto.Message)
 	for name, spec := range specs {
 		result[name] = schema.PoolSettings(spec)
 	}
@@ -258,7 +259,7 @@ func poolSettings(specs map[string]workload.PoolSpec) map[string]proto.Message {
 }
 
 func classifierSettings(specs map[string]workload.ClassifierSpec) map[string]proto.Message {
-	result := map[string]proto.Message{}
+	result := make(map[string]proto.Message)
 	for name, spec := range specs {
 		result[name] = schema.ClassifierSettings(spec)
 	}

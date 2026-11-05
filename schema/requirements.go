@@ -3,9 +3,10 @@ package schema
 import (
 	"errors"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // RequiredObjects returns the native prerequisites retained when a model is
@@ -60,41 +61,20 @@ func RequiredObjects(value *protocol.Envelope) ([]*protocol.ComparisonIdentity, 
 
 func externalRequirements(value *protocol.Envelope) ([]*protocol.ComparisonIdentity, bool, error) {
 	root := InterpretationRoot(value)
-	desired := value.GetDefinitionSha256() == NativeDesiredModel(value.GetKind()).GetDefinitionSha256()
 	kind := SecretProperties
 	var paths []ydbdecl.Path
 	var err error
 	if value.GetKind() == ExternalSourceProperties {
-		var options map[string]string
-		if desired {
-			intent, decodeErr := DesiredExternalSource(value)
-			if decodeErr != nil {
-				return nil, false, decodeErr
-			}
-			options = intent.Properties
-		} else {
-			observed, decodeErr := ObservedExternalSource(value)
-			if decodeErr != nil {
-				return nil, false, decodeErr
-			}
-			options = observed.Properties
+		options, decodeErr := externalSourceOptions(value)
+		if decodeErr != nil {
+			return nil, false, decodeErr
 		}
 		paths, err = externalpath.SecretPaths(options, root)
 	} else {
 		kind = ExternalSourceProperties
-		var written string
-		if desired {
-			intent, decodeErr := DesiredExternalTable(value)
-			if decodeErr != nil {
-				return nil, false, decodeErr
-			}
-			written = intent.GetDataSourcePath()
-		} else {
-			observed, decodeErr := ObservedExternalTable(value)
-			if decodeErr != nil {
-				return nil, false, decodeErr
-			}
-			written = observed.GetDataSourcePath()
+		written, decodeErr := externalTableSourcePath(value)
+		if decodeErr != nil {
+			return nil, false, decodeErr
 		}
 		var ref ydbdecl.Path
 		ref, err = externalpath.SourcePath(root, written)
@@ -118,4 +98,40 @@ func externalRequirements(value *protocol.Envelope) ([]*protocol.ComparisonIdent
 		refs = append(refs, identity)
 	}
 	return refs, false, nil
+}
+
+// externalSourceOptions returns the options of an external data source, read
+// through the desired model when value is bound to it and through the observed
+// one otherwise.
+func externalSourceOptions(value *protocol.Envelope) (map[string]string, error) {
+	if value.GetDefinitionSha256() == NativeDesiredModel(value.GetKind()).GetDefinitionSha256() {
+		intent, err := DesiredExternalSource(value)
+		if err != nil {
+			return nil, err
+		}
+		return intent.Properties, nil
+	}
+	observed, err := ObservedExternalSource(value)
+	if err != nil {
+		return nil, err
+	}
+	return observed.Properties, nil
+}
+
+// externalTableSourcePath returns the data source path of an external table as
+// written, read through the desired model when value is bound to it and
+// through the observed one otherwise.
+func externalTableSourcePath(value *protocol.Envelope) (string, error) {
+	if value.GetDefinitionSha256() == NativeDesiredModel(value.GetKind()).GetDefinitionSha256() {
+		intent, err := DesiredExternalTable(value)
+		if err != nil {
+			return "", err
+		}
+		return intent.GetDataSourcePath(), nil
+	}
+	observed, err := ObservedExternalTable(value)
+	if err != nil {
+		return "", err
+	}
+	return observed.GetDataSourcePath(), nil
 }

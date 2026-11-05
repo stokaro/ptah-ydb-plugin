@@ -9,12 +9,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 func streamingOperation(c *qt.C, database string, change streaming.Change) *protocol.Envelope {

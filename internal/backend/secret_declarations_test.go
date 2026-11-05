@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -14,8 +17,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 func authoredSecret(c *qt.C) *protocol.Envelope {
@@ -87,7 +88,7 @@ func TestAuthoredSecretRefusalsDiscardAllOutput(t *testing.T) {
 		secretPath string
 		capability bool
 	}{
-		{name: "disabled secrets", secretPath: "app/z.pw"},
+		{name: "disabled secrets", secretPath: "app/z.pw"}, // #nosec G101 -- a secret's path, not its value
 
 		{name: "self reference", secretPath: "app/a.source", capability: true},
 	} {

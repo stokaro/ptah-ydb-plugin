@@ -1,11 +1,12 @@
 package schema
 
 import (
-	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // A conversion changes the interpretation root while retaining the receipt.

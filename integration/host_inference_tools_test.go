@@ -9,9 +9,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // inferenceToolReply is what the host's MCP inference tools answer: the plan

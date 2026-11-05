@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/testing/protocmp"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // sequenceRow is a desired id declared as typ with a start and an increment,

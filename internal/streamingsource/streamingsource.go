@@ -11,10 +11,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 const (
@@ -63,7 +64,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	result := map[int][]*protocol.SourceModelValue{}
+	result := make(map[int][]*protocol.SourceModelValue)
 	var objects []declared
 	for index, fragment := range document.GetFragments() {
 		if err := ctx.Err(); err != nil {
@@ -110,7 +111,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			objects = append(objects, object)
 		}
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for position, object := range objects {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -139,7 +140,7 @@ func query(name string, mapping *protocol.SourceMapping, goSource bool) (declare
 		return declared{}, fmt.Errorf("a streaming query requires a mapping")
 	}
 	object := declared{name: name}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, entry := range mapping.GetEntries() {
 		if !slices.Contains(attributes(), entry.Key) {
 			return declared{}, fmt.Errorf("unknown key %q", entry.Key)

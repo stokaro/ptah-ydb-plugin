@@ -59,7 +59,7 @@ func hostCompat(c *qt.C) (binary, manifest string) {
 	if !probed {
 		answer = probeCompat(c, binary, manifest)
 		if compatReach.answers == nil {
-			compatReach.answers = map[string]string{}
+			compatReach.answers = make(map[string]string)
 		}
 		compatReach.answers[binary] = answer
 	}
@@ -124,7 +124,7 @@ func runCompatBinary(c *qt.C, binary, manifest string, env []string, args ...str
 // process itself, such as one that answers a prompt. A variable in env
 // replaces one the test process has.
 func compatCommand(ctx context.Context, binary, manifest string, env []string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := testCommand(ctx, binary, args...)
 	cmd.Env = append(append(os.Environ(), "PTAH_PROVIDER_CONFIG="+manifest), env...)
 	return cmd
 }
@@ -135,6 +135,6 @@ func compatFile(c *qt.C, dir, name, body string) string {
 	c.Helper()
 	file := filepath.Join(dir, name)
 	c.Assert(os.MkdirAll(filepath.Dir(file), 0o750), qt.IsNil)
-	c.Assert(os.WriteFile(file, []byte(body), 0o600), qt.IsNil)
+	c.Assert(os.WriteFile(file, []byte(body), 0o600), qt.IsNil) // #nosec G703 -- every caller passes a test's temporary directory and a fixture file name
 	return filepath.ToSlash(file)
 }

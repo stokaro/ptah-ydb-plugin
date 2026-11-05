@@ -10,6 +10,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-sdk/v3/topic/topictypes"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
@@ -18,10 +23,6 @@ import (
 	topicspec "github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/ydb-platform/ydb-go-sdk/v3/topic/topictypes"
-	"google.golang.org/protobuf/proto"
 )
 
 // TestTopicLifecycleSubprocess drives a topic through the provider's

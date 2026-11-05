@@ -10,12 +10,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-sdk/v3/scheme"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/ydb-platform/ydb-go-sdk/v3/scheme"
 )
 
 // indexSettingsItems declares items in directory with a covering global index
@@ -47,7 +48,7 @@ func heldSettings(c *qt.C, opened *connection.Connection, absolute string) map[s
 	defer func() { c.Check(session.Close(), qt.IsNil) }()
 	described, err := session.Describe(c.Context(), absolute)
 	c.Assert(err, qt.IsNil)
-	result := map[string]string{}
+	result := make(map[string]string)
 	for _, index := range described.GetIndexes() {
 		settings := tablecreate.HeldIndexSettings(index)
 		partitioning := settings.GetPartitioningSettings()

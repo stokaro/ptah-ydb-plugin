@@ -9,13 +9,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	wire "github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // wireSession uses one stream without reconnect or acquisition replay. Every

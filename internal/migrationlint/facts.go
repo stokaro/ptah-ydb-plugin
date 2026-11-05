@@ -4,9 +4,10 @@ import (
 	"slices"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlddl"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // statementFacts are the facts of contract 25.1 that say what a statement is,

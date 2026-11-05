@@ -5,12 +5,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	ydbreplication "github.com/stokaro/ptah-ydb-plugin/internal/replication"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_Replication"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	ydbreplication "github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // connectionParams is a connection to the local database with no credential.
@@ -21,7 +22,7 @@ func connectionParams() *Ydb_Replication.ConnectionParams {
 func items(pairs ...string) []*Ydb_Replication.DescribeReplicationResult_Item {
 	var result []*Ydb_Replication.DescribeReplicationResult_Item
 	for i := 0; i < len(pairs); i += 2 {
-		result = append(result, &Ydb_Replication.DescribeReplicationResult_Item{SourcePath: pairs[i], DestinationPath: pairs[i+1], Id: uint64(i)})
+		result = append(result, &Ydb_Replication.DescribeReplicationResult_Item{SourcePath: pairs[i], DestinationPath: pairs[i+1], Id: uint64(i)}) // #nosec G602 -- every caller passes source and destination paths in pairs
 	}
 	return result
 }

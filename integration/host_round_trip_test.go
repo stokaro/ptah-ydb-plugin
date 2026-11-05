@@ -11,10 +11,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // roundTripColumn is one column of the round trip's accounts table: its YAML
@@ -89,7 +90,7 @@ type builtTable struct {
 
 func describeBuilt(c *qt.C, opened *connection.Connection, absolute string) builtTable {
 	c.Helper()
-	built := builtTable{Columns: map[string]string{}}
+	built := builtTable{Columns: make(map[string]string)}
 	err := opened.Driver.Table().Do(c.Context(), func(ctx context.Context, session table.Session) error {
 		described, err := session.DescribeTable(ctx, absolute)
 		if err != nil {

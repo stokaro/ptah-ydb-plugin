@@ -7,9 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
@@ -19,6 +16,10 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // External owns the precondition, the dispatch and the confirmation of one

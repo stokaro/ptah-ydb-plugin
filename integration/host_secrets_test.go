@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -16,8 +15,9 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // Secret values cannot be read back. The public path must instead preserve
@@ -55,7 +55,7 @@ func TestHostSecretPresenceAndApprovedRotation(t *testing.T) {
 		c.Helper()
 		ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 		defer cancel()
-		command := exec.CommandContext(ctx, host, args...)
+		command := testCommand(ctx, host, args...)
 		command.Env = os.Environ()
 		if binding != nil {
 			command.Env = append(command.Env, variable+"="+*binding)

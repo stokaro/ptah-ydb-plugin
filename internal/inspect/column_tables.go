@@ -6,12 +6,13 @@ import (
 	"path"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
-	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // readColumnTable reads a column table from the table service and the

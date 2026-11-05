@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 // indexFacetRecord is the facet of index name of app.records in one
@@ -108,23 +109,22 @@ func indexSettingsStatements(c *qt.C, plan *protocol.PlannedFeatures) []string {
 // cannot give: on an index the table neither holds nor gains, and on an
 // index whose settings the read did not report.
 func TestDeclaredIndexSettings_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	unheld := indexSettingsRequest(c, `{"partitioningSettings":{"minPartitionsCount":"3"}}`, heldDefaults)
+	unheld.Tables[0].Current.Indexes, unheld.Tables[0].Desired.Indexes = nil, nil
 	for _, test := range []struct {
 		name       string
-		request    func(*qt.C) *protocol.PlanFeaturesRequest
+		request    *protocol.PlanFeaturesRequest
 		wantReason string
 	}{
-		{"an index the table does not hold", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			request := indexSettingsRequest(c, `{"partitioningSettings":{"minPartitionsCount":"3"}}`, heldDefaults)
-			request.Tables[0].Current.Indexes, request.Tables[0].Desired.Indexes = nil, nil
-			return request
-		}, `Index "by_label" declares its partitioning or read replicas, and the table neither holds it nor gains it`},
-		{"settings the read did not report", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			return indexSettingsRequest(c, `{"partitioningSettings":{"minPartitionsCount":"3"}}`, "")
-		}, `The settings index "by_label" holds were not read, so its declared settings cannot be compared`},
+		{"an index the table does not hold", unheld,
+			`Index "by_label" declares its partitioning or read replicas, and the table neither holds it nor gains it`},
+		{"settings the read did not report", indexSettingsRequest(c, `{"partitioningSettings":{"minPartitionsCount":"3"}}`, ""),
+			`The settings index "by_label" holds were not read, so its declared settings cannot be compared`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			plan, err := backend.New().PlanFeatures(c.Context(), test.request(c))
+			plan, err := backend.New().PlanFeatures(c.Context(), test.request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)

@@ -6,13 +6,13 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
@@ -41,7 +41,7 @@ func TestHostRendersAuthoredSchemaOfflineSubprocess(t *testing.T) {
 			run := func() []byte {
 				ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 				defer cancel()
-				command := exec.CommandContext(ctx, host, "schema", "render", test.flag, source, "--dialect", "ydb", "--server-version", "26.2", "--provider-config", manifest, "--provider-engine", "ydb")
+				command := testCommand(ctx, host, "schema", "render", test.flag, source, "--dialect", "ydb", "--server-version", "26.2", "--provider-config", manifest, "--provider-engine", "ydb")
 				command.Dir = directory
 				var stderr bytes.Buffer
 				command.Stderr = &stderr
@@ -66,7 +66,7 @@ func TestHostOrdersAuthoredNativeCreateBeforeGrantSubprocess(t *testing.T) {
 	c.Assert(os.WriteFile(file, []byte(source), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, host, "schema", "render", "--schema-file", file, "--dialect", "ydb", "--server-version", "26.2", "--provider-config", manifest, "--provider-engine", "ydb")
+	command := testCommand(ctx, host, "schema", "render", "--schema-file", file, "--dialect", "ydb", "--server-version", "26.2", "--provider-config", manifest, "--provider-engine", "ydb")
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
 	output, err := command.Output()

@@ -11,6 +11,8 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
@@ -20,7 +22,6 @@ import (
 	topicspec "github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // effectOrdered orders the steps of a declaration plan the way the host's
@@ -31,7 +32,7 @@ func effectOrdered(c *qt.C, steps []*protocol.PlanningStep) []*protocol.Planning
 	key := func(effect *protocol.PlanningEffect) string {
 		return effect.Subject.Kind + "\x00" + effect.Subject.Schema.Normalized + "\x00" + effect.Subject.Name.Normalized
 	}
-	creator := map[string]string{}
+	creator := make(map[string]string)
 	for _, step := range steps {
 		for _, effect := range step.Metadata.Effects {
 			if effect.Action == protocol.PlanningEffect_CREATE {
@@ -40,7 +41,7 @@ func effectOrdered(c *qt.C, steps []*protocol.PlanningStep) []*protocol.Planning
 		}
 	}
 	var ordered []*protocol.PlanningStep
-	done := map[string]bool{}
+	done := make(map[string]bool)
 	for len(ordered) < len(steps) {
 		before := len(ordered)
 		for _, step := range steps {

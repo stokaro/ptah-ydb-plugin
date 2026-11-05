@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 )
 
 // readers is a read topic with consumer generated, which transfer app/ingest

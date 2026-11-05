@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"errors"
 	"os"
 	"os/exec"
 	"path"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
@@ -80,7 +80,7 @@ func hostApplyAt(c *qt.C, address string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
 	arguments := slices.Concat([]string{"schema", "apply", "--json"}, args, []string{"--provider-config", manifest, "--provider-engine", "ydb", "--db-url", address})
-	cmd := exec.CommandContext(ctx, host, arguments...)
+	cmd := testCommand(ctx, host, arguments...)
 	var report, printed bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &report, &printed
 	err := cmd.Run()
@@ -94,7 +94,7 @@ func hostRunAt(c *qt.C, address string, args ...string) (string, error) {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, append(args, "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", address)...)
+	cmd := testCommand(ctx, host, append(args, "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", address)...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	err := cmd.Run()
@@ -198,15 +198,15 @@ func TestHostRefusesTheDeprecatedSecretObjectInAReplay_FailurePath(t *testing.T)
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	hashed, err := exec.CommandContext(ctx, host, "migrations", "hash", "--dir", migrations).CombinedOutput()
+	hashed, err := testCommand(ctx, host, "migrations", "hash", "--dir", migrations).CombinedOutput()
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", hashed))
-	cmd := exec.CommandContext(ctx, host, "migrations", "validate", "--dir", migrations, "--dev-url", os.Getenv("PTAH_YDB_TEST_URL"),
+	cmd := testCommand(ctx, host, "migrations", "validate", "--dir", migrations, "--dev-url", os.Getenv("PTAH_YDB_TEST_URL"),
 		"--provider-config", manifest, "--provider-engine", "ydb")
 
 	refused, err := cmd.CombinedOutput()
 
 	var exited *exec.ExitError
-	c.Assert(errors.As(err, &exited), qt.IsTrue, qt.Commentf("%s", refused))
+	c.Assert(err, qt.ErrorAs, &exited, qt.Commentf("%s", refused))
 	c.Assert(string(refused), qt.Contains, "ydb migration replay rejects an object of the whole database because its "+
 		"effects cannot be confined to the disposable database realm")
 }

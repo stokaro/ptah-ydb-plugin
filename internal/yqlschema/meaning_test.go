@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 )
 
@@ -98,7 +99,7 @@ func marshal(c *qt.C, value any) []byte {
 // hostMeaning is the meaning of the host's grammar's reading.
 func hostMeaning(c *qt.C, recorded goldenGrammar) meaning {
 	c.Helper()
-	result := meaning{TableFacets: map[string]map[string]any{}, IndexFacets: map[string]map[string]any{}}
+	result := meaning{TableFacets: make(map[string]map[string]any), IndexFacets: make(map[string]map[string]any)}
 	list := func(key string) []json.RawMessage {
 		var values []json.RawMessage
 		if raw, ok := recorded.Database[key]; ok {
@@ -106,7 +107,7 @@ func hostMeaning(c *qt.C, recorded goldenGrammar) meaning {
 		}
 		return values
 	}
-	tables := map[string]string{}
+	tables := make(map[string]string)
 	for _, raw := range list("Tables") {
 		var table struct{ StructName, Schema, Name string }
 		c.Assert(json.Unmarshal(raw, &table), qt.IsNil)
@@ -121,7 +122,7 @@ func hostMeaning(c *qt.C, recorded goldenGrammar) meaning {
 		object["Table"] = tables[field.StructName]
 		result.Fields = append(result.Fields, object)
 	}
-	indexes := map[string]string{}
+	indexes := make(map[string]string)
 	for _, raw := range list("Indexes") {
 		var index struct{ StructName, Name, TableName string }
 		c.Assert(json.Unmarshal(raw, &index), qt.IsNil)
@@ -161,7 +162,7 @@ func partSource(part *goldenPart) string {
 
 func facetMeaning(c *qt.C, facets []goldenFacet) map[string]any {
 	c.Helper()
-	result := map[string]any{}
+	result := make(map[string]any)
 	for _, facet := range facets {
 		c.Assert(facet.Value, qt.IsNotNil, qt.Commentf("an excluded facet of kind %s", facet.Kind))
 		result[facet.Kind] = decodeAny(c, facet.Value.Payload)
@@ -186,7 +187,7 @@ func canonical(schema, name string) string {
 // pluginMeaning is the meaning of this provider's reading.
 func pluginMeaning(c *qt.C, reading *yqlschema.Reading) meaning {
 	c.Helper()
-	result := meaning{TableFacets: map[string]map[string]any{}, IndexFacets: map[string]map[string]any{}}
+	result := meaning{TableFacets: make(map[string]map[string]any), IndexFacets: make(map[string]map[string]any)}
 	for _, table := range reading.Tables {
 		result.Tables = append(result.Tables, element(c, marshal(c, table)))
 		facets := yqlschema.TableFacetPayloads(table)
@@ -230,7 +231,7 @@ func pluginMeaning(c *qt.C, reading *yqlschema.Reading) meaning {
 
 func jsonValues(c *qt.C, values map[string]any) map[string]any {
 	c.Helper()
-	result := map[string]any{}
+	result := make(map[string]any)
 	for kind, value := range values {
 		result[kind] = decodeAny(c, marshal(c, value))
 	}

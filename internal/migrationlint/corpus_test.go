@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -14,7 +15,7 @@ import (
 // corpusHosts are the host commits the golden files name.
 func corpusHosts(c *qt.C) []string {
 	c.Helper()
-	hosts := map[string]bool{}
+	hosts := make(map[string]bool)
 	for _, row := range directoryCases(c) {
 		hosts[row.golden.Host] = true
 	}
@@ -36,7 +37,7 @@ func corpusHosts(c *qt.C) []string {
 // corpusFindings counts the findings of each code the corpus records.
 func corpusFindings(c *qt.C) map[string]int {
 	c.Helper()
-	counts := map[string]int{}
+	counts := make(map[string]int)
 	for _, row := range directoryCases(c) {
 		for _, r := range checkedRuns(row.golden) {
 			for _, f := range r.Check.Findings {
@@ -50,7 +51,7 @@ func corpusFindings(c *qt.C) map[string]int {
 // corpusFacts counts the effects of each fact the corpus's splits record.
 func corpusFacts(c *qt.C) map[string]int {
 	c.Helper()
-	counts := map[string]int{}
+	counts := make(map[string]int)
 	for _, row := range directoryCases(c) {
 		for _, call := range row.golden.Splits {
 			for _, file := range call.Files {

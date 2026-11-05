@@ -11,10 +11,11 @@ package replicationcompare
 import (
 	"context"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // The comparison services this package owns.

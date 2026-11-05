@@ -3,10 +3,11 @@ package schema
 import (
 	"fmt"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // reportedMetric is one count metric of a reported model, and what a value of
@@ -131,7 +132,7 @@ func changefeedConsumers(payload []byte, representation protocol.ValueInput_Repr
 	feeds, err := changefeedTopics(payload, representation)
 	var total uint64
 	for _, consumers := range feeds {
-		total += uint64(consumers)
+		total += uint64(consumers) // #nosec G115 -- a count of consumers, never negative
 	}
 	return total, err
 }

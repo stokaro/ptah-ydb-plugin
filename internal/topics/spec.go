@@ -17,12 +17,13 @@ import (
 	"strings"
 	"time"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 )
 
 // codecs maps the codec names a declaration takes to YDB's codec numbers.
@@ -254,11 +255,13 @@ func Intent(spec ydbdecl.Topic) (*native.TopicIntent, error) {
 	if err := ydbdecl.ValidateTopic(spec); err != nil {
 		return nil, err
 	}
+	// #nosec G115 -- ValidateTopic above caps each count at 1<<62
 	intent := &native.TopicIntent{PartitioningSettings: &Ydb_Topic.PartitioningSettings{
 		MinActivePartitions: int64(spec.MinActivePartitions), MaxActivePartitions: int64(spec.MaxActivePartitions)}}
 	if spec.AutoPartitioningStrategy != "" {
 		auto := &Ydb_Topic.AutoPartitioningSettings{Strategy: strategies[strings.ToLower(spec.AutoPartitioningStrategy)]}
 		if spec.AutoPartitioningUpUtilizationPercent != 0 || spec.AutoPartitioningDownUtilizationPercent != 0 || spec.AutoPartitioningStabilizationWindow != "" {
+			// #nosec G115 -- ValidateTopic above caps each percentage at 100
 			auto.PartitionWriteSpeed = &Ydb_Topic.AutoPartitioningWriteSpeedStrategy{
 				UpUtilizationPercent: int32(spec.AutoPartitioningUpUtilizationPercent), DownUtilizationPercent: int32(spec.AutoPartitioningDownUtilizationPercent)}
 			if spec.AutoPartitioningStabilizationWindow != "" {
@@ -270,8 +273,8 @@ func Intent(spec ydbdecl.Topic) (*native.TopicIntent, error) {
 	if spec.RetentionPeriod != "" {
 		intent.RetentionPeriod = durationOf(spec.RetentionPeriod)
 	}
-	intent.PartitionWriteSpeedBytesPerSecond = int64(spec.PartitionWriteSpeedBytesPerSecond)
-	intent.PartitionWriteBurstBytes = int64(spec.PartitionWriteBurstBytes)
+	intent.PartitionWriteSpeedBytesPerSecond = int64(spec.PartitionWriteSpeedBytesPerSecond) // #nosec G115 -- ValidateTopic above caps each count at 1<<62
+	intent.PartitionWriteBurstBytes = int64(spec.PartitionWriteBurstBytes)                   // #nosec G115 -- ValidateTopic above caps each count at 1<<62
 	intent.SupportedCodecs = codecList(spec.SupportedCodecs)
 	for _, consumer := range spec.Consumers {
 		declared, err := ConsumerIntent(consumer)
@@ -323,7 +326,7 @@ func interval(subject string, duration *durationpb.Duration) (string, error) {
 	if duration.GetSeconds() == 0 {
 		return "", nil
 	}
-	return FormatSeconds(uint64(duration.GetSeconds())), nil
+	return FormatSeconds(uint64(duration.GetSeconds())), nil // #nosec G115 -- a negative count is refused above
 }
 
 // durationOf is an interval a declaration's parse accepted, as a duration.
@@ -332,7 +335,7 @@ func durationOf(text string) *durationpb.Duration {
 	if err != nil {
 		return nil
 	}
-	return &durationpb.Duration{Seconds: int64(seconds)}
+	return &durationpb.Duration{Seconds: int64(seconds)} // #nosec G115 -- TopicSeconds divides a positive int64 count of microseconds, so the seconds fit int64
 }
 
 // codecNames names the codecs of a codec list, owner's being "its" for the

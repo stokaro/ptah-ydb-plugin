@@ -11,8 +11,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // feedEvents declares table events in directory with a changefeed feed kept

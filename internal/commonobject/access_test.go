@@ -1,13 +1,13 @@
 package commonobject_test
 
 import (
-	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 func accessCapabilities() map[string]bool {
@@ -100,7 +100,7 @@ func TestRenderAccess_FailurePath(t *testing.T) {
 			got, err := commonobject.Render(test.change, accessCapabilities())
 			c.Assert(err, qt.ErrorIs, commonobject.ErrUnsupported)
 			c.Assert(err.Error(), qt.Contains, test.want)
-			c.Assert(strings.Contains(err.Error(), "must-not-leak"), qt.IsFalse)
+			c.Assert(err.Error(), qt.Not(qt.Contains), "must-not-leak")
 			c.Assert(got, qt.Equals, "")
 		})
 	}

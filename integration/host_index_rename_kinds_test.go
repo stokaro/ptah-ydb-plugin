@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // renamedIndexItems declares items in directory as the host's global-index

@@ -8,15 +8,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // Rendering needs no session. Applying that authored text and comparing the
@@ -32,7 +32,7 @@ func TestHostAuthoredSchemaAppliesAndReplansSubprocess(t *testing.T) {
 		c.Helper()
 		ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 		defer cancel()
-		command := exec.CommandContext(ctx, host, append(arguments, "--provider-config", manifest, "--provider-engine", "ydb")...)
+		command := testCommand(ctx, host, append(arguments, "--provider-config", manifest, "--provider-engine", "ydb")...)
 		var stderr bytes.Buffer
 		command.Stderr = &stderr
 		output, err := command.Output()

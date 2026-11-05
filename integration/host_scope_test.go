@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -16,8 +15,9 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The host's selectors name native objects within the opened database, while
@@ -36,7 +36,7 @@ func TestHostScopesNativeObjectsSubprocess(t *testing.T) {
 			c.Check(opened.Driver.Coordination().DropNode(ctx, node), qt.IsNil)
 		})
 	}
-	inspect := exec.CommandContext(c.Context(), host, "schema", "inspect", "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", directory, "--format", "json")
+	inspect := testCommand(c.Context(), host, "schema", "inspect", "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", directory, "--format", "json")
 	var inspectDiagnostics bytes.Buffer
 	inspect.Stderr = &inspectDiagnostics
 	observed, err := inspect.Output()
@@ -54,13 +54,13 @@ func TestHostScopesNativeObjectsSubprocess(t *testing.T) {
 		statements           []string
 	}{
 		{"included node", "--include", directory + ".workers[type=coordination_node]", []string{"ALTER COORDINATION NODE `" + directory + "/workers` SET (self_check_period = Interval('PT3S'))"}},
-		{"excluded node", "--exclude", directory + ".workers[type=coordination_node]", []string{}},
+		{"excluded node", "--exclude", directory + ".workers[type=coordination_node]", make([]string, 0)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 			defer cancel()
-			command := exec.CommandContext(ctx, host, "schema", "diff", "--provider-config", manifest, "--provider-engine", "ydb", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", source, "--schemas", directory, "--format", "json", test.flag, test.selector)
+			command := testCommand(ctx, host, "schema", "diff", "--provider-config", manifest, "--provider-engine", "ydb", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", source, "--schemas", directory, "--format", "json", test.flag, test.selector)
 			var diagnostics bytes.Buffer
 			command.Stderr = &diagnostics
 			output, err := command.Output()

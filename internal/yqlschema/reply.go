@@ -9,6 +9,10 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -18,9 +22,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 // HeaderKinds are the kinds a `ptah:not-described` header of a YQL document
@@ -154,6 +155,7 @@ func sourcePosition(text string, offset int) *protocol.SourcePosition {
 	before := text[:offset]
 	line := strings.Count(before, "\n") + 1
 	column := offset - (strings.LastIndexByte(before, '\n') + 1) + 1
+	// #nosec G115 -- the offset is within a request document, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.SourcePosition{ByteOffset: uint64(offset), Line: uint32(line), Column: uint32(column)}
 }
 
@@ -167,6 +169,7 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool)
 	documents := request.GetDocuments()
 	trace := func(collection protocol.SQLObjectTrace_Collection, index int, document int, text span) {
 		source := documents[document]
+		// #nosec G115 -- index counts the objects read from the request's documents, which runtime.MaxMessageBytes bounds to 4 MiB
 		reply.Traces = append(reply.Traces, &protocol.SQLObjectTrace{Collection: collection, Index: uint32(index),
 			Source: &protocol.SourceTrace{DocumentId: source.GetId(), Span: sourceSpan(source.GetText(), text.start, text.end)}})
 	}
@@ -294,11 +297,11 @@ func gap(document int, text span, message string) *Refusal {
 }
 
 // ydbPath writes a directory and a name as one YDB path.
-func ydbPath(schema, name string) string {
-	if schema == "" {
+func ydbPath(directory, name string) string {
+	if directory == "" {
 		return name
 	}
-	return schema + "/" + name
+	return directory + "/" + name
 }
 
 // tableSettings names the YDB settings a table declares.
@@ -537,9 +540,9 @@ var limitedKinds = map[string]struct {
 // refuses it.
 func claim(limits []*protocol.SchemaCoverageLimit, models []*protocol.ValueModel) (*protocol.ModelCoverage, *Refusal) {
 	coverage := &protocol.ModelCoverage{Representation: protocol.ValueInput_DESIRED}
-	whole := map[string]*protocol.ModelKnowledge{}
+	whole := make(map[string]*protocol.ModelKnowledge)
 	var subjects []*protocol.ModelSubjectCoverage
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, limit := range limits {
 		if refusal := checkLimit(limit); refusal != nil {
 			return nil, refusal

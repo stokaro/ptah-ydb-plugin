@@ -3,21 +3,21 @@ package backend
 import (
 	"context"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
-	"github.com/stokaro/ptah-ydb-plugin/internal/streamingcompare"
-
-	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/externalcompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/replicationcompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/secretcompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
-	"github.com/stokaro/ptah-ydb-plugin/internal/workloadcompare"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replicationcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secretcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streamingcompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workloadcompare"
 )
 
 // CompareModels compares captured coordination schemas and row-table facets

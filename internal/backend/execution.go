@@ -8,6 +8,11 @@ import (
 	"slices"
 	"time"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
+	"google.golang.org/grpc/codes"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
@@ -20,10 +25,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/stokaro/ptah/provider-sdk/runtime"
-	"google.golang.org/grpc/codes"
 )
 
 type sqlExecutor interface {

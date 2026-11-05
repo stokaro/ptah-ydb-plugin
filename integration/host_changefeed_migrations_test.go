@@ -11,8 +11,9 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // feedItems declares items in directory with the changefeeds that follow.
@@ -63,7 +64,7 @@ func TestHostMigrationFileCarriesChangefeedChanges_HappyPath(t *testing.T) {
 
 	file, diffErr := hostCommand(c, "schema", "diff", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", writeYAML(c, changed), "--schemas", directory)
 	c.Assert(diffErr, qt.IsNil, qt.Commentf("schema diff:\n%s", file))
-	c.Assert(os.WriteFile(filepath.Join(migrations, "0000000001_changefeeds.up.sql"), []byte(file), 0o600), qt.IsNil)
+	c.Assert(os.WriteFile(filepath.Join(migrations, "0000000001_changefeeds.up.sql"), []byte(file), 0o600), qt.IsNil) // #nosec G703 -- a fixed file name under the test's c.TempDir()
 	c.Assert(os.WriteFile(filepath.Join(migrations, "0000000001_changefeeds.down.sql"), []byte("-- The test runs no down migration.\n"), 0o600), qt.IsNil)
 	up, upErr := hostCommand(c, append([]string{"migrations", "up"}, f.target(migrations)...)...)
 	compared, compareErr := hostCommand(c, "schema", "compare", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", writeYAML(c, changed),

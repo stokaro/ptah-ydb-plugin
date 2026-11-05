@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"math"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // familyCacheModeField is the wire number of a column family's cache mode in
@@ -25,6 +26,7 @@ func RequestFamily(family *native.ColumnFamily) *Ydb_Table.ColumnFamily {
 		KeepInMemory: family.GetKeepInMemory()}
 	if mode := family.GetCacheMode(); mode != native.ColumnFamily_CACHE_MODE_UNSPECIFIED {
 		raw := protowire.AppendTag(nil, familyCacheModeField, protowire.VarintType)
+		// #nosec G115 -- protobuf writes an enum as the varint of its value sign-extended to 64 bits, which is this conversion
 		result.ProtoReflect().SetUnknown(protowire.AppendVarint(raw, uint64(mode)))
 	}
 	return result

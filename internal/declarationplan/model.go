@@ -10,10 +10,11 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // ServiceID names the authored native-object planner.

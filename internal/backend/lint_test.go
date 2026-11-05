@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The description advertises lint on the provider and on the ydb engine, with
@@ -116,7 +117,7 @@ func TestSplitLintStatementsDescribesStatementsForAListingHost(t *testing.T) {
 		effects  int
 	}{
 		{name: "listing", features: []string{provider.LintStatementFactsFeature}, judged: facts, effects: 2},
-		{name: "not listing", judged: []protocol.LintFact{}, effects: 0},
+		{name: "not listing", judged: make([]protocol.LintFact, 0), effects: 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

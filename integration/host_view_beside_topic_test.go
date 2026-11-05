@@ -10,6 +10,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -73,7 +74,7 @@ func TestHostChangesAViewBesideATopic_HappyPath(t *testing.T) {
 		privileges    []string
 	}{
 		{name: "a comment on the view", comment: "Active ids", attributes: map[string]string{"ptah.comment": "Active ids"}},
-		{name: "a grant on the view", granted: true, attributes: map[string]string{}, privileges: []string{"ydb.granular.select_row"}},
+		{name: "a grant on the view", granted: true, attributes: make(map[string]string), privileges: []string{"ydb.granular.select_row"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

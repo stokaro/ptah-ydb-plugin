@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -151,7 +152,7 @@ func TestChangefeedPlan_FailurePath(t *testing.T) {
 	sids := `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","userSids":true,"topic":{"partitioningSettings":{}}}]}`
 	partitioned := `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","topic":{"partitioningSettings":{"minActivePartitions":"2"}}}]}`
 	withoutChangefeeds := feedCase(declaredFeed, noFeeds)
-	withoutChangefeeds.capabilities = map[string]bool{}
+	withoutChangefeeds.capabilities = make(map[string]bool)
 	oldLine := feedCase(sids, noFeeds)
 	oldLine.capabilities = map[string]bool{changefeeds.CapabilityChangefeeds: true}
 	notCaptured := feedCase(declaredFeed, "")

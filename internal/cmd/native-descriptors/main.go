@@ -38,7 +38,7 @@ func run() error {
 			if definition.Options == nil {
 				definition.Options = &descriptorpb.FileOptions{}
 			}
-			definition.Options.GoPackage = proto.String("github.com/ydb-platform/ydb-go-genproto/" + prefix + strings.ReplaceAll(string(file.Package()), ".", "_"))
+			definition.Options.GoPackage = new("github.com/ydb-platform/ydb-go-genproto/" + prefix + strings.ReplaceAll(string(file.Package()), ".", "_"))
 		}
 		set.File = append(set.File, definition)
 		return true
@@ -47,5 +47,5 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(os.Args[1], data, 0o600)
+	return os.WriteFile(os.Args[1], data, 0o600) // #nosec G703 -- the output path is the generator's one argument, which scripts/generate-native-schema.sh passes
 }

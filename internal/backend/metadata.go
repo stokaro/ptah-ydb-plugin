@@ -5,14 +5,15 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
-	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
 )
 
 func (p *Provider) metadataSession(ctx context.Context, scope *protocol.MetadataScope) (*session, metadata.Store, func(), error) {

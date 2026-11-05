@@ -4,12 +4,13 @@ import (
 	"context"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
-	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
 )
 
 // SplitLintStatements splits YDB migrations as YQL offline and reports each

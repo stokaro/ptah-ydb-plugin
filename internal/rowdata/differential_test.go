@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The corpus holds row cases and what the host's embedded YDB engine
@@ -125,7 +125,7 @@ func protojsonForm(c *qt.C, tag tagged) tagged {
 		"string": "stringValue", "bytes": "bytesValue", "decimal": "decimalValue", "timestamp": "timestampValue",
 		"date": "dateValue", "interval": "intervalValue", "json": "jsonValue", "native": "nativeValue",
 	}
-	out := tagged{}
+	out := make(tagged)
 	for name, raw := range tag {
 		renamed, known := names[name]
 		c.Assert(known, qt.IsTrue, qt.Commentf("corpus case %q", name))
@@ -147,7 +147,7 @@ func corpusValue(c *qt.C, value *protocol.DataValue) tagged {
 	}
 	switch v := value.GetValue().(type) {
 	case nil:
-		return tagged{}
+		return make(tagged)
 	case *protocol.DataValue_Null:
 		return tagged{"null": marshal(true)}
 	case *protocol.DataValue_BoolValue:
@@ -414,7 +414,7 @@ func TestCorpusNamesOneHostCommit(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join(corpusDirectory, "*.golden.json"))
 	c.Assert(err, qt.IsNil)
 	paths = append(paths, "testdata/query-dialect.golden.json")
-	commits := map[string]bool{}
+	commits := make(map[string]bool)
 	for _, path := range paths {
 		var golden struct {
 			HostCommit string `json:"host_commit"`

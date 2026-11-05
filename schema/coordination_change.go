@@ -131,7 +131,8 @@ func buildCoordinationChangeModel() *protocol.ValueModel {
 		panic(err)
 	}
 	digest := sha256.Sum256(canonical)
-	return &protocol.ValueModel{Kind: CoordinationChange, Representation: protocol.ValueInput_CHANGE, SchemaVersion: 1, Encoding: "json", DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: CoordinationChange + "/json-v1"}
+	return &protocol.ValueModel{Kind: CoordinationChange, Representation: protocol.ValueInput_CHANGE, SchemaVersion: 1, Encoding: "json",
+		DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(digest[:]), CanonicalFormat: CoordinationChange + "/json-v1"}
 }
 
 // CaptureCoordinationChange retains raw operands under a single bound identity.
@@ -167,7 +168,8 @@ func CaptureCoordinationChange(id string, owner *protocol.Reference, before, aft
 // A caller cannot supply grants, removal flags, or impact metadata in the payload.
 func NormalizeCoordinationChange(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	value, contract := input.GetValue(), CoordinationChangeModel()
-	if input.GetRepresentation() != protocol.ValueInput_CHANGE || value.GetProviderId() != ProviderID || value.GetKind() != contract.Kind || value.GetSchemaVersion() != contract.SchemaVersion || value.GetEncoding() != contract.Encoding || value.GetDefinitionSha256() != contract.DefinitionSha256 {
+	if input.GetRepresentation() != protocol.ValueInput_CHANGE || value.GetProviderId() != ProviderID || value.GetKind() != contract.Kind ||
+		value.GetSchemaVersion() != contract.SchemaVersion || value.GetEncoding() != contract.Encoding || value.GetDefinitionSha256() != contract.DefinitionSha256 {
 		return nil, fmt.Errorf("coordination change does not match its negotiated definition")
 	}
 	if err := ValidateManagedCoordinationOwner(value.GetOwner()); err != nil {
@@ -181,33 +183,9 @@ func NormalizeCoordinationChange(input *protocol.ValueInput) (*protocol.Normaliz
 	if err := json.Unmarshal(canonical, &operands); err != nil || len(operands) != 2 || operands["before"] == nil || operands["after"] == nil {
 		return nil, fmt.Errorf("coordination change requires exact before and after operands")
 	}
-	present := map[string]bool{}
-	validated := map[string]*protocol.Envelope{}
-	for _, key := range []string{"before", "after"} {
-		raw := operands[key]
-		if bytes.Equal(raw, []byte("null")) {
-			continue
-		}
-		present[key] = true
-		definition, representation := CoordinationDesiredModel(), protocol.ValueInput_DESIRED
-		if key == "before" {
-			definition, representation = model(CoordinationProperties), protocol.ValueInput_OBSERVED
-		}
-		operand := &protocol.Envelope{ProviderId: ProviderID, Kind: CoordinationProperties, Owner: proto.CloneOf(value.Owner), SchemaVersion: 1, Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: raw}
-		if _, err := CoordinationConfiguration(operand, representation); err != nil {
-			return nil, err
-		}
-		var normalized *protocol.Envelope
-		if key == "before" {
-			normalized, err = Normalize(operand)
-		} else {
-			normalized, err = NormalizeDesired(operand)
-		}
-		if err != nil {
-			return nil, err
-		}
-		operands[key] = normalized.Payload
-		validated[key] = normalized
+	present, validated, err := normalizeCoordinationOperands(value.Owner, operands)
+	if err != nil {
+		return nil, err
 	}
 	if !present["before"] && !present["after"] {
 		return nil, fmt.Errorf("coordination change has no operands")
@@ -225,13 +203,63 @@ func NormalizeCoordinationChange(input *protocol.ValueInput) (*protocol.Normaliz
 	}
 	result := proto.CloneOf(value)
 	result.Payload = canonical
-	semantics := &protocol.ChangeSemantics{ReplacesOwner: new(false), RemovesState: new(false), Impact: protocol.ChangeSemantics_BEHAVIORAL, Reason: "Coordination settings change session behavior", Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: "Altering coordination settings preserves native access metadata"}
+	semantics := coordinationChangeSemantics(present)
+	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner), CanonicalFormat: contract.CanonicalFormat,
+		CanonicalProjection: bytes.Clone(canonical), ChangeSemantics: semantics}, nil
+}
+
+// normalizeCoordinationOperands validates each operand of a coordination
+// change that is not null, before against the observed model and after
+// against the desired one, and replaces it in operands with its normalized
+// payload. It returns which operands are present and their normalized
+// envelopes, both keyed "before" and "after".
+func normalizeCoordinationOperands(owner *protocol.Reference, operands map[string]json.RawMessage) (map[string]bool, map[string]*protocol.Envelope, error) {
+	present := make(map[string]bool)
+	validated := make(map[string]*protocol.Envelope)
+	for _, key := range []string{"before", "after"} {
+		raw := operands[key]
+		if bytes.Equal(raw, []byte("null")) {
+			continue
+		}
+		present[key] = true
+		definition, representation := CoordinationDesiredModel(), protocol.ValueInput_DESIRED
+		if key == "before" {
+			definition, representation = model(CoordinationProperties), protocol.ValueInput_OBSERVED
+		}
+		operand := &protocol.Envelope{ProviderId: ProviderID, Kind: CoordinationProperties, Owner: proto.CloneOf(owner), SchemaVersion: 1,
+			Encoding: definition.Encoding, DefinitionSha256: definition.DefinitionSha256, Payload: raw}
+		if _, err := CoordinationConfiguration(operand, representation); err != nil {
+			return nil, nil, err
+		}
+		var normalized *protocol.Envelope
+		var err error
+		if key == "before" {
+			normalized, err = Normalize(operand)
+		} else {
+			normalized, err = NormalizeDesired(operand)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		operands[key] = normalized.Payload
+		validated[key] = normalized
+	}
+	return present, validated, nil
+}
+
+// coordinationChangeSemantics returns the safety facts of a coordination
+// change from the operands present holds, keyed "before" and "after": an
+// alter by default, a creation without before and a drop without after.
+func coordinationChangeSemantics(present map[string]bool) *protocol.ChangeSemantics {
+	semantics := &protocol.ChangeSemantics{ReplacesOwner: new(false), RemovesState: new(false), Impact: protocol.ChangeSemantics_BEHAVIORAL,
+		Reason: "Coordination settings change session behavior", Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: "Altering coordination settings preserves native access metadata"}
 	if !present["before"] {
 		semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = protocol.ChangeSemantics_ADDITIVE, "Creates a coordination node", protocol.ChangeSemantics_UNCHANGED,
 			"The coordination node is created by this plan, so no role could reach it before; it takes its directory's permissions"
 	}
 	if !present["after"] {
-		semantics.RemovesState, semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = new(true), protocol.ChangeSemantics_DESTRUCTIVE, "Drops the node and its runtime coordination state", protocol.ChangeSemantics_NARROWS, "Dropping the node removes access to it"
+		semantics.RemovesState, semantics.Impact, semantics.Reason, semantics.Access, semantics.AccessReason = new(true), protocol.ChangeSemantics_DESTRUCTIVE,
+			"Drops the node and its runtime coordination state", protocol.ChangeSemantics_NARROWS, "Dropping the node removes access to it"
 	}
-	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner), CanonicalFormat: contract.CanonicalFormat, CanonicalProjection: bytes.Clone(canonical), ChangeSemantics: semantics}, nil
+	return semantics
 }

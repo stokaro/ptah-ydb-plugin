@@ -5,12 +5,13 @@ import (
 	"slices"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // indexChange is one index an alteration adds to a table or drops from it. An
@@ -143,7 +144,7 @@ func signatureOf(spec *native.IndexIntent) indexSignature {
 
 // indexSignatures reads the indexes of one side by name, in name order.
 func indexSignatures(specs []*native.IndexIntent) (names []string, signatures map[string]indexSignature, specByName map[string]*native.IndexIntent) {
-	signatures, specByName = map[string]indexSignature{}, map[string]*native.IndexIntent{}
+	signatures, specByName = make(map[string]indexSignature), make(map[string]*native.IndexIntent)
 	for _, spec := range specs {
 		names = append(names, spec.Name)
 		signatures[spec.Name] = signatureOf(spec)
@@ -162,7 +163,7 @@ func declaredSpecs(set *native.IndexSetIntent) []*native.IndexIntent {
 }
 
 func heldSpecs(observed *native.IndexObservations) (specs []*native.IndexIntent, held map[string]*native.TableIndexDescription) {
-	held = map[string]*native.TableIndexDescription{}
+	held = make(map[string]*native.TableIndexDescription)
 	for _, index := range observed.GetIndexes() {
 		specs = append(specs, comparableIndex(schema.IndexSpecification(index.GetDescription())))
 		held[index.GetDescription().GetName()] = index.GetDescription()
@@ -201,15 +202,7 @@ func planIndexes(in indexInput) ([]indexChange, []indexSettingsChange, string) {
 		have, present := held[name]
 		switch {
 		case declared && present:
-			if !want.equal(have) {
-				for _, side := range []indexSignature{want, have} {
-					if scope := side.scope(); scope != "" {
-						return nil, nil, fmt.Sprintf("index %q is outside the global secondary indexes this provider alters: it %s", name, scope)
-					}
-				}
-				return nil, nil, fmt.Sprintf("index %q holds a %s, but the declaration states a %s; YDB cannot alter an index in place, and dropping and adding it rebuilds the index", name, have.describe(), want.describe())
-			}
-			change, reason := planIndexSettings(name, want.settings, heldByName[name])
+			change, reason := keptIndexChange(name, want, have, heldByName[name])
 			if reason != "" {
 				return nil, nil, reason
 			}
@@ -217,22 +210,11 @@ func planIndexes(in indexInput) ([]indexChange, []indexSettingsChange, string) {
 				settings = append(settings, *change)
 			}
 		case declared:
-			if scope := want.scope(); scope != "" {
-				return nil, nil, fmt.Sprintf("the declared index %q is outside the global secondary indexes this provider alters: it %s", name, scope)
-			}
-			if reason := declaredColumns(name, want, in.columns); reason != "" {
-				return nil, nil, reason
-			}
-			added := withoutIndexSettings(wantedByName[name])
-			changes = append(changes, indexChange{add: added})
-			// No call that adds an index takes its settings, so the index
-			// takes YDB's and a change of its own gives it the declared ones,
-			// as the host's embedded engine writes ALTER INDEX ... SET after
-			// ADD INDEX.
-			change, reason := planIndexSettings(name, want.settings, newIndexDescription(added))
+			added, change, reason := addedIndex(name, want, wantedByName[name], in.columns)
 			if reason != "" {
 				return nil, nil, reason
 			}
+			changes = append(changes, indexChange{add: added})
 			if change != nil {
 				settings = append(settings, *change)
 			}
@@ -254,6 +236,41 @@ func planIndexes(in indexInput) ([]indexChange, []indexSettingsChange, string) {
 	}
 	slices.SortFunc(changes, func(a, b indexChange) int { return strings.Compare(a.name(), b.name()) })
 	return changes, settings, ""
+}
+
+// keptIndexChange plans the settings change of an index both the
+// declaration and the table name: it has to keep its definition, which YDB
+// cannot alter in place, and changes its partitioning and read replicas in
+// place. held is the index as the table holds it.
+func keptIndexChange(name string, want, have indexSignature, held *native.TableIndexDescription) (*indexSettingsChange, string) {
+	if !want.equal(have) {
+		for _, side := range []indexSignature{want, have} {
+			if scope := side.scope(); scope != "" {
+				return nil, fmt.Sprintf("index %q is outside the global secondary indexes this provider alters: it %s", name, scope)
+			}
+		}
+		return nil, fmt.Sprintf("index %q holds a %s, but the declaration states a %s; YDB cannot alter an index in place, and dropping and adding it rebuilds the index", name, have.describe(), want.describe())
+	}
+	return planIndexSettings(name, want.settings, held)
+}
+
+// addedIndex plans the addition of the declared index spec states, which
+// reads only the declared columns, and the change that gives it the declared
+// settings.
+func addedIndex(name string, want indexSignature, spec *native.IndexIntent, columns []string) (*native.IndexIntent, *indexSettingsChange, string) {
+	if scope := want.scope(); scope != "" {
+		return nil, nil, fmt.Sprintf("the declared index %q is outside the global secondary indexes this provider alters: it %s", name, scope)
+	}
+	if reason := declaredColumns(name, want, columns); reason != "" {
+		return nil, nil, reason
+	}
+	added := withoutIndexSettings(spec)
+	// No call that adds an index takes its settings, so the index
+	// takes YDB's and a change of its own gives it the declared ones,
+	// as the host's embedded engine writes ALTER INDEX ... SET after
+	// ADD INDEX.
+	change, reason := planIndexSettings(name, want.settings, newIndexDescription(added))
+	return added, change, reason
 }
 
 // declaredColumns requires every column an index reads to be one the

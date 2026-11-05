@@ -5,11 +5,12 @@ import (
 	"slices"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // Common names the common objects a read reports on the common wire of

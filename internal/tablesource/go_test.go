@@ -6,16 +6,16 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // fileSize is the length of the imaginary Go file the declarations sit in.
@@ -116,13 +116,13 @@ func TestGoDirectives_TablesGetTheirOwnFacets(t *testing.T) {
 		declaration(4, "Item", map[string]string{"name": "warm", "table": "shop.orders"}))
 	tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 	c.Assert(err, qt.IsNil)
-	c.Assert(len(tables), qt.Equals, 2)
+	c.Assert(tables, qt.HasLen, 2)
 	c.Assert(tables[0].Fragment, qt.Equals, 0)
 	c.Assert(tables[0].Binding.Object.Name, qt.Equals, "items")
 	c.Assert(string(tables[0].Value.CanonicalProjection), qt.Equals, `{"columnFamilies":[{"name":"cold"}]}`)
 	c.Assert(tables[1].Fragment, qt.Equals, 1)
 	c.Assert(string(tables[1].Value.CanonicalProjection), qt.Equals, `{"columnFamilies":[{"data":{"media":"ssd"},"name":"hot"},{"name":"warm"}]}`)
-	ids := map[string]bool{}
+	ids := make(map[string]bool)
 	for _, table := range tables {
 		ids[table.Value.Id] = true
 	}
@@ -177,10 +177,10 @@ func TestGoDirectives_FailurePath(t *testing.T) {
 			request := goRequest(c, test.declarations...)
 			tables, err := tablesource.Decode(c.Context(), request.Documents[0])
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
-			c.Assert(len(tables), qt.Equals, 0)
+			c.Assert(tables, qt.HasLen, 0)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -192,7 +192,7 @@ func TestGoDirectives_AttributeOutsideTheClaim(t *testing.T) {
 	request := goRequest(c, declaration(2, "Item", map[string]string{"name": "cold", "barriers": "x"}))
 	decoded, err := backend.New().DecodeSource(c.Context(), request)
 	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-	c.Assert(decoded == nil, qt.IsTrue)
+	c.Assert(decoded, qt.IsNil)
 }
 
 // attributes is a ptah:schema:table directive on its own line of the file,
@@ -296,7 +296,7 @@ func TestTableDirective_RowStorageAloneDeclaresNothing(t *testing.T) {
 
 func TestTableDirective_FailurePath(t *testing.T) {
 	ttl := func(column, interval, unit string) map[string]string {
-		attributes := map[string]string{}
+		attributes := make(map[string]string)
 		for name, value := range map[string]string{"platform.ydb.row_deletion_column": column, "platform.ydb.row_deletion_interval": interval, "platform.ydb.row_deletion_unit": unit} {
 			if value != "-" {
 				attributes[name] = value
@@ -352,7 +352,7 @@ func TestTableDirective_FailurePath(t *testing.T) {
 			c.Assert(tables, qt.HasLen, 0)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -419,7 +419,7 @@ func TestIndexDirective_FailurePath(t *testing.T) {
 		{"read replicas with no mode", map[string]string{"read_replicas_settings": "2"}, facets, `(?s).*index "by_body": invalid read_replicas_settings "2": write PER_AZ:<n>.*`},
 		{"a minimum above the maximum", map[string]string{"auto_partitioning_min_partitions_count": "5", "auto_partitioning_max_partitions_count": "2"}, facets,
 			`(?s).*index "by_body": YDB minimum partitions exceed maximum.*`},
-		{"a host that reads no index settings", map[string]string{"auto_partitioning_by_load": "ENABLED"}, []string{},
+		{"a host that reads no index settings", map[string]string{"auto_partitioning_by_load": "ENABLED"}, make([]string, 0),
 			`(?s).*index "by_body" declares its partitioning or read replicas, which this provider compares only with a host that negotiates schema.observed-index-facets.*`},
 	}
 	for _, test := range tests {
@@ -429,7 +429,7 @@ func TestIndexDirective_FailurePath(t *testing.T) {
 			decoded, err := backend.New().DecodeSource(ctx, goRequest(c, indexDeclaration(2, "Item", test.attributes)))
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }

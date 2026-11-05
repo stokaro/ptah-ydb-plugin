@@ -15,12 +15,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // hostVerb runs one verb of the pinned host with this provider selected for
@@ -32,7 +33,7 @@ func hostVerb(c *qt.C, args ...string) (stdout, stderr string, exit int) {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, append(args, "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"))...)
+	cmd := testCommand(ctx, host, append(args, "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"))...)
 	var out, diagnostics bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &diagnostics
 	err := cmd.Run()

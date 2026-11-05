@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // executeFailing runs statement alone through client, which must fail it, and
@@ -38,7 +39,7 @@ func TestRefusedUnitGivesItsReasonSubprocess(t *testing.T) {
 	c.Cleanup(func() {
 		c.Check(execFixtureSchema(context.Background(), opened.DB, "DROP TABLE `"+table+"`"), qt.IsNil)
 	})
-	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+table+"` (id, v) VALUES (1, 'kept'u)")
+	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+table+"` (id, v) VALUES (1, 'kept'u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	listing := startProviderFor(c, provider.ErrorReasonsFeature)
 	listed, err := listing.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})

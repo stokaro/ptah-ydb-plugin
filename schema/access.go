@@ -1,9 +1,10 @@
 package schema
 
 import (
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 func accessIntent(self *Ydb_Scheme.Entry) *native.AccessIntent {
@@ -12,7 +13,7 @@ func accessIntent(self *Ydb_Scheme.Entry) *native.AccessIntent {
 	}
 	result := &native.AccessIntent{}
 	if self.Owner != "" {
-		result.Owner = proto.String(self.Owner)
+		result.Owner = new(self.Owner)
 	}
 	for _, grant := range self.Permissions {
 		result.DirectGrants = append(result.DirectGrants, proto.CloneOf(grant))

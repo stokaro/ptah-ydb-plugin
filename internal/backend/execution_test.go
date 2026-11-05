@@ -15,18 +15,19 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 type driverProbe struct {
@@ -60,7 +61,7 @@ func (*probeConnection) Close() error                        { return nil }
 func (*probeConnection) Begin() (driver.Tx, error)           { return nil, driver.ErrSkip }
 func (c *probeConnection) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	c.state.beginCalls.Add(1)
-	c.state.isolation.Store(int32(opts.Isolation))
+	c.state.isolation.Store(int32(opts.Isolation)) // #nosec G115 -- database/sql isolation levels run from 0 to 7
 	if c.state.onBegin != nil {
 		if err := c.state.onBegin(ctx); err != nil {
 			return nil, err
@@ -324,7 +325,7 @@ func TestExecutionDistinguishesRefusalFromUnknownDispatch(t *testing.T) {
 				return true, nil
 			}, []*protocol.Unit{{}, {}, {}})
 			c.Assert(result.Outcome, qt.Equals, test.outcome)
-			c.Assert(result.AppliedCount, qt.Equals, uint32(test.prefix))
+			c.Assert(result.AppliedCount, qt.Equals, uint32(test.prefix)) // #nosec G115 -- a row's prefix is 0 or 1
 			c.Assert(calls, qt.Equals, test.prefix+1)
 			c.Assert(result.Message, qt.Not(qt.Contains), "secret-marker")
 		})

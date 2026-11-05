@@ -87,14 +87,14 @@ func variableName(name string) bool {
 // in upper case, with every character a variable name cannot hold written as
 // an underscore.
 func DefaultValueEnv(schema, name string) string {
-	path := strings.Trim(schema, "/")
-	if path != "" {
-		path += "/"
+	qualified := strings.Trim(schema, "/")
+	if qualified != "" {
+		qualified += "/"
 	}
-	path += name
+	qualified += name
 	var b strings.Builder
 	b.WriteString(ValuePrefix)
-	for _, r := range strings.ToUpper(path) {
+	for _, r := range strings.ToUpper(qualified) {
 		if r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
 			b.WriteRune(r)
 			continue

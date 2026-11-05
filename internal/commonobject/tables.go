@@ -3,9 +3,10 @@ package commonobject
 import (
 	"fmt"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 )
 
 // TableCommentRefusal says why YDB cannot hold the comments a table
@@ -14,7 +15,7 @@ import (
 // and all of them together to its limit on one object's attributes.
 func TableCommentRefusal(table *protocol.DeclaredTable) error {
 	subject := "table " + qualified(table.GetSchema(), table.GetName())
-	comments := ydbcomment.Comments{Own: table.GetComment(), Columns: map[string]string{}, Indexes: map[string]string{}}
+	comments := ydbcomment.Comments{Own: table.GetComment(), Columns: make(map[string]string), Indexes: make(map[string]string)}
 	check := func(object ydbcomment.Object, name, comment, about string) error {
 		if comment == "" {
 			return nil

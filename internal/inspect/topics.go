@@ -6,9 +6,10 @@ import (
 	"path"
 	"slices"
 
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 )
 
 func topicIdentity(topic *native.DescribeTopicResult, name string) error {

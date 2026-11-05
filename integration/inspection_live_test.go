@@ -16,16 +16,17 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-sdk/v3"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnstore"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/ydb-platform/ydb-go-sdk/v3"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func inspectionFixture(c *qt.C) (*connection.Connection, string, string) {
@@ -82,7 +83,7 @@ func createFixtureTable(c *qt.C, opened *connection.Connection, database, direct
 // and uncertain outcomes must not replay DDL, even during fixture setup.
 func execFixtureSchema(ctx context.Context, db *sql.DB, statement string) error {
 	for {
-		_, err := db.ExecContext(ctx, statement)
+		_, err := db.ExecContext(ctx, statement) // #nosec G701 -- the statement is fixture DDL a test wrote for a directory it generated
 		// YDB answers a schema statement on a path a schema operation still
 		// holds with OVERLOADED, naming the path as under operation or as
 		// locked by the operation's transaction.

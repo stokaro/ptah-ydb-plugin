@@ -5,11 +5,12 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"google.golang.org/protobuf/types/known/durationpb"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 // declared writes declarations as the desired changefeed set.

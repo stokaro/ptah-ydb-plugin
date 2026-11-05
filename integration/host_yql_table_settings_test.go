@@ -11,10 +11,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // applyYQLUntilSynced applies a YQL schema through the host, requires output
@@ -88,7 +89,7 @@ func TestHostAppliesYQLTTLAndColumnFamilies_HappyPath(t *testing.T) {
 	opened, directory, database := lockFixture(c)
 	absolute := path.Join(database, directory, "events")
 	dropTablesAtCleanup(c, opened, absolute)
-	const table = "CREATE TABLE `{dir}/events` (id Int64 NOT NULL, ts Timestamp, body Utf8 FAMILY payload, PRIMARY KEY (id), FAMILY payload (COMPRESSION = 'lz4'))"
+	const createTable = "CREATE TABLE `{dir}/events` (id Int64 NOT NULL, ts Timestamp, body Utf8 FAMILY payload, PRIMARY KEY (id), FAMILY payload (COMPRESSION = 'lz4'))"
 	families := []string{"default compression=off", "payload compression=lz4 columns=body"}
 	for _, step := range []struct {
 		name, suffix, planned string
@@ -99,7 +100,7 @@ func TestHostAppliesYQLTTLAndColumnFamilies_HappyPath(t *testing.T) {
 		{"the TTL removed", ";", `(?s).*row-table-alter-operation.*Schema apply completed successfully.*`,
 			storedTable{Families: families, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0"}},
 	} {
-		applyYQLUntilSynced(c, directory, table+step.suffix, step.planned, step.name)
+		applyYQLUntilSynced(c, directory, createTable+step.suffix, step.planned, step.name)
 		c.Assert(heldStorage(c, opened, absolute), qt.DeepEquals, step.want, qt.Commentf("%s", step.name))
 	}
 }
@@ -113,12 +114,12 @@ func TestHostAppliesAYQLColumnTable_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.SQLFacetsFeature)
 	directory := hostColumnFixture(c)
-	const table = "CREATE TABLE `{dir}/events` (ts Timestamp NOT NULL, id Uint64 NOT NULL, body Utf8, PRIMARY KEY (ts, id)) PARTITION BY HASH (id) " +
+	const createTable = "CREATE TABLE `{dir}/events` (ts Timestamp NOT NULL, id Uint64 NOT NULL, body Utf8, PRIMARY KEY (ts, id)) PARTITION BY HASH (id) " +
 		"WITH (STORE = COLUMN, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3, TTL = Interval('%s') ON ts);"
 	for _, step := range []struct{ name, interval, planned string }{
 		{"creation", "P1D", `(?s).*column-table-create-operation.*Schema apply completed successfully.*`},
 		{"another TTL", "P2D", `(?s).*column-table-ttl-operation.*Schema apply completed successfully.*`},
 	} {
-		applyYQLUntilSynced(c, directory, fmt.Sprintf(table, step.interval), step.planned, step.name)
+		applyYQLUntilSynced(c, directory, fmt.Sprintf(createTable, step.interval), step.planned, step.name)
 	}
 }

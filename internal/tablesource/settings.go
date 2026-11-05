@@ -8,13 +8,14 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/proto"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
-	"google.golang.org/protobuf/proto"
 )
 
 // DeclarationError is an attribute whose value a declaration cannot carry.
@@ -365,7 +366,7 @@ func (s *settings) setTTL(values map[string]string) error {
 	if s.intent.TtlSettings != nil {
 		return fmt.Errorf("it declares a TTL twice")
 	}
-	// ttlgrammar bounds the interval by MaxSeconds, which fits 32 bits.
+	// #nosec G115 -- ttlgrammar bounds the interval by MaxSeconds, which fits 32 bits.
 	expire := uint32(seconds)
 	if canonicalUnit == "" {
 		s.intent.TtlSettings = &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_DateTypeColumn{

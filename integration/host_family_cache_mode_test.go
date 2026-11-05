@@ -10,15 +10,16 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/encoding/protowire"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // heldCacheModes reads the cache mode of each family of the table at
@@ -43,7 +44,7 @@ func heldCacheModes(c *qt.C, opened *connection.Connection, absolute string) map
 	c.Assert(described.GetOperation().GetStatus(), qt.Equals, Ydb.StatusIds_SUCCESS, qt.Commentf("%v", described.GetOperation().GetIssues()))
 	var table Ydb_Table.DescribeTableResult
 	c.Assert(described.GetOperation().GetResult().UnmarshalTo(&table), qt.IsNil)
-	modes := map[string]string{}
+	modes := make(map[string]string)
 	for _, family := range table.ColumnFamilies {
 		unknown := family.ProtoReflect().GetUnknown()
 		for len(unknown) > 0 {
@@ -99,7 +100,7 @@ func TestHostChangesAFamilyCacheModeInPlace_HappyPath(t *testing.T) {
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	created, err := hostApplySource(c, directory, "go", replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"hot\" fields=\"title\"\n", ""), directory))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u), (2l, 'b'u, NULL)")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u), (2l, 'b'u, NULL)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 
 	for _, step := range []struct {
@@ -122,7 +123,7 @@ func TestHostChangesAFamilyCacheModeInPlace_HappyPath(t *testing.T) {
 			wantModes:    map[string]string{"hot": "regular", "warm": "in_memory"}},
 		{name: "the cache modes left out",
 			families:     "//ptah:schema:columnfamily name=\"hot\" fields=\"title\"\n//ptah:schema:columnfamily name=\"warm\" fields=\"body\"\n",
-			wantPlan:     []string{},
+			wantPlan:     make([]string, 0),
 			wantFamilies: []string{"default compression=off", "hot compression=off columns=title", "warm compression=off columns=body"},
 			wantModes:    map[string]string{"hot": "regular", "warm": "in_memory"}},
 	} {
@@ -163,7 +164,7 @@ func TestHostRefusesAFamilyCacheModeTheTargetLacks_FailurePath(t *testing.T) {
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(refused, qt.Matches, cacheModeRefusal)
 	c.Assert(heldStorage(c, opened, absolute).Families, qt.DeepEquals, []string{"default compression=off", "hot compression=off columns=title"})
-	c.Assert(heldCacheModes(c, opened, absolute), qt.DeepEquals, map[string]string{})
+	c.Assert(heldCacheModes(c, opened, absolute), qt.DeepEquals, make(map[string]string))
 }
 
 // On a line that takes a cache mode by default, a cluster can turn

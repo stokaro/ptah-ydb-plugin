@@ -6,14 +6,16 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // The operations a table rebuild takes beside a creation and a removal: the
@@ -26,7 +28,8 @@ const (
 
 var (
 	copyModel = buildStatementModel(CopyOperationKind, map[string]any{
-		"payload":      "source: the table rows are read from, in the owner's directory; columns: each column the new table takes from it, with the type it is converted to and the message a row that does not convert or is NULL for a NOT NULL column fails the copy with",
+		"payload": "source: the table rows are read from, in the owner's directory; columns: each column the new table takes from it, with the type " +
+			"it is converted to and the message a row that does not convert or is NULL for a NOT NULL column fails the copy with",
 		"execution":    "one YQL INSERT ... SELECT through the query service, outside SQL transactions, which commits whole or not at all; no retries",
 		"precondition": "the source must hold every copied column and the owner must exist and hold no row",
 		"confirmation": "the statement commits; rows written to the source after it ran are not in the owner",
@@ -52,9 +55,7 @@ func RenameModel() *protocol.ValueModel { return proto.CloneOf(renameModel) }
 func buildStatementModel(kind string, contract map[string]any) *protocol.ValueModel {
 	definition := map[string]any{"kind": kind, "representation": "operation", "schema_version": 1, "encoding": "json",
 		"database": "an explicit owner database must match the selected session; an empty database binds to that session"}
-	for key, value := range contract {
-		definition[key] = value
-	}
+	maps.Copy(definition, contract)
 	raw, err := json.Marshal(definition)
 	if err != nil {
 		panic(err)
@@ -118,8 +119,8 @@ func (r Rename) validate() error {
 }
 
 // CaptureCopy builds the copy of rows into owner.
-func CaptureCopy(id string, owner *protocol.Reference, copy Copy) (*protocol.NormalizedValue, error) {
-	return captureStatement(id, owner, CopyModel(), copy, NormalizeCopy)
+func CaptureCopy(id string, owner *protocol.Reference, request Copy) (*protocol.NormalizedValue, error) {
+	return captureStatement(id, owner, CopyModel(), request, NormalizeCopy)
 }
 
 // CaptureRename builds the rename of owner.
@@ -140,11 +141,11 @@ func captureStatement(id string, owner *protocol.Reference, definition *protocol
 
 // NormalizeCopy reconstructs a copy's safety facts from its payload.
 func NormalizeCopy(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
-	copy, err := decodeStatement[Copy](input, CopyModel())
+	decoded, err := decodeStatement[Copy](input, CopyModel())
 	if err != nil {
 		return nil, err
 	}
-	return normalizedStatement(input, CopyModel(), copy, &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE,
+	return normalizedStatement(input, CopyModel(), decoded, &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE,
 		Reason: "Copies the rows of a table into a new one", Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: "Rows are written into a table the plan created"})
 }
 
@@ -220,18 +221,18 @@ func normalizedStatement(input *protocol.ValueInput, definition *protocol.ValueM
 // convert, so the value is unwrapped and such a row fails the copy with a
 // message naming the table being rebuilt and the column; a NOT NULL column is
 // unwrapped too, which YQL requires of an optional value written to one.
-func CopyStatement(path string, copy *Copy) (string, error) {
+func CopyStatement(path string, request *Copy) (string, error) {
 	directory := path[:max(strings.LastIndex(path, "/"), 0)]
-	source := TextPath(directory, copy.Source)
+	source := TextPath(directory, request.Source)
 	// The embedded engine names the table as the host does, its schema and
 	// name joined by a dot.
-	label := copy.Source
+	label := request.Source
 	if directory != "" {
-		label = directory + "." + copy.Source
+		label = directory + "." + request.Source
 	}
-	names := make([]string, 0, len(copy.Columns))
-	values := make([]string, 0, len(copy.Columns))
-	for _, column := range copy.Columns {
+	names := make([]string, 0, len(request.Columns))
+	values := make([]string, 0, len(request.Columns))
+	for _, column := range request.Columns {
 		value, err := copiedValue(label, column)
 		if err != nil {
 			return "", err

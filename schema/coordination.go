@@ -10,11 +10,12 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // CoordinationIntent preserves authored configuration. Missing settings request
@@ -69,7 +70,8 @@ func buildCoordinationDesiredModel() *protocol.ValueModel {
 	graph := make(map[string]any)
 	describeMessage((&native.AccessIntent{}).ProtoReflect().Descriptor(), graph)
 	document["access_definition"] = graph
-	document["access_contract"] = "snake_case JSON fields; missing access is unmanaged; complete direct and effective permission sets; owner omission is unmanaged; comparison and execution refuse unsatisfied constraints, never grant or infer inheritance"
+	document["access_contract"] = "snake_case JSON fields; missing access is unmanaged; complete direct and effective permission sets; owner omission is unmanaged; " +
+		"comparison and execution refuse unsatisfied constraints, never grant or infer inheritance"
 	document["conversion"] = "offline; native unspecified settings stay omitted; preserves access; source holder provenance cannot become observed state"
 	encoded, err := json.Marshal(document)
 	if err != nil {
@@ -202,30 +204,8 @@ func NormalizeDesired(value *protocol.Envelope) (*protocol.Envelope, error) {
 	if err != nil {
 		return nil, err
 	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(canonical, &fields); err != nil || fields == nil {
-		return nil, fmt.Errorf("desired YDB coordination requires an object")
-	}
-	for key, raw := range fields {
-		// encoding/json matches struct tags case-insensitively. The negotiated
-		// grammar does not: aliases could overwrite another authored field.
-		switch key {
-		case "self_check_period_millis", "session_grace_period_millis", "read_consistency_mode", "attach_consistency_mode", "rate_limiter_counters_mode", "struct_name", "access":
-		default:
-			return nil, fmt.Errorf("unknown desired YDB coordination field")
-		}
-		if bytes.Equal(raw, []byte("null")) {
-			return nil, fmt.Errorf("null YDB coordination setting")
-		}
-	}
-	if raw, ok := fields["access"]; ok {
-		var access native.AccessIntent
-		if err := rejectNullSettings(raw, access.ProtoReflect().Descriptor()); err != nil {
-			return nil, err
-		}
-		if err := protojson.Unmarshal(raw, &access); err != nil {
-			return nil, fmt.Errorf("invalid YDB coordination access requirements")
-		}
+	if err := validateCoordinationFields(canonical); err != nil {
+		return nil, err
 	}
 	var intent CoordinationIntent
 	decoder := json.NewDecoder(bytes.NewReader(canonical))
@@ -247,6 +227,39 @@ func NormalizeDesired(value *protocol.Envelope) (*protocol.Envelope, error) {
 	result := proto.CloneOf(value)
 	result.Payload = canonical
 	return result, nil
+}
+
+// validateCoordinationFields checks the fields of a desired coordination
+// payload before it is decoded: an object whose keys are the exact names of
+// the negotiated grammar, none null, and an access that reads as native access
+// requirements without a null setting.
+func validateCoordinationFields(canonical []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(canonical, &fields); err != nil || fields == nil {
+		return fmt.Errorf("desired YDB coordination requires an object")
+	}
+	for key, raw := range fields {
+		// encoding/json matches struct tags case-insensitively. The negotiated
+		// grammar does not: aliases could overwrite another authored field.
+		switch key {
+		case "self_check_period_millis", "session_grace_period_millis", "read_consistency_mode", "attach_consistency_mode", "rate_limiter_counters_mode", "struct_name", "access":
+		default:
+			return fmt.Errorf("unknown desired YDB coordination field")
+		}
+		if bytes.Equal(raw, []byte("null")) {
+			return fmt.Errorf("null YDB coordination setting")
+		}
+	}
+	if raw, ok := fields["access"]; ok {
+		var access native.AccessIntent
+		if err := rejectNullSettings(raw, access.ProtoReflect().Descriptor()); err != nil {
+			return err
+		}
+		if err := protojson.Unmarshal(raw, &access); err != nil {
+			return fmt.Errorf("invalid YDB coordination access requirements")
+		}
+	}
+	return nil
 }
 
 // CaptureCoordinationIntent captures a validated declaration under its model.

@@ -8,14 +8,15 @@ import (
 	"fmt"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // OperationKind identifies a complete native row-table creation request.
@@ -43,14 +44,20 @@ func buildOperationModel() *protocol.ValueModel {
 		"column_model": json.RawMessage(schema.ColumnDesiredModel().DefinitionJson),
 		"table_model":  json.RawMessage(schema.TableDesiredModel().DefinitionJson),
 		"columns":      "distinct names, exact native storage types, explicit matching notNull, optional typed literal or Serial sequence; compression and encoding refused",
-		"sequences":    "a Serial column is a NOT NULL Int16, Int32 or Int64 whose sequence is named _serial_column_<column> and states min 1, the maximum of the column's type, a start from 1 to that maximum, cache 1, an increment of at least 1 and no cycle; confirmation reads the same sequence back with no restart",
-		"keys":         "ordered nonempty distinct existing columns",
-		"families":     "each column family is written as column_family describes it, Ydb.Table.ColumnFamily with the cache mode at its upstream field 6, which the request carries to the table service; a cache mode requires the column_family_cache_mode capability",
-		"settings":     "row storage only; no access changes, temporary lifetime, changefeeds, profiles or compaction policy; a starting layout is either a count of uniform partitions over a Uint32 or Uint64 first key column, or split points of optional tuples over the leading key columns",
-		"indexes":      "global indexes, sync, async or unique, each with its ordered key columns and covered columns over declared columns and no settings of its own, built with the table",
-		"omission":     "omitted creation settings request server defaults; explicit settings are confirmed after creation",
-		"execution":    "native CreateTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
-		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root ptah_locks is reserved; no atomic compare-and-set",
+		"sequences": "a Serial column is a NOT NULL Int16, Int32 or Int64 whose sequence is named _serial_column_<column> and states min 1, the " +
+			"maximum of the column's type, a start from 1 to that maximum, cache 1, an increment of at least 1 and no cycle; confirmation reads the same " +
+			"sequence back with no restart",
+		"keys": "ordered nonempty distinct existing columns",
+		"families": "each column family is written as column_family describes it, Ydb.Table.ColumnFamily with the cache mode at its upstream field " +
+			"6, which the request carries to the table service; a cache mode requires the column_family_cache_mode capability",
+		"settings": "row storage only; no access changes, temporary lifetime, changefeeds, profiles or compaction policy; a starting layout is " +
+			"either a count of uniform partitions over a Uint32 or Uint64 first key column, or split points of optional tuples over the leading key columns",
+		"indexes":   "global indexes, sync, async or unique, each with its ordered key columns and covered columns over declared columns and no settings of its own, built with the table",
+		"omission":  "omitted creation settings request server defaults; explicit settings are confirmed after creation",
+		"execution": "native CreateTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
+		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence " +
+			"when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root " +
+			"ptah_locks is reserved; no atomic compare-and-set",
 		"confirmation": "read back columns, ordered primary key, requested settings, the requested indexes ready with their definitions and no other index, and no changefeed; a successful create does not establish exclusive ownership",
 		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
@@ -150,6 +157,42 @@ func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {
 	if request.StoreType != Ydb_Table.StoreType_STORE_TYPE_ROW {
 		return nil, fmt.Errorf("YDB creation requires row storage")
 	}
+	names, err := requestColumnNames(&request)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateIndexes(&request, names); err != nil {
+		return nil, err
+	}
+	// Reuse the desired model's validation for native settings rather than
+	// accepting a less strict operation payload than the source declaration.
+	if err := validateRequestLayout(&request); err != nil {
+		return nil, err
+	}
+	if err := validateRequestSettings(&request); err != nil {
+		return nil, err
+	}
+	if err := validateReferences(&request, names); err != nil {
+		return nil, err
+	}
+	// Native requests must carry no duplicate family declarations even if their
+	// unpopulated settings happen to serialize identically.
+	families := make([]string, 0)
+	for _, family := range request.ColumnFamilies {
+		families = append(families, family.Name)
+	}
+	slices.Sort(families)
+	if len(slices.Compact(families)) != len(request.ColumnFamilies) {
+		return nil, fmt.Errorf("duplicate YDB column family")
+	}
+	return &request, nil
+}
+
+// requestColumnNames checks the columns and the key of a creation request and
+// returns the set of column names. Each column has a valid distinct name, a
+// type with its matching nullability and at most a typed literal default or a
+// Serial sequence; the key names distinct columns.
+func requestColumnNames(request *Ydb_Table.CreateTableRequest) (map[string]bool, error) {
 	names := make(map[string]bool, len(request.Columns))
 	if len(request.Columns) == 0 || len(request.PrimaryKey) == 0 {
 		return nil, fmt.Errorf("YDB creation requires columns and an ordered primary key")
@@ -176,59 +219,44 @@ func decodeRequest(payload []byte) (*Ydb_Table.CreateTableRequest, error) {
 			return nil, fmt.Errorf("invalid YDB typed literal default")
 		}
 	}
-	keys := map[string]bool{}
+	keys := make(map[string]bool)
 	for _, key := range request.PrimaryKey {
 		if !names[key] || keys[key] {
 			return nil, fmt.Errorf("invalid YDB primary key column")
 		}
 		keys[key] = true
 	}
-	if err := validateIndexes(&request, names); err != nil {
-		return nil, err
-	}
-	// Reuse the desired model's validation for native settings rather than
-	// accepting a less strict operation payload than the source declaration.
-	if err := validateRequestLayout(&request); err != nil {
-		return nil, err
-	}
-	settings, err := marshalRequest(&request)
+	return names, nil
+}
+
+// validateRequestSettings holds the table settings of a creation request to
+// the desired table model: the request without its columns, its storage
+// kind, its indexes and its layout.
+func validateRequestSettings(request *Ydb_Table.CreateTableRequest) error {
+	settings, err := marshalRequest(request)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(settings, &raw); err != nil {
-		return nil, err
+		return err
 	}
 	delete(raw, "columns")
 	delete(raw, "storeType")
 	delete(raw, "indexes")
-	// The request states the layout as native typed values, which the check
-	// above holds to the rules; the settings model states it as source text.
+	// The request states the layout as native typed values, which
+	// validateRequestLayout holds to the rules; the settings model states it
+	// as source text.
 	delete(raw, "uniformPartitions")
 	delete(raw, "partitionAtKeys")
 	settings, err = json.Marshal(raw)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	model := schema.TableDesiredModel()
-	if _, err := schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: schema.TableProperties,
-		SchemaVersion: 1, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: &protocol.Reference{Engine: "ydb", Kind: "table", Name: "validation"}, Payload: settings}); err != nil {
-		return nil, err
-	}
-	if err := validateReferences(&request, names); err != nil {
-		return nil, err
-	}
-	// Native requests must carry no duplicate family declarations even if their
-	// unpopulated settings happen to serialize identically.
-	families := []string{}
-	for _, family := range request.ColumnFamilies {
-		families = append(families, family.Name)
-	}
-	slices.Sort(families)
-	if len(slices.Compact(families)) != len(request.ColumnFamilies) {
-		return nil, fmt.Errorf("duplicate YDB column family")
-	}
-	return &request, nil
+	_, err = schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: schema.TableProperties,
+		SchemaVersion: 1, Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: &protocol.Reference{Engine: "ydb", Kind: "table", Name: "validation"}, Payload: settings})
+	return err
 }
 
 func containsNull(value any) bool {
@@ -236,10 +264,8 @@ func containsNull(value any) bool {
 	case nil:
 		return true
 	case []any:
-		for _, item := range v {
-			if containsNull(item) {
-				return true
-			}
+		if slices.ContainsFunc(v, containsNull) {
+			return true
 		}
 	case map[string]any:
 		for _, item := range v {

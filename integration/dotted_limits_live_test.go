@@ -13,6 +13,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -20,9 +24,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topiccompare"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
-	"google.golang.org/protobuf/proto"
 )
 
 // limitedTopicComparison creates the topic events in the fixture directory,

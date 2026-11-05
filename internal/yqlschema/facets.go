@@ -7,14 +7,15 @@ import (
 	"strconv"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // tableFacets are the reply's facets of the YDB settings one table declares:
@@ -173,8 +174,8 @@ func rowTTL(policy ydbdecl.TTL) (*Ydb_Table.TtlSettings, error) {
 	if err != nil {
 		return nil, err
 	}
-	// IntervalSeconds bounds the interval by YDB's Interval type, which fits
-	// 32 bits.
+	// #nosec G115 -- IntervalSeconds bounds the interval by YDB's Interval
+	// type, which fits 32 bits.
 	expire := uint32(seconds)
 	if policy.Unit == "" {
 		return &Ydb_Table.TtlSettings{Mode: &Ydb_Table.TtlSettings_DateTypeColumn{
@@ -198,6 +199,7 @@ func columnStorageIntent(facets ydbdecl.TableFacets) (*native.ColumnStorageInten
 	case store.TTL != nil && facets.TTL != nil:
 		return nil, errors.New(schema.ColumnTableBothTTLRefusal)
 	case store.TTL != nil:
+		// #nosec G115 -- epochUnits holds YDB's column unit enum numbers, 1 to 4
 		enabled := &native.ColumnTTLEnabled{Column: store.TTL.Column, ColumnUnit: uint64(epochUnits[store.TTL.Unit])}
 		for position, tier := range store.TTL.Tiers {
 			seconds, err := ydbdecl.IntervalSeconds(tier.Interval)
@@ -217,7 +219,7 @@ func columnStorageIntent(facets ydbdecl.TableFacets) (*native.ColumnStorageInten
 			return nil, err
 		}
 		intent.Ttl = &native.ColumnTTLPolicy{State: &native.ColumnTTLPolicy_Enabled{Enabled: &native.ColumnTTLEnabled{Column: facets.TTL.Column,
-			ColumnUnit: uint64(epochUnits[facets.TTL.Unit]),
+			ColumnUnit: uint64(epochUnits[facets.TTL.Unit]), // #nosec G115 -- epochUnits holds YDB's column unit enum numbers, 1 to 4
 			Tiers:      []*native.ColumnTTLTier{{ApplyAfterSeconds: seconds, Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}}}}}}
 	}
 	return intent, nil

@@ -10,12 +10,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // hostGlobalItems declares items in directory as the host's global-index
@@ -52,7 +53,7 @@ func heldIndexColumns(c *qt.C, opened *connection.Connection, absolute string) m
 	defer func() { c.Check(session.Close(), qt.IsNil) }()
 	described, err := session.Describe(c.Context(), absolute)
 	c.Assert(err, qt.IsNil)
-	result := map[string][2][]string{}
+	result := make(map[string][2][]string)
 	for _, index := range described.GetIndexes() {
 		result[index.GetName()] = [2][]string{index.GetIndexColumns(), index.GetDataColumns()}
 	}

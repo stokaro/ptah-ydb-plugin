@@ -21,13 +21,14 @@ import (
 	"slices"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 )
 
 // Answer is what YDB answered a failed call with.

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
@@ -43,7 +43,7 @@ func hostSQLLint(c *qt.C, file, version string) ([]string, int) {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "sql", "lint", "--provider-config", manifest, "--dialect", "ydb", "--server-version", version, "--format", "json", file)
+	cmd := testCommand(ctx, host, "sql", "lint", "--provider-config", manifest, "--dialect", "ydb", "--server-version", version, "--format", "json", file)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
@@ -58,7 +58,7 @@ func hostSQLLint(c *qt.C, file, version string) ([]string, int) {
 		} `json:"findings"`
 	}
 	c.Assert(json.Unmarshal(stdout.Bytes(), &report), qt.IsNil, qt.Commentf("stdout %q, stderr %q", stdout.String(), stderr.String()))
-	findings := []string{}
+	findings := make([]string, 0)
 	for _, finding := range report.Findings {
 		findings = append(findings, fmt.Sprintf("%d:%d %s %s", finding.Line, finding.Column, finding.Rule, finding.Message))
 	}
@@ -74,7 +74,7 @@ var (
 // rule, and the table of a missing primary key or the key of a capability the
 // target lacks. The two readings word those findings differently by design.
 func about(findings []string) []string {
-	result := []string{}
+	result := make([]string, 0)
 	for _, finding := range findings {
 		finding = missingKeyMessage.ReplaceAllString(finding, "$1 $2")
 		result = append(result, requirementMessage.ReplaceAllString(finding, "$1 $2"))
@@ -99,7 +99,7 @@ func TestHostLintsYQLByTheStatementFacts_HappyPath(t *testing.T) {
 		for version, line := range golden.Versions {
 			t.Run(filepath.Base(file)+"/"+version, func(t *testing.T) {
 				c := testcheck.New(t)
-				want := []string{}
+				want := make([]string, 0)
 				for _, finding := range line.Findings {
 					want = append(want, fmt.Sprintf("%d:%d %s %s", finding.Line, finding.Column, finding.Rule, finding.Message))
 				}

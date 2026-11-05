@@ -3,12 +3,14 @@
 package integration_test
 
 import (
+	"testing"
+
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
-	"testing"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 )
 
 func TestCoordinationSourceOfflineSubprocess(t *testing.T) {

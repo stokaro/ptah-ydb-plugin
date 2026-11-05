@@ -3,10 +3,11 @@ package schema
 import (
 	"fmt"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // WithoutAccess is a desired value converted from a read with its native

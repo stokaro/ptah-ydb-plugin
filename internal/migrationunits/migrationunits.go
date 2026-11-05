@@ -26,9 +26,10 @@ import (
 	"errors"
 	"slices"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // Reasons the split gives for a refused body. None quotes the body: the host
@@ -85,6 +86,7 @@ func placement(kind yqlquery.Kind) protocol.MigrationUnit_Placement {
 }
 
 func refused(span yqlquery.Span, reason string) *protocol.SplitRefusal {
+	// #nosec G115 -- the span is a range of the request's migration text, and runtime.MaxMessageBytes bounds a request to 4 MiB
 	return &protocol.SplitRefusal{Start: uint32(span.Start), End: uint32(span.End), Reason: reason}
 }
 

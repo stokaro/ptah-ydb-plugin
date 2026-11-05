@@ -1,19 +1,20 @@
 package inspect
 
-// This white-box test checks unreadReplicas and snapshotTargets, which only
-// the directory walk calls: a public read reaches them only through a server
-// holding a replica table, and the live host tests cover that path on both
-// release lines.
+// White-box testing required: unreadReplicas and snapshotTargets are called
+// only by the directory walk, so a public read reaches them only through a
+// server holding a replica table, and the live host tests cover that path on
+// both release lines.
 import (
 	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 const orphanReason = "dir.rep is a replica table no replication of this database writes any more, which YDB keeps read-only " +

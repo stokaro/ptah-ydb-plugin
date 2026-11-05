@@ -5,14 +5,15 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/schemavalidation"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 func emptyFeatures() *protocol.CapturedFeatures {
@@ -176,7 +177,7 @@ func TestValidateSchema_ReportsEveryRefusalInADeterministicOrder(t *testing.T) {
 	c.Assert(first, qt.HasLen, 2)
 	c.Assert(first[0].Object, qt.Equals, "alpha")
 	c.Assert(first[1].Object, qt.Equals, "zeta")
-	c.Assert(len(first), qt.Equals, len(second))
+	c.Assert(first, qt.HasLen, len(second))
 	for i := range first {
 		c.Assert(proto.Equal(first[i], second[i]), qt.IsTrue)
 	}

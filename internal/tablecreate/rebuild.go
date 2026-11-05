@@ -6,16 +6,17 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // How this provider rebuilds a table.
@@ -161,7 +162,7 @@ func requestedWith(policy *protocol.PlanningPolicy) string {
 // the planning request's observed common objects hold what lies beyond the
 // tables, and a host fills them for no table.
 func keepHeldComments(request *Ydb_Table.CreateTableRequest, current *protocol.ObservedTable) {
-	comments := ydbcomment.Comments{Own: current.GetComment(), Columns: map[string]string{}, Indexes: map[string]string{}}
+	comments := ydbcomment.Comments{Own: current.GetComment(), Columns: make(map[string]string), Indexes: make(map[string]string)}
 	for _, column := range current.GetColumns() {
 		if column.GetComment() != "" && slices.ContainsFunc(request.GetColumns(), func(created *Ydb_Table.ColumnMeta) bool { return created.GetName() == column.GetName() }) {
 			comments.Columns[column.GetName()] = column.GetComment()
@@ -174,7 +175,7 @@ func keepHeldComments(request *Ydb_Table.CreateTableRequest, current *protocol.O
 	}
 	for key, value := range comments.Attributes() {
 		if request.Attributes == nil {
-			request.Attributes = map[string]string{}
+			request.Attributes = make(map[string]string)
 		}
 		request.Attributes[key] = value
 	}
@@ -211,7 +212,7 @@ func heldProperties(observed *protocol.ObservedTable) *native.DescribeTableResul
 
 // heldColumns are the column properties of an observed table by column name.
 func heldColumnProperties(observed *protocol.ObservedTable) map[string]*native.ColumnMeta {
-	result := map[string]*native.ColumnMeta{}
+	result := make(map[string]*native.ColumnMeta)
 	for _, record := range observed.GetFeatures().GetFacets().GetRecords() {
 		if record.GetKind() != schema.ColumnProperties {
 			continue
@@ -259,7 +260,7 @@ type rebuild struct {
 // objects, whose comments on the table the new one keeps. steps are the host's
 // steps, whose index renames name the old index a new one takes its settings
 // from.
-func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names map[string]bool,
+func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names,
 	capabilities map[string]bool, steps []*protocol.CommonPlanningStep) (*rebuild, string, error) {
 	label := tableLabel(owner)
 	subject := fmt.Sprintf("rebuilding table %q", label)
@@ -278,11 +279,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 		return nil, subject + fmt.Sprintf(": the table declares or holds the vector or full-text index %q, which the rebuild does not create; "+
 			"drop it, rebuild, and add it again", name), nil
 	}
-	scratch, err := freeName(owner, rebuildPrefix, names)
-	if err != nil {
-		return nil, subject + ": " + err.Error(), nil
-	}
-	replaced, err := freeName(owner, replacedPrefix, names)
+	scratch, replaced, err := rebuildNames(owner, names)
 	if err != nil {
 		return nil, subject + ": " + err.Error(), nil
 	}
@@ -298,20 +295,14 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	if reason != "" {
 		return nil, subject + ": " + reason, nil
 	}
-	heldColumns := make([]string, 0, len(current.GetColumns()))
-	for _, column := range current.GetColumns() {
-		heldColumns = append(heldColumns, column.GetName())
-	}
+	heldColumns := columnNames(current.GetColumns())
 	heldKeyColumns := heldKey(current)
 	copied, reason := copiedColumns(request, current)
 	if reason != "" {
 		return nil, subject + ": " + reason, nil
 	}
 	scratchOwner, replacedOwner := renamed(owner, scratch), renamed(owner, replaced)
-	newColumns := make([]string, 0, len(request.GetColumns()))
-	for _, column := range request.GetColumns() {
-		newColumns = append(newColumns, column.GetName())
-	}
+	newColumns := columnNames(request.GetColumns())
 	prefix := fmt.Sprintf("table-rebuild/%06d/", number)
 	create, err := CaptureRequest(prefix+"create", scratchOwner, request)
 	if err != nil {
@@ -344,26 +335,17 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 		return result
 	}
 	self, scratchSubject, replacedSubject := table.GetSubject(), subjectOf(scratch), subjectOf(replaced)
-	type rebuildStep struct {
-		operation *protocol.NormalizedValue
-		effects   []*protocol.PlanningEffect
-		notes     []string
-	}
 	planned := []rebuildStep{
 		{operation: create, effects: []*protocol.PlanningEffect{{Subject: scratchSubject, Action: protocol.PlanningEffect_CREATE},
 			{Subject: slot(scratchSubject), Action: protocol.PlanningEffect_CREATE}}, notes: rebuildNotes(label)},
 	}
 	// The settings of an index change on the empty new table, before the copy
 	// fills it.
-	for n, change := range indexSettings {
-		operation, err := CaptureIndexSettings(fmt.Sprintf("%sindex-settings/%06d", prefix, n), scratchOwner, change)
-		if err != nil {
-			return nil, subject + ": " + err.Error(), nil
-		}
-		planned = append(planned, rebuildStep{operation: operation, effects: []*protocol.PlanningEffect{
-			{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_READ},
-			{Subject: indexSubject(scratchSubject, change.held.GetName()), Action: protocol.PlanningEffect_ALTER}}})
+	settingsSteps, err := indexSettingsRebuildSteps(prefix, scratchOwner, scratchSubject, indexSettings)
+	if err != nil {
+		return nil, subject + ": " + err.Error(), nil
 	}
+	planned = append(planned, settingsSteps...)
 	planned = append(planned, rebuildStep{operation: copyOperation, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_READ},
 		{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_ALTER}}})
 	if len(feeds.drops) != 0 {
@@ -388,14 +370,68 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	}
 	planned = append(planned, rebuildStep{operation: drop, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(replacedSubject), Action: protocol.PlanningEffect_DROP},
 		{Subject: slot(replacedSubject), Action: protocol.PlanningEffect_DROP}}})
+	result.steps = rebuildPlanningSteps(planned)
+	return result, "", nil
+}
+
+// rebuildStep is one operation of a rebuild, with its footprint and the notes
+// it carries.
+type rebuildStep struct {
+	operation *protocol.NormalizedValue
+	effects   []*protocol.PlanningEffect
+	notes     []string
+}
+
+// rebuildNames are the scratch name the new table of a rebuild is created
+// under and the name the old table moves to, each free among names.
+func rebuildNames(owner *protocol.Reference, names map[string]bool) (scratch, replaced string, err error) {
+	if scratch, err = freeName(owner, rebuildPrefix, names); err != nil {
+		return "", "", err
+	}
+	if replaced, err = freeName(owner, replacedPrefix, names); err != nil {
+		return "", "", err
+	}
+	return scratch, replaced, nil
+}
+
+// columnNames lists the names of columns in order.
+func columnNames[C interface{ GetName() string }](columns []C) []string {
+	names := make([]string, 0, len(columns))
+	for _, column := range columns {
+		names = append(names, column.GetName())
+	}
+	return names
+}
+
+// indexSettingsRebuildSteps are the steps that give each index of the new
+// table of a rebuild, which scratchOwner names and scratchSubject identifies,
+// the settings changes states, numbered under prefix.
+func indexSettingsRebuildSteps(prefix string, scratchOwner *protocol.Reference, scratchSubject *protocol.ComparisonIdentity, changes []indexSettingsChange) ([]rebuildStep, error) {
+	var steps []rebuildStep
+	for n, change := range changes {
+		operation, err := CaptureIndexSettings(fmt.Sprintf("%sindex-settings/%06d", prefix, n), scratchOwner, change)
+		if err != nil {
+			return nil, err
+		}
+		steps = append(steps, rebuildStep{operation: operation, effects: []*protocol.PlanningEffect{
+			{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_READ},
+			{Subject: indexSubject(scratchSubject, change.held.GetName()), Action: protocol.PlanningEffect_ALTER}}})
+	}
+	return steps, nil
+}
+
+// rebuildPlanningSteps are the lifecycle steps of the operations of a
+// rebuild, in order, each named by its operation.
+func rebuildPlanningSteps(planned []rebuildStep) []*protocol.PlanningStep {
+	var steps []*protocol.PlanningStep
 	for _, step := range planned {
 		facts := step.operation.OperationSemantics
-		result.steps = append(result.steps, &protocol.PlanningStep{Id: &protocol.StepIdentity{Owner: schema.ProviderID, Name: step.operation.Id},
+		steps = append(steps, &protocol.PlanningStep{Id: &protocol.StepIdentity{Owner: schema.ProviderID, Name: step.operation.Id},
 			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: step.operation, Phase: protocol.PlanningOperation_LIFECYCLE,
 				Notes: step.notes},
 			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: step.effects}})
 	}
-	return result, "", nil
+	return steps
 }
 
 // changefeedEffects is the footprint of a rebuild step that changes the
@@ -498,7 +534,7 @@ func rebuiltIndexSettings(request *Ydb_Table.CreateTableRequest, table *protocol
 			}
 		}
 	}
-	formerName := map[string]string{}
+	formerName := make(map[string]string)
 	for _, step := range steps {
 		if rename := step.GetRenamedIndex(); rename != nil && step.GetParent() != nil && provider.CompareIdentities(step.GetParent(), table.GetSubject()) == 0 {
 			formerName[rename.GetTo()] = rename.GetFrom()
@@ -647,6 +683,31 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 	if request.GetTtlSettings() != nil && request.TtlSettings.RunIntervalSeconds == 0 {
 		request.TtlSettings.RunIntervalSeconds = held.GetTtlSettings().GetRunIntervalSeconds()
 	}
+	keepHeldPartitioning(request, held)
+	if request.ReadReplicasSettings == nil {
+		request.ReadReplicasSettings = proto.CloneOf(held.GetReadReplicasSettings())
+	}
+	if request.KeyBloomFilter == Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+		request.KeyBloomFilter = held.GetKeyBloomFilter()
+	}
+	for key, value := range held.GetAttributes() {
+		if _, declared := request.GetAttributes()[key]; !declared {
+			if request.Attributes == nil {
+				request.Attributes = make(map[string]string)
+			}
+			request.Attributes[key] = value
+		}
+	}
+	families := keepHeldFamilies(request, held)
+	keepHeldPlacements(request, table, families)
+}
+
+// keepHeldPartitioning gives the new table of a rebuild each automatic
+// partitioning setting the declaration leaves out as the old table holds it:
+// the partitioning by size, with its partition size where it is enabled, the
+// partitioning by load, the minimum partition count where the request states
+// no starting layout, and the maximum partition count.
+func keepHeldPartitioning(request *Ydb_Table.CreateTableRequest, held *native.DescribeTableResult) {
 	partitioning := request.GetPartitioningSettings()
 	if partitioning == nil {
 		partitioning = &Ydb_Table.PartitioningSettings{}
@@ -670,22 +731,13 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 	if proto.Size(partitioning) != 0 {
 		request.PartitioningSettings = partitioning
 	}
-	if request.ReadReplicasSettings == nil {
-		request.ReadReplicasSettings = proto.CloneOf(held.GetReadReplicasSettings())
-	}
-	if request.KeyBloomFilter == Ydb.FeatureFlag_STATUS_UNSPECIFIED {
-		request.KeyBloomFilter = held.GetKeyBloomFilter()
-	}
-	for key, value := range held.GetAttributes() {
-		if _, declared := request.GetAttributes()[key]; !declared {
-			if request.Attributes == nil {
-				request.Attributes = map[string]string{}
-			}
-			request.Attributes[key] = value
-		}
-	}
-	placements := heldColumnProperties(current)
-	families := map[string]bool{}
+}
+
+// keepHeldFamilies gives the new table of a rebuild every family the old
+// table holds, with each setting the declaration does not state as the old
+// table holds it, and returns the families the new table takes by key.
+func keepHeldFamilies(request *Ydb_Table.CreateTableRequest, held *native.DescribeTableResult) map[string]bool {
+	families := make(map[string]bool)
 	for i, requested := range request.GetColumnFamilies() {
 		families[familyKey(requested.GetName())] = true
 		held := findFamily(held.GetColumnFamilies(), requested.GetName())
@@ -714,7 +766,16 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 			Data: proto.CloneOf(family.GetData()), Compression: family.GetCompression(), CacheMode: family.GetCacheMode()}))
 		families[familyKey(family.GetName())] = true
 	}
-	placed := map[string]bool{}
+	return families
+}
+
+// keepHeldPlacements places each column of the new table of a rebuild whose
+// placement the declaration does not state in the family the old table holds
+// it in, where the new table takes that family and it is not the default one.
+func keepHeldPlacements(request *Ydb_Table.CreateTableRequest, table *protocol.PlanningTable, families map[string]bool) {
+	desired := table.GetDesired()
+	placements := heldColumnProperties(table.GetCurrent())
+	placed := make(map[string]bool)
 	for _, record := range desired.GetFeatures().GetFacets().GetRecords() {
 		if record.GetKind() == schema.ColumnProperties && record.GetValue() != nil {
 			placed[record.GetSubject().GetName().GetNormalized()] = true
@@ -738,7 +799,7 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 // requestTableNames are the paths of every table a planning request declares
 // or holds, which a scratch name must not take.
 func requestTableNames(request *protocol.PlanFeaturesRequest) map[string]bool {
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for _, table := range request.GetTables() {
 		names[TextPath(table.GetSubject().GetSchema().GetNormalized(), table.GetSubject().GetName().GetNormalized())] = true
 	}

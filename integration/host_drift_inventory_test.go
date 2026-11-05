@@ -11,9 +11,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // inventoryEntry is one kind of a drift report's inventory.

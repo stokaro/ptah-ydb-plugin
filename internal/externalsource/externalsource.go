@@ -13,11 +13,12 @@ import (
 	"strconv"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 // The syntax this package claims.
@@ -99,7 +100,7 @@ func (d declared) noun() string {
 // the whole document.
 func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	var objects []declared
-	owned := map[int]bool{}
+	owned := make(map[int]bool)
 	for index, fragment := range document.GetFragments() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -137,7 +138,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 	for index := range owned {
 		result[index] = nil
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for position, object := range objects {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -313,7 +314,7 @@ func yamlFields(entry *protocol.SourceEntry, names []string, columns bool) (map[
 	if mapping == nil {
 		return nil, nil, fmt.Errorf("an entry requires a mapping")
 	}
-	fields := map[string]string{}
+	fields := make(map[string]string)
 	var options map[string]string
 	for _, field := range mapping.GetEntries() {
 		switch {
@@ -325,7 +326,7 @@ func yamlFields(entry *protocol.SourceEntry, names []string, columns bool) (map[
 			if values == nil {
 				return nil, nil, fmt.Errorf("%s requires a mapping", field.Key)
 			}
-			options = map[string]string{}
+			options = make(map[string]string)
 			for _, option := range values.GetEntries() {
 				text, err := scalar(option.GetValue())
 				if err != nil {
@@ -400,7 +401,7 @@ func attributes(directive string, mapping *protocol.SourceMapping) (map[string]s
 	if mapping == nil {
 		return nil, fmt.Errorf("%s requires attributes", directive)
 	}
-	values := map[string]string{}
+	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {

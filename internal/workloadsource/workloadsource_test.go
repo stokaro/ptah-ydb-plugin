@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 func text(value string) *protocol.SourceValue {
@@ -49,7 +50,7 @@ func yamlDocument(pools, classifiers *protocol.SourceValue) *protocol.SourceDocu
 // its text attributes in written order.
 func goDocument(directives ...[]string) *protocol.SourceDocument {
 	document := &protocol.SourceDocument{Id: "doc", Format: protocol.SourceDocument_GO_ANNOTATIONS, Models: models()}
-	claims := map[string]*protocol.GoSourceDirective{}
+	claims := make(map[string]*protocol.GoSourceDirective)
 	for _, claim := range workloadsource.GoDirectives() {
 		claims[claim.Directive] = claim
 	}
@@ -67,7 +68,7 @@ func goDocument(directives ...[]string) *protocol.SourceDocument {
 // declared reads every value a decode returned, by kind and name.
 func declared(c *qt.C, values map[int][]*protocol.SourceModelValue) (map[string]workload.PoolSpec, map[string]workload.ClassifierSpec) {
 	c.Helper()
-	pools, classifiers := map[string]workload.PoolSpec{}, map[string]workload.ClassifierSpec{}
+	pools, classifiers := make(map[string]workload.PoolSpec), make(map[string]workload.ClassifierSpec)
 	for _, fragment := range values {
 		for _, value := range fragment {
 			c.Assert(value.Placement, qt.Equals, protocol.SourceModelValue_NATIVE_OBJECT)

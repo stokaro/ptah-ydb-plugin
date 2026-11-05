@@ -5,11 +5,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // declaredIndexes compiles the indexes a table declares into the indexes its
@@ -75,32 +76,14 @@ func declaredIndex(declared *protocol.DeclaredTable, index *protocol.DeclaredInd
 		return nil, err
 	}
 	cover := slices.Clone(index.GetIncludeColumns())
-	for i, covered := range cover {
-		switch {
-		case slices.Contains(keys, covered):
-			return nil, refuse(fmt.Sprintf("column %q is both a key and a covered column, which YDB refuses", covered))
-		case slices.Contains(cover[:i], covered):
-			return nil, refuse(fmt.Sprintf("it covers column %q twice", covered))
-		case slices.Contains(key, covered):
-			return nil, refuse(fmt.Sprintf("it covers key column %q, which every YDB index carries already", covered))
-		}
-		if _, declared := types[covered]; !declared {
-			return nil, refuse(fmt.Sprintf("it covers column %q, which the table does not declare", covered))
-		}
+	if reason := coveredColumnRefusal(keys, cover, key, types); reason != "" {
+		return nil, refuse(reason)
 	}
 	if slices.Equal(keys, key) {
 		return nil, refuse("its columns are the table's key, which YDB refuses (`index keys shouldn't be table keys`)")
 	}
-	for i, name := range keys {
-		ydbType, declared := types[name]
-		switch {
-		case !declared:
-			return nil, refuse(fmt.Sprintf("it names column %q, which the table does not declare", name))
-		case slices.Contains(keys[:i], name):
-			return nil, refuse(fmt.Sprintf("it names column %q twice", name))
-		case !keyComparable(ydbType):
-			return nil, refuse(fmt.Sprintf("column %q is %s, which YDB refuses as an index key", name, ydbType))
-		}
+	if reason := keyColumnRefusal(keys, types); reason != "" {
+		return nil, refuse(reason)
 	}
 	result := &Ydb_Table.TableIndex{Name: index.GetName(), IndexColumns: keys, DataColumns: cover}
 	switch {
@@ -112,6 +95,45 @@ func declaredIndex(declared *protocol.DeclaredTable, index *protocol.DeclaredInd
 		result.Type = &Ydb_Table.TableIndex_GlobalIndex{GlobalIndex: &Ydb_Table.GlobalIndex{}}
 	}
 	return result, nil
+}
+
+// coveredColumnRefusal says why an index with the key columns keys cannot
+// cover the columns cover, or is empty: each covered column is declared,
+// covered once, and neither a key column of the index nor of the table, whose
+// key is key. types maps each declared column to its type.
+func coveredColumnRefusal(keys, cover, key []string, types map[string]string) string {
+	for i, covered := range cover {
+		switch {
+		case slices.Contains(keys, covered):
+			return fmt.Sprintf("column %q is both a key and a covered column, which YDB refuses", covered)
+		case slices.Contains(cover[:i], covered):
+			return fmt.Sprintf("it covers column %q twice", covered)
+		case slices.Contains(key, covered):
+			return fmt.Sprintf("it covers key column %q, which every YDB index carries already", covered)
+		}
+		if _, declared := types[covered]; !declared {
+			return fmt.Sprintf("it covers column %q, which the table does not declare", covered)
+		}
+	}
+	return ""
+}
+
+// keyColumnRefusal says why an index cannot have the key columns keys, or is
+// empty: each is declared, named once, and of a type YDB compares as an index
+// key. types maps each declared column to its type.
+func keyColumnRefusal(keys []string, types map[string]string) string {
+	for i, name := range keys {
+		ydbType, declared := types[name]
+		switch {
+		case !declared:
+			return fmt.Sprintf("it names column %q, which the table does not declare", name)
+		case slices.Contains(keys[:i], name):
+			return fmt.Sprintf("it names column %q twice", name)
+		case !keyComparable(ydbType):
+			return fmt.Sprintf("column %q is %s, which YDB refuses as an index key", name, ydbType)
+		}
+	}
+	return ""
 }
 
 // namesTable reports whether an index's table name is the declared table:
@@ -127,17 +149,17 @@ func namesTable(name string, table *protocol.DeclaredTable) bool {
 // holds a dot, a double quote, a backquote or a bracket in double quotes,
 // with a double quote in it doubled. A dot in a YDB name is part of the name,
 // so the root table a.b is "a.b" and the table b of the directory a is a.b.
-func quotedReference(schema, name string) string {
+func quotedReference(directory, name string) string {
 	part := func(value string) string {
 		if !strings.ContainsAny(value, ".\"`[]") {
 			return value
 		}
 		return `"` + strings.ReplaceAll(value, `"`, `""`) + `"`
 	}
-	if schema == "" {
+	if directory == "" {
 		return part(name)
 	}
-	return part(schema) + "." + part(name)
+	return part(directory) + "." + part(name)
 }
 
 // indexKeyColumns are an index's key columns. A YDB index key is a list of
@@ -187,7 +209,7 @@ func keyComparable(ydbType string) bool {
 // build: one of another kind, with settings of its own, or that reads a column
 // the request does not create, and two indexes of one name.
 func validateIndexes(request *Ydb_Table.CreateTableRequest, names map[string]bool) error {
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, index := range request.GetIndexes() {
 		if err := only(index, "name", "index_columns", "data_columns", "global_index", "global_async_index", "global_unique_index"); err != nil {
 			return err

@@ -37,7 +37,7 @@ type Manifest struct {
 // that declares none is left out. The output is indented and ends with a
 // newline, and two calls over the same description return the same bytes.
 func Build(description *protocol.Description) ([]byte, error) {
-	manifest := Manifest{Provider: description.GetProviderId(), Engines: []Engine{}}
+	manifest := Manifest{Provider: description.GetProviderId(), Engines: make([]Engine, 0)}
 	for _, engine := range description.GetEngines() {
 		if len(engine.GetReleaseLines()) == 0 {
 			continue

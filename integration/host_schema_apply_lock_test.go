@@ -5,12 +5,12 @@ package integration_test
 import (
 	"context"
 	"io"
-	"os/exec"
 	"path"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -31,7 +31,7 @@ func TestHostSchemaApplyStopsWhenTheLockIsLost_FailurePath(t *testing.T) {
 	entities := writeFiles(c, c.TempDir(), map[string]string{"items.go": cliEntities})
 	ctx, cancel := context.WithTimeout(c.Context(), 5*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--db-url", realm.address, "--root-dir", entities,
+	cmd := testCommand(ctx, host, "schema", "apply", "--db-url", realm.address, "--root-dir", entities,
 		"--provider-config", manifest, "--provider-engine", "ydb")
 	stdin, err := cmd.StdinPipe()
 	c.Assert(err, qt.IsNil)

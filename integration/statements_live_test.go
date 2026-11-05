@@ -9,9 +9,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestOperatorStatementsSubprocess(t *testing.T) {
@@ -24,7 +25,7 @@ func TestOperatorStatementsSubprocess(t *testing.T) {
 		_, err := opened.DB.ExecContext(context.Background(), "DROP TABLE `"+table+"`")
 		c.Check(err, qt.IsNil)
 	})
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+table+"` (id,value) VALUES (1u,'first'),(2u,NULL),(3u,'last')")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+table+"` (id,value) VALUES (1u,'first'),(2u,NULL),(3u,'last')") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)

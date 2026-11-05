@@ -14,10 +14,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // The YAML document keys this package claims.
@@ -95,8 +96,8 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 	if document.GetFormat() == protocol.SourceDocument_GO_ANNOTATIONS {
 		return decodeGo(ctx, document)
 	}
-	result := map[int][]*protocol.SourceModelValue{}
-	seen := map[string]bool{}
+	result := make(map[int][]*protocol.SourceModelValue)
+	seen := make(map[string]bool)
 	position := 0
 	for index, fragment := range document.GetFragments() {
 		if err := ctx.Err(); err != nil {
@@ -221,7 +222,7 @@ func fields(entry *protocol.SourceEntry, keys []string, withItems bool) (map[str
 	if mapping == nil {
 		return nil, nil, fmt.Errorf("requires a mapping")
 	}
-	values := map[string]string{}
+	values := make(map[string]string)
 	var items []map[string]string
 	for _, field := range mapping.GetEntries() {
 		switch {
@@ -332,7 +333,7 @@ type pendingReplication struct {
 // replication of its name and directory in the same file, and a replication
 // with no item is refused.
 func decodeGo(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
-	result := map[int][]*protocol.SourceModelValue{}
+	result := make(map[int][]*protocol.SourceModelValue)
 	var replications []pendingReplication
 	type pendingItem struct {
 		schema, replication string
@@ -395,7 +396,7 @@ func decodeGo(ctx context.Context, document *protocol.SourceDocument) (map[int][
 		}
 		declared.spec.Items = append(declared.spec.Items, pending.item)
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	position := 0
 	add := func(fragment int, value *protocol.Envelope, family, path string) error {
 		if key := value.Kind + "\x00" + path; seen[key] {
@@ -454,7 +455,7 @@ func attributes(mapping *protocol.SourceMapping, directive string) (map[string]s
 	if mapping == nil {
 		return nil, fmt.Errorf("%s requires attributes", directive)
 	}
-	values := map[string]string{}
+	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {

@@ -6,7 +6,6 @@ import (
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
@@ -18,7 +17,7 @@ func scanned(kind protocol.SQLToken_Kind, end uint32) *protocol.SQLToken {
 }
 
 func scannedValue(kind protocol.SQLToken_Kind, end uint32, value string) *protocol.SQLToken {
-	return &protocol.SQLToken{Kind: kind, End: end, Value: proto.String(value)}
+	return &protocol.SQLToken{Kind: kind, End: end, Value: new(value)}
 }
 
 // A scan returns YQL's tokens with the values YDB reads: both quote styles and
@@ -42,7 +41,7 @@ func TestScanSQL_HappyPath(t *testing.T) {
 		{"a setting at the head", "--!syntax_v1\n", true, []*protocol.SQLToken{scanned(protocol.SQLToken_UNKNOWN, 12), scanned(protocol.SQLToken_WHITESPACE, 13)}},
 		{"the same text inside a query", "--!syntax_v1\n", false, []*protocol.SQLToken{scanned(protocol.SQLToken_COMMENT, 12), scanned(protocol.SQLToken_WHITESPACE, 13)}},
 		{"an escape YDB refuses", `'\x1'`, true, []*protocol.SQLToken{scanned(protocol.SQLToken_STRING, 5)}},
-		{"an empty text", "", true, []*protocol.SQLToken{}},
+		{"an empty text", "", true, make([]*protocol.SQLToken, 0)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

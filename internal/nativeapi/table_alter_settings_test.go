@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // settingsTableOf is a table with ts that holds the given settings fields

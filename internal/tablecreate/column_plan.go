@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // columnClaim is one host column step this service replaces with a native
@@ -171,5 +172,5 @@ func captureColumns(id string, owner *protocol.Reference, claim *columnClaim) (*
 	} else {
 		request.DropColumns = []string{claim.name}
 	}
-	return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: map[string]string{}})
+	return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: make(map[string]string)})
 }

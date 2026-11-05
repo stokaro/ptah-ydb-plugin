@@ -52,7 +52,7 @@ func TestInputErrorKeepsTheAnswerWithoutTheValue_HappyPath(t *testing.T) {
 	c.Assert(answer.Code, qt.Equals, uint32(2029))
 	c.Assert(answer.Issues, qt.DeepEquals, []string{"Executing ESchemeOpAlterLogin", "Password [secret] contains unacceptable characters"})
 	c.Assert(answer.Confirmed("CREATE USER app PASSWORD $PTAH_SECRET_PASSWORD_APP"), qt.IsTrue)
-	c.Assert(errors.Is(redacted, answered), qt.IsFalse)
+	c.Assert(redacted, qt.Not(qt.ErrorIs), answered)
 }
 
 // An error that is no answer of YDB's keeps its text alone, the values taken

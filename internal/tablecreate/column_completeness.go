@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // completeColumnAlteration refuses a parent receipt that would acknowledge an

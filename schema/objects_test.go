@@ -4,9 +4,6 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
@@ -16,6 +13,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func objectOwner(kind string) *protocol.Reference {
@@ -67,13 +68,13 @@ func TestCoordinationCapturePreservesConfigurationWithoutDuplicatePath(t *testin
 
 func TestExternalCapturePreservesNativeOptionsAndOrderedColumns(t *testing.T) {
 	c := testcheck.New(t)
-	source := &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: proto.String("PostgreSQL"), Location: proto.String("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "BASIC", "PASSWORD_SECRET_PATH": "/local/auth/credential", "LOGIN": "reader"}}
+	source := &Ydb_Table.DescribeExternalDataSourceResult{Self: objectSelf(), SourceType: new("PostgreSQL"), Location: new("pg.invalid:5432"), Properties: map[string]string{"AUTH_METHOD": "BASIC", "PASSWORD_SECRET_PATH": "/local/auth/credential", "LOGIN": "reader"}} // #nosec G101 -- the properties name a login and a secret's path, not a password
 	sourceEnvelope, err := schema.CaptureObject(objectOwner(schema.ExternalSourceProperties), source)
 	c.Assert(err, qt.IsNil)
 	var decodedSource Ydb_Table.DescribeExternalDataSourceResult
 	c.Assert(protojson.Unmarshal(sourceEnvelope.Payload, &decodedSource), qt.IsNil)
 	c.Assert(decodedSource.Properties, qt.DeepEquals, source.Properties)
-	table := &native.DescribeExternalTableResult{Self: objectSelf(), SourceType: proto.String("ObjectStorage"), DataSourcePath: proto.String("/local/app/bucket"), Location: proto.String("f/"), Content: map[string]string{"format": `["json_each_row"]`}, Columns: []*native.ColumnMeta{{Name: "z", Type: primitive(Ydb.Type_INT64)}, {Name: "a", Type: optional(primitive(Ydb.Type_UTF8))}}}
+	table := &native.DescribeExternalTableResult{Self: objectSelf(), SourceType: new("ObjectStorage"), DataSourcePath: new("/local/app/bucket"), Location: new("f/"), Content: map[string]string{"format": `["json_each_row"]`}, Columns: []*native.ColumnMeta{{Name: "z", Type: primitive(Ydb.Type_INT64)}, {Name: "a", Type: optional(primitive(Ydb.Type_UTF8))}}}
 	tableEnvelope, err := schema.CaptureObject(objectOwner(schema.ExternalTableProperties), table)
 	c.Assert(err, qt.IsNil)
 	var decodedTable native.DescribeExternalTableResult
@@ -104,7 +105,7 @@ func TestNativeObjectCaptureRefusesLossyOrMismatchedDescriptions(t *testing.T) {
 		{"unknown coordination mode", schema.CoordinationProperties, &Ydb_Coordination.DescribeNodeResult{Config: &Ydb_Coordination.Config{ReadConsistencyMode: 999}}},
 		{"missing coordination configuration", schema.CoordinationProperties, &Ydb_Coordination.DescribeNodeResult{}},
 		{"wrong native model", schema.ViewProperties, &Ydb_Coordination.DescribeNodeResult{Config: &Ydb_Coordination.Config{}}},
-		{"external table without columns", schema.ExternalTableProperties, &native.DescribeExternalTableResult{SourceType: proto.String("ObjectStorage"), DataSourcePath: proto.String("/local/s"), Location: proto.String("f/")}},
+		{"external table without columns", schema.ExternalTableProperties, &native.DescribeExternalTableResult{SourceType: new("ObjectStorage"), DataSourcePath: new("/local/s"), Location: new("f/")}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

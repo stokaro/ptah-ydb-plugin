@@ -11,12 +11,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/testing/protocmp"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // These tests run the units SplitMigration returns as the host runs them under
@@ -106,7 +107,7 @@ func seededTable(c *qt.C, opened *connection.Connection, table string) {
 	defer cancel()
 	c.Assert(execFixtureSchema(ctx, opened.DB, "CREATE TABLE `"+table+"` (id Uint64 NOT NULL, v Utf8, PRIMARY KEY (id))"), qt.IsNil)
 	dropAtCleanup(c, opened, table)
-	_, err := opened.DB.ExecContext(ctx, "UPSERT INTO `"+table+"` (id, v) VALUES (1u, \"a\"u), (2u, \"a\"u)")
+	_, err := opened.DB.ExecContext(ctx, "UPSERT INTO `"+table+"` (id, v) VALUES (1u, \"a\"u), (2u, \"a\"u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 }
 
@@ -217,13 +218,13 @@ func TestMigrationSplitUnitRejected_FailurePath(t *testing.T) {
 	c.Assert(err, qt.ErrorIs, provider.ErrExecution)
 	c.Assert(committed.Outcome, qt.Equals, protocol.TransactionResult_ROLLED_BACK)
 	c.Assert(committed.Aborted, qt.IsFalse)
-	_, err = opened.DB.ExecContext(c.Context(), "SELECT * FROM `"+path.Join(database, directory, "late")+"`")
+	_, err = opened.DB.ExecContext(c.Context(), "SELECT * FROM `"+path.Join(database, directory, "late")+"`") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNotNil)
 }
 
 // conflictingWrite commits a write of key id from a transaction of another
 // session, which invalidates the locks of a transaction that read the key.
-func conflictingWrite(c *qt.C, client *providerruntime.Client, session, table string, id string) {
+func conflictingWrite(c *qt.C, client *providerruntime.Client, session, table, id string) {
 	c.Helper()
 	beginSerializable(c, client, session, "conflict-"+id)
 	c.Assert(executeSQL(c, client, session, "conflict-"+id, "UPSERT INTO `"+table+"` (id, v) VALUES ("+id+"u, \"other\"u)").Outcome, qt.Equals, protocol.Execution_APPLIED)

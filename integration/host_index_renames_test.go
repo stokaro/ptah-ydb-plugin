@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // commentedItems declares items in directory with a synchronous index on kind
@@ -30,7 +31,7 @@ func describedItems(c *qt.C, opened *connection.Connection, absolute string) (ma
 	defer func() { c.Check(session.Close(), qt.IsNil) }()
 	described, err := session.Describe(c.Context(), absolute)
 	c.Assert(err, qt.IsNil)
-	indexes := map[string]*native.TableIndexDescription{}
+	indexes := make(map[string]*native.TableIndexDescription)
 	for _, index := range described.GetIndexes() {
 		indexes[index.GetName()] = index
 	}

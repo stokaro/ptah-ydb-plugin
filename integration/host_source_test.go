@@ -7,12 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -39,7 +39,7 @@ func hostSource(c *qt.C, flag, name, content string) string {
 	}
 	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "plan", "--dry-run", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := testCommand(ctx, host, "schema", "plan", "--dry-run", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), flag, target)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
@@ -63,7 +63,7 @@ func hostManifest(c *qt.C) (string, string) {
 // ptah-compat's PTAH_PROVIDER_CONFIG alike.
 func providerManifest(c *qt.C) string {
 	c.Helper()
-	return providerManifestWith(c, []string{})
+	return providerManifestWith(c, make([]string, 0))
 }
 
 // providerManifestWith is providerManifest whose provider starts with the

@@ -7,15 +7,16 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
-	"github.com/stokaro/ptah-ydb-plugin/internal/secretvalue"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secretvalue"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 var _ provider.ExecutionInputDescriber = (*Provider)(nil)

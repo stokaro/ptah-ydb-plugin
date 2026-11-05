@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // Reversed is the change that undoes one change of a standalone object, and

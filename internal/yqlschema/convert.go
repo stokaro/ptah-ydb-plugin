@@ -8,9 +8,10 @@ import (
 	"strconv"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // errUnsupported is the class of a construct the host's reader reads and this

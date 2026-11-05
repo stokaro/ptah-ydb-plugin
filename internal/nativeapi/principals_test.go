@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -57,7 +58,7 @@ func TestReadPrincipalsRefusesAnIncompleteSnapshot(t *testing.T) {
 			held, err := nativeapi.ReadPrincipals(c.Context(), db, "/local")
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(held, qt.DeepEquals, nativeapi.Principals{})
-			c.Assert(errors.Is(err, nativeapi.ErrPrincipalsRefused), qt.IsFalse)
+			c.Assert(err, qt.Not(qt.ErrorIs), nativeapi.ErrPrincipalsRefused)
 			for _, rows := range connector.results[:len(connector.queries)] {
 				c.Assert(rows.closed, qt.IsTrue)
 			}

@@ -2,15 +2,17 @@ package yql_test
 
 import (
 	"context"
+	"strings"
+	"testing"
+
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strings"
-	"testing"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
 
 func TestAnalysisRefusesWholeBatch(t *testing.T) {
@@ -39,7 +41,7 @@ func TestAnalysisRetainsTriviaOffsetsAndTokens(t *testing.T) {
 	c.Assert(result.Files[0].Statements, qt.HasLen, 1)
 	statement := result.Files[0].Statements[0]
 	c.Assert(statement.Start, qt.Equals, uint32(2))
-	c.Assert(statement.End, qt.Equals, uint32(len(source)))
+	c.Assert(statement.End, qt.Equals, uint32(len(source))) // #nosec G115 -- a test source of a few bytes
 	c.Assert(statement.Line, qt.Equals, uint32(1))
 	c.Assert(statement.SourceWords[2], qt.Equals, "`Case`")
 	c.Assert(statement.Words[2], qt.Equals, "`Case`")

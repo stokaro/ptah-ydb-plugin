@@ -10,9 +10,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 )
 
 // The host's dev database verbs with the test database as the dev URL: each

@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 )
 
 // pathPrefix is the pragma every query of a session on a dev realm starts
@@ -93,6 +94,6 @@ func (c prefixConn) Prepare(query string) (driver.Stmt, error) {
 // ensureRealm creates the realm's directory and the directories above it when
 // they are missing. A realm is the run's own directory, so a session that
 // names one creates it; creating one that exists succeeds.
-func ensureRealm(ctx context.Context, driver *ydb.Driver, root string) error {
-	return driver.Scheme().MakeDirectory(ctx, root)
+func ensureRealm(ctx context.Context, db *ydb.Driver, root string) error {
+	return db.Scheme().MakeDirectory(ctx, root)
 }

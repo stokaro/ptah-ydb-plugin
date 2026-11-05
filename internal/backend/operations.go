@@ -3,10 +3,11 @@ package backend
 import (
 	"fmt"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {

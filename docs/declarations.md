@@ -78,7 +78,7 @@ refuses a table that declares one. See
 | `initial_scan` | No | The stream opens with a record for every row. `true`/`false`; bare form allowed. |
 | `user_sids` | No | Each record names its change's user. Needs `changefeed_user_sids`. |
 | `schema_changes` | No | The stream carries schema change records. Needs `changefeed_schema_changes`. |
-| `topic_min_active_partitions` | No | Partitions the topic starts with, at least 1. |
+| `topic_min_active_partitions` | No | Partitions the topic starts with, from 1 to 9223372036854775807. |
 | `topic_auto_partitioning` | No | The topic gains partitions as writes grow. Needs `changefeed_topic_auto_partitioning`. |
 
 ### `//ptah:schema:changefeed:consumer`

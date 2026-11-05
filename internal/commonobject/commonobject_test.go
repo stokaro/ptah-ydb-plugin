@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 func view(mutate func(*protocol.SQLView)) *protocol.SQLView {

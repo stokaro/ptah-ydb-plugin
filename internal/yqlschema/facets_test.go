@@ -9,6 +9,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -16,12 +23,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // schemaRequest reads one YQL document for a host that lists the given
@@ -279,7 +280,7 @@ func TestReply_TableFacets_FailurePath(t *testing.T) {
 // host's.
 func hostTableFacets(c *qt.C, reply *protocol.SQLSchema) map[string]map[string]any {
 	c.Helper()
-	placed := map[string]map[string][]string{}
+	placed := make(map[string]map[string][]string)
 	for _, facet := range reply.GetFacets() {
 		if facet.GetKind() != schema.ColumnProperties {
 			continue
@@ -289,11 +290,11 @@ func hostTableFacets(c *qt.C, reply *protocol.SQLSchema) map[string]map[string]a
 		owner := facet.GetOwner()
 		table := canonical(owner.GetSchema(), owner.GetPath()[0])
 		if placed[table] == nil {
-			placed[table] = map[string][]string{}
+			placed[table] = make(map[string][]string)
 		}
 		placed[table][intent.GetFamily()] = append(placed[table][intent.GetFamily()], owner.GetName())
 	}
-	result := map[string]map[string]any{}
+	result := make(map[string]map[string]any)
 	for _, facet := range reply.GetFacets() {
 		owner := facet.GetOwner()
 		table := canonical(owner.GetSchema(), owner.GetName())
@@ -313,7 +314,7 @@ func hostTableFacets(c *qt.C, reply *protocol.SQLSchema) map[string]map[string]a
 
 func hostRowSettings(c *qt.C, intent *native.RowTableIntent, placed map[string][]string) map[string]any {
 	c.Helper()
-	facets := map[string]any{}
+	facets := make(map[string]any)
 	settings := intent.GetPartitioningSettings()
 	partitioning := ydbdecl.TablePartitioning{BySize: switchOf(settings.GetPartitioningBySize()), PartitionSizeMB: settings.GetPartitionSizeMb(),
 		ByLoad: switchOf(settings.GetPartitioningByLoad()), MinPartitions: settings.GetMinPartitionsCount(), MaxPartitions: settings.GetMaxPartitionsCount(),
@@ -345,14 +346,14 @@ func hostRowSettings(c *qt.C, intent *native.RowTableIntent, placed map[string][
 		facets["ptah.run/ydb/ttl"] = decodeAny(c, marshal(c, ydbdecl.TTL{Column: mode.DateTypeColumn.GetColumnName(), Interval: seconds(uint64(mode.DateTypeColumn.GetExpireAfterSeconds()))}))
 	case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
 		facets["ptah.run/ydb/ttl"] = decodeAny(c, marshal(c, ydbdecl.TTL{Column: mode.ValueSinceUnixEpoch.GetColumnName(),
-			Interval: seconds(uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds())), Unit: unitName(uint64(mode.ValueSinceUnixEpoch.GetColumnUnit()))}))
+			Interval: seconds(uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds())), Unit: unitName(uint64(mode.ValueSinceUnixEpoch.GetColumnUnit()))})) // #nosec G115 -- a column unit enum number, 0 to 4
 	}
 	return facets
 }
 
 func hostColumnStorage(c *qt.C, intent *native.ColumnStorageIntent) map[string]any {
 	c.Helper()
-	facets := map[string]any{}
+	facets := make(map[string]any)
 	store := ydbdecl.ColumnStore{HashColumns: intent.GetHashColumns(), Partitions: intent.GetPartitions()}
 	enabled := intent.GetTtl().GetEnabled()
 	tiers := enabled.GetTiers()

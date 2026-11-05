@@ -20,10 +20,11 @@ import (
 	"path"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // The planning services this package owns.
@@ -173,7 +174,7 @@ func refuseReplicaTables(request *protocol.PlanFeaturesRequest, change *protocol
 // targetPaths is action on the scheme path of each item's target.
 func targetPaths(items []replication.Item, action protocol.PlanningEffect_Action) []objectplan.PathEffect {
 	var effects []objectplan.PathEffect
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, target := range replication.Targets(replication.ReplicationSpec{Items: items}) {
 		if seen[target] {
 			continue
@@ -199,7 +200,7 @@ func sourcePaths(root string, spec replication.ReplicationSpec) []objectplan.Pat
 		return nil
 	}
 	var effects []objectplan.PathEffect
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, item := range spec.Items {
 		source := replication.SourceKey(item.Source, root)
 		if strings.HasPrefix(source, "/") || seen[source] {

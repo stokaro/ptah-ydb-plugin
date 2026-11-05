@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // A table service request holds its column families as the pinned
@@ -37,7 +38,7 @@ func familyFields(message protoreflect.MessageDescriptor) []protoreflect.FieldDe
 // with the cache mode it carries.
 func marshalRequest(request proto.Message) ([]byte, error) {
 	message := proto.Clone(request).ProtoReflect()
-	families := map[string][]json.RawMessage{}
+	families := make(map[string][]json.RawMessage)
 	for _, field := range familyFields(message.Descriptor()) {
 		list := message.Get(field).List()
 		for i := range list.Len() {
@@ -78,7 +79,7 @@ func unmarshalRequest(data []byte, request proto.Message) error {
 		return err
 	}
 	message := request.ProtoReflect()
-	read := map[protoreflect.FieldNumber][]*Ydb_Table.ColumnFamily{}
+	read := make(map[protoreflect.FieldNumber][]*Ydb_Table.ColumnFamily)
 	for _, field := range familyFields(message.Descriptor()) {
 		raw, found := fields[field.JSONName()]
 		if _, named := fields[field.TextName()]; named && field.TextName() != field.JSONName() {

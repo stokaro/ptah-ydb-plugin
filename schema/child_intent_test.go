@@ -2,13 +2,11 @@ package schema_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
@@ -19,6 +17,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func assertChildRoundTrip(c *qt.C, observed *protocol.Envelope) *protocol.Envelope {
@@ -47,10 +49,10 @@ func TestIndexDeclarationsPreserveEveryKindAndImplementation(t *testing.T) {
 			template.Self = &Ydb_Scheme.Entry{Owner: "owner", EffectivePermissions: []*Ydb_Scheme.Permissions{{Subject: "reader", PermissionNames: []string{"read"}}}}
 			template.ColumnFamilies = []*native.ColumnFamily{{Name: "cold", Compression: Ydb_Table.ColumnFamily_COMPRESSION_LZ4}}
 			template.Columns[0].Family = "cold"
-			template.Columns[0].NotNull = proto.Bool(false)
+			template.Columns[0].NotNull = new(false)
 			index.Tables = nil
-			for i := len(names) - 1; i >= 0; i-- {
-				index.Tables = append(index.Tables, &native.ImplementationTable{Name: names[i], Description: proto.CloneOf(template)})
+			for _, name := range slices.Backward(names) {
+				index.Tables = append(index.Tables, &native.ImplementationTable{Name: name, Description: proto.CloneOf(template)})
 			}
 			observed, err := schema.CaptureIndexes(tableOwner(), &native.IndexObservations{Indexes: []*native.ObservedIndex{index, indexObservation("a")}})
 			c.Assert(err, qt.IsNil)
@@ -67,7 +69,7 @@ func TestIndexDeclarationsPreserveEveryKindAndImplementation(t *testing.T) {
 func TestIndexSequenceProjectionValidatesBeforeExcludingPosition(t *testing.T) {
 	c := testcheck.New(t)
 	input := &native.IndexObservations{Indexes: []*native.ObservedIndex{indexObservation("idx")}}
-	sequence := &native.SequenceDescription{Name: proto.String("_serial"), DataType: primitive(Ydb.Type_INT64), Increment: proto.Int64(3), Cycle: proto.Bool(false), SetVal: &native.SequenceDescription_SetVal{NextValue: proto.Int64(19)}}
+	sequence := &native.SequenceDescription{Name: new("_serial"), DataType: primitive(Ydb.Type_INT64), Increment: proto.Int64(3), Cycle: new(false), SetVal: &native.SequenceDescription_SetVal{NextValue: proto.Int64(19)}}
 	input.Indexes[0].Tables[0].Description.Columns[1].DefaultValue = &native.ColumnMeta_FromSequence{FromSequence: sequence}
 	observed, err := schema.CaptureIndexes(tableOwner(), input)
 	c.Assert(err, qt.IsNil)

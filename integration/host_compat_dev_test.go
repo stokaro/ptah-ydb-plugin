@@ -4,7 +4,6 @@ package integration_test
 
 import (
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -12,6 +11,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/devdatabase"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -85,7 +85,7 @@ table "orders" {
 // than the whole list: another run may remove its own container meanwhile.
 func devContainers(c *qt.C) []string {
 	c.Helper()
-	listed, err := exec.CommandContext(c.Context(), "docker", "ps", "-aq", "--no-trunc", "--filter", "label="+devdatabase.ContainerLabel).Output()
+	listed, err := testCommand(c.Context(), "docker", "ps", "-aq", "--no-trunc", "--filter", "label="+devdatabase.ContainerLabel).Output()
 	c.Assert(err, qt.IsNil)
 	containers := strings.Fields(string(listed))
 	slices.Sort(containers)

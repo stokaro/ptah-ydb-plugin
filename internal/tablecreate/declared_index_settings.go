@@ -5,19 +5,20 @@ import (
 	"maps"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // indexSettingsFacets returns the index facets a captured state carries for
 // the indexes of the table owner names, by index name. A facet excluded for
 // this target or bound to other targets states nothing here.
 func indexSettingsFacets(owner *protocol.Reference, state *protocol.ComparisonState, representation protocol.ValueInput_Representation) (map[string]*native.IndexSettingsIntent, map[string]*native.IndexSettingsObservation, error) {
-	declared, held := map[string]*native.IndexSettingsIntent{}, map[string]*native.IndexSettingsObservation{}
+	declared, held := make(map[string]*native.IndexSettingsIntent), make(map[string]*native.IndexSettingsObservation)
 	for _, record := range state.GetRecords() {
 		if record.GetKind() != schema.IndexSettingsProperties || record.GetValue() == nil || (len(record.GetTargets()) > 0 && !slices.Contains(record.GetTargets(), "ydb")) {
 			continue

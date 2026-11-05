@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -15,10 +14,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // A busy lock says why to a client that lists errors.reasons, and the same
@@ -61,7 +61,7 @@ func hostNegotiates(c *qt.C, host, manifest, feature string) bool {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), time.Minute)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, host, "providers", "check", "--provider-config", manifest, "--provider-engine", "ydb", "--json").Output()
+	output, err := testCommand(ctx, host, "providers", "check", "--provider-config", manifest, "--provider-engine", "ydb", "--json").Output()
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
 	var report struct {
 		Provider struct {
@@ -89,7 +89,7 @@ func TestHostPrintsTheProvidersReasonSubprocess(t *testing.T) {
 	c.Assert(os.WriteFile(source, []byte(streaming.Create(directory, "refused", streaming.Spec{Text: "SELECT 1;"}, false)), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+	command := testCommand(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", withoutMonitoring(c, os.Getenv("PTAH_YDB_TEST_URL")), "--schemas", directory, "--schema-file", source)
 	var output bytes.Buffer
 	command.Stdout, command.Stderr = &output, &output

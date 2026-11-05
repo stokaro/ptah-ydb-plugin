@@ -4,15 +4,16 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 // storageFacet captures the column storage of app.records in either
@@ -105,13 +106,20 @@ func TestCompileColumnTableWritesTheKeyNotNull(t *testing.T) {
 }
 
 // keep leaves a declaration as it is.
-func keep(*qt.C, *protocol.DeclaredTable) {}
+func keep(*protocol.DeclaredTable) {}
 
 func TestCompileColumnTable_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	// withFacet adds a facet record to a declaration.
+	withFacet := func(record *protocol.ComparisonRecord) func(*protocol.DeclaredTable) {
+		return func(table *protocol.DeclaredTable) {
+			table.Features.Facets.Records = append(table.Features.Facets.Records, record)
+		}
+	}
 	for _, test := range []struct {
 		name    string
 		storage string
-		modify  func(*qt.C, *protocol.DeclaredTable)
+		modify  func(*protocol.DeclaredTable)
 		wantErr string
 	}{
 		{name: "a hash column outside the key", storage: `{"hashColumns":["body"]}`, modify: keep, wantErr: `hash column "body" must belong to the primary key`},
@@ -122,27 +130,23 @@ func TestCompileColumnTable_FailurePath(t *testing.T) {
 		{name: "a unit on a date column", storage: `{"ttl":{"enabled":{"column":"ts","columnUnit":"1","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`, modify: keep,
 			wantErr: `the TTL column "ts" is Timestamp, a date type, and YDB takes no unit for one`},
 		{name: "a data channel count of its own", storage: `{"dataChannelCount":"32"}`, modify: keep, wantErr: `a column table's data channel count is set by the server.*`},
-		{name: "row-table settings beside the storage", storage: `{}`, modify: func(c *qt.C, table *protocol.DeclaredTable) {
-			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.TableProperties, "", `{"keyBloomFilter":"ENABLED"}`))
-		}, wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
-		{name: "a vector index", storage: `{}`, modify: func(c *qt.C, table *protocol.DeclaredTable) {
-			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.IndexProperties, "", vectorIndexes(false)))
-		}, wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
-		{name: "a column in a family", storage: `{}`, modify: func(c *qt.C, table *protocol.DeclaredTable) {
-			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.ColumnProperties, "body", `{"family":"cold"}`))
-		}, wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
-		{name: "a column default", storage: `{}`, modify: func(c *qt.C, table *protocol.DeclaredTable) {
-			table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.ColumnProperties, "count",
-				`{"literal":{"type":{"typeId":"UINT64"},"value":{"uint64Value":"7"}}}`))
-		}, wantErr: `column tables do not support defaults or Serial columns`},
-		{name: "no key", storage: `{}`, modify: func(_ *qt.C, table *protocol.DeclaredTable) {
+		{name: "row-table settings beside the storage", storage: `{}`, modify: withFacet(facet(c, schema.TableProperties, "", `{"keyBloomFilter":"ENABLED"}`)),
+			wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
+		{name: "a vector index", storage: `{}`, modify: withFacet(facet(c, schema.IndexProperties, "", vectorIndexes(false))),
+			wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
+		{name: "a column in a family", storage: `{}`, modify: withFacet(facet(c, schema.ColumnProperties, "body", `{"family":"cold"}`)),
+			wantErr: `row-table partitioning, column families and changefeeds cannot be applied to a column table`},
+		{name: "a column default", storage: `{}`, modify: withFacet(facet(c, schema.ColumnProperties, "count",
+			`{"literal":{"type":{"typeId":"UINT64"},"value":{"uint64Value":"7"}}}`)),
+			wantErr: `column tables do not support defaults or Serial columns`},
+		{name: "no key", storage: `{}`, modify: func(table *protocol.DeclaredTable) {
 			table.PrimaryKey, table.Columns[0].Primary, table.Columns[1].Primary = nil, false, false
 		}, wantErr: `YDB table creation requires an ordered primary key`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			table := columnDeclaration(c, test.storage)
-			test.modify(c, table)
+			test.modify(table)
 			created, err := tablecreate.CompileColumnTable(owner(), table, nil)
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(created, qt.IsNil)
@@ -294,54 +298,48 @@ func TestColumnTablePlan_AlterWithNoChange(t *testing.T) {
 // TestColumnTablePlan_AlterRefusals refuses each change no statement makes in
 // place, with the reason, and returns no partial plan.
 func TestColumnTablePlan_AlterRefusals(t *testing.T) {
-	desired := func(c *qt.C, payload string) []*protocol.ComparisonRecord {
+	c := testcheck.New(t)
+	desired := func(payload string) []*protocol.ComparisonRecord {
 		return []*protocol.ComparisonRecord{storageFacet(c, protocol.ValueInput_DESIRED, payload)}
 	}
-	held := func(c *qt.C) []*protocol.ComparisonRecord {
+	held := func() []*protocol.ComparisonRecord {
 		return []*protocol.ComparisonRecord{storageFacet(c, protocol.ValueInput_OBSERVED, heldStorage)}
 	}
+	declaredRow := columnAlterRequest(c, nil, held())
+	declaredRow.Tables[0].Desired.Features.Facets.Coverage.Kinds = []*protocol.ComparisonKindCoverage{{Model: schema.NativeDesiredModel(schema.ColumnStorageProperties),
+		Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}}}}}
+	rebuild := columnAlterRequest(c, desired(`{"ttl":`+deleteDaily+`}`), held())
+	rebuild.Tables[0].Action = protocol.PlanningTable_REBUILD
 	for _, test := range []struct {
 		name    string
-		request func(*qt.C) *protocol.PlanFeaturesRequest
+		request *protocol.PlanFeaturesRequest
 		want    string
 	}{
-		{"another shard count", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			return columnAlterRequest(c, desired(c, `{"partitions":"4","ttl":`+deleteDaily+`}`), held(c))
-		}, `table "app/records": changing a column table's hash key or shard count requires an explicit data migration \(the table has 3 shards, and the declaration asks for 4\)`},
-		{"another hash key", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			return columnAlterRequest(c, desired(c, `{"hashColumns":["ts","id"],"ttl":`+deleteDaily+`}`), held(c))
-		}, `table "app/records": changing a column table's hash key or shard count requires an explicit data migration \(the table is hashed by \["id"\], and the declaration asks for \["ts" "id"\]\)`},
-		{"a local index to add of a kind the target lacks", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			return columnAlterRequest(c, desired(c, `{"ttl":`+deleteDaily+`,"localIndexes":[{"name":"mm","columns":["ts"],"storageId":"__LOCAL_METADATA","minMax":{}}]}`), held(c))
-		}, `local index "mm" is a min_max index, which requires target capability local_min_max_indexes, unavailable on this ydb target .*`},
-		{"a row table declared as a column table", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			return columnAlterRequest(c, desired(c, `{}`), []*protocol.ComparisonRecord{observedFacet(c, schema.TableProperties, "", `{"primaryKey":["ts","id"]}`)})
-		}, `table "app/records": changing between row and column storage requires an explicit data migration`},
-		{"a column table declared with row-table settings", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			return columnAlterRequest(c, []*protocol.ComparisonRecord{facet(c, schema.TableProperties, "", `{"keyBloomFilter":"ENABLED"}`)}, held(c))
-		}, `table "app/records": changing between row and column storage requires an explicit data migration`},
-		{"a column table a complete source declares as a row table", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			request := columnAlterRequest(c, nil, held(c))
-			request.Tables[0].Desired.Features.Facets.Coverage.Kinds = []*protocol.ComparisonKindCoverage{{Model: schema.NativeDesiredModel(schema.ColumnStorageProperties),
-				Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}}}}}
-			return request
-		}, `table "app/records": changing between row and column storage requires an explicit data migration`},
-		{"a storage the read did not capture", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			return columnAlterRequest(c, desired(c, `{}`), nil)
-		}, `The table's current storage was not captured`},
-		{"a column step", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			step := commonStep("add", tableSubject(), "note", &protocol.PlanningEffect{Subject: tableSubject(), Action: protocol.PlanningEffect_READ})
-			return columnAlterRequest(c, desired(c, `{"ttl":`+deleteDaily+`}`), held(c), step)
-		}, `A common step is outside the supported column table lifecycle: .*`},
-		{"a rebuild", func(c *qt.C) *protocol.PlanFeaturesRequest {
-			request := columnAlterRequest(c, desired(c, `{"ttl":`+deleteDaily+`}`), held(c))
-			request.Tables[0].Action = protocol.PlanningTable_REBUILD
-			return request
-		}, `table "app/records": column-table rebuilds require an explicit data migration`},
+		{"another shard count", columnAlterRequest(c, desired(`{"partitions":"4","ttl":`+deleteDaily+`}`), held()),
+			`table "app/records": changing a column table's hash key or shard count requires an explicit data migration \(the table has 3 shards, and the declaration asks for 4\)`},
+		{"another hash key", columnAlterRequest(c, desired(`{"hashColumns":["ts","id"],"ttl":`+deleteDaily+`}`), held()),
+			`table "app/records": changing a column table's hash key or shard count requires an explicit data migration \(the table is hashed by \["id"\], and the declaration asks for \["ts" "id"\]\)`},
+		{"a local index to add of a kind the target lacks",
+			columnAlterRequest(c, desired(`{"ttl":`+deleteDaily+`,"localIndexes":[{"name":"mm","columns":["ts"],"storageId":"__LOCAL_METADATA","minMax":{}}]}`), held()),
+			`local index "mm" is a min_max index, which requires target capability local_min_max_indexes, unavailable on this ydb target .*`},
+		{"a row table declared as a column table",
+			columnAlterRequest(c, desired(`{}`), []*protocol.ComparisonRecord{observedFacet(c, schema.TableProperties, "", `{"primaryKey":["ts","id"]}`)}),
+			`table "app/records": changing between row and column storage requires an explicit data migration`},
+		{"a column table declared with row-table settings",
+			columnAlterRequest(c, []*protocol.ComparisonRecord{facet(c, schema.TableProperties, "", `{"keyBloomFilter":"ENABLED"}`)}, held()),
+			`table "app/records": changing between row and column storage requires an explicit data migration`},
+		{"a column table a complete source declares as a row table", declaredRow,
+			`table "app/records": changing between row and column storage requires an explicit data migration`},
+		{"a storage the read did not capture", columnAlterRequest(c, desired(`{}`), nil),
+			`The table's current storage was not captured`},
+		{"a column step", columnAlterRequest(c, desired(`{"ttl":`+deleteDaily+`}`), held(),
+			commonStep("add", tableSubject(), "note", &protocol.PlanningEffect{Subject: tableSubject(), Action: protocol.PlanningEffect_READ})),
+			`A common step is outside the supported column table lifecycle: .*`},
+		{"a rebuild", rebuild, `table "app/records": column-table rebuilds require an explicit data migration`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			plan, err := backend.New().PlanFeatures(t.Context(), test.request(c))
+			plan, err := backend.New().PlanFeatures(t.Context(), test.request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 1)
 			c.Assert(plan.Diagnostics[0].Message, qt.Matches, test.want)

@@ -12,12 +12,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // storedAttributes reads the user attributes YDB keeps on the table or view
@@ -35,7 +36,7 @@ func storedAttributes(c *qt.C, opened *connection.Connection, absolute string) m
 	}, table.WithIdempotent())
 	c.Assert(err, qt.IsNil)
 	if attributes == nil {
-		attributes = map[string]string{}
+		attributes = make(map[string]string)
 	}
 	return attributes
 }

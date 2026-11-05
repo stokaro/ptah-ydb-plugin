@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
-	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
+	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // pageBytes bounds the rows of one page, so the page and its envelope stay

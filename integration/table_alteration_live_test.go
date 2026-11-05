@@ -13,14 +13,15 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // observedTable reads app.records back through the provider and captures it as
@@ -101,7 +102,7 @@ func TestRowTableFamilyAlterationSubprocess(t *testing.T) {
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, payload, extra, keep) VALUES (1u, \"a\"u, \"b\"u, \"c\"u)")
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, payload, extra, keep) VALUES (1u, \"a\"u, \"b\"u, \"c\"u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
@@ -166,7 +167,7 @@ func TestRowTableFamilyAlterationSubprocess(t *testing.T) {
 			again := plan(c, step)
 			c.Assert(again.Contributions, qt.HasLen, 0)
 			held := observedTable(c, client, session, directory)
-			placed := map[string]string{}
+			placed := make(map[string]string)
 			for _, record := range held.Features.Facets.Records {
 				var properties struct {
 					Family string `json:"family"`
@@ -200,7 +201,7 @@ func scheduled(c *qt.C, plan *protocol.PlannedFeatures) []*protocol.PlanningStep
 		dependencies = append(dependencies, contribution.Dependencies...)
 	}
 	var ordered []*protocol.PlanningStep
-	done := map[string]bool{}
+	done := make(map[string]bool)
 	for len(ordered) < len(steps) {
 		progressed := false
 		for _, step := range steps {
@@ -248,7 +249,7 @@ func TestRowTableColumnAlterationSubprocess(t *testing.T) {
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, keep, old, stale, marker) VALUES (1u, \"k\"u, \"o\"u, \"s\"u, \"t\"u)")
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, keep, old, stale, marker) VALUES (1u, \"k\"u, \"o\"u, \"s\"u, \"t\"u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)
@@ -389,7 +390,7 @@ func TestRowTableTTLAlterationSubprocess(t *testing.T) {
 		defer stop()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, keep) VALUES (1u, \"kept\"u)")
+	_, err = opened.DB.ExecContext(ctx, "UPSERT INTO `"+absolute+"` (id, keep) VALUES (1u, \"kept\"u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	binary, digest := providerBinary(c)
 	client := startProvider(c, binary, digest)

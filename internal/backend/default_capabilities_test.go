@@ -26,7 +26,7 @@ func TestDescriptionStatesTheOfflineCapabilities(t *testing.T) {
 	c.Assert(facts["full_text_indexes"], qt.IsTrue)
 	c.Assert(facts["resource_pools"], qt.IsFalse)
 
-	lines := map[string]map[string]bool{}
+	lines := make(map[string]map[string]bool)
 	for _, line := range listed.GetEngines()[0].GetReleaseLines() {
 		lines[line.GetLine()] = line.GetCapabilities()
 	}

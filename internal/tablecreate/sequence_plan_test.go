@@ -5,15 +5,16 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
-	"google.golang.org/protobuf/proto"
 )
 
 // serialChange is an existing app.records whose key id is held and declared
@@ -235,9 +236,9 @@ func TestSerialSequenceChange_FailurePath(t *testing.T) {
 // heldSequenceColumn is the native read of an Int64 Serial id whose sequence
 // starts at 100 and steps by 5.
 func heldSequenceColumn() *native.ColumnMeta {
-	return &native.ColumnMeta{Name: "id", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_INT64}}, NotNull: proto.Bool(true),
-		DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: &native.SequenceDescription{Name: proto.String("_serial_column_id"), MinValue: proto.Int64(1),
-			MaxValue: proto.Int64(9223372036854775807), StartValue: proto.Int64(100), Cache: proto.Uint64(1), Increment: proto.Int64(5), Cycle: proto.Bool(false)}}}
+	return &native.ColumnMeta{Name: "id", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_INT64}}, NotNull: new(true),
+		DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: &native.SequenceDescription{Name: new("_serial_column_id"), MinValue: proto.Int64(1),
+			MaxValue: proto.Int64(9223372036854775807), StartValue: proto.Int64(100), Cache: proto.Uint64(1), Increment: proto.Int64(5), Cycle: new(false)}}}
 }
 
 // The operation keeps the column it read and the settings the sequence takes,

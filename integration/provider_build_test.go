@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -69,7 +68,7 @@ func buildProvider() string {
 	binary := filepath.Join(dir, name)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, "go", "build", "-race", "-o", binary, "../cmd/ptah-plugin-ydb").CombinedOutput()
+	output, err := testCommand(ctx, "go", "build", "-race", "-o", binary, "../cmd/ptah-plugin-ydb").CombinedOutput()
 	if err != nil {
 		return fmt.Sprintf("build provider: %v: %s", err, output)
 	}

@@ -1,8 +1,9 @@
 package backend
 
 import (
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // scopeSelections names standalone models with the same directory and

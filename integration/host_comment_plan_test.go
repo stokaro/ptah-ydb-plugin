@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // setStoredAttributes gives the table at absolute the user attributes given,
@@ -131,6 +132,6 @@ func TestHostAddsAColumnWithoutTheCommentOfADroppedOne_HappyPath(t *testing.T) {
 
 	applyRuns(c, directory, "yaml", commentedUsers(directory, "", []string{"legacy"}, nil))
 
-	c.Assert(storedAttributes(c, opened, absolute), qt.DeepEquals, map[string]string{})
+	c.Assert(storedAttributes(c, opened, absolute), qt.DeepEquals, make(map[string]string))
 	c.Assert(heldColumnNames(c, opened, absolute), qt.DeepEquals, []string{"id", "legacy"})
 }

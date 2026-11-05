@@ -4,9 +4,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 )
 
 // statementFailure carries only server issues, never the SDK error wrapper

@@ -8,17 +8,18 @@ import (
 	"fmt"
 	"time"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/stokaro/ptah/provider-sdk/runtime"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/readproof"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secretvalue"
 	"github.com/stokaro/ptah-ydb-plugin/internal/statementrows"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/stokaro/ptah/provider-sdk/runtime"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const statementLimit = 1024
@@ -148,7 +149,7 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	result := &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_SUCCEEDED, Columns: record.cursor.Columns()}
-	record.columns = uint32(len(result.Columns))
+	record.columns = uint32(len(result.Columns)) // #nosec G115 -- the columns go out in this reply, and runtime.MaxMessageBytes bounds a reply to 4 MiB
 	var more bool
 	result.Rows, more, err = record.cursor.Page(request.MaxRows)
 	if err != nil {

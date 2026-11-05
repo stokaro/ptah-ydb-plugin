@@ -3,10 +3,11 @@ package tablecreate
 import (
 	"fmt"
 
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // ChangeKinds lists the comparison changes this service accepts. Each one
@@ -71,6 +72,7 @@ func changeIndex(request *protocol.PlanFeaturesRequest, change *protocol.Plannin
 }
 
 func refusedChange(index int, message string) *protocol.PlannedFeatures {
+	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE,
 		Kind: schema.TablePropertiesChange, Message: message, Input: &protocol.PlanningDiagnostic_Change{Change: uint32(index)}}}}
 }

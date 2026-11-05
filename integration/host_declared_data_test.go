@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -111,7 +111,7 @@ func (f *countriesFixture) run(c *qt.C, args ...string) (string, error) {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, f.host, append(args, "--provider-config", f.manifest, "--provider-engine", "ydb", "--db-url", f.address)...)
+	cmd := testCommand(ctx, f.host, append(args, "--provider-config", f.manifest, "--provider-engine", "ydb", "--db-url", f.address)...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	err := cmd.Run()
@@ -130,7 +130,7 @@ func (f *countriesFixture) planned(c *qt.C) []string {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, f.host, "schema", "apply", "--dry-run", "--json", "--tx-mode", "none", "--root-dir", f.withRows,
+	cmd := testCommand(ctx, f.host, "schema", "apply", "--dry-run", "--json", "--tx-mode", "none", "--root-dir", f.withRows,
 		"--provider-config", f.manifest, "--provider-engine", "ydb", "--db-url", f.address)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -177,6 +177,7 @@ func (f *countriesFixture) stored(c *qt.C) []string {
 	for i, column := range columns {
 		casts[i] = "CAST(`" + column + "` AS Utf8)"
 	}
+	// #nosec G202 -- the columns are this test's own names, and the path is a table under a directory this test generated
 	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT `code`, "+strings.Join(casts, ", ")+", `meta` FROM `"+path.Join(f.root, "countries")+"` ORDER BY `code`")
 	c.Assert(err, qt.IsNil)
 	defer func() { c.Check(rows.Close(), qt.IsNil) }()

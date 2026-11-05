@@ -5,6 +5,12 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
@@ -15,11 +21,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
-	"google.golang.org/protobuf/proto"
 )
 
 // external is one external object of app: a data source or a table.
@@ -81,7 +82,7 @@ func externalSubject(kind, database, name string) *protocol.ComparisonIdentity {
 // read objects and the read directory with the session's.
 func externalRequest(c *qt.C, declared, read []external, capabilities map[string]bool) *protocol.CompareModelsRequest {
 	c.Helper()
-	observed := map[string]*protocol.ValueModel{}
+	observed := make(map[string]*protocol.ValueModel)
 	for _, model := range schema.ObservedModels() {
 		observed[model.Kind] = model
 	}
@@ -300,7 +301,7 @@ func TestExternalPlanning_HappyPath(t *testing.T) {
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), planning, plan), qt.IsNil)
 			var steps []stepSummary
-			index := map[string]int{}
+			index := make(map[string]int)
 			for i, step := range plan.Contributions[0].Steps {
 				index[step.Id.Name] = i
 				c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)

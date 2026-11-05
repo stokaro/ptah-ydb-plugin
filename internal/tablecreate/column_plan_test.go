@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 func columnSubject(name string) *protocol.ComparisonIdentity {
@@ -256,31 +257,27 @@ func TestColumnPlan_ClaimsWhatTheCallCanState(t *testing.T) {
 }
 
 func TestColumnPlan_AddedColumnFacets(t *testing.T) {
-	captured := func(c *qt.C, name, payload string) *protocol.CapturedFacet {
-		c.Helper()
-		record := facet(c, schema.ColumnProperties, name, payload)
+	c := testcheck.New(t)
+	captured := func(payload string) *protocol.CapturedFacet {
+		record := facet(c, schema.ColumnProperties, "payload", payload)
 		return &protocol.CapturedFacet{Kind: record.Kind, Value: record.Value}
 	}
+	elsewhere := captured(`{"literal":{"type":{"typeId":"UTF8"},"value":{"textValue":"x"}}}`)
+	elsewhere.Targets = []string{"postgres"}
 	for _, test := range []struct {
 		name    string
-		facet   func(*qt.C) *protocol.CapturedFacet
+		facet   *protocol.CapturedFacet
 		claimed bool
 	}{
-		{"family only", func(c *qt.C) *protocol.CapturedFacet { return captured(c, "payload", `{"family":"archive"}`) }, true},
-		{"empty properties", func(c *qt.C) *protocol.CapturedFacet { return captured(c, "payload", `{}`) }, true},
-		{"literal default", func(c *qt.C) *protocol.CapturedFacet {
-			return captured(c, "payload", `{"literal":{"type":{"typeId":"UTF8"},"value":{"textValue":"x"}}}`)
-		}, false},
-		{"another target", func(c *qt.C) *protocol.CapturedFacet {
-			result := captured(c, "payload", `{"literal":{"type":{"typeId":"UTF8"},"value":{"textValue":"x"}}}`)
-			result.Targets = []string{"postgres"}
-			return result
-		}, true},
+		{"family only", captured(`{"family":"archive"}`), true},
+		{"empty properties", captured(`{}`), true},
+		{"literal default", captured(`{"literal":{"type":{"typeId":"UTF8"},"value":{"textValue":"x"}}}`), false},
+		{"another target", elsewhere, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}},
-				additionStep("add", "payload", func(column *protocol.PlanningColumn) { column.Facets = []*protocol.CapturedFacet{test.facet(c)} }))
+				additionStep("add", "payload", func(column *protocol.PlanningColumn) { column.Facets = []*protocol.CapturedFacet{test.facet} }))
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -290,29 +287,28 @@ func TestColumnPlan_AddedColumnFacets(t *testing.T) {
 }
 
 func TestColumnPlan_RefusesForgedAddedColumnFacets(t *testing.T) {
+	c := testcheck.New(t)
+	table := facet(c, schema.TableProperties, "", plainTable)
 	for _, test := range []struct {
 		name   string
-		modify func(*qt.C, *protocol.CapturedFacet)
+		modify func(*protocol.CapturedFacet)
 	}{
-		{"projection", func(c *qt.C, f *protocol.CapturedFacet) { f.Value.CanonicalProjection = []byte(`{"family":"cold"}`) }},
-		{"other database", func(c *qt.C, f *protocol.CapturedFacet) {
+		{"projection", func(f *protocol.CapturedFacet) { f.Value.CanonicalProjection = []byte(`{"family":"cold"}`) }},
+		{"other database", func(f *protocol.CapturedFacet) {
 			f.Value.Value.Owner.Database = "/other"
 			f.Value.NormalizedOwner.Database = "/other"
 		}},
-		{"other directory", func(c *qt.C, f *protocol.CapturedFacet) {
+		{"other directory", func(f *protocol.CapturedFacet) {
 			f.Value.Value.Owner.Schema = "elsewhere"
 			f.Value.NormalizedOwner.Schema = "elsewhere"
 		}},
-		{"outer kind", func(_ *qt.C, f *protocol.CapturedFacet) { f.Kind = schema.TableProperties }},
-		{"table properties", func(c *qt.C, f *protocol.CapturedFacet) {
-			table := facet(c, schema.TableProperties, "", plainTable)
-			f.Kind, f.Value = table.Kind, table.Value
-		}},
-		{"other column", func(c *qt.C, f *protocol.CapturedFacet) {
+		{"outer kind", func(f *protocol.CapturedFacet) { f.Kind = schema.TableProperties }},
+		{"table properties", func(f *protocol.CapturedFacet) { f.Kind, f.Value = table.Kind, table.Value }},
+		{"other column", func(f *protocol.CapturedFacet) {
 			f.Value.Value.Owner.Name = "elsewhere"
 			f.Value.NormalizedOwner.Name = "elsewhere"
 		}},
-		{"other table", func(c *qt.C, f *protocol.CapturedFacet) {
+		{"other table", func(f *protocol.CapturedFacet) {
 			f.Value.Value.Owner.Path = []string{"elsewhere"}
 			f.Value.NormalizedOwner.Path = []string{"elsewhere"}
 		}},
@@ -321,7 +317,7 @@ func TestColumnPlan_RefusesForgedAddedColumnFacets(t *testing.T) {
 			c := testcheck.New(t)
 			record := facet(c, schema.ColumnProperties, "payload", `{"family":"archive"}`)
 			captured := &protocol.CapturedFacet{Kind: record.Kind, Value: proto.CloneOf(record.Value)}
-			test.modify(c, captured)
+			test.modify(captured)
 			request := columnRequest(c, alterCase{desiredTable: plainTable, heldTable: plainTable, declared: []string{"payload"}},
 				additionStep("add", "payload", func(column *protocol.PlanningColumn) { column.Facets = []*protocol.CapturedFacet{captured} }))
 			plan, err := backend.New().PlanFeatures(c.Context(), request)

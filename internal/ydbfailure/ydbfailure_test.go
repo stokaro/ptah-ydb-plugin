@@ -8,14 +8,15 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 )
 
 // A live server answers the statuses below on demand only for some of them
@@ -50,7 +51,7 @@ func (a *answered) Issues() []*Ydb_Issue.IssueMessage { return a.issues }
 
 // issue is one issue YDB attaches, at row:column of the text (0:0 names no
 // position), with the issues nested in it.
-func issue(code uint32, row, column uint32, message string, nested ...*Ydb_Issue.IssueMessage) *Ydb_Issue.IssueMessage {
+func issue(code, row, column uint32, message string, nested ...*Ydb_Issue.IssueMessage) *Ydb_Issue.IssueMessage {
 	return &Ydb_Issue.IssueMessage{IssueCode: code, Severity: 1, Message: message, Position: &Ydb_Issue.IssueMessage_Position{Row: row, Column: column}, Issues: nested}
 }
 

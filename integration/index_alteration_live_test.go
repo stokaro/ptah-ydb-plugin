@@ -7,15 +7,16 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // indexSpec states one declared index by its native fields.
-func indexSpec(name, kind string, keys, cover string) string {
+func indexSpec(name, kind, keys, cover string) string {
 	text := `"name":"` + name + `","indexColumns":` + keys + `,"` + kind + `":{}`
 	if cover != "" {
 		text += `,"dataColumns":` + cover
@@ -44,7 +45,7 @@ func (f *facetFixture) compareIndexes(c *qt.C, declared string) *protocol.Compar
 // heldIndexes reads the indexes of the live table back through the provider.
 func (f *facetFixture) heldIndexes(c *qt.C) map[string]*native.TableIndexDescription {
 	c.Helper()
-	result := map[string]*native.TableIndexDescription{}
+	result := make(map[string]*native.TableIndexDescription)
 	for _, record := range observedTable(c, f.client, f.session, f.directory).Features.Facets.Records {
 		if record.Kind != schema.IndexProperties {
 			continue
@@ -75,19 +76,19 @@ func TestIndexAlterationAddSubprocess(t *testing.T) {
 			fixture := newFacetFixture(c, "", "")
 			declared := declaredIndexes(indexSpec("by_payload", test.kind, test.keys, test.cover))
 			found := fixture.compareIndexes(c, declared)
-			c.Assert(len(found.Changes), qt.Equals, 1)
+			c.Assert(found.Changes, qt.HasLen, 1)
 			c.Assert(found.Changes[0].Kind, qt.Equals, schema.IndexProperties)
 			c.Assert(found.Changes[0].Value.Value.Kind, qt.Equals, schema.TablePropertiesChange)
 			fixture.applyRecords(c, "index-add", found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
 			held := fixture.heldIndexes(c)
-			c.Assert(len(held), qt.Equals, 1)
+			c.Assert(held, qt.HasLen, 1)
 			c.Assert(held["by_payload"].Status, qt.Equals, native.TableIndexDescription_STATUS_READY)
 			description := held["by_payload"].ProtoReflect()
 			c.Assert(string(description.WhichOneof(description.Descriptor().Oneofs().ByName("type")).Name()), qt.Equals, test.field)
 			c.Assert(held["by_payload"].IndexColumns, qt.DeepEquals, test.wantKeys)
 			c.Assert(held["by_payload"].DataColumns, qt.DeepEquals, test.wantCover)
 			// The read-back is what the next comparison is made against: nothing is left to do.
-			c.Assert(len(fixture.compareIndexes(c, declared).Changes), qt.Equals, 0)
+			c.Assert(fixture.compareIndexes(c, declared).Changes, qt.HasLen, 0)
 		})
 	}
 }
@@ -107,14 +108,14 @@ func TestIndexAlterationDropSubprocess(t *testing.T) {
 			c := testcheck.New(t)
 			fixture := newFacetFixture(c, test.clauses, "")
 			found := fixture.compareIndexes(c, test.declared)
-			c.Assert(len(found.Changes), qt.Equals, 1)
+			c.Assert(found.Changes, qt.HasLen, 1)
 			fixture.applyRecords(c, "index-drop", found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, test.declared))
 			var names []string
 			for name := range fixture.heldIndexes(c) {
 				names = append(names, name)
 			}
 			c.Assert(names, qt.DeepEquals, test.want)
-			c.Assert(len(fixture.compareIndexes(c, test.declared).Changes), qt.Equals, 0)
+			c.Assert(fixture.compareIndexes(c, test.declared).Changes, qt.HasLen, 0)
 		})
 	}
 }
@@ -133,7 +134,7 @@ func TestIndexComparisonUnchangedSubprocess(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			fixture := newFacetFixture(c, test.clauses, "")
-			c.Assert(len(fixture.compareIndexes(c, test.declared).Changes), qt.Equals, 0)
+			c.Assert(fixture.compareIndexes(c, test.declared).Changes, qt.HasLen, 0)
 		})
 	}
 }
@@ -155,14 +156,14 @@ func TestIndexAlterationRefusesAChangedIndexSubprocess(t *testing.T) {
 			c := testcheck.New(t)
 			fixture := newFacetFixture(c, ", INDEX by_payload GLOBAL SYNC ON (payload)", "")
 			found := fixture.compareIndexes(c, test.declared)
-			c.Assert(len(found.Changes), qt.Equals, 1)
+			c.Assert(found.Changes, qt.HasLen, 1)
 			plan := fixture.plan(c, found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, test.declared))
-			c.Assert(len(plan.Diagnostics), qt.Equals, 1)
+			c.Assert(plan.Diagnostics, qt.HasLen, 1)
 			c.Assert(plan.Diagnostics[0].Message, qt.Matches, `(?s).*`+test.message+`.*YDB cannot alter an index in place.*`)
-			c.Assert(len(plan.Contributions), qt.Equals, 0)
+			c.Assert(plan.Contributions, qt.HasLen, 0)
 			// The refusal leaves the index as it was.
 			held := fixture.heldIndexes(c)
-			c.Assert(len(held), qt.Equals, 1)
+			c.Assert(held, qt.HasLen, 1)
 			c.Assert(held["by_payload"].GetGlobalIndex(), qt.IsNotNil)
 			c.Assert(held["by_payload"].IndexColumns, qt.DeepEquals, []string{"payload"})
 		})

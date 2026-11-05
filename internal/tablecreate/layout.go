@@ -6,11 +6,12 @@ import (
 	"slices"
 	"strconv"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // layout is the starting layout of a new table as a source states it: a count
@@ -159,6 +160,7 @@ func splitValue(text, ydbType string) (*Ydb.Type, *Ydb.Value, error) {
 // integerValue wraps a parsed non-negative integer in the value field its type
 // uses.
 func integerValue(ydbType string, parsed uint64) *Ydb.Value {
+	// #nosec G115 -- splitValue parses the value at its type's width and caps a signed type at its largest value
 	switch ydbType {
 	case "Int8", "Int16", "Int32":
 		return &Ydb.Value{Value: &Ydb.Value_Int32Value{Int32Value: int32(parsed)}}

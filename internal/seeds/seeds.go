@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"time"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 
@@ -32,7 +33,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbfailure"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // Table is the ledger's name, in the root of the session's database.
@@ -288,6 +288,7 @@ func Retryable(err error) bool {
 	}
 	deterministic := false
 	ydb.IterateByIssues(err, func(_ string, code Ydb.StatusIds_StatusCode, _ uint32) {
+		// #nosec G115 -- the SDK passes the issue's uint32 issue_code as this int32 type, and the conversion restores it
 		deterministic = deterministic || ydbfailure.RepeatedAbort(uint32(code))
 	})
 	return !deterministic

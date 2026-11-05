@@ -9,12 +9,13 @@ import (
 	"strconv"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 // desiredModels returns the desired models a source of the given format
@@ -132,7 +133,7 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 	}
 	for i, declaration := range declarations {
 		if i == 0 {
-			document.File, document.ByteLength = declaration.File, uint64(declaration.FileSize)
+			document.File, document.ByteLength = declaration.File, uint64(declaration.FileSize) // #nosec G115 -- a test fixture file of a few kilobytes
 		}
 		claims := slices.Concat(tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{schema.CoordinationGoDirective()}, externalsource.GoDirectives())
 		claim := slices.IndexFunc(claims, func(claim *protocol.GoSourceDirective) bool { return claim.Directive == declaration.Directive })
@@ -149,6 +150,7 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 		if owning < 0 && directive.Scope != protocol.GoSourceDirective_DOCUMENT {
 			return nil, fmt.Errorf("struct %s maps to no table in this file", declaration.Struct)
 		}
+		// #nosec G115 -- the positions are within a test fixture file of a few kilobytes
 		span := &protocol.SourceSpan{
 			Start: &protocol.SourcePosition{ByteOffset: uint64(declaration.Start.Offset), Line: uint32(declaration.Start.Line), Column: uint32(declaration.Start.Column)},
 			End:   &protocol.SourcePosition{ByteOffset: uint64(declaration.End.Offset), Line: uint32(declaration.End.Line), Column: uint32(declaration.End.Column)},

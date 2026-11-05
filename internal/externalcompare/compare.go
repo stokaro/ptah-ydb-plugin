@@ -8,16 +8,17 @@ package externalcompare
 import (
 	"context"
 	"fmt"
-	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"slices"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 // ServiceID names the owner of external object comparisons.
@@ -174,7 +175,7 @@ func pathOf(owner *protocol.Reference) ydbdecl.Path {
 // it and leave a table nothing can drop (`path hasn't been resolved`), as the
 // host measured.
 func refuseOrphanedTables(decided []objectcompare.Decided, tables []declared, root string) error {
-	dropped := map[ydbdecl.Path]string{}
+	dropped := make(map[ydbdecl.Path]string)
 	for _, object := range decided {
 		if object.Kind == schema.ExternalSourceProperties && object.Change != nil && object.Desired == nil {
 			dropped[pathOf(object.Owner)] = ydbdecl.ExternalDisplay(object.Owner.GetSchema(), object.Owner.GetName())
@@ -202,7 +203,7 @@ func refuseOrphanedTables(decided []objectcompare.Decided, tables []declared, ro
 // a table reads the source (measured on 26.2.1.14 by the host). The change's
 // operands may describe the same table.
 func tablesOverRecreatedSources(decided []objectcompare.Decided, replace bool, root string) ([]*protocol.ComparedChange, error) {
-	recreated := map[ydbdecl.Path]bool{}
+	recreated := make(map[ydbdecl.Path]bool)
 	for _, object := range decided {
 		if object.Kind != schema.ExternalSourceProperties || object.Change == nil || object.Current == nil || object.Desired == nil {
 			continue

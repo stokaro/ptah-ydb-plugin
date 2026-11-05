@@ -12,9 +12,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The statements here are the texts the host's query builder renders for YDB
@@ -178,6 +179,7 @@ func TestQueryBuilderUpsertOnATableWithAUniqueIndexFollowsTheLine(t *testing.T) 
 
 	first := runTyped(c, client, session, upsert, int64Argument(1), stringArgument("a@x"), stringArgument("free"))
 	partial := runTyped(c, client, session, "UPSERT INTO `"+accounts+"` (`id`, `plan`) VALUES ($p1, $p2)", int64Argument(2), stringArgument("trial"))
+	// #nosec G202 -- the path is a table under a directory this test generated
 	_, serverErr := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+path.Join(database, accounts)+"` (`id`, `plan`) VALUES (2l, 'trial'u)")
 	afterPartial := runTyped(c, client, session, read)
 	paid := runTyped(c, client, session, upsert, int64Argument(1), stringArgument("a@x"), stringArgument("paid"))

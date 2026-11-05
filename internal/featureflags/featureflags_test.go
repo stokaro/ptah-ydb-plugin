@@ -1,11 +1,13 @@
 package featureflags_test
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -27,9 +29,7 @@ func preset() map[string]bool {
 // with is the preset with some capabilities set.
 func with(set map[string]bool) map[string]bool {
 	caps := preset()
-	for key, value := range set {
-		caps[key] = value
-	}
+	maps.Copy(caps, set)
 	return caps
 }
 
@@ -41,7 +41,7 @@ func with(set map[string]bool) map[string]bool {
 // and 25.1 does not list it. EnableMoveIndex is on by default on both, so an
 // index is renamed in place. A family cache mode is on with 26.2's default
 // EnableTableCacheModes, and 25.1 does not list the flag.
-func linePreset(autoPartitionedFeeds bool, secrets bool) map[string]bool {
+func linePreset(autoPartitionedFeeds, secrets bool) map[string]bool {
 	caps := preset()
 	caps["changefeed_topic_auto_partitioning"] = autoPartitionedFeeds
 	caps["wide_date_time_types"] = autoPartitionedFeeds
@@ -179,7 +179,7 @@ func TestRefine_EmptySet(t *testing.T) {
 // per flag.
 func TestGates_NameEveryFlagOnce(t *testing.T) {
 	c := testcheck.New(t)
-	keys, flags := map[string]bool{}, map[string]bool{}
+	keys, flags := make(map[string]bool), make(map[string]bool)
 	for _, gate := range featureflags.Gates() {
 		c.Assert(keys[gate.Key], qt.IsFalse, qt.Commentf(gate.Key))
 		c.Assert(flags[gate.Flag], qt.IsFalse, qt.Commentf(gate.Flag))

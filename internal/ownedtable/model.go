@@ -9,13 +9,13 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
-	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Identity keeps the selected database, relative directory, and table separate.
@@ -30,7 +30,7 @@ func Resolve(database, directory, name string) (Identity, error) {
 		directory = ""
 	}
 	if directory != "" {
-		for _, part := range strings.Split(directory, "/") {
+		for part := range strings.SplitSeq(directory, "/") {
 			if !component(part) {
 				return Identity{}, fmt.Errorf("invalid YDB store directory")
 			}
@@ -68,7 +68,7 @@ type Definition struct {
 func (s Definition) CreateRequest() *Ydb_Table.CreateTableRequest {
 	result := &Ydb_Table.CreateTableRequest{Path: s.Path(), StoreType: Ydb_Table.StoreType_STORE_TYPE_ROW, PrimaryKey: slices.Clone(s.PrimaryKey), Attributes: map[string]string{s.Attribute: s.Marker}}
 	for _, column := range s.Columns {
-		result.Columns = append(result.Columns, &Ydb_Table.ColumnMeta{Name: column.Name, Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: column.Type}}, NotNull: proto.Bool(true)})
+		result.Columns = append(result.Columns, &Ydb_Table.ColumnMeta{Name: column.Name, Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: column.Type}}, NotNull: new(true)})
 	}
 	return result
 }

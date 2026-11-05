@@ -6,14 +6,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
-	"github.com/ydb-platform/ydb-go-sdk/v3/coordination/options"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
+	"github.com/ydb-platform/ydb-go-sdk/v3/coordination/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 type fakeSession struct {

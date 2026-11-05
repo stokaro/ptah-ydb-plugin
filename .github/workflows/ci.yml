@@ -47,10 +47,11 @@ jobs:
       - run: go vet -tags integration ./...
       - run: go test -race -tags integration ./integration -run 'TestRowTableCreationOfflineSubprocess|TestSchemaValidationOfflineSubprocess|TestNativeObjectConversionOfflineSubprocess|TestChildConversionOfflineSubprocess|TestTableConversionOfflineSubprocess|TestColumnConversionOfflineSubprocess|TestColumnStorageOfflineSubprocess|TestCoordinationSourceOfflineSubprocess|TestCoordinationComparisonOfflineSubprocess|TestComparisonCountsOfflineSubprocess|TestYQLAnalysisOfflineSubprocess|TestMigrationLintOfflineSubprocess|TestRowServicesOfflineSubprocess|TestStatementFactsOfflineSubprocess|TestStatementFactsAnnotationOfflineSubprocess|TestEmbeddingStoreNeedsTheHostsFeatureSubprocess|TestSQLSchemaOfflineSubprocess|TestTextUnitsOfflineSubprocess|TestStatementStyleOfflineSubprocess|TestCommonObjectsOfflineSubprocess|TestSourceClaimsOfflineSubprocess|TestDeclarationsOfflineSubprocess' -count=1
       - run: CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
-  # golangci-lint, with the gofmt formatter, over both build contours: a file
-  # behind the integration tag is outside the default build, so only the
-  # second step reads the live tests. The version is the one Ptah's own lint
-  # job pins.
+  # The host's lint contract: qtlint, nolintguard and golangci-lint over both
+  # build contours, and the declarative-test baseline. A file behind the
+  # integration tag is outside the default build, so only the second run of
+  # each linter reads the live tests. The golangci-lint version is the one
+  # Ptah's own lint job pins; the other tools are pinned in go.mod.
   lint:
     runs-on: ubuntu-latest
     env:
@@ -60,6 +61,12 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: qtlint
+        run: make lint-qtlint
+      - name: nolintguard
+        run: make lint-nolintguard
+      - name: Test style baseline
+        run: make lint-teststyle
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:

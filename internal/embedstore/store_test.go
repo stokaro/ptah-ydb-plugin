@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/embedstore"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // What a line does with vectors follows the host's YDB presets: 25.1 has no

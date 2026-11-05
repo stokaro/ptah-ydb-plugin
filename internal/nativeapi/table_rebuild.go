@@ -8,13 +8,14 @@ import (
 	"path"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 )
 
 // TableStatements owns the steps of a table rebuild that YQL makes: the copy
@@ -36,6 +37,7 @@ func NewTableStatements(driver *ydb.Driver, execute func(context.Context, string
 	return &TableStatements{Scheme: Ydb_Scheme_V1.NewSchemeServiceClient(ydb.GRPCConn(driver)), Execute: execute,
 		Open: func(ctx context.Context) (TableDescriber, error) { return OpenTable(ctx, driver) },
 		Empty: func(ctx context.Context, absolute string) (bool, error) {
+			// #nosec G202 -- the only concatenated part is the table's path, quoted by tablecreate.QuoteIdentifier
 			rows, err := db.QueryContext(ctx, "SELECT 1 FROM "+tablecreate.QuoteIdentifier(absolute)+" LIMIT 1")
 			if err != nil {
 				return false, err

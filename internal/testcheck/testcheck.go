@@ -41,7 +41,7 @@ func Format(v any) string {
 	var text strings.Builder
 	text.WriteString(value.Type().String() + "{\n")
 	for i := range value.Len() {
-		element, _ := value.Index(i).Interface().(proto.Message)
+		element, _ := reflect.TypeAssert[proto.Message](value.Index(i))
 		text.WriteString("    " + strings.ReplaceAll(messageText(element), "\n", "\n    ") + ",\n")
 	}
 	text.WriteString("}")

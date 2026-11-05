@@ -9,11 +9,12 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // workloadRead is what an inspection reports of the resource pools and the
@@ -28,8 +29,8 @@ type workloadRead struct {
 
 func readWorkload(c *qt.C, snapshot *protocol.Schema) workloadRead {
 	c.Helper()
-	read := workloadRead{pools: []string{}, classifiers: []string{}, knowledge: map[string]protocol.ModelKnowledge_State{}, reasons: map[string]string{},
-		complete: map[string][]string{}}
+	read := workloadRead{pools: make([]string, 0), classifiers: make([]string, 0), knowledge: make(map[string]protocol.ModelKnowledge_State), reasons: make(map[string]string),
+		complete: make(map[string][]string)}
 	for _, object := range snapshot.GetNativeObjects() {
 		switch object.GetKind() {
 		case schema.ResourcePoolProperties:
@@ -42,7 +43,7 @@ func readWorkload(c *qt.C, snapshot *protocol.Schema) workloadRead {
 		if schema.IsWorkloadObject(kind.GetModel().GetKind()) {
 			read.knowledge[kind.GetModel().GetKind()] = kind.GetKnowledge().GetState()
 			read.reasons[kind.GetModel().GetKind()] = kind.GetKnowledge().GetReason()
-			read.complete[kind.GetModel().GetKind()] = []string{}
+			read.complete[kind.GetModel().GetKind()] = make([]string, 0)
 			for _, region := range kind.GetRegions() {
 				if region.GetKnowledge().GetState() == protocol.ModelKnowledge_COMPLETE {
 					read.complete[kind.GetModel().GetKind()] = append(read.complete[kind.GetModel().GetKind()], region.GetScope().GetDatabase().GetNormalized())

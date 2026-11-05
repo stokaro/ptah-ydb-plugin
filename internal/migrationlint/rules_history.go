@@ -5,9 +5,10 @@ import (
 	"slices"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlddl"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // The capability keys the rules read besides the ones a statement's

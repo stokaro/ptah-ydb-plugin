@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -14,11 +13,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/seeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // hostDataEntities declares a table and the rows of regions.yaml for it.
@@ -74,7 +73,7 @@ func (f *hostData) run(c *qt.C, args ...string) (string, error) {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, f.host, append(args, "--provider-config", f.manifest, "--db-url", f.address)...)
+	cmd := testCommand(ctx, f.host, append(args, "--provider-config", f.manifest, "--db-url", f.address)...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	err := cmd.Run()
@@ -105,10 +104,10 @@ func (f *hostData) runSeeds(c *qt.C, extra ...string) (string, error) {
 // connection of its own.
 func (f *hostData) stored(c *qt.C) map[string]string {
 	c.Helper()
-	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT code, name, rank FROM `"+path.Join(f.root, "regions")+"` ORDER BY code")
+	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT code, name, rank FROM `"+path.Join(f.root, "regions")+"` ORDER BY code") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	defer func() { c.Check(rows.Close(), qt.IsNil) }()
-	result := map[string]string{}
+	result := make(map[string]string)
 	for rows.Next() {
 		var code, name string
 		var rank *int64

@@ -12,12 +12,12 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // rowsFixture is a session on the test database and a table of every value
@@ -88,7 +88,7 @@ func (f *rowsFixture) typeRows(c *qt.C, declared, live []*protocol.Row) *protoco
 // write renders writes of typed rows and runs them.
 func (f *rowsFixture) write(c *qt.C, typed *protocol.TypedRows, mode protocol.RowWrite_Mode, rows []*protocol.Row, columns []string) {
 	c.Helper()
-	types := map[string]string{}
+	types := make(map[string]string)
 	for _, column := range typed.GetColumns() {
 		if slices.Contains(columns, column.GetName()) {
 			types[column.GetName()] = column.GetType()

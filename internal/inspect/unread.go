@@ -7,12 +7,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // maxReasonBytes is the longest reason the contract lets a host show.
@@ -68,7 +69,7 @@ func snapshotTargets(snapshot *protocol.Schema) ([]string, error) {
 // uninspected.
 func (s *source) databaseTargets(ctx context.Context, database string, leaveOut []string) (targets []string, complete bool, err error) {
 	pending := []string{""}
-	visited := map[string]bool{}
+	visited := make(map[string]bool)
 	complete = true
 	for len(pending) != 0 {
 		directory := pending[0]

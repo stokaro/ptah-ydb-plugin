@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 // snapshot is what Read returns for a database holding nothing.
@@ -26,7 +27,7 @@ func snapshot() *protocol.Schema {
 }
 
 func workloadKnowledge(read *protocol.Schema) map[string]*protocol.ModelKnowledge {
-	knowledge := map[string]*protocol.ModelKnowledge{}
+	knowledge := make(map[string]*protocol.ModelKnowledge)
 	for _, record := range read.Coverage.Kinds {
 		if schema.IsWorkloadObject(record.Model.Kind) {
 			knowledge[record.Model.Kind] = record.Knowledge
@@ -169,7 +170,7 @@ func TestWorkload_BesideTheScope(t *testing.T) {
 
 // workloadRecords are a read's coverage records of the workload kinds.
 func workloadRecords(read *protocol.Schema) map[string]*protocol.ModelKindCoverage {
-	records := map[string]*protocol.ModelKindCoverage{}
+	records := make(map[string]*protocol.ModelKindCoverage)
 	for _, record := range read.Coverage.Kinds {
 		if schema.IsWorkloadObject(record.Model.Kind) {
 			records[record.Model.Kind] = record

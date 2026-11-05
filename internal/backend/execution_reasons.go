@@ -3,8 +3,9 @@ package backend
 import (
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbview"
 )
 
 // realmPrefixLines is how many lines a session on a dev realm sends in front
@@ -17,6 +18,8 @@ var realmPrefixLines = uint32(strings.Count(ydbview.RealmPrefix("/"), "\n"))
 // wrote, so a host that lists errors.reasons prints it; the result's message
 // can repeat a parser's or a server's text and is never printed. A result whose
 // reason depends on its outcome is in outcomeReason.
+//
+// #nosec G101 -- the keys are diagnostic codes and the values are sentences; none is a credential
 var fixedReasons = map[string]string{
 	"ydb.invalid-coordination-statement": "the unit holds a coordination node statement the provider cannot read",
 	"ydb.invalid-comment-statement":      "the unit holds a comment statement the provider cannot read",

@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/releasemanifest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestBuildDeclaredLines_HappyPath(t *testing.T) {

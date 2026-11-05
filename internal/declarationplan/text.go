@@ -3,6 +3,8 @@ package declarationplan
 import (
 	"fmt"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationsql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
@@ -13,7 +15,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // Text renders one authored CREATE after checking every target requirement.

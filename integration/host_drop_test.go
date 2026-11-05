@@ -5,11 +5,11 @@ package integration_test
 import (
 	"context"
 	"path"
-	"slices"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
@@ -25,10 +25,10 @@ func TestHostDropsATableTheSourceLeavesOut_HappyPath(t *testing.T) {
 	})
 	output, err := hostApply(c, directory, hostItems(directory, ""))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
-	c.Assert(slices.Contains(childNames(c, opened, path.Join(database, directory)), "items"), qt.IsTrue)
+	c.Assert(childNames(c, opened, path.Join(database, directory)), qt.Contains, "items")
 
 	output, err = hostApply(c, directory, "package entities\n")
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
 	c.Assert(output, qt.Matches, `(?s).*table-drop-operation.*Schema apply completed successfully.*`)
-	c.Assert(slices.Contains(childNames(c, opened, path.Join(database, directory)), "items"), qt.IsFalse)
+	c.Assert(childNames(c, opened, path.Join(database, directory)), qt.Not(qt.Contains), "items")
 }

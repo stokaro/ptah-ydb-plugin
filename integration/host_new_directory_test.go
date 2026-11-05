@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -15,17 +14,18 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // streamingQueryEntry is the scheme entry type of a streaming query, which
@@ -34,7 +34,7 @@ const streamingQueryEntry = Ydb_Scheme.Entry_Type(26)
 
 // newDirectorySecret is the variable the secret a source declares in a new
 // directory takes its value from.
-const newDirectorySecret = "PTAH_SECRET_NEW_DIRECTORY"
+const newDirectorySecret = "PTAH_SECRET_NEW_DIRECTORY" // #nosec G101 -- the name of the variable that carries the value
 
 // heldEntries lists the directory at absolute through the scheme service, as
 // names and entry types. A directory YDB does not show lists as nil.
@@ -45,7 +45,7 @@ func heldEntries(c *qt.C, opened *connection.Connection, absolute string) map[st
 		c.Assert(err, qt.ErrorIs, nativeapi.ErrDirectoryNotVisible)
 		return nil
 	}
-	held := map[string]Ydb_Scheme.Entry_Type{}
+	held := make(map[string]Ydb_Scheme.Entry_Type)
 	for _, child := range listed.GetChildren() {
 		held[child.GetName()] = child.GetType()
 	}
@@ -196,7 +196,7 @@ func hostApplyEverywhereAs(c *qt.C, address, name, text string) (string, error) 
 	c.Assert(os.WriteFile(file, []byte(text), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := testCommand(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", address, "--schema-file", file)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output

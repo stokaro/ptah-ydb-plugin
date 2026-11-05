@@ -8,12 +8,13 @@ import (
 	"fmt"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // IndexSettingsOperationKind identifies a change of the automatic
@@ -34,12 +35,14 @@ func buildIndexSettingsModel() *protocol.ValueModel {
 			"held_index: the index as the table held it, a global sync, async or unique index with its settings",
 		"partitioning": "partitioning_settings states the settings that change among the automatic partitioning by size and by load, the preferred partition size " +
 			"and the minimum and maximum partition counts; the partition columns are never named, a setting is never reset, and the minimum never exceeds a nonzero maximum",
-		"replicas":     "read_replicas_settings states PER_AZ or ANY_AZ replicas where they change, a count of zero removing them",
-		"execution":    "YQL ALTER TABLE ... ALTER INDEX ... SET through the query service once, outside SQL transactions, naming every partitioning setting the index ends with when the partitioning changes; no retries; session and absolute path bound at dispatch",
+		"replicas": "read_replicas_settings states PER_AZ or ANY_AZ replicas where they change, a count of zero removing them",
+		"execution": "YQL ALTER TABLE ... ALTER INDEX ... SET through the query service once, outside SQL transactions, naming every partitioning " +
+			"setting the index ends with when the partitioning changes; no retries; session and absolute path bound at dispatch",
 		"precondition": "the table must exist as a row table and hold the index exactly as captured, settings included",
-		"confirmation": "read the table back; the index must keep its definition and be ready, hold every partitioning setting stated and the partition columns it held, and the read replicas set, or else the ones it held; every other index, every column and the key must be unchanged",
-		"semantics":    "behavioral: the settings decide when YDB splits and merges the index's partitions and where it serves reads; no value is rewritten",
-		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
+		"confirmation": "read the table back; the index must keep its definition and be ready, hold every partitioning setting stated and the partition " +
+			"columns it held, and the read replicas set, or else the ones it held; every other index, every column and the key must be unchanged",
+		"semantics": "behavioral: the settings decide when YDB splits and merges the index's partitions and where it serves reads; no value is rewritten",
+		"database":  "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
 		panic(err)

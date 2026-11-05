@@ -5,6 +5,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
@@ -13,10 +18,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/testing/protocmp"
 )
 
 // binding is the table the facets of a table test belong to.
@@ -73,7 +74,7 @@ func decode(c *qt.C, format protocol.SourceDocument_Format, parts []*protocol.En
 	}
 	tables, err := tablesource.Decode(c.Context(), document)
 	c.Assert(err, qt.IsNil)
-	result := decodedTable{columns: map[string]string{}}
+	result := decodedTable{columns: make(map[string]string)}
 	for _, decoded := range tables {
 		payload := string(decoded.Value.Value.Payload)
 		result.row, result.storage = map[bool]string{true: payload}[decoded.Value.Value.Kind == schema.TableProperties],
@@ -155,7 +156,7 @@ func TestEncodeTable_HappyPath(t *testing.T) {
 		name:    "epoch TTL and a starting layout",
 		facets:  []facet{{"row", schema.TableProperties, "", `{"uniformPartitions":"4","ttlSettings":{"valueSinceUnixEpoch":{"columnName":"at","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":3600}}}`}},
 		row:     `{"uniformPartitions":"4","ttlSettings":{"valueSinceUnixEpoch":{"columnName":"at","columnUnit":"UNIT_MILLISECONDS","expireAfterSeconds":3600}}}`,
-		columns: map[string]string{}, written: []string{"row"},
+		columns: make(map[string]string), written: []string{"row"},
 	}, {
 		name: "family cache modes",
 		facets: []facet{{"row", schema.TableProperties, "", `{"columnFamilies":[{"name":"hot","cacheMode":"CACHE_MODE_IN_MEMORY"},` +
@@ -166,28 +167,28 @@ func TestEncodeTable_HappyPath(t *testing.T) {
 		name:    "split points",
 		facets:  []facet{{"row", schema.TableProperties, "", `{"partitionAtKeys":[{"values":["10"]},{"values":["it's","a,b"]}],"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`}},
 		row:     `{"partitionAtKeys":[{"values":["10"]},{"values":["it's","a,b"]}],"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`,
-		columns: map[string]string{}, written: []string{"row"},
+		columns: make(map[string]string), written: []string{"row"},
 	}, {
 		name: "column table with a tiered TTL",
 		facets: []facet{{"storage", schema.ColumnStorageProperties, "", `{"hashColumns":["id","at"],"partitions":"8","ttl":{"enabled":{"column":"at","tiers":[` +
 			`{"applyAfterSeconds":"3600","externalStorage":"/local/app/cold"},{"applyAfterSeconds":"86400","delete":{}}]}}}`}, {"id", schema.ColumnProperties, "id", `{}`}},
 		storage: `{"hashColumns":["id","at"],"partitions":"8","ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"3600","externalStorage":"/local/app/cold"},{"applyAfterSeconds":"86400","delete":{}}]}}}`,
-		columns: map[string]string{}, written: []string{"storage", "id"},
+		columns: make(map[string]string), written: []string{"storage", "id"},
 	}, {
 		name:    "column table with a TTL that only deletes",
 		facets:  []facet{{"storage", schema.ColumnStorageProperties, "", `{"ttl":{"enabled":{"column":"at","columnUnit":"1","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`}},
 		storage: `{"ttl":{"enabled":{"column":"at","columnUnit":"1","tiers":[{"applyAfterSeconds":"60","delete":{}}]}}}`,
-		columns: map[string]string{}, written: []string{"storage"},
+		columns: make(map[string]string), written: []string{"storage"},
 	}, {
 		name:    "only what a source states by writing nothing",
 		facets:  []facet{{"feeds", schema.ChangefeedProperties, "", `{}`}, {"indexes", schema.IndexProperties, "", `{}`}, {"id", schema.ColumnProperties, "id", `{}`}},
-		columns: map[string]string{}, written: []string{"feeds", "indexes", "id"},
+		columns: make(map[string]string), written: []string{"feeds", "indexes", "id"},
 	}, {
 		// The read reports a Serial's start and increment on the common
 		// column, which the host writes; the facet adds nothing.
 		name:    "a Serial's sequence, which the common column writes",
 		facets:  []facet{{"id", schema.ColumnProperties, "id", `{"sequence":{"startValue":"5"}}`}, {"seq", schema.ColumnProperties, "seq", `{"sequence":{}}`}},
-		columns: map[string]string{}, written: []string{"id", "seq"},
+		columns: make(map[string]string), written: []string{"id", "seq"},
 	}} {
 		for _, format := range []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS} {
 			t.Run(test.name+"/"+format.String(), func(t *testing.T) {

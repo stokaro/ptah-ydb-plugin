@@ -4,14 +4,15 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func columnOwner() *protocol.Reference {
@@ -28,8 +29,8 @@ func TestColumnConversionRetainsNativeSettings(t *testing.T) {
 		{"typed literal", &native.ColumnMeta{DefaultValue: &native.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: primitive(Ydb.Type_UTF8), Value: &Ydb.Value{Value: &Ydb.Value_TextValue{TextValue: "Case.Value"}}}}}},
 		{"typed null literal", &native.ColumnMeta{DefaultValue: &native.ColumnMeta_FromLiteral{FromLiteral: &Ydb.TypedValue{Type: optional(primitive(Ydb.Type_UTF8)), Value: &Ydb.Value{Value: &Ydb.Value_NullFlagValue{NullFlagValue: structpb.NullValue_NULL_VALUE}}}}}},
 		{"sequence configuration", &native.ColumnMeta{DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: &native.SequenceDescription{
-			Name: proto.String("_serial"), MinValue: proto.Int64(-100), MaxValue: proto.Int64(100), StartValue: proto.Int64(-3),
-			Cache: proto.Uint64(4), Increment: proto.Int64(2), Cycle: proto.Bool(false), DataType: primitive(Ydb.Type_INT64),
+			Name: new("_serial"), MinValue: proto.Int64(-100), MaxValue: proto.Int64(100), StartValue: proto.Int64(-3),
+			Cache: proto.Uint64(4), Increment: proto.Int64(2), Cycle: new(false), DataType: primitive(Ydb.Type_INT64),
 		}}}},
 		{"compression and ordered encoding", &native.ColumnMeta{Compression: &native.ColumnCompression{Algorithm: native.ColumnCompression_ALGORITHM_ZSTD.Enum(), CompressionLevel: proto.Int32(0)},
 			Encoding: []*native.ColumnEncoding{{EncodingSettings: &native.ColumnEncoding_Dictionary_{Dictionary: &native.ColumnEncoding_Dictionary{}}}, {EncodingSettings: &native.ColumnEncoding_Off_{Off: &native.ColumnEncoding_Off{}}}}}},

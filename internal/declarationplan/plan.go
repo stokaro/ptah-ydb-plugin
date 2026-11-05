@@ -3,16 +3,17 @@ package declarationplan
 import (
 	"context"
 	"fmt"
-	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
-	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
+	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Plan accounts for every authored object and its dependencies without reading
@@ -33,7 +34,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 	})
 	result := &protocol.PlannedDeclarations{Complete: true, Declarations: make([]*protocol.DeclarationReceipt, len(indices))}
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
-	ranks := map[int64]bool{}
+	ranks := make(map[int64]bool)
 	for position, index := range indices {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -116,6 +117,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 }
 
 func refused(index int, kind, message string) *protocol.PlannedDeclarations {
+	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedDeclarations{Complete: true, Diagnostics: []*protocol.DeclarationDiagnostic{{Object: new(uint32(index)), Problem: &protocol.SchemaDiagnostic{Code: protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, Kind: kind, Message: message}}}}
 }
 

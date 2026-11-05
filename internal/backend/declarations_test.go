@@ -7,6 +7,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/declarationplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
@@ -18,9 +22,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 )
 
 func declarationRequest(c *qt.C, values ...*protocol.Envelope) *protocol.PlanDeclarationsRequest {
@@ -72,7 +73,7 @@ func TestAuthoredDeclarationsCreateEveryNativeFamily(t *testing.T) {
 	text, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)
 	c.Assert(text.Units, qt.HasLen, 6)
-	byName := map[string]string{}
+	byName := make(map[string]string)
 	for i, step := range result.Contributions[0].Steps {
 		byName[step.Operation.Value.Value.Owner.Name] = text.Units[i].GetSql()
 		var payload map[string]json.RawMessage
@@ -99,24 +100,23 @@ func TestAuthoredDeclarationsCreateEveryNativeFamily(t *testing.T) {
 }
 
 func TestAuthoredDeclarationRefusalDiscardsEveryPrefix(t *testing.T) {
+	c := testcheck.New(t)
+	private := declarationRequest(c, declaredNode(c, "private", &native.AccessIntent{Owner: new("user")})).Objects[0]
+	child := declaredNode(c, "child", nil)
+	child.Owner.Schema = "app/node"
+	collision := declarationRequest(c, child).Objects[0]
 	for _, test := range []struct {
 		name string
-		edit func(*qt.C, *protocol.PlanDeclarationsRequest)
+		edit func(*protocol.PlanDeclarationsRequest)
 	}{
-		{"unknown capability", func(_ *qt.C, r *protocol.PlanDeclarationsRequest) { delete(r.Capabilities, "coordination_nodes") }},
-		{"access requirement", func(c *qt.C, r *protocol.PlanDeclarationsRequest) {
-			r.Objects = append(r.Objects, declarationRequest(c, declaredNode(c, "private", &native.AccessIntent{Owner: new("user")})).Objects[0])
-		}},
-		{"native path collision", func(c *qt.C, r *protocol.PlanDeclarationsRequest) {
-			child := declaredNode(c, "child", nil)
-			child.Owner.Schema = "app/node"
-			r.Objects = append(r.Objects, declarationRequest(c, child).Objects[0])
-		}},
+		{"unknown capability", func(r *protocol.PlanDeclarationsRequest) { delete(r.Capabilities, "coordination_nodes") }},
+		{"access requirement", func(r *protocol.PlanDeclarationsRequest) { r.Objects = append(r.Objects, private) }},
+		{"native path collision", func(r *protocol.PlanDeclarationsRequest) { r.Objects = append(r.Objects, collision) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			request := declarationRequest(c, declaredNode(c, "node", nil))
-			test.edit(c, request)
+			test.edit(request)
 			for i, object := range request.Objects {
 				object.Value.Id = strconv.Itoa(i)
 			}
@@ -170,7 +170,7 @@ func TestAuthoredStreamingQueryFollowsItsTopics(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Diagnostics, qt.HasLen, 0)
 	c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
-	effects := map[string][]string{}
+	effects := make(map[string][]string)
 	for _, step := range result.Contributions[0].Steps {
 		owner := step.Operation.Value.Value.Owner.Name
 		for _, effect := range step.Metadata.Effects {

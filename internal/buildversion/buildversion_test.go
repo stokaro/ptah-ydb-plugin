@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/buildversion"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestResolve(t *testing.T) {

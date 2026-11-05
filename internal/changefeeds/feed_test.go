@@ -1,18 +1,20 @@
 package changefeeds_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
 // observed is a changefeed as YDB reports one YQL created with the two options
@@ -145,6 +147,8 @@ func TestIntent_RoundTrip(t *testing.T) {
 				Consumers: []ydbdecl.Consumer{{Name: "b", Important: true, ReadFrom: "2026-01-01T00:00:00Z", SupportedCodecs: []string{"raw"}}, {Name: "a", AvailabilityPeriod: "PT1H"}}}},
 		{name: "YDB's 24 hours and one partition read as left out", spec: ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON", RetentionPeriod: "P1D", TopicMinActivePartitions: 1},
 			want: ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON"}},
+		{name: "the most partitions a topic counts", spec: ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON", TopicMinActivePartitions: math.MaxInt64},
+			want: ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON", TopicMinActivePartitions: math.MaxInt64}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -170,6 +174,8 @@ func TestIntent_FailurePath(t *testing.T) {
 			wantErr: `changefeed "f": its format "XML" is none of JSON, DEBEZIUM_JSON`},
 		{name: "a zero interval", spec: ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON", ResolvedTimestamps: "PT0S"},
 			wantErr: `changefeed "f": resolved_timestamps: interval "PT0S" is no time at all, and YDB takes only a positive interval`},
+		{name: "more partitions than a topic counts", spec: ydbdecl.Changefeed{Name: "f", Mode: "UPDATES", Format: "JSON", TopicMinActivePartitions: math.MaxInt64 + 1},
+			wantErr: `changefeed "f": topic_min_active_partitions takes a count of at most 9223372036854775807, the most a YDB topic holds`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

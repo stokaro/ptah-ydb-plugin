@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // PathKind identifies the physical namespace shared by native YDB objects.
@@ -214,5 +215,6 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 }
 
 func refusal(family Family, index int, message string) *protocol.PlannedFeatures {
+	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{Code: protocol.PlanningDiagnostic_UNSUPPORTED_FEATURE, Kind: family.ChangeKind, Message: message, Input: &protocol.PlanningDiagnostic_Change{Change: uint32(index)}}}}
 }

@@ -5,15 +5,16 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // readFeed is a changefeed as inspection captures it, with one consumer.
@@ -139,13 +140,14 @@ func TestChangefeedOperation_FailurePath(t *testing.T) {
 // TestChangefeedOperation_RefusesAForgedPayload holds a payload written by hand
 // to the operation's exact keys.
 func TestChangefeedOperation_RefusesAForgedPayload(t *testing.T) {
+	c := testcheck.New(t)
 	operation, err := schema.CaptureChangefeedOperation("op", tableOwner(), []changefeeds.Change{{Name: "f", Before: readFeed()}})
-	qt.Assert(t, err, qt.IsNil)
+	c.Assert(err, qt.IsNil)
 	var fields map[string]json.RawMessage
-	qt.Assert(t, json.Unmarshal(operation.Value.Payload, &fields), qt.IsNil)
+	c.Assert(json.Unmarshal(operation.Value.Payload, &fields), qt.IsNil)
 	fields["impact"] = json.RawMessage(`"ADDITIVE"`)
 	withImpact, err := json.Marshal(fields)
-	qt.Assert(t, err, qt.IsNil)
+	c.Assert(err, qt.IsNil)
 	for _, test := range []struct {
 		name    string
 		payload string

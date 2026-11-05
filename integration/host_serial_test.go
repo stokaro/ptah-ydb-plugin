@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -59,10 +59,10 @@ func serialFixture(c *qt.C) (*connection.Connection, string, string) {
 func serialIDs(c *qt.C, opened *connection.Connection, absolute string, notes ...string) []int64 {
 	c.Helper()
 	for _, note := range notes {
-		_, err := opened.DB.ExecContext(c.Context(), "INSERT INTO `"+absolute+"` (note) VALUES ('"+note+"'u)")
+		_, err := opened.DB.ExecContext(c.Context(), "INSERT INTO `"+absolute+"` (note) VALUES ('"+note+"'u)") // #nosec G202 -- the path is a table under a directory this test generated, and note is a letter its callers pass
 		c.Assert(err, qt.IsNil)
 	}
-	rows, err := opened.DB.QueryContext(c.Context(), "SELECT CAST(id AS Int64) FROM `"+absolute+"` ORDER BY id")
+	rows, err := opened.DB.QueryContext(c.Context(), "SELECT CAST(id AS Int64) FROM `"+absolute+"` ORDER BY id") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	defer func() { c.Check(rows.Close(), qt.IsNil) }()
 	var ids []int64
@@ -162,7 +162,7 @@ func TestHostSerialSequences_FailurePath(t *testing.T) {
 	}
 
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "ALTER SEQUENCE "+sequence("orders")+" INCREMENT BY 5"), qt.IsNil)
-	_, err = opened.DB.ExecContext(c.Context(), "INSERT INTO `"+table("orders")+"` (note) VALUES ('d'u)")
+	_, err = opened.DB.ExecContext(c.Context(), "INSERT INTO `"+table("orders")+"` (note) VALUES ('d'u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.ErrorMatches, `(?s).*Conflict with existing key.*`)
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "ALTER SEQUENCE "+sequence("plain")+" RESTART WITH 2147483647"), qt.IsNil)
 	c.Assert(serialIDs(c, opened, table("plain"), "a", "b"), qt.DeepEquals, []int64{-2147483648, 2147483647})
@@ -260,9 +260,9 @@ func TestHostSerialKeyComparesClean_HappyPath(t *testing.T) {
 	c.Assert(output, qt.Not(qt.Matches), `(?s).*(CREATE|ALTER|DROP) .*`)
 	accounts := path.Join(database, directory, "accounts")
 	c.Assert(describedSequence(c, opened, accounts), qt.Equals, heldSequence{Start: 1, Increment: 1, Maximum: 9223372036854775807})
-	_, err = opened.DB.ExecContext(c.Context(), "INSERT INTO `"+accounts+"` (email) VALUES ('a@example.com'u)")
+	_, err = opened.DB.ExecContext(c.Context(), "INSERT INTO `"+accounts+"` (email) VALUES ('a@example.com'u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
-	_, err = opened.DB.ExecContext(c.Context(), "INSERT INTO `"+accounts+"` (id) VALUES (100)")
+	_, err = opened.DB.ExecContext(c.Context(), "INSERT INTO `"+accounts+"` (id) VALUES (100)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	var id int64
 	c.Assert(opened.DB.QueryRowContext(c.Context(), "SELECT id FROM `"+accounts+"` WHERE email = 'a@example.com'u").Scan(&id), qt.IsNil)
@@ -283,7 +283,7 @@ func hostCompare(c *qt.C, directory, source string) (string, error) {
 	c.Assert(os.WriteFile(filepath.Join(root, "entities.go"), []byte(source), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "compare", "--exit-code", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := testCommand(ctx, host, "schema", "compare", "--exit-code", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", root, "--schemas", directory)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
@@ -300,7 +300,7 @@ func hostApplyRebuild(c *qt.C, directory, source string) (string, error) {
 	c.Assert(os.WriteFile(filepath.Join(root, "entities.go"), []byte(source), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--allow-table-rebuild", "--provider-config", manifest,
+	cmd := testCommand(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--allow-table-rebuild", "--provider-config", manifest,
 		"--provider-engine", "ydb", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", root, "--schemas", directory)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output

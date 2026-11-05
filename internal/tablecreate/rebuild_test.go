@@ -8,7 +8,6 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
@@ -16,6 +15,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -74,28 +74,30 @@ func TestRebuildPlan_FailurePath(t *testing.T) {
 }
 
 func TestRebuildPlanNamesEachChange(t *testing.T) {
+	check := testcheck.New(t)
+	key := facet(check, schema.TableProperties, "", `{"primaryKey":["id","payload"]}`)
 	for _, tc := range []struct {
 		name   string
-		modify func(*qt.C, *protocol.PlanFeaturesRequest)
+		modify func(*protocol.PlanFeaturesRequest)
 		want   string
 	}{
-		{name: "a column made NOT NULL", modify: func(_ *qt.C, r *protocol.PlanFeaturesRequest) {
+		{name: "a column made NOT NULL", modify: func(r *protocol.PlanFeaturesRequest) {
 			r.Tables[0].Desired.Columns[1].Nullable, r.Tables[0].Desired.Columns[2].Type = false, "Int32"
 		},
 			want: `making column "payload" of table "app/records" NOT NULL, which requires target capability alter_column_set_not_null, unavailable on this ydb target; ` +
 				`YDB makes it by rebuilding the table, which Ptah plans when asked with --allow-table-rebuild`},
-		{name: "the key", modify: func(c *qt.C, r *protocol.PlanFeaturesRequest) {
+		{name: "the key", modify: func(r *protocol.PlanFeaturesRequest) {
 			r.Tables[0].Desired.Columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "payload", Type: "Utf8", Primary: true},
 				{Name: "n", Type: "Int32", Nullable: true}}
 			r.Tables[0].Desired.PrimaryKey = []string{"id", "payload"}
-			r.Tables[0].Desired.Features.Facets.Records = []*protocol.ComparisonRecord{facet(c, schema.TableProperties, "", `{"primaryKey":["id","payload"]}`)}
+			r.Tables[0].Desired.Features.Facets.Records = []*protocol.ComparisonRecord{key}
 		}, want: `changing the primary key of table "app/records" (id -> id, payload), which requires target capability primary_key_alterable, unavailable on this ydb target; ` +
 			`YDB makes it by rebuilding the table, which Ptah plans when asked with --allow-table-rebuild`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			check := testcheck.New(t)
 			request := rebuildRequest(check, &protocol.PlanningPolicy{TableRebuildRequest: "--allow-table-rebuild"})
-			tc.modify(check, request)
+			tc.modify(request)
 			plan, err := backend.New().PlanFeatures(check.Context(), request)
 			check.Assert(err, qt.IsNil)
 			check.Assert(plan.Diagnostics, qt.HasLen, 1)
@@ -567,7 +569,7 @@ func TestRebuildPlanKeepsTheHeldTTLRunInterval_HappyPath(t *testing.T) {
 
 			check.Assert(err, qt.IsNil)
 			check.Assert(created.GetTtlSettings().GetDateTypeColumn().GetColumnName(), qt.Equals, "ts")
-			check.Assert(created.GetTtlSettings().GetDateTypeColumn().GetExpireAfterSeconds(), qt.Equals, uint32(tc.seconds))
+			check.Assert(created.GetTtlSettings().GetDateTypeColumn().GetExpireAfterSeconds(), qt.Equals, uint32(tc.seconds)) // #nosec G115 -- the rows hold a day and three days in seconds
 			check.Assert(created.GetTtlSettings().GetRunIntervalSeconds(), qt.Equals, uint32(1800))
 		})
 	}

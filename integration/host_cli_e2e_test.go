@@ -15,12 +15,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 )
 
 // cliRealm is a dev realm of the test database that a host command takes as a
@@ -217,6 +218,7 @@ func TestHostCheckpointCarriesReferenceRows_HappyPath(t *testing.T) {
 	c.Assert(writeErr, qt.IsNil, qt.Commentf("%s", written))
 	applied, upErr := hostCommand(c, "migrations", "up", "--db-url", fresh.address, "--migrations-dir", migrations)
 	c.Assert(upErr, qt.IsNil, qt.Commentf("%s", applied))
+	// #nosec G202 -- the path is a table under a directory this test generated
 	rows, err := fresh.opened.DB.QueryContext(c.Context(),
 		"SELECT `name`, CAST(`weight` AS Utf8), CAST(`created` AS Utf8) FROM `"+path.Join(fresh.root, "ref", "colors")+"` ORDER BY `id`")
 	c.Assert(err, qt.IsNil)

@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // DefaultFamily names the family every row table has. It holds the key columns
@@ -102,7 +103,20 @@ func familyDelta(want, held *native.ColumnFamily) (data, compression, cacheMode 
 // states, or the reason it cannot be made. An empty change means the table
 // already satisfies the declaration.
 func planFamilies(in familyInput) (familyChange, string) {
-	change := familyChange{heldColumns: map[string]string{}}
+	change := familyChange{heldColumns: make(map[string]string)}
+	if reason := planFamilySettings(in, &change); reason != "" {
+		return familyChange{}, reason
+	}
+	if reason := planColumnMoves(in, &change); reason != "" {
+		return familyChange{}, reason
+	}
+	return change, ""
+}
+
+// planFamilySettings adds to change, in name order, each declared family the
+// table lacks and each settings change of a family it holds. It returns the
+// reason a family cannot be planned.
+func planFamilySettings(in familyInput, change *familyChange) string {
 	names := make([]string, 0, len(in.desired))
 	for _, family := range in.desired {
 		names = append(names, familyKey(family.GetName()))
@@ -111,7 +125,7 @@ func planFamilies(in familyInput) (familyChange, string) {
 	for _, name := range names {
 		want := findFamily(in.desired, name)
 		if want.GetKeepInMemory() == Ydb.FeatureFlag_ENABLED && findFamily(in.held, name).GetKeepInMemory() != Ydb.FeatureFlag_ENABLED {
-			return familyChange{}, fmt.Sprintf("column family %q keeps its columns in memory (keep_in_memory) on one side only, and the table service refuses to set it", name)
+			return fmt.Sprintf("column family %q keeps its columns in memory (keep_in_memory) on one side only, and the table service refuses to set it", name)
 		}
 		held := findFamily(in.held, name)
 		stated := &native.ColumnFamily{Name: name, Compression: want.GetCompression(), CacheMode: want.GetCacheMode()}
@@ -121,7 +135,7 @@ func planFamilies(in familyInput) (familyChange, string) {
 		if held == nil {
 			if name == DefaultFamily {
 				// A table always has its default family; a read that lacks it is incomplete.
-				return familyChange{}, "the table's default column family was not captured"
+				return "the table's default column family was not captured"
 			}
 			change.add = append(change.add, stated)
 			continue
@@ -142,6 +156,14 @@ func planFamilies(in familyInput) (familyChange, string) {
 			change.heldFamilies = append(change.heldFamilies, proto.CloneOf(held))
 		}
 	}
+	return ""
+}
+
+// planColumnMoves adds to change, in column order, the move of each column
+// placed in another family than the one it sits in. It returns the reason a
+// placement cannot be made: a family neither side has, or a key column
+// outside the default family.
+func planColumnMoves(in familyInput, change *familyChange) string {
 	declared := func(name string) bool {
 		return familyKey(name) == DefaultFamily || findFamily(in.desired, name) != nil || findFamily(in.held, name) != nil
 	}
@@ -151,10 +173,10 @@ func planFamilies(in familyInput) (familyChange, string) {
 			continue
 		}
 		if !declared(family) {
-			return familyChange{}, fmt.Sprintf("column %q names column family %q, which neither the declaration nor the table has", column, family)
+			return fmt.Sprintf("column %q names column family %q, which neither the declaration nor the table has", column, family)
 		}
 		if slices.Contains(in.key, column) && familyKey(family) != DefaultFamily {
-			return familyChange{}, fmt.Sprintf("column family %q names key column %q, and YDB keeps every key column in the default family", family, column)
+			return fmt.Sprintf("column family %q names key column %q, and YDB keeps every key column in the default family", family, column)
 		}
 		if familyKey(family) == familyKey(in.heldPlacement[column]) {
 			continue
@@ -162,5 +184,5 @@ func planFamilies(in familyInput) (familyChange, string) {
 		change.move = append(change.move, &Ydb_Table.ColumnMeta{Name: column, Family: familyKey(family)})
 		change.heldColumns[column] = in.heldPlacement[column]
 	}
-	return change, ""
+	return ""
 }

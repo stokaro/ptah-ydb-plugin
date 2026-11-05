@@ -7,13 +7,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Secret checks presence before and after one scheme-secret operation. Values

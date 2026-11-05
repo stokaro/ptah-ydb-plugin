@@ -3,13 +3,14 @@ package backend
 import (
 	"context"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
-	"github.com/stokaro/ptah-ydb-plugin/internal/migrationunits"
-	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/migrationunits"
+	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 )
 
 var _ provider.MigrationSplitter = (*Provider)(nil)

@@ -35,7 +35,7 @@ func (s *Snapshot) append(payload []byte) error {
 		return fmt.Errorf("invalid YDB snapshot append")
 	}
 	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
+	binary.BigEndian.PutUint32(header[:], uint32(len(payload))) // #nosec G115 -- bounded by provider.MaxMetadataBytes above
 	if _, err := s.file.Write(header[:]); err != nil {
 		return fmt.Errorf("write YDB metadata snapshot failed")
 	}

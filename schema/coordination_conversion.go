@@ -39,32 +39,39 @@ func ConvertCoordination(value *protocol.Envelope, from, to protocol.ValueInput_
 		if intent.StructName != "" {
 			return nil, fmt.Errorf("YDB source holder provenance has no observed representation")
 		}
-		config := &Ydb_Coordination.Config{}
-		if intent.SelfCheckPeriodMillis != nil {
-			config.SelfCheckPeriodMillis = *intent.SelfCheckPeriodMillis
-		}
-		if intent.SessionGracePeriodMillis != nil {
-			config.SessionGracePeriodMillis = *intent.SessionGracePeriodMillis
-		}
-		mode := func(v *string) Ydb_Coordination.ConsistencyMode {
-			if v == nil {
-				return Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_UNSET
-			}
-			if *v == "strict" {
-				return Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT
-			}
-			return Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_RELAXED
-		}
-		config.ReadConsistencyMode, config.AttachConsistencyMode = mode(intent.ReadConsistencyMode), mode(intent.AttachConsistencyMode)
-		if intent.RateLimiterCountersMode != nil {
-			config.RateLimiterCountersMode = Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_AGGREGATED
-			if *intent.RateLimiterCountersMode == "detailed" {
-				config.RateLimiterCountersMode = Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_DETAILED
-			}
-		}
+		config := observedCoordinationConfig(intent)
 		return convertedEnvelope(value, model(CoordinationProperties), &Ydb_Coordination.DescribeNodeResult{Self: accessObservation(intent.Access), Config: config}, Normalize)
 	}
 	return nil, fmt.Errorf("YDB coordination conversion requires distinct schema representations")
+}
+
+// observedCoordinationConfig writes the settings of a declaration as a read of
+// the node reports them. A setting the declaration leaves out stays unset.
+func observedCoordinationConfig(intent CoordinationIntent) *Ydb_Coordination.Config {
+	config := &Ydb_Coordination.Config{}
+	if intent.SelfCheckPeriodMillis != nil {
+		config.SelfCheckPeriodMillis = *intent.SelfCheckPeriodMillis
+	}
+	if intent.SessionGracePeriodMillis != nil {
+		config.SessionGracePeriodMillis = *intent.SessionGracePeriodMillis
+	}
+	mode := func(v *string) Ydb_Coordination.ConsistencyMode {
+		if v == nil {
+			return Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_UNSET
+		}
+		if *v == "strict" {
+			return Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT
+		}
+		return Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_RELAXED
+	}
+	config.ReadConsistencyMode, config.AttachConsistencyMode = mode(intent.ReadConsistencyMode), mode(intent.AttachConsistencyMode)
+	if intent.RateLimiterCountersMode != nil {
+		config.RateLimiterCountersMode = Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_AGGREGATED
+		if *intent.RateLimiterCountersMode == "detailed" {
+			config.RateLimiterCountersMode = Ydb_Coordination.RateLimiterCountersMode_RATE_LIMITER_COUNTERS_MODE_DETAILED
+		}
+	}
+	return config
 }
 
 // ValidateCoordinationAccess checks requirements against established access.
@@ -89,7 +96,8 @@ func ValidateCoordinationAccess(before, after *protocol.Envelope) error {
 		return err
 	}
 	actual := observed.Access
-	if actual == nil || (required.Owner != nil && required.GetOwner() != actual.GetOwner()) || !permissionSetsEqual(required.DirectGrants, actual.DirectGrants) || !permissionSetsEqual(required.RequiredEffectivePermissions, actual.RequiredEffectivePermissions) {
+	if actual == nil || (required.Owner != nil && required.GetOwner() != actual.GetOwner()) || !permissionSetsEqual(required.DirectGrants, actual.DirectGrants) ||
+		!permissionSetsEqual(required.RequiredEffectivePermissions, actual.RequiredEffectivePermissions) {
 		return fmt.Errorf("coordination access requirements differ from established access")
 	}
 	return nil

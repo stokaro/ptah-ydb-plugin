@@ -12,12 +12,13 @@ import (
 	"strconv"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // The session capabilities a column table's local index of each kind
@@ -214,8 +215,8 @@ func localIndexRenames(wanted, have map[string]*native.LocalIndexObservation) ma
 	}
 	slices.Sort(additions)
 	slices.Sort(removals)
-	renames := map[string]string{}
-	paired := map[string]bool{}
+	renames := make(map[string]string)
+	paired := make(map[string]bool)
 	for _, to := range additions {
 		for _, from := range removals {
 			if !paired[from] && LocalIndexEqual(renamedTo(have[from], to), wanted[to]) {
@@ -250,11 +251,11 @@ func planLocalIndexes(desired *native.ColumnStorageIntent, held *native.ColumnSt
 	if !localIndexesManaged(desired) {
 		return nil, ""
 	}
-	wanted := map[string]*native.LocalIndexObservation{}
+	wanted := make(map[string]*native.LocalIndexObservation)
 	for _, index := range desired.GetLocalIndexes() {
 		wanted[index.GetName()] = index
 	}
-	have := map[string]*native.LocalIndexObservation{}
+	have := make(map[string]*native.LocalIndexObservation)
 	for _, index := range held.GetLocalIndexes() {
 		have[index.GetName()] = index
 	}
@@ -268,11 +269,11 @@ func planLocalIndexes(desired *native.ColumnStorageIntent, held *native.ColumnSt
 		}
 	}
 	slices.Sort(names)
-	renames := map[string]string{}
+	renames := make(map[string]string)
 	if capabilities[IndexRenameCapability] {
 		renames = localIndexRenames(wanted, have)
 	}
-	renamed := map[string]bool{}
+	renamed := make(map[string]bool)
 	for _, from := range renames {
 		renamed[from] = true
 	}
@@ -333,13 +334,18 @@ func ColumnLocalIndexModel() *protocol.ValueModel {
 func buildColumnLocalIndexOperationModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": ColumnLocalIndexOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
-		"message":      string((&native.ColumnTableLocalIndexAlteration{}).ProtoReflect().Descriptor().FullName()),
-		"index":        "add, drop, or both for a rename; add names one column, its kind and every setting, defaults included, and no storage; drop is the index as the table held it; a rename's add is drop under another name",
-		"render":       "YQL ALTER TABLE ... ADD INDEX `name` LOCAL USING kind ON (`column`) WITH (...) for add, ALTER TABLE ... DROP INDEX `name` for drop, ALTER TABLE ... RENAME INDEX `old` TO `new` for a rename, as the host's embedded engine writes them",
-		"execution":    "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
-		"precondition": "the table is a column table; for add it holds no index of that name and holds the column, Utf8 for an n-gram index; for drop and a rename it holds the index as captured, and for a rename no index under the new name; the session must name the monitoring endpoint, which the read uses",
-		"confirmation": "read the table service's and the monitoring endpoint's descriptions back: the added index is held as requested, the dropped one is gone, or the renamed one is gone under its old name and held as captured under its new one, and every other local index, the layout and the TTL are unchanged",
-		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
+		"message": string((&native.ColumnTableLocalIndexAlteration{}).ProtoReflect().Descriptor().FullName()),
+		"index":   "add, drop, or both for a rename; add names one column, its kind and every setting, defaults included, and no storage; drop is the index as the table held it; a rename's add is drop under another name",
+		"render": "YQL ALTER TABLE ... ADD INDEX `name` LOCAL USING kind ON (`column`) WITH (...) for add, ALTER TABLE ... DROP INDEX `name` for " +
+			"drop, ALTER TABLE ... RENAME INDEX `old` TO `new` for a rename, as the host's embedded engine writes them",
+		"execution": "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
+		"precondition": "the table is a column table; for add it holds no index of that name and holds the column, Utf8 for an n-gram index; for drop " +
+			"and a rename it holds the index as captured, and for a rename no index under the new name; the session must name the monitoring endpoint, " +
+			"which the read uses",
+		"confirmation": "read the table service's and the monitoring endpoint's descriptions back: the added index is held as requested, the dropped one " +
+			"is gone, or the renamed one is gone under its old name and held as captured under its new one, and every other local index, the layout and the " +
+			"TTL are unchanged",
+		"database": "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
 		panic(err)

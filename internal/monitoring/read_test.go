@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/monitoring"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -122,13 +123,13 @@ func TestRead_RefusalRepeatsNeitherTheTicketNorTheEndpoint(t *testing.T) {
 	c := testcheck.New(t)
 	endpoint := serve(c, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte("Failed to resolve database for " + r.Header.Get("Authorization")))
+		_, _ = w.Write([]byte("Failed to resolve database for " + r.Header.Get("Authorization"))) // #nosec G705 -- the test server echoes the header on purpose: the test holds Read to redacting it
 	})
 	_, err := monitoring.Read(c.Context(), endpoint, "feature flags", "/viewer/json/feature_flags", "/local", "ticket-value", nil)
 	c.Assert(err, qt.ErrorMatches, `read the YDB feature flags from the monitoring endpoint: 400 Bad Request; `+
 		`the page is read as the connection's user, who needs DESCRIBE SCHEMA on /local; the endpoint answered: Failed to resolve database for <redacted>`)
-	c.Assert(strings.Contains(err.Error(), "ticket-value"), qt.IsFalse)
-	c.Assert(strings.Contains(err.Error(), endpoint.Host), qt.IsFalse)
+	c.Assert(err.Error(), qt.Not(qt.Contains), "ticket-value")
+	c.Assert(err.Error(), qt.Not(qt.Contains), endpoint.Host)
 }
 
 // TestRead_RefusalOfAnUnreachableEndpointNamesNoAddress keeps the endpoint

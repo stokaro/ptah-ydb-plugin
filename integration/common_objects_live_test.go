@@ -10,12 +10,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // runCommon renders changes in form and executes the units in one request.
@@ -57,7 +58,7 @@ func commonRead(c *qt.C, client *providerruntime.Client, session *protocol.Sessi
 	for _, object := range snapshot.NativeObjects {
 		c.Assert(object.Kind, qt.Not(qt.Equals), schema.ViewProperties, qt.Commentf("a view the common wire carries is no native object"))
 	}
-	views := map[string]string{}
+	views := make(map[string]string)
 	for _, view := range snapshot.CommonObjects.GetViews() {
 		views[view.Identity.Name] = view.Body
 	}

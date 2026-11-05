@@ -5,8 +5,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The patterns allow any run of spaces after a field name: prototext adds a
@@ -21,7 +22,7 @@ func TestFormat_HappyPath(t *testing.T) {
 		{"a message", undecided, `\*protocol\.ComparisonUndecided\{\n    kind: +"external-table"\n    reason: +"absence was not established"\n\}`},
 		{"a slice of messages", []*protocol.ComparisonUndecided{undecided},
 			`\[\]\*protocol\.ComparisonUndecided\{\n    \*protocol\.ComparisonUndecided\{\n        kind: +"external-table"\n        reason: +"absence was not established"\n    \},\n\}`},
-		{"an empty slice of messages", []*protocol.ComparisonUndecided{}, `\[\]\*protocol\.ComparisonUndecided\{\n\}`},
+		{"an empty slice of messages", make([]*protocol.ComparisonUndecided, 0), `\[\]\*protocol\.ComparisonUndecided\{\n\}`},
 		{"a nil message in a slice", []*protocol.ComparisonUndecided{nil}, `\[\]\*protocol\.ComparisonUndecided\{\n    nil,\n\}`},
 		{"a value that is no message", []int{1, 2}, `\[\]int\{1, 2\}`},
 		{"a string", "text", `"text"`},

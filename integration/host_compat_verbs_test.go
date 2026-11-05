@@ -14,9 +14,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 )
 
 // compatDirectory is the directory of a realm the compatibility tests put a
@@ -139,7 +140,7 @@ func TestHostCompatRunsTheAtlasVerbs_HappyPath(t *testing.T) {
 	described, describedNotes, describedExit := runCompat(c, nil, "schema", "inspect", "--url", realm.address, "--schema", compatDirectory)
 	rolledBack, downNotes, downExit := runCompat(c, nil, "migrate", "down", "--url", realm.address, "--dir", dir,
 		"--revisions-schema", compatDirectory, "--to-version", "20260101000000")
-	_, err := realm.opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+root+"` (id, note) VALUES (1l, 'start'u)")
+	_, err := realm.opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+root+"` (id, note) VALUES (1l, 'start'u)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	ran, ranNotes, runExit := runCompat(c, nil, "script", "exec", "--url", realm.address, "--file", scripts, "--run", "note", "--quiet")
 	_, refused, refusedExit := runCompat(c, nil, "script", "exec", "--url", realm.address, "--file", scripts, "--run", "checked")
@@ -209,7 +210,7 @@ func compatRebuildFixture(c *qt.C) (f migrationsFixture, absolute string, apply 
 	absolute = path.Join(database, directory, "rb")
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+absolute+"` (`id` Int64 NOT NULL, `v` Int32, PRIMARY KEY (`id`))"), qt.IsNil)
-	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, v) VALUES (1l, 10), (2l, NULL)")
+	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, v) VALUES (1l, 10), (2l, NULL)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	desired := "file://" + compatFile(c, c.TempDir(), "desired.hcl", compatRebuildDesired(directory))
 	apply = []string{"schema", "apply", "--url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema", directory, "--to", desired}
@@ -396,7 +397,7 @@ func TestHostCompatScriptBindsTypedArgs_HappyPath(t *testing.T) {
 	absolute := path.Join(database, directory, "script_args")
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+absolute+"` (id Int64 NOT NULL, price Int64 NOT NULL, PRIMARY KEY (id))"), qt.IsNil)
-	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, price) VALUES (1l, 0l), (2l, 0l)")
+	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, price) VALUES (1l, 0l), (2l, 0l)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	script := compatFile(c, c.TempDir(), "script.hcl", compatLoop(directory+"/script_args"))
 

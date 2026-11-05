@@ -3,9 +3,10 @@ package tablecreate
 import (
 	"fmt"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // DeletingColumnTTL is a row table's TTL as a column table's: one tier that
@@ -20,7 +21,7 @@ func DeletingColumnTTL(ttl *Ydb_Table.TtlSettings) (*native.ColumnTTLPolicy, err
 		enabled.Tiers = []*native.ColumnTTLTier{{ApplyAfterSeconds: uint64(mode.DateTypeColumn.GetExpireAfterSeconds()), Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}}}
 	case *Ydb_Table.TtlSettings_ValueSinceUnixEpoch:
 		enabled.Column = mode.ValueSinceUnixEpoch.GetColumnName()
-		enabled.ColumnUnit = uint64(mode.ValueSinceUnixEpoch.GetColumnUnit())
+		enabled.ColumnUnit = uint64(mode.ValueSinceUnixEpoch.GetColumnUnit()) // #nosec G115 -- a column unit is one of YDB's enum numbers, 0 to 4
 		enabled.Tiers = []*native.ColumnTTLTier{{ApplyAfterSeconds: uint64(mode.ValueSinceUnixEpoch.GetExpireAfterSeconds()), Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}}}
 	default:
 		return nil, fmt.Errorf("YDB TTL requires an explicit mode")

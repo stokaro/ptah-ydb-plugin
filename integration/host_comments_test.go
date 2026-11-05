@@ -4,11 +4,13 @@ package integration_test
 
 import (
 	"context"
+	"maps"
 	"path"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -57,9 +59,7 @@ func TestHostSetsTheCommentsOfACreatedTable_HappyPath(t *testing.T) {
 	table := map[string]string{"ptah.comment": "People who sign in", "ptah.comment.column.id": "Key"}
 	withIndex := func(comment string) map[string]string {
 		result := map[string]string{"ptah.comment.index.users_by_label": comment}
-		for key, value := range table {
-			result[key] = value
-		}
+		maps.Copy(result, table)
 		return result
 	}
 	for _, run := range []struct {

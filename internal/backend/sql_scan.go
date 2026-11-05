@@ -3,10 +3,11 @@ package backend
 import (
 	"context"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/status"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
 
 // scannedKinds maps the scanner's token types to the contract's token kinds.

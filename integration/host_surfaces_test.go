@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -16,9 +15,10 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The tests in this file run the host's reading surfaces, which have no YDB
@@ -226,7 +226,7 @@ func mcpCallOn(c *qt.C, address string, flags []string, tool string, arguments m
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, append(append([]string{"mcp", "--database-url", address, "--database-class", "ephemeral",
+	cmd := testCommand(ctx, host, append(append([]string{"mcp", "--database-url", address, "--database-class", "ephemeral",
 		"--allow-database-inspect", "allow"}, flags...), "--provider-config", manifest, "--provider-engine", "ydb")...)
 	stdin, err := cmd.StdinPipe()
 	c.Assert(err, qt.IsNil)

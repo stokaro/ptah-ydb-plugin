@@ -11,10 +11,10 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // testdata/statementfacts holds YQL files and what the Ptah host's built-in
@@ -157,7 +157,7 @@ var (
 // builtinFindings is the built-in reading's findings in the form of
 // ownedFindings.
 func builtinFindings(findings []hostFinding) []string {
-	result := []string{}
+	result := make([]string, 0)
 	for _, finding := range findings {
 		about := finding.Message
 		switch finding.Rule {
@@ -180,7 +180,7 @@ func TestStatementFactsLintAsTheHostsYQLReading(t *testing.T) {
 
 				got := ownedFindings(c, test.sql, line.Capabilities)
 
-				c.Assert(append([]string{}, got...), qt.DeepEquals, builtinFindings(line.Findings))
+				c.Assert(append(make([]string, 0), got...), qt.DeepEquals, builtinFindings(line.Findings))
 			})
 		}
 	}
@@ -191,8 +191,8 @@ func TestStatementFactsLintAsTheHostsYQLReading(t *testing.T) {
 // and that the goldens come from one host commit.
 func TestStatementFactsCorpusReachesEveryRule(t *testing.T) {
 	c := testcheck.New(t)
-	rules := map[string]int{}
-	commits := map[string]bool{}
+	rules := make(map[string]int)
+	commits := make(map[string]bool)
 	for _, test := range lintCorpus(c) {
 		commits[test.golden.HostCommit] = true
 		for _, line := range test.golden.Versions {
@@ -246,9 +246,9 @@ func TestStatementFactsAreStricterOnPurpose(t *testing.T) {
 
 // statementFacts is each annotation's statement facts, or "declined".
 func statementFacts(annotations []*protocol.LintAnnotation) []string {
-	result := []string{}
+	result := make([]string, 0)
 	for _, annotation := range annotations {
-		described := []string{}
+		described := make([]string, 0)
 		for _, effect := range annotation.Effects {
 			described = append(described, effect.Fact.String()+" "+effect.StatementClass.String()+" "+effect.Kind+" "+effect.Table+effect.Capability)
 		}

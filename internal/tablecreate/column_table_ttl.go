@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // ColumnTTLOperationKind identifies one step of an in-place change of a column
@@ -28,8 +29,9 @@ func ColumnTTLModel() *protocol.ValueModel { return proto.CloneOf(columnTTLOpera
 func buildColumnTTLOperationModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": ColumnTTLOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
-		"message":      string((&native.ColumnTableTTLAlteration{}).ProtoReflect().Descriptor().FullName()),
-		"ttl":          "held and set are each absent for none, or tiers that grow strictly, of which only the last may delete and every other moves rows to an external data source named by its absolute path; they differ, and at least one is present",
+		"message": string((&native.ColumnTableTTLAlteration{}).ProtoReflect().Descriptor().FullName()),
+		"ttl": "held and set are each absent for none, or tiers that grow strictly, of which only the last may delete and every other moves " +
+			"rows to an external data source named by its absolute path; they differ, and at least one is present",
 		"render":       "YQL ALTER TABLE ... RESET (TTL) without set, ALTER TABLE ... SET (TTL = ...) with it, as the host's embedded engine writes them",
 		"execution":    "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
 		"precondition": "the table is a column table and holds exactly the held TTL; a TTL to set reads a column the table holds, first in its key, of a type its mode reads; the session must name the monitoring endpoint, which the read uses",

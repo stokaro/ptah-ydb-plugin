@@ -9,13 +9,14 @@ import (
 	"strings"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // meaning is what a table's declared partitioning, TTL, column families and
@@ -90,7 +91,7 @@ func families(list []familyMeaning) []familyMeaning {
 	return list
 }
 
-func tableKey(schema, name string) string { return schema + "." + name }
+func tableKey(directory, name string) string { return directory + "." + name }
 
 // hostPartitioning and hostFamilies are the host's facet payloads. An unknown
 // field fails the decode, so an agreement row cannot carry a setting that the
@@ -149,7 +150,7 @@ func strictJSON(c *qt.C, data json.RawMessage, target any) {
 // that declares anything.
 func hostMeaning(c *qt.C, recorded golden) map[string]meaning {
 	c.Helper()
-	result := map[string]meaning{}
+	result := make(map[string]meaning)
 	for _, table := range recorded.Tables {
 		var m meaning
 		for kind, payload := range table.Facets {
@@ -229,9 +230,9 @@ var cacheModes = map[native.ColumnFamily_CacheMode]string{
 // table that declares anything.
 func pluginMeaning(c *qt.C, decoded *protocol.DecodedSource) map[string]meaning {
 	c.Helper()
-	result := map[string]meaning{}
+	result := make(map[string]meaning)
 	// placed are the columns the column facets put in a family, by table.
-	placed := map[string][]placement{}
+	placed := make(map[string][]placement)
 	for _, document := range decoded.Documents {
 		for _, fragment := range document.Fragments {
 			for _, value := range fragment.Values {

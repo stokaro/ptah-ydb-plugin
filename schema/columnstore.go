@@ -8,9 +8,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 // The host's words for a column table that states a row table's settings, and
@@ -131,35 +132,14 @@ func ValidateDeclaredLocalIndexes(indexes []*native.LocalIndexObservation) error
 // representation. A read describes the storage YDB placed each index in; a
 // declaration may leave it out, since no statement names it.
 func validateLocalIndexes(indexes []*native.LocalIndexObservation, declared bool) error {
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for _, index := range indexes {
 		if !componentName(index.GetName()) || names[index.Name] || !distinctColumns(index.Columns) {
 			return fmt.Errorf("invalid or duplicate YDB local index")
 		}
 		names[index.Name] = true
-		var extractor, bits string
-		var probability *float64
-		switch kind := index.Kind.(type) {
-		case *native.LocalIndexObservation_Bloom:
-			extractor, bits, probability = kind.Bloom.DataExtractor, kind.Bloom.BitsStorage, kind.Bloom.FalsePositiveProbability
-		case *native.LocalIndexObservation_Ngram:
-			if len(index.Columns) != 1 || (kind.Ngram.NgramSize != nil && kind.Ngram.GetNgramSize() == 0) {
-				return fmt.Errorf("invalid YDB ngram index")
-			}
-			extractor, bits, probability = kind.Ngram.DataExtractor, kind.Ngram.BitsStorage, kind.Ngram.FalsePositiveProbability
-		case *native.LocalIndexObservation_MinMax:
-			if len(index.Columns) != 1 {
-				return fmt.Errorf("invalid YDB min/max index")
-			}
-			extractor = kind.MinMax.DataExtractor
-		default:
-			return fmt.Errorf("missing YDB local index kind")
-		}
-		if (extractor != "" && extractor != "DEFAULT") || (bits != "" && bits != "SIMPLE_STRING") {
-			return fmt.Errorf("unsupported YDB local index encoding")
-		}
-		if probability != nil && (math.IsNaN(*probability) || math.IsInf(*probability, 0) || *probability <= 0 || *probability >= 1) {
-			return fmt.Errorf("invalid YDB local index probability")
+		if err := validateLocalIndexKind(index); err != nil {
+			return err
 		}
 		if declared && index.StorageId == "" && !index.InheritPortionStorage {
 			continue
@@ -175,11 +155,43 @@ func validateLocalIndexes(indexes []*native.LocalIndexObservation, declared bool
 	return nil
 }
 
+// validateLocalIndexKind checks the kind of one local index of a column
+// table: a kind is present, an ngram or min/max index covers one column, an
+// ngram size is not zero, the encodings are the ones YDB writes and a false
+// positive probability lies strictly between 0 and 1.
+func validateLocalIndexKind(index *native.LocalIndexObservation) error {
+	var extractor, bits string
+	var probability *float64
+	switch kind := index.Kind.(type) {
+	case *native.LocalIndexObservation_Bloom:
+		extractor, bits, probability = kind.Bloom.DataExtractor, kind.Bloom.BitsStorage, kind.Bloom.FalsePositiveProbability
+	case *native.LocalIndexObservation_Ngram:
+		if len(index.Columns) != 1 || (kind.Ngram.NgramSize != nil && kind.Ngram.GetNgramSize() == 0) {
+			return fmt.Errorf("invalid YDB ngram index")
+		}
+		extractor, bits, probability = kind.Ngram.DataExtractor, kind.Ngram.BitsStorage, kind.Ngram.FalsePositiveProbability
+	case *native.LocalIndexObservation_MinMax:
+		if len(index.Columns) != 1 {
+			return fmt.Errorf("invalid YDB min/max index")
+		}
+		extractor = kind.MinMax.DataExtractor
+	default:
+		return fmt.Errorf("missing YDB local index kind")
+	}
+	if (extractor != "" && extractor != "DEFAULT") || (bits != "" && bits != "SIMPLE_STRING") {
+		return fmt.Errorf("unsupported YDB local index encoding")
+	}
+	if probability != nil && (math.IsNaN(*probability) || math.IsInf(*probability, 0) || *probability <= 0 || *probability >= 1) {
+		return fmt.Errorf("invalid YDB local index probability")
+	}
+	return nil
+}
+
 func distinctColumns(names []string) bool {
 	if len(names) == 0 {
 		return false
 	}
-	seen := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, name := range names {
 		if name == "" || seen[name] {
 			return false

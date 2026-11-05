@@ -6,17 +6,18 @@ import (
 	"path"
 	"slices"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func (s *source) readIndexes(ctx context.Context, tablePath string, table *description) (*native.IndexObservations, error) {
 	result := &native.IndexObservations{}
-	columns := map[string]bool{}
+	columns := make(map[string]bool)
 	for _, column := range table.table.GetColumns() {
 		columns[column.GetName()] = true
 	}

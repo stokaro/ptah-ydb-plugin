@@ -10,10 +10,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/migrationunits"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/testing/protocmp"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/migrationunits"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // The corpus is internal/yqlquery's: YQL texts and the queries the host's
@@ -189,7 +190,7 @@ func TestSplitCarriesDefinitionsAndPlacesBlocks(t *testing.T) {
 		{
 			name: "no statement",
 			body: "-- nothing runs\n;\n",
-			want: []*protocol.MigrationUnit{},
+			want: make([]*protocol.MigrationUnit, 0),
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {

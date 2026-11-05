@@ -1,16 +1,18 @@
 package externals_test
 
 import (
-	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
+	"maps"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 )
 
 func TestParseOptions_HappyPath(t *testing.T) {
@@ -125,7 +127,7 @@ func TestCheck_FailurePath(t *testing.T) {
 		got  error
 		want string
 	}{
-		{name: "a data source on a line with the flag off", got: externals.CheckDataSource("ext/pg", postgresSource(), map[string]bool{}),
+		{name: "a data source on a line with the flag off", got: externals.CheckDataSource("ext/pg", postgresSource(), make(map[string]bool)),
 			want: "external data source ext/pg, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: .*"},
 		{name: "a secret path on a line that reads it as a name", got: externals.CheckDataSource("ext/pg", postgresSource(), sources),
 			want: "external data source ext/pg option PASSWORD_SECRET_PATH, which requires target capability external_data_source_secret_paths, unavailable on this ydb target"},
@@ -133,12 +135,12 @@ func TestCheck_FailurePath(t *testing.T) {
 			want: "external data source ext/pg: it needs a source_type, such as ObjectStorage or PostgreSQL"},
 		{name: "no auth method", got: externals.CheckDataSource("ext/pg", ydbdecl.ExternalDataSource{SourceType: "ObjectStorage"}, sources),
 			want: "external data source ext/pg: it needs an auth_method, such as NONE or BASIC \\(`AUTH_METHOD requires key`\\)"},
-		{name: "a table on a line with the flag off", got: externals.CheckTable("ext/events", eventsTable(), map[string]bool{}),
+		{name: "a table on a line with the flag off", got: externals.CheckTable("ext/events", eventsTable(), make(map[string]bool)),
 			want: "external table ext/events, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: .*"},
 		{name: "no data source", got: externals.CheckTable("ext/events", noSource, sources), want: "external table ext/events: it needs a data_source, the path of the data source it reads"},
 		{name: "no location", got: externals.CheckTable("ext/events", noLocation, sources), want: "external table ext/events: it needs a location \\(`LOCATION requires key`\\)"},
 		{name: "no column", got: externals.CheckTable("ext/events", noColumns, sources), want: "external table ext/events: it needs a column"},
-		{name: "a drop on a line with the flag off", got: externals.CheckDrop("DROP EXTERNAL TABLE ext/events", map[string]bool{}),
+		{name: "a drop on a line with the flag off", got: externals.CheckDrop("DROP EXTERNAL TABLE ext/events", make(map[string]bool)),
 			want: "DROP EXTERNAL TABLE ext/events, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: .*"},
 		{name: "a replacement without the replace flag", got: externals.CheckReplace("external table ext/events", sources),
 			want: "external table ext/events replaced in place, which requires target capability external_object_replace, unavailable on this ydb target; YDB keeps it behind feature flag EnableReplaceIfExistsForExternalEntities: .*"},
@@ -152,14 +154,14 @@ func TestCheck_FailurePath(t *testing.T) {
 
 func TestSecretPaths_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/local/ext/pw", "TOKEN_SECRET_PATH": "ext/pw", "AWS_SECRET_PATH": "ext/aws", "LOGIN": "reader"}, "/local")
+	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/local/ext/pw", "TOKEN_SECRET_PATH": "ext/pw", "AWS_SECRET_PATH": "ext/aws", "LOGIN": "reader"}, "/local") // #nosec G101 -- the options name secrets' paths, not their values
 	c.Assert(err, qt.IsNil)
 	c.Assert(got, qt.DeepEquals, []ydbdecl.Path{{Schema: "ext", Name: "aws"}, {Schema: "ext", Name: "pw"}})
 }
 
 func TestSecretPaths_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/other/ext/pw"}, "/local")
+	got, err := externalpath.SecretPaths(map[string]string{"PASSWORD_SECRET_PATH": "/other/ext/pw"}, "/local") // #nosec G101 -- the option names a secret's path, not its value
 	c.Assert(err, qt.ErrorMatches, `option PASSWORD_SECRET_PATH names secret "/other/ext/pw", which is outside the database /local, so the data source cannot read it`)
 	c.Assert(got, qt.IsNil)
 }
@@ -206,13 +208,12 @@ func TestSameDataSource(t *testing.T) {
 	read := func(options map[string]string, sourceType string) ydbdecl.ExternalDataSource {
 		c := testcheck.New(t)
 		properties := map[string]string{"AUTH_METHOD": "BASIC", "REFERENCES": `["/local/ext/events"]`}
-		for name, value := range options {
-			properties[name] = value
-		}
+		maps.Copy(properties, options)
 		spec, err := externals.SourceFromObserved(&Ydb_Table.DescribeExternalDataSourceResult{SourceType: new(sourceType), Location: new("pg:5432"), Properties: properties}, "/local")
 		c.Assert(err, qt.IsNil)
 		return spec
 	}
+	// #nosec G101 -- the options name a login and a secret's path, not a password
 	for _, test := range []struct {
 		name    string
 		current ydbdecl.ExternalDataSource

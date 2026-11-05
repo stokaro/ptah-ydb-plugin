@@ -9,8 +9,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // Ported from the host's TestYDBBinary_GeneratesAndAppliesCoordinationNodes:

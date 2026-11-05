@@ -2,8 +2,10 @@ package backend
 
 import (
 	"context"
-	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
+
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
 
 // AnalyzeSQL provides offline YQL framing and native safety judgments.

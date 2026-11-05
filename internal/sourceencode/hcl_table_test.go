@@ -4,16 +4,17 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/sourceencode"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // overrides are the overrides an HCL table part writes, as key=value.
 func overrides(parts []*protocol.EncodedSourcePart) []string {
-	written := []string{}
+	written := make([]string, 0)
 	for _, part := range parts {
 		for _, entry := range part.GetFragment().GetValue().GetMapping().GetEntries() {
 			written = append(written, entry.GetKey()+"="+entry.GetValue().GetText())
@@ -24,7 +25,7 @@ func overrides(parts []*protocol.EncodedSourcePart) []string {
 
 // losses are the loss lines of a result.
 func losses(result sourceencode.TableResult) []string {
-	lines := []string{}
+	lines := make([]string, 0)
 	for _, loss := range result.Losses {
 		lines = append(lines, loss.GetValueId()+": "+loss.GetMessage())
 	}
@@ -53,11 +54,11 @@ func TestEncodeTableHCL_HappyPath(t *testing.T) {
 	}{
 		{"a row table's TTL beside the defaults a read reports", schema.TableProperties,
 			`{"primaryKey":["id"],` + readDefaults + `,"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":2592000}}}`,
-			[]string{"row_deletion_column=ts", "row_deletion_interval=P30D"}, []string{},
+			[]string{"row_deletion_column=ts", "row_deletion_interval=P30D"}, make([]string, 0),
 			`{"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":2592000}}}`},
 		{"an epoch TTL", schema.TableProperties,
 			`{"ttlSettings":{"valueSinceUnixEpoch":{"columnName":"at","columnUnit":"UNIT_SECONDS","expireAfterSeconds":3600}}}`,
-			[]string{"row_deletion_column=at", "row_deletion_interval=PT1H", "row_deletion_unit=SECONDS"}, []string{},
+			[]string{"row_deletion_column=at", "row_deletion_interval=PT1H", "row_deletion_unit=SECONDS"}, make([]string, 0),
 			`{"ttlSettings":{"valueSinceUnixEpoch":{"columnName":"at","columnUnit":"UNIT_SECONDS","expireAfterSeconds":3600}}}`},
 		{"a TTL beside a setting HCL cannot say", schema.TableProperties,
 			`{"columnFamilies":[{"name":"default","compression":"COMPRESSION_NONE"},{"name":"cold","compression":"COMPRESSION_LZ4"}],` +
@@ -70,7 +71,7 @@ func TestEncodeTableHCL_HappyPath(t *testing.T) {
 			`{"hashColumns":["id"],"ttl":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}}}`,
 			[]string{"row_deletion_column=ts", "row_deletion_interval=P1D"}, []string{"value: YDB column storage, hash partitioning and tiered TTL are not represented in HCL"},
 			`{"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":86400}}}`},
-		{"the defaults a read reports alone", schema.TableProperties, `{"primaryKey":["id"],` + readDefaults + `}`, []string{}, []string{}, ""},
+		{"the defaults a read reports alone", schema.TableProperties, `{"primaryKey":["id"],` + readDefaults + `}`, make([]string, 0), make([]string, 0), ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

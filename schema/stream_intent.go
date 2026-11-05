@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"maps"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 )
 
 func topicIntent(observed *native.DescribeTopicResult) *native.TopicIntent {

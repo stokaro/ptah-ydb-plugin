@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/inspect"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 )
 
 // The upstream scheme enum does not yet name the server's streaming type.
@@ -171,11 +172,11 @@ func TestRealmStreamingInventory(t *testing.T) {
 func TestOutsideStreamingInventory(t *testing.T) {
 	c := testcheck.New(t)
 	inventory := realmInventory(c, "/local/app/copy", "/local/ptah_dev/realm/copy")
-	context := inspect.OutsideStreamingInventory(inventory, []string{"app"})
-	c.Assert(context.Objects, qt.HasLen, 1)
-	c.Assert(context.Objects[0].Owner.Schema, qt.Equals, "ptah_dev/realm")
-	c.Assert(context.Coverage.Subjects, qt.HasLen, 1)
-	c.Assert(context.Coverage.Subjects[0].Subject.Schema, qt.Equals, "ptah_dev/realm")
-	c.Assert(context.Coverage.Kinds, qt.HasLen, 1)
-	c.Assert(context.Coverage.Kinds[0].Regions[0].Scope.Schema, qt.IsNil)
+	outside := inspect.OutsideStreamingInventory(inventory, []string{"app"})
+	c.Assert(outside.Objects, qt.HasLen, 1)
+	c.Assert(outside.Objects[0].Owner.Schema, qt.Equals, "ptah_dev/realm")
+	c.Assert(outside.Coverage.Subjects, qt.HasLen, 1)
+	c.Assert(outside.Coverage.Subjects[0].Subject.Schema, qt.Equals, "ptah_dev/realm")
+	c.Assert(outside.Coverage.Kinds, qt.HasLen, 1)
+	c.Assert(outside.Coverage.Kinds[0].Regions[0].Scope.Schema, qt.IsNil)
 }

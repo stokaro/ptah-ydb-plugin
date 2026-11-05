@@ -10,12 +10,13 @@ import (
 	"strconv"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/modeljson"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // ColumnOperationKind identifies the creation of a column table.
@@ -36,17 +37,26 @@ func ColumnModel() *protocol.ValueModel { return proto.CloneOf(columnOperationMo
 func buildColumnOperationModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": ColumnOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
-		"message":       string((&native.ColumnTableCreation{}).ProtoReflect().Descriptor().FullName()),
-		"columns":       "distinct names, exact native storage types and an explicit matching notNull; no family, default, compression or encoding; key columns are not null",
-		"keys":          "ordered nonempty distinct existing columns; hash columns, when stated, are distinct key columns; without them YDB hashes by the whole key",
-		"shards":        "a stated count of at least 1 that fits 32 bits; without one YDB chooses",
-		"ttl":           "absent for none, or tiers that grow strictly, of which only the last may delete and every other moves rows to an external data source named by its absolute path; the column is declared, first in the key, and of a type the mode reads: a date type without a unit, Uint32, Uint64 or DyNumber with one",
-		"local_indexes": "distinct names, each over one declared column, of kind bloom_filter, bloom_ngram_filter over a Utf8 column, or min_max, with every setting named and no storage; an n-gram size from 3 to 8 and a probability that gives at most 8 n-gram hashes",
-		"render":        "YQL CREATE TABLE ... (columns, PRIMARY KEY (...), INDEX `name` LOCAL USING kind ON (`column`) WITH (...)) PARTITION BY HASH (...) WITH (STORE = COLUMN, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = n, TTL = ...), as the host's embedded engine writes it; the native CreateTable call writes another hash function (HASH_FUNCTION_MODULO_N), which the host does not read",
-		"execution":     "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
-		"precondition":  "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root ptah_locks is reserved; the session must name the monitoring endpoint, which the confirmation reads",
-		"confirmation":  "read the table service's and the monitoring endpoint's descriptions back: the columns in order with their types and nullability, the key, the hash key the request states or the whole key, the shard count the request states, the TTL and the local indexes the request states, each as stated",
-		"database":      "an explicit owner database must match the selected session; an empty database binds to that session",
+		"message": string((&native.ColumnTableCreation{}).ProtoReflect().Descriptor().FullName()),
+		"columns": "distinct names, exact native storage types and an explicit matching notNull; no family, default, compression or encoding; key columns are not null",
+		"keys":    "ordered nonempty distinct existing columns; hash columns, when stated, are distinct key columns; without them YDB hashes by the whole key",
+		"shards":  "a stated count of at least 1 that fits 32 bits; without one YDB chooses",
+		"ttl": "absent for none, or tiers that grow strictly, of which only the last may delete and every other moves rows to an external data " +
+			"source named by its absolute path; the column is declared, first in the key, and of a type the mode reads: a date type without a unit, Uint32, " +
+			"Uint64 or DyNumber with one",
+		"local_indexes": "distinct names, each over one declared column, of kind bloom_filter, bloom_ngram_filter over a Utf8 column, or min_max, with " +
+			"every setting named and no storage; an n-gram size from 3 to 8 and a probability that gives at most 8 n-gram hashes",
+		"render": "YQL CREATE TABLE ... (columns, PRIMARY KEY (...), INDEX `name` LOCAL USING kind ON (`column`) WITH (...)) PARTITION BY HASH " +
+			"(...) WITH (STORE = COLUMN, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = n, TTL = ...), as the host's embedded engine writes it; the native " +
+			"CreateTable call writes another hash function (HASH_FUNCTION_MODULO_N), which the host does not read",
+		"execution": "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
+		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence " +
+			"when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root " +
+			"ptah_locks is reserved; the session must name the monitoring endpoint, which the confirmation reads",
+		"confirmation": "read the table service's and the monitoring endpoint's descriptions back: the columns in order with their types and " +
+			"nullability, the key, the hash key the request states or the whole key, the shard count the request states, the TTL and the local indexes the " +
+			"request states, each as stated",
+		"database": "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
 		panic(err)
@@ -210,43 +220,12 @@ func ValidateColumnTableCreation(creation *native.ColumnTableCreation) error {
 	if len(creation.Columns) == 0 || len(creation.PrimaryKey) == 0 {
 		return fmt.Errorf("YDB creation requires columns and an ordered primary key")
 	}
-	types := map[string]string{}
-	nullable := map[string]bool{}
-	for _, column := range creation.Columns {
-		if err := only(column, "name", "type", "not_null"); err != nil {
-			return err
-		}
-		if !validName(column.Name) || types[column.Name] != "" {
-			return fmt.Errorf("invalid or duplicate YDB creation column")
-		}
-		spelling, optional, err := schema.ColumnType(column.Type)
-		if err != nil {
-			return err
-		}
-		if column.NotNull == nil || *column.NotNull == optional {
-			return fmt.Errorf("YDB column type and nullability disagree")
-		}
-		types[column.Name], nullable[column.Name] = spelling, optional
+	types, nullable, err := columnTableTypes(creation)
+	if err != nil {
+		return err
 	}
-	keys := map[string]bool{}
-	for _, key := range creation.PrimaryKey {
-		if types[key] == "" || keys[key] {
-			return fmt.Errorf("invalid YDB primary key column")
-		}
-		if nullable[key] {
-			return unsupported("column table key column %q must be NOT NULL; YDB refuses a nullable key column", key)
-		}
-		keys[key] = true
-	}
-	seen := map[string]bool{}
-	for _, name := range creation.HashColumns {
-		if !keys[name] {
-			return unsupported("hash column %q must belong to the primary key", name)
-		}
-		if seen[name] {
-			return fmt.Errorf("hash partitioning column %q is empty or repeated", name)
-		}
-		seen[name] = true
+	if err := validateColumnTableKey(creation, types, nullable); err != nil {
+		return err
 	}
 	if creation.Partitions > 1<<32-1 {
 		return fmt.Errorf("column shard count exceeds a 32-bit integer")
@@ -262,6 +241,65 @@ func ValidateColumnTableCreation(creation *native.ColumnTableCreation) error {
 			return unsupported("%s", reason)
 		}
 	}
+	return validateColumnTableTTL(creation, types)
+}
+
+// columnTableTypes checks the columns of a column table's creation, each with
+// a valid distinct name and only a type and its matching nullability, and
+// maps each to its type and whether it is nullable.
+func columnTableTypes(creation *native.ColumnTableCreation) (map[string]string, map[string]bool, error) {
+	types := make(map[string]string)
+	nullable := make(map[string]bool)
+	for _, column := range creation.Columns {
+		if err := only(column, "name", "type", "not_null"); err != nil {
+			return nil, nil, err
+		}
+		if !validName(column.Name) || types[column.Name] != "" {
+			return nil, nil, fmt.Errorf("invalid or duplicate YDB creation column")
+		}
+		spelling, optional, err := schema.ColumnType(column.Type)
+		if err != nil {
+			return nil, nil, err
+		}
+		if column.NotNull == nil || *column.NotNull == optional {
+			return nil, nil, fmt.Errorf("YDB column type and nullability disagree")
+		}
+		types[column.Name], nullable[column.Name] = spelling, optional
+	}
+	return types, nullable, nil
+}
+
+// validateColumnTableKey checks the key of a column table's creation, of
+// distinct NOT NULL declared columns, and its hash columns, distinct key
+// columns.
+func validateColumnTableKey(creation *native.ColumnTableCreation, types map[string]string, nullable map[string]bool) error {
+	keys := make(map[string]bool)
+	for _, key := range creation.PrimaryKey {
+		if types[key] == "" || keys[key] {
+			return fmt.Errorf("invalid YDB primary key column")
+		}
+		if nullable[key] {
+			return unsupported("column table key column %q must be NOT NULL; YDB refuses a nullable key column", key)
+		}
+		keys[key] = true
+	}
+	seen := make(map[string]bool)
+	for _, name := range creation.HashColumns {
+		if !keys[name] {
+			return unsupported("hash column %q must belong to the primary key", name)
+		}
+		if seen[name] {
+			return fmt.Errorf("hash partitioning column %q is empty or repeated", name)
+		}
+		seen[name] = true
+	}
+	return nil
+}
+
+// validateColumnTableTTL checks the TTL of a column table's creation, if any:
+// a valid policy whose column is declared, first in the key and of a type its
+// mode reads. types maps each declared column to its type.
+func validateColumnTableTTL(creation *native.ColumnTableCreation, types map[string]string) error {
 	if creation.Ttl == nil {
 		return nil
 	}

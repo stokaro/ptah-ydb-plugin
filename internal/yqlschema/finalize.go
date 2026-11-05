@@ -76,7 +76,7 @@ func (r *Reading) append(file *Reading) *Object {
 // statements in order.
 func declarationsOf(file *Reading, statements []statement) FileDeclarations {
 	var result FileDeclarations
-	result.Objects = []Declaration{}
+	result.Objects = make([]Declaration, 0)
 	for _, table := range file.Tables {
 		result.Objects = append(result.Objects, Declaration{Kind: "table", Name: table.Qualified()})
 	}

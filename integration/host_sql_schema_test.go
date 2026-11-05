@@ -6,15 +6,15 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // hostApplySQL runs the host's `schema apply` over a YQL schema, a file or a
@@ -26,7 +26,7 @@ func hostApplySQL(c *qt.C, directory, schemaFile string) (string, error) {
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := testCommand(ctx, host, "schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", schemaFile, "--schemas", directory)
 	var report, printed bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &report, &printed
@@ -94,7 +94,7 @@ func TestHostAppliesASQLSchema_HappyPath(t *testing.T) {
 					c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+path.Join(database, directory, name)+"`"), qt.IsNil)
 				}
 			})
-			documents := map[string]string{}
+			documents := make(map[string]string)
 			for name, text := range test.documents {
 				documents[name] = replaceDirectory(text, directory)
 			}

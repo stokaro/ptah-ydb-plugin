@@ -14,10 +14,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // operationOrder lists the native operations an apply planned, in plan

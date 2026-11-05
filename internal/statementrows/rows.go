@@ -7,10 +7,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
-	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 )
 
 const pageBytes = 3 << 20
@@ -60,10 +61,10 @@ func (c *Cursor) Columns() []*protocol.DataColumn {
 	return columns
 }
 
-// Page returns at most max rows and reserves at most one row for the next
+// Page returns at most limit rows and reserves at most one row for the next
 // page. An error returns no prefix. EOF checks that no second result set was
 // hidden by the one-statement contract.
-func (c *Cursor) Page(max uint32) ([]*protocol.Row, bool, error) {
+func (c *Cursor) Page(limit uint32) ([]*protocol.Row, bool, error) {
 	if c.closed {
 		return nil, false, errors.New("statement result is closed")
 	}
@@ -95,7 +96,7 @@ func (c *Cursor) Page(max uint32) ([]*protocol.Row, bool, error) {
 		if rowSize > pageBytes {
 			return nil, false, errors.New("statement row exceeds the page byte limit")
 		}
-		if len(result) == int(max) || size+rowSize > pageBytes {
+		if len(result) == int(limit) || size+rowSize > pageBytes {
 			c.pending = row
 			return result, true, nil
 		}

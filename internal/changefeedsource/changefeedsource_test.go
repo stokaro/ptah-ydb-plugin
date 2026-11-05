@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
@@ -12,8 +15,6 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // declared decodes a request through the provider's source service and reads
@@ -22,7 +23,7 @@ func declared(c *qt.C, request *protocol.DecodeSourceRequest) map[string][]chang
 	c.Helper()
 	decoded, err := backend.New().DecodeSource(c.Context(), request)
 	c.Assert(err, qt.IsNil)
-	result := map[string][]changefeeds.Feed{}
+	result := make(map[string][]changefeeds.Feed)
 	for _, fragment := range decoded.Documents[0].Fragments {
 		for _, value := range fragment.Values {
 			envelope := value.Value.Value
@@ -109,7 +110,7 @@ func TestDecodeYAML_FailurePath(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			decoded, err := backend.New().DecodeSource(c.Context(), request)
 			c.Assert(err, qt.ErrorMatches, `(?s).*`+test.wantErr+`.*`)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -189,7 +190,7 @@ func TestDecodeGo_FailurePath(t *testing.T) {
 			c := testcheck.New(t)
 			decoded, err := backend.New().DecodeSource(c.Context(), goRequest(c, test.declarations...))
 			c.Assert(err, qt.ErrorMatches, `(?s).*`+test.wantErr+`.*`)
-			c.Assert(decoded == nil, qt.IsTrue)
+			c.Assert(decoded, qt.IsNil)
 		})
 	}
 }
@@ -203,5 +204,5 @@ func TestDecode_ColumnTableTakesNoChangefeed(t *testing.T) {
 		declaration(2, "Item", "ptah:schema:changefeed", map[string]string{"name": "f", "mode": "UPDATES", "format": "JSON"}))
 	decoded, err := backend.New().DecodeSource(c.Context(), request)
 	c.Assert(err, qt.ErrorMatches, `(?s).*table "items": row-table partitioning, column families and changefeeds cannot be applied to a column table.*`)
-	c.Assert(decoded == nil, qt.IsTrue)
+	c.Assert(decoded, qt.IsNil)
 }

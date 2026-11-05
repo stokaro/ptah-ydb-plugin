@@ -6,9 +6,10 @@ import (
 	"slices"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
-	"google.golang.org/protobuf/proto"
 )
 
 // Action is what a change does to one changefeed.
@@ -72,8 +73,8 @@ func (c Change) Action() Action {
 // declaration leaves out is kept, because its controller, not the schema,
 // owns it.
 func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservations) ([]Change, string) {
-	wanted := map[string]*native.ChangefeedIntent{}
-	wantedFeeds := map[string]Feed{}
+	wanted := make(map[string]*native.ChangefeedIntent)
+	wantedFeeds := make(map[string]Feed)
 	for _, intent := range desired.GetChangefeeds() {
 		feed, err := FromIntent(intent)
 		if err != nil {
@@ -81,8 +82,8 @@ func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservatio
 		}
 		wanted[intent.GetName()], wantedFeeds[intent.GetName()] = intent, feed
 	}
-	having := map[string]*native.ObservedChangefeed{}
-	havingFeeds := map[string]Feed{}
+	having := make(map[string]*native.ObservedChangefeed)
+	havingFeeds := make(map[string]Feed)
 	for _, observed := range held.GetChangefeeds() {
 		name := observed.GetDescription().GetName()
 		feed, err := FromObserved(observed)
@@ -148,7 +149,7 @@ func Diff(desired *native.ChangefeedSetIntent, held *native.ChangefeedObservatio
 // consumers of its topic; then every topic change. Each group keeps the order
 // of changes.
 func Statements(path string, changes []Change) ([]string, error) {
-	var drops, adds, topics []string
+	var drops, adds, topicStatements []string
 	for _, change := range changes {
 		action := change.Action()
 		if action == Drop || action == Recreate {
@@ -171,10 +172,10 @@ func Statements(path string, changes []Change) ([]string, error) {
 				return nil, err
 			}
 			written, _ := TopicStatements(path, desired.Changefeed, previous.Changefeed)
-			topics = append(topics, written...)
+			topicStatements = append(topicStatements, written...)
 		}
 	}
-	return slices.Concat(drops, adds, topics), nil
+	return slices.Concat(drops, adds, topicStatements), nil
 }
 
 // Declared reads the declared changefeeds of a table, in name order.

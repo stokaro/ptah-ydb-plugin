@@ -9,11 +9,12 @@ import (
 	"strconv"
 	"strings"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/protobuf/proto"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"google.golang.org/protobuf/proto"
 )
 
 // Directive is the document-level secret annotation.
@@ -76,7 +77,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			if entry.fields == nil {
 				return nil, fmt.Errorf("a secret requires a mapping")
 			}
-			values := map[string]string{}
+			values := make(map[string]string)
 			for _, field := range entry.fields.Entries {
 				if field.Key == "value" {
 					return nil, fmt.Errorf("a secret declaration must name value_env instead of an inline value")

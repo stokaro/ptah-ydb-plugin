@@ -8,14 +8,15 @@ import (
 	"slices"
 	"strings"
 
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // ErrNoMonitoring refuses a column table's creation or TTL change in a session
@@ -123,7 +124,7 @@ func listedAbsent(ctx context.Context, scheme Ydb_Scheme_V1.SchemeServiceClient,
 		(owner.Schema != "" && entries.GetSelf().GetType() == Ydb_Scheme.Entry_DATABASE) || len(entries.Children) > 4096 {
 		return fmt.Errorf("invalid YDB table namespace")
 	}
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for _, entry := range entries.Children {
 		if entry.GetName() == "" || strings.ContainsAny(entry.Name, "/\\\x00") || entry.Name == "." || entry.Name == ".." || names[entry.Name] {
 			return fmt.Errorf("invalid YDB table namespace entry")

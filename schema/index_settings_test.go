@@ -1,15 +1,17 @@
 package schema_test
 
 import (
+	"slices"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 func indexOwner() *protocol.Reference {
@@ -112,13 +114,10 @@ func TestIndexSettings_FailurePath(t *testing.T) {
 // replicas of none, which a read reports by leaving them out.
 func TestObservedIndexSettings_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	var model *protocol.ValueModel
-	for _, candidate := range schema.ObservedModels() {
-		if candidate.Kind == schema.IndexSettingsProperties {
-			model = candidate
-		}
-	}
-	c.Assert(model, qt.IsNotNil)
+	models := schema.ObservedModels()
+	at := slices.IndexFunc(models, func(model *protocol.ValueModel) bool { return model.Kind == schema.IndexSettingsProperties })
+	c.Assert(at, qt.Not(qt.Equals), -1)
+	model := models[at]
 	normalized, err := schema.Normalize(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: 1, Encoding: model.Encoding,
 		DefinitionSha256: model.DefinitionSha256, Owner: indexOwner(), Payload: []byte(`{"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`)})
 	c.Assert(err, qt.ErrorMatches, `observed YDB index read replicas report a count of zero.*`)

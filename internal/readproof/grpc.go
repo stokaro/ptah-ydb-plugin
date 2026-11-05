@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/draft/Ydb_View_V1"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 )
 
 // Catalog reads object kinds and stored view queries from the session driver.

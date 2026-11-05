@@ -6,13 +6,7 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/stokaro/ptah-ydb-plugin/internal/history"
-	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-
-	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
-	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
-	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Coordination_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Scheme_V1"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
@@ -22,6 +16,12 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/history"
+	"github.com/stokaro/ptah-ydb-plugin/internal/metadata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 type source struct {
@@ -47,8 +47,8 @@ func open(ctx context.Context, driver *ydb.Driver) (*source, error) {
 
 func (s *source) close() error { return s.owner.Close() }
 
-func (s *source) directory(ctx context.Context, path string) (*Ydb_Scheme.ListDirectoryResult, error) {
-	return nativeapi.SchemeLister(s.scheme)(ctx, path)
+func (s *source) directory(ctx context.Context, directoryPath string) (*Ydb_Scheme.ListDirectoryResult, error) {
+	return nativeapi.SchemeLister(s.scheme)(ctx, directoryPath)
 }
 
 type description struct {
@@ -108,8 +108,8 @@ func classifyTable(absolute string, result *native.DescribeTableResult) (*descri
 	return &description{reservation: purpose, table: result, indexes: indexes, changefeeds: feeds}, nil
 }
 
-func (s *source) describeTopic(ctx context.Context, path string) (*native.DescribeTopicResult, error) {
-	response, err := s.topic.DescribeTopic(ctx, &Ydb_Topic.DescribeTopicRequest{Path: path})
+func (s *source) describeTopic(ctx context.Context, topicPath string) (*native.DescribeTopicResult, error) {
+	response, err := s.topic.DescribeTopic(ctx, &Ydb_Topic.DescribeTopicRequest{Path: topicPath})
 	if err != nil {
 		return nil, fmt.Errorf("describe YDB topic: transport failed")
 	}

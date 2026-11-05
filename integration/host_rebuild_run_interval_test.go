@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 )
 
 // runIntervalItems declares table items keyed on an unsigned id, with a

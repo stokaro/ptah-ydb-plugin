@@ -2,16 +2,18 @@ package tablecreate_test
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // The tables YDB implements each kind of vector and full-text index with.
@@ -216,9 +218,7 @@ func TestNativeIndexPlan_NoChange(t *testing.T) {
 // capability but the ones set false.
 func withCapabilities(in alterCase, set map[string]bool) alterCase {
 	in.capabilities = everyIndexKind()
-	for key, value := range set {
-		in.capabilities[key] = value
-	}
+	maps.Copy(in.capabilities, set)
 	return in
 }
 

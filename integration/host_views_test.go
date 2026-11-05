@@ -10,12 +10,13 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-genproto/draft/Ydb_View_V1"
 	"github.com/ydb-platform/ydb-go-genproto/draft/protos/Ydb_View"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // hostViews declares, in the fixture directory, a table items and a table old
@@ -71,7 +72,7 @@ func TestHostAppliesViews_HappyPath(t *testing.T) {
 	viewsAtCleanup(c, opened, database, directory)
 
 	applyUntilSynced(c, directory+","+directory+"/archive", "go", hostViews(directory))
-	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+path.Join(database, directory, "items")+"` (id, label, qty) VALUES (1l, 'a'u, 1), (2l, 'b'u, 0)")
+	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+path.Join(database, directory, "items")+"` (id, label, qty) VALUES (1l, 'a'u, 1), (2l, 'b'u, 0)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 
 	c.Assert(storedView(c, opened, path.Join(database, directory, "active")), qt.Equals, "select id , `label` FROM `"+directory+"/items` WHERE qty > 0")

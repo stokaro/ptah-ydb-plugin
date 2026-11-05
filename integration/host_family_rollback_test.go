@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
@@ -36,6 +37,7 @@ func TestHostRollsBackAColumnFamilyMove_HappyPath(t *testing.T) {
 			}
 			created, err := hostApplySource(c, directory, "go", declared(test.before))
 			c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
+			// #nosec G202 -- the path is a table under a directory this test generated
 			_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body, blob) VALUES (1l, 'a'u, 'one'u, 'x'), (2l, 'b'u, NULL, NULL)")
 			c.Assert(err, qt.IsNil)
 

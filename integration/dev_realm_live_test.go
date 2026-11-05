@@ -13,14 +13,15 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
 // realmFixture names a dev realm in the test database and removes it, with the
 // directory of the realms when nothing else is left in it, once the test ends.
-func realmFixture(c *qt.C, opened *connection.Connection, base connection.Address) (address string, root string) {
+func realmFixture(c *qt.C, opened *connection.Connection, base connection.Address) (address, root string) {
 	c.Helper()
 	name := "r" + strings.ToLower(rand.Text())[:12]
 	parsed, err := url.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
@@ -97,7 +98,7 @@ func TestDevRealmSessionSubprocess(t *testing.T) {
 			c.Assert(result.DiagnosticCode, qt.Equals, "ydb.realm-escape")
 			c.Assert(result.AppliedCount, qt.Equals, uint32(0))
 		}
-		_, err := opened.DB.ExecContext(ctx, "SELECT * FROM `"+escape+"`")
+		_, err := opened.DB.ExecContext(ctx, "SELECT * FROM `"+escape+"`") // #nosec G202 G701 -- escape is a path this test made from the test database and random letters
 		c.Assert(err, qt.IsNotNil)
 	})
 }

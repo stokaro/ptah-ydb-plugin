@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlschema"
 )
@@ -16,7 +17,7 @@ func TestCorpusShape(t *testing.T) {
 	c := testcheck.New(t)
 	rows := corpus(c, func(row) bool { return true })
 	c.Assert(len(rows) >= 800, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(rows)))
-	hosts := map[string]bool{}
+	hosts := make(map[string]bool)
 	for _, r := range rows {
 		hosts[r.golden.Host] = true
 		c.Assert(r.golden.Host, qt.Matches, `[0-9a-f]{40}`, qt.Commentf(r.name))
@@ -24,7 +25,7 @@ func TestCorpusShape(t *testing.T) {
 	c.Assert(slices.Collect(maps.Keys(hosts)), qt.HasLen, 1)
 	c.Assert(len(corpus(c, refused)) >= 500, qt.IsTrue)
 	c.Assert(len(corpus(c, accepted)) >= 280, qt.IsTrue)
-	names := map[string]bool{}
+	names := make(map[string]bool)
 	for _, r := range rows {
 		names[r.name] = true
 	}

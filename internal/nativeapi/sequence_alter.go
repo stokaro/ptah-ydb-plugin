@@ -7,13 +7,14 @@ import (
 	"path"
 	"slices"
 
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
+	"google.golang.org/protobuf/proto"
+
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbsequence"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
-	"google.golang.org/protobuf/proto"
 )
 
 // SerialSequence changes the start and the increment of the sequence behind a

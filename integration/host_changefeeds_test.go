@@ -13,10 +13,6 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
-	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
-	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 	"github.com/ydb-platform/ydb-go-genproto/Ydb_Table_V1"
@@ -25,6 +21,11 @@ import (
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
 // feedShape is what the server holds of one changefeed: its mode, its topic's
@@ -48,7 +49,7 @@ func describedChangefeeds(c *qt.C, opened *connection.Connection, absolute strin
 	if err != nil {
 		return nil, false
 	}
-	result := map[string]feedShape{}
+	result := make(map[string]feedShape)
 	for _, feed := range described.Changefeeds {
 		topic, err := opened.Driver.Topic().Describe(c.Context(), path.Join(absolute, feed.Name))
 		c.Assert(err, qt.IsNil)
@@ -171,8 +172,8 @@ func newHostChangefeeds(c *qt.C) *hostChangefeeds {
 
 // events is the YAML of table events, keyed on a Uint64 so its changefeeds'
 // topics may start with several partitions, with the changefeeds block given.
-func (h *hostChangefeeds) events(changefeeds string) string {
-	return "tables:\n  events:\n    schema: " + h.directory + "\n    columns:\n      id: {type: Uint64, primary: true, not_null: true}\n      payload: {type: Utf8}\n" + changefeeds
+func (h *hostChangefeeds) events(block string) string {
+	return "tables:\n  events:\n    schema: " + h.directory + "\n    columns:\n      id: {type: Uint64, primary: true, not_null: true}\n      payload: {type: Utf8}\n" + block
 }
 
 // apply runs the host's schema apply over text and requires want of its
@@ -283,7 +284,7 @@ func TestHostSwapsAChangefeedAtTheLimit_HappyPath(t *testing.T) {
 func TestHostChangesChangefeedsInPlace_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	h := newHostChangefeeds(c)
-	table := h.directory + "/events"
+	eventsTable := h.directory + "/events"
 	feed := func(mode, retention, consumers string) string {
 		text := "    changefeeds:\n      feed:\n        mode: " + mode + "\n        format: JSON\n"
 		if retention != "" {
@@ -302,10 +303,10 @@ func TestHostChangesChangefeedsInPlace_HappyPath(t *testing.T) {
 			want: ydbdecl.Changefeed{Name: "feed", Mode: "UPDATES", Format: "JSON",
 				Consumers: []ydbdecl.Consumer{{Name: "a", Important: true, SupportedCodecs: []string{"raw", "zstd"}}, {Name: "c", ReadFrom: "2026-01-01T00:00:00Z"}}}},
 		{name: "a consumer's codecs taken away", text: feed("UPDATES", "", "          a: {important: true}\n          c: {read_from: \"2026-01-01T00:00:00Z\"}\n"),
-			note: "Consumer a of changefeed feed of table " + table + " is dropped and added again, because YDB keeps a consumer's codecs once it has any.",
+			note: "Consumer a of changefeed feed of table " + eventsTable + " is dropped and added again, because YDB keeps a consumer's codecs once it has any.",
 			want: ydbdecl.Changefeed{Name: "feed", Mode: "UPDATES", Format: "JSON", Consumers: []ydbdecl.Consumer{{Name: "a", Important: true}, {Name: "c", ReadFrom: "2026-01-01T00:00:00Z"}}}},
 		{name: "the mode changed", text: feed("KEYS_ONLY", "", "          a: {important: true}\n          c: {read_from: \"2026-01-01T00:00:00Z\"}\n"),
-			note: "Changefeed feed of table " + table + " is dropped and added again, because YDB changes no option of a changefeed in place. Its stream restarts: " +
+			note: "Changefeed feed of table " + eventsTable + " is dropped and added again, because YDB changes no option of a changefeed in place. Its stream restarts: " +
 				"the records nobody read are lost, and consumers a, c lose their position and start again from the beginning of the new stream.",
 			want: ydbdecl.Changefeed{Name: "feed", Mode: "KEYS_ONLY", Format: "JSON", Consumers: []ydbdecl.Consumer{{Name: "a", Important: true}, {Name: "c", ReadFrom: "2026-01-01T00:00:00Z"}}}},
 	}
@@ -319,7 +320,7 @@ func TestHostChangesChangefeedsInPlace_HappyPath(t *testing.T) {
 	}
 
 	removed := h.apply("the removal", h.events(""), "Schema apply completed successfully")
-	c.Assert(removed, qt.Contains, "Changefeed feed of table "+table+" is dropped with its topic: the records nobody read are lost, and so are consumers a, c.")
+	c.Assert(removed, qt.Contains, "Changefeed feed of table "+eventsTable+" is dropped with its topic: the records nobody read are lost, and so are consumers a, c.")
 	c.Assert(h.read(), qt.HasLen, 0)
 }
 

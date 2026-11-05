@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/readproof"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func TestReadSources_HappyPath(t *testing.T) {

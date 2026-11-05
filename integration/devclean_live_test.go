@@ -12,7 +12,6 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -20,6 +19,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // startProviderFor starts the provider for a host that lists hostFeatures.
@@ -223,7 +223,7 @@ func TestStatementTimeoutSubprocess(t *testing.T) {
 func childNames(c *qt.C, opened *connection.Connection, absolute string) []string {
 	c.Helper()
 	listing, err := opened.Driver.Scheme().ListDirectory(c.Context(), absolute)
-	names := []string{}
+	names := make([]string, 0)
 	if err != nil {
 		return names
 	}

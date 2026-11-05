@@ -6,11 +6,11 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 func int64Value(v int64) *protocol.DataValue {
@@ -125,7 +125,7 @@ type decimal struct {
 
 func (d decimal) Decimal() ([16]byte, uint32, uint32) {
 	var bytes [16]byte
-	binary.BigEndian.PutUint64(bytes[8:], uint64(d.unscaled))
+	binary.BigEndian.PutUint64(bytes[8:], uint64(d.unscaled)) // #nosec G115 -- keeps the low 64 bits of the two's complement value; high carries the sign
 	high := uint64(0)
 	if d.unscaled < 0 {
 		high = ^uint64(0)

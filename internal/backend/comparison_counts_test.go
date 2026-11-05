@@ -5,17 +5,18 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalcompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecompare"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
-	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
-	"github.com/stokaro/ptah/provider-sdk/provider"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
-	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
-	"google.golang.org/protobuf/proto"
 )
 
 // countsFeatures is the target profile of a host that lists the counts.
@@ -129,7 +130,7 @@ func TestComparisonCountsNeedTheTargetFeature_HappyPath(t *testing.T) {
 // as the host asks when only a coverage claim names a kind.
 func emptyBatch(service *protocol.ModelComparison, kinds []string) *protocol.CompareModelsRequest {
 	return &protocol.CompareModelsRequest{Engine: "ydb", ComparisonId: service.GetId(), Kinds: kinds, TargetFeatures: countsFeatures(), DatabasePath: "/local",
-		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().GetEngines()[0].GetIdentifiers())}, Capabilities: map[string]bool{},
+		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().GetEngines()[0].GetIdentifiers())}, Capabilities: make(map[string]bool),
 		Desired: &protocol.ComparisonState{Representation: protocol.ValueInput_DESIRED, Coverage: &protocol.ComparisonCoverage{}},
 		Current: &protocol.ComparisonState{Representation: protocol.ValueInput_OBSERVED, Coverage: &protocol.ComparisonCoverage{}}}
 }

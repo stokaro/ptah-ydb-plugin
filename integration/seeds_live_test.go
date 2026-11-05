@@ -12,7 +12,6 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
-	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/seeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
 // seedsFixture is a session on a dev realm of its own, so the seed ledger,
@@ -84,7 +84,7 @@ func (f *seedsFixture) ledger(c *qt.C) *protocol.SeedLedger {
 
 func (f *seedsFixture) names(c *qt.C) []string {
 	c.Helper()
-	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT name FROM `"+path.Join(f.root, "regions")+"` ORDER BY id")
+	rows, err := f.opened.DB.QueryContext(c.Context(), "SELECT name FROM `"+path.Join(f.root, "regions")+"` ORDER BY id") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 	defer func() { c.Check(rows.Close(), qt.IsNil) }()
 	var names []string

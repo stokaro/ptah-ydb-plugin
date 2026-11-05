@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
@@ -28,7 +29,7 @@ func TestHostRebuildKeepsTheColumnFamiliesATableHolds_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "ALTER TABLE `"+absolute+"` ALTER FAMILY `default` SET COMPRESSION 'lz4', "+
 		"ADD FAMILY `extra` (COMPRESSION = 'lz4'), ALTER FAMILY `cold` SET DATA '"+storagePool+"'"), qt.IsNil)
-	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, code, n, label) VALUES (1ul, 'a'u, 1, 'one'u), (2ul, 'b'u, 2, NULL)")
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, code, n, label) VALUES (1ul, 'a'u, 1, 'one'u), (2ul, 'b'u, 2, NULL)") // #nosec G202 -- the path is a table under a directory this test generated
 	c.Assert(err, qt.IsNil)
 
 	rebuildRuns(c, directory, "go", replaceDirectory(rebuiltItems(inCold, "Int64", ""), directory))
@@ -98,7 +99,7 @@ func TestHostRebuildFromHCLKeepsWhatTheDocumentLeavesOut_HappyPath(t *testing.T)
 			absolute := path.Join(database, directory, "items")
 			emptyAtCleanup(c, opened, path.Join(database, directory))
 			c.Assert(execFixtureSchema(c.Context(), opened.DB, strings.ReplaceAll(test.create, "{table}", absolute)), qt.IsNil)
-			_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, n, ts) VALUES (1l, 1, CurrentUtcTimestamp())")
+			_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, n, ts) VALUES (1l, 1, CurrentUtcTimestamp())") // #nosec G202 -- the path is a table under a directory this test generated
 			c.Assert(err, qt.IsNil)
 			c.Assert(heldStorage(c, opened, absolute), qt.DeepEquals, test.want)
 
