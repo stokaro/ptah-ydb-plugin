@@ -881,17 +881,22 @@ exercise native file cleanup.
 The lock service uses exclusive ephemeral semaphores on the database-root
 `ptah_locks` coordination node. Each acquisition has its own native session.
 The provider creates a missing node with strict read and attach consistency.
-An existing node must have both settings explicitly strict; the provider refuses
-an incompatible configuration without changing it. The refusal is a
+Ptah's built-in YDB engine creates the node with neither setting, which YDB
+reads as relaxed reads, so every database that engine locked holds such a
+node: the provider alters a node that sets neither mode to strict reads and
+attachment before it takes a lock there, as a run of that engine took its
+locks there, and a session of that engine that still holds a lock keeps it. A
+user who may use the node but not alter it is refused with the right to grant.
+Any other node must have both settings explicitly strict; the provider refuses
+one someone set otherwise without changing it. The refusal is a
 `NOT_ACQUIRED` receipt that holds nothing, and its reason names the node and its
-two settings. Ptah's built-in YDB engine creates the node with neither setting,
-so a database that engine locked holds a node this provider refuses until it is
-made strict or removed.
+two settings.
 
 YDB's CLI (2.25.0 and 2.29.0, bundled with 25.1.4.7 and 26.2.1.14) and YQL have
-no command for a coordination node, so the fix goes through the coordination
-service. With [ydb-go-sdk](https://github.com/ydb-platform/ydb-go-sdk), alter
-the node in place:
+no command for a coordination node, so making such a node strict goes through
+the coordination service. With
+[ydb-go-sdk](https://github.com/ydb-platform/ydb-go-sdk), alter the node in
+place:
 
 ```go
 err := driver.Coordination().AlterNode(ctx, path.Join(driver.Name(), "ptah_locks"), coordination.NodeConfig{
@@ -905,8 +910,6 @@ it strict. Remove it only while no run holds a lock there: dropping the node end
 every lock session on it. YDB's default read mode can
 return stale state during leader changes; see the
 [YDB coordination documentation](https://ydb.tech/docs/en/reference/ydb-sdk/coordination).
-This changes the requirements for an older Ptah lock node; pre-v1, so no
-compatibility is owed. Configure that reserved node explicitly before using it.
 
 The provider finds the node by describing its path rather than by listing the
 database root, so a user granted the node takes the lock without the right to
