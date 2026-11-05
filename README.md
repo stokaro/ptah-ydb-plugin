@@ -3856,7 +3856,11 @@ and `@@...@@` delimit strings, a type suffix belongs to its string, and a
 backticked name carries the path it stands for. A `--!` comment is a setting
 the server reads only at the head of a text; the host clears `head` for a range
 inside one, where the comment is a comment. A string whose escape YDB refuses
-carries no value. A host of an earlier contract never calls the RPC and reads
+carries no value. A semicolon is a `SEMICOLON` token only where it ends a
+statement of the text: one that ends a statement inside a DEFINE ACTION or
+DEFINE SUBQUERY body, a DO BEGIN block or a lambda is an `OPERATOR`, so the
+host's statement splitter keeps such a body whole, as Ptah's built-in YDB
+engine split it. A host of an earlier contract never calls the RPC and reads
 YQL by its shared rules.
 
 ## Migration lint
