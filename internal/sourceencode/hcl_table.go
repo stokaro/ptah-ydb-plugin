@@ -22,37 +22,44 @@ import (
 // the table's platform "ydb" block, which tablesource.HCLPlatformBlock
 // claims. HCL has no spelling for anything else a facet holds: a row table's
 // column families, partitioning, read replicas, key Bloom filter and starting
-// layout, and a column table's storage. A facet that holds such a setting
-// beside its TTL is written in part, and the loss names what the document
-// leaves out, in the words the embedded engine reports it with; one that holds
-// it without a TTL is lost. A facet that holds neither is written by a part
-// with no override, which the host writes as no block: a table that writes no
-// block states nothing about its TTL. Reading the document back keeps every
-// setting it leaves out, since a declaration that leaves a setting out keeps
-// what the table holds.
+// layout, a column table's storage, changefeeds and native indexes. A facet
+// that holds such a setting beside its TTL is written in part, and the loss
+// names what the document leaves out, in the words the embedded engine
+// reports it with; one that holds it without a TTL is lost. A facet that
+// holds neither, such as the empty changefeed set and native index set a read
+// reports for a table without either, is written by the table's part with no
+// override, which the host writes as no block: a table that writes no block
+// states nothing about its TTL, changefeeds or native indexes. Reading the
+// document back keeps every setting it leaves out, since a declaration that
+// leaves a setting out keeps what the table holds.
 //
-// Only the row-table and column-storage facets have a place in HCL; any other
-// facet is a loss.
+// The table's written facets share one part. Only the facets the platform
+// block claims have a place in HCL; any other facet is a loss.
 func EncodeTableHCL(table Table) (TableResult, error) {
 	var result TableResult
-	claim := tablesource.HCLPlatformBlock()
+	var entries []*protocol.SourceEntry
 	for _, value := range table.Values {
 		id := value.GetValue().GetId()
-		entries, losses, err := hclTableValue(value.GetValue().GetValue())
+		written, losses, err := hclTableValue(value.GetValue().GetValue())
 		if err != nil {
 			return TableResult{}, err
 		}
 		if setting := strings.Join(losses, "; "); setting != "" {
 			result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: id, Message: setting})
 		}
-		if entries == nil {
+		if written == nil {
 			continue
 		}
 		result.Written = append(result.Written, id)
-		result.Parts = append(result.Parts, &protocol.EncodedSourcePart{Fragment: &protocol.SourceFragment{Id: "table." + table.Binding.GetId() + ".platform",
-			Selector: claim.GetSelector(), HclBlock: claim, BindingId: table.Binding.GetId(),
-			Content: &protocol.SourceFragment_Value{Value: mapping(entries...)}}})
+		entries = append(entries, written...)
 	}
+	if len(result.Written) == 0 {
+		return result, nil
+	}
+	claim := tablesource.HCLPlatformBlock()
+	result.Parts = []*protocol.EncodedSourcePart{{Fragment: &protocol.SourceFragment{Id: "table." + table.Binding.GetId() + ".platform",
+		Selector: claim.GetSelector(), HclBlock: claim, BindingId: table.Binding.GetId(),
+		Content: &protocol.SourceFragment_Value{Value: mapping(entries...)}}}}
 	return result, nil
 }
 
@@ -89,10 +96,42 @@ func hclTableValue(envelope *protocol.Envelope) ([]*protocol.SourceEntry, []stri
 			return nil, nil, err
 		}
 		return ttlEntries(nil, &intent), []string{"YDB column storage, hash partitioning and tiered TTL are not represented in HCL"}, nil
+	case schema.ChangefeedProperties:
+		var intent native.ChangefeedSetIntent
+		if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
+			return nil, nil, err
+		}
+		names := make([]string, 0, len(intent.GetChangefeeds()))
+		for _, feed := range intent.GetChangefeeds() {
+			names = append(names, feed.GetName())
+		}
+		return neutralOrLost(names, "changefeed", "changefeeds")
+	case schema.IndexProperties:
+		var intent native.IndexSetIntent
+		if err := protojson.Unmarshal(normalized.GetPayload(), &intent); err != nil {
+			return nil, nil, err
+		}
+		names := make([]string, 0, len(intent.GetIndexes()))
+		for _, index := range intent.GetIndexes() {
+			names = append(names, index.GetSpecification().GetName())
+		}
+		return neutralOrLost(names, "native index", "native indexes")
 	default:
 		return nil, []string{fmt.Sprintf("%s of %s %s has no HCL spelling", strings.ReplaceAll(strings.TrimPrefix(envelope.GetKind(), schema.ProviderID+"/"), "-", " "),
 			owner.GetKind(), Subject(owner))}, nil
 	}
+}
+
+// neutralOrLost is how HCL writes a set of named objects of one kind: an empty
+// set by writing nothing, and any other as a loss that names its objects.
+func neutralOrLost(names []string, one, many string) ([]*protocol.SourceEntry, []string, error) {
+	switch len(names) {
+	case 0:
+		return make([]*protocol.SourceEntry, 0), nil, nil
+	case 1:
+		return nil, []string{fmt.Sprintf("%s %s is not represented in HCL", one, names[0])}, nil
+	}
+	return nil, []string{fmt.Sprintf("%s %s are not represented in HCL", many, strings.Join(names, ", "))}, nil
 }
 
 // rowSettingLosses are what HCL leaves out of a row table's settings beside

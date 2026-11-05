@@ -20,6 +20,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/sourceencode"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -36,8 +37,10 @@ import (
 // coordination_node block, and no other object. The facets of one table are
 // written together as the table declaration the table decoders read (see
 // sourceencode.EncodeTable); HCL spells a table's TTL alone, in the table's
-// platform "ydb" block where the host reads it, and reports the rest as the
-// host's embedded engine reports it (see sourceencode.EncodeTableHCL). A Go export also gives each column the Go
+// platform "ydb" block where the host reads it, writes there the empty
+// changefeed and native index sets a table states by writing nothing, and
+// reports the rest as the host's embedded engine reports it (see
+// sourceencode.EncodeTableHCL). A Go export also gives each column the Go
 // type of its YDB type, and loses a table with a nullable key column, which
 // no declaration can ask for.
 //
@@ -155,7 +158,7 @@ func (e *sourceEncoding) add(request *protocol.EncodeSourceRequest, format proto
 		}
 		e.units = append(e.units, encodedUnit{ids: []string{id}, parts: parts})
 	case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL &&
-		(!e.platform || envelope.GetKind() != schema.TableProperties && envelope.GetKind() != schema.ColumnStorageProperties):
+		(!e.platform || !slices.Contains(tablesource.HCLPlatformBlock().GetModels(), envelope.GetKind())):
 		e.result.Losses = append(e.result.Losses, &protocol.EncodeLoss{ValueId: id, Message: lossMessage(format, envelope)})
 	case value.GetPlacement() == protocol.SourceModelValue_FACET:
 		table, bound := e.tables[value.GetBindingId()]

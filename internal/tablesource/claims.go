@@ -93,13 +93,20 @@ const KeyPlatformYDB = "platform.ydb"
 // group holds. The row-table and column-storage models list no HCL: a table
 // that writes no block states nothing about its TTL, and the TTL it holds
 // stays, as on the host's embedded engine.
+//
+// The block is also where an export writes what a table states by writing
+// nothing, as the Go table directive is: no changefeed and no native index.
+// A read reports an empty set of each for every table that has none, and
+// without a claim of their models the host could only report them as details
+// the document leaves out. The block decodes to neither, so a table keeps the
+// changefeeds and the native indexes it holds.
 func HCLPlatformBlock() *protocol.HCLSourceBlock {
 	attributes := make([]*protocol.HCLSourceAttribute, 0, len(ttlAttributes()))
 	for _, name := range ttlAttributes() {
 		attributes = append(attributes, &protocol.HCLSourceAttribute{Name: strings.TrimPrefix(name, PlatformPrefix), Kind: protocol.HCLSourceAttribute_STRING})
 	}
 	return &protocol.HCLSourceBlock{Site: protocol.HCLSourceBlock_TABLE_PLATFORM, Type: "ydb", Selector: KeyPlatformYDB, Attributes: attributes,
-		Models: []string{schema.TableProperties, schema.ColumnStorageProperties}}
+		Models: []string{schema.TableProperties, schema.ColumnStorageProperties, schema.ChangefeedProperties, schema.IndexProperties}}
 }
 
 // DirectiveIndex is the host's directive that declares an index. The bundled

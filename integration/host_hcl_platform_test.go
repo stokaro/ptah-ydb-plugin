@@ -279,3 +279,38 @@ func TestHostCompatInspectedHCLKeepsATTLItCannotWrite(t *testing.T) {
 	c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
 	c.Assert(heldStorage(c, opened, absolute).TTL, qt.Equals, "created_at 86400s")
 }
+
+// A read reports an empty changefeed set and an empty native index set for
+// every table that holds neither, and an HCL export lists neither as a detail
+// it leaves out, as the host's embedded engine lists none: the table's
+// platform part writes them by writing nothing. A changefeed the table holds
+// is left out by name. The document applied back plans nothing, so the table
+// keeps its changefeed.
+func TestHostHCLExportListsNoEmptySetAsALoss_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.HCLPlatformFeature)
+	listLosses(c)
+	opened, directory, database := lockFixture(c)
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	plain, feed := path.Join(database, directory, "plain"), path.Join(database, directory, "feed")
+	for _, statement := range []string{
+		"CREATE TABLE `" + plain + "` (id Uint64 NOT NULL, body Utf8, PRIMARY KEY (id))",
+		"CREATE TABLE `" + feed + "` (id Uint64 NOT NULL, PRIMARY KEY (id))",
+		"ALTER TABLE `" + feed + "` ADD CHANGEFEED `updates` WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+	} {
+		c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil, qt.Commentf("%s", statement))
+	}
+
+	document, notes := hostExport(c, "schema", "inspect", "--schemas", directory, "--format", "hcl")
+
+	c.Assert(notes, qt.Not(qt.Contains), schema.ChangefeedProperties, qt.Commentf("%s", notes))
+	c.Assert(notes, qt.Not(qt.Contains), schema.IndexProperties, qt.Commentf("%s", notes))
+	c.Assert(notes, qt.Not(qt.Contains), "table."+directory+".plain:", qt.Commentf("%s", notes))
+	c.Assert(notes, qt.Contains, "table."+directory+".feed: changefeed updates is not represented in HCL", qt.Commentf("%s", notes))
+	replanned, err := hostReplanSource(c, directory, "hcl", document)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", document, replanned))
+	c.Assert(replanned, qt.Contains, "Schema is synced, no changes to be made", qt.Commentf("%s\n%s", document, replanned))
+	held, found := describedChangefeeds(c, opened, feed)
+	c.Assert(found, qt.IsTrue)
+	c.Assert(held, qt.HasLen, 1)
+}
