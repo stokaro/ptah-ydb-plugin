@@ -125,20 +125,36 @@ func mustInt(c *qt.C, text string) int64 {
 	return value
 }
 
+// heldNarrowSerial is heldSerial for an Int32 Serial key.
+func heldNarrowSerial(start, increment string) *protocol.ObservedColumn {
+	held := heldSerial(start, increment)
+	held.DataType = "Int32"
+	return held
+}
+
 // A sequence that holds what the declaration states, however it spells it,
-// plans nothing.
+// plans nothing. So does a 32-bit Serial whose sequence holds a start and an
+// increment, which no target that raises its range on ALTER SEQUENCE could
+// give it: the table needs no statement, as the host's embedded engine plans
+// it (G113 of stokaro/ptah#4204).
 func TestSerialSequenceUnchanged_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		desired *protocol.DeclaredColumn
+		held    *protocol.ObservedColumn
+		maximum int64
 	}{
-		{name: "the same settings", desired: &protocol.DeclaredColumn{Type: "BIGSERIAL", IdentityStart: "100", IdentityIncrement: "5"}},
-		{name: "another spelling", desired: &protocol.DeclaredColumn{Type: "BIGINT", AutoIncrement: true, IdentityStart: "0100", IdentityIncrement: " 5"}},
+		{name: "the same settings", desired: &protocol.DeclaredColumn{Type: "BIGSERIAL", IdentityStart: "100", IdentityIncrement: "5"}, held: heldSerial("100", "5"),
+			maximum: 9223372036854775807},
+		{name: "another spelling", desired: &protocol.DeclaredColumn{Type: "BIGINT", AutoIncrement: true, IdentityStart: "0100", IdentityIncrement: " 5"}, held: heldSerial("100", "5"),
+			maximum: 9223372036854775807},
+		{name: "the settings a 32-bit Serial holds", desired: &protocol.DeclaredColumn{Type: "INTEGER", AutoIncrement: true, IdentityStart: "100", IdentityIncrement: "5"},
+			held: heldNarrowSerial("100", "5"), maximum: 2147483647},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := serialChangeRequest(c, serialChange{desired: test.desired, held: heldSerial("100", "5"), heldStart: "100", heldIncrement: "5",
-				maximum: 9223372036854775807, caps: serialCapabilities()})
+			request := serialChangeRequest(c, serialChange{desired: test.desired, held: test.held, heldStart: "100", heldIncrement: "5",
+				maximum: test.maximum, caps: serialCapabilities()})
 			plan, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
@@ -169,6 +185,12 @@ func TestSerialSequenceChange_FailurePath(t *testing.T) {
 				"so the next insert would take that value again and fail on a key a row may hold (measured: `Conflict with existing key`)"},
 		{name: "a start on a 32-bit Serial", in: serialChange{desired: &protocol.DeclaredColumn{Type: "SERIAL", IdentityIncrement: "2"},
 			held: narrow, heldStart: "1", heldIncrement: "1", maximum: 2147483647, caps: serialCapabilities()},
+			want: `giving the sequence of column "id" of table "app/records" a start or an increment (an ALTER SEQUENCE raises the maximum of a Serial's sequence ` +
+				`from 2147483647 to the Int64 maximum, and the column then stores the value after 2147483647 as a negative number without an error; declare the column ` +
+				`as a 64-bit Serial (BIGSERIAL, or BIGINT with auto_increment) to give its sequence a start or an increment), which requires target capability ` +
+				`serial_sequence_keeps_range, unavailable on this ydb target`},
+		{name: "the defaults written back on a 32-bit Serial", in: serialChange{desired: &protocol.DeclaredColumn{Type: "SERIAL"},
+			held: heldNarrowSerial("100", "5"), heldStart: "100", heldIncrement: "5", maximum: 2147483647, caps: serialCapabilities()},
 			want: `giving the sequence of column "id" of table "app/records" a start or an increment (an ALTER SEQUENCE raises the maximum of a Serial's sequence ` +
 				`from 2147483647 to the Int64 maximum, and the column then stores the value after 2147483647 as a negative number without an error; declare the column ` +
 				`as a 64-bit Serial (BIGSERIAL, or BIGINT with auto_increment) to give its sequence a start or an increment), which requires target capability ` +

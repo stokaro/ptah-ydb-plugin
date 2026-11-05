@@ -211,21 +211,23 @@ func familyDocs(families, extra string) string {
 		"\t//ptah:schema:field name=\"blob\" type=\"String\"\n\tBlob []byte\n" + extra + "}\n"
 }
 
-// Ported from the host's TestYDBColumnFamilies_RoundTrip, without the cache
-// mode the host gives family hot on a line that takes one (gap G10): the host
-// creates a table whose default family is compressed, whose family cold is
-// on a storage pool and holds two columns, whose family hot states no setting
-// and holds the NOT NULL column, and whose family spare holds no column. The
+// Ported from the host's TestYDBColumnFamilies_RoundTrip: the host creates a
+// table whose default family is compressed, whose family cold is on a
+// storage pool and holds two columns, whose family hot holds the NOT NULL
+// column and keeps its columns in memory where the line takes a cache mode
+// (states no setting otherwise), and whose family spare holds no column. The
 // next two runs find nothing to change, and the server holds every family
 // with its columns and settings, a family stating no compression read back
-// as off.
+// as off, and a cache mode only where one was set.
 func TestHostCreatesATableWithColumnFamilies_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	cached := targetTakesCacheModes(c)
 	opened, directory, database := lockFixture(c)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	families := "//ptah:schema:columnfamily name=\"default\" compression=\"lz4\"\n" +
 		"//ptah:schema:columnfamily name=\"cold\" data=\"" + storagePool + "\" compression=\"lz4\" fields=\"body,blob\"\n" +
-		"//ptah:schema:columnfamily name=\"hot\" fields=\"title\"\n//ptah:schema:columnfamily name=\"spare\"\n"
+		"//ptah:schema:columnfamily name=\"hot\"" + map[bool]string{true: ` cache_mode="in_memory"`}[cached] + " fields=\"title\"\n" +
+		"//ptah:schema:columnfamily name=\"spare\"\n"
 
 	applyUntilSynced(c, directory, "go", replaceDirectory(familyDocs(families, ""), directory))
 
@@ -235,6 +237,7 @@ func TestHostCreatesATableWithColumnFamilies_HappyPath(t *testing.T) {
 		"hot compression=off columns=title",
 		"spare compression=off",
 	})
+	c.Assert(heldCacheModes(c, opened, path.Join(database, directory, "docs")), qt.DeepEquals, map[bool]map[string]string{true: {"hot": "in_memory"}, false: {}}[cached])
 }
 
 // Ported from the host's TestYDBColumnFamilies_KeepInMemoryIsRefusedWithDefaultFlags:
