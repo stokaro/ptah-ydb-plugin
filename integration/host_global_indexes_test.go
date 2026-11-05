@@ -127,30 +127,34 @@ func TestHostRenamesAnIndexAsADropAndAnAdd_HappyPath(t *testing.T) {
 	c.Assert(count, qt.Equals, uint64(1))
 }
 
-// The host's TestYDBWriter_ClusterWithoutMoveIndex_FailurePath. A RENAME
-// INDEX that reaches a cluster with EnableMoveIndex off, as one does from a
-// migration file, is refused by the server: the provider reports it as not
-// applied with the server's words, and the index keeps its name. The host's
-// embedded engine also names the capability and the feature flag in its
-// error; this provider does not yet name the flag a refusal comes from.
+// Ported from the host's TestYDBWriter_ClusterWithoutMoveIndex_FailurePath. A
+// RENAME INDEX that reaches a cluster with EnableMoveIndex off, as one does
+// from a migration file, is refused by the server: the provider reports it as
+// not applied, and the index keeps its name. To a client that lists
+// errors.reasons the error names the capability and the feature flag, in the
+// words of the host's embedded engine, and leaves out the server's text,
+// which the result's message keeps. The test address names the monitoring
+// endpoint, so the session read the flags, and the error asks only to turn
+// the flag on.
 func TestRawIndexRenameWithoutMoveIndex_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, absolute := itemsFixture(c)
 	newClusterFlags(c, opened).set(c, map[string]bool{"EnableMoveIndex": false})
 	output, err := hostApply(c, directory, hostGlobalItems(directory, "idx_items_kind", ""))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
-	binary, digest := providerBinary(c)
-	client := startProvider(c, binary, digest)
+	client := startProviderFor(c, provider.ErrorReasonsFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
 
-	result, err := client.Execute(c.Context(), &protocol.ExecuteRequest{SessionId: session.Id, RequestId: "rename", Units: []*protocol.Unit{
-		{ChangeId: "0", Body: &protocol.Unit_Sql{Sql: "ALTER TABLE `" + absolute + "` RENAME INDEX `idx_items_kind` TO `idx_items_by_kind`"}}}})
-	c.Assert(err, qt.ErrorIs, provider.ErrExecution)
+	result, err := executeFailing(c, client, session.Id, "ALTER TABLE `"+absolute+"` RENAME INDEX `idx_items_kind` TO `idx_items_by_kind`")
+
 	c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
 	c.Assert(result.GetDiagnosticCode(), qt.Equals, "ydb.statement-rejected")
+	c.Assert(err, qt.ErrorMatches, `provider execution: NOT_APPLIED \(0 units confirmed applied\): capability index_rename is off on this YDB cluster, `+
+		`which runs with feature flag EnableMoveIndex off: YDB refused the statement \(PRECONDITION_FAILED[^)]*\)\. Turn the flag on`)
 	c.Assert(result.GetMessage(), qt.Matches, `(?s).*Move index is not supported yet.*`)
+	c.Assert(err.Error(), qt.Not(qt.Contains), "Move index is not supported yet")
 	held := heldIndexColumns(c, opened, absolute)
 	c.Assert(held["idx_items_kind"], qt.DeepEquals, [2][]string{{"kind"}, nil})
 }

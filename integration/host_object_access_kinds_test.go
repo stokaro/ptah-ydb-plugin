@@ -105,7 +105,7 @@ func TestHostGrantsOnAResourcePool_HappyPath(t *testing.T) {
 	// A pool takes the root's namespace, so the run selects it beside the
 	// fixture directory.
 	selectors := f.directory + ",/"
-	principal := "roles:\n  " + f.names.user + ":\n    login: true\n    password: \"Secret1!\"\n"
+	principal := "roles:\n  " + f.names.user + ":\n    login: true\n"
 	declared := principal + "resource_pools:\n  " + pool + ":\n    concurrent_query_limit: 2\n" +
 		"grants:\n  pool:\n    role: " + f.names.user + "\n    privileges: [SELECT ROW]\n    on_resource_pool: " + pool + "\n"
 	poolGrants := func(roles ...string) []grantEntry {

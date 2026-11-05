@@ -336,13 +336,14 @@ func yamlValue(value *protocol.SourceValue) string {
 
 // hostReplanSource runs the host's `schema apply --dry-run` over one source
 // with this provider selected for ydb, restricted to the fixture directory,
-// and returns what the host reported. The dry run still opens the provider's
-// lock node, so a test that runs it takes the lock fixture.
+// and returns the planned units as appliedUnits lists them. The dry run still
+// opens the provider's lock node, so a test that runs it takes the lock
+// fixture.
 func hostReplanSource(c *qt.C, directory, format, text string) (string, error) {
 	c.Helper()
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
-	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "hcl": "schema.hcl"}[format]
+	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql", "hcl": "schema.hcl"}[format]
 	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil)
 	source := []string{"--schema-file", filepath.Join(root, name)}
 	if format == "go" {
@@ -350,13 +351,13 @@ func hostReplanSource(c *qt.C, directory, format, text string) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	arguments := append([]string{"schema", "apply", "--dry-run", "--provider-config", manifest, "--provider-engine", "ydb",
+	arguments := append([]string{"schema", "apply", "--dry-run", "--json", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", directory}, source...)
 	cmd := exec.CommandContext(ctx, host, arguments...)
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
+	var report, printed bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &report, &printed
 	err := cmd.Run()
-	return output.String(), err
+	return appliedUnits(report.Bytes(), printed.String()), err
 }
 
 // A schema read, written back as a Go file or a YAML document, and applied
@@ -450,13 +451,15 @@ const exportedGo = "package entities\n\n" +
 	"\t//ptah:schema:field name=\"created_at\" type=\"Timestamp\"\n\tCreatedAt int64\n}\n\n" +
 	"//ptah:schema:coordinationnode name=\"workers\" schema=\"{dir}\" self_check_period=\"PT2S\"\ntype Workers struct{}\n"
 
-// The host exports a Go source as HCL through this provider: the
-// coordination node becomes its coordination_node block, the host warns that
-// the table's YDB settings are not in the document, and the document applied
-// back to the database the Go source made plans nothing, since a setting HCL
-// leaves out keeps what the table holds.
+// A host that does not read a table's platform "ydb" block exports a Go
+// source as HCL through this provider: the coordination node becomes its
+// coordination_node block, the host warns that the table's YDB settings are
+// not in the document, and the document applied back to the database the Go
+// source made plans nothing, since a setting HCL leaves out keeps what the
+// table holds.
 func TestHostExportsAGoSourceAsHCLSubprocess(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostLacks(c, provider.HCLPlatformFeature)
 	opened, directory, database := lockFixture(c)
 	c.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)

@@ -19,18 +19,19 @@ import (
 
 // hostApplySQL runs the host's `schema apply` over a YQL schema, a file or a
 // directory of files, with this provider selected for ydb, restricted to the
-// fixture directory, and returns what the host printed and how it exited.
+// fixture directory, and returns the planned units as appliedUnits lists them
+// and how it exited.
 func hostApplySQL(c *qt.C, directory, schemaFile string) (string, error) {
 	c.Helper()
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
+	cmd := exec.CommandContext(ctx, host, "schema", "apply", "--auto-approve", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema-file", schemaFile, "--schemas", directory)
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
+	var report, printed bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &report, &printed
 	err := cmd.Run()
-	return output.String(), err
+	return appliedUnits(report.Bytes(), printed.String()), err
 }
 
 // writeSchema writes the documents of a YQL schema into a new directory, each

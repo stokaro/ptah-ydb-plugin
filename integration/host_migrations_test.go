@@ -6,14 +6,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
@@ -518,4 +524,105 @@ func TestHostDryRunRunsNoDataQuery_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", dry))
 	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+f.table("q")+"`"), qt.Equals, int64(0))
 	c.Assert(f.names(c), qt.DeepEquals, []string{"q"})
+}
+
+// gateMigrations writes a directory whose second version adds a unique index to
+// the table its first version created, under the lint policy given.
+func gateMigrations(c *qt.C, f migrationsFixture, policy string) string {
+	c.Helper()
+	users := "`" + f.table("users") + "`"
+	return writeFiles(c, c.TempDir(), map[string]string{
+		".ptah-lint.yaml":            policy,
+		"0000000001_users.up.sql":    "CREATE TABLE " + users + " (id Uint64 NOT NULL, email Utf8, PRIMARY KEY (id));\n",
+		"0000000001_users.down.sql":  "DROP TABLE " + users + ";\n",
+		"0000000002_unique.up.sql":   "ALTER TABLE " + users + " ADD INDEX users_email GLOBAL UNIQUE SYNC ON (email);\n",
+		"0000000002_unique.down.sql": "ALTER TABLE " + users + " DROP INDEX users_email;\n",
+	})
+}
+
+// withoutUniqueIndexOnExistingTables turns EnableAddUniqueIndex off until the
+// test ends on a server whose session establishes
+// unique_index_on_existing_table, as the 26.2 test server's does, so that a
+// unique index added to a table that exists is refused there. A server whose
+// session lacks the capability is left as it is.
+func withoutUniqueIndexOnExistingTables(c *qt.C, opened *connection.Connection) {
+	c.Helper()
+	if !targetCapabilities(c)[tablecreate.UniqueIndexOnExistingTableCapability] {
+		return
+	}
+	newClusterFlags(c, opened).set(c, map[string]bool{"EnableAddUniqueIndex": false})
+}
+
+// Ported from the host's TestYDBBinary_MigrationsUpGatesOnTheYDFamily:
+// `migrations up` lints the pending migrations through this provider before it
+// runs any of them. A policy whose gate section blocks on the YD family refuses
+// the unique index the second version adds to the table the first version
+// creates, in YD101's words, and no migration runs: the directory holds the
+// revision table the host creates first, and no users. Without the gate section
+// the first version runs and the server refuses the second. The host's test
+// quotes the server's words there; the provider keeps YDB's issue text out of
+// the reason it gives (see package ydbfailure), so the refusal is the
+// provider's: on 26.2 the capability and the flag YDB refused for, and on 25.1
+// that the release has no unique secondary index. The 26.2 test server starts with EnableAddUniqueIndex on,
+// under which it builds the index, so the test turns the flag off there while
+// it runs.
+func TestHostMigrationsUpGatesOnTheYDFamily_FailurePath(t *testing.T) {
+	refusals := map[string]string{
+		"26.2": `capability unique_index_on_existing_table is off on this YDB cluster, which runs with feature flag EnableAddUniqueIndex off: ` +
+			`YDB refused the statement \(BAD_REQUEST\)`,
+		"25.1": `YDB refused the statement: the YDB release the cluster runs has no unique secondary index \(GENERIC_ERROR, issue 1060, line 1, column \d+\)`,
+	}
+	c := testcheck.New(t)
+	f := newMigrationsFixture(c)
+	withoutUniqueIndexOnExistingTables(c, f.opened)
+	refusal, measured := refusals[serverLine(c, serverVersion(c, f.opened))]
+	c.Assert(measured, qt.IsTrue)
+
+	gated, gatedErr := hostCommand(c, append([]string{"migrations", "up"},
+		f.target(gateMigrations(c, f, "dialect: ydb\ngate:\n  families: [YD]\n"))...)...)
+	namesAfterGate := f.names(c)
+	ungated, ungatedErr := hostCommand(c, append([]string{"migrations", "up"}, f.target(gateMigrations(c, f, "dialect: ydb\n"))...)...)
+
+	c.Assert(gatedErr, qt.IsNotNil)
+	c.Assert(gated, qt.Matches, `(?s).*pending migrations carry lint findings the policy's gate section blocks on.*`+
+		`0000000002_unique\.up\.sql:1 YD101 error: ADD INDEX users_email adds a unique index to `+regexp.QuoteMeta(f.table("users"))+`.*`)
+	c.Assert(namesAfterGate, qt.Not(qt.Contains), "users")
+	c.Assert(ungatedErr, qt.IsNotNil)
+	c.Assert(ungated, qt.Matches, `(?s).*failed to apply migration 2: .*`+refusal+`.*`)
+	c.Assert(f.names(c), qt.Contains, "users")
+}
+
+// Ported from the host's TestYDBWriter_StatementsSucceedByStatus: YDB answers
+// CREATE TABLE IF NOT EXISTS on a table that exists, and ADD INDEX on a table
+// that holds rows, with issues and a success status, and the run reads both
+// as applied. Two scheme statements in one body run as two queries, so the
+// index sees the column the statement before it adds.
+func TestHostAppliesStatementsYDBAnswersWithIssues_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	f := newMigrationsFixture(c)
+	create := "CREATE TABLE IF NOT EXISTS `" + f.table("statused") + "` (`id` Int64 NOT NULL, PRIMARY KEY (`id`));\n"
+	migrations := writeFiles(c, c.TempDir(), map[string]string{
+		"0000000001_statused.up.sql":   create + "UPSERT INTO `" + f.table("statused") + "` (`id`) VALUES (1l), (2l);\n",
+		"0000000001_statused.down.sql": "DROP TABLE `" + f.table("statused") + "`;\n",
+		"0000000002_index.up.sql": create + "ALTER TABLE `" + f.table("statused") + "` ADD COLUMN `v` Utf8;\n" +
+			"ALTER TABLE `" + f.table("statused") + "` ADD INDEX `by_v` GLOBAL SYNC ON (`v`);\n",
+		"0000000002_index.down.sql": "ALTER TABLE `" + f.table("statused") + "` DROP INDEX `by_v`;\nALTER TABLE `" + f.table("statused") + "` DROP COLUMN `v`;\n",
+	})
+
+	up, err := hostCommand(c, append([]string{"migrations", "up"}, f.target(migrations)...)...)
+
+	absolute := path.Join(f.database, f.table("statused"))
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", up))
+	c.Assert(f.progress(c, protocol.HistoryScope_NATIVE), qt.DeepEquals, []progress{{"1", applied, 2, 2}, {"2", applied, 3, 3}})
+	c.Assert(heldColumnTypes(c, f.opened, absolute), qt.DeepEquals, map[string]string{"id": "Int64", "v": "Optional<Utf8>"})
+	c.Assert(heldIndexNames(c, f.opened, absolute), qt.DeepEquals, []string{"by_v"})
+	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+f.table("statused")+"`"), qt.Equals, int64(2))
+}
+
+// heldIndexNames is the names of the indexes the table at absolute holds, in
+// order, read through the table service.
+func heldIndexNames(c *qt.C, opened *connection.Connection, absolute string) []string {
+	c.Helper()
+	indexes, _ := describedItems(c, opened, absolute)
+	return slices.Sorted(maps.Keys(indexes))
 }

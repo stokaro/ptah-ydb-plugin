@@ -139,3 +139,29 @@ func TestPlanOrdersCommonObjectStepsBeforeARemoval(t *testing.T) {
 		"row-table-add-column/000000 -> column-comment",
 	})
 }
+
+// A comment on the table or on one of its columns does not wait for a step
+// that changes only an index of the table: the host places the comment of a
+// column it adds right after the column, before the index additions, and an
+// edge the other way closed a cycle (`plan dependency cycle`) on a plan that
+// added a commented column and an index on the same table. A comment on the
+// index still follows the index's addition.
+func TestPlanOrdersTableCommentsBeforeAnIndexAddition(t *testing.T) {
+	c := testcheck.New(t)
+	tableComment := commonObjectStep("table-comment", commentOn("table", "records"))
+	tableComment.Parent = tableSubject()
+	tableComment.Metadata.Effects = []*protocol.PlanningEffect{{Subject: tableSubject(), Action: protocol.PlanningEffect_ALTER}}
+	request := commonIndexRequest(c, heldIndexes(), []*protocol.DeclaredIndex{{Name: "by_extra", Fields: []string{"extra"}}},
+		commonIndexStep("add-by-extra", "by_extra", protocol.PlanningEffect_CREATE), tableComment,
+		commonObjectStep("column-comment", commentOn("column", "extra", "records")),
+		commonObjectStep("index-comment", commentOn("index", "by_extra", "records")))
+	request.TargetFeatures = append(request.TargetFeatures, provider.CommonObjectsFeature)
+
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
+	c.Assert(rewrites(plan), qt.DeepEquals, []string{"add-by-extra => row-table-add-index/000000"})
+	c.Assert(edges(plan), qt.DeepEquals, []string{"row-table-add-index/000000 -> index-comment"})
+}

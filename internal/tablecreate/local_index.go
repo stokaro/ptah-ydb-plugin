@@ -401,7 +401,7 @@ func NormalizeColumnLocalIndex(input *protocol.ValueInput) (*protocol.Normalized
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner),
 		CanonicalFormat: definition.CanonicalFormat, CanonicalProjection: bytes.Clone(payload),
 		OperationSemantics: &protocol.OperationSemantics{Impact: impact, Reason: reason,
-			Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Alteration inherits server access policy"}}, nil
+			Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: alteredAccess}}, nil
 }
 
 // ColumnLocalIndexAlteration returns the local-index step an envelope carries

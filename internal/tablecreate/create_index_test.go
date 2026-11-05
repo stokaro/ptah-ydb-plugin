@@ -50,6 +50,56 @@ func TestCompileDeclaredIndexes_HappyPath(t *testing.T) {
 		"    INDEX `by_mail_note` GLOBAL SYNC ON (`mail`) COVER (`note`, `score`)\n);")
 }
 
+// A dot in a YDB name is part of the name, and the host names an index's
+// table by a reference that quotes a part holding one: "app.records" is the
+// root table app.records, and app."v.1" is the table v.1 of the directory
+// app. The index compiles with the table it names.
+func TestCompileAnIndexOfADottedTable_HappyPath(t *testing.T) {
+	for _, tc := range []struct {
+		name, schema, table, reference string
+	}{
+		{name: "a dotted root table", table: "app.records", reference: `"app.records"`},
+		{name: "a dotted table in a directory", schema: "app", table: "v.1", reference: `app."v.1"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			table := indexedTable(&protocol.DeclaredIndex{Name: "by_mail", Fields: []string{"mail"}, TableName: tc.reference})
+			table.Schema, table.Name = tc.schema, tc.table
+
+			request, err := tablecreate.Compile(&protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: tc.schema, Name: tc.table}, table, nil)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(request.Indexes, qt.HasLen, 1)
+			c.Assert(request.Indexes[0].GetName(), qt.Equals, "by_mail")
+		})
+	}
+}
+
+// A quoted reference names one table: "app.records" is the root table
+// app.records, not the table records of the directory app, and not another
+// dotted root table.
+func TestCompileAnIndexOfADottedTable_FailurePath(t *testing.T) {
+	for _, tc := range []struct {
+		name, schema, table, reference, want string
+	}{
+		{name: "the root form of a directory table", schema: "app", table: "records", reference: `"app.records"`,
+			want: `it names table "\"app.records\"", and the table declaring it is "records"`},
+		{name: "another dotted table", table: "app.records", reference: `"app.other"`,
+			want: `it names table "\"app.other\"", and the table declaring it is "app.records"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			table := indexedTable(&protocol.DeclaredIndex{Name: "by_mail", Fields: []string{"mail"}, TableName: tc.reference})
+			table.Schema, table.Name = tc.schema, tc.table
+
+			request, err := tablecreate.Compile(&protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: tc.schema, Name: tc.table}, table, nil)
+
+			c.Assert(err, qt.ErrorMatches, ".*"+regexp.QuoteMeta(tc.want)+".*")
+			c.Assert(request, qt.IsNil)
+		})
+	}
+}
+
 // Each row is an index YDB has no clause for or refuses, and the words the
 // refusal names it with, which are the host's embedded engine's.
 func TestCompileDeclaredIndexes_FailurePath(t *testing.T) {

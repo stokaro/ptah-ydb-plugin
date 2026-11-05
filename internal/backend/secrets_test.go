@@ -242,3 +242,32 @@ func TestSecretComparisonDropsASecretNoDeclarationReads_HappyPath(t *testing.T) 
 	c.Assert(result.Changes, qt.HasLen, 1)
 	c.Assert(result.Undecided, qt.HasLen, 0)
 }
+
+// A user created with a password input is a unit whose discovery reports the
+// input and whose statement names it, so the host approves the reference and
+// binds the value at execution (ADR 0071).
+func TestPasswordInputDiscoveryReportsTheUsersInput_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	units := []*protocol.Unit{
+		{ChangeId: "create", Body: &protocol.Unit_Sql{Sql: "CREATE USER `app` PASSWORD $PTAH_SECRET_PASSWORD_APP;"}},
+		{ChangeId: "alter", Body: &protocol.Unit_Sql{Sql: "ALTER USER `ops` PASSWORD $PTAH_SECRET_PASSWORD_OPS NOLOGIN;"}},
+	}
+
+	inputs, err := backend.New().DescribeExecutionInputs(c.Context(), &protocol.DescribeExecutionInputsRequest{Engine: "ydb", Units: units})
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(inputs.GetInputs(), qt.HasLen, 2)
+	c.Assert([]string{inputs.Inputs[0].Name, inputs.Inputs[1].Name}, qt.DeepEquals, []string{"PTAH_SECRET_PASSWORD_APP", "PTAH_SECRET_PASSWORD_OPS"})
+}
+
+// A reference to a password input anywhere but after PASSWORD is refused
+// before anything runs, as a secret's is.
+func TestPasswordInputDiscoveryRefusesAnotherPosition_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	unit := &protocol.Unit{ChangeId: "read", Body: &protocol.Unit_Sql{Sql: "CREATE USER `app` PASSWORD $PTAH_SECRET_PASSWORD_APP; SELECT $PTAH_SECRET_PASSWORD_APP;"}}
+
+	inputs, err := backend.New().DescribeExecutionInputs(c.Context(), &protocol.DescribeExecutionInputsRequest{Engine: "ydb", Units: []*protocol.Unit{unit}})
+
+	c.Assert(err, qt.ErrorMatches, `.*a secret value is referred to outside the value of CREATE SECRET or ALTER SECRET and the password of CREATE USER or ALTER USER.*`)
+	c.Assert(inputs, qt.IsNil)
+}
