@@ -129,11 +129,18 @@ func createNode(ctx context.Context, driver *ydb.Driver, node string) error {
 	return validateNode(ctx, driver, node)
 }
 
+// errNodeMissing is the answer of a lock node that does not exist: YDB
+// describes no node at its path (SCHEME_ERROR).
+var errNodeMissing = errors.New("the YDB lock node does not exist")
+
 func validateNode(ctx context.Context, driver *ydb.Driver, node string) error {
 	service := Ydb_Coordination_V1.NewCoordinationServiceClient(ydb.GRPCConn(driver))
 	response, err := service.DescribeNode(ctx, &Ydb_Coordination.DescribeNodeRequest{Path: node})
 	if err != nil {
 		return fmt.Errorf("describe YDB lock node failed")
+	}
+	if operation := response.GetOperation(); operation.GetReady() && operation.GetStatus() == Ydb.StatusIds_SCHEME_ERROR {
+		return errNodeMissing
 	}
 	var description Ydb_Coordination.DescribeNodeResult
 	if err := nativeapi.Operation(response.GetOperation(), &description); err != nil {
