@@ -1,0 +1,827 @@
+{
+  "test_conditionals": [
+    {
+      "path": "integration/access_live_test.go",
+      "function": "TestCommonAccessSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/changefeed_lifecycle_live_test.go",
+      "function": "TestChangefeedLifecycleSubprocess",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "integration/column_conversion_test.go",
+      "function": "TestColumnConversionLiveSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/embeddings_live_test.go",
+      "function": "TestEmbeddingGenerationInSourceColumnsSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/error_reasons_live_test.go",
+      "function": "TestHostPrintsTheProvidersReasonSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/execution_live_test.go",
+      "function": "TestNativeTransactionRefusesDDLAndControlEscape",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "integration/history_live_test.go",
+      "function": "TestNativeHistoryChecksFormatAndLayoutOnEveryOperation",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/history_live_test.go",
+      "function": "TestNativeHistoryConcurrentCASCannotOverwriteCommittedRow",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "integration/history_live_test.go",
+      "function": "TestNativeHistorySharesExecutionTransaction",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "integration/history_live_test.go",
+      "function": "TestNativeHistorySubprocess",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "integration/host_changefeeds_test.go",
+      "function": "TestHostChangesChangefeedsInPlace_HappyPath",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/host_column_lifecycle_test.go",
+      "function": "TestHostColumnDefaultsAndInventory",
+      "kind": "if",
+      "count": 4
+    },
+    {
+      "path": "integration/host_coordination_settings_test.go",
+      "function": "TestLockNodeIsLeftOutOfARootReadSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/host_declarations_test.go",
+      "function": "TestHostRendersAuthoredSchemaOfflineSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/host_externals_test.go",
+      "function": "TestHostAppliesExternalObjects_HappyPath",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "integration/host_externals_test.go",
+      "function": "TestHostAppliesExternalObjects_HappyPath",
+      "kind": "switch",
+      "count": 1
+    },
+    {
+      "path": "integration/host_refusal_reasons_test.go",
+      "function": "TestHostPrintsTheReasonOfARefusedCreation_FailurePath",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/host_replication_test.go",
+      "function": "TestHostAppliesATransfer_HappyPath",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "integration/host_scope_test.go",
+      "function": "TestHostScopesNativeObjectsSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/host_secrets_test.go",
+      "function": "TestHostSecretPresenceAndApprovedRotation",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "integration/host_source_test.go",
+      "function": "TestHostPlansYAMLFamilyPlacement",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "integration/host_streaming_test.go",
+      "function": "TestHostRefusesStreamingWithoutCapability",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/host_streaming_test.go",
+      "function": "TestHostStreamingQueryGraph",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/host_streaming_test.go",
+      "function": "TestInspectionRefusesAStreamingQueryWithoutObjectContext",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/host_transfer_order_test.go",
+      "function": "TestHostDropsATransferBeforeTheTopicASecretReplaces_HappyPath",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/host_yql_replication_test.go",
+      "function": "TestHostAppliesAYQLTransfer_HappyPath",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "integration/indexes_live_test.go",
+      "function": "TestNativeIndexObservationsSubprocess",
+      "kind": "if",
+      "count": 12
+    },
+    {
+      "path": "integration/inspection_live_test.go",
+      "function": "TestRowTableInspectionSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/locks_live_test.go",
+      "function": "TestNativeLockLossFencesExecutionHistoryAndCommit",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/locks_live_test.go",
+      "function": "TestNativeLocksReleaseAfterProviderExit",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/objects_live_test.go",
+      "function": "TestNativeObjectsAndNamespaceCoverageSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/objects_live_test.go",
+      "function": "TestNativeObjectsAndNamespaceCoverageSubprocess",
+      "kind": "switch",
+      "count": 1
+    },
+    {
+      "path": "integration/planning_live_test.go",
+      "function": "TestCoordinationPlanningExecutionSubprocess",
+      "kind": "if",
+      "count": 4
+    },
+    {
+      "path": "integration/replication_live_test.go",
+      "function": "TestReplicationFailedOverSubprocess",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "integration/replication_live_test.go",
+      "function": "TestReplicationLifecycleSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/replication_live_test.go",
+      "function": "TestTransferLifecycleSubprocess",
+      "kind": "if",
+      "count": 5
+    },
+    {
+      "path": "integration/replication_live_test.go",
+      "function": "TestTransferRefusedWithoutTheCapabilitySubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/source_claims_offline_test.go",
+      "function": "TestSourceClaimsOfflineSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/sql_analysis_test.go",
+      "function": "TestYQLAnalysisMatchesLiveQueries",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/table_alteration_live_test.go",
+      "function": "TestRowTableColumnAlterationSubprocess",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "integration/table_alteration_live_test.go",
+      "function": "TestRowTableFamilyAlterationSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/table_alteration_live_test.go",
+      "function": "TestRowTableTTLAlterationSubprocess",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "integration/table_conversion_test.go",
+      "function": "TestTableConversionLiveSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/table_creation_indexes_live_test.go",
+      "function": "TestTableCreationWithIndexesSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/table_creation_live_test.go",
+      "function": "TestRowTableCreationSubprocess",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "integration/topic_lifecycle_live_test.go",
+      "function": "TestTopicLifecycleSubprocess",
+      "kind": "if",
+      "count": 4
+    },
+    {
+      "path": "integration/topics_live_test.go",
+      "function": "TestNativeStreamsSubprocess",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "integration/workload_lifecycle_live_test.go",
+      "function": "TestWorkloadLifecycleSubprocess",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "internal/backend/access_planning_test.go",
+      "function": "TestExternalRecreationKeepsRevokesAfterRestoration",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/backend/access_planning_test.go",
+      "function": "TestNativeAccessOrderingPreservesCapturedACLChecks",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/access_planning_test.go",
+      "function": "TestNativeAccessOrderingRefusesContradictoryOrForgedContext",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/access_planning_test.go",
+      "function": "TestNativeAccessOrderingWithPrincipalEdits",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/access_planning_test.go",
+      "function": "TestWorkloadDropRewritesRevokesAsOneCompleteReplacement",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/comparison_test.go",
+      "function": "TestCoordinationAccessRequirementsCannotBecomeIgnoredChanges",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/backend/comparison_test.go",
+      "function": "TestCoordinationComparisonCoverage",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/backend/comparison_test.go",
+      "function": "TestCoordinationComparisonLifecycle",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/declarations_test.go",
+      "function": "TestAuthoredDeclarationsCreateEveryNativeFamily",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/execution_test.go",
+      "function": "TestExecutionDistinguishesRefusalFromUnknownDispatch",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/execution_test.go",
+      "function": "TestExecutionStoppedByADeadlineKeepsTheConfirmedPrefix",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/planning_test.go",
+      "function": "TestCoordinationPlanningOrdersSharedPaths",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/secret_declarations_test.go",
+      "function": "TestAuthoredSecretRetainsOnlyApprovedReferenceAndDependencyEffects",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/secrets_test.go",
+      "function": "TestExternalSecretDependencies",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/secrets_test.go",
+      "function": "TestExternalSecretDependencies",
+      "kind": "switch",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/secrets_test.go",
+      "function": "TestSecretsPresenceAndExplicitRotation",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/backend/selections_test.go",
+      "function": "TestClassifierScopeKeepsItsPool",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/selections_test.go",
+      "function": "TestScopeSelectionsNegotiation",
+      "kind": "switch",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/source_hcl_test.go",
+      "function": "TestSourceClaimsAreNegotiated",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/source_test.go",
+      "function": "TestCoordinationGoSourceClaimsTheNamespace_HappyPath",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/streaming_context_test.go",
+      "function": "TestStreamingContextRequiresCompleteUnnamedInventoryForWrites",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "internal/backend/streaming_context_test.go",
+      "function": "TestUnchangedStreamingQueryFixedPoints",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/streaming_context_test.go",
+      "function": "TestUnchangedStreamingQueryUsesDatabaseWidePoolIdentity",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "internal/backend/streaming_resources_test.go",
+      "function": "TestStreamingResourcePoolSurvivesNormalization",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/streaming_resources_test.go",
+      "function": "TestStreamingResourcesBindPathsAndPool",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/streaming_resources_test.go",
+      "function": "TestStreamingResourcesBindPathsAndPool",
+      "kind": "switch",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/streaming_resources_test.go",
+      "function": "TestStreamingResourcesResolveNamedAndExternalInputs",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/streaming_resources_test.go",
+      "function": "TestStreamingSplitPreservesAccessOrderingAndDropRewrite",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/backend/streaming_test.go",
+      "function": "TestStreamingPlanningSplitsRunningChanges",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/backend/workload_test.go",
+      "function": "TestWorkloadComparisonKeepsAnOmittedObject_HappyPath",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/columnsemantics/observed_test.go",
+      "function": "TestObservedColumnPreservesCommonMetadata",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/commonobject/commonobject_test.go",
+      "function": "TestTableCommentRefusal",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/devdatabase/spec_test.go",
+      "function": "TestParseSpecAgreesWithHost_Address",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/history/model_test.go",
+      "function": "TestHistoryCodecPreservesAllFacts",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/inspect/access_test.go",
+      "function": "TestAccessReadsStreamingQueryIdentity",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/inspect/streaming_reserved_test.go",
+      "function": "TestStreamingInventoryKeepsIndependentReservationConflicts",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/locking/hold_test.go",
+      "function": "TestHoldRequiresExactFreshExclusiveOwnership",
+      "kind": "switch",
+      "count": 1
+    },
+    {
+      "path": "internal/locking/session_test.go",
+      "function": "TestNativeReleaseRequiresBothAcknowledgments",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/locking/session_test.go",
+      "function": "TestOwnershipRequiresSuccessfulExactResponse",
+      "kind": "switch",
+      "count": 1
+    },
+    {
+      "path": "internal/metadata/model_test.go",
+      "function": "TestMetadataMutationPreservesUncertainAndAbsentOutcomes",
+      "kind": "if",
+      "count": 5
+    },
+    {
+      "path": "internal/metadata/model_test.go",
+      "function": "TestMetadataSnapshotChecksCountKeysAndCompleteRecords",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/metadata/model_test.go",
+      "function": "TestMetadataSnapshotRefusesTruncatedAndTrailingData",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/metadata/ownership_test.go",
+      "function": "TestMetadataOwnershipUsesCompleteFormat",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "internal/nativeapi/column_default_test.go",
+      "function": "TestColumnDefaultChecksBeforeAndAfterSingleDispatch",
+      "kind": "if",
+      "count": 8
+    },
+    {
+      "path": "internal/nativeapi/column_inventory_test.go",
+      "function": "TestColumnInventoryChecksNativeStateAndDispatch",
+      "kind": "if",
+      "count": 3
+    },
+    {
+      "path": "internal/nativeapi/column_inventory_test.go",
+      "function": "TestDefaultAdditionUsesOneQueryAndConfirmsEveryColumn",
+      "kind": "if",
+      "count": 6
+    },
+    {
+      "path": "internal/nativeapi/coordination_test.go",
+      "function": "TestCoordinationNativePreflightRefusesBeforeDispatch",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/nativeapi/streaming_test.go",
+      "function": "TestReadStreamingQueryChecksCompleteObservations",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/nativeapi/streaming_test.go",
+      "function": "TestStreamingApplyHappyPath",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/nativeapi/streaming_test.go",
+      "function": "TestStreamingApplyRefusesBeforeDispatch",
+      "kind": "if",
+      "count": 8
+    },
+    {
+      "path": "internal/nativeapi/streaming_test.go",
+      "function": "TestStreamingApplyReportsUncertainDispatch",
+      "kind": "if",
+      "count": 4
+    },
+    {
+      "path": "internal/nativeapi/table_alter_index_test.go",
+      "function": "TestNativeTableAlteration_IndexFailurePath",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/nativeapi/table_create_test.go",
+      "function": "TestNativeTableCreationDispatchAndConfirmation",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/sourceencode/native_test.go",
+      "function": "TestNativeFragmentsRoundTripWithoutMutatingInputs",
+      "kind": "switch",
+      "count": 1
+    },
+    {
+      "path": "internal/streamingsource/streamingsource_test.go",
+      "function": "TestDecodeBooleanGrammars",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/streamingsource/streamingsource_test.go",
+      "function": "TestDecodeDeclarations",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/tablecompare/column_storage_test.go",
+      "function": "TestCompareStorage_LeavesTheColumnsOfAColumnTable",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/tablecompare/compare_test.go",
+      "function": "TestDescription_DeclaresTheFacetComparison",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/tablecreate/column_default_test.go",
+      "function": "TestDefaultOperationRefusesPayloadAmbiguity",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/tablecreate/column_inventory_test.go",
+      "function": "TestColumnInventoryRefusesMissingStateAndUnsupportedAddition",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/tablecreate/column_semantics_test.go",
+      "function": "TestColumnParentRefusesUnplannedDefaultChange",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/tablecreate/compile_test.go",
+      "function": "TestCompilePrimaryKeySources",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/tablecreate/projection_test.go",
+      "function": "TestCreationProjectionPreservesIntentAndUnknownDefaults",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/tablecreate/rebuild_test.go",
+      "function": "TestRebuildPlanKeepsTheIndexSettingsTheTableHolds",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/tablecreate/rebuild_test.go",
+      "function": "TestRebuildPlanPlacesTheColumnsTheDeclarationPlaces",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/tablecreate/text_corpus_test.go",
+      "function": "TestRowTableStatementMatchesTheEmbeddedRendering",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/tablesource/decode_test.go",
+      "function": "TestClaims",
+      "kind": "switch",
+      "count": 1
+    },
+    {
+      "path": "internal/tablesource/decode_test.go",
+      "function": "TestClaims_TableAttributesAreTheYAMLKeysAndMore",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/tablesource/family_fields_test.go",
+      "function": "TestFamilyColumnsFollowTheirClaim",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/tablesource/family_fields_test.go",
+      "function": "TestYAMLFamilyFields",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/tablesource/go_test.go",
+      "function": "TestTableDirective_FailurePath",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "internal/yql/analysis_test.go",
+      "function": "FuzzAnalysisFraming",
+      "kind": "if",
+      "count": 2
+    },
+    {
+      "path": "internal/yql/analysis_test.go",
+      "function": "TestAnalysisNativeSafety",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "schema/child_intent_test.go",
+      "function": "TestChangefeedDeclarationsSeparateInitialScanFromProgress",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "schema/child_intent_test.go",
+      "function": "TestDesiredChildrenRefuseIncompleteAndRuntimeSettings",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "schema/object_intent_test.go",
+      "function": "TestDesiredObjectsRefuseInvalidValues",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "schema/object_intent_test.go",
+      "function": "TestEveryObservedKindHasItsOwnDesiredContract",
+      "kind": "if",
+      "count": 1
+    },
+    {
+      "path": "schema/workload_test.go",
+      "function": "TestWorkloadChange_HappyPath",
+      "kind": "if",
+      "count": 1
+    }
+  ],
+  "white_box_files": [
+    {
+      "path": "internal/backend/execution_reasons_test.go",
+      "package": "backend",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/backend/execution_test.go",
+      "package": "backend",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/backend/locks_test.go",
+      "package": "backend",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/backend/metadata_read_test.go",
+      "package": "backend",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/backend/realm_test.go",
+      "package": "backend",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/inspect/reserved_test.go",
+      "package": "inspect",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/inspect/streaming_reserved_test.go",
+      "package": "inspect",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/locking/hold_test.go",
+      "package": "locking",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/locking/session_test.go",
+      "package": "locking",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/metadata/model_test.go",
+      "package": "metadata",
+      "reason": "same-package test file is not named *_internal_test.go"
+    },
+    {
+      "path": "internal/nativeapi/table_operation_internal_test.go",
+      "package": "nativeapi",
+      "reason": "missing white-box justification comment after package clause"
+    },
+    {
+      "path": "internal/tablecreate/column_completeness_internal_test.go",
+      "package": "tablecreate",
+      "reason": "missing white-box justification comment after package clause"
+    },
+    {
+      "path": "internal/yql/scanner_test.go",
+      "package": "yql",
+      "reason": "same-package test file is not named *_internal_test.go"
+    }
+  ]
+}

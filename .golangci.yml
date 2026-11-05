@@ -1,30 +1,55 @@
 version: "2"
 
+# The linters, their settings and the exclusions that name no path are Ptah's:
+# this provider is held to its host's lint contract. What differs from the
+# host's .golangci.yml is module-specific (the gci prefix, the rowserrcheck
+# packages, the path exclusions) or a linter the host does not run.
+
 run:
+  concurrency: 8
   timeout: 30m
 
 linters:
-  # The standard set (errcheck, govet, ineffassign, staticcheck, unused) and
-  # the linters below, each of which the tree satisfies. Enable another one
-  # with the changes that satisfy it, never with an exclusion that hides what
-  # it reports.
-  default: standard
+  default: none
   enable:
     - asciicheck
-    - bidichk
-    - bodyclose
     - copyloopvar
     - depguard
+    # - dupl # enabled with the complexity changes
+    - forbidigo
+    # - funlen # enabled with the complexity changes
+    - gochecknoinits
+    # - gocognit # enabled with the complexity changes
+    - gocritic
+    # - gocyclo # enabled with the complexity changes
+    - goprintffuncname
+    # - gosec # enabled with the gosec changes
+    - govet
+    - importas
+    - ineffassign
+    # - lll # enabled with the complexity changes
+    - modernize
+    - nakedret
+    # - nestif # enabled with the complexity changes
+    - nolintlint
+    - revive
+    # - rowserrcheck # enabled with the rows.Err changes
+    - staticcheck
+    - unused
+    - whitespace
+    # Beyond the host's set. The provider satisfies each of these; errcheck is
+    # the one linter of golangci-lint's standard set the host leaves out.
+    - bidichk
+    - bodyclose
     - durationcheck
+    - errcheck
     - errorlint
     - exptostd
     - fatcontext
     - gocheckcompilerdirectives
-    - importas
     - makezero
     - mirror
     - misspell
-    - nolintlint
     - nosprintfhostport
     - reassign
     - unconvert
@@ -32,22 +57,274 @@ linters:
   settings:
     depguard:
       rules:
-        tests:
+        main:
           deny:
+            - pkg: io/ioutil
+              desc: 'Deprecated: As of Go 1.16, the same functionality is now provided by package `io` or package `os`.'
+            # `pkg` matches by prefix, so this covers every testify subpackage
+            # (assert, require, mock, suite) with one entry.
             - pkg: github.com/stretchr/testify
-              desc: tests assert with quicktest, through internal/testcheck
+              desc: 'testify is prohibited; tests assert with quicktest imported as qt, through internal/testcheck where it helps.'
+    funlen:
+      lines: 240
+      statements: 160
+    gocognit:
+      min-complexity: 30
+    gocritic:
+      enabled-checks:
+        - badLock
+        - badRegexp
+        - badSorting
+        - badSyncOnceFunc
+        - deferInLoop
+        - dynamicFmtString
+        - emptyDecl
+        - filepathJoin
+    gocyclo:
+      min-complexity: 20
     importas:
       no-unaliased: true
       alias:
         - pkg: github.com/frankban/quicktest
           alias: qt
+    lll:
+      line-length: 240
     misspell:
       locale: US
       # YDB names a status CANCELLED (Ydb.StatusIds_CANCELLED), and a comment
       # or a test that names the status spells it as YDB does.
       ignore-rules:
         - cancelled
+    nakedret:
+      max-func-lines: 2
+    nestif:
+      min-complexity: 6
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-no-explanation:
+        - errcheck
+        - lll
+    # nolintguard does not register as a golangci-lint module plugin. It is
+    # pinned as a Go tool and run through go vet by `make lint-nolintguard`.
+    revive:
+      severity: error
+      # See https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md
+      rules:
+        - name: atomic
+          disabled: false
+        - name: bare-return
+          disabled: true # covered by nakedret linter
+        - name: blank-imports
+          disabled: false
+        - name: bool-literal-in-expr
+          disabled: false
+        - name: confusing-results
+          disabled: true # enabled with the remaining revive changes
+        - name: constant-logical-expr
+          disabled: false
+        - name: context-keys-type
+          disabled: false
+        - name: datarace
+          disabled: false
+        - name: deep-exit
+          disabled: false
+        - name: defer
+          disabled: false
+        - name: dot-imports
+          disabled: false
+        - name: duplicated-imports
+          disabled: false
+        - name: early-return
+          disabled: false
+        - name: empty-block
+          disabled: false
+        - name: empty-lines
+          disabled: false
+        - name: enforce-map-style
+          arguments:
+            - make
+          disabled: false
+        - name: enforce-repeated-arg-type-style
+          arguments:
+            - short
+          disabled: false
+        - name: enforce-slice-style
+          arguments:
+            - make
+          disabled: false
+        - name: error-naming
+          disabled: false
+        - name: error-return
+          disabled: false
+        - name: error-strings
+          disabled: false
+        - name: filename-format
+          arguments:
+            - '^[_a-z][_a-z0-9]*.go$'
+          disabled: false
+        - name: flag-parameter
+          disabled: true # enabled with the remaining revive changes
+        - name: function-result-limit
+          arguments:
+            - 3
+          disabled: true # enabled with the remaining revive changes
+        - name: get-return
+          disabled: false
+        - name: identical-branches
+          disabled: false
+        - name: import-alias-naming
+          arguments:
+            - # require aliases to be lowercased alphanumeric values (the first symbol is always a letter)
+              allowRegex: '^[a-z][a-z0-9]*$'
+              # disallow v1 (or vN, where N is a number) prefixes
+              denyRegex: '^v\d+$'
+          disabled: false
+        - name: import-shadowing
+          disabled: false
+        - name: increment-decrement
+          disabled: false
+        - name: indent-error-flow
+          arguments:
+            - preserveScope
+          disabled: false
+        - name: modifies-value-receiver
+          disabled: false
+        - name: optimize-operands-order
+          disabled: false
+        - name: range
+          disabled: false
+        - name: receiver-naming
+          arguments:
+            - maxLength: 4
+          disabled: false
+        - name: redefines-builtin-id
+          disabled: false
+        - name: redundant-import-alias
+          disabled: false
+        - name: string-of-int
+          disabled: false
+        - name: struct-tag
+          disabled: false
+        - name: superfluous-else
+          disabled: false
+        - name: time-equal
+          disabled: false
+        - name: unchecked-type-assertion
+          arguments:
+            - acceptIgnoredAssertionResult: true
+          disabled: true # enabled with the remaining revive changes
+        - name: unconditional-recursion
+          disabled: false
+        - name: unexported-naming
+          disabled: false
+        - name: unexported-return
+          disabled: false
+        - name: unnecessary-stmt
+          disabled: false
+        - name: unreachable-code
+          disabled: false
+        - name: unused-parameter
+          arguments:
+            - allowRegex: '^_'
+          disabled: true # off in the host's contract too
+        - name: unused-receiver
+          disabled: true # off in the host's contract too
+        - name: use-any
+          disabled: false
+        - name: useless-break
+          disabled: false
+        - name: var-naming
+          disabled: false
+        - name: waitgroup-by-value
+          disabled: false
+    rowserrcheck:
+      # The list is what the linter can see, and the default is database/sql
+      # alone. The linter tracks rows by the package that declared the Query
+      # returning them, so a reader that holds one of the interfaces below
+      # rather than a *sql.DB is invisible to it under the default list. Every
+      # package here declares a QueryContext returning *sql.Rows, and a new such
+      # declaration joins the list.
+      packages:
+        - database/sql
+        - github.com/stokaro/ptah-ydb-plugin/internal/backend
+        - github.com/stokaro/ptah-ydb-plugin/internal/embedstore
+        - github.com/stokaro/ptah-ydb-plugin/internal/history
+        - github.com/stokaro/ptah-ydb-plugin/internal/metadata
+    staticcheck:
+      checks:
+        - all
+        - -QF1008
+        # ST1000 (package comment required) stays on: every package carries a
+        # package doc comment that says what it does.
+        - -ST1003
+        - -ST1005
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+  exclusions:
+    generated: lax
+    presets:
+      # The "comments" preset is deliberately absent: it swallows staticcheck
+      # "should have a package comment" findings, which would neuter ST1000.
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - funlen
+          - gocognit
+          - gocritic
+          - gocyclo
+          - lll
+          - nestif
+          - dupl
+        path: '_test\.go$'
+      - path: '_test\.go$'
+        text: 'function-result-limit:'
+      - path: '_test\.go$'
+        text: 'bool-literal-in-expr:'
+      - path: '_test\.go$'
+        text: 'unused-parameter:'
+      - path: '_test\.go$'
+        text: 'unchecked-type-assertion:'
+      - path: '(cmd|integration)/.*\.go$'
+        text: 'use of `fmt\..*` forbidden by pattern'
+      - path: '(cmd|integration)/.*\.go$'
+        linters:
+          - gocognit
+          - nestif
+          - gocyclo
+      - path: '(cmd|integration)/.*\.go$'
+        text: 'deep-exit:'
+      - path: 'cmd/.*\.go$'
+        linters:
+          - gochecknoinits
+      - path: 'integration/.*\.go$'
+        linters:
+          - unused
+      - text: 'var-naming: avoid meaningless package names'
+        linters:
+          - revive
+    paths:
+      - 'third_party$'
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
 formatters:
   enable:
+    - gci
     - gofmt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/stokaro/ptah-ydb-plugin)
+  exclusions:
+    generated: lax
+    paths:
+      - 'third_party$'

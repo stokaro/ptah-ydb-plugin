@@ -19,6 +19,8 @@ require (
 
 require (
 	github.com/fatih/color v1.19.0 // indirect
+	github.com/go-extras/nolintguard v0.4.2 // indirect
+	github.com/go-extras/qtlint v1.15.0 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
@@ -31,14 +33,22 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/oklog/run v1.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
+	github.com/stokaro/teststyle v0.2.0 // indirect
 	github.com/yandex-cloud/go-genproto v0.0.0-20240819112322-98a264d392f6 // indirect
 	github.com/ydb-platform/ydb-go-yc v0.12.5 // indirect
 	github.com/ydb-platform/ydb-go-yc-metadata v0.6.2 // indirect
+	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260817212433-ac3dfec99bb1 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261104224025-d1e00e9f33ab // indirect
 )
 
-tool google.golang.org/protobuf/cmd/protoc-gen-go
+tool (
+	github.com/go-extras/nolintguard/cmd/nolintguard
+	github.com/go-extras/qtlint/cmd/qtlint
+	github.com/stokaro/teststyle/cmd/teststyle
+	google.golang.org/protobuf/cmd/protoc-gen-go
+)

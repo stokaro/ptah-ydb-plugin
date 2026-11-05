@@ -101,14 +101,21 @@ GOWORK=off go test -race ./...
 GOWORK=off CGO_ENABLED=0 go build -o bin/ptah-plugin-ydb ./cmd/ptah-plugin-ydb
 ```
 
-Lint both build contours with golangci-lint v2.15.0, as CI does. The
-configuration in `.golangci.yml` enables the gofmt formatter, so an unformatted
-file fails the run:
+The provider is held to Ptah's lint contract: `.golangci.yml` carries the
+host's linters and settings, and the Makefile runs the host's other lint tools.
+Lint as CI does, with golangci-lint v2.15.0 on the `PATH`; qtlint, nolintguard
+and teststyle are pinned as tools in `go.mod`:
 
 ```sh
-GOWORK=off golangci-lint run ./...
-GOWORK=off golangci-lint run --build-tags integration ./...
+make lint       # qtlint, nolintguard, golangci-lint and the test style baseline
+make lint-fix   # the automatic fixes of qtlint and golangci-lint, then make lint
 ```
+
+Every linter runs over both build contours, the default one and the
+`integration` tag. `scripts/check-test-style.sh` holds the tests to the
+declarative rule: no `if`, `switch` or `goto` in a test function. The functions
+that broke it when the rule was adopted are listed in
+`.teststyle-baseline.json`; the list may shrink and must not grow.
 
 The executable requires the SDK's authenticated local subprocess bootstrap.
 Run it through a Ptah SDK client rather than invoking it as a command-line tool.
