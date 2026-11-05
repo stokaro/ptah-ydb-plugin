@@ -57,6 +57,7 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // Provider owns connection handles for one subprocess lifetime.
@@ -98,6 +99,11 @@ type session struct {
 func providerFeatures() []string {
 	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
 		provider.IndexMethodsFeature,
+		// A read with no selector claims every directory below the root
+		// complete in one region, and each directory it leaves out unknown,
+		// so an object declared in a new directory is planned; see
+		// inspect.subtreeRegions.
+		provider.SchemaSubtreeCoverageFeature,
 		// A refusal reaches the host with the reason the provider wrote, and a
 		// driver's error with its code alone; see package authored.
 		provider.ErrorReasonsFeature,
@@ -368,11 +374,44 @@ func withSerialSequences(engine *protocol.Engine) {
 	}
 }
 
+// identifierRules are the engine's identifier rules. A directory path is one
+// schema, so its components nest under /, and a coverage region can cover a
+// directory and everything below it (schema.subtree-coverage).
 func identifierRules() *protocol.IdentifierRules {
 	return &protocol.IdentifierRules{
 		TableNames: protocol.IdentifierRules_EXACT, ColumnNames: protocol.IdentifierRules_EXACT,
 		IndexNames: protocol.IdentifierRules_EXACT, IndexNamespace: protocol.IdentifierRules_TABLE,
+		SchemaSeparator: schema.SchemaSeparator,
 	}
+}
+
+// negotiatedRules are the identifier rules as the host holds them: without
+// the schema separator for a host that does not list
+// schema.subtree-coverage, as the SDK leaves it out of the description that
+// host reads. A request a host sends carries these rules back.
+func negotiatedRules(ctx context.Context) *protocol.IdentifierRules {
+	rules := identifierRules()
+	if !slices.Contains(provider.HostFeatures(ctx), provider.SchemaSubtreeCoverageFeature) {
+		rules.SchemaSeparator = ""
+	}
+	return rules
+}
+
+// rulesMatch reports whether rules a host sent are the engine's. The
+// separator may be absent: a host that does not list schema.subtree-coverage
+// sends none, and a host that does may still build a request's rules from an
+// identity that does not carry it. It decides only subtree regions, which the
+// SDK refuses in a comparison whose rules carry no separator, so an absent
+// separator is accepted and a different one is not.
+func rulesMatch(rules *protocol.IdentifierRules) bool {
+	sent, want := proto.CloneOf(rules), identifierRules()
+	if sent == nil {
+		return false
+	}
+	if sent.SchemaSeparator == "" {
+		want.SchemaSeparator = ""
+	}
+	return proto.Equal(sent, want)
 }
 
 // Open verifies a native connection and server version before publishing its
@@ -422,7 +461,7 @@ func (p *Provider) Open(ctx context.Context, request *protocol.OpenRequest) (*pr
 	p.mu.Lock()
 	p.sessions[id] = &session{connection: opened, database: address.Root(), realm: address.Realm() != "", version: version, capabilities: maps.Clone(capabilities)}
 	p.mu.Unlock()
-	result := &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: identifierRules(), Capabilities: commonCapabilities(ctx, capabilities), Features: negotiatedFeatures(ctx)}
+	result := &protocol.Session{Id: id, Engine: "ydb", Database: address.Root(), ServerVersion: version, Identifiers: negotiatedRules(ctx), Capabilities: commonCapabilities(ctx, capabilities), Features: negotiatedFeatures(ctx)}
 	if slices.Contains(result.Features, provider.DatabaseContextFeature) {
 		result.Context = databaseContext(address)
 	}
