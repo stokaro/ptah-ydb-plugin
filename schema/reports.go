@@ -28,10 +28,13 @@ func one([]byte, protocol.ValueInput_Representation) (uint64, error) { return 1,
 // has. Each metric counts what a value holds: a topic is one topic and its
 // consumers, a table's changefeed set its feeds and the consumers across them,
 // a row table's properties its TTL, its column families and its settings, a
-// column table's storage the table and its TTL, and a table's index set its
-// global indexes with settings and its vector indexes. Two models count into
-// ydb_ttl_tables, as the built-in engine counted a column table whose TTL only
-// deletes rows among the tables with a TTL.
+// column table's storage the table and its TTL, a table's index set the global
+// indexes it holds with settings and its vector indexes, and a global index's
+// own settings the index once they differ from a new index's. Two models count
+// into ydb_ttl_tables, as the built-in engine counted a column table whose TTL
+// only deletes rows among the tables with a TTL, and two into
+// ydb_index_partitioning, since a global index the host reads as a common
+// index keeps its settings in a model of its own.
 var reportedKinds = []struct {
 	kind    string
 	metrics []reportedMetric
@@ -50,6 +53,7 @@ var reportedKinds = []struct {
 	{TableProperties, []reportedMetric{{"ydb_ttl_tables", ttlTablesHelp, ttlTable},
 		{"ydb_column_families", "YDB column families a table states, without a default family that states nothing", statedFamilies},
 		{"ydb_table_partitioning", "YDB row tables stating partitioning, read replicas or a key bloom filter", tablePartitioning}}},
+	{IndexSettingsProperties, []reportedMetric{{"ydb_index_partitioning", "YDB global indexes stating partitioning or read replicas", indexSettingsStated}}},
 	{ColumnStorageProperties, []reportedMetric{{"ydb_ttl_tables", ttlTablesHelp, columnTTLTable},
 		{"ydb_column_tables", "YDB tables stored by column", one},
 		{"ydb_tiered_ttl_tables", "YDB column tables whose TTL moves rows to an external data source", tieredTTLTable}}},
