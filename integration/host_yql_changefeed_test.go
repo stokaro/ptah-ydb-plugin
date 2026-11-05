@@ -38,7 +38,7 @@ func TestHostAppliesYQLChangefeedsAndConsumers_HappyPath(t *testing.T) {
 	const feed = "ALTER TABLE `{dir}/events` ADD CHANGEFEED updates WITH (mode='UPDATES', format='JSON', retention_period=Interval('PT12H'));\n"
 	// A changed consumer set is one ALTER TOPIC of the changefeed's topic,
 	// which the built-in engine writes as DROP CONSUMER and ADD CONSUMER.
-	const alterTopic = "(?s).*changefeed-operation\n[^\n]*: ALTER TOPIC can drop a consumer's position.*Schema apply completed successfully.*"
+	const alterTopic = "(?s).*changefeed-operation [^\n]*: ALTER TOPIC can drop a consumer's position.*Schema apply completed successfully.*"
 	apply := func(text, planned, name string) {
 		c.Helper()
 		root := writeSchema(c, map[string]string{"schema.sql": replaceDirectory(text, directory)})
@@ -55,7 +55,7 @@ func TestHostAppliesYQLChangefeedsAndConsumers_HappyPath(t *testing.T) {
 		consumers           []string
 	}{
 		{"a changefeed with a consumer", table + feed + "ALTER TOPIC `{dir}/events/updates` ADD CONSUMER worker;\n",
-			"(?s).*row-table-create-operation.*changefeed-operation\n[^\n]*: ADD CHANGEFEED adds a stream of the table's changes.*Schema apply completed successfully.*",
+			"(?s).*row-table-create-operation.*changefeed-operation [^\n]*: ADD CHANGEFEED adds a stream of the table's changes.*Schema apply completed successfully.*",
 			[]string{"worker"}},
 		{"an important consumer instead", table + feed + "ALTER TOPIC `{dir}/events/updates` ADD CONSUMER audit WITH (important=TRUE);\n",
 			alterTopic, []string{"audit (important)"}},
@@ -70,7 +70,7 @@ func TestHostAppliesYQLChangefeedsAndConsumers_HappyPath(t *testing.T) {
 		}
 		c.Assert(consumers, qt.DeepEquals, step.consumers, qt.Commentf("%s", step.name))
 	}
-	apply(table, "(?s).*changefeed-operation\n[^\n]*: DROP CHANGEFEED removes the change stream.*Schema apply completed successfully.*", "no changefeed")
+	apply(table, "(?s).*changefeed-operation [^\n]*: DROP CHANGEFEED removes the change stream.*Schema apply completed successfully.*", "no changefeed")
 	_, err := opened.Driver.Topic().Describe(c.Context(), topic)
 	c.Assert(err, qt.IsNotNil)
 }
