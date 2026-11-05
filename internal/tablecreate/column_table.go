@@ -365,10 +365,11 @@ func NormalizeColumnTable(input *protocol.ValueInput) (*protocol.NormalizedValue
 	}
 	result := proto.CloneOf(value)
 	result.Payload = payload
+	access, accessReason := createdAccess(result.GetOwner().GetName())
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner),
 		CanonicalFormat: definition.CanonicalFormat, CanonicalProjection: bytes.Clone(payload),
 		OperationSemantics: &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Creates a column table",
-			Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Creation inherits server access policy"}}, nil
+			Access: access, AccessReason: accessReason}}, nil
 }
 
 // ColumnTable returns the creation an envelope carries after validating it.

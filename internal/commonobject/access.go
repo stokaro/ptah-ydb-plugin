@@ -7,9 +7,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // RoleRefusal checks the attributes YDB users and groups can carry. Password
@@ -92,19 +94,23 @@ func createRole(creation *protocol.RoleCreation, capabilities map[string]bool) (
 		if err := accessCapability(capabilities, "group_principals"); err != nil {
 			return "", err
 		}
-		if creation.GetPassword() != "" {
+		if creation.GetPassword() != "" || creation.GetPasswordInput() != nil {
 			return "", unsupported("a YDB group cannot have a password")
 		}
 		return accessComment(role.GetComment()) + "CREATE GROUP " + ydbtype.QuoteIdentifier(role.GetName()) + ";", nil
 	}
 	statement := "CREATE USER " + ydbtype.QuoteIdentifier(role.GetName())
-	if creation.GetPassword() != "" {
-		statement += " " + passwordClause(creation.GetPassword())
+	if creation.GetPassword() != "" || creation.GetPasswordInput() != nil {
+		clause, err := passwordClause(role.GetName(), creation.GetPassword(), creation.GetPasswordInput())
+		if err != nil {
+			return "", err
+		}
+		statement += " " + clause
 	}
 	if !role.GetLogin() {
 		statement += " NOLOGIN"
 	}
-	return accessComment(role.GetComment()) + passwordWarning(creation.GetPassword()) + statement + ";", nil
+	return accessComment(role.GetComment()) + statement + ";", nil
 }
 
 func alterRole(alteration *protocol.RoleAlteration) (string, error) {
@@ -119,7 +125,11 @@ func alterRole(alteration *protocol.RoleAlteration) (string, error) {
 	for _, attribute := range alteration.GetChanged() {
 		switch attribute {
 		case "password":
-			password = " " + passwordClause(alteration.GetPassword())
+			clause, err := passwordClause(role.GetName(), alteration.GetPassword(), alteration.GetPasswordInput())
+			if err != nil {
+				return "", err
+			}
+			password = " " + clause
 		case "login":
 			login = " NOLOGIN"
 			if role.GetLogin() {
@@ -132,11 +142,7 @@ func alterRole(alteration *protocol.RoleAlteration) (string, error) {
 	if password == "" && login == "" {
 		return "", unsupported("ALTER USER changes no login or password attribute")
 	}
-	warning := ""
-	if slices.Contains(alteration.GetChanged(), "password") {
-		warning = passwordWarning(alteration.GetPassword())
-	}
-	return accessComment(role.GetComment()) + warning + "ALTER USER " + ydbtype.QuoteIdentifier(role.GetName()) + password + login + ";", nil
+	return accessComment(role.GetComment()) + "ALTER USER " + ydbtype.QuoteIdentifier(role.GetName()) + password + login + ";", nil
 }
 
 func membership(member *protocol.RoleMembership, clause string, capabilities map[string]bool) (string, error) {
@@ -163,18 +169,29 @@ func accessComment(comment string) string {
 	return ""
 }
 
-func passwordClause(password string) string {
-	if ydbacl.IsPasswordHash(password) {
-		return "HASH " + ydbtype.StringLiteral(strings.TrimSpace(password))
+// passwordClause sets the password of user from what the host sent. A
+// declared password, or a password hash, arrives as an execution input
+// (schema.password-inputs, ADR 0071), and the clause names the input where the
+// password stands: `PASSWORD $<input>`, which YDB refuses as written, so a
+// statement run without Ptah sets no other password. The execution writes the
+// bound value there, with HASH for a hash (see secretvalue.Expand). A value on
+// the wire comes from a host that does not negotiate the feature; it would be
+// written into every plan and migration file that shows the statement, so it
+// is refused, naming the user and never the value. Neither a value nor an
+// input removes the password.
+func passwordClause(user, value string, input *protocol.ExecutionInput) (string, error) {
+	switch {
+	case input != nil:
+		if err := secrets.CheckValueEnv(input.GetName()); err != nil {
+			return "", unsupported("the password input of user %q: %s", user, err)
+		}
+		return "PASSWORD " + secrets.Reference(input.GetName()), nil
+	case value != "":
+		return "", unsupported("user %q declares a password, and the host sends the password itself, which would write it "+
+			"into the plan; use a Ptah release that lists %s", user, provider.PasswordInputsFeature)
+	default:
+		return "PASSWORD ''", nil
 	}
-	return "PASSWORD " + ydbtype.StringLiteral(password)
-}
-
-func passwordWarning(password string) string {
-	if password == "" || ydbacl.IsPasswordHash(password) {
-		return ""
-	}
-	return "-- WARNING: the password is written in plain text; declare its hash to keep it out of the file\n"
 }
 
 func grant(declared *protocol.SQLGrant, revoke bool, capabilities map[string]bool) (string, error) {

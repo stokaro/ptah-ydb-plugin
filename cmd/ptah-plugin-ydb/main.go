@@ -48,6 +48,7 @@ func main() {
 		Locks:           owner,
 		Metadata:        owner,
 		SQLAnalyzer:     owner,
+		SQLScanner:      owner,
 		Linter:          owner,
 		RowTyper:        owner,
 		RowReader:       owner,
@@ -58,7 +59,8 @@ func main() {
 		EmbeddingStore:  owner,
 		CommonObjects:   owner,
 		SourceEncoder:   owner,
-		MigrationSplits: owner})
+		MigrationSplits: owner,
+		ChangeReverser:  owner})
 	if closeErr := dev.Close(); closeErr != nil {
 		fmt.Fprintln(os.Stderr, closeErr)
 	}

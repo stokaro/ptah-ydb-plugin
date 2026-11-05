@@ -164,7 +164,7 @@ func TestHostKeepsTheConsumerYDBMadeForATransferOfAChangefeed_HappyPath(t *testi
 	settled := f.apply("a second run", tables("PT6H")+f.transfer("orders/feed"), "Schema is synced, no changes to be made")
 	changed := f.apply("a longer retention", tables("PT12H")+f.transfer("orders/feed"), "Schema apply completed successfully")
 
-	c.Assert(settled, qt.Not(qt.Contains), "Native operation")
+	c.Assert(settled, qt.Not(qt.Contains), unitPrefix)
 	c.Assert(changed, qt.Not(qt.Contains), "loses its position")
 	c.Assert(f.consumers("orders/feed"), qt.DeepEquals, []string{made})
 	f.apply("a run after the change", tables("PT12H")+f.transfer("orders/feed"), "Schema is synced, no changes to be made")
@@ -194,7 +194,7 @@ func TestHostKeepsTheConsumerYDBMadeForATransferOfATopic_HappyPath(t *testing.T)
 	settled := f.apply("a second run", declared("PT6H"), "Schema is synced, no changes to be made")
 	changed := f.apply("a longer retention", declared("PT12H"), "Schema apply completed successfully")
 
-	c.Assert(settled, qt.Not(qt.Contains), "Native operation")
+	c.Assert(settled, qt.Not(qt.Contains), unitPrefix)
 	c.Assert(changed, qt.Not(qt.Contains), "DROP CONSUMER")
 	c.Assert(f.consumers("events"), qt.DeepEquals, []string{made})
 	f.apply("a run after the change", declared("PT12H"), "Schema is synced, no changes to be made")

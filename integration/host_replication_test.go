@@ -388,21 +388,9 @@ func (h *hostTransfer) awaitRunning() replication.TransferSpec {
 	}
 }
 
-// operations lists the subjects of the native operations an apply printed,
-// in plan order, each as kind and subject.
-func operations(output string) []string {
-	var listed []string
-	lines := strings.Split(output, "\n")
-	for i, line := range lines {
-		kind, found := strings.CutPrefix(line, "Native operation: github.com/stokaro/ptah-ydb-plugin/")
-		if !found || i+1 >= len(lines) {
-			continue
-		}
-		subject, _, _ := strings.Cut(strings.TrimSpace(lines[i+1]), ":")
-		listed = append(listed, kind+" "+subject[strings.LastIndex(subject, " ")+1:])
-	}
-	return listed
-}
+// operations lists the native operations an apply planned, in plan order,
+// each as kind and subject.
+func operations(output string) []string { return pluginUnits(output) }
 
 // Ported from the host's TestYDBOwnedTransfer_CreatesAfterItsTopicAndDropsBeforeIt:
 // a topic with a consumer is created first and a transfer through that
