@@ -164,6 +164,9 @@ func providerFeatures() []string {
 		provider.PlanningContextInventoryFeature,
 		provider.EntryKeysFeature,
 		provider.HCLSourceFeature,
+		// A table's TTL is read from and written to its platform "ydb"
+		// block in HCL; see tablesource.HCLPlatformBlock.
+		provider.HCLPlatformFeature,
 		provider.EncodeSourceFeature,
 		// A Go or HCL source leaves a native kind unmanaged with a
 		// not-described entry; see EncodeSource and DecodeSource.
@@ -600,7 +603,7 @@ func Description() *protocol.Description {
 				ScopeSelections:     scopeSelections(),
 				DatabaseKinds:       databaseKinds(),
 				HclSource: &protocol.HCLSourceDeclaration{
-					Blocks:      []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock()},
+					Blocks:      []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock(), tablesource.HCLPlatformBlock()},
 					HeaderKinds: []string{"coordination_node"},
 				},
 				GoHeaderKinds: yqlschema.HeaderKinds(),
