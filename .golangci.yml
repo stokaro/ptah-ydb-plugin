@@ -281,6 +281,14 @@ linters:
           - nestif
           - dupl
         path: '_test\.go$'
+      # gosec G101 reads the made-up credentials of these test fixtures as
+      # real ones: example user:pass@ addresses, a static login's password,
+      # role passwords and password inputs. Limited to the test files that
+      # hold them; other tests are still scanned.
+      - linters:
+          - gosec
+        text: 'G101:'
+        path: '(internal/backend/reasons_test\.go|internal/commonobject/access_test\.go|internal/connection/address_test\.go|internal/secretvalue/expand_test\.go|integration/sessions_live_test\.go)$'
       - path: '_test\.go$'
         text: 'function-result-limit:'
       - path: '_test\.go$'

@@ -35,7 +35,7 @@ const streamingQueryEntry = Ydb_Scheme.Entry_Type(26)
 
 // newDirectorySecret is the variable the secret a source declares in a new
 // directory takes its value from.
-const newDirectorySecret = "PTAH_SECRET_NEW_DIRECTORY"
+const newDirectorySecret = "PTAH_SECRET_NEW_DIRECTORY" // #nosec G101 -- the name of the variable that carries the value
 
 // heldEntries lists the directory at absolute through the scheme service, as
 // names and entry types. A directory YDB does not show lists as nil.
