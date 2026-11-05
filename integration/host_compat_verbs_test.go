@@ -107,10 +107,12 @@ func compatMigrationsDir(c *qt.C) string {
 // the realm is what leaves the rest of a shared server alone. schema apply
 // builds a table at the root and one in a directory and then finds them
 // synced; schema inspect describes both, as HCL that applies back as synced
-// and as YQL; schema diff finds nothing to change; migrate apply records two
-// migrations in the Atlas revision table in the directory, and migrate down
-// rolls one back; script exec writes a row and refuses expect_rows, because
-// the driver's row count is not a measurement.
+// and as YQL, and names neither the lock node nor, once migrate apply wrote
+// it, the revision table as an object it left out; schema diff finds nothing
+// to change; migrate apply records two migrations in the Atlas revision table
+// in the directory, and migrate down rolls one back; script exec writes a row
+// and refuses expect_rows, because the driver's row count is not a
+// measurement.
 func TestHostCompatRunsTheAtlasVerbs_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	hostCompat(c)
@@ -134,6 +136,7 @@ func TestHostCompatRunsTheAtlasVerbs_HappyPath(t *testing.T) {
 		"--revisions-schema", compatDirectory)
 	status, _, statusExit := runCompat(c, nil, "migrate", "status", "--url", realm.address, "--dir", dir, "--revisions-schema", compatDirectory)
 	recorded := rowCount(c, realm.opened, revisions, "")
+	described, describedNotes, describedExit := runCompat(c, nil, "schema", "inspect", "--url", realm.address, "--schema", compatDirectory)
 	rolledBack, downNotes, downExit := runCompat(c, nil, "migrate", "down", "--url", realm.address, "--dir", dir,
 		"--revisions-schema", compatDirectory, "--to-version", "20260101000000")
 	_, err := realm.opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+root+"` (id, note) VALUES (1l, 'start'u)")
@@ -149,6 +152,9 @@ func TestHostCompatRunsTheAtlasVerbs_HappyPath(t *testing.T) {
 	c.Assert(inspected, qt.Contains, "table \""+compatRootTable+"\" {\n  column \"id\" {\n    type = Int64\n  }")
 	c.Assert(inspected, qt.Contains, "table \"orders\" {\n  schema = schema."+compatDirectory+"\n")
 	c.Assert(inspected, qt.Contains, "    type = Decimal(22,9)\n")
+	// The lock node and the revision table are the provider's storage at
+	// reserved names; the document names neither as an object it left out.
+	c.Assert(inspected, qt.Not(qt.Contains), "ptah:not-described")
 	c.Assert(reapplyExit, qt.Equals, 0, qt.Commentf("schema apply of the inspected document:\n%s", reapplied))
 	c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
 	c.Assert(yqlExit, qt.Equals, 0, qt.Commentf("schema inspect --format sql:\n%s", yqlNotes))
@@ -160,6 +166,8 @@ func TestHostCompatRunsTheAtlasVerbs_HappyPath(t *testing.T) {
 	c.Assert(statusExit, qt.Equals, 0, qt.Commentf("migrate status:\n%s", status))
 	c.Assert(status, qt.Contains, "Migration Status: OK")
 	c.Assert(recorded, qt.Equals, int64(2))
+	c.Assert(describedExit, qt.Equals, 0, qt.Commentf("schema inspect --schema:\n%s", describedNotes))
+	c.Assert(described, qt.Not(qt.Contains), "atlas_schema_revisions")
 	c.Assert(downExit, qt.Equals, 0, qt.Commentf("migrate down:\n%s\n%s", rolledBack, downNotes))
 	c.Assert(rowCount(c, realm.opened, revisions, ""), qt.Equals, int64(1))
 	c.Assert(heldColumnTypes(c, realm.opened, path.Join(realm.root, compatDirectory, "items")), qt.DeepEquals, map[string]string{"id": "Int64"})
