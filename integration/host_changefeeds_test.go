@@ -348,7 +348,7 @@ func TestHostKeepsAChangefeedItCannotModel_HappyPath(t *testing.T) {
 			Attributes: map[string]string{"owner": "team"}}}})
 	c.Assert(err, qt.IsNil)
 	c.Assert(altered.GetOperation().GetStatus(), qt.Equals, Ydb.StatusIds_SUCCESS)
-	const limit = `changefeed "tagged" has settings this provider cannot represent, so the current changefeed was not established: it holds attributes, which Ptah does not model.`
+	const limit = `changefeed "tagged" has settings this provider cannot represent, so the current changefeed was not established: it holds attributes, which Ptah does not model`
 
 	omitted := h.apply("a schema without it", h.events(""), "No changes planned, but 1 comparison limit remains unresolved.")
 	named := h.apply("a schema naming it", h.events("    changefeeds:\n      tagged:\n        mode: UPDATES\n        format: JSON\n"),
