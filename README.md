@@ -3318,7 +3318,8 @@ refusals, and the answers an agent reads, which carry no source content.
 ## Offline schema rendering
 
 The provider uses `schema.declarations` to create authored coordination nodes,
-topics, external sources and tables, resource pools, classifiers, and secrets. The host
+topics, external sources and tables, resource pools, classifiers, secrets and
+streaming queries. The host
 validates the whole schema and combines these creations with table and common
 object steps before rendering SQL. Declaration operations retain their desired
 definitions and contain no observed-state claims.
@@ -3328,7 +3329,10 @@ duplicate classifier ranks, and explicit native access requirements refuse the
 whole batch. Use live schema planning for access requirements that a CREATE
 statement cannot express. External tables follow their declared data sources;
 classifiers follow their declared resource pools. External sources follow their
-declared secrets. Secret statements retain approved input references; rendering
+declared secrets. A streaming query follows each topic and table its text reads
+or writes, since YDB compiles a query when it creates it, and a query that
+names a path by its database is refused, since a rendered schema names no
+database. Secret statements retain approved input references; rendering
 opens no session and reads no input value.
 
 ## Operator statements and object scopes
