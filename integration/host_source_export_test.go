@@ -336,8 +336,9 @@ func yamlValue(value *protocol.SourceValue) string {
 
 // hostReplanSource runs the host's `schema apply --dry-run` over one source
 // with this provider selected for ydb, restricted to the fixture directory,
-// and returns what the host reported. The dry run still opens the provider's
-// lock node, so a test that runs it takes the lock fixture.
+// and returns the planned units as appliedUnits lists them. The dry run still
+// opens the provider's lock node, so a test that runs it takes the lock
+// fixture.
 func hostReplanSource(c *qt.C, directory, format, text string) (string, error) {
 	c.Helper()
 	host, manifest := hostManifest(c)
@@ -350,13 +351,13 @@ func hostReplanSource(c *qt.C, directory, format, text string) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	arguments := append([]string{"schema", "apply", "--dry-run", "--provider-config", manifest, "--provider-engine", "ydb",
+	arguments := append([]string{"schema", "apply", "--dry-run", "--json", "--provider-config", manifest, "--provider-engine", "ydb",
 		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", directory}, source...)
 	cmd := exec.CommandContext(ctx, host, arguments...)
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
+	var report, printed bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &report, &printed
 	err := cmd.Run()
-	return output.String(), err
+	return appliedUnits(report.Bytes(), printed.String()), err
 }
 
 // A schema read, written back as a Go file or a YAML document, and applied
