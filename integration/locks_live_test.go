@@ -200,50 +200,62 @@ func TestNativeLockLossFencesExecutionHistoryAndCommit(t *testing.T) {
 	c.Assert(executeSQL(c, client, id, "", "UPSERT INTO `"+table+"` (id) VALUES (3u)").Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
 }
 
-// A lock node that does not read and attach with strict consistency is
-// refused without being changed. The refusal is a confirmed NOT_ACQUIRED
-// whose reason names the node and its settings, so the session takes the
-// lock once the node is made strict. Ptah's built-in YDB engine creates the
-// node with neither mode set, which is the first row: every database that
-// engine locked holds such a node.
+// A lock node someone set to relaxed reads is refused without being changed.
+// The refusal is a confirmed NOT_ACQUIRED whose reason names the node and its
+// settings, so the session takes the lock once the node is made strict.
 func TestNativeLocksRefuseRelaxedNodeWithoutChangingIt(t *testing.T) {
-	for _, test := range []struct {
-		name, settings string
-		config         coordination.NodeConfig
-	}{
-		{"neither mode set", "read consistency unset and attach consistency unset", coordination.NodeConfig{}},
-		{"relaxed reads", "read consistency relaxed and attach consistency unset", coordination.NodeConfig{ReadConsistencyMode: coordination.ConsistencyModeRelaxed}},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			c := testcheck.New(t)
-			opened, _, database := lockFixture(c)
-			node := path.Join(database, locking.NodeName)
-			c.Assert(opened.Driver.Coordination().CreateNode(c.Context(), node, test.config), qt.IsNil)
-			client := startProviderFor(c, provider.ErrorReasonsFeature)
-			session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
-			c.Assert(err, qt.IsNil)
-			c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
-			id := session.Id
+	c := testcheck.New(t)
+	opened, _, database := lockFixture(c)
+	node := path.Join(database, locking.NodeName)
+	relaxed := coordination.NodeConfig{ReadConsistencyMode: coordination.ConsistencyModeRelaxed}
+	c.Assert(opened.Driver.Coordination().CreateNode(c.Context(), node, relaxed), qt.IsNil)
+	client := startProviderFor(c, provider.ErrorReasonsFeature)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	id := session.Id
 
-			result, err := client.TryLock(c.Context(), nativeLockRequest(id, "refused", "migration"))
+	result, err := client.TryLock(c.Context(), nativeLockRequest(id, "refused", "migration"))
 
-			c.Assert(err, qt.ErrorIs, provider.ErrExecution)
-			c.Assert(err, qt.Not(qt.ErrorIs), provider.ErrOutcomeUnknown)
-			c.Assert(err, qt.ErrorMatches, regexp.QuoteMeta("provider lock outcome is NOT_ACQUIRED: the YDB coordination node "+node+
-				", which holds Ptah's locks, reads with "+test.settings+", and a lock taken there cannot be shown to be still held. Ptah's "+
-				"built-in YDB engine creates the node without either setting. YDB's CLI and YQL have no command for a coordination node: set "+
-				"both modes to strict with the coordination service's AlterNode call, or remove the node with its DropNode call while no "+
-				"run holds a lock on it, and the provider creates it strict"))
-			c.Assert(result.GetOutcome(), qt.Equals, protocol.LockResult_NOT_ACQUIRED)
-			_, config, err := opened.Driver.Coordination().DescribeNode(c.Context(), node)
-			c.Assert(err, qt.IsNil)
-			c.Assert(config.ReadConsistencyMode, qt.Equals, test.config.ReadConsistencyMode)
-			c.Assert(opened.Driver.Coordination().AlterNode(c.Context(), node, coordination.NodeConfig{
-				ReadConsistencyMode: coordination.ConsistencyModeStrict, AttachConsistencyMode: coordination.ConsistencyModeStrict}), qt.IsNil)
-			acquireNativeLock(c, client, nativeLockRequest(id, "taken", "migration"))
-		})
-	}
+	c.Assert(err, qt.ErrorIs, provider.ErrExecution)
+	c.Assert(err, qt.Not(qt.ErrorIs), provider.ErrOutcomeUnknown)
+	c.Assert(err, qt.ErrorMatches, regexp.QuoteMeta("provider lock outcome is NOT_ACQUIRED: the YDB coordination node "+node+
+		", which holds Ptah's locks, reads with read consistency relaxed and attach consistency unset, and a lock taken there "+
+		"cannot be shown to be still held. YDB's CLI and YQL have no command for a coordination node: set "+
+		"both modes to strict with the coordination service's AlterNode call, or remove the node with its DropNode call while no "+
+		"run holds a lock on it, and the provider creates it strict"))
+	c.Assert(result.GetOutcome(), qt.Equals, protocol.LockResult_NOT_ACQUIRED)
+	_, config, err := opened.Driver.Coordination().DescribeNode(c.Context(), node)
+	c.Assert(err, qt.IsNil)
+	c.Assert(config.ReadConsistencyMode, qt.Equals, coordination.ConsistencyModeRelaxed)
+	c.Assert(opened.Driver.Coordination().AlterNode(c.Context(), node, coordination.NodeConfig{
+		ReadConsistencyMode: coordination.ConsistencyModeStrict, AttachConsistencyMode: coordination.ConsistencyModeStrict}), qt.IsNil)
+	acquireNativeLock(c, client, nativeLockRequest(id, "taken", "migration"))
 }
+
+// Ptah's built-in YDB engine creates the lock node with neither consistency
+// mode set, so every database that engine locked holds such a node, and its
+// runs took their locks there. The provider takes the lock on that node as
+// the engine did, and makes the node strict first, so a lock taken there can
+// be shown to be still held.
+func TestNativeLocksAdoptTheBuiltInEnginesNode(t *testing.T) {
+	c := testcheck.New(t)
+	opened, _, database := lockFixture(c)
+	node := path.Join(database, locking.NodeName)
+	c.Assert(opened.Driver.Coordination().CreateNode(c.Context(), node, coordination.NodeConfig{}), qt.IsNil)
+	client := startProviderFor(c, provider.ErrorReasonsFeature)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+
+	acquireNativeLock(c, client, nativeLockRequest(session.Id, "adopted", "migration"))
+
+	_, config, err := opened.Driver.Coordination().DescribeNode(c.Context(), node)
+	c.Assert(err, qt.IsNil)
+	c.Assert(config.ReadConsistencyMode, qt.Equals, coordination.ConsistencyModeStrict)
+	c.Assert(config.AttachConsistencyMode, qt.Equals, coordination.ConsistencyModeStrict)
+}
+
 func TestNativeLocksReleaseAfterProviderExit(t *testing.T) {
 	c := testcheck.New(t)
 	_, _, _ = lockFixture(c)

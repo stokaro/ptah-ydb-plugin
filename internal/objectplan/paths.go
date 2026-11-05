@@ -198,7 +198,7 @@ func (o *occupants) above(item change, step *protocol.StepIdentity, effect *prot
 	case item.action == protocol.PlanningEffect_CREATE && (effect.Action == protocol.PlanningEffect_READ || effect.Action == protocol.PlanningEffect_ALTER):
 		o.kept = append(o.kept, at)
 	case item.action == protocol.PlanningEffect_DROP && effect.Action == protocol.PlanningEffect_CREATE:
-		return directoryKept(pathKey(item.input.Subject), at)
+		return DirectoryKept(pathKey(item.input.Subject), at)
 	default:
 		return errOverlap
 	}
@@ -215,18 +215,20 @@ func (o *occupants) below(item change, step *protocol.StepIdentity, effect *prot
 		o.before = append(o.before, step)
 		o.filled[at] = true
 	case item.action == protocol.PlanningEffect_CREATE && effect.Action == protocol.PlanningEffect_DROP:
-		return directoryKept(at, pathKey(item.input.Subject))
+		return DirectoryKept(at, pathKey(item.input.Subject))
 	default:
 		return errOverlap
 	}
 	return nil
 }
 
-// directoryKept refuses a plan that drops the object at dropped and creates
-// one at directory, the path of a directory above it. YDB keeps a directory
-// after its last object is dropped, and YQL has no statement that removes
-// one, so no order of the plan's statements can apply it.
-func directoryKept(dropped, directory string) error {
+// DirectoryKept refuses a plan that drops the object at dropped and creates
+// one at directory, the path of a directory above it, in the words of the
+// host's embedded engine. YDB keeps a directory after its last object is
+// dropped, and YQL has no statement that removes one, so no order of the
+// plan's statements can apply it. Both paths are relative to the database,
+// as YQL names the objects there.
+func DirectoryKept(dropped, directory string) error {
 	return fmt.Errorf("this plan drops %s and creates an object at %s, which is a directory in the database. "+
 		"YDB keeps a directory after its last object is dropped, and YQL has no statement that removes one: "+
 		"drop the objects below %s and remove the directory first (for example with `ydb scheme rmdir`), "+
@@ -340,9 +342,9 @@ func checkTableAboveOrBelow(family Family, item change, table *protocol.Planning
 	at := pathKey(table.Subject)
 	switch {
 	case ancestor(table.Subject, item.input.Subject) && item.action == protocol.PlanningEffect_DROP && table.Action == protocol.PlanningTable_CREATE:
-		return directoryKept(pathKey(item.input.Subject), at)
+		return DirectoryKept(pathKey(item.input.Subject), at)
 	case ancestor(item.input.Subject, table.Subject) && item.action == protocol.PlanningEffect_CREATE && table.Action == protocol.PlanningTable_DROP:
-		return directoryKept(at, pathKey(item.input.Subject))
+		return DirectoryKept(at, pathKey(item.input.Subject))
 	case ancestor(table.Subject, item.input.Subject) && (table.Action != protocol.PlanningTable_DROP || !occupied.freed[at]),
 		ancestor(item.input.Subject, table.Subject) && (table.Action != protocol.PlanningTable_CREATE || !occupied.filled[at]):
 		return fmt.Errorf("captured table overlaps the directory path of a %s", family.Noun)
@@ -378,9 +380,9 @@ func checkPathChanges(request *protocol.PlanFeaturesRequest, family Family, item
 		case below && item.action == protocol.PlanningEffect_DROP && known.action == protocol.PlanningEffect_CREATE:
 			// The creation below orders itself after this drop.
 		case above && known.action == protocol.PlanningEffect_CREATE && item.action == protocol.PlanningEffect_DROP:
-			return nil, directoryKept(pathKey(item.input.Subject), pathKey(other.Subject))
+			return nil, DirectoryKept(pathKey(item.input.Subject), pathKey(other.Subject))
 		case below && item.action == protocol.PlanningEffect_CREATE && known.action == protocol.PlanningEffect_DROP:
-			return nil, directoryKept(pathKey(other.Subject), pathKey(item.input.Subject))
+			return nil, DirectoryKept(pathKey(other.Subject), pathKey(item.input.Subject))
 		default:
 			return nil, fmt.Errorf("%s changes contain overlapping object and directory paths", family.Noun)
 		}
