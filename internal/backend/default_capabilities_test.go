@@ -26,6 +26,15 @@ func TestDescriptionStatesTheOfflineCapabilities(t *testing.T) {
 	c.Assert(facts["full_text_indexes"], qt.IsTrue)
 	c.Assert(facts["resource_pools"], qt.IsFalse)
 
+	lines := map[string]map[string]bool{}
+	for _, line := range listed.GetEngines()[0].GetReleaseLines() {
+		lines[line.GetLine()] = line.GetCapabilities()
+	}
+	c.Assert(lines["25.1"]["vector_indexes"], qt.IsFalse)
+	c.Assert(lines["25.2"]["vector_indexes"], qt.IsTrue)
+	c.Assert(lines["26.2"], qt.DeepEquals, facts)
+
 	unlisted := provider.NegotiatedDescription(backend.Description(), nil)
 	c.Assert(unlisted.GetEngines()[0].GetDefaultCapabilities(), qt.IsNil)
+	c.Assert(unlisted.GetEngines()[0].GetReleaseLines()[0].GetCapabilities(), qt.IsNil)
 }

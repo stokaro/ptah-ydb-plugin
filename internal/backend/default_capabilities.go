@@ -19,7 +19,15 @@ const offlineLine = "26.2"
 // them. These are the facts of the built-in engine's YDB262 preset for the
 // keys this provider reads.
 func defaultCapabilities() map[string]bool {
-	result := sessionCapabilities(offlineLine)
+	return lineCapabilities(offlineLine)
+}
+
+// lineCapabilities are the facts a session states for a server of line whose
+// address names no monitoring endpoint, with the facts of the common objects:
+// what the host plans with for a --server-version that names the line
+// (ReleaseLine.capabilities, contract 25.27).
+func lineCapabilities(line string) map[string]bool {
+	result := sessionCapabilities(line)
 	maps.Copy(result, commonobject.Capabilities())
 	return result
 }

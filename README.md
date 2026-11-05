@@ -3302,8 +3302,10 @@ identity contract to bypass that requirement.
 The provider lists `engine.default-capabilities` (contract 25.27) and states
 the facts an offline command plans `ydb` with: those a session states for a
 26.2 server whose address names no monitoring endpoint, with the facts of the
-common objects. `ptah schema render` and the other commands that plan without
-a database read them. A command that connects plans with the session's facts.
+common objects. Each release line states its own the same way, and a
+`--server-version` selects the line it equals or the longest line it starts
+with followed by a dot, so `26.2.1.14` selects 26.2. `ptah schema render`, `sql
+lint` and the other commands that plan without a database read them. A command that connects plans with the session's facts.
 A host of an earlier contract receives no facts, plans offline against unknown
 facts, and the provider refuses what needs one, such as a table creation,
 which needs nontransactional DDL established.
