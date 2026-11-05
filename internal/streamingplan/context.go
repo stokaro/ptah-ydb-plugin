@@ -113,16 +113,26 @@ func assessUnchanged(request *protocol.PlanFeaturesRequest, builder *lifecycleBu
 }
 
 // uncapturedDefinition refuses a query subject neither side of the context
-// records, unless the coverage of each side knows the subject complete, absent
-// or a reserved name. A name the provider's own storage occupies, such as the
-// lock node at the root, holds no streaming query, so no query there reads an
-// input the plan writes.
+// records, unless the coverage of each side knows the subject complete or
+// absent, or either side reserves the name. A name the provider's own storage
+// occupies, such as the lock node at the root, holds no streaming query, so no
+// query there reads an input the plan writes. One side's reservation is
+// enough: the storage is the provider's on both sides, and a desired source
+// that claims nothing, such as an HCL document without a coverage header,
+// cannot place a query at the name.
 func uncapturedDefinition(request *protocol.PlanFeaturesRequest, subject *protocol.ComparisonIdentity) error {
+	var unknown *protocol.ModelKnowledge
 	for _, state := range []*protocol.ComparisonState{request.CurrentObjects, request.DesiredObjects} {
 		known := objectcompare.Knowledge(state.GetCoverage(), subject.Kind, subject, request.DatabasePath)
-		if known.GetState() != protocol.ModelKnowledge_COMPLETE && known.GetState() != protocol.ModelKnowledge_ABSENT && !objectcompare.ReservedName(known) {
-			return fmt.Errorf("streaming query %q has no complete captured definition: %s", subject.GetName().GetSource(), known.GetReason())
+		if objectcompare.ReservedName(known) {
+			return nil
 		}
+		if unknown == nil && known.GetState() != protocol.ModelKnowledge_COMPLETE && known.GetState() != protocol.ModelKnowledge_ABSENT {
+			unknown = known
+		}
+	}
+	if unknown != nil {
+		return fmt.Errorf("streaming query %q has no complete captured definition: %s", subject.GetName().GetSource(), unknown.GetReason())
 	}
 	return nil
 }
