@@ -590,10 +590,12 @@ properties, such as its TTL and its partitioning, and a column table's
 storage. What the forward change leaves is the description the table held
 with the declared settings in place of its own; a setting the declaration
 leaves unset stays as the table held it, except the TTL, which a table the
-declaration gives none loses. A column's move to another family has no
-reversal: the host projects a reverse's state onto the table and its
-indexes, not onto a column, and the provider refuses it with that reason. A
-host that does not list the feature gets no reversal service and refuses
+declaration gives none loses. A column's move to another family reverses to
+a move back: what the forward change leaves is the column in the declared
+family, with a default or storage setting the declaration does not state
+kept as the column held it. A host that does not project a reverse's state
+onto a column cannot plan that reverse and refuses it. A host that does not
+list the feature gets no reversal service and refuses
 every such change, naming the change kind that has no reversal.
 
 A topic reverses like any other object, but no migration file holds a topic
