@@ -34,7 +34,7 @@ func TestHostRefusesAUniqueIndexOnATableThatExists_FailurePath(t *testing.T) {
 	output, err = hostApply(c, directory, withUnique)
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(output, qt.Matches, `(?s).*adding unique index "uq_items_price" to table "[^"]+\.items", which exists already, `+
-		`which requires target capability unique_index_on_existing_table, unavailable on this ydb target.*`)
+		`which requires target capability unique_index_on_existing_table, unavailable on this ydb target; YDB keeps it behind feature flag EnableAddUniqueIndex: turn the flag on.*`)
 	_, added := heldIndexColumns(c, opened, absolute)["uq_items_price"]
 	c.Assert(added, qt.IsFalse)
 }
@@ -59,7 +59,7 @@ func TestHostRefusesAUniqueIndexWithTheFlagOff_FailurePath(t *testing.T) {
 	output, err = hostApply(c, directory, withUnique)
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(output, qt.Matches, `(?s).*adding unique index "uq_items_price" to table "[^"]+\.items", which exists already, `+
-		`which requires target capability unique_index_on_existing_table, unavailable on this ydb target.*`)
+		`which requires target capability unique_index_on_existing_table, unavailable on this ydb target; YDB keeps it behind feature flag EnableAddUniqueIndex: turn the flag on.*`)
 	_, added := heldIndexColumns(c, opened, absolute)["uq_items_price"]
 	c.Assert(added, qt.IsFalse)
 }

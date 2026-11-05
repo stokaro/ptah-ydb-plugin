@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
@@ -28,7 +29,7 @@ const (
 const UnsupportedReason = "target capability external_data_sources is unavailable, so Ptah leaves the object unmanaged"
 
 func capabilityRefusal(subject, key string) error {
-	return fmt.Errorf("%s, which requires target capability %s, unavailable on this ydb target", subject, key)
+	return fmt.Errorf("%s, which requires target capability %s, unavailable on this ydb target%s", subject, key, featureflags.Clause(key))
 }
 
 // CheckDataSource reports why the data source display names cannot be

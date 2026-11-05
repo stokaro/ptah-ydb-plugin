@@ -243,6 +243,13 @@ holds the pages the mapping is checked against, and a live test turns the
 flag on and off through the server's dynamic configuration and reads the
 capability each new session reports.
 
+A plan refused for want of a capability a flag decides names the flag, after
+the host's words for the capability: `...; YDB keeps it behind feature flag
+<Flag>: turn the flag on, and name the cluster's monitoring endpoint in the
+URL (monitoring=http://host:8765) so Ptah reads the flags before it plans`. A
+session without the endpoint takes its release line's default, so the flag
+alone does not change the answer.
+
 Session close releases both the SQL pool and its parent native driver, even
 when the RPC context is canceled. Cleanup results are retained for repeated
 closes. A process accepts at most 1,024 lifetime session handles; start a new

@@ -142,7 +142,7 @@ func TestIndexAlterationUniqueRefusedSubprocess(t *testing.T) {
 		desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
 	c.Assert(plan.Diagnostics, qt.HasLen, 1)
 	c.Assert(plan.Diagnostics[0].Message, qt.Matches, `adding unique index "by_payload" to table "[^"]+\.records", which exists already, `+
-		`which requires target capability unique_index_on_existing_table, unavailable on this ydb target`)
+		`which requires target capability unique_index_on_existing_table, unavailable on this ydb target; YDB keeps it behind feature flag EnableAddUniqueIndex: .*`)
 	c.Assert(plan.Contributions, qt.HasLen, 0)
 	c.Assert(fixture.heldIndexes(c), qt.HasLen, 0)
 }
