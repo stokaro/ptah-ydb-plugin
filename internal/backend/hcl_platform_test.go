@@ -1,6 +1,7 @@
 package backend_test
 
 import (
+	"bytes"
 	"context"
 	"slices"
 	"testing"
@@ -129,4 +130,34 @@ func TestEncodeSource_WritesATableTTLInHCL(t *testing.T) {
 	c.Assert(provider.EncodedSourceParts(old), qt.HasLen, 0)
 	c.Assert(old.Losses[0].Message, qt.Equals,
 		"the YDB settings of table app/records: HCL has no spelling for a YDB table's partitioning, layout, TTL, column families or column storage")
+}
+
+// For a host that reads the block, the empty changefeed and native index sets
+// a read reports for a table without either are written by the table's
+// platform part, beside its TTL, and no loss names them. A set that holds a
+// changefeed is lost by name.
+func TestEncodeSource_WritesTheEmptySetsOfATableInHCL(t *testing.T) {
+	c := testcheck.New(t)
+	row := tableFacet(c, `{"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600}}}`)
+	feeds, indexes := kindFacet(c, schema.ChangefeedProperties, "feeds", `{}`), kindFacet(c, schema.IndexProperties, "indexes", `{}`)
+	request := tableRequest(protocol.SourceDocument_HCL, row, feeds, indexes)
+
+	encoded, err := backend.New().EncodeSource(platformContext(c), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidateEncodedSource(provider.NegotiatedDescription(backend.Description(), provider.HostFeatures(platformContext(c))), request, encoded), qt.IsNil)
+	c.Assert(encoded.Losses, qt.HasLen, 0)
+	c.Assert(provider.EncodedSourceParts(encoded), qt.HasLen, 1)
+}
+
+// kindFacet is a desired facet of kind with payload on app/records, under id.
+func kindFacet(c *qt.C, kind, id, payload string) *protocol.EncodeSourceValue {
+	c.Helper()
+	table := &protocol.Reference{Engine: "ydb", Kind: "table", Schema: "app", Name: "records"}
+	model := schema.NativeDesiredModel(kind)
+	envelope, err := schema.NormalizeDesired(&protocol.Envelope{ProviderId: schema.ProviderID, Kind: model.Kind, SchemaVersion: model.SchemaVersion,
+		Encoding: model.Encoding, DefinitionSha256: model.DefinitionSha256, Owner: table, Payload: []byte(payload)})
+	c.Assert(err, qt.IsNil)
+	return &protocol.EncodeSourceValue{Placement: protocol.SourceModelValue_FACET, BindingId: "records", Value: &protocol.NormalizedValue{Id: id,
+		Value: envelope, NormalizedOwner: proto.CloneOf(table), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(envelope.Payload)}}
 }

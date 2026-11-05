@@ -1373,7 +1373,11 @@ at the table in the embedded engine's words, such as `YDB table settings
 (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3) are not represented in HCL`. A
 facet whose TTL the block writes and that holds such a setting too is written in
 part, and the loss names the setting. The settings a read reports for every
-table, YDB's documented defaults, are no loss. The parts are
+table, YDB's documented defaults, are no loss, and neither are the empty
+changefeed and native index sets a read reports for a table without either,
+which the table's `platform "ydb"` part writes by writing nothing; a
+changefeed or a native index the table holds is a loss by name (`changefeed
+updates is not represented in HCL`). The parts are
 decoded again before they are returned, and a value they do not give back is a
 loss. A value that needs several declarations is a loss for a host that does not
 negotiate `source.encode-groups`. `struct_name` is written in YAML alone.

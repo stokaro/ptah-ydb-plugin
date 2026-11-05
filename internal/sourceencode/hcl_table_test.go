@@ -110,7 +110,8 @@ func TestEncodeTableHCL_LosesWhatHasNoTTL(t *testing.T) {
 		{"a tiered column TTL", schema.ColumnStorageProperties,
 			`{"ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"3600","externalStorage":"/local/app/cold"},{"applyAfterSeconds":"86400","delete":{}}]}}}`,
 			"value: YDB column storage, hash partitioning and tiered TTL are not represented in HCL"},
-		{"a facet HCL has no place for", schema.ChangefeedProperties, `{}`, "value: table changefeeds of table app/events has no HCL spelling"},
+		{"a changefeed", schema.ChangefeedProperties, readFeeds, "value: changefeed updates is not represented in HCL"},
+		{"a native index", schema.IndexProperties, nativeIndex, "value: native index by_body is not represented in HCL"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -135,4 +136,40 @@ func TestEncodeTableHCL_WritesTheClaim(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(tablesource.Owns(result.Parts[0].GetFragment()), qt.IsTrue)
 	c.Assert(result.Parts[0].GetFragment().GetSelector(), qt.Equals, tablesource.HCLPlatformBlock().GetSelector())
+}
+
+// What a read reports for every table without changefeeds or native indexes,
+// an empty set of each, is no loss: the table's platform part writes it with
+// no override, beside the TTL, and reads back as the TTL alone, so the table
+// keeps the changefeeds and the native indexes it holds.
+func TestEncodeTableHCL_WritesTheEmptySetsAReadReports(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		facets    []facet
+		overrides []string
+		row       string
+	}{
+		{"beside a TTL", []facet{{"row", schema.TableProperties, "", `{"primaryKey":["id"],` + readDefaults + `,"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":60}}}`},
+			{"feeds", schema.ChangefeedProperties, "", `{}`}, {"indexes", schema.IndexProperties, "", `{}`}},
+			[]string{"row_deletion_column=ts", "row_deletion_interval=PT1M"}, `{"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":60}}}`},
+		{"alone", []facet{{"feeds", schema.ChangefeedProperties, "", `{}`}, {"indexes", schema.IndexProperties, "", `{}`}}, make([]string, 0), ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			ids := make([]string, 0, len(test.facets))
+			for _, written := range test.facets {
+				ids = append(ids, written.id)
+			}
+
+			result, err := sourceencode.EncodeTableHCL(table(c, test.facets...))
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(losses(result), qt.HasLen, 0)
+			c.Assert(result.Written, qt.DeepEquals, ids)
+			c.Assert(result.Parts, qt.HasLen, 1)
+			c.Assert(result.Parts[0].GetFragment().GetHclBlock().GetSite(), qt.Equals, protocol.HCLSourceBlock_TABLE_PLATFORM)
+			c.Assert(overrides(result.Parts), qt.DeepEquals, test.overrides)
+			c.Assert(decode(c, protocol.SourceDocument_HCL, result.Parts).row, qt.Equals, canonical(c, schema.TableProperties, test.row))
+		})
+	}
 }

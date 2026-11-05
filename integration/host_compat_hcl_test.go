@@ -108,7 +108,7 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 			_, notes, reapplied := compatInspect(c, directory)
 
 			c.Assert(before, qt.DeepEquals, test.want)
-			c.Assert(notes, qt.Matches, `(?s).*table\.`+regexp.QuoteMeta(directory+"."+test.table)+`: [^\n]* is not represented in HCL.*`)
+			c.Assert(notes, qt.Matches, `(?s).*table\.`+regexp.QuoteMeta(directory+"."+test.table)+`: [^\n]* (is|are) not represented in HCL.*`)
 			c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
 			c.Assert(heldTableOf(c, opened, absolute), qt.DeepEquals, test.want)
 		})
