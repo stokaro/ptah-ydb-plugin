@@ -51,7 +51,12 @@ minor version at least `min_contract.minor`. The document states the minimum the
 provider declares in its `Describe` reply, so the two cannot disagree. This
 provider requires contract 25.7. It negotiates `database.context` and
 `values.context` to resolve dependency paths, and `planning.lifecycle` to order
-native replacements around common table operations. `ptah providers install`
+native replacements around common table operations. It offers
+`planning.statement-style` (contract 25.8), which ptah-compat's `migrate diff`
+needs, because it plans in the exact statement style: no comment that only
+describes a statement, no guard the plan does not need and no CASCADE. The
+operations the provider plans carry none of these in either style, so an exact
+plan is the plan the annotated style gets. `ptah providers install`
 reads the document to choose the newest release the host can start, without
 downloading an archive. `release-lines.json` lists the release lines the provider declares.
 
@@ -155,7 +160,19 @@ The host and provider are built against the published SDK pin with
 run builds the newest published Ptah release whose provider contract this
 provider can run on (`scripts/resolve-host.sh`); it is skipped with a notice
 while no release speaks that contract. A second, non-blocking run builds Ptah's
-master branch, so a host change that breaks this provider shows up early. This
+master branch, so a host change that breaks this provider shows up early. A
+third run, on each image, builds a host a run names: a branch, tag or commit of
+stokaro/ptah, given as the `host_ref` input of a manual run or as the first line
+of `.github/host-ref` in a pull request whose tests need a host change master
+does not have yet (`scripts/live-lines.sh`). It blocks, because the run asked
+for that host, and a ref that names no commit fails it. Each run also builds
+the host's `ptah-compat` from the same checkout and names it in
+`PTAH_HOST_COMPAT_TEST_BIN`. The `TestHostCompat` tests run it with
+`PTAH_PROVIDER_CONFIG` naming this provider's manifest, which is how
+ptah-compat takes one. They skip, with the binary's answer, where ptah-compat
+still builds in a YDB engine of its own, which claims `ydb` and refuses this
+provider's registration; a host without the built-in engine
+(stokaro/ptah#5298) runs them. This
 repository owns the YDB end-to-end, live and parity tests; Ptah's own CI checks
 the provider contract only on its in-tree fixture provider. These are source-build checks; packaged installation and
 default bundling remain separate requirements.
@@ -581,7 +598,7 @@ The comments of a table the host creates, of its columns and of its indexes,
 and of a column or an index it adds to a table, reach the provider as comment
 steps after the step that creates the object, as for any comment change. The
 provider takes them off the declaration it creates the table from, and runs
-the steps after its own steps on that table.
+the steps after its own steps on that table, with the exceptions below.
 
 Views and comments use these shared stages:
 
@@ -591,7 +608,7 @@ Views and comments use these shared stages:
 | PrepareCommonObjects | The query in the server's form: its tokens joined by single spaces, comments and terminators left out | As declared |
 | ValidateSchema | Refuses a view without a query, `WITH CHECK OPTION`, view attributes and materialized views | Refuses what an attribute cannot hold: a key over 100 bytes, a value over 4096 bytes, text that is not UTF-8, more than 10240 bytes on one table |
 | Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
-| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes |
+| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes; a comment on the table or a column also skips a step that changes only an index |
 
 The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
 two- or three-character operator is one token except `>>`, which YDB writes
@@ -603,6 +620,17 @@ A step that only removes, such as a column's removal, is ordered after the
 views and comments of the plan, not before them: the host places a removal
 after its views and comments, and what a removal drops is no longer declared,
 so no view the plan creates reads it and no comment the plan sets names it.
+The one comment step that names a dropped column removes its comment: YDB
+keeps the attribute once the column is gone and would give it to a column
+added later under that name. The host sends that step for each dropped column
+that held a comment (stokaro/ptah#5280), in its comment window, so it runs
+before the removal.
+
+A comment on a table or on one of its columns is not ordered after a step that
+changes only an index of the table, such as an index's addition. The host
+places the comment of a column it adds right after the column, before the
+index additions, and the index step changes nothing such a comment names. A
+comment on an index still follows the steps on its table.
 
 YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table

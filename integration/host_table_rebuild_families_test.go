@@ -49,23 +49,21 @@ func hclItems(directory, nType string, tsNull bool) string {
 			"  primary_key {\n    columns = [column.id]\n  }\n}\n")
 }
 
-// Ported from the host's compatibility tests that rebuild a table from HCL:
-// TestYDBCompatBinary_RebuildKeepsATTLTheDocumentLeavesOut,
-// TestYDBCompatBinary_RebuildKeepsColumnFamiliesHCLCannotWrite and
-// TestYDBCompatBinary_RebuildKeepsTableSettingsHCLCannotWrite. HCL can state
-// no TTL, no column family and no splitting setting, so a rebuild planned
-// from it, for a widened column or a column made NOT NULL, writes what the
-// table holds of each on the new table rather than dropping it with the old
-// one, and the next run finds nothing to change. The host's tests run
-// ptah-compat with PTAH_ALLOW_TABLE_REBUILD=1; the plugin's CI builds the
-// native host, so the same document runs through `schema apply
-// --allow-table-rebuild`, which plans with the same provider rules.
-func TestHostRebuildFromHCLKeepsWhatTheDocumentLeavesOut_HappyPath(t *testing.T) {
+// hclRebuildCase is a table items created with a TTL, column families or
+// splitting settings HCL cannot state, the type HCL then declares its column
+// n with, and what the server holds of the table's storage before the
+// rebuild and after it. Declaring the Int32 column n again makes the
+// nullable column ts NOT NULL instead (see hclItems).
+type hclRebuildCase struct {
+	name, create, nType string
+	want                storedTable
+}
+
+// hclRebuildCases are the tables the rebuilds from HCL start from, for native
+// ptah and for ptah-compat alike.
+func hclRebuildCases() []hclRebuildCase {
 	plain := []string{"default compression=off"}
-	for _, test := range []struct {
-		name, create, nType string
-		want                storedTable
-	}{
+	return []hclRebuildCase{
 		{name: "a TTL, for a widened column", nType: "Int64",
 			create: "CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `ts` Timestamp, PRIMARY KEY (`id`)) WITH (TTL = Interval('P1D') ON `ts`)",
 			want:   storedTable{TTL: "ts 86400s", Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0", ReadReplicas: ""}},
@@ -78,7 +76,22 @@ func TestHostRebuildFromHCLKeepsWhatTheDocumentLeavesOut_HappyPath(t *testing.T)
 			create: "CREATE TABLE `{table}` (`id` Int64 NOT NULL, `n` Int32, `ts` Timestamp, PRIMARY KEY (`id`)) WITH (" +
 				"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3, READ_REPLICAS_SETTINGS = 'PER_AZ:1')",
 			want: storedTable{Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=DISABLED min=3 max=0", ReadReplicas: "PER_AZ:1"}},
-	} {
+	}
+}
+
+// Ported from the host's compatibility tests that rebuild a table from HCL:
+// TestYDBCompatBinary_RebuildKeepsATTLTheDocumentLeavesOut,
+// TestYDBCompatBinary_RebuildKeepsColumnFamiliesHCLCannotWrite and
+// TestYDBCompatBinary_RebuildKeepsTableSettingsHCLCannotWrite. HCL can state
+// no TTL, no column family and no splitting setting, so a rebuild planned
+// from it, for a widened column or a column made NOT NULL, writes what the
+// table holds of each on the new table rather than dropping it with the old
+// one, and the next run finds nothing to change. The same document runs
+// through native `schema apply --allow-table-rebuild` here and through
+// ptah-compat with PTAH_ALLOW_TABLE_REBUILD=1 in
+// TestHostCompatRebuildFromHCLKeepsWhatTheDocumentLeavesOut_HappyPath.
+func TestHostRebuildFromHCLKeepsWhatTheDocumentLeavesOut_HappyPath(t *testing.T) {
+	for _, test := range hclRebuildCases() {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			opened, directory, database := lockFixture(c)

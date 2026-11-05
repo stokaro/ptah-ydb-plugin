@@ -20,21 +20,28 @@ import (
 // Docker daemon on the machine that runs them, which the service demands.
 const devImageTag = "26.2.1.14"
 
-// startProviderWithDocker starts the provider with the variables the docker
-// command needs. The provider runs with an explicit environment, so it does not
-// see PATH or the daemon's address unless the host passes them.
-func startProviderWithDocker(c *qt.C, binary, digest string) *providerruntime.Client {
-	c.Helper()
+// dockerEnvironment is the variables the docker command needs, as NAME=value
+// entries of the test process's environment. The provider runs with an
+// explicit environment, so it does not see PATH or the daemon's address unless
+// the host passes them.
+func dockerEnvironment() []string {
 	var environment []string
 	for _, name := range []string{"PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG"} {
 		if value, ok := os.LookupEnv(name); ok {
 			environment = append(environment, name+"="+value)
 		}
 	}
+	return environment
+}
+
+// startProviderWithDocker starts the provider with the variables the docker
+// command needs.
+func startProviderWithDocker(c *qt.C, binary, digest string) *providerruntime.Client {
+	c.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	client, err := providerruntime.Start(ctx, providerruntime.Options{
-		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin", Environment: environment, HostFeatures: []string{provider.ObservedColumnsFeature},
+		Executable: binary, SHA256: digest, ProviderID: "github.com/stokaro/ptah-ydb-plugin", Environment: dockerEnvironment(), HostFeatures: []string{provider.ObservedColumnsFeature},
 	})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(client.Close)
