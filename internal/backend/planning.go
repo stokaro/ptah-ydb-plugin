@@ -111,73 +111,11 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		if err := ctx.Err(); err != nil {
 			return nil, status.FromContextError(err).Err()
 		}
-		if common := change.GetCommonObject(); common != nil {
-			statement, err := commonobject.Render(common, request.GetCapabilities())
-			if err != nil {
-				return nil, authored.Status(codes.FailedPrecondition, err)
-			}
-			statements[i] = statement
-			continue
-		}
-		native := change.GetNative()
-		if native.GetRole() != protocol.NativeOperation_STATEMENT || native.GetParent() != nil {
-			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "only standalone native operations are implemented")
-		}
-		captured := native.GetValue()
-		if captured.GetValue().GetKind() == tablecreate.InventoryOperationKind {
-			change, err := tablecreate.DecodeInventory(captured.GetValue())
-			if err != nil {
-				return nil, authored.Status(codes.InvalidArgument, err)
-			}
-			if err := change.CheckCapabilities(request.Capabilities); err != nil {
-				return nil, authored.Status(codes.FailedPrecondition, err)
-			}
-		}
-		if captured.GetValue().GetKind() == schema.CoordinationOperation && !request.Capabilities["coordination_nodes"] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "native coordination rendering requires established capabilities")
-		}
-		if captured.GetValue().GetKind() == schema.SecretOperation && !request.Capabilities["secrets"] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "secret rendering requires the secrets capability"+featureflags.Clause("secrets"))
-		}
-		if captured.GetValue().GetKind() == schema.TopicOperation && !request.Capabilities[topics.CapabilityTopics] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "topic rendering requires the topics capability")
-		}
-		if captured.GetValue().GetKind() == schema.ChangefeedOperation && !request.Capabilities[changefeeds.CapabilityChangefeeds] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "changefeed rendering requires the changefeeds capability")
-		}
-		if kind := captured.GetValue().GetKind(); (kind == schema.ExternalSourceOperation || kind == schema.ExternalTableOperation) && !request.Capabilities[externals.CapabilityExternalDataSources] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "external object rendering requires the external_data_sources capability"+
-				featureflags.Clause(externals.CapabilityExternalDataSources))
-		}
-		if captured.GetValue().GetKind() == schema.StreamingQueryOperation && !request.Capabilities[streaming.Capability] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, streaming.CapabilityRefusal("streaming query"))
-		}
-		if captured.GetValue().GetKind() == schema.ReplicationOperation && !request.Capabilities[replication.CapabilityReplication] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "async replication rendering requires the async_replication capability"+
-				featureflags.Clause(replication.CapabilityReplication))
-		}
-		if captured.GetValue().GetKind() == schema.TransferOperation && !request.Capabilities[replication.CapabilityTransfers] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "transfer rendering requires the transfers capability"+featureflags.Clause(replication.CapabilityTransfers))
-		}
-		if captured.GetValue().GetKind() == schema.WorkloadOperation && !request.Capabilities[workload.CapabilityResourcePools] {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "resource pools require target capability resource_pools; "+workload.FlagHint)
-		}
-		normalized, err := normalizeOperation(&protocol.ValueInput{Id: captured.GetId(), Representation: protocol.ValueInput_OPERATION, Value: captured.GetValue()})
+		operation, statement, err := renderChange(change, request.GetCapabilities())
 		if err != nil {
-			return nil, authored.Status(codes.InvalidArgument, err)
+			return nil, err
 		}
-		if !proto.Equal(normalized, captured) {
-			return nil, runtime.ErrorWithReason(codes.InvalidArgument, "native operation metadata changed")
-		}
-		if normalized.Value.Kind == declarationplan.OperationKind {
-			statement, err := declarationplan.Text(normalized.Value, request.Capabilities)
-			if err != nil {
-				return nil, authored.Status(codes.FailedPrecondition, err)
-			}
-			statements[i] = statement
-			continue
-		}
-		operations[i] = normalized.Value
+		operations[i], statements[i] = operation, statement
 	}
 	result := &protocol.RenderResult{Complete: true}
 	if request.GetForm() == protocol.RenderRequest_TEXT {
@@ -202,4 +140,90 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 		return nil, status.FromContextError(err).Err()
 	}
 	return result, nil
+}
+
+// renderChange checks one change of a render request against capabilities and
+// returns what renders it: the native operation, or the statement of a common
+// object or of a declaration. Its error is the call's status.
+func renderChange(change *protocol.Change, capabilities map[string]bool) (*protocol.Envelope, string, error) {
+	if common := change.GetCommonObject(); common != nil {
+		statement, err := commonobject.Render(common, capabilities)
+		if err != nil {
+			return nil, "", authored.Status(codes.FailedPrecondition, err)
+		}
+		return nil, statement, nil
+	}
+	native := change.GetNative()
+	if native.GetRole() != protocol.NativeOperation_STATEMENT || native.GetParent() != nil {
+		return nil, "", runtime.ErrorWithReason(codes.InvalidArgument, "only standalone native operations are implemented")
+	}
+	captured := native.GetValue()
+	if err := renderRefusal(captured.GetValue(), capabilities); err != nil {
+		return nil, "", err
+	}
+	normalized, err := normalizeOperation(&protocol.ValueInput{Id: captured.GetId(), Representation: protocol.ValueInput_OPERATION, Value: captured.GetValue()})
+	if err != nil {
+		return nil, "", authored.Status(codes.InvalidArgument, err)
+	}
+	if !proto.Equal(normalized, captured) {
+		return nil, "", runtime.ErrorWithReason(codes.InvalidArgument, "native operation metadata changed")
+	}
+	if normalized.Value.Kind == declarationplan.OperationKind {
+		statement, err := declarationplan.Text(normalized.Value, capabilities)
+		if err != nil {
+			return nil, "", authored.Status(codes.FailedPrecondition, err)
+		}
+		return nil, statement, nil
+	}
+	return normalized.Value, "", nil
+}
+
+// renderRefusal refuses a native operation the target's capabilities cannot
+// carry out: a column addition they refuse, or an operation whose kind needs a
+// capability the target lacks (see renderGate). Its error is the call's
+// status.
+func renderRefusal(operation *protocol.Envelope, capabilities map[string]bool) error {
+	if operation.GetKind() == tablecreate.InventoryOperationKind {
+		change, err := tablecreate.DecodeInventory(operation)
+		if err != nil {
+			return authored.Status(codes.InvalidArgument, err)
+		}
+		if err := change.CheckCapabilities(capabilities); err != nil {
+			return authored.Status(codes.FailedPrecondition, err)
+		}
+	}
+	if capability, refusal := renderGate(operation.GetKind()); capability != "" && !capabilities[capability] {
+		return runtime.ErrorWithReason(codes.FailedPrecondition, refusal)
+	}
+	return nil
+}
+
+// renderGate names the capability a native operation of kind needs before it
+// renders, and the refusal of a target without it. A kind no capability gates
+// names none.
+func renderGate(kind string) (capability, refusal string) {
+	switch kind {
+	case schema.CoordinationOperation:
+		return "coordination_nodes", "native coordination rendering requires established capabilities"
+	case schema.SecretOperation:
+		return "secrets", "secret rendering requires the secrets capability" + featureflags.Clause("secrets")
+	case schema.TopicOperation:
+		return topics.CapabilityTopics, "topic rendering requires the topics capability"
+	case schema.ChangefeedOperation:
+		return changefeeds.CapabilityChangefeeds, "changefeed rendering requires the changefeeds capability"
+	case schema.ExternalSourceOperation, schema.ExternalTableOperation:
+		return externals.CapabilityExternalDataSources, "external object rendering requires the external_data_sources capability" +
+			featureflags.Clause(externals.CapabilityExternalDataSources)
+	case schema.StreamingQueryOperation:
+		return streaming.Capability, streaming.CapabilityRefusal("streaming query")
+	case schema.ReplicationOperation:
+		return replication.CapabilityReplication, "async replication rendering requires the async_replication capability" +
+			featureflags.Clause(replication.CapabilityReplication)
+	case schema.TransferOperation:
+		return replication.CapabilityTransfers, "transfer rendering requires the transfers capability" + featureflags.Clause(replication.CapabilityTransfers)
+	case schema.WorkloadOperation:
+		return workload.CapabilityResourcePools, "resource pools require target capability resource_pools; " + workload.FlagHint
+	default:
+		return "", ""
+	}
 }

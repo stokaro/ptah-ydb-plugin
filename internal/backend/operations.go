@@ -32,6 +32,15 @@ func normalizeOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, 
 		return schema.NormalizeReplicationOperation(input)
 	case schema.TransferOperation:
 		return schema.NormalizeTransferOperation(input)
+	default:
+		return normalizeTableOperation(input)
+	}
+}
+
+// normalizeTableOperation normalizes an operation on a row or column table,
+// and refuses any other kind as unsupported.
+func normalizeTableOperation(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
+	switch input.GetValue().GetKind() {
 	case tablecreate.OperationKind:
 		return tablecreate.Normalize(input)
 	case tablecreate.InventoryOperationKind:

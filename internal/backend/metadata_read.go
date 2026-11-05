@@ -168,34 +168,8 @@ func (p *Provider) ReadMetadataPage(ctx context.Context, request *protocol.ReadM
 		}
 	}()
 	result = &protocol.MetadataPage{Reader: metadataReadResult(request.Reader), Page: request.Page, Exists: reader.exists}
-	for count := uint32(0); count < request.MaxRecords; count++ {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if err := reader.fill(); err != nil {
-			return nil, err
-		}
-		if reader.eof {
-			break
-		}
-		switch row := reader.pending.(type) {
-		case *protocol.MigrationLogRecord:
-			result.Logs = append(result.Logs, row)
-		case *protocol.MigrationTagRecord:
-			result.Tags = append(result.Tags, row)
-		}
-		if proto.Size(result) > provider.MaxMetadataBytes {
-			if count == 0 {
-				return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB metadata record exceeds page size")
-			}
-			if len(result.Logs) > 0 {
-				result.Logs = result.Logs[:len(result.Logs)-1]
-			} else {
-				result.Tags = result.Tags[:len(result.Tags)-1]
-			}
-			break
-		}
-		reader.pending = nil
+	if err := reader.fillPage(ctx, result, request.MaxRecords); err != nil {
+		return nil, err
 	}
 	if err := reader.fill(); err != nil {
 		return nil, err
@@ -207,16 +181,63 @@ func (p *Provider) ReadMetadataPage(ctx context.Context, request *protocol.ReadM
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	reader.page++
-	reader.complete = result.Complete
-	if reader.complete && reader.snapshot != nil {
-		reader.closeErr = reader.snapshot.Close()
-		reader.snapshot = nil
-		if reader.closeErr != nil {
-			return nil, reader.closeErr
-		}
+	if err := reader.advance(result); err != nil {
+		return nil, err
 	}
 	return result, nil
+}
+
+// fillPage appends up to limit records to page, in the snapshot's order. It
+// stops early at the end of the snapshot, and before a record that would take
+// the page past provider.MaxMetadataBytes, which stays pending for the next
+// page; a page whose first record alone is too large is an error.
+func (r *metadataReader) fillPage(ctx context.Context, page *protocol.MetadataPage, limit uint32) error {
+	for count := range limit {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := r.fill(); err != nil {
+			return err
+		}
+		if r.eof {
+			return nil
+		}
+		switch row := r.pending.(type) {
+		case *protocol.MigrationLogRecord:
+			page.Logs = append(page.Logs, row)
+		case *protocol.MigrationTagRecord:
+			page.Tags = append(page.Tags, row)
+		}
+		if proto.Size(page) > provider.MaxMetadataBytes {
+			if count == 0 {
+				return runtime.ErrorWithReason(codes.ResourceExhausted, "YDB metadata record exceeds page size")
+			}
+			if len(page.Logs) > 0 {
+				page.Logs = page.Logs[:len(page.Logs)-1]
+			} else {
+				page.Tags = page.Tags[:len(page.Tags)-1]
+			}
+			return nil
+		}
+		r.pending = nil
+	}
+	return nil
+}
+
+// advance moves the reader past the page it served. The page that completes
+// the read closes its snapshot, and a failed close is the reader's error from
+// then on.
+func (r *metadataReader) advance(page *protocol.MetadataPage) error {
+	r.page++
+	r.complete = page.Complete
+	if r.complete && r.snapshot != nil {
+		r.closeErr = r.snapshot.Close()
+		r.snapshot = nil
+		if r.closeErr != nil {
+			return r.closeErr
+		}
+	}
+	return nil
 }
 
 // CloseMetadataRead releases resources even when the caller has canceled.
