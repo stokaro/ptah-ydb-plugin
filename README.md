@@ -2074,9 +2074,16 @@ step that creates an object below it. That holds whichever planning service
 plans the other step: a drop records a `ydb.scheme-directory` creation at its
 path, a creation reads each directory above its own, and the host runs a
 creation before another service's read. A drop below a path where the plan
-creates an object is refused, since YDB keeps a directory after its last object
-goes and YQL has no statement that removes one. Any other overlap of parent and
-descendant paths, and an unsupported common footprint, is refused. The host's window markers (such as `common/feature-creations`) and the
+creates an object is refused before anything runs, since YDB keeps a directory
+after its last object goes and YQL has no statement that removes one. The
+refusal is the host's embedded engine's, `this plan drops app/holder/events and
+creates an object at app/holder, which is a directory in the database`, also
+where two planning services plan the two objects, and where both are tables. A
+service sees only its own changes, so the pair of two services is refused in
+the streaming query service's call, which the host asks on every plan with the
+desired and current objects of every kind and the subject of every change. Any
+other overlap of parent and descendant paths, and an unsupported common
+footprint, is refused. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
 the change is refused. A parent directory that does not exist holds no node,
