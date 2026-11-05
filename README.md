@@ -2124,15 +2124,22 @@ the server's own included. Measured on 25.1.4.7: while such a classifier
 routed every query to a pool that admits none, a read of
 `.sys/resource_pool_classifiers` sent to the `default` pool ended in
 `System view: timeout`. Inspection reads
-the views on a target with resource pools, for a read of the whole database or
-one that selects the root, `/`: a read filtered to other directories cannot
-report what belongs to the database, so it leaves both kinds uninspected. A dev
-realm holds none of its own.
+the views on a target with resource pools, for a read of the whole database,
+one that selects the root, `/`, and one filtered to other directories where the
+host lists `schema.database-kinds`: the engine names both kinds database
+kinds, so a filtered read reports them beside its scope, named at the database
+(ADR 0065). With a host that does not list the feature, a read filtered to
+other directories cannot report what belongs to the database, so it leaves
+both kinds uninspected. A dev realm holds none of its own.
 
 A complete workload read records absence inside the opened database's root
 namespace, including when no pools or classifiers were returned. It establishes
 no absence in another database or a directory namespace. The host preserves
 that boundary when it compares a new declaration against the inspection.
+
+`TestHostAppliesAResourcePoolInARunOfADirectory_HappyPath` drives `ptah schema
+apply --schemas` the fixture directory alone: it creates a declared pool, reads
+it as synced, keeps it when the source leaves it out, and changes it in place.
 
 `TestWorkloadLifecycleSubprocess` creates a pool and two classifiers, swaps
 their ranks from the text of a migration file, refuses a change planned before
