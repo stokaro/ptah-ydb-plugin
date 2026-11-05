@@ -53,6 +53,13 @@ func normalizeColumnStorage(value *native.ColumnStorageObservation) error {
 	return validateColumnTTL(value.Ttl)
 }
 
+// CaptureColumnStorageIntent writes the storage a source declares for a column
+// table as the provider's desired facet of that table.
+func CaptureColumnStorageIntent(owner *protocol.Reference, intent *native.ColumnStorageIntent) (*protocol.Envelope, error) {
+	definition := NativeDesiredModel(ColumnStorageProperties)
+	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: ColumnStorageProperties, Owner: proto.CloneOf(owner)}, definition, intent, NormalizeDesired)
+}
+
 // validateColumnStorageIntent checks a declaration of column storage. A
 // declaration may leave the hash key (the server hashes by the primary key),
 // the shard count and the data channel count to the server, and states the

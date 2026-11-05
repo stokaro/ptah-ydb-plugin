@@ -45,6 +45,12 @@ func buildColumnDesiredModel() *protocol.ValueModel {
 		CanonicalFormat: ColumnProperties + "/desired-json-v1", SourceFormats: []protocol.SourceDocument_Format{protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_YAML, protocol.SourceDocument_SQL}}
 }
 
+// CaptureColumnIntent writes the settings a source declares for a column, such
+// as the family it sits in, as the provider's desired facet of that column.
+func CaptureColumnIntent(owner *protocol.Reference, intent *native.ColumnIntent) (*protocol.Envelope, error) {
+	return convertedEnvelope(&protocol.Envelope{ProviderId: ProviderID, Kind: ColumnProperties, Owner: proto.CloneOf(owner)}, ColumnDesiredModel(), intent, NormalizeDesired)
+}
+
 func normalizeColumnIntent(value *protocol.Envelope) (*protocol.Envelope, error) {
 	definition := ColumnDesiredModel()
 	if value.GetProviderId() != ProviderID || value.GetKind() != definition.Kind || value.GetSchemaVersion() != definition.SchemaVersion ||

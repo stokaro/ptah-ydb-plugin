@@ -3564,12 +3564,32 @@ values are approved input references; and the async replications and transfers
 `CREATE ASYNC REPLICATION` and `CREATE TRANSFER` declare, with what a later
 `ALTER ASYNC REPLICATION ... SET` or `ALTER TRANSFER ... SET` of the load
 changes folded in, as this provider's replication and transfer models. For a
-host that lists `schema.sql-facets` (contract 25.23), it carries the
+host that lists `schema.sql-facets` (contract 25.21), it carries the
 changefeeds `ALTER TABLE ... ADD CHANGEFEED` declares, with the consumers
 `ALTER TOPIC <table>/<changefeed> ADD CONSUMER` adds to their topics, as one
 facet of each table in this provider's changefeed model, the value a YAML
-`changefeeds:` key of the table declares. It says what each document declares,
-traces every object to its statement, and claims complete coverage of the
+`changefeeds:` key of the table declares.
+
+Under the same feature it carries the settings of a `CREATE TABLE` as the
+facets a YAML or Go source declares for the same table (see
+[Offline row-table declarations](#offline-row-table-declarations)), so a table
+means the same in all three formats:
+
+- a row table's partitioning (`AUTO_PARTITIONING_*`), read replicas, key bloom
+  filter, starting layout (`UNIFORM_PARTITIONS` or `PARTITION_AT_KEYS`), column
+  families and TTL, as one row-table facet of the table;
+- for each column that `FAMILY <name>` places in a family other than the
+  default one, a column facet that names the family;
+- a column table's hash key (`PARTITION BY HASH`), shard count
+  (`AUTO_PARTITIONING_MIN_PARTITIONS_COUNT`) and TTL, as one column-storage
+  facet. A TTL that only deletes is the storage's one deleting tier, as the
+  `row_deletion_*` properties beside a YAML or Go column table are.
+
+A setting the statement leaves out keeps what the table holds, and a row table
+declared without a TTL has its TTL removed, as for a YAML or Go source.
+
+The reply says what each document declares, traces every object to its
+statement, and claims complete coverage of the
 row-table, column, column-storage, coordination, topic, external data source,
 external table, streaming query, secret, async replication and transfer models,
 and of the changefeed model under that feature, so a table a load declares
@@ -3599,9 +3619,14 @@ whole: a schema file can hold a secret in a string literal.
 A load that declares something no reply field or model of this provider can
 carry is refused by name, with no partial reading:
 
-- the partitioning settings, column families, TTL and column storage of a
-  table, which Ptah refuses in a SQL schema reading;
-- the partitioning and vector settings of an index;
+- the settings of a table, for a host that does not list `schema.sql-facets`,
+  which has no home for a facet of a table;
+- a column family on a column table, and a row table that declares both
+  `UNIFORM_PARTITIONS` and `PARTITION_AT_KEYS`, with the words a YAML or Go
+  source of the same table is refused with;
+- the partitioning and vector settings of an index: an index states no settings
+  of its own in the row-table model, and the provider adds only plain global
+  indexes, as for a YAML or Go source;
 - changefeeds and the consumers of their topics, for a host that does not list
   `schema.sql-facets`, which has no home for a facet of a table. The load then
   claims nothing about changefeeds and leaves those of its tables as they are;
