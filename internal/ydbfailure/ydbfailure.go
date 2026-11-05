@@ -98,12 +98,13 @@ var refusals = []Ydb.StatusIds_StatusCode{
 // Confirmed reports an answer that establishes that the statement text failed:
 // a status in which YDB refused it or aborted its transaction, or
 // GENERIC_ERROR for a data statement the query service runs in one implicit
-// transaction, or for any text YDB refused while compiling it. GENERIC_ERROR
-// is also what YDB answers a compound statement, a batch write or transaction
-// control that may have applied a prefix, so for those it establishes nothing
-// unless YDB refused the text before any of it ran.
+// transaction, for one ANALYZE statement, or for any text YDB refused while
+// compiling it. GENERIC_ERROR is also what YDB answers a compound statement, a
+// batch write or transaction control that may have applied a prefix, so for
+// those it establishes nothing unless YDB refused the text before any of it
+// ran.
 func (a Answer) Confirmed(text string) bool {
-	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || a.Compiled)
+	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || statisticsStatement(text) || a.Compiled)
 }
 
 // Rejected reports an answer that proves nothing of a unit of text was
@@ -233,6 +234,29 @@ func opensBlock(statement string) bool {
 			continue
 		}
 		return token.IsWord("DO") || token.IsWord("EVALUATE")
+	}
+	return false
+}
+
+// statisticsStatement reports text that is one ANALYZE statement. ANALYZE
+// collects column statistics: it creates, changes and drops no schema object
+// and writes no row, so a failed one applied nothing a plan or a migration
+// changes, whichever stage of YDB refused it. Measured on 26.2.1.14 with
+// default flags, YDB refuses it in its execution stage, GENERIC_ERROR with
+// `ANALYZE command is not supported because EnableColumnStatistics feature
+// flag is off` and no position in the text, where 25.1.4.7 refuses it while
+// compiling (`analyze is not supported for oltp tables`).
+func statisticsStatement(text string) bool {
+	queries, err := yqlquery.Split(text)
+	if err != nil || len(queries) != 1 || queries[0].Kind != yqlquery.Scheme || len(queries[0].Statements) != 1 {
+		return false
+	}
+	for _, token := range yql.Tokens(queries[0].Statements[0]) {
+		switch token.Type {
+		case yql.TokenWhitespace, yql.TokenComment, yql.TokenUnknown:
+			continue
+		}
+		return token.IsWord("ANALYZE")
 	}
 	return false
 }
