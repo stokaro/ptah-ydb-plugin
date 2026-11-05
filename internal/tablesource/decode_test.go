@@ -46,29 +46,31 @@ func TestClaims(t *testing.T) {
 		c.Assert(models[key], qt.DeepEquals, []string{schema.TableProperties}, qt.Commentf(key))
 	}
 	// The families key is also where an export states a column of the
-	// default family and an empty native index set.
-	c.Assert(models["column_families"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties})
+	// default family, an empty native index set and an index that holds the
+	// settings YDB gives a new one.
+	c.Assert(models["column_families"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.IndexSettingsProperties})
 	c.Assert(models["platform.ydb"], qt.DeepEquals, []string{schema.TableProperties, schema.ColumnStorageProperties})
 	c.Assert(models["column_store"], qt.DeepEquals, []string{schema.ColumnStorageProperties})
 	directives := tablesource.GoDirectives()
 	c.Assert(len(directives), qt.Equals, 3)
 	scopes := map[string]protocol.GoSourceDirective_Scope{}
+	directiveModels := map[string][]string{}
 	var names []string
 	for _, directive := range directives {
 		names = append(names, directive.Directive)
 		scopes[directive.Directive] = directive.Scope
-		// A family lists the columns it holds, so it answers for them too, and
-		// the table directive declares a row table or a column table, and is
-		// where an export states what a table states by writing nothing.
-		want := []string{schema.TableProperties}
-		switch directive.Directive {
-		case tablesource.DirectiveColumnFamily:
-			want = append(want, schema.ColumnProperties)
-		case tablesource.DirectiveTable:
-			want = append(want, schema.ColumnStorageProperties, schema.ColumnProperties, schema.ChangefeedProperties, schema.IndexProperties)
-		}
-		c.Assert(directive.Models, qt.DeepEquals, want, qt.Commentf(directive.Directive))
+		directiveModels[directive.Directive] = directive.Models
 	}
+	// A family lists the columns it holds, so it answers for them too; the
+	// table directive declares a row table or a column table, and is where an
+	// export states what a table states by writing nothing; and an index
+	// directive declares the index's own settings.
+	c.Assert(directiveModels, qt.DeepEquals, map[string][]string{
+		"ptah:schema:table": {schema.TableProperties, schema.ColumnStorageProperties, schema.ColumnProperties, schema.ChangefeedProperties, schema.IndexProperties,
+			schema.IndexSettingsProperties},
+		"ptah:schema:index":        {schema.IndexSettingsProperties},
+		"ptah:schema:columnfamily": {schema.TableProperties, schema.ColumnProperties},
+	})
 	c.Assert(names, qt.DeepEquals, []string{"ptah:schema:table", "ptah:schema:index", "ptah:schema:columnfamily"})
 	// The host's own directives take the scope of the part they declare, and
 	// the provider's directive sits on a table.

@@ -194,7 +194,10 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				if common.Indexes {
 					// The host holds what the common model describes; the
 					// native facet keeps only the rest.
-					table.Indexes = commonIndexes(table.Identity, indexes)
+					table.Indexes, err = commonIndexes(table.Identity, indexes, common.IndexFacets)
+					if err != nil {
+						return nil, err
+					}
 					indexes = nativeIndexes(indexes)
 				}
 				facet, err := schema.CaptureIndexes(table.Identity, indexes)
@@ -215,6 +218,9 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				observe(result, table.Facets)
 				for _, column := range table.Columns {
 					observe(result, column.Facets)
+				}
+				for _, index := range table.Indexes {
+					observe(result, index.Facets)
 				}
 			case Ydb_Scheme.Entry_COLUMN_TABLE:
 				table, err := source.readColumnTable(ctx, columns, database, selected, name)
@@ -299,11 +305,14 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		// A successful list and complete child reads prove native-object
 		// absence only in this exact directory, never in skipped descendants.
 		// The read describes every table of the directory with each facet its
-		// kind of table has, a row table's settings, indexes and changefeeds,
-		// a column table's storage and every column's properties, so the
-		// facet kinds are known completely there too. Without that the kinds
-		// stay narrowed, and an export the read knows completely could not be
-		// written: a source has no limit that says a facet kind.
+		// kind of table has, a row table's settings, indexes, changefeeds and
+		// the settings of its global indexes, a column table's storage and
+		// every column's properties, so the facet kinds are known completely
+		// there too. A host that did not negotiate schema.observed-index-facets
+		// has no place for an index's settings, so none of them is missing
+		// either. Without that the kinds stay narrowed, and an export the read
+		// knows completely could not be written: a source has no limit that
+		// says a facet kind.
 		for _, record := range result.Coverage.Kinds {
 			if slices.Contains(tablecompare.Kinds(), record.Model.Kind) {
 				record.Regions = append(record.Regions, directoryRegion(database, selected))

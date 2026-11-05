@@ -154,9 +154,18 @@ func ReversibleTableChanges() []string { return []string{ColumnStorageChange, Ta
 // what the forward change leaves, as a read would report it, and what it
 // found, as a declaration. A column's change, its move to another family,
 // reverses the same way under the column.
+//
+// A change of a global index's settings is refused. Its declaration states
+// only the settings it changes and keeps every other, so the restored
+// declaration would have to state each setting the index held, including the
+// ones the forward change turned away from what YDB gives a new index, and no
+// reverse planned that way has been measured against a server.
 func ReverseTableChange(id string, change *protocol.Envelope, commonAccess bool) (Reversed, error) {
 	var before, after *protocol.Envelope
 	var err error
+	if change.GetKind() == TablePropertiesChange && change.GetOwner().GetKind() == "index" {
+		return Reversed{}, fmt.Errorf("a change of a global index's settings has no reversal yet")
+	}
 	switch change.GetKind() {
 	case TablePropertiesChange:
 		before, after, err = tablePropertiesOperands(change)

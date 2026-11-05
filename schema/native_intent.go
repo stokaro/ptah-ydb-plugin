@@ -29,6 +29,7 @@ var nativeIntentDefinitions = map[string]*protocol.ValueModel{
 	ResourcePoolProperties: buildNativeIntentModel(ResourcePoolProperties), ResourcePoolClassifierProperties: buildNativeIntentModel(ResourcePoolClassifierProperties),
 	StreamingQueryProperties: buildNativeIntentModel(StreamingQueryProperties),
 	ReplicationProperties:    buildNativeIntentModel(ReplicationProperties), TransferProperties: buildNativeIntentModel(TransferProperties),
+	IndexSettingsProperties: buildNativeIntentModel(IndexSettingsProperties),
 }
 
 func nativeIntentMessage(kind string) proto.Message {
@@ -37,6 +38,8 @@ func nativeIntentMessage(kind string) proto.Message {
 		return &native.SecretIntent{}
 	case IndexProperties:
 		return &native.IndexSetIntent{}
+	case IndexSettingsProperties:
+		return &native.IndexSettingsIntent{}
 	case ChangefeedProperties:
 		return &native.ChangefeedSetIntent{}
 	case TopicProperties:
@@ -82,6 +85,9 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		"native_objects":       "views require matching access from view and table APIs; external options, references and column order remain exact; no network access to external sources",
 		"topic_declarations":   "a topic setting or consumer setting left at zero is one the declaration leaves out, which requests the value YDB gives a new topic; attributes and access are not declared",
 		"column_storage":       "preserves hash order, partition and data-channel counts, local indexes and TTL tiers; excludes native IDs and runtime topology; a declaration may omit the hash key, the shard count and the data channels, which the server then chooses, and states the whole TTL of the table, a TTL that only deletes as one deleting tier; the server's derived expiration is not declared",
+	}
+	if kind == IndexSettingsProperties {
+		definition["index_settings"] = indexSettingsDeclaration
 	}
 	if kind == SecretProperties {
 		definition["secrets"] = "value_env is a required PTAH_SECRET_ approved-input reference; observed presence carries no value or value reference; conversions derive a deterministic reference from the exact path; rotations require an explicit comparison request"
@@ -132,6 +138,11 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		// a table it declares states is empty; an export writes an empty set
 		// with the table's declaration.
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
+	case IndexSettingsProperties:
+		// The index directive of a Go source, the index entry of a YAML
+		// source and the index block of an HCL document write the settings as
+		// the host's embedded engine reads them.
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_HCL}
 	}
 	return result
 }
@@ -263,6 +274,8 @@ func nativeIntent(value proto.Message) (proto.Message, error) {
 		return &native.SecretIntent{}, nil
 	case *native.IndexObservations:
 		return indexIntents(v)
+	case *native.IndexSettingsObservation:
+		return indexSettingsIntent(v), nil
 	case *native.ChangefeedObservations:
 		return changefeedIntents(v), nil
 	case *native.DescribeTopicResult:
@@ -288,6 +301,11 @@ func nativeObservation(value proto.Message) (proto.Message, error) {
 		return &native.SecretPresence{}, nil
 	case *native.IndexSetIntent:
 		return indexObservations(v)
+	case *native.IndexSettingsIntent:
+		if err := validateIndexSettings(v.GetPartitioningSettings(), v.GetReadReplicasSettings(), false); err != nil {
+			return nil, err
+		}
+		return indexSettingsObservation(v), nil
 	case *native.ChangefeedSetIntent:
 		return changefeedObservations(v)
 	case *native.TopicIntent:

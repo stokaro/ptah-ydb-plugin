@@ -23,7 +23,7 @@ const ServiceID = "ydb-row-table-properties"
 
 // Kinds lists the facet models this comparison owns.
 func Kinds() []string {
-	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.IndexSettingsProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
 }
 
 // ChangeKinds lists the changes this comparison reports.
@@ -32,7 +32,7 @@ func ChangeKinds() []string {
 }
 
 // OwnerKinds lists the subject kinds that carry those facets.
-func OwnerKinds() []string { return []string{"table", "column"} }
+func OwnerKinds() []string { return []string{"table", "column", "index"} }
 
 // Compare reports every table or column whose declared facet differs from the
 // one the existing table holds. A facet on only one side states nothing to

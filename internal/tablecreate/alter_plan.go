@@ -216,6 +216,26 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	if reason := uniqueAdditionRefusal(table.Subject, indexes, capabilities); reason != "" {
 		return alterationChanges{}, reason, nil
 	}
+	// An index's own facet declares its partitioning and read replicas, as a
+	// Go index directive or a YAML index entry writes them.
+	declaredSettings, _, err := indexSettingsFacets(owner, table.Desired.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
+	if err != nil {
+		return alterationChanges{}, "", err
+	}
+	_, heldSettings, err := indexSettingsFacets(owner, table.Current.GetFeatures().GetFacets(), protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return alterationChanges{}, "", err
+	}
+	for _, change := range indexSettings {
+		if _, declared := declaredSettings[change.held.GetName()]; declared {
+			return alterationChanges{}, fmt.Sprintf("Index %q declares its settings both in the native index set and as its own facet", change.held.GetName()), nil
+		}
+	}
+	own, reason := planDeclaredIndexSettings(table, declaredSettings, heldSettings, indexes, &heldIndexes)
+	if reason != "" {
+		return alterationChanges{}, reason, nil
+	}
+	indexSettings = append(indexSettings, own...)
 	// The changefeeds are managed by a declaration that states them, and by a
 	// source that describes the changefeeds of every table it declares. Without
 	// the table's own read, a changefeed the table already holds would look

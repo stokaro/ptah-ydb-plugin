@@ -86,14 +86,14 @@ func TestTablePropertiesChange_FailurePath(t *testing.T) {
 
 		c.Assert(err, qt.ErrorMatches, "table properties change operands have different owners")
 	})
-	t.Run("an owner that is neither a table nor a column", func(t *testing.T) {
+	t.Run("an owner that is neither a table, a column nor an index", func(t *testing.T) {
 		c := testcheck.New(t)
 		value := proto.CloneOf(change.Value)
-		value.Owner.Kind = "index"
+		value.Owner.Kind = "constraint"
 
 		_, err := schema.NormalizeTablePropertiesChange(&protocol.ValueInput{Id: "forged", Representation: protocol.ValueInput_CHANGE, Value: value})
 
-		c.Assert(err, qt.ErrorMatches, "table properties change requires a table or column owner")
+		c.Assert(err, qt.ErrorMatches, "table properties change requires a table, column or index owner")
 	})
 	t.Run("a foreign definition", func(t *testing.T) {
 		c := testcheck.New(t)
