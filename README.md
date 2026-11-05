@@ -76,10 +76,10 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.19.0, which speaks provider contract 25.21. The provider
-still requires 25.7 of its host and offers each later feature to a host that
-lists it. Builds require neither the Ptah application source nor a local SDK
-checkout.
+The module pins `provider-sdk` v0.19.0, which speaks provider contract 25.21.
+The provider still requires 25.7 of its host and offers each later feature to a
+host that lists it. Builds require neither the Ptah application source nor a
+local SDK checkout.
 
 Database context is resolved without connecting or reading credentials. A dev
 realm carries both its selected root and the authored database root. Context
@@ -3280,8 +3280,8 @@ means the same in all three formats:
 A setting the statement leaves out keeps what the table holds, and a row table
 declared without a TTL has its TTL removed, as for a YAML or Go source.
 
-It says what each document declares,
-traces every object to its statement, and claims complete coverage of the
+The reply says what each document declares, traces every object to its
+statement, and claims complete coverage of the
 row-table, column, column-storage, coordination, topic, external data source,
 external table, streaming query, secret, async replication and transfer models,
 and of the changefeed model under that feature, so a table a load declares
