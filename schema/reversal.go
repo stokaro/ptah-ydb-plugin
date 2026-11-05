@@ -1,10 +1,13 @@
 package schema
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -139,4 +142,137 @@ func keepStateReset(family *objectChanges, after, restored *protocol.Envelope) (
 	}
 	kept.AllowStateReset = true
 	return convertedEnvelope(restored, NativeDesiredModel(StreamingQueryProperties), kept, NormalizeDesired)
+}
+
+// ReversibleTableChanges lists the change kinds ReverseTableChange undoes.
+func ReversibleTableChanges() []string { return []string{ColumnStorageChange, TablePropertiesChange} }
+
+// ReverseTableChange returns the change that undoes change, a change of a
+// table's own settings, under id: the row table's properties, its index set
+// or its changefeed set, or a column table's storage. Both operands of such a
+// change are present, and the reverse swaps them as ReverseObjectChange does:
+// what the forward change leaves, as a read would report it, and what it
+// found, as a declaration. A column's change has no reversal: the host
+// projects a reverse's state onto the table and its indexes, not onto a
+// column.
+func ReverseTableChange(id string, change *protocol.Envelope, commonAccess bool) (Reversed, error) {
+	var before, after *protocol.Envelope
+	var err error
+	switch change.GetKind() {
+	case TablePropertiesChange:
+		before, after, err = tablePropertiesOperands(change)
+	case ColumnStorageChange:
+		before, after, err = ColumnStorageOperands(change)
+		if err == nil && (before == nil || after == nil) {
+			err = fmt.Errorf("a change between row and column storage has no reversal")
+		}
+	default:
+		err = fmt.Errorf("YDB change %s has no reversal", change.GetKind())
+	}
+	if err != nil {
+		return Reversed{}, err
+	}
+	convert := ConvertNative
+	if before.Kind == TableProperties {
+		convert = ConvertTable
+	}
+	left, restored, err := reversedOperands(before, after, convert, commonAccess)
+	if before.Kind == TableProperties {
+		// A table's properties are the whole table's description, and the
+		// declaration states only its settings: what the forward change
+		// leaves is the description the table held with the declared
+		// settings in place of its own.
+		left, restored, err = reversedOperands(before, nil, convert, commonAccess)
+		if err == nil {
+			left, err = alteredTable(before, after)
+		}
+	}
+	if err != nil {
+		return Reversed{}, err
+	}
+	capture := CaptureTablePropertiesChange
+	if change.GetKind() == ColumnStorageChange {
+		capture = CaptureColumnStorageChange
+	}
+	value, err := capture(id, change.Owner, left, restored)
+	if err != nil {
+		return Reversed{}, err
+	}
+	return Reversed{Value: value, Kind: before.Kind, Before: before, After: after, Left: left, Restored: restored}, nil
+}
+
+// tablePropertiesOperands returns the normalized operands of a table
+// properties change of a table: its properties, its index set or its
+// changefeed set, each under the change's owner.
+func tablePropertiesOperands(change *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error) {
+	if change.GetOwner().GetKind() != "table" {
+		return nil, nil, fmt.Errorf("a column's change of family has no reversal")
+	}
+	normalized, err := NormalizeTablePropertiesChange(&protocol.ValueInput{Id: "operands", Representation: protocol.ValueInput_CHANGE, Value: change})
+	if err != nil {
+		return nil, nil, err
+	}
+	var operands map[string]json.RawMessage
+	if err := json.Unmarshal(normalized.Value.Payload, &operands); err != nil {
+		return nil, nil, err
+	}
+	kind := TableProperties
+	if selector, found := operands[facetKey]; found {
+		if err := json.Unmarshal(selector, &kind); err != nil {
+			return nil, nil, err
+		}
+	}
+	operand := func(key string, definition *protocol.ValueModel) *protocol.Envelope {
+		return &protocol.Envelope{ProviderId: ProviderID, Kind: kind, Owner: proto.CloneOf(change.Owner), SchemaVersion: definition.SchemaVersion, Encoding: definition.Encoding,
+			DefinitionSha256: definition.DefinitionSha256, Payload: bytes.Clone(operands[key])}
+	}
+	return operand("before", model(kind)), operand("after", desiredModel(kind)), nil
+}
+
+// alteredTable is the description a table holding before reads back with
+// once an ALTER gives it the settings after declares: the settings are the
+// declaration's, and what a declaration does not state, the columns, the key
+// and the indexes among them, stays as the table held it.
+func alteredTable(before, after *protocol.Envelope) (*protocol.Envelope, error) {
+	held, declared := &native.DescribeTableResult{}, &native.RowTableIntent{}
+	if err := protojson.Unmarshal(before.GetPayload(), held); err != nil {
+		return nil, err
+	}
+	normalized, err := normalizeTableIntent(after)
+	if err != nil {
+		return nil, err
+	}
+	if err := protojson.Unmarshal(normalized.GetPayload(), declared); err != nil {
+		return nil, err
+	}
+	settings := tableObservation(declared)
+	result := proto.CloneOf(held)
+	// A table the declaration gives no TTL loses the one it holds, as the
+	// comparison reads it; a setting the declaration leaves unset otherwise
+	// stays as the table holds it.
+	result.TtlSettings, result.Tiering = settings.TtlSettings, settings.Tiering
+	if settings.StorageSettings != nil {
+		result.StorageSettings = settings.StorageSettings
+	}
+	if settings.PartitioningSettings != nil {
+		result.PartitioningSettings = settings.PartitioningSettings
+	}
+	if settings.KeyBloomFilter != Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+		result.KeyBloomFilter = settings.KeyBloomFilter
+	}
+	if settings.ReadReplicasSettings != nil {
+		result.ReadReplicasSettings = settings.ReadReplicasSettings
+	}
+	if len(settings.ColumnFamilies) != 0 {
+		result.ColumnFamilies = settings.ColumnFamilies
+	}
+	if len(settings.Attributes) != 0 {
+		result.Attributes = settings.Attributes
+	}
+	altered, err := convertedEnvelope(before, model(TableProperties), result, Normalize)
+	if err != nil {
+		return nil, err
+	}
+	altered.Context = proto.CloneOf(after.Context)
+	return altered, nil
 }
