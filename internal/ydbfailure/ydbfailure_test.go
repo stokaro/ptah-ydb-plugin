@@ -95,6 +95,38 @@ func TestReadPlacesARefusalBeforeExecution(t *testing.T) {
 	}
 }
 
+// sizeAbort is the answer 25.1.4.7 gives the commit of a transaction whose
+// writes do not fit one datashard program, measured: ABORTED, as a conflict is
+// answered, with issue 200509.
+var sizeAbort = ydbfailure.Answer{Status: Ydb.StatusIds_ABORTED, Issues: []string{"Datashard program size limit exceeded (56281509 > 50331648)"},
+	Code: 200509, Repeats: true}
+
+// An ABORTED answer whose issue says the transaction does not fit one
+// datashard program repeats on every attempt, nested or not, so it is not an
+// abort for a conflict; one for a lock conflict is.
+func TestReadNamesAnAbortThatRepeats(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		issues  []*Ydb_Issue.IssueMessage
+		repeats bool
+		aborted bool
+	}{
+		{name: "too large for one program", issues: []*Ydb_Issue.IssueMessage{issue(200509, 0, 0, "Datashard program size limit exceeded (56281509 > 50331648)")},
+			repeats: true},
+		{name: "too large, nested", issues: []*Ydb_Issue.IssueMessage{issue(1060, 0, 0, "Execution", issue(200509, 0, 0, "Datashard program size limit exceeded (56281509 > 50331648)"))},
+			repeats: true},
+		{name: "a lock conflict", issues: []*Ydb_Issue.IssueMessage{issue(2001, 0, 0, "Transaction locks invalidated. Table: `/local/t`.")}, aborted: true},
+		{name: "no issues", aborted: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			read := ydbfailure.Read(fmt.Errorf("commit: %w", &answered{status: Ydb.StatusIds_ABORTED, issues: test.issues}))
+			c.Assert(read.Repeats, qt.Equals, test.repeats)
+			c.Assert(read.Aborted(), qt.Equals, test.aborted)
+		})
+	}
+}
+
 func TestReadKnowsNoStatusOfAnErrorYDBDidNotReturn(t *testing.T) {
 	c := testcheck.New(t)
 	for _, err := range []error{nil, errors.New("PRECONDITION_FAILED"), context.Canceled} {
@@ -237,6 +269,9 @@ func TestFailed(t *testing.T) {
 		{"aborted without issues", answer(Ydb.StatusIds_ABORTED), ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0,
 			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.transaction-aborted", Message: "YDB aborted the transaction for a conflict", TransactionAborted: true},
 			aborted},
+		{"aborted for its size", sizeAbort, ydbfailure.Unit{Text: insert, Transaction: true, Aborts: true}, 0,
+			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Datashard program size limit exceeded (56281509 > 50331648)"},
+			"YDB refused the statement: its writes do not fit one datashard program, which holds about 48 MiB; write the rows in smaller transactions (ABORTED, issue 200509)"},
 		{"aborted outside a transaction", conflict, ydbfailure.Unit{Text: insert, Aborts: true}, 0,
 			&protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, DiagnosticCode: "ydb.statement-rejected", Message: "Transaction locks invalidated. Table: `/local/t`."},
 			"YDB refused the statement (ABORTED)"},
@@ -286,6 +321,17 @@ func TestCommitOfAnAbortedTransactionIsRolledBack(t *testing.T) {
 			c.Assert(ydbfailure.Commit(answer(Ydb.StatusIds_ABORTED, "Transaction locks invalidated."), test.aborts), qt.CmpEquals(protocmp.Transform()), test.want)
 		})
 	}
+}
+
+// A commit YDB aborted for the transaction's size applied nothing either, so
+// it is rolled back, but it is not aborted for a conflict: a host that runs
+// aborted transactions again would get the same answer each time.
+func TestCommitOfATransactionTooLargeIsRefused(t *testing.T) {
+	c := testcheck.New(t)
+	c.Assert(ydbfailure.Commit(sizeAbort, true), qt.CmpEquals(protocmp.Transform()), &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK,
+		DiagnosticCode: "ydb.transaction-rejected", Message: "Datashard program size limit exceeded (56281509 > 50331648)",
+		Diagnostic: &protocol.ProviderDiagnostic{Reason: "YDB refused the transaction at its commit: its writes do not fit one datashard program, which holds about 48 MiB; " +
+			"write the rows in smaller transactions (ABORTED, issue 200509)"}})
 }
 
 func TestCommitOfAnotherFailureIsUnknown(t *testing.T) {
