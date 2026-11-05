@@ -21,27 +21,48 @@ func sequence(words []string, wanted ...string) bool {
 // safetyOf carries native state-loss semantics across the process boundary.
 // Unmodeled syntax is UNKNOWN, so the host cannot label it safe by default.
 func safetyOf(words []string) (protocol.SQLStatement_Safety, string) {
+	if safety, reason, found := objectSafetyOf(words); found {
+		return safety, reason
+	}
+	return tableSafetyOf(words)
+}
+
+// objectSafetyOf classifies the statements on replications, streaming queries,
+// topics, transfers, coordination nodes, secrets and external data, and
+// reports whether words is one of them.
+func objectSafetyOf(words []string) (protocol.SQLStatement_Safety, string, bool) {
 	switch {
 	case prefix(words, "DROP", "ASYNC", "REPLICATION") && !slices.Contains(words, "CASCADE"):
-		return protocol.SQLStatement_BEHAVIORAL, "Dropping replication without CASCADE leaves replica tables read-only unless failover already completed"
+		return protocol.SQLStatement_BEHAVIORAL, "Dropping replication without CASCADE leaves replica tables read-only unless failover already completed", true
 	case prefix(words, "DROP", "ASYNC", "REPLICATION"):
-		return protocol.SQLStatement_DESTRUCTIVE, "Dropping replication with CASCADE removes replica tables"
-	case prefix(words, "DROP", "STREAMING", "QUERY"), prefix(words, "CREATE", "OR", "REPLACE", "STREAMING", "QUERY") && !prefix(words[5:], "IF", "NOT", "EXISTS"), prefix(words, "ALTER", "STREAMING", "QUERY") && sequence(words, "AS", "DO", "BEGIN"):
-		return protocol.SQLStatement_DESTRUCTIVE, "The operation removes or resets streaming-query checkpoint state"
+		return protocol.SQLStatement_DESTRUCTIVE, "Dropping replication with CASCADE removes replica tables", true
+	case prefix(words, "DROP", "STREAMING", "QUERY"),
+		prefix(words, "CREATE", "OR", "REPLACE", "STREAMING", "QUERY") && !prefix(words[5:], "IF", "NOT", "EXISTS"),
+		prefix(words, "ALTER", "STREAMING", "QUERY") && sequence(words, "AS", "DO", "BEGIN"):
+		return protocol.SQLStatement_DESTRUCTIVE, "The operation removes or resets streaming-query checkpoint state", true
 	case prefix(words, "ALTER", "STREAMING", "QUERY"):
-		return protocol.SQLStatement_BEHAVIORAL, "The operation changes continuous query execution"
+		return protocol.SQLStatement_BEHAVIORAL, "The operation changes continuous query execution", true
 	case prefix(words, "DROP", "TOPIC"):
-		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a topic removes its messages and every consumer position"
+		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a topic removes its messages and every consumer position", true
 	case prefix(words, "ALTER", "TOPIC") && sequence(words, "DROP", "CONSUMER"):
-		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a consumer removes its position in the topic"
+		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a consumer removes its position in the topic", true
 	case prefix(words, "DROP", "TRANSFER"):
-		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a transfer removes its topic consumer and position"
+		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a transfer removes its topic consumer and position", true
 	case prefix(words, "DROP", "COORDINATION", "NODE"):
-		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a coordination node removes its sessions, semaphores, and rate limiter resources"
+		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a coordination node removes its sessions, semaphores, and rate limiter resources", true
 	case prefix(words, "DROP", "SECRET"):
-		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a secret removes a value that cannot be read back"
+		return protocol.SQLStatement_DESTRUCTIVE, "Dropping a secret removes a value that cannot be read back", true
 	case prefix(words, "DROP", "EXTERNAL", "DATA", "SOURCE"), prefix(words, "DROP", "EXTERNAL", "TABLE"), prefix(words, "CREATE", "OR", "REPLACE", "EXTERNAL"):
-		return protocol.SQLStatement_BEHAVIORAL, "The operation changes how YDB reads external data; external data remains outside this operation"
+		return protocol.SQLStatement_BEHAVIORAL, "The operation changes how YDB reads external data; external data remains outside this operation", true
+	default:
+		return protocol.SQLStatement_UNKNOWN, "", false
+	}
+}
+
+// tableSafetyOf classifies the statements on tables, views and indexes, the
+// statements that write data, and any other statement as UNKNOWN.
+func tableSafetyOf(words []string) (protocol.SQLStatement_Safety, string) {
+	switch {
 	case prefix(words, "DROP", "TABLE"), prefix(words, "TRUNCATE", "TABLE"), prefix(words, "ALTER", "TABLE") && sequence(words, "DROP", "COLUMN"):
 		return protocol.SQLStatement_DESTRUCTIVE, "The operation removes stored table data"
 	case prefix(words, "ALTER", "TABLE") && slices.Contains(words, "TTL"):

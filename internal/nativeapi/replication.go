@@ -154,33 +154,17 @@ func replicationServiceError(subject string, err error) error {
 // secret named by its path. A source path belongs to the source database and
 // is written as declared.
 func (r *Replications) ApplyReplication(ctx context.Context, database string, value *protocol.Envelope, beforeWrite func(context.Context) error) (bool, error) {
-	normalized, err := schema.NormalizeReplicationOperation(&protocol.ValueInput{Id: "execute", Representation: protocol.ValueInput_OPERATION, Value: value})
-	if err != nil {
-		return false, err
-	}
-	owner, err := boundOwner(normalized.NormalizedOwner, database, "async replication")
-	if err != nil {
-		return false, err
-	}
-	change := schema.ReplicationOperationChange(normalized.Value)
-	before, _, err := schema.ReplicationOperands(change)
-	if err != nil {
-		return false, err
-	}
-	step, err := schema.ReplicationStepOf(change)
-	if err != nil {
-		return false, err
-	}
-	absolute := path.Join(database, owner.Schema, owner.Name)
-	if refusal := replication.RefuseReplication(absolute, step.Before, step.After, step.State, replicationCapabilities); refusal != nil && refusal.Key == "" {
-		return false, refusal
-	}
-	statement := replicationStatement(database, absolute, step)
-	if statement == "" {
-		return false, fmt.Errorf("async replication operation holds no statement")
-	}
-	return r.apply(ctx, database, owner, before, statement, beforeWrite, func(current *protocol.Envelope) error {
-		return confirmReplication(step, current)
+	return applyStep(ctx, r, database, value, beforeWrite, stepOperation[schema.ReplicationStep]{
+		noun:      "async replication",
+		normalize: schema.NormalizeReplicationOperation,
+		change:    schema.ReplicationOperationChange,
+		operands:  schema.ReplicationOperands,
+		stepOf:    schema.ReplicationStepOf,
+		refuse: func(absolute string, step schema.ReplicationStep) *replication.Refusal {
+			return replication.RefuseReplication(absolute, step.Before, step.After, step.State, replicationCapabilities)
+		},
+		statement: replicationStatement,
+		confirm:   confirmReplication,
 	})
 }
 
@@ -189,33 +173,68 @@ func (r *Replications) ApplyReplication(ctx context.Context, database string, va
 // topic keeps its spelling (see [replication.AbsoluteTransfer]). A dev realm
 // refuses a transfer before this runs, so the root is the database's.
 func (r *Replications) ApplyTransfer(ctx context.Context, database string, value *protocol.Envelope, beforeWrite func(context.Context) error) (bool, error) {
-	normalized, err := schema.NormalizeTransferOperation(&protocol.ValueInput{Id: "execute", Representation: protocol.ValueInput_OPERATION, Value: value})
+	return applyStep(ctx, r, database, value, beforeWrite, stepOperation[schema.TransferStep]{
+		noun:      "transfer",
+		normalize: schema.NormalizeTransferOperation,
+		change:    schema.TransferOperationChange,
+		operands:  schema.TransferOperands,
+		stepOf:    schema.TransferStepOf,
+		refuse: func(absolute string, step schema.TransferStep) *replication.Refusal {
+			return replication.RefuseTransfer(absolute, step.Before, step.After, step.State, transferCapabilities)
+		},
+		statement: transferStatement,
+		confirm:   confirmTransfer,
+	})
+}
+
+// stepOperation is what applying an async replication or a transfer
+// operation takes from its kind: the noun its errors name, how the operation
+// is normalized and read as a step, the refusal of a step YDB rejects on
+// every line, the step's statement, and the confirmation of the result read
+// back.
+type stepOperation[Step any] struct {
+	noun      string
+	normalize func(*protocol.ValueInput) (*protocol.NormalizedValue, error)
+	change    func(*protocol.Envelope) *protocol.Envelope
+	operands  func(*protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error)
+	stepOf    func(*protocol.Envelope) (Step, error)
+	refuse    func(absolute string, step Step) *replication.Refusal
+	statement func(root, absolute string, step Step) string
+	confirm   func(step Step, current *protocol.Envelope) error
+}
+
+// applyStep verifies, runs and confirms one operation of the kind operation
+// describes, as [Replications.ApplyReplication] says.
+func applyStep[Step any](ctx context.Context, r *Replications, database string, value *protocol.Envelope, beforeWrite func(context.Context) error,
+	operation stepOperation[Step],
+) (bool, error) {
+	normalized, err := operation.normalize(&protocol.ValueInput{Id: "execute", Representation: protocol.ValueInput_OPERATION, Value: value})
 	if err != nil {
 		return false, err
 	}
-	owner, err := boundOwner(normalized.NormalizedOwner, database, "transfer")
+	owner, err := boundOwner(normalized.NormalizedOwner, database, operation.noun)
 	if err != nil {
 		return false, err
 	}
-	change := schema.TransferOperationChange(normalized.Value)
-	before, _, err := schema.TransferOperands(change)
+	change := operation.change(normalized.Value)
+	before, _, err := operation.operands(change)
 	if err != nil {
 		return false, err
 	}
-	step, err := schema.TransferStepOf(change)
+	step, err := operation.stepOf(change)
 	if err != nil {
 		return false, err
 	}
 	absolute := path.Join(database, owner.Schema, owner.Name)
-	if refusal := replication.RefuseTransfer(absolute, step.Before, step.After, step.State, transferCapabilities); refusal != nil && refusal.Key == "" {
+	if refusal := operation.refuse(absolute, step); refusal != nil && refusal.Key == "" {
 		return false, refusal
 	}
-	statement := transferStatement(database, absolute, step)
+	statement := operation.statement(database, absolute, step)
 	if statement == "" {
-		return false, fmt.Errorf("transfer operation holds no statement")
+		return false, fmt.Errorf("%s operation holds no statement", operation.noun)
 	}
 	return r.apply(ctx, database, owner, before, statement, beforeWrite, func(current *protocol.Envelope) error {
-		return confirmTransfer(step, current)
+		return operation.confirm(step, current)
 	})
 }
 

@@ -16,22 +16,22 @@ linters:
     - asciicheck
     - copyloopvar
     - depguard
-    # - dupl # enabled with the complexity changes
+    - dupl
     - forbidigo
-    # - funlen # enabled with the complexity changes
+    - funlen
     - gochecknoinits
-    # - gocognit # enabled with the complexity changes
+    - gocognit
     - gocritic
-    # - gocyclo # enabled with the complexity changes
+    - gocyclo
     - goprintffuncname
     - gosec
     - govet
     - importas
     - ineffassign
-    # - lll # enabled with the complexity changes
+    - lll
     - modernize
     - nakedret
-    # - nestif # enabled with the complexity changes
+    - nestif
     - nolintlint
     - revive
     # - rowserrcheck # enabled with the rows.Err changes

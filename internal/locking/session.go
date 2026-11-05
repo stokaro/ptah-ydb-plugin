@@ -54,7 +54,12 @@ func openSession(ctx context.Context, driver *ydb.Driver, node string) (*wireSes
 	go s.receive()
 	key := make([]byte, 16)
 	_, _ = rand.Read(key)
-	result, err := s.call(ctx, &wire.SessionRequest{Request: &wire.SessionRequest_SessionStart_{SessionStart: &wire.SessionRequest_SessionStart{Path: node, TimeoutMillis: uint64(sessionTimeout / time.Millisecond), Description: "ptah-ydb-plugin", ProtectionKey: key}}})
+	result, err := s.call(ctx, &wire.SessionRequest{Request: &wire.SessionRequest_SessionStart_{SessionStart: &wire.SessionRequest_SessionStart{
+		Path:          node,
+		TimeoutMillis: uint64(sessionTimeout / time.Millisecond),
+		Description:   "ptah-ydb-plugin",
+		ProtectionKey: key,
+	}}})
 	if err != nil || result.GetSessionStarted().GetSessionId() == 0 {
 		cancel()
 		<-s.receiving
@@ -188,7 +193,13 @@ func (s *wireSession) acquire(ctx context.Context, name string) (bool, error) {
 	defer s.callMu.Unlock()
 	s.requestID++
 	id := s.requestID
-	response, err := s.call(ctx, &wire.SessionRequest{Request: &wire.SessionRequest_AcquireSemaphore_{AcquireSemaphore: &wire.SessionRequest_AcquireSemaphore{ReqId: id, Name: name, Count: coordination.Exclusive, Ephemeral: true, TimeoutMillis: 0}}})
+	response, err := s.call(ctx, &wire.SessionRequest{Request: &wire.SessionRequest_AcquireSemaphore_{AcquireSemaphore: &wire.SessionRequest_AcquireSemaphore{
+		ReqId:         id,
+		Name:          name,
+		Count:         coordination.Exclusive,
+		Ephemeral:     true,
+		TimeoutMillis: 0,
+	}}})
 	if err != nil {
 		return false, err
 	}

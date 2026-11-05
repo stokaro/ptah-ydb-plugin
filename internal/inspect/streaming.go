@@ -33,7 +33,14 @@ func ReadStreamingInventory(ctx context.Context, database string, list func(cont
 			model = candidate
 		}
 	}
-	result.Coverage.Kinds = []*protocol.ModelKindCoverage{{Model: model, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Streaming inventory is limited to the selected database"}, Regions: []*protocol.ModelNamespaceKnowledge{{Scope: &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: database, Normalized: database}}, Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE}}}}}
+	result.Coverage.Kinds = []*protocol.ModelKindCoverage{{
+		Model:     model,
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Streaming inventory is limited to the selected database"},
+		Regions: []*protocol.ModelNamespaceKnowledge{{
+			Scope:     &protocol.ModelNamespace{Database: &protocol.NamespaceComponent{Source: database, Normalized: database}},
+			Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE},
+		}},
+	}}
 	pending := []string{""}
 	visited := make(map[string]bool)
 	for len(pending) > 0 {
@@ -57,50 +64,74 @@ func ReadStreamingInventory(ctx context.Context, database string, list func(cont
 		if listing.GetSelf().GetName() != path.Base(absolute) || (listing.GetSelf().GetType() != Ydb_Scheme.Entry_DIRECTORY && (directory != "" || listing.GetSelf().GetType() != Ydb_Scheme.Entry_DATABASE)) {
 			return nil, fmt.Errorf("streaming inventory directory identity disagrees")
 		}
-		children := slices.Clone(listing.GetChildren())
-		slices.SortFunc(children, func(a, b *Ydb_Scheme.Entry) int { return strings.Compare(a.GetName(), b.GetName()) })
-		names := make(map[string]bool)
-		for _, entry := range children {
-			name := entry.GetName()
-			if !component(name) || names[name] {
-				return nil, fmt.Errorf("invalid or duplicate streaming inventory entry")
-			}
-			names[name] = true
-			if entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
-				pending = append(pending, path.Join(directory, name))
-				continue
-			}
-			if entry.GetType() != streamingQueryEntry {
-				continue
-			}
-			owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: database, Schema: directory, Name: name}
-			var observed *protocol.Envelope
-			readErr := fmt.Errorf("the streaming query capability was not established")
-			if read != nil {
-				spec, err := read(ctx, path.Join(absolute, name))
-				readErr = err
-				if err == nil && spec == nil {
-					readErr = fmt.Errorf("the listed streaming query has no stored settings")
-				}
-				if readErr == nil {
-					observed, readErr = schema.CaptureObject(owner, &native.StreamingQuerySettings{Text: spec.Text, Run: spec.Run, ResourcePool: spec.ResourcePool})
-				}
-			}
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			if readErr != nil {
-				result.Coverage.Subjects = append(result.Coverage.Subjects, &protocol.ModelSubjectCoverage{Kind: owner.Kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner), Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: readErr.Error()}})
-			} else {
-				result.NativeObjects = append(result.NativeObjects, observed)
-				observe(result, []*protocol.Envelope{observed})
-			}
-			if len(result.NativeObjects)+len(result.Coverage.Subjects) > 4096 || proto.Size(result) > 3<<20 {
-				return nil, fmt.Errorf("streaming inventory exceeds capture limit")
-			}
+		directories, err := inventoryEntries(ctx, result, database, directory, listing.GetChildren(), read)
+		if err != nil {
+			return nil, err
 		}
+		pending = append(pending, directories...)
 	}
 	return result, nil
+}
+
+// inventoryEntries captures the streaming queries among the entries of one
+// listed directory into result, in name order, and returns the directory's
+// subdirectories in the same order. A query whose settings cannot be read is
+// recorded as uninspected.
+func inventoryEntries(ctx context.Context, result *protocol.Schema, database, directory string, entries []*Ydb_Scheme.Entry, read StreamingQuery) ([]string, error) {
+	absolute := path.Join(database, directory)
+	children := slices.Clone(entries)
+	slices.SortFunc(children, func(a, b *Ydb_Scheme.Entry) int { return strings.Compare(a.GetName(), b.GetName()) })
+	names := make(map[string]bool)
+	var directories []string
+	for _, entry := range children {
+		name := entry.GetName()
+		if !component(name) || names[name] {
+			return nil, fmt.Errorf("invalid or duplicate streaming inventory entry")
+		}
+		names[name] = true
+		if entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
+			directories = append(directories, path.Join(directory, name))
+			continue
+		}
+		if entry.GetType() != streamingQueryEntry {
+			continue
+		}
+		owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Database: database, Schema: directory, Name: name}
+		observed, readErr := inventoryQuery(ctx, owner, path.Join(absolute, name), read)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if readErr != nil {
+			result.Coverage.Subjects = append(result.Coverage.Subjects, &protocol.ModelSubjectCoverage{
+				Kind: owner.Kind, Subject: proto.CloneOf(owner), NormalizedSubject: proto.CloneOf(owner),
+				Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: readErr.Error()},
+			})
+		} else {
+			result.NativeObjects = append(result.NativeObjects, observed)
+			observe(result, []*protocol.Envelope{observed})
+		}
+		if len(result.NativeObjects)+len(result.Coverage.Subjects) > 4096 || proto.Size(result) > 3<<20 {
+			return nil, fmt.Errorf("streaming inventory exceeds capture limit")
+		}
+	}
+	return directories, nil
+}
+
+// inventoryQuery captures the stored settings of the streaming query owner
+// names, read at queryPath. Its error is the reason the settings stay unknown:
+// no reader, a failed read, or a query with no stored settings.
+func inventoryQuery(ctx context.Context, owner *protocol.Reference, queryPath string, read StreamingQuery) (*protocol.Envelope, error) {
+	if read == nil {
+		return nil, fmt.Errorf("the streaming query capability was not established")
+	}
+	spec, err := read(ctx, queryPath)
+	if err != nil {
+		return nil, err
+	}
+	if spec == nil {
+		return nil, fmt.Errorf("the listed streaming query has no stored settings")
+	}
+	return schema.CaptureObject(owner, &native.StreamingQuerySettings{Text: spec.Text, Run: spec.Run, ResourcePool: spec.ResourcePool})
 }
 
 // RealmStreamingInventory gives a read that left out the dev realm

@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ownedtable"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
@@ -61,11 +62,8 @@ type rowReader interface {
 // is an error.
 func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsRequest) (result *protocol.RowPage, err error) {
 	table := request.GetTable()
-	if table.GetCatalog() != "" || len(table.GetPath()) != 0 || len(table.GetOverload()) != 0 {
-		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "a YDB table is named by its directory and name")
-	}
-	if err := rowdata.ValidateDirectory(table.GetSchema()); err != nil {
-		return nil, authored.Status(codes.InvalidArgument, err)
+	if err := checkTableName(table); err != nil {
+		return nil, err
 	}
 	s, err := p.lookup(request.GetSessionId())
 	if err != nil {
@@ -94,38 +92,14 @@ func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsReque
 	if described == nil {
 		return &protocol.RowPage{Table: proto.CloneOf(table), Exists: false, Complete: true}, nil
 	}
-	types := make(map[string]string, len(described.GetColumns()))
-	for _, column := range described.GetColumns() {
-		kind, _, err := schema.ColumnType(column.GetType())
-		if err != nil {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("column %q: %v", column.GetName(), err))
-		}
-		types[column.GetName()] = kind
-	}
-	columns := make([]*protocol.DataColumn, len(request.GetColumns()))
-	for i, name := range request.GetColumns() {
-		kind, found := types[name]
-		if !found {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("the table holds no column %q", name))
-		}
-		columns[i] = &protocol.DataColumn{Name: name, Type: kind, Kind: rowdata.Kind(kind)}
-		if columns[i].Kind == protocol.DataKind_DATA_KIND_UNSPECIFIED {
-			return nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("column %q: no value of type %s is read", name, kind))
-		}
+	types, columns, err := readColumns(described, request.GetColumns())
+	if err != nil {
+		return nil, err
 	}
 	order := rowdata.Order(request.GetKeyColumns(), described.GetPrimaryKey())
-	query := rowdata.PageQuery{Table: ydbtype.QuotePath(table.GetSchema(), table.GetName()), Order: order,
-		Limit: rowdata.Limit(request.GetMaxRows()), Columns: slices.Clone(request.GetColumns())}
-	for _, column := range order {
-		query.OrderTypes = append(query.OrderTypes, types[column])
-		if !slices.Contains(query.Columns, column) {
-			query.Columns = append(query.Columns, column)
-		}
-	}
-	if request.GetPageToken() != "" {
-		if query.After, err = rowdata.DecodeToken(request.GetPageToken(), order); err != nil {
-			return nil, authored.Status(codes.InvalidArgument, err)
-		}
+	query, err := pageQuery(table, request, order, types)
+	if err != nil {
+		return nil, err
 	}
 	text, err := query.Text()
 	if err != nil {
@@ -149,6 +123,66 @@ func (p *Provider) ReadRows(ctx context.Context, request *protocol.ReadRowsReque
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	return result, nil
+}
+
+// checkTableName refuses a table named by more than its directory and name,
+// and a directory a row read cannot name.
+func checkTableName(table *protocol.Reference) error {
+	if table.GetCatalog() != "" || len(table.GetPath()) != 0 || len(table.GetOverload()) != 0 {
+		return runtime.ErrorWithReason(codes.InvalidArgument, "a YDB table is named by its directory and name")
+	}
+	if err := rowdata.ValidateDirectory(table.GetSchema()); err != nil {
+		return authored.Status(codes.InvalidArgument, err)
+	}
+	return nil
+}
+
+// readColumns maps each column of the described table to its type, and
+// describes the named columns a page reads, in their order. It refuses a type
+// the provider cannot spell, a column the table does not hold, and one whose
+// values no row read reads.
+func readColumns(described *native.DescribeTableResult, names []string) (map[string]string, []*protocol.DataColumn, error) {
+	types := make(map[string]string, len(described.GetColumns()))
+	for _, column := range described.GetColumns() {
+		kind, _, err := schema.ColumnType(column.GetType())
+		if err != nil {
+			return nil, nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("column %q: %v", column.GetName(), err))
+		}
+		types[column.GetName()] = kind
+	}
+	columns := make([]*protocol.DataColumn, len(names))
+	for i, name := range names {
+		kind, found := types[name]
+		if !found {
+			return nil, nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("the table holds no column %q", name))
+		}
+		columns[i] = &protocol.DataColumn{Name: name, Type: kind, Kind: rowdata.Kind(kind)}
+		if columns[i].Kind == protocol.DataKind_DATA_KIND_UNSPECIFIED {
+			return nil, nil, runtime.ErrorWithReason(codes.FailedPrecondition, fmt.Sprintf("column %q: no value of type %s is read", name, kind))
+		}
+	}
+	return types, columns, nil
+}
+
+// pageQuery is the query of one page of the table in order: the requested
+// columns and every ordering column, after the row the request's page token
+// names.
+func pageQuery(table *protocol.Reference, request *protocol.ReadRowsRequest, order []string, types map[string]string) (rowdata.PageQuery, error) {
+	query := rowdata.PageQuery{Table: ydbtype.QuotePath(table.GetSchema(), table.GetName()), Order: order,
+		Limit: rowdata.Limit(request.GetMaxRows()), Columns: slices.Clone(request.GetColumns())}
+	for _, column := range order {
+		query.OrderTypes = append(query.OrderTypes, types[column])
+		if !slices.Contains(query.Columns, column) {
+			query.Columns = append(query.Columns, column)
+		}
+	}
+	if request.GetPageToken() != "" {
+		var err error
+		if query.After, err = rowdata.DecodeToken(request.GetPageToken(), order); err != nil {
+			return rowdata.PageQuery{}, authored.Status(codes.InvalidArgument, err)
+		}
+	}
+	return query, nil
 }
 
 // readPage reads the rows of one page into result. It stops at the request's
