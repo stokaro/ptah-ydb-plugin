@@ -51,11 +51,11 @@ func compatInspect(c *qt.C, directory string) (document, notes, reapplied string
 
 // Ported from the host's TestYDBCompatBinary_KeepsColumnFamiliesHCLCannotWrite,
 // TestYDBCompatBinary_KeepsTableSettingsHCLCannotWrite and the part of
-// TestYDBCompatBinary_InspectWritesTheTTLAsPlatformProperties and
 // TestYDBVectorIndexes_ApplyBackFromInspectedHCL that holds without HCL
 // blocks for this provider's table settings. HCL has no spelling for a column
-// family, a table's splitting settings, its TTL, its changefeeds or a vector
-// index's settings through this provider. `ptah-compat schema inspect` warns
+// family, a table's splitting settings, its changefeeds or a vector index's
+// settings through this provider. A TTL has one, its platform "ydb" block
+// (host_hcl_platform_test.go). `ptah-compat schema inspect` warns
 // that the table's settings are not in the document, and the document applied
 // back to the database it came from plans nothing: what a description leaves
 // out keeps what the table holds, so the table does not return to YDB's
@@ -77,10 +77,6 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 			create: []string{"CREATE TABLE `{table}` (`id` Uint64 NOT NULL, `code` Utf8 NOT NULL, `label` Utf8, PRIMARY KEY (`id`, `code`)) WITH (" +
 				"AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 4, KEY_BLOOM_FILTER = ENABLED)"},
 			want: heldTable{Storage: storedTable{Families: plain, Partitioning: "by_size=ENABLED size=2048 by_load=ENABLED min=4 max=0", KeyBloomFilter: "ENABLED"},
-				Changefeeds: map[string]feedShape{}, Indexes: map[string][2][]string{}}},
-		{name: "a TTL", table: "events",
-			create: []string{"CREATE TABLE `{table}` (`id` Int64 NOT NULL, `created_at` Timestamp, PRIMARY KEY (`id`)) WITH (TTL = Interval('P1D') ON `created_at`)"},
-			want: heldTable{Storage: storedTable{TTL: "created_at 86400s", Families: plain, Partitioning: bySize},
 				Changefeeds: map[string]feedShape{}, Indexes: map[string][2][]string{}}},
 		{name: "a changefeed and its consumer", table: "cf",
 			create: []string{"CREATE TABLE `{table}` (`id` Int64 NOT NULL, `v` Int32, PRIMARY KEY (`id`))",

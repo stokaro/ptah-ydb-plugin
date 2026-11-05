@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
@@ -23,6 +25,14 @@ func requireHostLacks(c *qt.C, feature string) {
 	if hostNegotiates(c, host, manifest, feature) {
 		c.Skipf("the selected host negotiates %s", feature)
 	}
+}
+
+// listLosses has the host list each detail an HCL document leaves out, one
+// line per detail with its path and message, where it otherwise reports only
+// their count.
+func listLosses(c *qt.C) {
+	c.Helper()
+	c.Setenv("PTAH_LOG_LEVEL", "debug")
 }
 
 // platformItems is the HCL document of directory's items table with a TTL in
@@ -72,13 +82,14 @@ func withoutPlatformBlocks(document string) string {
 func TestHostHCLPlatformTTL_RowTables(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.HCLPlatformFeature)
+	listLosses(c)
 	opened, directory, database := lockFixture(c)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 
 	created, err := hostApplySource(c, directory, "hcl", platformItems(directory, "P30D"))
 
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
-	c.Assert(created, qt.Contains, "row-table-create-operation", qt.Commentf("%s", created))
+	c.Assert(created, qt.Contains, ") WITH (TTL = Interval(\"P30D\") ON `ts`);\n", qt.Commentf("%s", created))
 	c.Assert(heldStorage(c, opened, path.Join(database, directory, "items")).TTL, qt.Equals, "ts 2592000s")
 	events := path.Join(database, directory, "events")
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+events+"` (id Uint64 NOT NULL, at Uint64, PRIMARY KEY (id)) "+
@@ -99,7 +110,7 @@ func TestHostHCLPlatformTTL_RowTables(t *testing.T) {
   }
 `, qt.Commentf("%s", document))
 	c.Assert(document, qt.Contains, platformItems(directory, "P30D")[:strings.Index(platformItems(directory, "P30D"), `  column "id"`)], qt.Commentf("%s", document))
-	c.Assert(notes, qt.Contains, "warning: table."+directory+".events: YDB table settings (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3) are not represented in HCL")
+	c.Assert(notes, qt.Contains, "table."+directory+".events: YDB table settings (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3) are not represented in HCL")
 	c.Assert(notes, qt.Not(qt.Contains), "row-table-properties is not represented in HCL")
 	c.Assert(notes, qt.Not(qt.Contains), "table."+directory+".items: YDB")
 	for _, written := range []string{document, withoutPlatformBlocks(document)} {
@@ -126,6 +137,7 @@ func TestHostHCLPlatformTTL_RowTables(t *testing.T) {
 func TestHostHCLPlatformTTL_ColumnTable(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.HCLPlatformFeature)
+	listLosses(c)
 	opened, directory, database := lockFixture(c)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+path.Join(database, directory, "events")+"` "+
@@ -142,7 +154,7 @@ func TestHostHCLPlatformTTL_ColumnTable(t *testing.T) {
     }
   }
 `, qt.Commentf("%s", document))
-	c.Assert(notes, qt.Contains, "warning: table."+directory+".events: YDB column storage, hash partitioning and tiered TTL are not represented in HCL")
+	c.Assert(notes, qt.Contains, "table."+directory+".events: YDB column storage, hash partitioning and tiered TTL are not represented in HCL")
 	for _, written := range []string{document, withoutPlatformBlocks(document)} {
 		replanned, err := hostReplanSource(c, directory, "hcl", written)
 		c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", written, replanned))
@@ -151,7 +163,7 @@ func TestHostHCLPlatformTTL_ColumnTable(t *testing.T) {
 	changed := strings.Replace(document, `value = "P1D"`, `value = "P2D"`, 1)
 	altered, err := hostApplySource(c, directory, "hcl", changed)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", altered))
-	c.Assert(altered, qt.Contains, "column-table-ttl-operation", qt.Commentf("%s", altered))
+	c.Assert(altered, qt.Contains, "ALTER TABLE `"+directory+"/events` SET (TTL = Interval(\"PT172800S\") DELETE ON `ts`);\n", qt.Commentf("%s", altered))
 	again, _ := hostExport(c, "schema", "inspect", "--schemas", directory, "--format", "hcl")
 	c.Assert(again, qt.Contains, `value = "P2D"`, qt.Commentf("%s", again))
 	replanned, err := hostReplanSource(c, directory, "hcl", changed)
@@ -205,4 +217,64 @@ func TestHostExportsAGoSourceWithATTLAsHCL(t *testing.T) {
 	output, err = hostApplySource(c, directory, "hcl", document)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s\n%s", document, output))
 	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`, qt.Commentf("%s\n%s", document, output))
+}
+
+// Ported from the host's TestYDBCompatBinary_InspectWritesTheTTLAsPlatformProperties.
+// `ptah-compat schema inspect` writes a table's TTL into HCL as its platform
+// "ydb" block, in the spelling YDB shows, and reports no loss of it. The
+// document applied back to the database it came from plans nothing, and so
+// does the same document without the block: HCL that names no TTL leaves the
+// table's TTL alone rather than losing it to a RESET (TTL).
+func TestHostCompatInspectWritesTheTTLAsPlatformProperties(t *testing.T) {
+	c := testcheck.New(t)
+	hostCompat(c)
+	requireHostNegotiates(c, provider.HCLPlatformFeature)
+	listLosses(c)
+	opened, directory, database := lockFixture(c)
+	absolute := path.Join(database, directory, "events")
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+absolute+"` (`id` Int64 NOT NULL, `created_at` Timestamp, PRIMARY KEY (`id`)) "+
+		"WITH (TTL = Interval('P1D') ON `created_at`)"), qt.IsNil)
+
+	document, notes, reapplied := compatInspect(c, directory)
+
+	c.Assert(document, qt.Contains, `  platform "ydb" {
+    override "row_deletion_column" {
+      value = "created_at"
+    }
+    override "row_deletion_interval" {
+      value = "P1D"
+    }
+  }
+`, qt.Commentf("%s", document))
+	c.Assert(notes, qt.Not(qt.Contains), "row-table-properties is not represented in HCL")
+	c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
+	desired := "file://" + compatFile(c, c.TempDir(), "without-ttl.hcl", withoutPlatformBlocks(document))
+	without, applyNotes, exit := runCompat(c, nil, "schema", "apply", "--url", os.Getenv("PTAH_YDB_TEST_URL"), "--schema", directory, "--to", desired, "--dry-run")
+	c.Assert(exit, qt.Equals, 0, qt.Commentf("%s\n%s", without, applyNotes))
+	c.Assert(without, qt.Equals, "Schema is synced, no changes to be made\n")
+	c.Assert(heldStorage(c, opened, absolute).TTL, qt.Equals, "created_at 86400s")
+}
+
+// The TTL row of TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath,
+// on a host that does not negotiate source.hcl-platform. HCL then has no
+// spelling for a table's TTL through this provider: `ptah-compat schema
+// inspect` reports the row-table facet as not in the document, and the
+// document applied back plans nothing and keeps the TTL.
+func TestHostCompatInspectedHCLKeepsATTLItCannotWrite(t *testing.T) {
+	c := testcheck.New(t)
+	hostCompat(c)
+	requireHostLacks(c, provider.HCLPlatformFeature)
+	listLosses(c)
+	opened, directory, database := lockFixture(c)
+	absolute := path.Join(database, directory, "events")
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+absolute+"` (`id` Int64 NOT NULL, `created_at` Timestamp, PRIMARY KEY (`id`)) "+
+		"WITH (TTL = Interval('P1D') ON `created_at`)"), qt.IsNil)
+
+	_, notes, reapplied := compatInspect(c, directory)
+
+	c.Assert(notes, qt.Contains, "table."+directory+".events: feature facet "+schema.TableProperties+" is not represented in HCL")
+	c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
+	c.Assert(heldStorage(c, opened, absolute).TTL, qt.Equals, "created_at 86400s")
 }

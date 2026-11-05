@@ -1309,8 +1309,8 @@ target is refused with the flag's name, `regular` included, as the host's
 embedded engine refuses it.
 
 In HCL, the TTL is the `platform "ydb"` block of the table, with the same
-three properties as `override` blocks, as the host's embedded engine reads and
-writes it:
+three properties as `override` blocks. `ptah` and `ptah-compat` read it and
+`schema inspect` writes it:
 
 ```hcl
 table "events" {
