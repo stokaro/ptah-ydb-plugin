@@ -51,14 +51,9 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if !Owns(fragment) {
+		// An index's settings are its own facet; see DecodeIndexes.
+		if !Owns(fragment) || indexFragment(fragment) {
 			continue
-		}
-		if fragment.GetGoDirective().GetDirective() == DirectiveIndex {
-			return nil, indexRefusal(fragment)
-		}
-		if key := fragment.GetYamlKey(); key.GetScope() == protocol.YAMLSourceKey_INDEX {
-			return nil, &UnsupportedError{Setting: key.GetKey(), Reason: indexReason}
 		}
 		binding, err := bindingOf(document, fragment)
 		if err != nil {
@@ -269,17 +264,9 @@ func splitTable(written string) (schemaName, name string, err error) {
 	return schemaName, name, nil
 }
 
-// indexRefusal refuses the first option an index directive writes. The bundled
-// decoder reads partitioning, local, full-text and vector options of an index;
-// the provider adds and drops only plain global indexes and compares nothing an
-// index states beyond its keys, so an option it accepted would be dropped.
-func indexRefusal(fragment *protocol.SourceFragment) error {
-	setting := DirectiveIndex
-	if entries := fragment.GetValue().GetMapping().GetEntries(); len(entries) != 0 {
-		setting = entries[0].GetKey()
-	}
-	return &UnsupportedError{Setting: setting, Reason: indexReason}
-}
-
-// indexReason is why an index setting is refused, in either format.
-const indexReason = "an index states no settings of its own in the row-table model, and the provider adds only plain global indexes"
+// indexReason is why an index option other than a global index's partitioning
+// and read replicas is refused, in either format: the bundled decoder reads a
+// column table's local index options and the full-text and vector settings
+// too, and the provider would drop them.
+const indexReason = "an index directive or entry declares the partitioning and read replicas of a global index here; " +
+	"a local index's options and a full-text or vector index's settings are declared through the native index facet"

@@ -159,6 +159,10 @@ func TestNativeObjectsAndNamespaceCoverageSubprocess(t *testing.T) {
 	})
 }
 
+// assertExactObjectRegions asserts that a read claims each native object kind,
+// and each table facet kind, the settings of a global index among them,
+// complete in exactly the listed directories and nowhere else, and claims no
+// region for any other kind.
 func assertExactObjectRegions(c *qt.C, snapshot *protocol.Schema, database string, schemas []string) {
 	c.Helper()
 	for _, record := range snapshot.Coverage.Kinds {

@@ -106,7 +106,7 @@ func TestPartitioningPlan_HappyPath(t *testing.T) {
 			c.Assert(step.Metadata.Effects[0].Action, qt.Equals, protocol.PlanningEffect_READ)
 			c.Assert(step.Metadata.Effects[1].Action, qt.Equals, protocol.PlanningEffect_ALTER)
 			c.Assert(step.Metadata.Effects[1].Subject.Kind, qt.Equals, "ydb.partitioning")
-			c.Assert(plan.Parents, qt.HasLen, 5)
+			c.Assert(plan.Parents, qt.HasLen, len(tablecreate.ParentKinds()))
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, 1)
 			c.Assert(plan.Parents[0].Receipt.Steps[0].Name, qt.Equals, "row-table-partitioning/000000")
 			alteration, err := tablecreate.DecodeAlteration(step.Operation.Value.Value)
@@ -159,7 +159,7 @@ func TestPartitioningPlan_NoChange(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
-			c.Assert(plan.Parents, qt.HasLen, 5)
+			c.Assert(plan.Parents, qt.HasLen, len(tablecreate.ParentKinds()))
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, 0)
 		})
 	}

@@ -19,7 +19,7 @@ const ServiceID = "ydb-row-table-create"
 // column table, and the changefeeds of a table to this assessment: the host
 // plans no table whose facets no planning service claims.
 func ParentKinds() []string {
-	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
+	return []string{schema.TableProperties, schema.ColumnProperties, schema.IndexProperties, schema.IndexSettingsProperties, schema.ChangefeedProperties, schema.ColumnStorageProperties}
 }
 
 type creation struct {
@@ -32,6 +32,10 @@ type creation struct {
 	// indexes add the vector and full-text indexes the new table declares,
 	// each after its creation.
 	indexes []*indexStep
+	// settings give the new table's global indexes the partitioning and read
+	// replicas their own facets declare, each after the creation: the call
+	// that creates a table takes no index settings.
+	settings []*indexSettingsStep
 }
 
 // removal is a table the plan drops, and the host's steps its drop replaces.
@@ -308,12 +312,19 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		if reason != "" {
 			return refused(i, reason), nil
 		}
-		creations = append(creations, creation{index: i, table: table, operation: operation, feeds: feeds, indexes: indexes})
+		settings, reason, err := plannedCreationIndexSettings(owner, table.Desired, operation)
+		if err != nil {
+			return nil, err
+		}
+		if reason != "" {
+			return refused(i, reason), nil
+		}
+		creations = append(creations, creation{index: i, table: table, operation: operation, feeds: feeds, indexes: indexes, settings: settings})
 	}
 	slices.SortFunc(creations, func(a, b creation) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
 	receiptSteps := make(map[int][]*protocol.StepIdentity)
-	var rowCreations, columnCreations, creationIndexNumber int
+	var rowCreations, columnCreations, creationIndexNumber, indexSettings int
 	feedNumber := 0
 	for i := range creations {
 		item := &creations[i]
@@ -358,6 +369,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			contribution.Dependencies = append(contribution.Dependencies, dependency)
 			receiptSteps[item.index] = append(receiptSteps[item.index], index.id)
 		}
+		for _, settings := range item.settings {
+			step := settings.planningStep(indexSettings, item.table.Subject)
+			indexSettings++
+			contribution.Steps = append(contribution.Steps, step)
+			contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(item.id), After: proto.CloneOf(settings.id)})
+			receiptSteps[item.index] = append(receiptSteps[item.index], settings.id)
+		}
 		if item.feeds != nil {
 			step, dependencies := item.feeds.planningStep(feedNumber, item.table.Subject, []*protocol.StepIdentity{item.id})
 			feedNumber++
@@ -395,7 +413,7 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	// sequenceSteps numbers the sequence changes of the altered tables.
 	sequenceSteps := 0
 	slices.SortFunc(alterations, func(a, b alteration) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, indexRenames, indexSettings, defaults, inventories int
+	var families, additions, removals, ttls, partitionings, indexAdditions, indexRemovals, indexRenames, defaults, inventories int
 	for i := range alterations {
 		item := &alterations[i]
 		subject := item.table.Subject
@@ -523,15 +541,8 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		contribution.Dependencies = append(contribution.Dependencies, indexReplacements(item.indexes)...)
 		for _, settings := range item.indexSettings {
-			settings.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-index-settings/%06d", indexSettings)}
+			contribution.Steps = append(contribution.Steps, settings.planningStep(indexSettings, subject))
 			indexSettings++
-			settings.operation.Id = settings.id.Name
-			facts := settings.operation.OperationSemantics
-			contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: settings.id,
-				Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: settings.operation},
-				Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
-					Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
-						{Subject: indexSubject(subject, settings.change.held.GetName()), Action: protocol.PlanningEffect_ALTER}}}})
 			ordered = append(ordered, settings.id)
 		}
 		contribution.Dependencies = append(contribution.Dependencies, settingsAfterAdditions(item.indexes, item.indexSettings)...)

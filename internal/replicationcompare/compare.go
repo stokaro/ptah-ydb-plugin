@@ -41,7 +41,7 @@ func CompareTransfers(ctx context.Context, request *protocol.CompareModelsReques
 // ReplicationFamily is the async replication's part of a comparison.
 func ReplicationFamily() objectcompare.Family {
 	return objectcompare.Family{
-		ServiceID: ReplicationServiceID, Kind: schema.ReplicationProperties, Capability: replication.CapabilityReplication, ChangeCapability: true,
+		ServiceID: ReplicationServiceID, Kind: schema.ReplicationProperties, ChangeKind: schema.ReplicationChange, Capability: replication.CapabilityReplication, ChangeCapability: true,
 		Noun:         "async replication",
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(schema.ReplicationProperties) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
@@ -84,7 +84,7 @@ func ReplicationFamily() objectcompare.Family {
 // TransferFamily is the transfer's part of a comparison.
 func TransferFamily() objectcompare.Family {
 	return objectcompare.Family{
-		ServiceID: TransferServiceID, Kind: schema.TransferProperties, Capability: replication.CapabilityTransfers, ChangeCapability: true,
+		ServiceID: TransferServiceID, Kind: schema.TransferProperties, ChangeKind: schema.TransferChange, Capability: replication.CapabilityTransfers, ChangeCapability: true,
 		Noun:         "transfer",
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(schema.TransferProperties) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {

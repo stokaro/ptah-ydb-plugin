@@ -116,6 +116,11 @@ func providerFeatures() []string {
 		provider.PlanFeaturesFeature,
 		provider.RenderFeature,
 		provider.CompareModelsFeature,
+		// An object comparison counts what it compares, so a drift inventory
+		// reports the provider's native kinds; see objectcompare.countDecided.
+		// The row-table facet comparison counts nothing: a table's settings
+		// stand for no object, and a table's changefeeds change as one set.
+		provider.ComparisonCountsFeature,
 		provider.DecodeSourceFeature,
 		// A table's facets, a topic with its consumers and a changefeed set
 		// are each written by several declarations; see EncodeSource.
@@ -176,6 +181,10 @@ func providerFeatures() []string {
 		// name as one rename step, which the table service claims with
 		// RENAME INDEX; see indexRenames.
 		provider.IndexRenamesFeature,
+		// A read reports a global index's partitioning and read replicas as
+		// the index's own facet, which a source's index directive or entry
+		// declares; see inspect.Common.IndexFacets.
+		provider.ObservedIndexFacetsFeature,
 		// A YQL reading carries a table's changefeeds as a facet of the
 		// table; see yqlschema.Reply.
 		provider.SQLFacetsFeature,
@@ -603,7 +612,7 @@ func Description() *protocol.Description {
 				ScopeSelections:     scopeSelections(),
 				DatabaseKinds:       databaseKinds(),
 				HclSource: &protocol.HCLSourceDeclaration{
-					Blocks:      []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock(), tablesource.HCLPlatformBlock()},
+					Blocks:      []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock(), tablesource.HCLIndexBlock(), tablesource.HCLPlatformBlock()},
 					HeaderKinds: []string{"coordination_node"},
 				},
 				GoHeaderKinds: yqlschema.HeaderKinds(),

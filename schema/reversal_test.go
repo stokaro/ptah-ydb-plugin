@@ -134,14 +134,23 @@ func TestReverseTableChange_MovesAColumnBack(t *testing.T) {
 	c.Assert(reversed.Value.Id, qt.Equals, "reverse")
 }
 
-// A change whose owner is neither a table nor a column is refused.
+// A change whose owner is not a table, a column or an index is refused, and
+// so is a change of an index's settings, whose reverse would have to state
+// every setting the index held.
 func TestReverseTableChange_FailurePath(t *testing.T) {
-	c := testcheck.New(t)
-	change := columnFamilyChange(c).Value
-	change.Owner.Kind = "index"
+	for _, test := range []struct{ name, owner, want string }{
+		{"a view owner", "view", `.*table, column or index owner.*`},
+		{"an index owner", "index", `a change of a global index's settings has no reversal yet`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			change := columnFamilyChange(c).Value
+			change.Owner.Kind = test.owner
 
-	reversed, err := schema.ReverseTableChange("reverse", change, false)
+			reversed, err := schema.ReverseTableChange("reverse", change, false)
 
-	c.Assert(err, qt.ErrorMatches, `.*table or column owner.*`)
-	c.Assert(reversed.Value, qt.IsNil)
+			c.Assert(err, qt.ErrorMatches, test.want)
+			c.Assert(reversed.Value, qt.IsNil)
+		})
+	}
 }

@@ -20,7 +20,7 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 
 func family() objectcompare.Family {
 	return objectcompare.Family{
-		ServiceID: ServiceID, Kind: schema.CoordinationProperties, Capability: "coordination_nodes", Noun: "coordination node",
+		ServiceID: ServiceID, Kind: schema.CoordinationProperties, ChangeKind: schema.CoordinationChange, Capability: "coordination_nodes", Noun: "coordination node",
 		DesiredModel:     schema.CoordinationDesiredModel,
 		Owner:            schema.CoordinationBoundOwner,
 		NormalizeDesired: schema.NormalizeDesired, NormalizeObserved: schema.Normalize,

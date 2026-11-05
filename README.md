@@ -82,10 +82,10 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.19.0, which speaks provider contract 25.21.
+The module pins `provider-sdk` v0.20.0, which speaks provider contract 25.22.
 The provider still requires 25.7 of its host and offers each later feature to a
-host that lists it. Builds require neither the Ptah application source nor a
-local SDK checkout.
+host that lists it. Builds require neither the Ptah application source nor a local SDK
+checkout.
 
 Database context is resolved without connecting or reading credentials. A dev
 realm carries both its selected root and the authored database root. Context
@@ -629,9 +629,11 @@ declaration gives none loses. A column's move to another family reverses to
 a move back: what the forward change leaves is the column in the declared
 family, with a default or storage setting the declaration does not state
 kept as the column held it. A host that does not project a reverse's state
-onto a column cannot plan that reverse and refuses it. A host that does not
-list the feature gets no reversal service and refuses
-every such change, naming the change kind that has no reversal.
+onto a column cannot plan that reverse and refuses it. A change of a global
+index's settings is refused: its declaration keeps every setting it leaves
+out, so a reverse would have to state each setting the index held. A host
+that does not list the feature gets no reversal service and refuses every
+such change, naming the change kind that has no reversal.
 
 A topic reverses like any other object, but no migration file holds a topic
 (see [Text units](#text-units)).
@@ -1261,6 +1263,19 @@ coordination_node "app" "limits" {
 }
 ```
 
+It also claims, at the index-attributes site, a global index's partitioning
+and read replicas inside the frontend's `index` block, spelled as the index
+directive spells them (see [Index settings from a source](#index-settings-from-a-source)):
+a switch and the read replicas as strings, a count as a number.
+
+```hcl
+index "by_body" {
+  auto_partitioning_by_load              = "ENABLED"
+  auto_partitioning_min_partitions_count = 2
+  columns                                = [column.body]
+}
+```
+
 A `ptah:not-described coordination_node` header entry, with a node's path or
 none, is the one header kind the engine declares, and the provider refuses a
 name no node can take with the host's words. With `source.limits` negotiated,
@@ -1312,6 +1327,7 @@ provider's decoders read, which decode to the same declarations:
 | Column families and the columns they hold | `column_families` | `ptah:schema:columnfamily` | loss |
 | Column-table storage, hash key, shards, TTL | `column_store` | attributes of `ptah:schema:table` | a TTL that only deletes in the table's `platform "ydb"` block; the rest is a loss |
 | Changefeeds and their consumers | `changefeeds` | `ptah:schema:changefeed`, `ptah:schema:changefeed:consumer` | loss |
+| A global index's partitioning and read replicas | keys of its index entry | attributes of `ptah:schema:index` | attributes of its `index` block |
 
 A value is written as the declaration the provider compares it as: a topic or a
 changefeed as its declared settings, without the attributes YDB keeps on it; a
@@ -1332,10 +1348,10 @@ table, a family kept in memory, a TTL run interval, a disabled changefeed or the
 stream of an async replication, a native index, a column's compression or
 encoding, a native view (the host writes views from the common
 wire), and an object of another database than the one it was read in. A
-secret's value is never written. HCL declares coordination nodes, and a
-table's TTL in its `platform "ydb"` block, as the host's embedded engine does;
-its other YDB settings are losses, which the host reports at the table in the
-embedded engine's words, such as `YDB table settings
+secret's value is never written. HCL declares coordination nodes, a global
+index's settings, and a table's TTL in its `platform "ydb"` block, as the host's
+embedded engine does; its other YDB settings are losses, which the host reports
+at the table in the embedded engine's words, such as `YDB table settings
 (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3) are not represented in HCL`. A
 facet whose TTL the block writes and that holds such a setting too is written in
 part, and the loss names the setting. The settings a read reports for every
@@ -1520,7 +1536,7 @@ Not read yet, and listed so that nobody mistakes the silence for support:
 | Setting | Why |
 | --- | --- |
 | `fields` with a `table` attribute for another table in Go | The host places the columns of the directive's own struct only. Claimed and refused by name. |
-| Index partitioning, local, full-text and vector options | The row-table model holds no index option, and the host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. The attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. The index set model takes an index's partitioning and read replicas, and the planner changes them on an index the table holds (see [Index alteration](#index-alteration)). A vector or full-text index is created and changed from the native index set (see [Vector and full-text indexes](#vector-and-full-text-indexes)). No Go or YAML source writes either into the index set yet, and neither does a pgvector operator class (`ops`) on a source index. |
+| Local, full-text and vector index options | The host's bundled source writes the local and full-text options into the common index, which a claim cannot reach. These attributes of `ptah:schema:index` are claimed and refused by name, and so are the same keys of a YAML index entry for a host that lists `source.entry-keys`. A vector or full-text index is created and changed from the native index set (see [Vector and full-text indexes](#vector-and-full-text-indexes)). No Go or YAML source writes either into the index set yet, and neither does a pgvector operator class (`ops`) on a source index. A global index's partitioning and read replicas are read (see [Index settings from a source](#index-settings-from-a-source)). |
 
 A table is managed for its TTL when its source states table properties for it,
 or when the host reports complete knowledge of the table properties of the
@@ -1624,8 +1640,8 @@ index grammar at all (`local: alternative is not implemented yet`). A new
 table's local indexes are written inside its CREATE TABLE, as ``INDEX `bf`
 LOCAL USING bloom_filter ON (`body`) WITH (false_positive_probability =
 0.01)``, every setting named. No Go or YAML source declares a local index yet: the host turns
-an index directive into a common index, whose model has no place for the
-settings, and the provider refuses the settings where it decodes them.
+an index directive into a common index, whose model has no place for a local
+index's options, and the provider refuses those options where it decodes them.
 
 Comparison and planning. The comparison `ydb-row-table-properties` compares the
 column-storage facet of a table that exists on both sides, and reports a
@@ -1757,6 +1773,32 @@ drives `ptah schema apply` of the current host through this provider from a
 YAML, a Go and a YQL source: it creates a node, finds nothing to change on the
 next run, changes its settings in place, and removes it once the source no
 longer declares it, reading the node back after each run.
+
+## Comparison counts
+
+The provider offers `models.compare-counts`, so `ptah schema drift --format json`
+lists its native kinds in the report's inventory. Each object comparison counts,
+under its change kind, the objects it decides: an object both sides hold counts
+on both, whether or not it differs and also when the plan drops and creates it
+again, an object only the source declares counts as desired, and an object only
+the server holds counts as observed. An object the comparison excludes, reserves,
+keeps because the source does not describe it, or leaves undecided counts on
+neither side.
+
+The counted kinds are secrets, streaming queries, coordination nodes, topics,
+external data sources, external tables, resource pools, resource pool classifiers,
+async replications and transfers. A service counts every kind it owns, with zeros
+for a kind a batch holds nothing of, because the host reports a kind only when
+every service that ran counted it.
+
+The row-table facet comparison counts nothing, so its two change kinds have no
+inventory entry. A table's TTL and partitioning are settings that stand for no
+object. A table's changefeeds change as one set, with one change for the table,
+and the contract refuses more additions and removals than a kind has changes, so
+a set that gains two changefeeds cannot count them.
+
+A host that does not list the feature receives no counts and reports none of
+these kinds, never a zero.
 
 ## Offline column declarations
 
@@ -3253,6 +3295,48 @@ space. The host compares the two spellings, so a declaration that changes only
 an index's kind is a removal and an addition of the index under its name, which
 this service carries out as the two steps above, the removal first. A host
 without the feature compares no kind, and such a change plans nothing.
+
+#### Index settings from a source
+
+A Go `ptah:schema:index` directive, the index entry of a YAML table and the
+`index` block of an HCL document state a global index's partitioning and read
+replicas with the attributes the host's embedded engine reads there:
+`auto_partitioning_by_size`, `auto_partitioning_partition_size_mb`,
+`auto_partitioning_by_load`, `auto_partitioning_min_partitions_count`,
+`auto_partitioning_max_partitions_count` and `read_replicas_settings`, with the
+spellings a table directive takes. They decode into the index's own facet
+(`index-properties`), owned by the index, and a value an index cannot take,
+such as `auto_partitioning_by_load="true"` or a count of zero, is refused where
+it was written. For a host that lists `schema.observed-index-facets` (contract
+25.21, ADR 0068 in Ptah), inspection reports the same facet on each common
+index, with every setting the server describes on it, defaults included, so
+the host compares one owner's facet on both sides. A host that does not list
+the feature reads no index's settings, and the provider refuses a declared
+setting from it, since the comparison could not see what the index holds.
+
+```go
+//ptah:schema:index name="by_body" fields="body" auto_partitioning_by_load="ENABLED" auto_partitioning_min_partitions_count="2"
+```
+
+- A setting the source leaves out keeps what the index holds, as the host's
+  embedded engine compares it. A differing setting is a
+  `github.com/stokaro/ptah-ydb-plugin/row-table-properties-change` on the index,
+  planned as the `row-table-index-settings/N` step above.
+- A table the plan creates is created with its indexes, and each index whose
+  facet declares settings then takes them in a `row-table-index-settings/N`
+  step after the creation, since no call that creates an index takes them. An
+  index added to a table that exists takes them after its addition.
+- An index the plan renames in place keeps its settings: the host compares a
+  renamed index's facet under its new name, and a changed setting is a
+  settings step after the rename, as the host's embedded engine writes `RENAME
+  INDEX` and then `ALTER INDEX ... SET`. An index the plan drops is left alone.
+- Settings declared on an index that is not a global sync, async or unique
+  index, or on one the table neither holds nor gains, are refused.
+- An export writes an index's facet as the settings that differ from the ones
+  YDB gives a new index, as the host's embedded engine writes them, so `ptah
+  introspect` writes `auto_partitioning_by_load="ENABLED"
+  auto_partitioning_min_partitions_count="2"` on the directive, and the export
+  applies back with nothing planned.
 
 The declaration is the index set model (`table-indexes`, desired side) as a
 facet of the table, beside the table properties. It is managed when the

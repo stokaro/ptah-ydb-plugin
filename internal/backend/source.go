@@ -61,6 +61,20 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			}
 			return nil, authored.Status(codes.InvalidArgument, err)
 		}
+		indexes, err := tablesource.DecodeIndexes(ctx, document)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, status.FromContextError(ctx.Err()).Err()
+			}
+			return nil, authored.Status(codes.InvalidArgument, err)
+		}
+		// Without the feature the host reads no index's settings, so the
+		// comparison could not see what an index holds, and a declared
+		// setting would be dropped on every index the table already has.
+		if len(indexes) != 0 && !slices.Contains(negotiatedFeatures(ctx), provider.ObservedIndexFacetsFeature) {
+			return nil, authored.Status(codes.InvalidArgument, fmt.Errorf("index %q declares its partitioning or read replicas, which this provider compares only with a host that negotiates %s",
+				indexes[0].Value.GetValue().GetOwner().GetName(), provider.ObservedIndexFacetsFeature))
+		}
 		secretValues, err := secretsource.Decode(ctx, document)
 		if err != nil {
 			return nil, authored.Status(codes.InvalidArgument, err)
@@ -126,7 +140,7 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 			case externalsource.Owns(fragment):
 				values = externals[index]
 			default:
-				values, err = fragmentValues(ctx, document, fragment, index, tables)
+				values, err = fragmentValues(ctx, document, fragment, index, tables, indexes)
 			}
 			if err != nil {
 				if ctx.Err() != nil {
@@ -208,10 +222,18 @@ func changefeedValues(document *protocol.SourceDocument, fragment *protocol.Sour
 }
 
 // fragmentValues returns the values one fragment declares. A table's
-// fragments declare one facet together, which its first fragment returns.
-func fragmentValues(ctx context.Context, document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int, tables []tablesource.Table) ([]*protocol.SourceModelValue, error) {
+// fragments declare one facet together, which its first fragment returns, and
+// so do an index's.
+func fragmentValues(ctx context.Context, document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int, tables []tablesource.Table,
+	indexes []tablesource.Index) ([]*protocol.SourceModelValue, error) {
 	if !tablesource.Owns(fragment) {
 		return coordinationSource(ctx, document, fragment, index)
+	}
+	for _, declared := range indexes {
+		if declared.Fragment == index {
+			trace := &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}
+			return []*protocol.SourceModelValue{{Placement: protocol.SourceModelValue_FACET, Value: declared.Value, Source: trace}}, nil
+		}
 	}
 	for _, table := range tables {
 		trace := &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}

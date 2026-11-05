@@ -45,7 +45,7 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 			converted, err = schema.ConvertColumn(value.Value, request.From, request.To)
 		case schema.TableProperties:
 			converted, err = schema.ConvertTable(value.Value, request.From, request.To)
-		case schema.SecretProperties, schema.IndexProperties, schema.ChangefeedProperties, schema.TopicProperties, schema.ViewProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties, schema.ColumnStorageProperties,
+		case schema.SecretProperties, schema.IndexProperties, schema.IndexSettingsProperties, schema.ChangefeedProperties, schema.TopicProperties, schema.ViewProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties, schema.ColumnStorageProperties,
 			schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties, schema.StreamingQueryProperties, schema.ReplicationProperties, schema.TransferProperties:
 			converted, err = schema.ConvertNative(value.Value, request.From, request.To)
 		case schema.CoordinationProperties:

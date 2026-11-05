@@ -202,7 +202,7 @@ func TestColumnTablePlan_Create(t *testing.T) {
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
 	c.Assert(plan.Contributions, qt.HasLen, 1)
 	c.Assert(plan.Rewrites, qt.HasLen, 1)
-	c.Assert(plan.Parents, qt.HasLen, 5)
+	c.Assert(plan.Parents, qt.HasLen, len(tablecreate.ParentKinds()))
 	c.Assert(plan.Parents[0].Receipt.Strategy, qt.Matches, `Create the complete captured column table with YQL's CREATE TABLE.*`)
 	step := plan.Contributions[0].Steps[0]
 	c.Assert(step.Id.Name, qt.Equals, "column-table-create/000000")
@@ -284,7 +284,7 @@ func TestColumnTablePlan_AlterWithNoChange(t *testing.T) {
 			c.Assert(err, qt.IsNil)
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(plan.Contributions, qt.HasLen, 0)
-			c.Assert(plan.Parents, qt.HasLen, 5)
+			c.Assert(plan.Parents, qt.HasLen, len(tablecreate.ParentKinds()))
 			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, 0)
 			c.Assert(plan.Parents[0].Receipt.Strategy, qt.Matches, `The column table already holds the declared storage.*`)
 		})
