@@ -1,6 +1,7 @@
 package yqlschema_test
 
 import (
+	"cmp"
 	"encoding/json"
 	"slices"
 	"strconv"
@@ -9,7 +10,9 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -17,6 +20,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -99,6 +103,10 @@ func gaps(reading *yqlschema.Reading) []string {
 			}
 		case yqlschema.KindResourcePool, yqlschema.KindResourcePoolClassifier, yqlschema.KindStreamingQuery, yqlschema.KindReplication, yqlschema.KindTransfer:
 			continue
+		case yqlschema.KindChangefeed:
+			if _, err := changefeeds.Intent(*object.Spec.(*ydbdecl.Changefeed)); err == nil {
+				continue
+			}
 		}
 		found = append(found, string(object.Kind)+" "+object.Name)
 	}
@@ -127,7 +135,8 @@ func TestReply_HappyPath(t *testing.T) {
 			reply := yqlschema.Reply(request)
 			c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
 			c.Assert(reply.GetComplete(), qt.IsTrue, qt.Commentf("%v", reply.GetDiagnostics()))
-			c.Assert(wireOrder(settle(c, hostMapping(c, reply))), qt.DeepEquals, wireOrder(settle(c, normalExternals(c, normalTopics(c, withoutFacets(hostMeaning(c, r.golden.Grammar)))))))
+			c.Assert(wireOrder(settle(c, hostMapping(c, reply))), qt.DeepEquals,
+				wireOrder(settle(c, normalChangefeeds(c, normalExternals(c, normalTopics(c, withoutFacets(hostMeaning(c, r.golden.Grammar))))))))
 		})
 	}
 }
@@ -232,12 +241,18 @@ func withoutFacets(m meaning) meaning {
 	return m
 }
 
-// wireOrder orders the columns of a meaning by table. The host's reader
+// wireOrder orders the columns of a meaning by table, and its objects as
+// the host orders feature objects: by kind, directory, parent and name. A
+// reply carries a table's changefeeds as a facet of the table, apart from its
+// native objects, and the host's reader keeps them among its objects. The host's reader
 // keeps the columns of a load in the order the documents create them; a
 // reply lists each table's columns with the table, and the host keeps the
 // order of a table's own columns either way.
 func wireOrder(m meaning) meaning {
 	slices.SortStableFunc(m.Fields, func(a, b map[string]any) int { return strings.Compare(a["Table"].(string), b["Table"].(string)) })
+	slices.SortStableFunc(m.Objects, func(a, b objectMeaning) int {
+		return cmp.Or(strings.Compare(a.Kind, b.Kind), strings.Compare(a.Schema, b.Schema), strings.Compare(a.Parent, b.Parent), strings.Compare(a.Name, b.Name))
+	})
 	slices.SortStableFunc(m.Indexes, func(a, b map[string]any) int {
 		return strings.Compare(a["TableName"].(string), b["TableName"].(string))
 	})
@@ -377,6 +392,18 @@ func hostMapping(c *qt.C, reply *protocol.SQLSchema) meaning {
 		result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindCoordinationNode), Schema: owner.GetSchema(), Name: owner.GetName(),
 			Payload: map[string]any{"spec": spec}})
 	}
+	for _, facet := range reply.GetFacets() {
+		c.Assert(facet.GetKind(), qt.Equals, schema.ChangefeedProperties)
+		var set native.ChangefeedSetIntent
+		c.Assert(protojson.Unmarshal(facet.GetPayload(), &set), qt.IsNil)
+		owner := facet.GetOwner()
+		for _, intent := range set.GetChangefeeds() {
+			feed, err := changefeeds.FromIntent(intent)
+			c.Assert(err, qt.IsNil)
+			result.Objects = append(result.Objects, objectMeaning{Kind: string(yqlschema.KindChangefeed), Schema: owner.GetSchema(), Parent: owner.GetName(),
+				Name: feed.Name, Payload: changefeedPayload(c, feed.Changefeed)})
+		}
+	}
 	for _, declared := range reply.GetDeclarations() {
 		var file fileMeaning
 		for _, object := range declared.GetObjects() {
@@ -405,6 +432,36 @@ func topicPayload(c *qt.C, spec ydbdecl.Topic) any {
 	c.Assert(err, qt.IsNil)
 	slices.SortFunc(read.Consumers, func(a, b ydbdecl.Consumer) int { return strings.Compare(a.Name, b.Name) })
 	return decodeAny(c, marshal(c, map[string]any{"spec": read}))
+}
+
+// changefeedPayload is a changefeed as the host's payload holds it, in the
+// spelling the provider's model keeps: intervals written the host's way, the
+// default retention left out, and consumers sorted by name.
+func changefeedPayload(c *qt.C, spec ydbdecl.Changefeed) any {
+	c.Helper()
+	intent, err := changefeeds.Intent(spec)
+	c.Assert(err, qt.IsNil)
+	read, err := changefeeds.FromIntent(intent)
+	c.Assert(err, qt.IsNil)
+	slices.SortFunc(read.Consumers, func(a, b ydbdecl.Consumer) int { return strings.Compare(a.Name, b.Name) })
+	return decodeAny(c, marshal(c, map[string]any{"spec": read.Changefeed}))
+}
+
+// normalChangefeeds writes the host's changefeeds in the spelling the
+// provider's model keeps, as normalTopics writes its topics.
+func normalChangefeeds(c *qt.C, m meaning) meaning {
+	c.Helper()
+	for i, object := range m.Objects {
+		if object.Kind != string(yqlschema.KindChangefeed) {
+			continue
+		}
+		var held struct {
+			Spec ydbdecl.Changefeed `json:"spec"`
+		}
+		c.Assert(json.Unmarshal(marshal(c, object.Payload), &held), qt.IsNil)
+		m.Objects[i].Payload = changefeedPayload(c, held.Spec)
+	}
+	return m
 }
 
 // normalTopics writes the host's topics in the spelling the provider's model
@@ -487,6 +544,7 @@ var claimedHostKinds = map[string][]string{
 	schema.ExternalTableProperties:          {"ptah.run/ydb/external-table"},
 	schema.ResourcePoolProperties:           {"ptah.run/ydb/resource-pool"},
 	schema.ResourcePoolClassifierProperties: {"ptah.run/ydb/resource-pool-classifier"},
+	schema.ChangefeedProperties:             {"ptah.run/ydb/changefeed"},
 }
 
 func pluginCoverage(coverage *protocol.ModelCoverage) coverageMeaning {
@@ -561,4 +619,87 @@ func TestReply_HeaderLimits(t *testing.T) {
 			c.Assert(hostRefusal{Document: documentIndex(c, diagnostic.GetDocumentId()), Offset: -1, Message: diagnostic.GetMessage()}, qt.DeepEquals, want)
 		})
 	}
+}
+
+// changefeedRequest reads one YQL document that gives table app/events a
+// changefeed with a consumer, for a host that lists the given features of the
+// engine.
+func changefeedRequest(features []string) *protocol.ReadSQLSchemaRequest {
+	engine := backend.Description().GetEngines()[0]
+	return &protocol.ReadSQLSchemaRequest{Engine: engine.GetId(), TargetFeatures: features,
+		Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(engine.GetIdentifiers()), DefaultSchema: engine.GetDefaultSchema()},
+		Documents: []*protocol.SQLDocument{{Id: "1", Path: "schema.sql", Text: "CREATE TABLE `app/events` (id Int64 NOT NULL, PRIMARY KEY (id));\n" +
+			"ALTER TABLE `app/events` ADD CHANGEFEED updates WITH (mode='UPDATES', format='JSON', retention_period=Interval('PT12H'));\n" +
+			"ALTER TOPIC `app/events/updates` ADD CONSUMER worker;\n"}}}
+}
+
+// claimedKinds are the model kinds a reply's claim covers.
+func claimedKinds(reply *protocol.SQLSchema) []string {
+	var kinds []string
+	for _, record := range reply.GetCoverage().GetKinds() {
+		kinds = append(kinds, record.GetModel().GetKind())
+	}
+	return kinds
+}
+
+// For a host that takes the facets of a reading, a table's changefeeds reach
+// the reply as one facet of the table, with the consumer on the changefeed's
+// topic, the statement that adds the changefeed as its trace, and a claim
+// that covers the changefeed model.
+func TestReply_ChangefeedFacet_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	features := backend.Description().GetEngines()[0].GetFeatures()
+	request := changefeedRequest(features)
+
+	reply := yqlschema.Reply(request)
+
+	c.Assert(provider.ValidateSQLSchema(backend.Description(), request, reply), qt.IsNil)
+	c.Assert(reply.GetComplete(), qt.IsTrue, qt.Commentf("%v", reply.GetDiagnostics()))
+	c.Assert(reply.GetNativeObjects(), qt.HasLen, 0)
+	c.Assert(reply.GetFacets(), qt.HasLen, 1)
+	facet := reply.GetFacets()[0]
+	c.Assert(facet.GetKind(), qt.Equals, schema.ChangefeedProperties)
+	c.Assert(proto.Equal(facet.GetOwner(), &protocol.Reference{Engine: "ydb", Kind: "table", Schema: "app", Name: "events"}), qt.IsTrue)
+	var set native.ChangefeedSetIntent
+	c.Assert(protojson.Unmarshal(facet.GetPayload(), &set), qt.IsNil)
+	c.Assert(set.GetChangefeeds(), qt.HasLen, 1)
+	feed, err := changefeeds.FromIntent(set.GetChangefeeds()[0])
+	c.Assert(err, qt.IsNil)
+	c.Assert(feed.Name, qt.Equals, "updates")
+	c.Assert(feed.Mode, qt.Equals, "UPDATES")
+	c.Assert(feed.RetentionPeriod, qt.Equals, "PT12H")
+	c.Assert(feed.Consumers, qt.HasLen, 1)
+	c.Assert(feed.Consumers[0].Name, qt.Equals, "worker")
+	trace := reply.GetTraces()[len(reply.GetTraces())-1]
+	c.Assert(trace.GetCollection(), qt.Equals, protocol.SQLObjectTrace_FACETS)
+	c.Assert(trace.GetSource().GetSpan().GetStart().GetLine(), qt.Equals, uint32(2))
+	c.Assert(claimedKinds(reply), qt.Contains, schema.ChangefeedProperties)
+}
+
+// For a host that does not take the facets of a reading, a changefeed has no
+// home: the reply refuses it in words that name the feature, and a load
+// without one claims nothing about changefeeds, so the changefeeds a declared
+// table holds stay unmanaged.
+func TestReply_ChangefeedFacet_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	features := slices.DeleteFunc(slices.Clone(backend.Description().GetEngines()[0].GetFeatures()), func(feature string) bool {
+		return feature == provider.SQLFacetsFeature
+	})
+	request := changefeedRequest(features)
+	negotiated := provider.NegotiatedDescription(backend.Description(), slices.DeleteFunc(slices.Clone(provider.TwoWayFeatures()), func(feature string) bool {
+		return feature == provider.SQLFacetsFeature
+	}))
+
+	reply := yqlschema.Reply(request)
+
+	c.Assert(provider.ValidateSQLSchema(negotiated, request, reply), qt.IsNil)
+	c.Assert(reply.GetComplete(), qt.IsFalse)
+	c.Assert(reply.GetFacets(), qt.HasLen, 0)
+	c.Assert(reply.GetDiagnostics(), qt.HasLen, 1)
+	c.Assert(reply.GetDiagnostics()[0].GetMessage(), qt.Equals, "changefeed `updates` of table `app/events` has no home in a SQL schema reading: "+
+		"the host does not take the facets of a table in a SQL schema reading (schema.sql-facets)")
+	request.Documents[0].Text = "CREATE TABLE `app/events` (id Int64 NOT NULL, PRIMARY KEY (id));\n"
+	plain := yqlschema.Reply(request)
+	c.Assert(plain.GetComplete(), qt.IsTrue, qt.Commentf("%v", plain.GetDiagnostics()))
+	c.Assert(claimedKinds(plain), qt.Not(qt.Contains), schema.ChangefeedProperties)
 }

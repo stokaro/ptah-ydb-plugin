@@ -153,7 +153,7 @@ func TestHostAppliesExternalObjects_HappyPath(t *testing.T) {
 
 			movedSource := document(format, source(moved), table(false))
 			output := apply("a moved data source", movedSource, `(?s).*Schema apply completed successfully.*`)
-			c.Assert(output, qt.Matches, `(?s).*external-table-operation\n  [^\n]*events: DROP EXTERNAL TABLE.*external-data-source-operation\n  [^\n]*bucket: CREATE OR REPLACE.*external-table-operation\n  [^\n]*events: CREATE OR REPLACE.*`)
+			c.Assert(output, qt.Matches, `(?s).*external-table-operation [^\n]*events: DROP EXTERNAL TABLE.*external-data-source-operation [^\n]*bucket: CREATE OR REPLACE.*external-table-operation [^\n]*events: CREATE OR REPLACE.*`)
 			shape, found = describedExternals(c, opened, database, directory)
 			c.Assert(found, qt.IsTrue)
 			c.Assert(shape.Location, qt.Equals, moved)

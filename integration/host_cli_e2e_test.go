@@ -159,13 +159,15 @@ func TestHostSchemaApplyDryRunCreatesNoLockNode_HappyPath(t *testing.T) {
 		defer cancel()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	entities := writeFiles(c, c.TempDir(), map[string]string{"items.go": "package entities\n\n//ptah:schema:table name=\"lock_items\" schema=\"" + directory + "\"\n" +
-		"type LockItem struct {\n\t//ptah:schema:field name=\"id\" type=\"BIGINT\" primary\n\tID int64\n}\n"})
+	source := "package entities\n\n//ptah:schema:table name=\"lock_items\" schema=\"" + directory + "\"\n" +
+		"type LockItem struct {\n\t//ptah:schema:field name=\"id\" type=\"BIGINT\" primary\n\tID int64\n}\n"
+	entities := writeFiles(c, c.TempDir(), map[string]string{"items.go": source})
 	root := func() []string { return entryNames(heldEntries(c, opened, database)) }
 	before := root()
 
 	previewed, previewErr := hostCommand(c, "schema", "apply", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", entities,
 		"--schemas", directory, "--dry-run")
+	planned := hostPlanned(c, directory, "go", source)
 	afterPreview := root()
 	applied, applyErr := hostCommand(c, "schema", "apply", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", entities,
 		"--schemas", directory, "--auto-approve", "--tx-mode", "none")
@@ -175,8 +177,7 @@ func TestHostSchemaApplyDryRunCreatesNoLockNode_HappyPath(t *testing.T) {
 	snapshot, inspectErr := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session, Schemas: []string{"/"}})
 
 	c.Assert(previewErr, qt.IsNil, qt.Commentf("schema apply --dry-run:\n%s", previewed))
-	c.Assert(previewed, qt.Contains, "row-table-create-operation")
-	c.Assert(previewed, qt.Contains, directory+".lock_items")
+	c.Assert(planned, qt.DeepEquals, []string{"row-table-create-operation " + directory + ".lock_items"})
 	c.Assert(afterPreview, qt.DeepEquals, before)
 	c.Assert(before, qt.Not(qt.Contains), locking.NodeName)
 	c.Assert(applyErr, qt.IsNil, qt.Commentf("schema apply:\n%s", applied))
@@ -237,4 +238,21 @@ func TestHostCheckpointCarriesReferenceRows_HappyPath(t *testing.T) {
 	c.Assert(read, qt.DeepEquals, []string{"red 0.25 2025-12-31T00:00:00Z", "blue 1.5 2026-01-02T03:04:05Z"})
 	c.Assert(entryNames(heldEntries(c, fresh.opened, database)), qt.Not(qt.Contains), "ref")
 	c.Assert(heldEntries(c, fresh.opened, path.Join(database, connection.RealmDirectory)), qt.HasLen, 1)
+}
+
+// A table the plan creates is assessed safe and leaves access unchanged, as
+// the built-in engine assesses a CREATE TABLE: no role could read the table
+// before the plan, and it takes its directory's permissions. The host reads an
+// unknown access effect as destructive.
+func TestHostAssessesACreatedTableSafe_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	_, directory, _ := inspectionFixture(c)
+
+	units := hostPlannedUnits(c, directory, "yaml", "tables:\n  created_items:\n    schema: "+directory+"\n    columns:\n      id: {type: Uint64, primary: true}\n")
+
+	c.Assert(units, qt.HasLen, 1)
+	c.Assert(units[0].Native.Subject, qt.Equals, directory+".created_items")
+	c.Assert(units[0].Native.Severity, qt.Equals, "safe")
+	c.Assert(units[0].Native.Access, qt.Equals, "unchanged")
+	c.Assert(units[0].Native.AccessReason, qt.Equals, "The table is created by this plan, so no role could read it before; it takes its directory's permissions")
 }
