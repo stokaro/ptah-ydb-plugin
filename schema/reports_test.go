@@ -67,13 +67,17 @@ func TestReports_NameTheBuiltInEnginesMetrics(t *testing.T) {
 		`column-storage-properties/DESIRED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
 		`column-storage-properties/DESIRED: ydb_column_tables "YDB tables stored by column"`,
 		`column-storage-properties/DESIRED: ydb_tiered_ttl_tables "YDB column tables whose TTL moves rows to an external data source"`,
+		`column-storage-properties/DESIRED: indexes "Indexes"`,
 		`column-storage-properties/OBSERVED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
 		`column-storage-properties/OBSERVED: ydb_column_tables "YDB tables stored by column"`,
 		`column-storage-properties/OBSERVED: ydb_tiered_ttl_tables "YDB column tables whose TTL moves rows to an external data source"`,
+		`column-storage-properties/OBSERVED: indexes "Indexes"`,
 		`table-indexes/DESIRED: ydb_index_partitioning "YDB global indexes stating partitioning or read replicas"`,
 		`table-indexes/DESIRED: ydb_vector_indexes "YDB vector indexes with captured settings"`,
+		`table-indexes/DESIRED: indexes "Indexes"`,
 		`table-indexes/OBSERVED: ydb_index_partitioning "YDB global indexes stating partitioning or read replicas"`,
 		`table-indexes/OBSERVED: ydb_vector_indexes "YDB vector indexes with captured settings"`,
+		`table-indexes/OBSERVED: indexes "Indexes"`,
 	})
 }
 

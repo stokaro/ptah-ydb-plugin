@@ -278,3 +278,23 @@ func vectorIndexes(payload []byte, representation protocol.ValueInput_Representa
 	}
 	return total, err
 }
+
+// heldIndexes counts the indexes a table's index set holds: the vector and
+// full-text indexes, and a global index the host does not read as a common
+// index. The common indexes are not among them; see [tableIndexes].
+func heldIndexes(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
+	indexes, err := tableIndexes(payload, representation)
+	return uint64(len(indexes)), err
+}
+
+// localIndexes counts the local indexes of a column table.
+func localIndexes(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
+	if representation == protocol.ValueInput_DESIRED {
+		var storage native.ColumnStorageIntent
+		err := unmarshalCounted(payload, &storage)
+		return uint64(len(storage.GetLocalIndexes())), err
+	}
+	var storage native.ColumnStorageObservation
+	err := unmarshalCounted(payload, &storage)
+	return uint64(len(storage.GetLocalIndexes())), err
+}

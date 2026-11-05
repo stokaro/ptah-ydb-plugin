@@ -1207,6 +1207,13 @@ The table setting families count as the built-in engine counted them:
 | `ydb_tiered_ttl_tables` | Column tables whose TTL has any other tiers, such as one that moves rows to an external data source. |
 | `ydb_vector_indexes` | Vector indexes. |
 
+The host counts the global indexes it reads as common indexes in `indexes`. The
+index set and the column storage models add the indexes they hold under the
+same metric and help, `Indexes`: vector and full-text indexes, and a column
+table's local indexes, which the built-in engine counted among the indexes too.
+A host adds them to its count with stokaro/ptah#5378; a host without it refuses
+`schema stats` when a provider reports the metric.
+
 What YDB gives a new table or global index is automatic partitioning by size
 at 2048 MB, none by load, at least one partition, no maximum, no read replicas
 and no key bloom filter; an unspecified setting is that value. A read holds
