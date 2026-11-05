@@ -785,8 +785,11 @@ errors the provider receives: `authored.New` marks one, and `authored.Status`
 sends it as the reason, with the error's whole text as the status message,
 which no host prints. The reasons the provider gives are its refusals of a
 connection address, of a capability the target lacks, of a lock the server
-refuses this user, and the refusals whose text is a fixed sentence, such as a
-closed session or a reached handle limit. A YDB driver's error is never a
+refuses this user, the refusals whose text is a fixed sentence, such as a
+closed session or a reached handle limit, and the refusal of a table's
+declaration by table preparation or the creation projection. That last reason
+names the table and gives the sentence schema validation reports for the same
+declaration; the compilation behind it reads no server. A YDB driver's error is never a
 reason, because YDB can quote a statement and its values, or a credential
 source: the host prints its code alone.
 
