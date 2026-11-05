@@ -21,7 +21,7 @@ func TestTextUnitsChangeACacheModeAsTheNativeCallSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	const clauses = ", FAMILY archive (COMPRESSION = 'off')"
 	native := newFacetFixture(c, clauses, "")
-	requireSessionCapability(c, native.session, tablecreate.CacheModeCapability, true)
+	requireSessionCapability(c, native.session, tablecreate.CacheModeCapability)
 	text := newFacetFixtureListing(c, clauses, "", provider.TextUnitsFeature)
 	text.form = protocol.RenderRequest_TEXT
 	apply := func(f *facetFixture) any {

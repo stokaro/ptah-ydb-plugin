@@ -187,7 +187,7 @@ func TestAuthoredStreamingQueryFollowsItsTopics(t *testing.T) {
 	rendering.TargetFeatures, rendering.Form = request.TargetFeatures, protocol.RenderRequest_TEXT
 	text, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)
-	c.Assert(text.Units[0].GetSql(), qt.Equals, streaming.Create("app", "copy", streaming.Spec{Text: "INSERT INTO `app/output` SELECT * FROM `app/input`;"}, false))
+	c.Assert(text.Units[0].GetSql(), qt.Equals, streaming.Create("app", "copy", streaming.Spec{Text: "INSERT INTO `app/output` SELECT * FROM `app/input`;"}))
 }
 
 func TestAuthoredStreamingQuery_FailurePath(t *testing.T) {

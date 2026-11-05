@@ -60,14 +60,33 @@ func Owns(fragment *protocol.SourceFragment) bool {
 	return directive == DirectivePool || directive == DirectiveClassifier
 }
 
+// objectKind tells the two objects a workload source declares apart.
+type objectKind int
+
+const (
+	// poolObject is a resource pool.
+	poolObject objectKind = iota
+	// classifierObject is a resource pool classifier.
+	classifierObject
+)
+
+// kindOf is the kind of object a fragment selector declares: a classifier
+// for the classifiers' YAML key or Go directive, and a pool otherwise.
+func kindOf(selector string) objectKind {
+	if selector == KeyClassifiers || selector == DirectiveClassifier {
+		return classifierObject
+	}
+	return poolObject
+}
+
 // declared is one pool or classifier a document declares, with the fragment
 // and path its trace points at.
 type declared struct {
-	fragment   int
-	path       []*protocol.SourcePathStep
-	classifier bool
-	name       string
-	settings   proto.Message
+	fragment int
+	path     []*protocol.SourcePathStep
+	kind     objectKind
+	name     string
+	settings proto.Message
 }
 
 // Decode reads every pool and classifier a document declares and returns the
@@ -92,10 +111,10 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 		var err error
 		switch {
 		case document.Format == protocol.SourceDocument_YAML && (fragment.Selector == KeyPools || fragment.Selector == KeyClassifiers):
-			read, err = yamlObjects(index, fragment.Selector == KeyClassifiers, mapping)
+			read, err = yamlObjects(index, kindOf(fragment.Selector), mapping)
 		case document.Format == protocol.SourceDocument_GO_ANNOTATIONS && (fragment.Selector == DirectivePool || fragment.Selector == DirectiveClassifier):
 			var object declared
-			object, err = goObject(fragment.Selector == DirectiveClassifier, mapping)
+			object, err = goObject(kindOf(fragment.Selector), mapping)
 			object.fragment = index
 			read = []declared{object}
 		default:
@@ -113,7 +132,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 	seen := make(map[string]bool)
 	for position, object := range objects {
 		kind, noun := schema.ResourcePoolProperties, "resource pool"
-		if object.classifier {
+		if object.kind == classifierObject {
 			kind, noun = schema.ResourcePoolClassifierProperties, "resource pool classifier"
 		}
 		if seen[kind+"\x00"+object.name] {
@@ -136,9 +155,9 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 
 // yamlObjects reads a resource_pools or resource_pool_classifiers mapping:
 // each entry an object keyed by its name, in key order.
-func yamlObjects(fragment int, classifier bool, mapping *protocol.SourceMapping) ([]declared, error) {
+func yamlObjects(fragment int, kind objectKind, mapping *protocol.SourceMapping) ([]declared, error) {
 	key, noun, allowed := KeyPools, "resource pool", workload.PoolAttributes()[1:]
-	if classifier {
+	if kind == classifierObject {
 		key, noun, allowed = KeyClassifiers, "resource pool classifier", workload.ClassifierAttributes()[1:]
 	}
 	if mapping == nil {
@@ -164,7 +183,7 @@ func yamlObjects(fragment int, classifier bool, mapping *protocol.SourceMapping)
 			values[field.Key] = text
 		}
 		values[workload.AttributeName] = entry.Key
-		object, err := parse(classifier, values)
+		object, err := parse(kind, values)
 		if err != nil {
 			return nil, fmt.Errorf("%s %q: %w", noun, entry.Key, err)
 		}
@@ -176,9 +195,9 @@ func yamlObjects(fragment int, classifier bool, mapping *protocol.SourceMapping)
 }
 
 // goObject reads one directive's attributes, which the host lexed as text.
-func goObject(classifier bool, mapping *protocol.SourceMapping) (declared, error) {
+func goObject(kind objectKind, mapping *protocol.SourceMapping) (declared, error) {
 	directive := DirectivePool
-	if classifier {
+	if kind == classifierObject {
 		directive = DirectiveClassifier
 	}
 	if mapping == nil {
@@ -192,7 +211,7 @@ func goObject(classifier bool, mapping *protocol.SourceMapping) (declared, error
 		}
 		values[entry.Key] = text.Text
 	}
-	object, err := parse(classifier, values)
+	object, err := parse(kind, values)
 	if err != nil {
 		return declared{}, fmt.Errorf("%w on //%s", err, directive)
 	}
@@ -200,13 +219,13 @@ func goObject(classifier bool, mapping *protocol.SourceMapping) (declared, error
 }
 
 // parse reads one pool or classifier with the host's rules and words.
-func parse(classifier bool, values map[string]string) (declared, error) {
-	if classifier {
+func parse(kind objectKind, values map[string]string) (declared, error) {
+	if kind == classifierObject {
 		name, spec, err := workload.ParseClassifier(values)
 		if err != nil {
 			return declared{}, err
 		}
-		return declared{classifier: true, name: name, settings: schema.ClassifierSettings(spec)}, nil
+		return declared{kind: classifierObject, name: name, settings: schema.ClassifierSettings(spec)}, nil
 	}
 	name, spec, err := workload.ParsePool(values)
 	if err != nil {

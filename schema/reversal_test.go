@@ -38,7 +38,7 @@ func streamingTextChange(c *qt.C) *protocol.NormalizedValue {
 func TestReverseObjectChange_KeepsAStreamingQuerysStateReset(t *testing.T) {
 	c := testcheck.New(t)
 
-	reversed, err := schema.ReverseObjectChange("reverse", streamingTextChange(c).Value, false)
+	reversed, err := schema.ReverseObjectChange("reverse", streamingTextChange(c).Value, schema.NativeAccess)
 
 	c.Assert(err, qt.IsNil)
 	restored, left := &native.StreamingQueryIntent{}, &native.StreamingQuerySettings{}
@@ -58,7 +58,7 @@ func TestReverseObjectChange_FailurePath(t *testing.T) {
 	change := streamingTextChange(c).Value
 	change.Kind = schema.TablePropertiesChange
 
-	reversed, err := schema.ReverseObjectChange("reverse", change, false)
+	reversed, err := schema.ReverseObjectChange("reverse", change, schema.NativeAccess)
 
 	c.Assert(err, qt.ErrorMatches, `YDB change .*row-table-properties-change has no reversal`)
 	c.Assert(reversed.Value, qt.IsNil)
@@ -79,7 +79,7 @@ func TestReverseTableChange_PredictsTheAlteredTable(t *testing.T) {
 	change, err := schema.CaptureTablePropertiesChange("change", tableOwner(), before, after)
 	c.Assert(err, qt.IsNil)
 
-	reversed, err := schema.ReverseTableChange("reverse", change.Value, false)
+	reversed, err := schema.ReverseTableChange("reverse", change.Value, schema.NativeAccess)
 
 	c.Assert(err, qt.IsNil)
 	left, restored := &native.DescribeTableResult{}, &native.RowTableIntent{}
@@ -119,7 +119,7 @@ func columnFamilyChange(c *qt.C) *protocol.NormalizedValue {
 func TestReverseTableChange_MovesAColumnBack(t *testing.T) {
 	c := testcheck.New(t)
 
-	reversed, err := schema.ReverseTableChange("reverse", columnFamilyChange(c).Value, false)
+	reversed, err := schema.ReverseTableChange("reverse", columnFamilyChange(c).Value, schema.NativeAccess)
 
 	c.Assert(err, qt.IsNil)
 	left, restored := &native.ColumnMeta{}, &native.ColumnIntent{}
@@ -148,7 +148,7 @@ func TestReverseTableChange_FailurePath(t *testing.T) {
 			change := columnFamilyChange(c).Value
 			change.Owner.Kind = test.owner
 
-			reversed, err := schema.ReverseTableChange("reverse", change, false)
+			reversed, err := schema.ReverseTableChange("reverse", change, schema.NativeAccess)
 
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(reversed.Value, qt.IsNil)

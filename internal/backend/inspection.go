@@ -104,7 +104,7 @@ func (s *session) inspectAccess(ctx context.Context, result *protocol.Schema) er
 	principals := func(ctx context.Context) (nativeapi.Principals, error) {
 		return nativeapi.ReadPrincipals(ctx, s.connection.DB, s.connection.Database())
 	}
-	if err := inspect.Access(ctx, result, s.database, s.realm, nativeapi.AccessReader(s.connection.Driver), principals); err != nil {
+	if err := inspect.Access(ctx, result, s.database, s.scope(), nativeapi.AccessReader(s.connection.Driver), principals); err != nil {
 		return inspectError(ctx, err)
 	}
 	return nil
@@ -130,6 +130,15 @@ func inspectedValues(snapshot *protocol.Schema) []*protocol.Envelope {
 		}
 	}
 	return values
+}
+
+// scope is what the session's reads are confined to: its dev realm, or the
+// whole database.
+func (s *session) scope() inspect.Scope {
+	if s.realm {
+		return inspect.RealmScope
+	}
+	return inspect.DatabaseScope
 }
 
 func (s *session) streaming() inspect.StreamingQuery {

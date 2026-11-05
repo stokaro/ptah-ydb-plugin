@@ -65,21 +65,25 @@ func TestHostChangesCommentsInPlace_HappyPath(t *testing.T) {
 		"ptah.comment.column.label": "Display name", "owner": "team", "ptah.comment.other": "kept"})
 }
 
-// viewBesideItems declares table items of the fixture directory, with a
-// column qty where the argument asks, and a view ids over it where the
-// argument asks.
-func viewBesideItems(directory string, qty, view bool) string {
-	text := "package entities\n\n//ptah:schema:table name=\"items\" schema=\"" + directory + "\"\ntype Item struct {\n" +
+// itemsDeclaring declares table items of the fixture directory: columns id
+// and label, then the field declarations given.
+func itemsDeclaring(directory, fields string) string {
+	return "package entities\n\n//ptah:schema:table name=\"items\" schema=\"" + directory + "\"\ntype Item struct {\n" +
 		"\t//ptah:schema:field name=\"id\" type=\"Int64\" primary=\"true\" not_null=\"true\"\n\tID int64\n" +
-		"\t//ptah:schema:field name=\"label\" type=\"Utf8\"\n\tLabel string\n"
-	if qty {
-		text += "\t//ptah:schema:field name=\"qty\" type=\"Int32\"\n\tQty int32\n"
-	}
-	text += "}\n"
-	if view {
-		text += "\n//ptah:schema:view name=\"ids\" schema=\"" + directory + "\" body=\"SELECT id FROM `" + directory + "/items`\"\ntype Views struct{}\n"
-	}
-	return text
+		"\t//ptah:schema:field name=\"label\" type=\"Utf8\"\n\tLabel string\n" + fields + "}\n"
+}
+
+// itemsWithQty declares table items of the fixture directory with a column
+// qty beside id and label, and no view.
+func itemsWithQty(directory string) string {
+	return itemsDeclaring(directory, "\t//ptah:schema:field name=\"qty\" type=\"Int32\"\n\tQty int32\n")
+}
+
+// viewBesideItems declares table items of the fixture directory without the
+// column qty, and a view ids over it.
+func viewBesideItems(directory string) string {
+	return itemsDeclaring(directory, "") +
+		"\n//ptah:schema:view name=\"ids\" schema=\"" + directory + "\" body=\"SELECT id FROM `" + directory + "/items`\"\ntype Views struct{}\n"
 }
 
 // A view the plan creates beside a column's removal is created in the same
@@ -90,9 +94,9 @@ func TestHostCreatesAViewBesideAColumnRemoval_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
 	viewsAtCleanup(c, opened, database, directory)
-	applyRuns(c, directory, "go", viewBesideItems(directory, true, false))
+	applyRuns(c, directory, "go", itemsWithQty(directory))
 
-	applyRuns(c, directory, "go", viewBesideItems(directory, false, true))
+	applyRuns(c, directory, "go", viewBesideItems(directory))
 
 	c.Assert(storedView(c, opened, path.Join(database, directory, "ids")), qt.Equals, "SELECT id FROM `"+directory+"/items`")
 	c.Assert(heldColumnNames(c, opened, path.Join(database, directory, "items")), qt.DeepEquals, []string{"id", "label"})

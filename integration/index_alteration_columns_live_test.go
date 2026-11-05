@@ -15,20 +15,30 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
-// columnStep is a host step that adds or drops a column of records, with the
-// footprint the host gives a column step.
-func (f *facetFixture) columnStep(id, name string, add bool) *protocol.CommonPlanningStep {
+// addColumnStep is a host step that adds the nullable Utf8 column name to
+// records, with the footprint the host gives a column step.
+func (f *facetFixture) addColumnStep(id, name string) *protocol.CommonPlanningStep {
+	step := f.columnStep(id, name, protocol.PlanningEffect_CREATE)
+	step.AddedColumn = &protocol.PlanningColumn{Name: name, Type: "Utf8", Nullable: true}
+	return step
+}
+
+// dropColumnStep is a host step that drops the column name of records, with
+// the footprint the host gives a column step.
+func (f *facetFixture) dropColumnStep(id, name string) *protocol.CommonPlanningStep {
+	return f.columnStep(id, name, protocol.PlanningEffect_DROP)
+}
+
+// columnStep is a host step over the column name of records with the
+// footprint the host gives a column step: it reads the table and has effect
+// action on the column.
+func (f *facetFixture) columnStep(id, name string, action protocol.PlanningEffect_Action) *protocol.CommonPlanningStep {
 	table := testplanning.Subject(f.owner)
 	column := testplanning.Subject(&protocol.Reference{Engine: "ydb", Kind: "column", Database: f.database, Schema: f.directory, Path: []string{"records"}, Name: name})
 	column.Parent = &protocol.ComparisonPart{Source: "records", Normalized: "records"}
-	step := &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: id}, Parent: proto.CloneOf(table),
+	return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: id}, Parent: proto.CloneOf(table),
 		Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN, Reason: "Fixture common operation", Effects: []*protocol.PlanningEffect{
-			{Subject: proto.CloneOf(table), Action: protocol.PlanningEffect_READ}, {Subject: column, Action: protocol.PlanningEffect_DROP}}}}
-	if add {
-		step.AddedColumn = &protocol.PlanningColumn{Name: name, Type: "Utf8", Nullable: true}
-		step.Metadata.Effects[1].Action = protocol.PlanningEffect_CREATE
-	}
-	return step
+			{Subject: proto.CloneOf(table), Action: protocol.PlanningEffect_READ}, {Subject: column, Action: action}}}}
 }
 
 func (f *facetFixture) heldColumns(c *qt.C) []string {
@@ -47,7 +57,7 @@ func TestIndexAlterationDropsTheIndexBeforeTheColumnItReads(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newFacetFixture(c, ", INDEX by_payload GLOBAL SYNC ON (payload)", "")
 	fixture.columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true}}
-	fixture.steps = []*protocol.CommonPlanningStep{fixture.columnStep("drop-payload", "payload", false)}
+	fixture.steps = []*protocol.CommonPlanningStep{fixture.dropColumnStep("drop-payload", "payload")}
 	declared := declaredIndexes()
 	found := fixture.compareIndexes(c, declared)
 	c.Assert(found.Changes, qt.HasLen, 1)
@@ -72,7 +82,7 @@ func TestIndexAlterationAddsTheIndexAfterTheColumnItReads(t *testing.T) {
 	fixture := newFacetFixture(c, "", "")
 	fixture.columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true},
 		{Name: "payload", Type: "Utf8", Nullable: true}, {Name: "label", Type: "Utf8", Nullable: true}}
-	fixture.steps = []*protocol.CommonPlanningStep{fixture.columnStep("add-label", "label", true)}
+	fixture.steps = []*protocol.CommonPlanningStep{fixture.addColumnStep("add-label", "label")}
 	declared := declaredIndexes(indexSpec("by_label", "globalIndex", `["label"]`, ""))
 	found := fixture.compareIndexes(c, declared)
 	c.Assert(found.Changes, qt.HasLen, 1)
@@ -95,7 +105,7 @@ func TestIndexAlterationRefusesTheColumnOfAKeptIndex(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newFacetFixture(c, ", INDEX by_payload GLOBAL SYNC ON (payload)", "")
 	fixture.columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true}}
-	fixture.steps = []*protocol.CommonPlanningStep{fixture.columnStep("drop-payload", "payload", false)}
+	fixture.steps = []*protocol.CommonPlanningStep{fixture.dropColumnStep("drop-payload", "payload")}
 	declared := declaredIndexes(indexSpec("by_payload", "globalIndex", `["payload"]`, ""))
 	plan := fixture.plan(c, nil, desiredFacet(c, fixture.client, fixture.owner, schema.TableProperties, noTTLDeclaration),
 		desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
@@ -110,7 +120,7 @@ func TestIndexAlterationRefusesTheColumnOfAKeptIndex(t *testing.T) {
 func TestIndexAlterationUniqueSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newFacetFixture(c, "", "")
-	requireSessionCapability(c, fixture.session, tablecreate.UniqueIndexOnExistingTableCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.UniqueIndexOnExistingTableCapability)
 	declared := declaredIndexes(indexSpec("by_payload", "globalUniqueIndex", `["payload"]`, ""))
 	found := fixture.compareIndexes(c, declared)
 	c.Assert(found.Changes, qt.HasLen, 1)
@@ -135,7 +145,7 @@ func TestIndexAlterationUniqueSubprocess(t *testing.T) {
 func TestIndexAlterationUniqueRefusedSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newFacetFixture(c, "", "")
-	requireSessionCapability(c, fixture.session, tablecreate.UniqueIndexOnExistingTableCapability, false)
+	requireNoSessionCapability(c, fixture.session, tablecreate.UniqueIndexOnExistingTableCapability)
 	declared := declaredIndexes(indexSpec("by_payload", "globalUniqueIndex", `["payload"]`, ""))
 	found := fixture.compareIndexes(c, declared)
 	c.Assert(found.Changes, qt.HasLen, 1)

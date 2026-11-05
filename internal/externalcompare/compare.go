@@ -60,7 +60,7 @@ func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*prot
 	if err := refuseOrphanedTables(decided, declared, root); err != nil {
 		return nil, err
 	}
-	extra, err := tablesOverRecreatedSources(decided, request.Capabilities[externals.CapabilityReplace], root)
+	extra, err := tablesOverRecreatedSources(decided, request.Capabilities, root)
 	if err != nil {
 		return nil, err
 	}
@@ -200,9 +200,10 @@ func refuseOrphanedTables(decided []objectcompare.Decided, tables []declared, ro
 // over a data source the plan drops and creates again, or replaces with a new
 // source type, and that holds what is declared: YDB keeps no table over a
 // dropped data source, and CREATE OR REPLACE refuses a new source type while
-// a table reads the source (measured on 26.2.1.14 by the host). The change's
-// operands may describe the same table.
-func tablesOverRecreatedSources(decided []objectcompare.Decided, replace bool, root string) ([]*protocol.ComparedChange, error) {
+// a table reads the source (measured on 26.2.1.14 by the host). Whether the
+// target has CREATE OR REPLACE is its capability externals.CapabilityReplace.
+// The change's operands may describe the same table.
+func tablesOverRecreatedSources(decided []objectcompare.Decided, capabilities map[string]bool, root string) ([]*protocol.ComparedChange, error) {
 	recreated := make(map[ydbdecl.Path]bool)
 	for _, object := range decided {
 		if object.Kind != schema.ExternalSourceProperties || object.Change == nil || object.Current == nil || object.Desired == nil {
@@ -212,7 +213,7 @@ func tablesOverRecreatedSources(decided []objectcompare.Decided, replace bool, r
 		if err != nil {
 			return nil, err
 		}
-		if externals.Displaces(current, desired, replace) {
+		if externals.Displaces(current, desired, capabilities[externals.CapabilityReplace]) {
 			recreated[pathOf(object.Owner)] = true
 		}
 	}

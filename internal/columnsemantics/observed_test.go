@@ -31,9 +31,9 @@ func TestObservedColumnPreservesCommonMetadata(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			kind, err := schema.StorageType(test.spelling, test.nullable)
+			kind, err := schema.StorageType(test.spelling)
 			c.Assert(err, qt.IsNil)
-			column := &native.ColumnMeta{Name: "value", Type: kind, NotNull: new(test.notNull)}
+			column := &native.ColumnMeta{Name: "value", Type: map[bool]*Ydb.Type{false: kind, true: schema.Optional(kind)}[test.nullable], NotNull: new(test.notNull)}
 			if test.literal != nil {
 				value, err := columnsemantics.NativeDefault(test.literal, test.spelling, nil)
 				c.Assert(err, qt.IsNil)
@@ -63,7 +63,7 @@ func TestObservedSequenceRetainsConfigurationAndRestartEvidence(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			kind, err := schema.StorageType("Int32", false)
+			kind, err := schema.StorageType("Int32")
 			c.Assert(err, qt.IsNil)
 			column := &native.ColumnMeta{Name: "id", Type: kind, DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: test.sequence}}
 			got, err := columnsemantics.Observed(column, 1, true)
@@ -88,7 +88,7 @@ func TestObservedColumnRefusesUnrepresentableFacts(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			kind, err := schema.StorageType("Int64", false)
+			kind, err := schema.StorageType("Int64")
 			c.Assert(err, qt.IsNil)
 			got, err := columnsemantics.Observed(&native.ColumnMeta{Name: "id", Type: kind, DefaultValue: &native.ColumnMeta_FromSequence{FromSequence: test.sequence}}, 1, true)
 			c.Assert(err, qt.IsNotNil)
@@ -99,7 +99,7 @@ func TestObservedColumnRefusesUnrepresentableFacts(t *testing.T) {
 
 func TestObservedColumnRejectsUnknownOrContradictoryMetadata(t *testing.T) {
 	c := testcheck.New(t)
-	kind, err := schema.StorageType("Int32", false)
+	kind, err := schema.StorageType("Int32")
 	c.Assert(err, qt.IsNil)
 	literal, err := columnsemantics.NativeDefault(&protocol.DeclaredColumn{DefaultSet: true, DefaultValue: "wrong type"}, "Utf8", nil)
 	c.Assert(err, qt.IsNil)
@@ -114,8 +114,9 @@ func TestObservedColumnRejectsUnknownOrContradictoryMetadata(t *testing.T) {
 
 func TestProjectedColumnUsesInspectionSemantics(t *testing.T) {
 	c := testcheck.New(t)
-	kind, err := schema.StorageType("Decimal(22,9)", true)
+	kind, err := schema.StorageType("Decimal(22,9)")
 	c.Assert(err, qt.IsNil)
+	kind = schema.Optional(kind)
 	projected, err := columnsemantics.Projected(&Ydb_Table.ColumnMeta{Name: "amount", Type: kind}, 2, false)
 	c.Assert(err, qt.IsNil)
 	observed, err := columnsemantics.Observed(&native.ColumnMeta{Name: "amount", Type: kind}, 2, false)

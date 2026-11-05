@@ -121,7 +121,7 @@ func TestStreamingSplitPreservesAccessOrderingAndDropRewrite(t *testing.T) {
 			}
 			request := streamingPlanRequest(c, before, after, true)
 			request.TargetFeatures = backend.Description().Engines[0].Features
-			access := commonAccessFor(request.Changes[0].Subject, "streaming query", true)
+			access := commonAccessFor(request.Changes[0].Subject, "streaming query", revokeAccess)
 			request.CommonSteps = []*protocol.CommonPlanningStep{access}
 			result, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)

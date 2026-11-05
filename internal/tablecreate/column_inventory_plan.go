@@ -106,9 +106,12 @@ func capturedColumn(common *protocol.ObservedColumn, value *protocol.Envelope) (
 	}
 	var err error
 	result.Name = common.Name
-	result.Type, err = schema.StorageType(heldType(common), common.IsNullable == "YES")
+	result.Type, err = schema.StorageType(heldType(common))
 	if err != nil {
 		return nil, err
+	}
+	if common.IsNullable == "YES" {
+		result.Type = schema.Optional(result.Type)
 	}
 	text, err := defaultText(result.GetFromLiteral())
 	if err != nil {

@@ -15,10 +15,21 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
+// viewGrant is whether viewBesideTopic grants the group a privilege on the
+// view.
+type viewGrant int
+
+const (
+	// noViewGrant declares no grant.
+	noViewGrant viewGrant = iota
+	// groupViewGrant grants the group SELECT ROW on the view.
+	groupViewGrant
+)
+
 // viewBesideTopic declares, in directory, a table src, a view active over it
 // with the comment given, a topic events with the retention given, and the
-// group of names, with a grant to the group on the view where granted is set.
-func viewBesideTopic(directory string, names accessNames, comment, retention string, granted bool) string {
+// group of names, with the grant to the group on the view that grant names.
+func viewBesideTopic(directory string, names accessNames, comment, retention string, grant viewGrant) string {
 	text := "tables:\n  src:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n" +
 		"views:\n  active:\n    name: " + directory + ".active\n    body: \"SELECT id FROM `" + directory + "/src`\"\n"
 	if comment != "" {
@@ -26,7 +37,7 @@ func viewBesideTopic(directory string, names accessNames, comment, retention str
 	}
 	text += "topics:\n  events:\n    schema: " + directory + "\n    retention_period: " + retention + "\n" +
 		"roles:\n  " + names.group + ":\n    group: true\n"
-	if granted {
+	if grant == groupViewGrant {
 		text += "grants:\n  view:\n    role: " + names.group + "\n    privileges: [SELECT ROW]\n    on_table: " + directory + ".active\n"
 	}
 	return text
@@ -69,20 +80,20 @@ func privilegesOf(entries []string, role string) []string {
 func TestHostChangesAViewBesideATopic_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, comment string
-		granted       bool
+		grant         viewGrant
 		attributes    map[string]string
 		privileges    []string
 	}{
 		{name: "a comment on the view", comment: "Active ids", attributes: map[string]string{"ptah.comment": "Active ids"}},
-		{name: "a grant on the view", granted: true, attributes: make(map[string]string), privileges: []string{"ydb.granular.select_row"}},
+		{name: "a grant on the view", grant: groupViewGrant, attributes: make(map[string]string), privileges: []string{"ydb.granular.select_row"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			opened, directory, database, names := viewTopicFixture(c)
 			view := path.Join(database, directory, "active")
-			applyRuns(c, directory, "yaml", viewBesideTopic(directory, names, "", "PT36H", false))
+			applyRuns(c, directory, "yaml", viewBesideTopic(directory, names, "", "PT36H", noViewGrant))
 
-			applyRuns(c, directory, "yaml", viewBesideTopic(directory, names, test.comment, "P2D", test.granted))
+			applyRuns(c, directory, "yaml", viewBesideTopic(directory, names, test.comment, "P2D", test.grant))
 
 			topic, found := describedTopic(c, opened, database, directory, "events")
 			c.Assert(found, qt.IsTrue)

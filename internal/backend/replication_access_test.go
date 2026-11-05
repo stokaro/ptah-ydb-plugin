@@ -24,7 +24,7 @@ type replicationAccess struct {
 	kind, comparison, planning string
 	object, grantKind          string
 	declared, read             *protocol.Envelope
-	revoke                     bool
+	verb                       accessVerb
 }
 
 // replicationAccessCases are the changes of both families, with the
@@ -39,20 +39,20 @@ func replicationAccessCases(c *qt.C) (creations, drops []replicationAccess) {
 		planning: replicationplan.ReplicationServiceID, object: "mirror", grantKind: "async replication"}
 	transfers := replicationAccess{kind: schema.TransferProperties, comparison: replicationcompare.TransferServiceID,
 		planning: replicationplan.TransferServiceID, object: "ingest", grantKind: "transfer"}
-	with := func(base replicationAccess, name string, declared, read *protocol.Envelope, revoke bool) replicationAccess {
-		base.name, base.declared, base.read, base.revoke = name, declared, read, revoke
+	with := func(base replicationAccess, name string, declared, read *protocol.Envelope, verb accessVerb) replicationAccess {
+		base.name, base.declared, base.read, base.verb = name, declared, read, verb
 		return base
 	}
 	creations = []replicationAccess{
-		with(replications, "a replication created", declaredReplication(c, new(mirror())), nil, false),
-		with(replications, "a paused replication altered", declaredReplication(c, &paused), readReplication(c, new(mirror()), replication.StatePaused), false),
-		with(replications, "a paused replication altered with a revoke", declaredReplication(c, &paused), readReplication(c, new(mirror()), replication.StatePaused), true),
-		with(transfers, "a transfer created", declaredTransfer(c, new(ingest())), nil, false),
-		with(transfers, "a transfer's lambda altered", declaredTransfer(c, &relambda), readTransfer(c, new(ingest()), replication.StateRunning), false),
+		with(replications, "a replication created", declaredReplication(c, new(mirror())), nil, grantAccess),
+		with(replications, "a paused replication altered", declaredReplication(c, &paused), readReplication(c, new(mirror()), replication.StatePaused), grantAccess),
+		with(replications, "a paused replication altered with a revoke", declaredReplication(c, &paused), readReplication(c, new(mirror()), replication.StatePaused), revokeAccess),
+		with(transfers, "a transfer created", declaredTransfer(c, new(ingest())), nil, grantAccess),
+		with(transfers, "a transfer's lambda altered", declaredTransfer(c, &relambda), readTransfer(c, new(ingest()), replication.StateRunning), grantAccess),
 	}
 	drops = []replicationAccess{
-		with(replications, "a running replication dropped", nil, readReplication(c, new(mirror()), replication.StateRunning), true),
-		with(transfers, "a transfer dropped", nil, readTransfer(c, new(ingest()), replication.StateRunning), true),
+		with(replications, "a running replication dropped", nil, readReplication(c, new(mirror()), replication.StateRunning), revokeAccess),
+		with(transfers, "a transfer dropped", nil, readTransfer(c, new(ingest()), replication.StateRunning), revokeAccess),
 	}
 	return creations, drops
 }
@@ -66,7 +66,7 @@ func planAccess(c *qt.C, test replicationAccess) (*protocol.PlannedFeatures, *pr
 	compared, err := backend.New().CompareModels(c.Context(), objectRequest(c, test.kind, test.comparison, test.object, test.declared, test.read))
 	c.Assert(err, qt.IsNil)
 	c.Assert(compared.Changes, qt.HasLen, 1)
-	access := commonAccessFor(compared.Changes[0].Subject, test.grantKind, test.revoke)
+	access := commonAccessFor(compared.Changes[0].Subject, test.grantKind, test.verb)
 	planned, err := backend.New().PlanFeatures(c.Context(), &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: test.planning, DatabasePath: "/local",
 		TargetFeatures: []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature},
 		Identifiers:    &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)}, Capabilities: replicationCapabilities(),
@@ -118,11 +118,11 @@ func TestReplicationAccessDropTakesTheRevoke_HappyPath(t *testing.T) {
 func TestReplicationAccessContradictingTheObject_FailurePath(t *testing.T) {
 	creations, drops := replicationAccessCases(testcheck.New(t))
 	granted := drops[0]
-	granted.name, granted.revoke = "a grant on a dropped replication", false
+	granted.name, granted.verb = "a grant on a dropped replication", grantAccess
 	revoked := creations[0]
-	revoked.name, revoked.revoke = "a revoke on a created replication", true
+	revoked.name, revoked.verb = "a revoke on a created replication", revokeAccess
 	transfer := drops[1]
-	transfer.name, transfer.revoke = "a grant on a dropped transfer", false
+	transfer.name, transfer.verb = "a grant on a dropped transfer", grantAccess
 	for _, test := range []replicationAccess{granted, revoked, transfer} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

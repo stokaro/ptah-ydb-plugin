@@ -137,7 +137,7 @@ func alterationScenarios() []alterationScenario {
 			apply: func(c *qt.C, f *facetFixture) any {
 				f.columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true},
 					{Name: "payload", Type: "Utf8", Nullable: true}, {Name: "label", Type: "Utf8", Nullable: true}}
-				f.steps = []*protocol.CommonPlanningStep{f.columnStep("add-label", "label", true)}
+				f.steps = []*protocol.CommonPlanningStep{f.addColumnStep("add-label", "label")}
 				declared := declaredIndexes(indexSpec("by_label", "globalIndex", `["label"]`, ""))
 				plan := f.plan(c, f.compareIndexes(c, declared).Changes, desiredFacet(c, f.client, f.owner, schema.TableProperties, noTTLDeclaration),
 					desiredFacet(c, f.client, f.owner, schema.IndexProperties, declared))
@@ -148,7 +148,7 @@ func alterationScenarios() []alterationScenario {
 		{name: "an index and the column it reads dropped", clauses: ", INDEX by_payload GLOBAL SYNC ON (payload)", statements: []string{"ALTER TABLE", "ALTER TABLE"},
 			apply: func(c *qt.C, f *facetFixture) any {
 				f.columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "ts", Type: "Timestamp", Nullable: true}}
-				f.steps = []*protocol.CommonPlanningStep{f.columnStep("drop-payload", "payload", false)}
+				f.steps = []*protocol.CommonPlanningStep{f.dropColumnStep("drop-payload", "payload")}
 				declared := declaredIndexes()
 				plan := f.plan(c, f.compareIndexes(c, declared).Changes, desiredFacet(c, f.client, f.owner, schema.TableProperties, noTTLDeclaration),
 					desiredFacet(c, f.client, f.owner, schema.IndexProperties, declared))
@@ -298,17 +298,27 @@ type coordinationText struct {
 
 // plan compares the node a source declares in read consistency mode with
 // the node the server holds, and renders the change in the TEXT form. An
-// empty mode declares the node with its defaults, and drop declares none.
-func (f *coordinationText) plan(c *qt.C, mode string, drop bool) *protocol.ComparedModels {
+// empty mode declares the node with its defaults.
+func (f *coordinationText) plan(c *qt.C, mode string) *protocol.ComparedModels {
 	c.Helper()
-	nodes := make(map[string]any)
-	if !drop {
-		fields := map[string]any{"schema": f.directory}
-		if mode != "" {
-			fields["read_consistency_mode"] = mode
-		}
-		nodes["node"] = fields
+	fields := map[string]any{"schema": f.directory}
+	if mode != "" {
+		fields["read_consistency_mode"] = mode
 	}
+	return f.compareNodes(c, map[string]any{"node": fields})
+}
+
+// planWithoutNode compares a source that declares no coordination node with
+// the node the server holds.
+func (f *coordinationText) planWithoutNode(c *qt.C) *protocol.ComparedModels {
+	c.Helper()
+	return f.compareNodes(c, make(map[string]any))
+}
+
+// compareNodes compares a source whose coordination_nodes section holds nodes
+// with the coordination nodes the server holds in the fixture directory.
+func (f *coordinationText) compareNodes(c *qt.C, nodes map[string]any) *protocol.ComparedModels {
+	c.Helper()
 	data, err := json.Marshal(map[string]any{"coordination_nodes": nodes})
 	c.Assert(err, qt.IsNil)
 	source, err := testsource.Request(string(data))
@@ -396,13 +406,13 @@ func TestCoordinationTextUnitsSubprocess(t *testing.T) {
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
 	f := &coordinationText{client: client, session: session, directory: directory, database: database, nodes: nodes}
 
-	create := f.text(c, f.plan(c, "strict", false))
+	create := f.text(c, f.plan(c, "strict"))
 	c.Assert(create.GetSql(), qt.Equals, "CREATE COORDINATION NODE `"+directory+"/node` WITH (read_consistency_mode = 'strict');")
 	result, err := f.execute(c, "", create)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_APPLIED)
 	c.Assert(f.held(c).GetReadConsistencyMode(), qt.Equals, Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT)
-	c.Assert(f.plan(c, "strict", false).Changes, qt.HasLen, 0)
+	c.Assert(f.plan(c, "strict").Changes, qt.HasLen, 0)
 
 	// The service would answer a second creation with success and keep the
 	// node as it is, so the statement is refused before it is sent.
@@ -417,19 +427,19 @@ func TestCoordinationTextUnitsSubprocess(t *testing.T) {
 		Config: &Ydb_Coordination.Config{SessionGracePeriodMillis: 12_000}})
 	c.Assert(err, qt.IsNil)
 	c.Assert(changed.GetOperation().GetStatus(), qt.Equals, Ydb.StatusIds_SUCCESS)
-	alter := f.text(c, f.plan(c, "", false))
+	alter := f.text(c, f.plan(c, ""))
 	c.Assert(alter.GetSql(), qt.Equals, "ALTER COORDINATION NODE `"+directory+"/node` SET (session_grace_period = Interval('PT10S'), read_consistency_mode = 'relaxed');")
 	result, err = f.execute(c, "", alter)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_APPLIED)
-	c.Assert(f.plan(c, "", false).Changes, qt.HasLen, 0)
+	c.Assert(f.plan(c, "").Changes, qt.HasLen, 0)
 	held := f.held(c)
 	c.Assert(held.GetSessionGracePeriodMillis(), qt.Equals, uint32(10_000))
 	c.Assert(held.GetReadConsistencyMode(), qt.Equals, Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_RELAXED)
 
 	// A coordination node statement runs outside a transaction, as YDB runs
 	// every scheme statement.
-	drop := f.text(c, f.plan(c, "", true))
+	drop := f.text(c, f.planWithoutNode(c))
 	c.Assert(drop.GetSql(), qt.Equals, "DROP COORDINATION NODE `"+directory+"/node`;")
 	handle, err := client.BeginTransaction(c.Context(), &protocol.BeginTransactionRequest{SessionId: session.Id, TransactionId: "text",
 		Isolation: protocol.TransactionIsolation_SERIALIZABLE})
@@ -444,7 +454,7 @@ func TestCoordinationTextUnitsSubprocess(t *testing.T) {
 	result, err = f.execute(c, "", drop)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Outcome, qt.Equals, protocol.Execution_APPLIED)
-	c.Assert(f.plan(c, "", true).Changes, qt.HasLen, 0)
+	c.Assert(f.planWithoutNode(c).Changes, qt.HasLen, 0)
 }
 
 // TestCoordinationStatementsOfAMigrationFileSubprocess runs the statements a

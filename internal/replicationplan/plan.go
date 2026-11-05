@@ -121,9 +121,9 @@ func PlanTransfers(ctx context.Context, request *protocol.PlanFeaturesRequest) (
 				return nil, err
 			}
 			if step.After == nil {
-				return transferPaths(request.GetDatabasePath(), *step.Before, true), nil
+				return transferPaths(request.GetDatabasePath(), *step.Before, topicByIdentity), nil
 			}
-			return transferPaths(request.GetDatabasePath(), *step.After, false), nil
+			return transferPaths(request.GetDatabasePath(), *step.After, topicByPath), nil
 		},
 	})
 }
@@ -229,8 +229,10 @@ func sourcePaths(root string, spec replication.ReplicationSpec) []objectplan.Pat
 // plan creates there once the topic is gone, such as a secret, and the host
 // would then order the drop after that creation and after the topic's drop,
 // which YDB runs under a transfer that still reads the topic. A source of
-// another database names no path here.
-func transferPaths(root string, spec replication.TransferSpec, drop bool) []objectplan.PathEffect {
+// another database names no path here. readTopic is the caller's choice of
+// the two reads: [topicByIdentity] for a dropped transfer, [topicByPath]
+// otherwise.
+func transferPaths(root string, spec replication.TransferSpec, readTopic func(root, directory, name string) []objectplan.PathEffect) []objectplan.PathEffect {
 	var effects []objectplan.PathEffect
 	directory, name := split(spec.Target)
 	effects = append(effects, objectplan.PathEffect{Schema: directory, Name: name, Action: protocol.PlanningEffect_READ})
@@ -245,20 +247,31 @@ func transferPaths(root string, spec replication.TransferSpec, drop bool) []obje
 		return effects
 	}
 	directory, name = split(source)
-	if drop {
-		databases := []string{""}
-		if root != "" {
-			databases = append(databases, root)
-		}
-		for _, database := range databases {
-			effects = append(effects, objectplan.PathEffect{Subject: topicSubject(database, directory, name), Action: protocol.PlanningEffect_READ})
-		}
-	} else {
-		effects = append(effects, objectplan.PathEffect{Schema: directory, Name: name, Action: protocol.PlanningEffect_READ})
-	}
+	effects = append(effects, readTopic(root, directory, name)...)
 	if directory != "" {
 		schemaName, table := split(directory)
 		effects = append(effects, objectplan.PathEffect{Subject: changefeedSubject(schemaName, table, name), Action: protocol.PlanningEffect_READ})
+	}
+	return effects
+}
+
+// topicByPath is a read of the object at directory and name by its path, as a
+// transfer that is created or changed reads its topic.
+func topicByPath(_, directory, name string) []objectplan.PathEffect {
+	return []objectplan.PathEffect{{Schema: directory, Name: name, Action: protocol.PlanningEffect_READ}}
+}
+
+// topicByIdentity is a read of the topic at directory and name by its own
+// identity, in no database and in the database at root when root is set, as
+// a dropped transfer reads its topic.
+func topicByIdentity(root, directory, name string) []objectplan.PathEffect {
+	databases := []string{""}
+	if root != "" {
+		databases = append(databases, root)
+	}
+	effects := make([]objectplan.PathEffect, 0, len(databases))
+	for _, database := range databases {
+		effects = append(effects, objectplan.PathEffect{Subject: topicSubject(database, directory, name), Action: protocol.PlanningEffect_READ})
 	}
 	return effects
 }
@@ -284,9 +297,9 @@ func part(value string) *protocol.ComparisonPart {
 	return &protocol.ComparisonPart{Source: value, Normalized: value}
 }
 
-func split(relative string) (string, string) {
+func split(relative string) (directory, name string) {
 	cleaned := path.Clean(strings.Trim(relative, "/"))
-	directory, name := path.Split(cleaned)
+	directory, name = path.Split(cleaned)
 	return strings.TrimSuffix(directory, "/"), name
 }
 

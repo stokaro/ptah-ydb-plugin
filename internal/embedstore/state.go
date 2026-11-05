@@ -125,7 +125,7 @@ func (s *Store) PrepareStore(ctx context.Context, requestID string) *protocol.Em
 		}
 	}
 	for i, t := range missing {
-		if _, err := s.db.ExecContext(ctx, t.createStatement(s.caps.WideTimestamps)); err != nil {
+		if _, err := s.db.ExecContext(ctx, t.createStatement(s.caps)); err != nil {
 			if i == 0 {
 				return outcome(requestID, fmt.Errorf("create %s: %s", t.name, statusName(err)))
 			}

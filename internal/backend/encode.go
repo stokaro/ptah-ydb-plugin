@@ -56,7 +56,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	if err := provider.ValidateEncodeSourceRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	limits, err := encodeCoverage(request, description.GetEngines()[0], sourceLimitsNegotiated(description.GetEngines()[0]))
+	limits, err := encodeCoverage(request, description.GetEngines()[0])
 	if err != nil {
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}

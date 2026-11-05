@@ -129,8 +129,8 @@ func (f *embeddingFixture) maintainedOnWrite(c *qt.C) bool {
 const testGeneration = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 // articlesSpec is a generation of the articles' title and body, in column
-// embedding beside them or in a table of its own.
-func articlesSpec(layout protocol.EmbeddingTarget_Layout, indexed bool) *protocol.EmbeddingSpec {
+// embedding beside them or in a table of its own, with no vector index.
+func articlesSpec(layout protocol.EmbeddingTarget_Layout) *protocol.EmbeddingSpec {
 	target := &protocol.EmbeddingTarget{Table: &protocol.Reference{Kind: "table", Name: "articles"}, Column: "embedding", Layout: layout,
 		Representation: "float", Metric: protocol.EmbeddingTarget_COSINE, Dimension: 4}
 	names := &protocol.EmbeddingNames{ColumnComment: "embedding generation " + testGeneration[:12]}
@@ -138,14 +138,19 @@ func articlesSpec(layout protocol.EmbeddingTarget_Layout, indexed bool) *protoco
 		target.Table = &protocol.Reference{Kind: "table", Name: "article_vectors"}
 		names.OwnershipMark = "ptah embedding target for generation " + testGeneration
 	}
-	if indexed {
-		target.IndexMethod, target.IndexOptions = "vector_kmeans_tree", map[string]string{"levels": "1", "clusters": "2"}
-		names.Index = target.Table.Name + "_embedding_" + testGeneration[:12] + "_idx"
-	}
 	return &protocol.EmbeddingSpec{Generation: testGeneration, Chunked: layout == protocol.EmbeddingTarget_OWN_TABLE, Names: names,
 		Source: &protocol.EmbeddingSource{Table: &protocol.Reference{Kind: "table", Name: "articles"}, KeyFields: []string{"id"},
 			InputFields: []string{"title", "body"}, VersionField: "updated_at"},
 		Target: target}
+}
+
+// withVectorIndex gives spec's target a vector_kmeans_tree index of one level
+// and two clusters, named for the target table and the generation, and
+// returns spec.
+func withVectorIndex(spec *protocol.EmbeddingSpec) *protocol.EmbeddingSpec {
+	spec.Target.IndexMethod, spec.Target.IndexOptions = "vector_kmeans_tree", map[string]string{"levels": "1", "clusters": "2"}
+	spec.Names.Index = spec.Target.Table.Name + "_embedding_" + testGeneration[:12] + "_idx"
+	return spec
 }
 
 func key(components ...string) *protocol.EmbeddingKey {
@@ -317,7 +322,7 @@ func TestEmbeddingFencedWorkerCannotCommitSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.seedArticles(c)
-	spec := articlesSpec(protocol.EmbeddingTarget_SOURCE_COLUMNS, false)
+	spec := articlesSpec(protocol.EmbeddingTarget_SOURCE_COLUMNS)
 	prepared, err := f.client.PrepareEmbeddingTarget(c.Context(), &protocol.PrepareEmbeddingTargetRequest{SessionId: f.session, RequestId: "prepare",
 		Spec: spec, Mode: protocol.PrepareEmbeddingTargetRequest_CREATE})
 	c.Assert(err, qt.IsNil)
@@ -444,7 +449,7 @@ func TestEmbeddingGenerationInSourceColumnsSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.seedArticles(c)
-	spec := articlesSpec(protocol.EmbeddingTarget_SOURCE_COLUMNS, true)
+	spec := withVectorIndex(articlesSpec(protocol.EmbeddingTarget_SOURCE_COLUMNS))
 
 	described, err := f.client.DescribeEmbeddingTarget(c.Context(), &protocol.DescribeEmbeddingTargetRequest{Engine: "ydb", Spec: spec})
 	c.Assert(err, qt.IsNil)
@@ -555,7 +560,7 @@ func TestEmbeddingGenerationInATableOfItsOwnSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	f := newEmbeddingFixture(c)
 	f.seedArticles(c)
-	spec := articlesSpec(protocol.EmbeddingTarget_OWN_TABLE, false)
+	spec := articlesSpec(protocol.EmbeddingTarget_OWN_TABLE)
 	prepare := func(c *qt.C, spec *protocol.EmbeddingSpec) (*protocol.EmbeddingWriteResult, error) {
 		return f.client.PrepareEmbeddingTarget(c.Context(), &protocol.PrepareEmbeddingTargetRequest{SessionId: f.session, RequestId: "prepare",
 			Spec: spec, Mode: protocol.PrepareEmbeddingTargetRequest_CREATE})
@@ -626,6 +631,6 @@ func TestEmbeddingStoreNeedsTheHostsFeatureSubprocess(t *testing.T) {
 	c.Assert(client.Description().Engines[0].Features, qt.Not(qt.Contains), provider.EmbeddingStoreFeature)
 	c.Assert(client.Description().Engines[0].Embeddings, qt.IsNil)
 	_, err := client.DescribeEmbeddingTarget(c.Context(), &protocol.DescribeEmbeddingTargetRequest{Engine: "ydb",
-		Spec: articlesSpec(protocol.EmbeddingTarget_SOURCE_COLUMNS, false)})
+		Spec: articlesSpec(protocol.EmbeddingTarget_SOURCE_COLUMNS)})
 	c.Assert(err, qt.IsNotNil)
 }

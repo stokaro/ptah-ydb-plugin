@@ -147,15 +147,15 @@ func Maximum(serialType string) int64 {
 }
 
 // RangeRefusal says why Ptah does not give the sequence of a Serial column of
-// YDB type serialType the settings, or "" when it does. keepsRange is the
-// target's [KeepsRange].
+// YDB type serialType the settings, on a target with the capabilities caps,
+// or "" when it does.
 //
 // Every ALTER SEQUENCE raises the maximum of a Serial's or a SmallSerial's
 // sequence to the Int64 maximum on a target without [KeepsRange], and nothing
 // lowers it again; the column then wraps to negative values without an
 // error. A BigSerial's sequence ends at the Int64 maximum already.
-func RangeRefusal(serialType string, settings Settings, keepsRange bool) string {
-	if settings.IsDefault() || serialType == ydbtype.BigSerial || keepsRange {
+func RangeRefusal(serialType string, settings Settings, caps map[string]bool) string {
+	if settings.IsDefault() || serialType == ydbtype.BigSerial || caps[KeepsRange] {
 		return ""
 	}
 	limit := strconv.FormatInt(Maximum(serialType), 10)

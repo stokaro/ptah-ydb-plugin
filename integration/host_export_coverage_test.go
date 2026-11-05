@@ -76,7 +76,7 @@ func createNode(c *qt.C, opened *connection.Connection, absolute string) {
 // hostExport runs one of the host's commands over the directory with this
 // provider selected for ydb, and returns its standard output and what it
 // reported.
-func hostExport(c *qt.C, arguments ...string) (string, string) {
+func hostExport(c *qt.C, arguments ...string) (output, reported string) {
 	c.Helper()
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)

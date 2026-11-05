@@ -315,7 +315,7 @@ func nativeObservation(value proto.Message) (proto.Message, error) {
 	case *native.IndexSetIntent:
 		return indexObservations(v)
 	case *native.IndexSettingsIntent:
-		if err := validateIndexSettings(v.GetPartitioningSettings(), v.GetReadReplicasSettings(), false); err != nil {
+		if err := validateIndexSettings(v.GetPartitioningSettings(), v.GetReadReplicasSettings()); err != nil {
 			return nil, err
 		}
 		return indexSettingsObservation(v), nil

@@ -378,14 +378,24 @@ func containsKeywords(tokens []Token, words ...string) bool {
 // GuardReplay judges a statement a host replays into a dev database, as the
 // host's YDB replay guard (internal/devclean/ydbreplay) does, and returns a
 // *RealmRefusal for the first statement of the text whose effects cannot be
-// confined to the scope. server reports a run that owns the whole server, the
+// confined to the dev database the session selected. A translation setting
+// changes how the rest of the text is read and is refused, --!syntax_v1
+// included, as the host refuses it.
+func GuardReplay(source string) error {
+	return guardReplay(source, confineToRealm)
+}
+
+// GuardServerReplay is [GuardReplay] for a run that owns the whole server, the
 // operator's declaration or a server the run provisioned: there only what
 // reaches past the server stays refused, an external data source or table, an
-// async replication, a transfer and a streaming query. Every other scope
-// confines a statement to the dev database the session selected. A
-// translation setting changes how the rest of the text is read and is
-// refused, --!syntax_v1 included, as the host refuses it.
-func GuardReplay(source string, server bool) error {
+// async replication, a transfer and a streaming query.
+func GuardServerReplay(source string) error {
+	return guardReplay(source, func([]Token) error { return nil })
+}
+
+// guardReplay judges each statement of source: a translation setting and an
+// operation past the server are refused, and confine judges the rest.
+func guardReplay(source string, confine func([]Token) error) error {
 	stream := reader{input: source}
 	var tokens []Token
 	var bodies Bodies
@@ -399,10 +409,7 @@ func GuardReplay(source string, server bool) error {
 		if operation := beyondTheServer(tokens); operation != "" {
 			return refuse(operation)
 		}
-		if server {
-			return nil
-		}
-		return confineToRealm(tokens)
+		return confine(tokens)
 	}
 	for {
 		token := stream.NextToken()

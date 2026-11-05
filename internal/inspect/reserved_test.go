@@ -29,7 +29,7 @@ func TestReservationLeavesTheNativeViewModelToTheCommonWire(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			snapshot := &protocol.Schema{Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}}
-			reserve(snapshot, &protocol.Reference{Engine: "ydb", Database: "/local", Kind: schema.CoordinationProperties, Name: "ptah_locks"}, protocol.ReservedObject_LOCK, test.commonViews)
+			Common{Views: test.commonViews}.reserve(snapshot, &protocol.Reference{Engine: "ydb", Database: "/local", Kind: schema.CoordinationProperties, Name: "ptah_locks"}, protocol.ReservedObject_LOCK)
 			c.Assert(snapshot.ReservedObjects, qt.HasLen, 1)
 			c.Assert(snapshot.ReservedObjects[0].ConflictKinds, qt.Contains, schema.CoordinationProperties)
 			c.Assert(slices.Contains(snapshot.ReservedObjects[0].ConflictKinds, schema.ViewProperties), qt.Equals, test.claimed)

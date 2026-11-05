@@ -8,9 +8,11 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 )
 
-// StorageType parses the column grammar exported by ColumnType. Nullability is
-// a separate common property, so nested Optional syntax is never accepted.
-func StorageType(spelling string, nullable bool) (*Ydb.Type, error) {
+// StorageType parses the column grammar exported by ColumnType into the type
+// a NOT NULL column stores. Nullability is a separate common property, so
+// nested Optional syntax is never accepted; [Optional] gives a nullable
+// column's type.
+func StorageType(spelling string) (*Ydb.Type, error) {
 	var result *Ydb.Type
 	for id, name := range primitiveTypes {
 		if strings.EqualFold(spelling, name) {
@@ -31,10 +33,12 @@ func StorageType(spelling string, nullable bool) (*Ydb.Type, error) {
 	if result == nil {
 		return nil, fmt.Errorf("unsupported YDB storage column type")
 	}
-	if nullable {
-		result = &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: result}}}
-	}
 	return result, nil
+}
+
+// Optional is the type a nullable column of the storage type item stores.
+func Optional(item *Ydb.Type) *Ydb.Type {
+	return &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: item}}}
 }
 
 func decimalArgument(value string) (uint32, error) {

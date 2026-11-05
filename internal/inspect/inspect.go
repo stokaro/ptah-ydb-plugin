@@ -118,7 +118,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		}
 	}
 	if len(selectors) == 0 && slices.Contains(provider.HostFeatures(ctx), provider.SchemaSubtreeCoverageFeature) {
-		subtreeRegions(result, database, read.skipped, common.Views)
+		common.subtreeRegions(result, database, read.skipped)
 	}
 	if err := read.streamingInventory(ctx, selectors); err != nil {
 		return nil, err
@@ -269,7 +269,7 @@ func (t *traversal) entry(ctx context.Context, selected, name string, kind Ydb_S
 			// session's database by its name, so the name is the
 			// reservation. Read as a managed node, it would be
 			// exported into a source that declarations then refuse.
-			reserve(t.result, &protocol.Reference{Engine: "ydb", Database: t.database, Kind: schema.CoordinationProperties, Name: name}, protocol.ReservedObject_LOCK, t.common.Views)
+			t.common.reserve(t.result, &protocol.Reference{Engine: "ydb", Database: t.database, Kind: schema.CoordinationProperties, Name: name}, protocol.ReservedObject_LOCK)
 			return nil
 		}
 		fallthrough
@@ -317,7 +317,7 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 		return err
 	}
 	if description.reservation != protocol.ReservedObject_PURPOSE_UNSPECIFIED {
-		reserve(t.result, &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: "table", Name: name}, description.reservation, t.common.Views)
+		t.common.reserve(t.result, &protocol.Reference{Engine: "ydb", Database: t.database, Schema: selected, Kind: "table", Name: name}, description.reservation)
 		return nil
 	}
 	// A table an async replication writes, or wrote without
@@ -342,7 +342,7 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 	if t.common.Indexes {
 		// The host holds what the common model describes; the
 		// native facet keeps only the rest.
-		table.Indexes, err = commonIndexes(table.Identity, indexes, t.common.IndexFacets)
+		table.Indexes, err = t.common.commonIndexes(table.Identity, indexes)
 		if err != nil {
 			return err
 		}
@@ -470,7 +470,7 @@ func (t *traversal) unreadTables(ctx context.Context, selectors []string) error 
 	if err != nil {
 		return err
 	}
-	t.result.UnreadTables = unreadReplicas(t.replicas, targets, complete)
+	t.result.UnreadTables = unreadReplicas(t.replicas, replicationTargets{paths: targets, complete: complete})
 	return nil
 }
 

@@ -262,7 +262,7 @@ func TestUnchangedStreamingQueryOrdersCommonInputReplacement(t *testing.T) {
 func TestUnchangedStreamingRestartRetainsAccessOrdering(t *testing.T) {
 	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
-	access := commonAccessFor(request.DesiredObjects.Records[0].Subject, "streaming query", true)
+	access := commonAccessFor(request.DesiredObjects.Records[0].Subject, "streaming query", revokeAccess)
 	request.CommonSteps = []*protocol.CommonPlanningStep{access}
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)

@@ -71,12 +71,21 @@ func targetTakesCacheModes(c *qt.C) bool {
 	return session.Capabilities[tablecreate.CacheModeCapability]
 }
 
-// requireCacheModes skips a test on a target whose answer is not the one the
-// test is about.
-func requireCacheModes(c *qt.C, wanted bool) {
+// requireCacheModes skips a test on a target that does not take a column
+// family cache mode.
+func requireCacheModes(c *qt.C) {
 	c.Helper()
-	if targetTakesCacheModes(c) != wanted {
-		c.Skipf("the target's %s is not %t", tablecreate.CacheModeCapability, wanted)
+	if !targetTakesCacheModes(c) {
+		c.Skipf("the target's %s is not true", tablecreate.CacheModeCapability)
+	}
+}
+
+// requireNoCacheModes skips a test on a target that takes a column family
+// cache mode, for the tests about the refusal a target without one gives.
+func requireNoCacheModes(c *qt.C) {
+	c.Helper()
+	if targetTakesCacheModes(c) {
+		c.Skipf("the target's %s is not false", tablecreate.CacheModeCapability)
 	}
 }
 
@@ -94,7 +103,7 @@ const cacheModeRefusal = `(?s).*declares column family cache mode, which require
 // holds the cache modes the step names, and the rows stay.
 func TestHostChangesAFamilyCacheModeInPlace_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	requireCacheModes(c, true)
+	requireCacheModes(c)
 	opened, directory, database := lockFixture(c)
 	absolute := path.Join(database, directory, "docs")
 	emptyAtCleanup(c, opened, path.Join(database, directory))
@@ -145,7 +154,7 @@ func TestHostChangesAFamilyCacheModeInPlace_HappyPath(t *testing.T) {
 // the field, and would create or alter the table without it.
 func TestHostRefusesAFamilyCacheModeTheTargetLacks_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	requireCacheModes(c, false)
+	requireNoCacheModes(c)
 	opened, directory, database := lockFixture(c)
 	absolute := path.Join(database, directory, "docs")
 	emptyAtCleanup(c, opened, path.Join(database, directory))
@@ -174,7 +183,7 @@ func TestHostRefusesAFamilyCacheModeTheTargetLacks_FailurePath(t *testing.T) {
 // name before anything runs. The flags are restored when the test ends.
 func TestHostRefusesAFamilyCacheModeTheClusterTurnedOff_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	requireCacheModes(c, true)
+	requireCacheModes(c)
 	opened, directory, database := lockFixture(c)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	newClusterFlags(c, opened).set(c, map[string]bool{"EnableTableCacheModes": false})
@@ -202,7 +211,7 @@ func TestHostReplansAnExportedCacheModeSubprocess(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			requireCacheModes(c, true)
+			requireCacheModes(c)
 			opened, directory, database := lockFixture(c)
 			emptyAtCleanup(c, opened, path.Join(database, directory))
 			c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+path.Join(database, directory, "docs")+"` (id Uint64 NOT NULL, body Utf8 FAMILY hot, "+

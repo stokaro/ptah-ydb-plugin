@@ -14,11 +14,21 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
-func commonNativeAccess(request *protocol.PlanFeaturesRequest, revoke bool) *protocol.CommonPlanningStep {
-	return commonAccessFor(request.Changes[0].Subject, "coordination node", revoke)
+// accessVerb is the statement a host's access step carries.
+type accessVerb int
+
+const (
+	// grantAccess is a GRANT.
+	grantAccess accessVerb = iota
+	// revokeAccess is a REVOKE.
+	revokeAccess
+)
+
+func commonNativeAccess(request *protocol.PlanFeaturesRequest, verb accessVerb) *protocol.CommonPlanningStep {
+	return commonAccessFor(request.Changes[0].Subject, "coordination node", verb)
 }
 
-func commonAccessFor(subject *protocol.ComparisonIdentity, kind string, revoke bool) *protocol.CommonPlanningStep {
+func commonAccessFor(subject *protocol.ComparisonIdentity, kind string, verb accessVerb) *protocol.CommonPlanningStep {
 	subject = proto.CloneOf(subject)
 	access := proto.CloneOf(subject)
 	access.Kind = "object_access"
@@ -26,7 +36,7 @@ func commonAccessFor(subject *protocol.ComparisonIdentity, kind string, revoke b
 	grant := &protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"}, Target: &protocol.Reference{Engine: "ydb", Kind: kind,
 		Database: subject.GetDatabase().GetSource(), Schema: subject.GetSchema().GetSource(), Name: subject.GetName().GetSource()}}
 	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_Grant{Grant: grant}}
-	if revoke {
+	if verb == revokeAccess {
 		change.Operation = &protocol.CommonObjectChange_Revoke{Revoke: grant}
 	}
 	return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: "access"}, CommonObject: change,
@@ -40,7 +50,7 @@ func TestNativeAccessOrderingPreservesCapturedACLChecks(t *testing.T) {
 			c := testcheck.New(t)
 			request := nativePlan(c, action)
 			request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
-			request.CommonSteps = []*protocol.CommonPlanningStep{commonNativeAccess(request, action == "drop")}
+			request.CommonSteps = []*protocol.CommonPlanningStep{commonNativeAccess(request, map[string]accessVerb{"drop": revokeAccess}[action])}
 			result, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Diagnostics, qt.HasLen, 0)
@@ -66,11 +76,11 @@ func TestNativeAccessOrderingPreservesCapturedACLChecks(t *testing.T) {
 func TestNativeAccessOrderingRefusesContradictoryOrForgedContext(t *testing.T) {
 	for _, test := range []struct {
 		name, action string
-		revoke       bool
+		verb         accessVerb
 		change       func(*protocol.PlanFeaturesRequest)
 	}{
 		{name: "grant dropped object", action: "drop"},
-		{name: "revoke absent object", action: "create", revoke: true},
+		{name: "revoke absent object", action: "create", verb: revokeAccess},
 		{name: "unnegotiated lifecycle", action: "alter", change: func(r *protocol.PlanFeaturesRequest) { r.TargetFeatures = []string{provider.CommonObjectsFeature} }},
 		{name: "foreign database", action: "alter", change: func(r *protocol.PlanFeaturesRequest) {
 			r.CommonSteps[0].CommonObject.GetGrant().Target.Database = "/foreign"
@@ -81,7 +91,7 @@ func TestNativeAccessOrderingRefusesContradictoryOrForgedContext(t *testing.T) {
 			c := testcheck.New(t)
 			request := nativePlan(c, test.action)
 			request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
-			request.CommonSteps = []*protocol.CommonPlanningStep{commonNativeAccess(request, test.revoke)}
+			request.CommonSteps = []*protocol.CommonPlanningStep{commonNativeAccess(request, test.verb)}
 			if test.change != nil {
 				test.change(request)
 			}
@@ -103,7 +113,7 @@ func TestExternalRecreationKeepsRevokesAfterRestoration(t *testing.T) {
 	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature, provider.DatabaseContextFeature, provider.ValueContextFeature}
 	for _, change := range request.Changes {
 		if change.Subject.Kind == schema.ExternalTableProperties {
-			request.CommonSteps = []*protocol.CommonPlanningStep{commonAccessFor(change.Subject, "external table", true)}
+			request.CommonSteps = []*protocol.CommonPlanningStep{commonAccessFor(change.Subject, "external table", revokeAccess)}
 		}
 	}
 	c.Assert(request.CommonSteps, qt.HasLen, 1)
@@ -147,7 +157,7 @@ func TestWorkloadDropRewritesRevokesAsOneCompleteReplacement(t *testing.T) {
 	c.Assert(request.Changes, qt.HasLen, 2)
 	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
 	for _, change := range request.Changes {
-		common := commonAccessFor(change.Subject, "resource pool", true)
+		common := commonAccessFor(change.Subject, "resource pool", revokeAccess)
 		common.Id.Name += "/" + change.Subject.Name.Source
 		request.CommonSteps = append(request.CommonSteps, common)
 	}
@@ -186,7 +196,7 @@ func TestNativeAccessOrderingWithPrincipalEdits(t *testing.T) {
 			} else {
 				common.CommonObject = &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_RemoveMember{RemoveMember: &protocol.RoleMembership{Group: "team", Member: "app"}}}
 			}
-			request.CommonSteps = []*protocol.CommonPlanningStep{commonNativeAccess(request, action == "alter"), common}
+			request.CommonSteps = []*protocol.CommonPlanningStep{commonNativeAccess(request, map[string]accessVerb{"alter": revokeAccess}[action]), common}
 			result, err := backend.New().PlanFeatures(c.Context(), request)
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Diagnostics, qt.HasLen, 0)

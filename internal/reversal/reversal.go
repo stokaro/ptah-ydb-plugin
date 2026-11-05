@@ -41,7 +41,10 @@ const workloadLimitation = "Restoring workload configuration cannot undo queries
 // as the provider normalizes an observed value; each prediction of a batch
 // takes the id of the change it follows from.
 func Reverse(ctx context.Context, request *protocol.ReverseChangesRequest, observe func(id string, value *protocol.Envelope) (*protocol.NormalizedValue, error)) (*protocol.ReversedChanges, error) {
-	commonAccess := slices.Contains(request.GetTargetFeatures(), provider.CommonAccessFeature)
+	access := schema.NativeAccess
+	if slices.Contains(request.GetTargetFeatures(), provider.CommonAccessFeature) {
+		access = schema.CommonAccess
+	}
 	result := &protocol.ReversedChanges{Complete: true}
 	for _, change := range request.GetChanges() {
 		if err := ctx.Err(); err != nil {
@@ -51,7 +54,7 @@ func Reverse(ctx context.Context, request *protocol.ReverseChangesRequest, obser
 		if slices.Contains(schema.ReversibleTableChanges(), change.GetValue().GetValue().GetKind()) {
 			reverse, placement = schema.ReverseTableChange, protocol.ForwardState_FACET
 		}
-		reversed, err := reverse(change.GetValue().GetId(), change.GetValue().GetValue(), commonAccess)
+		reversed, err := reverse(change.GetValue().GetId(), change.GetValue().GetValue(), access)
 		if err != nil {
 			owner := change.GetValue().GetValue().GetOwner()
 			return nil, authored.Wrap(err, fmt.Sprintf("the change of %s cannot be reversed: %v", path.Join(owner.GetSchema(), owner.GetName()), err))

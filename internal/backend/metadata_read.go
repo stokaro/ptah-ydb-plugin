@@ -64,11 +64,11 @@ func (p *Provider) OpenMetadataRead(ctx context.Context, request *protocol.Metad
 	if err := provider.ValidateMetadataReadRequest(request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	s, store, unlock, err := p.metadataSession(ctx, request.Scope)
+	s, store, err := p.metadataSession(ctx, request.Scope)
 	if err != nil {
 		return nil, err
 	}
-	defer unlock()
+	defer s.mu.Unlock()
 	previous, err := s.metadataReservation(request)
 	if err != nil {
 		return nil, err
@@ -144,11 +144,11 @@ func (p *Provider) ReadMetadataPage(ctx context.Context, request *protocol.ReadM
 	if err := provider.ValidateReadMetadataPageRequest(request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	s, _, unlock, err := p.metadataSession(ctx, request.Reader.Scope)
+	s, _, err := p.metadataSession(ctx, request.Reader.Scope)
 	if err != nil {
 		return nil, err
 	}
-	defer unlock()
+	defer s.mu.Unlock()
 	reader, err := s.metadataReservation(request.Reader)
 	if err != nil {
 		return nil, err
@@ -271,9 +271,20 @@ func (p *Provider) CloseMetadataRead(_ context.Context, request *protocol.Metada
 	}
 	return metadataReadResult(request), nil
 }
-func (s *session) closeMetadataReaders(transactionID string, all bool) {
+
+// closeMetadataReaders closes every metadata reader of the session and keeps
+// their cleanup errors on it.
+func (s *session) closeMetadataReaders() {
 	for _, reader := range s.metadataReaders {
-		if all || reader.scope.TransactionId == transactionID {
+		s.cleanupErr = errors.Join(s.cleanupErr, reader.close())
+	}
+}
+
+// closeTransactionMetadataReaders closes the metadata readers bound to
+// transactionID and keeps their cleanup errors on the session.
+func (s *session) closeTransactionMetadataReaders(transactionID string) {
+	for _, reader := range s.metadataReaders {
+		if reader.scope.TransactionId == transactionID {
 			s.cleanupErr = errors.Join(s.cleanupErr, reader.close())
 		}
 	}

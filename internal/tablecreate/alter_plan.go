@@ -223,7 +223,7 @@ func (a *alterationSides) settings() (ttlChange, partitioningChange, string) {
 		return ttlChange{}, partitioningChange{}, "The table's current TTL was not captured"
 	}
 	ttlManaged := managed || a.observed.table != nil &&
-		FacetKnown(a.table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.TableProperties, a.table.Subject, true)
+		FacetKnown(a.table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.TableProperties, a.table.Subject, DesiredSide)
 	ttl, reason := planTTL(ttlInput{managed: ttlManaged, desired: a.intent.TtlSettings, held: a.held.TtlSettings, declared: declaredTypes(a.table.Desired.GetColumns())})
 	if reason != "" {
 		return ttlChange{}, partitioningChange{}, reason

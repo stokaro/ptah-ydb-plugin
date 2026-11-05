@@ -53,9 +53,9 @@ func replicaCount(replicas *Ydb_Table.ReadReplicasSettings) uint64 {
 // validateIndexSettings refuses a setting an index does not take: partition
 // columns, which YDB keys on the index's own key, a count of zero, which no
 // statement sets, a minimum above a nonzero maximum, and read replicas that
-// name no mode. observed refuses a count of zero replicas too, which a read
-// reports as none; a declaration states none with it.
-func validateIndexSettings(partitioning *Ydb_Table.PartitioningSettings, replicas *Ydb_Table.ReadReplicasSettings, observed bool) error {
+// name no mode. A declaration states no read replicas with a count of zero;
+// see validateObservedIndexSettings for a read.
+func validateIndexSettings(partitioning *Ydb_Table.PartitioningSettings, replicas *Ydb_Table.ReadReplicasSettings) error {
 	if partitioning != nil {
 		if len(partitioning.GetPartitionBy()) != 0 {
 			return fmt.Errorf("YDB index settings name partition columns, and YDB partitions an index on its own key")
@@ -71,9 +71,18 @@ func validateIndexSettings(partitioning *Ydb_Table.PartitioningSettings, replica
 		if replicas.GetSettings() == nil {
 			return fmt.Errorf("YDB index read replicas name no mode")
 		}
-		if observed && replicaCount(replicas) == 0 {
-			return fmt.Errorf("observed YDB index read replicas report a count of zero, which a read reports as none")
-		}
+	}
+	return nil
+}
+
+// validateObservedIndexSettings is [validateIndexSettings] for a read, which
+// reports no read replicas as none and refuses a count of zero.
+func validateObservedIndexSettings(partitioning *Ydb_Table.PartitioningSettings, replicas *Ydb_Table.ReadReplicasSettings) error {
+	if err := validateIndexSettings(partitioning, replicas); err != nil {
+		return err
+	}
+	if replicas != nil && replicaCount(replicas) == 0 {
+		return fmt.Errorf("observed YDB index read replicas report a count of zero, which a read reports as none")
 	}
 	return nil
 }

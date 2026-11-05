@@ -52,7 +52,10 @@ func rowTable(payload []byte, representation protocol.ValueInput_Representation)
 // ttlTable counts a row table with a TTL.
 func ttlTable(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
 	table, err := rowTable(payload, representation)
-	return counted(table.ttl.GetMode() != nil), err
+	if table.ttl.GetMode() != nil {
+		return 1, err
+	}
+	return 0, err
 }
 
 // statedFamilies counts a row table's column families, without a default
@@ -61,7 +64,9 @@ func statedFamilies(payload []byte, representation protocol.ValueInput_Represent
 	table, err := rowTable(payload, representation)
 	var total uint64
 	for _, family := range table.families {
-		total += counted(family.GetName() != defaultFamilyName || !plainFamily(family))
+		if family.GetName() != defaultFamilyName || !plainFamily(family) {
+			total++
+		}
 	}
 	return total, err
 }
@@ -82,7 +87,10 @@ func plainFamily(family *native.ColumnFamily) bool {
 // states a starting layout.
 func tablePartitioning(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
 	table, err := rowTable(payload, representation)
-	return counted(table.layout || table.bloomFilter == Ydb.FeatureFlag_ENABLED || partitioningStated(table.partitioning, table.replicas)), err
+	if table.layout || table.bloomFilter == Ydb.FeatureFlag_ENABLED || partitioningStated(table.partitioning, table.replicas) {
+		return 1, err
+	}
+	return 0, err
 }
 
 // partitioningStated reports settings of a table or a global index that
@@ -122,13 +130,19 @@ func deleteOnly(tiers []*native.ColumnTTLTier) bool {
 // built-in engine counted it among the tables with a TTL.
 func columnTTLTable(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
 	tiers, err := columnTTLTiers(payload, representation)
-	return counted(deleteOnly(tiers)), err
+	if deleteOnly(tiers) {
+		return 1, err
+	}
+	return 0, err
 }
 
 // tieredTTLTable counts a column table whose TTL has any other tiers.
 func tieredTTLTable(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
 	tiers, err := columnTTLTiers(payload, representation)
-	return counted(len(tiers) != 0 && !deleteOnly(tiers)), err
+	if len(tiers) != 0 && !deleteOnly(tiers) {
+		return 1, err
+	}
+	return 0, err
 }
 
 // indexSettings is what the counts read of one index of a table's index set:
@@ -223,7 +237,9 @@ func indexPartitioning(payload []byte, representation protocol.ValueInput_Repres
 	indexes, err := tableIndexes(payload, representation)
 	var total uint64
 	for _, index := range indexes {
-		total += counted(index.global && partitioningStated(index.partitioning, index.replicas))
+		if index.global && partitioningStated(index.partitioning, index.replicas) {
+			total++
+		}
 	}
 	return total, err
 }
@@ -233,15 +249,9 @@ func vectorIndexes(payload []byte, representation protocol.ValueInput_Representa
 	indexes, err := tableIndexes(payload, representation)
 	var total uint64
 	for _, index := range indexes {
-		total += counted(index.vector)
+		if index.vector {
+			total++
+		}
 	}
 	return total, err
-}
-
-// counted is 1 for true and 0 for false.
-func counted(holds bool) uint64 {
-	if holds {
-		return 1
-	}
-	return 0
 }

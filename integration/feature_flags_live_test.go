@@ -43,17 +43,17 @@ func differingKeys(first, second map[string]bool) []string {
 // provider has no counterpart of.
 func TestSessionReadsTheClusterFeatureFlags_HappyPath(t *testing.T) {
 	for _, test := range []struct {
-		name     string
-		before26 bool
-		flagged  []string
+		name    string
+		line    lineFamily
+		flagged []string
 	}{
-		{name: "a 25.x line", before26: true, flagged: []string{"external_data_sources", "vector_indexes"}},
-		{name: "a 26.x line", flagged: []string{"external_data_sources", "streaming_queries", "unique_index_on_existing_table"}},
+		{name: "a 25.x line", line: lines25, flagged: []string{"external_data_sources", "vector_indexes"}},
+		{name: "a 26.x line", line: lines26, flagged: []string{"external_data_sources", "streaming_queries", "unique_index_on_existing_table"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			opened, _, _ := inspectionFixture(c)
-			skipOnLine(c, test.before26, serverVersion(c, opened))
+			skipOnLine(c, test.line, serverVersion(c, opened))
 			address := monitoredAddress(c)
 			client := startProviderFor(c)
 			monitored, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: address})

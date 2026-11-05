@@ -314,7 +314,7 @@ func normalizeObservation(kind string, owner *protocol.Reference, target proto.M
 		}
 	}
 	if settings, ok := target.(*native.IndexSettingsObservation); ok {
-		if err := validateIndexSettings(settings.GetPartitioningSettings(), settings.GetReadReplicasSettings(), true); err != nil {
+		if err := validateObservedIndexSettings(settings.GetPartitioningSettings(), settings.GetReadReplicasSettings()); err != nil {
 			return err
 		}
 	}

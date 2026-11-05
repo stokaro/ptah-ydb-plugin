@@ -186,7 +186,7 @@ func streamingQueryText(desired *protocol.Envelope, owner *protocol.Reference, c
 	if err := streaming.Validate(spec); err != nil {
 		return "", err
 	}
-	return streaming.Create(owner.Schema, owner.Name, spec, false), nil
+	return streaming.Create(owner.Schema, owner.Name, spec), nil
 }
 
 func accessRefusal() error {

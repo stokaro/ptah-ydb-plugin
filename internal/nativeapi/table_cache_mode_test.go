@@ -98,7 +98,7 @@ func TestNativeTableAlteration_CacheMode_HappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			fixture := &alterFixture{before: test.before, after: test.after}
-			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
+			dispatched, err := applyAlteration(c, fixture, "", test.payload, nil)
 			c.Assert(err, qt.IsNil)
 			c.Assert(dispatched, qt.IsTrue)
 			families := slices.Concat(fixture.sent.AddColumnFamilies, fixture.sent.AlterColumnFamilies)
@@ -135,7 +135,7 @@ func TestNativeTableAlteration_CacheMode_FailurePath(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			dispatched, err := applyAlteration(c, &alterFixture{before: test.before, after: test.after}, "", test.payload, false)
+			dispatched, err := applyAlteration(c, &alterFixture{before: test.before, after: test.after}, "", test.payload, nil)
 			c.Assert(err, qt.ErrorMatches, test.message)
 			c.Assert(dispatched, qt.Equals, test.dispatched)
 		})

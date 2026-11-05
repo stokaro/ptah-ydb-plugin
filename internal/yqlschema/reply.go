@@ -32,22 +32,29 @@ func HeaderKinds() []string {
 		"external_data_source", "external_table", "replication", "transfer"}
 }
 
-// ClaimedModels are the desired models whose coverage a YQL document claims:
-// a row table's settings, a column's, a column table's storage, a
-// coordination node, a topic, an external data source, an external table, an
-// async replication and a transfer, and a table's changefeeds when the host
-// takes the facets of a reading (provider.SQLFacetsFeature). Their source
+// ClaimedModels are the desired models whose coverage a YQL document read for
+// request claims: a row table's settings, a column's, a column table's
+// storage, a coordination node, a topic, an external data source, an external
+// table, an async replication and a transfer, and a table's changefeeds when
+// the host takes the facets of a reading (see [takesFacets]). Their source
 // formats include SQL. Without that feature the reading cannot say a
 // changefeed, so it claims nothing about the changefeeds of its tables and
 // leaves those a table holds unmanaged. A table's settings, a column's and a
 // column table's storage are claimed either way, as a YAML or Go source claims
 // them; without the feature a load that declares one is refused.
-func ClaimedModels(facets bool) []*protocol.ValueModel {
+func ClaimedModels(request *protocol.ReadSQLSchemaRequest) []*protocol.ValueModel {
 	models := claimedModels()
-	if facets {
+	if takesFacets(request) {
 		models = append(models, schema.NativeDesiredModel(schema.ChangefeedProperties))
 	}
 	return models
+}
+
+// takesFacets reports whether the host that sent request takes the facets of
+// a reading, provider.SQLFacetsFeature, which a table's settings, the family of
+// a column and a table's changefeeds need.
+func takesFacets(request *protocol.ReadSQLSchemaRequest) bool {
+	return slices.Contains(request.GetTargetFeatures(), provider.SQLFacetsFeature)
 }
 
 func claimedModels() []*protocol.ValueModel {
@@ -84,8 +91,7 @@ func Reply(request *protocol.ReadSQLSchemaRequest) *protocol.SQLSchema {
 	if refusal != nil {
 		return refused(request, []*Refusal{refusal})
 	}
-	facets := slices.Contains(request.GetTargetFeatures(), provider.SQLFacetsFeature)
-	coverage, refusal := claim(request.GetLimits(), ClaimedModels(facets))
+	coverage, refusal := claim(request.GetLimits(), ClaimedModels(request))
 	if refusal != nil {
 		refusal.Document, refusal.Start, refusal.End = limitDocument(request, refusal.limit)
 		return refused(request, []*Refusal{refusal})
@@ -94,7 +100,7 @@ func Reply(request *protocol.ReadSQLSchemaRequest) *protocol.SQLSchema {
 	// two documents declare is one table, with the columns of both.
 	settled := reading.clone()
 	finalize(settled)
-	reply, gaps := wire(request, settled, facets)
+	reply, gaps := wire(request, settled)
 	if len(gaps) != 0 {
 		return refused(request, gaps)
 	}
@@ -172,11 +178,11 @@ func sourcePosition(text string, offset int) *protocol.SourcePosition {
 }
 
 // wire writes a reading as the reply's schema, and returns the refusals of
-// everything in it a SQL schema reading has no home for. facets says whether
-// the host takes the facets of a reading, which a table's settings, the family
-// of a column and a table's changefeeds need.
-func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool) (*protocol.SQLSchema, []*Refusal) {
-	w := &wiring{request: request, reply: &protocol.SQLSchema{Complete: true}, facets: facets}
+// everything in it a SQL schema reading has no home for: a table's settings
+// and changefeeds among them where the host does not take the facets of a
+// reading (see [takesFacets]).
+func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading) (*protocol.SQLSchema, []*Refusal) {
+	w := &wiring{request: request, reply: &protocol.SQLSchema{Complete: true}, facets: takesFacets(request)}
 	w.tables(reading)
 	for _, view := range reading.Views {
 		w.trace(protocol.SQLObjectTrace_VIEWS, len(w.reply.Views), view.document, view.span)
@@ -393,19 +399,18 @@ func indexSettings(index Index) []string {
 }
 
 // nativeObject is the reply's envelope for a YDB object, or the refusal of
-// one the reading cannot write. A changefeed is a facet of its table and
-// never reaches it.
+// one the reading cannot write. It reads the object by its specification,
+// whose type the reading sets from the object's kind. A changefeed is a facet
+// of its table and never reaches it.
 func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
-	switch object.Kind {
-	case KindSecret:
-		spec := object.Spec.(*secrets.Spec)
+	switch spec := object.Spec.(type) {
+	case *secrets.Spec:
 		value, err := schema.CaptureSecretIntent(&protocol.Reference{Engine: "ydb", Kind: schema.SecretProperties, Schema: object.Schema, Name: object.Name}, &native.SecretIntent{ValueEnv: spec.ValueEnv})
 		if err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: "invalid secret declaration"}
 		}
 		return value, nil
-	case KindCoordinationNode:
-		spec := object.Spec.(*ydbdecl.CoordinationNode)
+	case *ydbdecl.CoordinationNode:
 		owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: object.Schema, Name: object.Name}
 		if err := schema.ValidateManagedCoordinationOwner(owner); err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
@@ -417,29 +422,25 @@ func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 				Message: fmt.Sprintf("coordination node %s: %v", quoteName(ydbPath(object.Schema, object.Name)), err)}
 		}
 		return envelope, nil
-	case KindReplication:
-		spec := object.Spec.(*replication.ReplicationSpec)
+	case *replication.ReplicationSpec:
 		envelope, err := schema.CaptureReplicationIntent(&protocol.Reference{Engine: "ydb", Kind: schema.ReplicationProperties, Schema: object.Schema, Name: object.Name}, *spec)
 		if err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: replicationRefusal}
 		}
 		return envelope, nil
-	case KindTransfer:
-		spec := object.Spec.(*replication.TransferSpec)
+	case *replication.TransferSpec:
 		envelope, err := schema.CaptureTransferIntent(&protocol.Reference{Engine: "ydb", Kind: schema.TransferProperties, Schema: object.Schema, Name: object.Name}, *spec)
 		if err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: replicationRefusal}
 		}
 		return envelope, nil
-	case KindStreamingQuery:
-		node := object.Spec.(*createStreamingQuery)
-		envelope, err := schema.CaptureStreamingQueryIntent(&protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: object.Schema, Name: object.Name}, node.spec, node.allowStateReset)
+	case *createStreamingQuery:
+		envelope, err := schema.CaptureStreamingQueryIntent(&protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: object.Schema, Name: object.Name}, spec.spec, spec.allowStateReset)
 		if err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: err.Error()}
 		}
 		return envelope, nil
-	case KindTopic:
-		spec := object.Spec.(*ydbdecl.Topic)
+	case *ydbdecl.Topic:
 		invalid := func(err error) *Refusal {
 			return &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
 				Message: fmt.Sprintf("topic %s: %v", quoteName(ydbPath(object.Schema, object.Name)), err)}
@@ -453,22 +454,25 @@ func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 			return nil, invalid(err)
 		}
 		return envelope, nil
-	case KindResourcePool, KindResourcePoolClassifier:
-		kind, settings, noun := schema.ResourcePoolProperties, proto.Message(nil), "resource pool"
-		if spec, ok := object.Spec.(*workload.PoolSpec); ok {
-			settings = schema.PoolSettings(*spec)
-		} else {
-			kind, settings, noun = schema.ResourcePoolClassifierProperties, schema.ClassifierSettings(*object.Spec.(*workload.ClassifierSpec)), "resource pool classifier"
-		}
-		envelope, err := schema.CaptureWorkloadIntent(&protocol.Reference{Engine: "ydb", Kind: kind, Name: object.Name}, settings)
-		if err != nil {
-			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
-				Message: fmt.Sprintf("%s %s: %v", noun, quoteName(object.Name), err)}
-		}
-		return envelope, nil
+	case *workload.PoolSpec:
+		return workloadObject(object, schema.ResourcePoolProperties, schema.PoolSettings(*spec), "resource pool")
+	case *workload.ClassifierSpec:
+		return workloadObject(object, schema.ResourcePoolClassifierProperties, schema.ClassifierSettings(*spec), "resource pool classifier")
 	default:
 		return externalObject(object)
 	}
+}
+
+// workloadObject is the reply's envelope for a resource pool or a
+// classifier, an object of model kind with settings, or the refusal that
+// names it as noun.
+func workloadObject(object Object, kind string, settings proto.Message, noun string) (*protocol.Envelope, *Refusal) {
+	envelope, err := schema.CaptureWorkloadIntent(&protocol.Reference{Engine: "ydb", Kind: kind, Name: object.Name}, settings)
+	if err != nil {
+		return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
+			Message: fmt.Sprintf("%s %s: %v", noun, quoteName(object.Name), err)}
+	}
+	return envelope, nil
 }
 
 // changefeedTables groups the changefeeds of a reading by their table, in the
@@ -648,11 +652,11 @@ func CheckLimits(limits []*protocol.SchemaCoverageLimit) error {
 
 // workloadLimit is the name of the pool or the classifier a header names,
 // which belongs to the database and has no directory.
-func workloadLimit(written string) (string, string) { return "", written }
+func workloadLimit(written string) (directory, name string) { return "", written }
 
 // topicLimit is the directory and the name of the topic a header names: a
 // path relative to the database root, a dot being part of a name.
-func topicLimit(written string) (string, string) {
+func topicLimit(written string) (directory, name string) {
 	path, err := ydbdecl.ParseTopicPath(written)
 	if err != nil {
 		return "", written
@@ -663,7 +667,7 @@ func topicLimit(written string) (string, string) {
 // externalLimit is the directory and the name of the external object a
 // header names: a path relative to the database root, a dot being part of a
 // name.
-func externalLimit(written string) (string, string) {
+func externalLimit(written string) (directory, name string) {
 	path, err := ydbdecl.ParseExternalPath(written)
 	if err != nil {
 		return "", written
@@ -673,7 +677,7 @@ func externalLimit(written string) (string, string) {
 
 // coordinationLimit is the directory and the name of the node a header
 // names: a path, or a name qualified by its directory with a dot.
-func coordinationLimit(written string) (string, string) {
+func coordinationLimit(written string) (directory, name string) {
 	physical := written
 	if !strings.Contains(written, "/") {
 		if ref, ok := parseTableRef(written); ok {
@@ -693,9 +697,9 @@ func coordinationLimit(written string) (string, string) {
 // first `ptah:not-described` line naming its kind and its name. A limit
 // arrives without its document, and the load's first document stands in when
 // no line is found.
-func limitDocument(request *protocol.ReadSQLSchemaRequest, limit *protocol.SchemaCoverageLimit) (int, int, int) {
-	for index, document := range request.GetDocuments() {
-		text := document.GetText()
+func limitDocument(request *protocol.ReadSQLSchemaRequest, limit *protocol.SchemaCoverageLimit) (document, start, end int) {
+	for index, source := range request.GetDocuments() {
+		text := source.GetText()
 		offset := 0
 		for line := range strings.SplitAfterSeq(text, "\n") {
 			if strings.Contains(line, "ptah:not-described") && strings.Contains(strings.ToLower(line), strings.ToLower(limit.GetKind())) &&

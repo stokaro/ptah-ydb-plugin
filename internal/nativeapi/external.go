@@ -55,11 +55,12 @@ func (e *External) Apply(ctx context.Context, database string, value *protocol.E
 	if err != nil {
 		return false, err
 	}
-	before, after, named, err := schema.ExternalOperands(change)
+	parts, err := schema.ExternalOperands(change)
 	if err != nil {
 		return false, err
 	}
-	if named != "" && named != database {
+	before, after := parts.Before, parts.After
+	if parts.Database != "" && parts.Database != database {
 		return false, fmt.Errorf("external object operation targets another database")
 	}
 	owner, err := boundOwner(normalized.NormalizedOwner, database, "external object")

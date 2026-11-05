@@ -19,9 +19,9 @@ import (
 
 // streamingFixture is a locked fixture directory on a line with streaming
 // queries. The cleanup drops the query before the topics it reads.
-func streamingFixture(c *qt.C) (*connection.Connection, string, string, func() *streaming.Spec) {
+func streamingFixture(c *qt.C) (opened *connection.Connection, directory, database string, held func() *streaming.Spec) {
 	c.Helper()
-	opened, directory, database := lockFixture(c)
+	opened, directory, database = lockFixture(c)
 	_, session := accessSession(c)
 	skipWithout(c, session, streaming.Capability)
 	c.Cleanup(func() {
@@ -29,7 +29,7 @@ func streamingFixture(c *qt.C) (*connection.Connection, string, string, func() *
 		defer cancel()
 		emptyTree(ctx, opened, path.Join(database, directory))
 	})
-	held := func() *streaming.Spec {
+	held = func() *streaming.Spec {
 		c.Helper()
 		spec, err := nativeapi.ReadStreamingQuery(c.Context(), opened.DB, database, path.Join(database, directory, "copy"))
 		c.Assert(err, qt.IsNil)

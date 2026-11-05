@@ -169,5 +169,5 @@ func SequenceAlterationStatement(database, path string, change *SequenceAlterati
 	if database == "" {
 		return "", noTextForm("the sequence of column %q changes through an ALTER SEQUENCE, which names the sequence by its absolute path, and the change names no database", change.Held.GetName())
 	}
-	return SequenceStatement(ydbsequence.Path(database, "", path, change.Held.GetName()), change.Settings, false), nil
+	return SequenceStatement(ydbsequence.Path(database, "", path, change.Held.GetName()), change.Settings), nil
 }

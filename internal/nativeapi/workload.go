@@ -159,7 +159,7 @@ func (w *Workload) Apply(ctx context.Context, database string, value *protocol.E
 	if err != nil {
 		return false, err
 	}
-	if subject := differs(held, changes, true); subject != "" {
+	if subject := differs(held, changes, beforeSide); subject != "" {
 		return false, &Refusal{Err: fmt.Errorf("%s changed since the plan read it", subject)}
 	}
 	if err := beforeWrite(ctx); err != nil {
@@ -177,7 +177,7 @@ func (w *Workload) Apply(ctx context.Context, database string, value *protocol.E
 	if err != nil {
 		return true, err
 	}
-	if subject := differs(held, changes, false); subject != "" {
+	if subject := differs(held, changes, afterSide); subject != "" {
 		return true, fmt.Errorf("%s was not confirmed: the database holds it otherwise", subject)
 	}
 	return true, nil
@@ -209,13 +209,22 @@ func RoutedRead(read func(context.Context) (HeldWorkload, error)) func(context.C
 	}
 }
 
-// differs names the first object held does not carry as a change's before
-// side, or its after side once the operation ran, and is empty when held
-// carries them all.
-func differs(held HeldWorkload, changes schema.WorkloadChanges, before bool) string {
+// changeSide names one side of a workload change.
+type changeSide int
+
+const (
+	// beforeSide is the object as the database held it when the plan read it.
+	beforeSide changeSide = iota
+	// afterSide is the object as the change's operation leaves it.
+	afterSide
+)
+
+// differs names the first object held does not carry as side of its change,
+// and is empty when held carries them all.
+func differs(held HeldWorkload, changes schema.WorkloadChanges, side changeSide) string {
 	for _, change := range changes.Pools {
 		want := change.After
-		if before {
+		if side == beforeSide {
 			want = change.Before
 		}
 		have, found := held.Pools[change.Name]
@@ -225,7 +234,7 @@ func differs(held HeldWorkload, changes schema.WorkloadChanges, before bool) str
 	}
 	for _, change := range changes.Classifiers {
 		want := change.After
-		if before {
+		if side == beforeSide {
 			want = change.Before
 		}
 		have, found := held.Classifiers[change.Name]

@@ -290,8 +290,8 @@ func TestRebuildPlanRefusesVectorAndFullTextIndexes(t *testing.T) {
 		name          string
 		desired, held []string
 	}{
-		{"a declared vector index", []string{vectorIndexes(false)}, nil},
-		{"a held vector index", nil, []string{vectorIndexes(true)}},
+		{"a declared vector index", []string{declaredVectorIndexes()}, nil},
+		{"a held vector index", nil, []string{heldVectorIndexes()}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

@@ -143,7 +143,7 @@ func sequenceSettingsRefusal(subject, serialType string, settings ydbsequence.Se
 	if !caps[ydbsequence.Options] {
 		return keyRefusal(ydbsequence.Options, "giving the sequence of "+subject+" a start or an increment")
 	}
-	if reason := ydbsequence.RangeRefusal(serialType, settings, caps[ydbsequence.KeepsRange]); reason != "" {
+	if reason := ydbsequence.RangeRefusal(serialType, settings, caps); reason != "" {
 		return keyRefusal(ydbsequence.KeepsRange, "giving the sequence of "+subject+" a start or an increment ("+reason+")")
 	}
 	return ""
@@ -235,29 +235,60 @@ func createdSequenceStatements(database, path string, request *Ydb_Table.CreateT
 		case database == "":
 			return nil, noTextForm("the sequence of column %q takes its start and increment from an ALTER SEQUENCE, which names the sequence by its absolute path, and the creation names no database", column.GetName())
 		}
-		statements = append(statements, SequenceStatement(ydbsequence.Path(database, "", path, column.GetName()), settings, settings.Start != 1))
+		statements = append(statements, newSequenceStatement(ydbsequence.Path(database, "", path, column.GetName()), settings))
 	}
 	return statements, nil
 }
 
 // SequenceStatement is the ALTER SEQUENCE that gives the sequence at the
 // absolute path absolute the settings, as the host's embedded engine writes
-// it: START WITH and INCREMENT BY always, and RESTART WITH the start when
-// restart is set. YDB moves the next value only on a RESTART.
-func SequenceStatement(absolute string, settings ydbsequence.Settings, restart bool) string {
-	statement := fmt.Sprintf("ALTER SEQUENCE %s START WITH %d INCREMENT BY %d", QuoteIdentifier(absolute), settings.Start, settings.Increment)
-	if restart {
+// it: START WITH and INCREMENT BY, and no RESTART. YDB moves the next value
+// only on a RESTART.
+func SequenceStatement(absolute string, settings ydbsequence.Settings) string {
+	return sequenceSettings(absolute, settings) + ";"
+}
+
+// newSequenceStatement is the ALTER SEQUENCE that gives a sequence just
+// created at the absolute path absolute the settings: START WITH and
+// INCREMENT BY, and RESTART WITH the start when it is not 1, the value a new
+// sequence starts at.
+func newSequenceStatement(absolute string, settings ydbsequence.Settings) string {
+	statement := sequenceSettings(absolute, settings)
+	if settings.Start != 1 {
 		statement += fmt.Sprintf(" RESTART WITH %d", settings.Start)
 	}
 	return statement + ";"
 }
 
-// serialSpelling is the type a comparison reads for a column stored as the
-// integer type storage: its Serial type when serial holds and one exists.
-func serialSpelling(storage string, serial bool) string {
-	if !serial {
+// sequenceSettings is the ALTER SEQUENCE ... START WITH ... INCREMENT BY ...
+// clause both sequence statements open with.
+func sequenceSettings(absolute string, settings ydbsequence.Settings) string {
+	return fmt.Sprintf("ALTER SEQUENCE %s START WITH %d INCREMENT BY %d", QuoteIdentifier(absolute), settings.Start, settings.Increment)
+}
+
+// declaredSpelling is the type a comparison reads for column, declared as the
+// integer type storage: its Serial type when the column is a Serial and one
+// exists.
+func declaredSpelling(storage string, column *Ydb_Table.ColumnMeta) string {
+	if SerialTypeOf(column) == "" {
 		return storage
 	}
+	return serialSpelling(storage)
+}
+
+// heldSpelling is the type a comparison reads for held, a column stored as
+// the integer type storage: its Serial type when the column is a Serial and
+// one exists.
+func heldSpelling(storage string, held *protocol.ObservedColumn) string {
+	if !held.GetAutoIncrement() {
+		return storage
+	}
+	return serialSpelling(storage)
+}
+
+// serialSpelling is the Serial type of the integer type storage, or storage
+// when it has none.
+func serialSpelling(storage string) string {
 	if spelling, ok := ydbsequence.SerialFor(storage); ok {
 		return spelling
 	}

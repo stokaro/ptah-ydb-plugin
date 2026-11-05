@@ -136,8 +136,8 @@ func (p *Provider) FinishTransaction(ctx context.Context, request *protocol.Fini
 		}
 	}
 	if record.tx != nil {
-		s.closeStatements(request.TransactionId, false)
-		s.closeMetadataReaders(request.TransactionId, false)
+		s.closeTransactionStatements(request.TransactionId)
+		s.closeTransactionMetadataReaders(request.TransactionId)
 		if request.Action == protocol.FinishTransactionRequest_COMMIT && !record.failed {
 			guarded, stop, err := s.guard(ctx)
 			if err != nil {
@@ -212,8 +212,8 @@ func (s *session) abandonTransaction(ctx context.Context, id string) {
 	record.failed = true
 	rollback, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
-	s.closeStatements(id, false)
-	s.closeMetadataReaders(id, false)
+	s.closeTransactionStatements(id)
+	s.closeTransactionMetadataReaders(id)
 	s.finishTransaction(rollback, record, protocol.FinishTransactionRequest_ROLLBACK)
 	record.outcome = protocol.TransactionResult_ROLLED_BACK
 	s.active = ""

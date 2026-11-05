@@ -47,9 +47,12 @@ func NativeDefault(column *protocol.DeclaredColumn, spelling string, caps map[st
 		if err != nil {
 			return nil, err
 		}
-		kind, err := schema.StorageType(spelling, column.Nullable)
+		kind, err := schema.StorageType(spelling)
 		if err != nil {
 			return nil, err
+		}
+		if column.Nullable {
+			kind = schema.Optional(kind)
 		}
 		return &Ydb.TypedValue{Type: kind, Value: &Ydb.Value{Value: &Ydb.Value_Int64Value{Int64Value: micros}}}, nil
 	}
@@ -57,9 +60,12 @@ func NativeDefault(column *protocol.DeclaredColumn, spelling string, caps map[st
 	if err != nil {
 		return nil, err
 	}
-	kind, err := schema.StorageType(spelling, column.Nullable)
+	kind, err := schema.StorageType(spelling)
 	if err != nil {
 		return nil, err
+	}
+	if column.Nullable {
+		kind = schema.Optional(kind)
 	}
 	held, err := nativeValue(spelling, canonical)
 	if err != nil {

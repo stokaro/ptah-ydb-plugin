@@ -60,7 +60,7 @@ func NormalizeTopicChange(input *protocol.ValueInput) (*protocol.NormalizedValue
 
 // TopicOperands returns a topic change's normalized operands, nil for an
 // absent one.
-func TopicOperands(change *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error) {
+func TopicOperands(change *protocol.Envelope) (before, after *protocol.Envelope, err error) {
 	return topicChanges.operands(change)
 }
 
@@ -82,7 +82,7 @@ func TopicOperationChange(operation *protocol.Envelope) *protocol.Envelope {
 
 // TopicSpecs reads a topic change's operands as the host's topic
 // specifications, nil for an absent one.
-func TopicSpecs(change *protocol.Envelope) (*ydbdecl.Topic, *ydbdecl.Topic, error) {
+func TopicSpecs(change *protocol.Envelope) (current, desired *ydbdecl.Topic, err error) {
 	before, after, err := TopicOperands(change)
 	if err != nil {
 		return nil, nil, err
@@ -90,8 +90,7 @@ func TopicSpecs(change *protocol.Envelope) (*ydbdecl.Topic, *ydbdecl.Topic, erro
 	return topicOperandSpecs(before, after)
 }
 
-func topicOperandSpecs(before, after *protocol.Envelope) (*ydbdecl.Topic, *ydbdecl.Topic, error) {
-	var current, desired *ydbdecl.Topic
+func topicOperandSpecs(before, after *protocol.Envelope) (current, desired *ydbdecl.Topic, err error) {
 	if before != nil {
 		observed, err := ObservedTopic(before)
 		if err != nil {
@@ -224,6 +223,6 @@ func ValidateTopicAccess(before, after *protocol.Envelope) error {
 
 // TopicPair reads a read topic and its declaration as the host's topic
 // specifications.
-func TopicPair(current, desired *protocol.Envelope) (*ydbdecl.Topic, *ydbdecl.Topic, error) {
+func TopicPair(current, desired *protocol.Envelope) (read, declared *ydbdecl.Topic, err error) {
 	return topicOperandSpecs(current, desired)
 }

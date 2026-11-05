@@ -16,10 +16,10 @@ import (
 // commonDirectoryAccess is the host's step that grants, or revokes, LIST on
 // the directory, with the footprint the host gives it: an alteration of the
 // directory's access, named as a schema.
-func commonDirectoryAccess(directory string, revoke bool) *protocol.CommonPlanningStep {
+func commonDirectoryAccess(directory string, verb accessVerb) *protocol.CommonPlanningStep {
 	grant := &protocol.SQLGrant{Role: "readers", Privileges: []string{"LIST"}, Target: &protocol.Reference{Engine: "ydb", Kind: "schema", Name: directory}}
 	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_Grant{Grant: grant}}
-	if revoke {
+	if verb == revokeAccess {
 		change.Operation = &protocol.CommonObjectChange_Revoke{Revoke: grant}
 	}
 	subject := &protocol.ComparisonIdentity{Kind: "schema", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: &protocol.ComparisonPart{},
@@ -31,11 +31,11 @@ func commonDirectoryAccess(directory string, revoke bool) *protocol.CommonPlanni
 
 // directoryPlan plans a coordination node at app/node beside a host step on
 // the access of directory.
-func directoryPlan(c *qt.C, action, directory string, revoke bool) (*protocol.PlannedFeatures, *protocol.CommonPlanningStep) {
+func directoryPlan(c *qt.C, action, directory string, verb accessVerb) (*protocol.PlannedFeatures, *protocol.CommonPlanningStep) {
 	c.Helper()
 	request := nativePlan(c, action)
 	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
-	access := commonDirectoryAccess(directory, revoke)
+	access := commonDirectoryAccess(directory, verb)
 	request.CommonSteps = []*protocol.CommonPlanningStep{access}
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -51,14 +51,14 @@ func directoryPlan(c *qt.C, action, directory string, revoke bool) (*protocol.Pl
 func TestDirectoryAccessFollowsACreationBelowIt_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, directory string
-		revoke          bool
+		verb            accessVerb
 	}{
 		{name: "a grant on the directory", directory: "app"},
-		{name: "a revoke on the directory", directory: "app", revoke: true},
+		{name: "a revoke on the directory", directory: "app", verb: revokeAccess},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			result, access := directoryPlan(c, "create", test.directory, test.revoke)
+			result, access := directoryPlan(c, "create", test.directory, test.verb)
 			c.Assert(result.Diagnostics, qt.HasLen, 0)
 			c.Assert(result.Contributions, qt.HasLen, 1)
 			step := result.Contributions[0].Steps[0]
@@ -81,7 +81,7 @@ func TestDirectoryAccessLeavesOtherOperationsUnordered_HappyPath(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			result, _ := directoryPlan(c, test.action, test.directory, false)
+			result, _ := directoryPlan(c, test.action, test.directory, grantAccess)
 			c.Assert(result.Diagnostics, qt.HasLen, 0)
 			c.Assert(result.Contributions, qt.HasLen, 1)
 			c.Assert(result.Contributions[0].Dependencies, qt.HasLen, 0)
@@ -104,7 +104,7 @@ func TestDirectoryAccessWithAForgedFootprint_FailurePath(t *testing.T) {
 			c := testcheck.New(t)
 			request := nativePlan(c, "create")
 			request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
-			access := commonDirectoryAccess("app", false)
+			access := commonDirectoryAccess("app", grantAccess)
 			access.Metadata.Effects[0].Action = test.action
 			access.Metadata.Effects[0].Subject.Name = testcomparison.Part(test.effect)
 			request.CommonSteps = []*protocol.CommonPlanningStep{access}

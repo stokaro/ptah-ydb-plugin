@@ -49,9 +49,9 @@ func hostSource(c *qt.C, flag, name, content string) string {
 
 // hostManifest returns the pinned host binary and a provider manifest that
 // selects this provider for ydb. The test is skipped without the host binary.
-func hostManifest(c *qt.C) (string, string) {
+func hostManifest(c *qt.C) (host, manifest string) {
 	c.Helper()
-	host := os.Getenv("PTAH_HOST_TEST_BIN")
+	host = os.Getenv("PTAH_HOST_TEST_BIN")
 	if host == "" {
 		c.Skip("PTAH_HOST_TEST_BIN is required for the external host contract")
 	}

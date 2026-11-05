@@ -220,8 +220,10 @@ func pluginMeaning(c *qt.C, reading *yqlschema.Reading) meaning {
 		result.RevokedGrants = append(result.RevokedGrants, element(c, marshal(c, grant)))
 	}
 	for _, object := range yqlschema.SortedObjects(reading) {
+		payload, err := yqlschema.ObjectPayload(object)
+		c.Assert(err, qt.IsNil)
 		result.Objects = append(result.Objects, objectMeaning{Kind: string(object.Kind), Schema: object.Schema, Parent: object.Parent, Name: object.Name,
-			Payload: decodeAny(c, marshal(c, yqlschema.ObjectPayload(object)))})
+			Payload: decodeAny(c, marshal(c, payload))})
 	}
 	for _, file := range reading.Files {
 		result.Files = append(result.Files, fileMeaning{Objects: file.Objects, Guards: file.Guards, Tables: file.Tables})

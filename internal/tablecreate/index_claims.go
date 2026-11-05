@@ -84,7 +84,7 @@ func claimIndexSteps(owner *protocol.Reference, table *protocol.PlanningTable, s
 	}
 	// A changed index is dropped before it is added again under its name.
 	slices.SortStableFunc(changes, func(a, b indexChange) int {
-		return boolOrder(a.add != nil) - boolOrder(b.add != nil)
+		return a.order() - b.order()
 	})
 	return changes, "", nil
 }
@@ -135,8 +135,10 @@ func heldIndex(current *protocol.ObservedTable, held *native.IndexObservations, 
 	return result
 }
 
-func boolOrder(value bool) int {
-	if value {
+// order is where a change runs among a table's index changes: an addition,
+// 1, after any other change, 0.
+func (c indexChange) order() int {
+	if c.add != nil {
 		return 1
 	}
 	return 0

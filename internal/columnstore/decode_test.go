@@ -34,12 +34,15 @@ var ttlDescription []byte
 //go:embed testdata/26-2-epoch.json
 var epochDescription []byte
 
-func column(name string, typ Ydb.Type_PrimitiveTypeId, nullable bool) *native.ColumnMeta {
-	value := &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: typ}}
-	if nullable {
-		value = &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: value}}}
-	}
-	return &native.ColumnMeta{Name: name, Type: value}
+func column(name string, typ Ydb.Type_PrimitiveTypeId) *native.ColumnMeta {
+	return &native.ColumnMeta{Name: name, Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: typ}}}
+}
+
+// nullableColumn is column name of the optional type typ.
+func nullableColumn(name string, typ Ydb.Type_PrimitiveTypeId) *native.ColumnMeta {
+	result := column(name, typ)
+	result.Type = &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: result.Type}}}
+	return result
 }
 
 // table writes the table service's description of a column table hashed by id.
@@ -53,13 +56,13 @@ func table(name string, columns ...*native.ColumnMeta) *native.ColumnTableDescri
 }
 
 func indexTable() *native.ColumnTableDescribeResult {
-	return table("col_index_probe", column("id", Ydb.Type_UINT64, false), column("body", Ydb.Type_UTF8, true))
+	return table("col_index_probe", column("id", Ydb.Type_UINT64), nullableColumn("body", Ydb.Type_UTF8))
 }
 
 // tieredTable is the table service's description of the TTL fixtures: two
 // tiers on column at, the first moving rows to /local/col_archive.
 func tieredTable(name string, typ Ydb.Type_PrimitiveTypeId, unit Ydb_Table.ValueSinceUnixEpochModeSettings_Unit) *native.ColumnTableDescribeResult {
-	described := table(name, column("at", typ, false), column("id", Ydb.Type_UINT64, false))
+	described := table(name, column("at", typ), column("id", Ydb.Type_UINT64))
 	described.PrimaryKey = []string{"at", "id"}
 	expression := func(seconds uint32) *native.TtlTier {
 		if unit == Ydb_Table.ValueSinceUnixEpochModeSettings_UNIT_UNSPECIFIED {
@@ -82,9 +85,9 @@ func TestCapturedDescriptionsPreserveStorage(t *testing.T) {
 		partitions uint64
 		indexes    int
 	}{
-		{"old", oldDescription, table("col_probe", column("id", Ydb.Type_UINT64, false), column("body", Ydb.Type_UTF8, true), column("at", Ydb.Type_TIMESTAMP, false)), 64, 0},
+		{"old", oldDescription, table("col_probe", column("id", Ydb.Type_UINT64), nullableColumn("body", Ydb.Type_UTF8), column("at", Ydb.Type_TIMESTAMP)), 64, 0},
 		{"indexes", indexDescription, indexTable(), 64, 5},
-		{"inline", inlineDescription, table("ptah_inline_probe", column("id", Ydb.Type_UINT64, false), column("body", Ydb.Type_UTF8, true)), 1, 2},
+		{"inline", inlineDescription, table("ptah_inline_probe", column("id", Ydb.Type_UINT64), nullableColumn("body", Ydb.Type_UTF8)), 1, 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

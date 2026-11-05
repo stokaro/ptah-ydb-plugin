@@ -16,15 +16,17 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/history"
 )
 
-func (p *Provider) historySession(ctx context.Context, scope *protocol.HistoryScope) (*session, history.Store, func(), error) {
+// historySession locks the session scope names and resolves the history store
+// the scope selects. On success the caller unlocks the session's mutex.
+func (p *Provider) historySession(ctx context.Context, scope *protocol.HistoryScope) (*session, history.Store, error) {
 	s, err := p.lookup(scope.GetSessionId())
 	if err != nil {
-		return nil, history.Store{}, nil, err
+		return nil, history.Store{}, err
 	}
 	s.mu.Lock()
-	fail := func(err error) (*session, history.Store, func(), error) {
+	fail := func(err error) (*session, history.Store, error) {
 		s.mu.Unlock()
-		return nil, history.Store{}, nil, err
+		return nil, history.Store{}, err
 	}
 	if s.closed {
 		return fail(runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed"))
@@ -46,7 +48,7 @@ func (p *Provider) historySession(ctx context.Context, scope *protocol.HistorySc
 	if err != nil {
 		return fail(authored.Status(codes.InvalidArgument, err))
 	}
-	return s, store, s.mu.Unlock, nil
+	return s, store, nil
 }
 
 func historyResult(scope *protocol.HistoryScope, id string, outcome protocol.HistoryResult_Outcome, code string) *protocol.HistoryResult {
@@ -59,11 +61,11 @@ func (p *Provider) PrepareHistory(ctx context.Context, request *protocol.Prepare
 	if err := provider.ValidatePrepareHistoryRequest(request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	s, store, unlock, err := p.historySession(ctx, request.Scope)
+	s, store, err := p.historySession(ctx, request.Scope)
 	if err != nil {
 		return nil, err
 	}
-	defer unlock()
+	defer s.mu.Unlock()
 	guarded, stop, err := s.guard(ctx)
 	if err != nil {
 		return historyResult(request.Scope, request.RequestId, protocol.HistoryResult_REFUSED, "ydb.lock-guarantee-lost"), nil
@@ -89,11 +91,11 @@ func (p *Provider) ReadHistory(ctx context.Context, request *protocol.ReadHistor
 	if err := provider.ValidateReadHistoryRequest(request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	s, store, unlock, err := p.historySession(ctx, request.Scope)
+	s, store, err := p.historySession(ctx, request.Scope)
 	if err != nil {
 		return nil, err
 	}
-	defer unlock()
+	defer s.mu.Unlock()
 	defer func() {
 		if err != nil && request.Scope.TransactionId != "" {
 			s.transactions[request.Scope.TransactionId].failed = true
@@ -143,11 +145,11 @@ func (p *Provider) MutateHistory(ctx context.Context, request *protocol.MutateHi
 	if err := provider.ValidateMutateHistoryRequest(request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	s, store, unlock, err := p.historySession(ctx, request.Scope)
+	s, store, err := p.historySession(ctx, request.Scope)
 	if err != nil {
 		return nil, err
 	}
-	defer unlock()
+	defer s.mu.Unlock()
 	guarded, stop, err := s.guard(ctx)
 	if err != nil {
 		return historyResult(request.Scope, request.RequestId, protocol.HistoryResult_REFUSED, "ydb.lock-guarantee-lost"), nil

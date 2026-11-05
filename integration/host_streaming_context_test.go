@@ -18,13 +18,16 @@ import (
 )
 
 // contextTopics declares, in the fixture directory, the topic events with
-// the retention given, and the table items when withTable is set.
-func contextTopics(directory, retention string, withTable bool) string {
-	text := "topics:\n  events:\n    schema: " + directory + "\n    retention_period: " + retention + "\n"
-	if withTable {
-		text += "tables:\n  items:\n    schema: " + directory + "\n    columns:\n      id: {type: Uint64, primary: true}\n      ts: {type: Timestamp}\n"
-	}
-	return text
+// the retention given.
+func contextTopics(directory, retention string) string {
+	return "topics:\n  events:\n    schema: " + directory + "\n    retention_period: " + retention + "\n"
+}
+
+// contextTopicsAndTable declares the topic of contextTopics and, beside it,
+// the table items.
+func contextTopicsAndTable(directory, retention string) string {
+	return contextTopics(directory, retention) +
+		"tables:\n  items:\n    schema: " + directory + "\n    columns:\n      id: {type: Uint64, primary: true}\n      ts: {type: Timestamp}\n"
 }
 
 // outsideReader is a fixture directory whose topic events a streaming query
@@ -64,7 +67,7 @@ func (f *outsideReader) both() string { return f.directory + "," + f.outer }
 // the retention given, the topic sink, and the query copy between them,
 // running or stopped.
 func (f *outsideReader) declared(retention, run string) string {
-	return contextTopics(f.directory, retention, false) + "  sink:\n    schema: " + f.outer + "\n" +
+	return contextTopics(f.directory, retention) + "  sink:\n    schema: " + f.outer + "\n" +
 		"streaming_queries:\n  copy:\n    schema: " + f.outer + "\n    text: \"INSERT INTO `" + f.outer + "/sink` SELECT * FROM `" + f.directory + "/events`;\"\n    run: " + run + "\n"
 }
 
@@ -108,12 +111,12 @@ func TestHostChangesAnInputUnderAFilteredRead_HappyPath(t *testing.T) {
 		defer cancel()
 		emptyTree(ctx, opened, path.Join(database, directory))
 	})
-	applyRuns(c, directory, "yaml", contextTopics(directory, "PT24H", true))
-	applyRuns(c, directory, "yaml", contextTopics(directory, "PT48H", true))
+	applyRuns(c, directory, "yaml", contextTopicsAndTable(directory, "PT24H"))
+	applyRuns(c, directory, "yaml", contextTopicsAndTable(directory, "PT48H"))
 	topic, found := describedTopic(c, opened, database, directory, "events")
 	c.Assert(found, qt.IsTrue)
 	c.Assert(topic.Retention, qt.Equals, 48*time.Hour)
-	applyRuns(c, directory, "yaml", contextTopics(directory, "PT48H", false))
+	applyRuns(c, directory, "yaml", contextTopics(directory, "PT48H"))
 	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.DeepEquals, []string{"events"})
 }
 
@@ -134,11 +137,11 @@ func TestHostChangesAnInputAQueryOutsideTheScopeReads_HappyPath(t *testing.T) {
 	c.Assert([]any{f.retention(c), f.running(c)}, qt.DeepEquals, []any{48 * time.Hour, true})
 
 	applyRuns(c, f.both(), "yaml", f.declared("PT48H", "false"))
-	output, err := hostApplySelected(c, f.directory, "yaml", contextTopics(f.directory, "PT72H", false))
+	output, err := hostApplySelected(c, f.directory, "yaml", contextTopics(f.directory, "PT72H"))
 	skipWithoutContextPerService(c, output)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
 	c.Assert(output, qt.Matches, `(?s).*Schema apply completed successfully.*`)
-	c.Assert(hostPlanned(c, f.directory, "yaml", contextTopics(f.directory, "PT72H", false)), qt.HasLen, 0)
+	c.Assert(hostPlanned(c, f.directory, "yaml", contextTopics(f.directory, "PT72H")), qt.HasLen, 0)
 	c.Assert([]any{f.retention(c), f.running(c)}, qt.DeepEquals, []any{72 * time.Hour, false})
 }
 
@@ -153,7 +156,7 @@ func TestHostRefusesAnInputChangeAQueryOutsideTheScopeReads_FailurePath(t *testi
 	applyRuns(c, f.both(), "yaml", f.declared("PT24H", "true"))
 	refusal := `streaming query "` + f.outer + `/copy" outside the command's scope reads a changed input; include its directory in the scope so the plan can stop and restart it`
 	for _, test := range []struct{ name, source string }{
-		{"a changed retention", contextTopics(f.directory, "PT48H", false)},
+		{"a changed retention", contextTopics(f.directory, "PT48H")},
 		{"a dropped topic", "topics: {}\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

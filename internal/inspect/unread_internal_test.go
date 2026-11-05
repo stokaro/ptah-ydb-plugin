@@ -28,14 +28,14 @@ func replicaRef() *protocol.Reference {
 func TestUnreadReplicas_HappyPath(t *testing.T) {
 	t.Run("a replica no replication writes, every replication read", func(t *testing.T) {
 		c := testcheck.New(t)
-		unread := unreadReplicas([]*protocol.Reference{replicaRef()}, []string{"other"}, true)
+		unread := unreadReplicas([]*protocol.Reference{replicaRef()}, replicationTargets{paths: []string{"other"}, complete: true})
 		c.Assert(unread, qt.HasLen, 1)
 		c.Assert(proto.Equal(unread[0].GetTable(), replicaRef()), qt.IsTrue)
 		c.Assert(unread[0].GetDiagnostic().GetReason(), qt.Equals, orphanReason)
 	})
 	t.Run("a replica of a replication the read could not describe", func(t *testing.T) {
 		c := testcheck.New(t)
-		unread := unreadReplicas([]*protocol.Reference{replicaRef()}, nil, false)
+		unread := unreadReplicas([]*protocol.Reference{replicaRef()}, replicationTargets{})
 		c.Assert(unread, qt.HasLen, 1)
 		c.Assert(unread[0].GetDiagnostic().GetReason(), qt.Equals, "dir.rep is a replica table of an async replication this read "+
 			"cannot describe, and YDB keeps a replica table read-only (`path is an async replica table`); remove it from the schema")
@@ -44,7 +44,7 @@ func TestUnreadReplicas_HappyPath(t *testing.T) {
 		c := testcheck.New(t)
 		ref := replicaRef()
 		ref.Name = strings.Repeat("r", 300)
-		unread := unreadReplicas([]*protocol.Reference{ref}, nil, true)
+		unread := unreadReplicas([]*protocol.Reference{ref}, replicationTargets{complete: true})
 		c.Assert(unread, qt.HasLen, 1)
 		c.Assert(unread[0].GetDiagnostic().GetReason(), qt.Equals, strings.Replace(orphanReason, "dir.rep", "it", 1))
 	})
@@ -56,7 +56,7 @@ func TestUnreadReplicas_WrittenByAReplication(t *testing.T) {
 	for _, target := range []string{"dir/rep", "dir"} {
 		t.Run(target, func(t *testing.T) {
 			c := testcheck.New(t)
-			c.Assert(unreadReplicas([]*protocol.Reference{replicaRef()}, []string{target}, true), qt.HasLen, 0)
+			c.Assert(unreadReplicas([]*protocol.Reference{replicaRef()}, replicationTargets{paths: []string{target}, complete: true}), qt.HasLen, 0)
 		})
 	}
 }

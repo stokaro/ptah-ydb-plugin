@@ -47,9 +47,9 @@ func serverVersion(c *qt.C, opened *connection.Connection) string {
 // connectingUser creates a user with a password and the rights given on the
 // database, and drops it when the test ends. Users belong to the whole
 // cluster, so the name is the test's own.
-func connectingUser(c *qt.C, opened *connection.Connection, database string, rights ...string) (string, string) {
+func connectingUser(c *qt.C, opened *connection.Connection, database string, rights ...string) (user, password string) {
 	c.Helper()
-	user, password := "ptahflags"+strings.ToLower(rand.Text()[:10]), "Pw"+rand.Text()
+	user, password = "ptahflags"+strings.ToLower(rand.Text()[:10]), "Pw"+rand.Text()
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE USER "+user+" PASSWORD '"+password+"'"), qt.IsNil)
 	c.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -91,18 +91,18 @@ func TestSessionNeedsAnAnsweringMonitoringEndpoint_FailurePath(t *testing.T) {
 // connect, because that line's endpoint checks no right beyond the login.
 func TestSessionReadsTheFlagsAsTheConnectingUser_HappyPath(t *testing.T) {
 	for _, test := range []struct {
-		name     string
-		before26 bool
-		rights   []string
+		name   string
+		line   lineFamily
+		rights []string
 	}{
-		{name: "a user who may describe the database, on a 26.x line", rights: []string{"CONNECT", "DESCRIBE SCHEMA"}},
-		{name: "a user who may describe the database, on a 25.x line", before26: true, rights: []string{"CONNECT", "DESCRIBE SCHEMA"}},
-		{name: "a user who may only connect, on a 25.x line", before26: true, rights: []string{"CONNECT"}},
+		{name: "a user who may describe the database, on a 26.x line", line: lines26, rights: []string{"CONNECT", "DESCRIBE SCHEMA"}},
+		{name: "a user who may describe the database, on a 25.x line", line: lines25, rights: []string{"CONNECT", "DESCRIBE SCHEMA"}},
+		{name: "a user who may only connect, on a 25.x line", line: lines25, rights: []string{"CONNECT"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			opened, _, database := inspectionFixture(c)
-			skipOnLine(c, test.before26, serverVersion(c, opened))
+			skipOnLine(c, test.line, serverVersion(c, opened))
 			user, password := connectingUser(c, opened, database, test.rights...)
 			client := startProviderFor(c)
 			admin, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: testAddress(c, nil, "", "")})
@@ -118,13 +118,23 @@ func TestSessionReadsTheFlagsAsTheConnectingUser_HappyPath(t *testing.T) {
 	}
 }
 
+// lineFamily is the release lines a test row describes. The two families'
+// viewers check different rights, as measured by the host on 25.1.4.7 and
+// 26.2.1.14.
+type lineFamily int
+
+const (
+	// lines26 is a 26.x line or a later one.
+	lines26 lineFamily = iota
+	// lines25 is a line before 26.0, which on the test servers is 25.1.
+	lines25
+)
+
 // skipOnLine skips a row on the line it does not describe: one meant for a
 // 25.x line on a later one, and one meant for a 26.x line on an earlier one.
-// The two lines' viewers check different rights, as measured by the host on
-// 25.1.4.7 and 26.2.1.14.
-func skipOnLine(c *qt.C, before26 bool, version string) {
+func skipOnLine(c *qt.C, described lineFamily, version string) {
 	c.Helper()
-	if before26 == releaseline.AtLeast(version, 26, 0) {
+	if releaseline.AtLeast(version, 26, 0) != (described == lines26) {
 		c.Skipf("the row describes another release line than %s", version)
 	}
 }
@@ -137,7 +147,7 @@ func skipOnLine(c *qt.C, before26 bool, version string) {
 func TestSessionReadsTheFlagsAsTheConnectingUser_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, _, database := inspectionFixture(c)
-	skipOnLine(c, false, serverVersion(c, opened))
+	skipOnLine(c, lines26, serverVersion(c, opened))
 	user, password := connectingUser(c, opened, database, "CONNECT")
 	client := startProviderFor(c, provider.ErrorReasonsFeature)
 

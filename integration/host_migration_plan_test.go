@@ -14,21 +14,31 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
-// migrationEntities declares the items table of directory with generic SQL
-// types, and the obsolete table when it is given.
-func migrationEntities(directory string, before bool) string {
-	source := "package entities\n\n//ptah:schema:table name=\"items\" schema=\"" + directory + "\"\ntype Item struct {\n" +
+// migrationItems opens the declaration of the items table of directory with
+// generic SQL types: its columns id, name and sku, which both declarations of
+// the migration hold.
+func migrationItems(directory string) string {
+	return "package entities\n\n//ptah:schema:table name=\"items\" schema=\"" + directory + "\"\ntype Item struct {\n" +
 		"\t//ptah:schema:field name=\"id\" type=\"BIGINT\" primary\n\tID int64\n" +
 		"\t//ptah:schema:field name=\"name\" type=\"TEXT\"\n\tName string\n" +
 		"\t//ptah:schema:field name=\"sku\" type=\"VARCHAR(32)\"\n\tSKU string\n"
-	if before {
-		return source + "\t//ptah:schema:field name=\"legacy\" type=\"TEXT\"\n\tLegacy string\n" +
-			"\t//ptah:schema:index name=\"idx_items_sku\" fields=\"sku\"\n\t_ int\n" +
-			"\t//ptah:schema:index name=\"idx_items_legacy\" fields=\"legacy\"\n\t__ int\n}\n\n" +
-			"//ptah:schema:table name=\"obsolete\" schema=\"" + directory + "\"\ntype Obsolete struct {\n" +
-			"\t//ptah:schema:field name=\"id\" type=\"INTEGER\" primary\n\tID int32\n}\n"
-	}
-	return source + "\t//ptah:schema:field name=\"stock\" type=\"INTEGER\"\n\tStock int32\n" +
+}
+
+// migrationEntitiesBefore declares the schema the migration starts from: the
+// items table with column legacy and indexes on sku and legacy, and the
+// obsolete table.
+func migrationEntitiesBefore(directory string) string {
+	return migrationItems(directory) + "\t//ptah:schema:field name=\"legacy\" type=\"TEXT\"\n\tLegacy string\n" +
+		"\t//ptah:schema:index name=\"idx_items_sku\" fields=\"sku\"\n\t_ int\n" +
+		"\t//ptah:schema:index name=\"idx_items_legacy\" fields=\"legacy\"\n\t__ int\n}\n\n" +
+		"//ptah:schema:table name=\"obsolete\" schema=\"" + directory + "\"\ntype Obsolete struct {\n" +
+		"\t//ptah:schema:field name=\"id\" type=\"INTEGER\" primary\n\tID int32\n}\n"
+}
+
+// migrationEntitiesAfter declares the schema the migration ends at: the items
+// table with column stock and an index on name, and no obsolete table.
+func migrationEntitiesAfter(directory string) string {
+	return migrationItems(directory) + "\t//ptah:schema:field name=\"stock\" type=\"INTEGER\"\n\tStock int32\n" +
 		"\t//ptah:schema:index name=\"idx_items_name\" fields=\"name\"\n\t_ int\n}\n"
 }
 
@@ -47,11 +57,11 @@ func TestHostPlansAMigrationAgainstTheLiveDatabase_HappyPath(t *testing.T) {
 			c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute(table)+"`"), qt.IsNil)
 		}
 	})
-	created, err := hostApplySource(c, directory, "go", migrationEntities(directory, true))
+	created, err := hostApplySource(c, directory, "go", migrationEntitiesBefore(directory))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "UPSERT INTO `"+absolute("items")+"` (`id`, `name`, `sku`, `legacy`) "+
 		"VALUES (1l, 'one'u, 'A-1'u, 'x'u), (2l, 'two'u, 'B-2'u, 'y'u)"), qt.IsNil)
-	after := migrationEntities(directory, false)
+	after := migrationEntitiesAfter(directory)
 
 	migrated, migrateErr := hostApplySource(c, directory, "go", after)
 	compared, compareErr := hostCompare(c, directory, after)

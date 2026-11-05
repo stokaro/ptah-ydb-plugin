@@ -91,14 +91,13 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 	if reason != "" {
 		return refuse(reason)
 	}
-	rows, err := runner.QueryContext(lifetime, request.Sql, arguments...)
-	if err != nil {
+	var statementErr error
+	record.cursor, statementErr, err = statementrows.Query(lifetime, runner, request.Sql, arguments...)
+	if statementErr != nil {
 		s.failStatement(record)
-		return statementFailure(request.RequestId, err, request.Sql), nil
+		return statementFailure(request.RequestId, statementErr, request.Sql), nil
 	}
-	record.cursor, err = statementrows.New(rows)
 	if err != nil {
-		_ = rows.Close()
 		s.failStatement(record)
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
@@ -369,9 +368,18 @@ func (s *session) releaseStatement(record *statementResult) error {
 	return record.closeErr
 }
 
-func (s *session) closeStatements(transaction string, all bool) {
+// closeStatements releases every statement result of the session.
+func (s *session) closeStatements() {
 	for _, record := range s.statementResults {
-		if all || record.transaction == transaction {
+		_ = s.releaseStatement(record)
+	}
+}
+
+// closeTransactionStatements releases the statement results that run in
+// transaction.
+func (s *session) closeTransactionStatements(transaction string) {
+	for _, record := range s.statementResults {
+		if record.transaction == transaction {
 			_ = s.releaseStatement(record)
 		}
 	}

@@ -21,12 +21,23 @@ import (
 
 const poolAccessDirectory = ".metadata/workload_manager/pools"
 
+// Scope is what a read is confined to.
+type Scope int
+
+const (
+	// DatabaseScope is a read of a whole database.
+	DatabaseScope Scope = iota
+	// RealmScope is a read of a dev realm inside a database.
+	RealmScope
+)
+
 // Access reads the permissions and owners of the objects a snapshot captured,
 // its listed directories, and its root. Principals belong to the whole database;
-// a realm records their existence without declaring that it owns them. A read
-// failure leaves the snapshot unchanged. A specific principal-visibility refusal
-// retains object access and records unknown role and membership coverage.
-func Access(ctx context.Context, snapshot *protocol.Schema, database string, realm bool,
+// a read of RealmScope records their existence without declaring that it owns
+// them. A read failure leaves the snapshot unchanged. A specific
+// principal-visibility refusal retains object access and records unknown role
+// and membership coverage.
+func Access(ctx context.Context, snapshot *protocol.Schema, database string, scope Scope,
 	describe func(context.Context, string) (*Ydb_Scheme.Entry, error),
 	principals func(context.Context) (nativeapi.Principals, error),
 ) error {
@@ -62,7 +73,7 @@ func Access(ctx context.Context, snapshot *protocol.Schema, database string, rea
 		objects.Coverage = append(objects.Coverage, accessCoverage(kind, reason))
 	}
 	if err == nil {
-		recordPrincipals(objects, held, realm)
+		recordPrincipals(objects, held, scope)
 	}
 	sortAccess(objects)
 	candidate := proto.CloneOf(snapshot)
@@ -325,7 +336,7 @@ func defaultPoolEntry(names []string) bool {
 	return len(names) == 2 && slices.Contains(names, "ydb.granular.select_row") && slices.Contains(names, "ydb.granular.describe_schema")
 }
 
-func recordPrincipals(objects *protocol.ObservedCommonObjects, held nativeapi.Principals, realm bool) {
+func recordPrincipals(objects *protocol.ObservedCommonObjects, held nativeapi.Principals, scope Scope) {
 	owner := ""
 	for _, entry := range objects.ObjectOwners {
 		if entry.Object.Kind == "database" {
@@ -334,7 +345,7 @@ func recordPrincipals(objects *protocol.ObservedCommonObjects, held nativeapi.Pr
 	}
 	canLogin := make(map[string]bool)
 	add := func(role *protocol.ObservedRole) {
-		if realm || role.Name == owner || ydbacl.CheckName(role.Name) != nil {
+		if scope == RealmScope || role.Name == owner || ydbacl.CheckName(role.Name) != nil {
 			objects.RolesOutOfScope = append(objects.RolesOutOfScope, role.Name)
 			return
 		}

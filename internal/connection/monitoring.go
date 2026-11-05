@@ -84,17 +84,17 @@ func (c *Connection) ReadMonitoring(ctx context.Context, resource, page string, 
 	if err != nil {
 		return nil, fmt.Errorf("read the YDB %s: %w", resource, err)
 	}
-	if err := sendable(ticket, c.secure, c.monitoring); err != nil {
+	if err := c.sendable(ticket); err != nil {
 		return nil, authored.New(fmt.Sprintf("read the YDB %s: %s", resource, err))
 	}
 	return monitoring.Read(ctx, c.monitoring, resource, page, c.database, ticket, query)
 }
 
-// sendable refuses to send a credential that travels over TLS to a plain
-// http:// endpoint, where anyone on the path reads it. The refusal names the
-// scheme to use and never the endpoint.
-func sendable(ticket string, secure bool, endpoint *url.URL) error {
-	if ticket != "" && secure && endpoint.Scheme != "https" {
+// sendable refuses to send ticket, a credential the connection carries over
+// TLS, to a plain http:// monitoring endpoint, where anyone on the path reads
+// it. The refusal names the scheme to use and never the endpoint.
+func (c *Connection) sendable(ticket string) error {
+	if ticket != "" && c.secure && c.monitoring.Scheme != "https" {
 		return errors.New("the connection's credential travels over TLS, and the provider does not send it to a plain http:// monitoring endpoint; name the endpoint with https://")
 	}
 	return nil

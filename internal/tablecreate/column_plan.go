@@ -119,7 +119,7 @@ func nativeAddition(owner *protocol.Reference, column *protocol.PlanningColumn) 
 	if only(column, "name", "type", "type_raw_sql", "type_is_declared_text", "nullable", "facets") != nil || !column.Nullable || !validName(column.Name) {
 		return false, nil
 	}
-	if _, err := schema.StorageType(column.Type, true); err != nil {
+	if _, err := schema.StorageType(column.Type); err != nil {
 		return false, nil
 	}
 	for _, captured := range column.Facets {
@@ -164,11 +164,11 @@ func capturedDesired(captured *protocol.CapturedFacet) (*protocol.Envelope, erro
 func captureColumns(id string, owner *protocol.Reference, claim *columnClaim) (*protocol.NormalizedValue, error) {
 	request := &Ydb_Table.AlterTableRequest{}
 	if claim.add {
-		kind, err := schema.StorageType(claim.source.AddedColumn.Type, true)
+		kind, err := schema.StorageType(claim.source.AddedColumn.Type)
 		if err != nil {
 			return nil, err
 		}
-		request.AddColumns = []*Ydb_Table.ColumnMeta{{Name: claim.name, Type: kind, NotNull: new(false)}}
+		request.AddColumns = []*Ydb_Table.ColumnMeta{{Name: claim.name, Type: schema.Optional(kind), NotNull: new(false)}}
 	} else {
 		request.DropColumns = []string{claim.name}
 	}
