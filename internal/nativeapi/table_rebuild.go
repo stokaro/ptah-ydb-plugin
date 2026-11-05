@@ -99,12 +99,32 @@ func (t *TableStatements) ApplyCopy(ctx context.Context, database string, value 
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	statement, err := tablecreate.CopyStatement(absolute, copied)
+	statement, err := tablecreate.CopyStatement(absolute, value.GetOwner().GetSchema(), copied)
 	if err != nil {
 		return false, err
 	}
-	return true, t.Execute(ctx, statement)
+	if err := t.Execute(ctx, statement); err != nil {
+		return true, &QueryFailure{Text: statement, Err: err}
+	}
+	return true, nil
 }
+
+// QueryFailure is the failure of the one query an operation sent after
+// reading what it needed, such as a rebuild's copy. Nothing of the operation
+// ran before the query, so YDB's answer to Text says what the failure proves
+// of the whole operation: a data query YDB refused applied nothing.
+type QueryFailure struct {
+	// Text is the query the operation sent.
+	Text string
+	// Err is what running it returned.
+	Err error
+}
+
+// Error returns the query's error.
+func (f *QueryFailure) Error() string { return f.Err.Error() }
+
+// Unwrap returns the query's error.
+func (f *QueryFailure) Unwrap() error { return f.Err }
 
 // ApplyRename renames the owner once it holds the row table the plan read and
 // the target path is free, and confirms the swap.

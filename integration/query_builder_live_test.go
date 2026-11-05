@@ -150,10 +150,13 @@ var upsertNamingNoIndexColumn = map[string]string{
 }
 
 // upsertNamingNoIndexColumnThroughTheProvider is the provider's outcome for
-// the same UPSERT. INTERNAL_ERROR does not establish that the server applied
-// nothing, so the provider reports the outcome as unknown, and the contract
-// carries a server message only with a failure.
-var upsertNamingNoIndexColumnThroughTheProvider = map[string]string{"26.2": "UNKNOWN: ", "25.1": "SUCCEEDED: "}
+// the same UPSERT. 26.2 fails it while it plans the query, before any of it
+// runs, so the statement FAILED with the server's issues, as the host's
+// embedded engine reported YDB's answer.
+var upsertNamingNoIndexColumnThroughTheProvider = map[string]string{
+	"26.2": `(?s)FAILED: .*verification=!hasUniqIndex \|\| !usedIndexes\.empty\(\);fline=kqp_opt_phy_upsert_index\.cpp:359.*`,
+	"25.1": `SUCCEEDED: `,
+}
 
 // upsertNamingNoIndexColumnRows is how many rows the table holds after that
 // UPSERT on each line: the failed UPSERT wrote nothing.
@@ -190,7 +193,7 @@ func TestQueryBuilderUpsertOnATableWithAUniqueIndexFollowsTheLine(t *testing.T) 
 
 	c.Assert(resultRows(first), qt.HasLen, 0)
 	c.Assert(fmt.Sprint(serverErr), qt.Matches, upsertNamingNoIndexColumn[line])
-	c.Assert(partial.GetOutcome().String()+": "+partial.GetError(), qt.Equals, upsertNamingNoIndexColumnThroughTheProvider[line])
+	c.Assert(partial.GetOutcome().String()+": "+partial.GetError(), qt.Matches, upsertNamingNoIndexColumnThroughTheProvider[line])
 	c.Assert(resultRows(afterPartial), qt.HasLen, upsertNamingNoIndexColumnRows[line])
 	c.Assert(resultRows(paid), qt.HasLen, 0)
 	c.Assert(resultRows(afterPaid)[0], qt.Equals, "Int64(1) String(a@x) String(paid)")
