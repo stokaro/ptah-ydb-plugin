@@ -51,3 +51,43 @@ the source changed after the index was built.
 
 **Fix.** Set `target.representation: float`, `target.index_method:
 vector_kmeans_tree` and the `levels` and `clusters` index options; see [The vector index](#the-vector-index).
+
+### `builds generations in consistency mode immutable, and the specification selects "outbox"`
+
+**Cause.** The specification selects `consistency.mode: outbox` and the
+database is YDB, whose provider declares `immutable` alone. The outbox captures
+a change with a row trigger in the transaction that makes it, and YDB has no
+triggers.
+
+**Fix.** Select `mode: immutable` and declare the source `mutable: false`, or
+keep it mutable and stop its writes for the run with `consistency.paused: true`;
+see
+[Migrate a paused source](https://docs.ptah.run/edge/inference/guides/migrate-a-paused-source/).
+
+### `key_fields [...] are not the primary key of ...`
+
+**Cause.** On YDB the specification's `source.key_fields` name columns other
+than the source table's primary key. A YDB generation reads by keyset over the
+primary key and writes a row by it.
+
+**Fix.** Name the primary key the message quotes, in key order.
+
+### `has no vector_indexes, and building the generation's vector_kmeans_tree index needs it`
+
+**Cause.** The YDB server cannot build a vector index. YDB 25.1 builds one only
+with its `EnableVectorIndex` feature flag on, and Ptah reads the cluster's flags
+only when the URL names its monitoring endpoint.
+
+**Fix.** Turn the flag on, and add `monitoring=http://host:8765` to the
+`--db-url` so the connection reads it.
+
+### `has no vector_index_maintained_on_write`
+
+**Cause.** A run wrote into a YDB generation whose index exists, on YDB 25.1 or
+25.2. The index on those lines answers as it stood at its build, so the write
+would leave it describing a table that has moved on. On a source declared
+immutable this means the source changed after the index was built.
+
+**Fix.** Build a new generation, in a column of its own, from the source as it
+is now, or run the generation on YDB 25.3 or later, whose index takes later
+writes in. Nothing was written: the refusal rolls the batch back.
