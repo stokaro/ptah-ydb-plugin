@@ -803,9 +803,11 @@ errors the provider receives: `authored.New` marks one, and `authored.Status`
 sends it as the reason, with the error's whole text as the status message,
 which no host prints. The reasons the provider gives are its refusals of a
 connection address, of a monitoring page it could not read, of a capability
-the target lacks, of a lock the server refuses this user, the refusals whose
-text is a fixed sentence, such as a closed session or a reached handle limit,
-and the refusal of a table's declaration by table preparation or the creation
+the target lacks, a declared external object among them, of a lock the server
+refuses this user, of a streaming query body changed without
+`allow_state_reset`, the refusals whose text is a fixed sentence, such as a
+closed session or a reached handle limit, and the refusal of a table's
+declaration by table preparation or the creation
 projection. That last reason names the table and gives the sentence schema
 validation reports for the same declaration; the compilation behind it reads no
 server. A YDB driver's error is never a

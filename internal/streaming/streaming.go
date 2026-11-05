@@ -13,6 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
@@ -200,7 +201,7 @@ func Alter(schema, name string, desired, current Spec, allowStateReset bool) (st
 // query's state.
 func ValidateAlter(schema, name string, desired, current Spec, allowStateReset bool) error {
 	if !SameBody(desired.Text, current.Text) && !allowStateReset {
-		return fmt.Errorf("streaming query %q: changing text resets aggregation state; declare allow_state_reset=true to permit it", Display(schema, name))
+		return authored.New(fmt.Sprintf("streaming query %q: changing text resets aggregation state; declare allow_state_reset=true to permit it", Display(schema, name)))
 	}
 	return nil
 }
