@@ -2,11 +2,9 @@ package yqlschema_test
 
 import (
 	"encoding/json"
-	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -236,9 +234,4 @@ func pluginRefusal(refusal *yqlschema.Refusal, want hostRefusal) hostRefusal {
 	got := hostRefusal{Document: refusal.Document, Offset: refusal.Start, Message: refusal.Message}
 	got.Offset = map[bool]int{true: -1, false: got.Offset}[want.Offset < 0]
 	return got
-}
-
-// keys returns the keys of a JSON object in order.
-func keys(object map[string]any) []string {
-	return slices.Sorted(maps.Keys(object))
 }
