@@ -1,2 +1,2 @@
-# The host change the release-line tests need: a provider engine resolved on its declared lines.
-fix/4204-provider-release-lines
+# The host change the release-line tests need: a provider line's label printed as its preset name only.
+fix/4204-provider-line-names-the-preset
