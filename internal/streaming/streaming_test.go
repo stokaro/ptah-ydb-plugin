@@ -1,9 +1,11 @@
 package streaming_test
 
 import (
+	"errors"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -179,4 +181,17 @@ func TestNamedPathsRefusesUnresolvedPaths(t *testing.T) {
 		qt.Assert(t, err, qt.IsNotNil)
 		qt.Assert(t, got, qt.IsNil)
 	}
+}
+
+// A body change refused for want of allow_state_reset is a reason the host
+// prints: it names the query and the attribute that permits the change, and
+// nothing of the query's text.
+func TestValidateAlterRefusalIsAReason(t *testing.T) {
+	c := testcheck.New(t)
+
+	err := streaming.ValidateAlter("app", "copy", streaming.Spec{Text: "SELECT 2;"}, streaming.Spec{Text: "SELECT 1;"}, false)
+
+	written, isReason := errors.AsType[*authored.Error](err)
+	c.Assert(isReason, qt.IsTrue, qt.Commentf("%v", err))
+	c.Assert(written.Error(), qt.Equals, `streaming query "app/copy": changing text resets aggregation state; declare allow_state_reset=true to permit it`)
 }

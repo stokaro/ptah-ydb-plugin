@@ -274,16 +274,17 @@ func TestHostReadsASecretThroughAnAbsolutePath_HappyPath(t *testing.T) {
 	c.Assert(hostPlanned(c, directory, "yaml", declared), qt.HasLen, 0)
 }
 
-// Ported from the outside-the-database half of the host's
-// TestYDBSecrets_FailurePath_ReadThroughAnAbsolutePath: from a data source
-// that reads its secret by an absolute path, a source whose path is outside
-// the database is refused, since no statement of it could read the secret,
-// and the database is left as it was.
+// Ported from the host's TestYDBSecrets_FailurePath_ReadThroughAnAbsolutePath:
+// from a data source that reads its secret by an absolute path, a source
+// whose path is outside the database is refused, since no statement of it
+// could read the secret, and so is a source that leaves the secret out while
+// the source still reads it, whether the source is created again or kept.
+// Each refusal leaves the database as it was.
 //
-// The other half differs here. The host's engine refuses a plan that drops the
-// secret while it replaces the source; this provider leaves the secret
-// undecided with a warning, keeps it, and replaces the source, so the run
-// succeeds without the drop it was asked for. That half is not run here.
+// The host's engine refuses the drop only when a statement of its plan reads
+// the secret, and drops the secret under a source it keeps, which YDB allows
+// and which leaves the source naming a secret that is gone. This provider
+// refuses both, in the comparison.
 func TestHostRefusesASecretPathNoStatementCanRead_FailurePath(t *testing.T) {
 	variable := secretVariable(t, secretValue())
 	c := testcheck.New(t)
@@ -297,8 +298,14 @@ func TestHostRefusesASecretPathNoStatementCanRead_FailurePath(t *testing.T) {
 	hostRun(c, directory, "the secret and the source", pgSource(directory, "pg.invalid:5432", secretPath, variable, true), `(?s).*Schema apply completed successfully.*`)
 
 	outside, outsideErr := hostApplySource(c, directory, "yaml", pgSource(directory, "pg2.invalid:5432", "/elsewhere/abs_pw", variable, true))
+	replaced, replacedErr := hostApplySource(c, directory, "yaml", pgSource(directory, "pg2.invalid:5432", secretPath, variable, false))
+	kept, keptErr := hostApplySource(c, directory, "yaml", pgSource(directory, "pg.invalid:5432", secretPath, variable, false))
 
 	c.Assert(outsideErr, qt.IsNotNil, qt.Commentf("%s", outside))
+	c.Assert(replacedErr, qt.IsNotNil, qt.Commentf("%s", replaced))
+	c.Assert(replaced, qt.Contains, "secret "+directory+"/abs_pw is dropped while a declared object reads it by its path")
+	c.Assert(keptErr, qt.IsNotNil, qt.Commentf("%s", kept))
+	c.Assert(kept, qt.Contains, "secret "+directory+"/abs_pw is dropped while a declared object reads it by its path")
 	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.DeepEquals, []string{"abs_pw", "warehouse"})
 	c.Assert(hostPlanned(c, directory, "yaml", pgSource(directory, "pg.invalid:5432", secretPath, variable, true)), qt.HasLen, 0)
 }

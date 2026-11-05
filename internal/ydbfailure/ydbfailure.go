@@ -6,14 +6,22 @@
 // from it, so a unit the server rejected is NOT_APPLIED rather than UNKNOWN,
 // and a transaction aborted for a conflict is one the host may run again. The
 // message of each such reply is the server's own issues, never the SDK's
-// error text, which names connection addresses.
+// error text, which names connection addresses. No host prints the message.
+// The reason of an Execute or FinishTransaction reply, which a host that
+// lists errors.reasons prints, is a sentence of the provider's own: what YDB
+// did, its status, and the issue code and the position YDB gave, with the
+// capability and the feature flag where YDB refused for want of the flag, and
+// never YDB's issue text, which quotes the statement's text, a literal in it
+// or the database's path.
 package ydbfailure
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
@@ -36,6 +44,14 @@ type Answer struct {
 	// text of what YDB refused, and no issue comes from the stage that
 	// executes a query.
 	Compiled bool
+	// Code is the most specific issue code YDB gave: that of the last issue,
+	// in the order of Issues, whose code is not 0. It is 0 when no issue has
+	// one.
+	Code uint32
+	// Row and Column are the most specific position YDB named in the text:
+	// those of the last issue, in the order of Issues, that names one. They
+	// are 0 when no issue does.
+	Row, Column uint32
 }
 
 // operation is the SDK's error for an operation status YDB returned: the
@@ -62,7 +78,13 @@ func Read(err error) Answer {
 			if issue.GetMessage() != "" {
 				answer.Issues = append(answer.Issues, issue.GetMessage())
 			}
-			positioned = positioned || issue.GetPosition().GetRow() > 0
+			if issue.GetIssueCode() != 0 {
+				answer.Code = issue.GetIssueCode()
+			}
+			if issue.GetPosition().GetRow() > 0 {
+				positioned = true
+				answer.Row, answer.Column = issue.GetPosition().GetRow(), issue.GetPosition().GetColumn()
+			}
 			executing = executing || executionIssue(issue)
 			walk(issue.GetIssues())
 		}
@@ -98,12 +120,13 @@ var refusals = []Ydb.StatusIds_StatusCode{
 // Confirmed reports an answer that establishes that the statement text failed:
 // a status in which YDB refused it or aborted its transaction, or
 // GENERIC_ERROR for a data statement the query service runs in one implicit
-// transaction, or for any text YDB refused while compiling it. GENERIC_ERROR
-// is also what YDB answers a compound statement, a batch write or transaction
-// control that may have applied a prefix, so for those it establishes nothing
-// unless YDB refused the text before any of it ran.
+// transaction, for one ANALYZE statement, or for any text YDB refused while
+// compiling it. GENERIC_ERROR is also what YDB answers a compound statement, a
+// batch write or transaction control that may have applied a prefix, so for
+// those it establishes nothing unless YDB refused the text before any of it
+// ran.
 func (a Answer) Confirmed(text string) bool {
-	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || a.Compiled)
+	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || statisticsStatement(text) || a.Compiled)
 }
 
 // Rejected reports an answer that proves nothing of a unit of text was
@@ -152,6 +175,99 @@ func (a Answer) Message(fallback string) string {
 	return fallback
 }
 
+// issueMeanings say what the statement did that YDB refused, for the issue
+// codes measured on 25.1.4.7 and 26.2.1.14 whose meaning the code alone
+// establishes. YDB's text for each quotes the table's path or a type the
+// statement wrote, so the provider says it in its own words.
+var issueMeanings = map[uint32]string{
+	// `Cannot find table '...' because it does not exist or you do not have
+	// access permissions`.
+	2003: "it names a scheme object that does not exist or that the connection may not read",
+	// `Constraint violated. Table: ...`, then `Conflict with existing key.`
+	2012: "it violates a constraint of the table, such as a key the table holds",
+	// `Failed to convert input columns types to scheme types`.
+	2031: "a value it writes does not convert to its column's type",
+	// `Missing not null column in input: ...`.
+	2032: "it gives no value to a NOT NULL column",
+}
+
+// WithoutLines is a with its position counted from the unit's own text, for
+// a unit the provider sent with lines lines in front of it, as a session on a
+// dev realm sends the realm's pragma. A position inside those lines names no
+// text of the unit and is dropped.
+func (a Answer) WithoutLines(lines uint32) Answer {
+	if a.Row <= lines {
+		a.Row, a.Column = 0, 0
+		return a
+	}
+	a.Row -= lines
+	return a
+}
+
+// detail is the answer's status, then the most specific issue code and the
+// most specific position YDB gave, when it gave them:
+// `GENERIC_ERROR, issue 1030, line 1, column 27`.
+func (a Answer) detail() string {
+	parts := []string{a.Status.String()}
+	if a.Code != 0 {
+		parts = append(parts, fmt.Sprintf("issue %d", a.Code))
+	}
+	if a.Row > 0 {
+		parts = append(parts, fmt.Sprintf("line %d, column %d", a.Row, a.Column))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// RefusedReason is the reason of a reply to a unit YDB refused. It says that
+// YDB refused the statement, whether while compiling it, what the issue code
+// means when the provider knows, and the detail, and names the feature flag
+// the refusal says is off (see [Answer.flagged]).
+func (a Answer) RefusedReason() string {
+	reason := "YDB refused the statement"
+	if a.Compiled {
+		reason += " while compiling it"
+	}
+	if meaning, known := issueMeanings[a.Code]; known {
+		reason += ": " + meaning
+	}
+	return a.flagged(reason + " (" + a.detail() + ")")
+}
+
+// flagged is reason for an answer whose issues say a feature flag YDB keeps a
+// capability behind is off, in the words the host's embedded engine writes
+// for such a refusal: the capability, the flag, then reason where the host's
+// engine quotes YDB's text, and how to have the session report the
+// capability. The plan took the capability from the release line's
+// default, and this cluster runs with the flag off. A session reads the
+// flags only when the address names the monitoring endpoint. reason is
+// returned as it is for any other answer.
+func (a Answer) flagged(reason string) string {
+	gate, off := featureflags.Refused(a.Issues)
+	if !off {
+		return reason
+	}
+	return fmt.Sprintf("capability %s is off on this YDB cluster, which runs with feature flag %s off: %s. "+
+		"Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans",
+		gate.Key, gate.Flag, reason)
+}
+
+// AbortedReason is the reason of a reply to a unit or a commit whose
+// transaction YDB aborted for a conflict.
+func (a Answer) AbortedReason() string {
+	return "YDB aborted the transaction for a conflict (" + a.detail() + ")"
+}
+
+// UnknownReason is the reason of a reply to a unit whose outcome the answer
+// does not establish. An answer without a status is a transport failure, a
+// canceled call or an answer the provider did not keep, such as one to a unit
+// that expanded a secret input.
+func (a Answer) UnknownReason() string {
+	if a.Status == Ydb.StatusIds_STATUS_CODE_UNSPECIFIED {
+		return "the unit's outcome is unknown: no answer of YDB's shows whether it applied"
+	}
+	return a.flagged("the unit's outcome is unknown: YDB answered " + a.detail() + ", which does not show whether the unit applied")
+}
+
 // Unit is a unit of an Execute request that failed after it was dispatched.
 type Unit struct {
 	// Text is the unit's SQL, or empty for a unit that runs as more than a
@@ -159,6 +275,11 @@ type Unit struct {
 	// the provider runs one by one, and a unit that holds a comment or
 	// coordination node statement.
 	Text string
+	// Call reports a unit whose failure is the answer to one call of a YDB
+	// service other than the query service, which YDB applies whole or not at
+	// all, with nothing of the unit applied before it: a comment statement,
+	// which sets one user attribute with one AlterTable.
+	Call bool
 	// Transaction reports a unit that ran in a caller transaction.
 	Transaction bool
 	// Aborts reports a host that listed units.migration-split, which carries
@@ -176,19 +297,27 @@ const (
 // Failed is the reply to an Execute whose first applied units were applied and
 // whose next unit failed after dispatch with answer. A unit YDB rejected
 // without applying any of it is NOT_APPLIED, or PARTIAL after an applied
-// prefix, with the server's issues as its message. One that YDB aborted for a
-// conflict in a caller transaction, as the request's first unit, also sets
-// transaction_aborted when the host negotiated it. Anything else is UNKNOWN.
+// prefix, with the server's issues as its message: a unit of text whose
+// answer is [Answer.Rejected], and a call whose answer is a status in which
+// YDB refuses it. One that YDB aborted for a conflict in a caller
+// transaction, as the request's first unit, also sets transaction_aborted
+// when the host negotiated it. Anything else is UNKNOWN. Each reply's
+// diagnostic gives its reason: [Answer.RefusedReason], [Answer.AbortedReason]
+// or [Answer.UnknownReason].
 func Failed(answer Answer, unit Unit, applied uint32) *protocol.Execution {
-	if unit.Text == "" || !answer.Rejected(unit.Text, unit.Transaction) {
-		return &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: applied, DiagnosticCode: "ydb.execution-unconfirmed", Message: unknownMessage}
+	rejected := unit.Text != "" && answer.Rejected(unit.Text, unit.Transaction) || unit.Call && slices.Contains(refusals, answer.Status)
+	if !rejected {
+		return &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: applied, DiagnosticCode: "ydb.execution-unconfirmed", Message: unknownMessage,
+			Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.UnknownReason()}}
 	}
-	result := &protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, AppliedCount: applied, DiagnosticCode: "ydb.statement-rejected", Message: answer.Message(rejectedMessage)}
+	result := &protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, AppliedCount: applied, DiagnosticCode: "ydb.statement-rejected", Message: answer.Message(rejectedMessage),
+		Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.RefusedReason()}}
 	if applied > 0 {
 		result.Outcome = protocol.Execution_PARTIAL
 	}
 	if answer.Aborted() && unit.Transaction {
 		result.DiagnosticCode, result.Message = "ydb.transaction-aborted", answer.Message(abortedMessage)
+		result.Diagnostic = &protocol.ProviderDiagnostic{Reason: answer.AbortedReason()}
 		result.TransactionAborted = unit.Aborts && applied == 0
 	}
 	return result
@@ -203,7 +332,8 @@ func Commit(answer Answer, aborts bool) *protocol.TransactionResult {
 		return nil
 	}
 	return &protocol.TransactionResult{Outcome: protocol.TransactionResult_ROLLED_BACK, Aborted: aborts,
-		DiagnosticCode: "ydb.transaction-aborted", Message: answer.Message(abortedMessage)}
+		DiagnosticCode: "ydb.transaction-aborted", Message: answer.Message(abortedMessage),
+		Diagnostic: &protocol.ProviderDiagnostic{Reason: answer.AbortedReason()}}
 }
 
 // appliedWhole reports a unit of text that YDB applies whole or not at all:
@@ -233,6 +363,29 @@ func opensBlock(statement string) bool {
 			continue
 		}
 		return token.IsWord("DO") || token.IsWord("EVALUATE")
+	}
+	return false
+}
+
+// statisticsStatement reports text that is one ANALYZE statement. ANALYZE
+// collects column statistics: it creates, changes and drops no schema object
+// and writes no row, so a failed one applied nothing a plan or a migration
+// changes, whichever stage of YDB refused it. Measured on 26.2.1.14 with
+// default flags, YDB refuses it in its execution stage, GENERIC_ERROR with
+// `ANALYZE command is not supported because EnableColumnStatistics feature
+// flag is off` and no position in the text, where 25.1.4.7 refuses it while
+// compiling (`analyze is not supported for oltp tables`).
+func statisticsStatement(text string) bool {
+	queries, err := yqlquery.Split(text)
+	if err != nil || len(queries) != 1 || queries[0].Kind != yqlquery.Scheme || len(queries[0].Statements) != 1 {
+		return false
+	}
+	for _, token := range yql.Tokens(queries[0].Statements[0]) {
+		switch token.Type {
+		case yql.TokenWhitespace, yql.TokenComment, yql.TokenUnknown:
+			continue
+		}
+		return token.IsWord("ANALYZE")
 	}
 	return false
 }

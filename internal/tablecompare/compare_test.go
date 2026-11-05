@@ -294,6 +294,10 @@ func TestCompare_ReportsAChange(t *testing.T) {
 		{"a column back in the default family",
 			side{table: plain, columns: map[string]string{"note": `{}`}},
 			side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}, []string{"note"}},
+		// A Go, YAML or YQL source describes where every column sits, so a
+		// column it places in no family sits in the default family.
+		{"a column the declaration places nowhere, held in another family",
+			side{table: plain}, side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}, []string{"note"}},
 		{"an index the table lacks", side{table: plain, indexes: declaredIndexes(syncByLabel)}, side{table: plain, indexes: heldIndexes()}, []string{"records"}},
 		{"an index the declaration leaves out", side{table: plain, indexes: declaredIndexes()}, side{table: plain, indexes: heldIndexes(syncByLabel)}, []string{"records"}},
 		{"an index with another kind", side{indexes: declaredIndexes(asyncByLabel)}, side{indexes: heldIndexes(syncByLabel)}, []string{"records"}},
@@ -388,7 +392,10 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"a table a source that could not describe the properties states none for", side{uninspected: true}, side{table: withTTL(hourly)}},
 		{"a table the read states no properties for", side{table: withTTL(hourly)}, side{}},
 		{"a column only the declaration states", side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}, side{table: plain}},
-		{"a column only the read states", side{table: plain}, side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}},
+		{"a column a source that could not describe the column properties places nowhere",
+			side{uninspected: true, table: plain}, side{table: plain, columns: map[string]string{"note": `{"family":"archive"}`}}},
+		{"a column the declaration places nowhere and the table holds in the default family",
+			side{table: plain}, side{table: plain, columns: map[string]string{"note": `{}`}}},
 		{"no facets at all", side{}, side{}},
 		{"changefeeds on both sides", side{changefeeds: declaredFeed}, side{changefeeds: heldFeed}},
 		{"a changefeed read with YDB's defaults", side{changefeeds: declaredFeed}, side{changefeeds: heldDefaults}},

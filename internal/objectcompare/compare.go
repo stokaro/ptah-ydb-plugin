@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
@@ -79,6 +80,13 @@ type Family struct {
 	// it, which leaves it undecided rather than preserved, or "". A nil
 	// Unkeepable keeps every object.
 	Unkeepable func(current *protocol.Envelope) (string, error)
+	// RequiredRemoval refuses a comparison that would drop an object a
+	// declared object requires, with this text after the family's noun and
+	// the object's path. It is for a family whose object the server lets go
+	// while a reader still names it, so the drop the source asks for leaves
+	// the reader naming nothing. Empty leaves such an object undecided, and
+	// the current one stays.
+	RequiredRemoval string
 }
 
 type object struct {
@@ -401,7 +409,7 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		}
 		return nil, nil
 	}
-	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && reservedName(claim) {
+	if claim, found := subjectKnowledge(request.Current.Coverage, family.Kind, item.subject); found && ReservedName(claim) {
 		// The read reserves the name for the provider's own storage on every
 		// native kind, so it holds no object of this family. It is left out as
 		// Reserved leaves the family's own objects; only a declaration at the
@@ -453,10 +461,14 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 	}
 	if item.desired == nil {
 		for _, required := range request.Required {
-			if provider.CompareIdentities(required, item.subject) == 0 {
-				undecided(result, family, item, "A declared dependency requires the "+family.Noun)
-				return nil, nil
+			if provider.CompareIdentities(required, item.subject) != 0 {
+				continue
 			}
+			if family.RequiredRemoval != "" {
+				return nil, authored.New(family.Noun + " " + name + " " + family.RequiredRemoval)
+			}
+			undecided(result, family, item, "A declared dependency requires the "+family.Noun)
+			return nil, nil
 		}
 	}
 	if err := family.Unsettled(item.current, item.desired); err != nil {
@@ -482,7 +494,7 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 		}
 	}
 	if family.ChangeCapability && !request.Capabilities[family.Capability] {
-		return nil, authored.New(fmt.Sprintf("changing %ss requires %s", family.Noun, family.Capability))
+		return nil, authored.New(fmt.Sprintf("changing %ss requires %s%s", family.Noun, family.Capability, featureflags.Clause(family.Capability)))
 	}
 	change, err := family.Change("change-"+id, reported, pair.Current, pair.Desired)
 	if err != nil {

@@ -17,6 +17,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/releaseline"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 )
 
 // testAddress is the test URL with the query parameter given replaced, or
@@ -125,4 +126,23 @@ func skipOnLine(c *qt.C, before26 bool, version string) {
 	if before26 == releaseline.AtLeast(version, 26, 0) {
 		c.Skipf("the row describes another release line than %s", version)
 	}
+}
+
+// Ported from the host's TestYDBConnection_ReadsTheFlagsAsTheConnectingUser_FailurePath:
+// on a 26.x line, a user who may only connect cannot read the flags page,
+// so the session is refused with the right it needs, and the refusal repeats
+// neither the password nor the endpoint. The client lists errors.reasons, as
+// the host does, since a client that does not is told the code alone.
+func TestSessionReadsTheFlagsAsTheConnectingUser_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, _, database := inspectionFixture(c)
+	skipOnLine(c, false, serverVersion(c, opened))
+	user, password := connectingUser(c, opened, database, "CONNECT")
+	client := startProviderFor(c, provider.ErrorReasonsFeature)
+
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: testAddress(c, url.UserPassword(user, password), "", "")})
+
+	c.Assert(session, qt.IsNil)
+	c.Assert(err, qt.ErrorMatches, `(?s).*needs DESCRIBE SCHEMA on `+database+`.*`)
+	c.Assert(err.Error(), qt.Not(qt.Contains), password)
 }

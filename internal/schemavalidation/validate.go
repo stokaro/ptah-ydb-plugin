@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -216,7 +217,8 @@ func validateObjects(ctx context.Context, request *protocol.ValidateSchemaReques
 			return fmt.Errorf("YDB validation found a %s object whose normalization differs from its capture", record.Kind)
 		}
 		if record.Kind == schema.SecretProperties && !request.Capabilities["secrets"] {
-			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, record.Kind, object, "secrets", "secret %s requires the unavailable target capability secrets", object)
+			add(protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, record.Kind, object, "secrets", "secret %s requires the unavailable target capability secrets%s", object,
+				featureflags.Clause("secrets"))
 		}
 	}
 	return nil

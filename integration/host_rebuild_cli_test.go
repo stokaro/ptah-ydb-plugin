@@ -12,6 +12,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
 )
 
 // rebuildEntities is a table whose `n` column is declared with the type passed
@@ -161,4 +162,55 @@ func TestHostEveryPlanningCommandRefusesARebuildNotAskedFor_FailurePath(t *testi
 	written, err := filepath.Glob(filepath.Join(generated, "*.sql"))
 	c.Assert(err, qt.IsNil)
 	c.Assert(written, qt.HasLen, 0)
+}
+
+// rebuildFeedEntities is rebuildEntities in directory with the changefeed
+// updates on the table and its consumer audit.
+func rebuildFeedEntities(directory, nType string) string {
+	return "package entities\n\n//ptah:schema:table name=\"items\" schema=\"" + directory + "\"\n" +
+		"//ptah:schema:changefeed name=\"updates\" mode=\"UPDATES\" format=\"JSON\" retention_period=\"PT6H\"\n" +
+		"//ptah:schema:changefeed:consumer name=\"audit\" changefeed=\"updates\" important=\"true\"\n" +
+		"type Item struct {\n\t//ptah:schema:field name=\"id\" type=\"BIGINT\" primary\n\tID int64\n" +
+		"\t//ptah:schema:field name=\"n\" type=\"" + nType + "\"\n\tN int64\n}\n"
+}
+
+// Ported from the host's TestYDBChangefeeds_RebuildCarriesThem. YDB moves no
+// table that carries a changefeed, so the rebuild drops the changefeed before
+// it moves the old table and adds it with its consumer to the new one, and the
+// plan says the stream restarts. The rows survive, the changefeed reads back
+// as declared, and `schema compare` finds nothing left to change.
+func TestHostSchemaApplyRebuildCarriesChangefeeds_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	absolute := path.Join(database, directory, "items")
+	f := migrationsFixture{opened: opened, dir: directory, database: database}
+	c.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		for _, table := range []string{absolute, path.Join(database, directory, "__ptah_rebuild_items"), path.Join(database, directory, "__ptah_replaced_items")} {
+			c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+table+"`"), qt.IsNil)
+		}
+	})
+	before := writeFiles(c, c.TempDir(), map[string]string{"items.go": rebuildFeedEntities(directory, "INTEGER")})
+	after := writeFiles(c, c.TempDir(), map[string]string{"items.go": rebuildFeedEntities(directory, "BIGINT")})
+	created, err := hostCommand(c, "schema", "apply", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", before, "--schemas", directory,
+		"--auto-approve", "--tx-mode", "none")
+	c.Assert(err, qt.IsNil, qt.Commentf("schema apply:\n%s", created))
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "UPSERT INTO `"+absolute+"` (`id`, `n`) VALUES (1l, 10), (2l, NULL)"), qt.IsNil)
+
+	rebuilt, rebuildErr := hostCommand(c, "schema", "apply", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", after, "--schemas", directory,
+		"--auto-approve", "--tx-mode", "none", "--allow-table-rebuild")
+	compared, compareErr := hostCommand(c, "schema", "compare", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", after,
+		"--schemas", directory, "--exit-code")
+
+	c.Assert(rebuildErr, qt.IsNil, qt.Commentf("schema apply --allow-table-rebuild:\n%s", rebuilt))
+	c.Assert(rebuilt, qt.Contains, "Changefeed updates of table "+directory+"/items is dropped before the swap")
+	c.Assert(rebuilt, qt.Contains, "Its stream restarts")
+	c.Assert(compareErr, qt.IsNil, qt.Commentf("schema compare:\n%s", compared))
+	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+absolute+"` WHERE `id` = 1l AND `n` = 10l"), qt.Equals, int64(1))
+	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+absolute+"` WHERE `id` = 2l AND `n` IS NULL"), qt.Equals, int64(1))
+	c.Assert(f.names(c), qt.DeepEquals, []string{"items"})
+	shapes, found := describedChangefeeds(c, opened, absolute)
+	c.Assert(found, qt.IsTrue)
+	c.Assert(shapes, qt.DeepEquals, map[string]feedShape{"updates": {Mode: options.ChangefeedModeUpdates, Retention: 6 * time.Hour, Consumers: []string{"audit important"}}})
 }
