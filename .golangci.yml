@@ -3,7 +3,8 @@ version: "2"
 # The linters, their settings and the exclusions that name no path are Ptah's:
 # this provider is held to its host's lint contract. What differs from the
 # host's .golangci.yml is module-specific (the gci prefix, the rowserrcheck
-# packages, the path exclusions) or a linter the host does not run.
+# packages, the path exclusions) or a linter the host does not run. CI's
+# lint-contract job compares the two with internal/cmd/lintcontract.
 
 run:
   concurrency: 8
