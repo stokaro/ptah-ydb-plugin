@@ -119,7 +119,14 @@ func (u plannedUnit) head() string {
 // run changes nothing.
 func hostPlanned(c *qt.C, selectors, format, text string, flags ...string) []string {
 	c.Helper()
-	units := hostPlannedUnits(c, selectors, format, text, flags...)
+	return hostPlannedAt(c, os.Getenv("PTAH_YDB_TEST_URL"), selectors, format, text, flags...)
+}
+
+// hostPlannedAt is hostPlanned against address, such as a dev realm's. With
+// no selectors the run reads every directory of the address's database.
+func hostPlannedAt(c *qt.C, address, selectors, format, text string, flags ...string) []string {
+	c.Helper()
+	units := hostPlannedUnitsAt(c, address, selectors, format, text, flags...)
 	heads := make([]string, len(units))
 	for i, unit := range units {
 		heads[i] = unit.head()
@@ -131,6 +138,12 @@ func hostPlanned(c *qt.C, selectors, format, text string, flags ...string) []str
 // the assessment of a native operation.
 func hostPlannedUnits(c *qt.C, selectors, format, text string, flags ...string) []plannedUnit {
 	c.Helper()
+	return hostPlannedUnitsAt(c, os.Getenv("PTAH_YDB_TEST_URL"), selectors, format, text, flags...)
+}
+
+// hostPlannedUnitsAt is hostPlannedUnits against address.
+func hostPlannedUnitsAt(c *qt.C, address, selectors, format, text string, flags ...string) []plannedUnit {
+	c.Helper()
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
 	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql", "hcl": "schema.hcl"}[format]
@@ -141,8 +154,11 @@ func hostPlannedUnits(c *qt.C, selectors, format, text string, flags ...string) 
 	}
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
-	arguments := append([]string{"schema", "apply", "--dry-run", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",
-		"--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", selectors}, slices.Concat(flags, source)...)
+	arguments := []string{"schema", "apply", "--dry-run", "--json", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", address}
+	if selectors != "" {
+		arguments = append(arguments, "--schemas", selectors)
+	}
+	arguments = append(arguments, slices.Concat(flags, source)...)
 	cmd := exec.CommandContext(ctx, host, arguments...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

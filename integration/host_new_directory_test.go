@@ -184,8 +184,15 @@ func TestHostCreatesTheFirstObjectOfANewDirectory_HappyPath(t *testing.T) {
 // of the session's database.
 func hostApplyEverywhere(c *qt.C, address, text string) (string, error) {
 	c.Helper()
+	return hostApplyEverywhereAs(c, address, "schema.yaml", text)
+}
+
+// hostApplyEverywhereAs is hostApplyEverywhere over a schema file of the name
+// given, whose extension says its format, such as schema.sql for YQL.
+func hostApplyEverywhereAs(c *qt.C, address, name, text string) (string, error) {
+	c.Helper()
 	host, manifest := hostManifest(c)
-	file := filepath.Join(c.TempDir(), "schema.yaml")
+	file := filepath.Join(c.TempDir(), name)
 	c.Assert(os.WriteFile(file, []byte(text), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()

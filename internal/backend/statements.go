@@ -99,7 +99,7 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 		return refuse("statement was canceled before execution")
 	}
 	if piece.service() {
-		dispatched, err := s.runPiece(ctx, nil, piece)
+		dispatched, err := s.runPiece(ctx, nil, piece, s.verifyLocks)
 		if err != nil {
 			if !dispatched {
 				return refuse(err.Error())

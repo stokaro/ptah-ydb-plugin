@@ -127,10 +127,12 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		// a source that leaves one out keeps it (see the source service).
 		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}
 	case ChangefeedProperties:
-		// A YAML or Go source declares the changefeeds of each table it
+		// A YAML, Go or SQL source declares the changefeeds of each table it
 		// declares, as for the host's embedded engine, so a table it declares
-		// with none is declared to have none.
-		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS}
+		// with none is declared to have none. A SQL reading carries them as a
+		// facet of the table only for a host that takes one
+		// (provider.SQLFacetsFeature).
+		result.SourceFormats = []protocol.SourceDocument_Format{protocol.SourceDocument_YAML, protocol.SourceDocument_GO_ANNOTATIONS, protocol.SourceDocument_SQL}
 	case IndexProperties:
 		// A YAML or Go source spells no native index, so the native index set
 		// a table it declares states is empty; an export writes an empty set

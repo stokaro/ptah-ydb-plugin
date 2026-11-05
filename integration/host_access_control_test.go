@@ -19,6 +19,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	providerruntime "github.com/stokaro/ptah/provider-sdk/runtime"
 )
 
@@ -66,7 +67,7 @@ func accessTable(directory string) string {
 func accessDeclaration(directory string, names accessNames, userGroups []string, blockedLogin bool, tablePrivileges ...string) string {
 	return accessTable(directory) +
 		"roles:\n  " + names.group + ":\n    group: true\n" +
-		"  " + names.user + ":\n    login: true\n    password: \"Secret1!\"\n    member_of: [" + strings.Join(userGroups, ", ") + "]\n" +
+		"  " + names.user + ":\n    login: true\n    member_of: [" + strings.Join(userGroups, ", ") + "]\n" +
 		"  " + names.blocked + ":\n    login: " + fmt.Sprint(blockedLogin) + "\n    member_of: [" + names.group + "]\n" +
 		"grants:\n  table:\n    role: " + names.group + "\n    privileges: [" + strings.Join(tablePrivileges, ", ") + "]\n    on_table: " + directory + ".orders\n" +
 		"  directory:\n    role: " + names.group + "\n    privileges: [LIST]\n    on_schema: " + directory + "\n" +
@@ -178,9 +179,11 @@ func TestHostAppliesAccessControl_HappyPath(t *testing.T) {
 // password and not with another, and a declaration that names another
 // password plans nothing, so the first one still opens a session. The plan
 // that creates the user is one CREATE USER, as the host's engine writes it:
-// the password in the statement, below a warning that it is plain text.
+// the statement names the variable of the password, never the password
+// (ADR 0071), and the apply that plans from the schema needs no variable set.
 func TestHostSetsAUserPasswordOnce_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.PasswordInputsFeature)
 	opened, directory, database := lockFixture(c)
 	names := newAccessNames()
 	removeAccess(c, opened, database, names)
@@ -195,7 +198,7 @@ func TestHostSetsAUserPasswordOnce_HappyPath(t *testing.T) {
 	changed := hostPlanned(c, directory, "yaml", user(second))
 
 	c.Assert(created, qt.HasLen, 1)
-	c.Assert(created[0], qt.Matches, "CREATE USER `"+names.user+"` PASSWORD '.+'")
+	c.Assert(created[0], qt.Equals, "CREATE USER `"+names.user+"` PASSWORD $"+passwordVariable(names.user))
 	c.Assert(declaredLogin, qt.IsNil)
 	c.Assert(otherLogin, qt.IsNotNil)
 	c.Assert(changed, qt.HasLen, 0)

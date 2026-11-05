@@ -5,6 +5,7 @@ package locking
 import (
 	"context"
 	"errors"
+	"fmt"
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
@@ -147,4 +148,50 @@ func TestHoldCheckWaitsForTheFreshnessWindow(t *testing.T) {
 	// The window began at the confirmation, so it ends before a full window
 	// after the check.
 	c.Assert(native.deadline.Before(checked.Add(freshness)), qt.IsTrue)
+}
+
+// A check that finds the lock node gone reads the lock as lost, without
+// asking for the semaphore: the node took its semaphores with it. Measured on
+// 25.1.4.7, a check that runs right after the node is dropped meets the
+// missing node before the server ends the session's stream.
+func TestHoldReadsAMissingNodeAsLost(t *testing.T) {
+	c := testcheck.New(t)
+	now := time.Now()
+	native := &fakeSession{description: ownedDescription()}
+	h := newHold(native, fakeLease{context.Background()}, "lock", now, func() time.Time { return now },
+		func(context.Context) error { return fmt.Errorf("describe the node: %w", errNodeMissing) })
+
+	c.Assert(h.Check(c.Context()), qt.ErrorIs, ErrLost)
+	c.Assert(native.calls.Load(), qt.Equals, int32(0))
+	c.Assert(h.Context().Err(), qt.ErrorIs, context.Canceled)
+}
+
+// A check whose call fails because the server ended the session's stream
+// meanwhile reads the lock as lost, as the watch reads an ended session: the
+// server answers a dropped node by ending the stream with UNAVAILABLE.
+func TestHoldReadsAStreamTheServerEndedAsLost(t *testing.T) {
+	c := testcheck.New(t)
+	now := time.Now()
+	lease, end := context.WithCancel(context.Background())
+	c.Cleanup(end)
+	native := &fakeSession{describeErr: errors.New("YDB lock stream ended"), onDescribe: end}
+	h := newHold(native, fakeLease{lease}, "lock", now, func() time.Time { return now }, func(context.Context) error { return nil })
+
+	c.Assert(h.Check(c.Context()), qt.ErrorIs, ErrLost)
+	c.Assert(native.calls.Load(), qt.Equals, int32(1))
+}
+
+// A call cut because the check's own context ended also ends the session,
+// which proves nothing about the lock, so the lock stays unknown.
+func TestHoldKeepsACheckItsContextCutUnknown(t *testing.T) {
+	c := testcheck.New(t)
+	now := time.Now()
+	lease, end := context.WithCancel(context.Background())
+	c.Cleanup(end)
+	ctx, cancel := context.WithCancel(c.Context())
+	c.Cleanup(cancel)
+	native := &fakeSession{describeErr: errors.New("YDB lock request canceled"), onDescribe: func() { cancel(); end() }}
+	h := newHold(native, fakeLease{lease}, "lock", now, func() time.Time { return now }, func(context.Context) error { return nil })
+
+	c.Assert(h.Check(ctx), qt.ErrorIs, ErrUnknown)
 }

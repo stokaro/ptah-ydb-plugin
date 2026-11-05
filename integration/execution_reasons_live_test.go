@@ -84,21 +84,82 @@ func TestRefusedUnitGivesItsReasonSubprocess(t *testing.T) {
 // A unit YDB refuses because a feature flag is off names the capability and
 // the flag in the host's embedded engine's words, around the provider's own
 // reason, and not YDB's text. A resource pool is refused on every line, which
-// runs with EnableResourcePools off by default.
+// runs with EnableResourcePools off by default. A session whose address names
+// the monitoring endpoint read the flags, so the sentence asks only to turn
+// the flag on; one without it took the line's default, and is told to name
+// the endpoint too.
 func TestRefusedUnitNamesTheFeatureFlagSubprocess(t *testing.T) {
+	const refusal = "provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, " +
+		"which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on"
+	for _, test := range []struct {
+		name, want string
+		monitoring bool
+	}{
+		{"the flags read", refusal, true},
+		{"the line's default", refusal + ", or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			client := startProviderFor(c, provider.ErrorReasonsFeature)
+			session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: flagReasonAddress(c, test.monitoring)})
+			c.Assert(err, qt.IsNil)
+			c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+			c.Assert(session.GetCapabilities()["resource_pools"], qt.IsFalse)
+
+			result, err := executeFailing(c, client, session.Id, "CREATE RESOURCE POOL `ptah_flag_reason_pool` WITH (CONCURRENT_QUERY_LIMIT = 1)")
+
+			c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
+			c.Assert(err.Error(), qt.Equals, test.want)
+			c.Assert(result.GetMessage(), qt.Contains, "Resource pools are disabled")
+			c.Assert(err.Error(), qt.Not(qt.Contains), "Resource pools are disabled")
+		})
+	}
+}
+
+// flagReasonAddress is the test address, which names the monitoring endpoint,
+// or the same address without the endpoint.
+func flagReasonAddress(c *qt.C, monitoring bool) string {
+	c.Helper()
+	address := testAddress(c, nil, "", "")
+	if monitoring {
+		return address
+	}
+	return withoutMonitoring(c, address)
+}
+
+// skipOffLine skips a test that measures what one release line answers on a
+// server of another line.
+func skipOffLine(c *qt.C, version, line string) {
+	c.Helper()
+	if got := serverLine(c, version); got != line {
+		c.Skipf("the server runs YDB %s; this test measures %s", got, line)
+	}
+}
+
+// 25.1 has no unique secondary index, and refuses one inside its execution
+// stage, before it proposes a schema operation, so nothing of the statement
+// applied. The unit is NOT_APPLIED, with the provider's reason for it, as the
+// host's embedded engine names the refusal; the table keeps no index.
+func TestUniqueIndexRefusedBeforeItsOperationSubprocess(t *testing.T) {
 	c := testcheck.New(t)
+	opened, directory, database := inspectionFixture(c)
+	table := path.Join(database, directory, "unique_refused")
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+table+"` (id Int64 NOT NULL, v Utf8, PRIMARY KEY (id))"), qt.IsNil)
+	c.Cleanup(func() {
+		c.Check(execFixtureSchema(context.Background(), opened.DB, "DROP TABLE `"+table+"`"), qt.IsNil)
+	})
 	client := startProviderFor(c, provider.ErrorReasonsFeature)
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
-	c.Assert(session.GetCapabilities()["resource_pools"], qt.IsFalse)
+	skipOffLine(c, session.GetServerVersion(), "25.1")
 
-	result, err := executeFailing(c, client, session.Id, "CREATE RESOURCE POOL `ptah_flag_reason_pool` WITH (CONCURRENT_QUERY_LIMIT = 1)")
+	result, err := executeFailing(c, client, session.Id, "ALTER TABLE `"+table+"` ADD INDEX `u` GLOBAL UNIQUE SYNC ON (`v`)")
 
 	c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
-	c.Assert(err.Error(), qt.Equals, "provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, "+
-		"which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on, or name the cluster's "+
-		"monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans")
-	c.Assert(result.GetMessage(), qt.Contains, "Resource pools are disabled")
-	c.Assert(err.Error(), qt.Not(qt.Contains), "Resource pools are disabled")
+	c.Assert(result.GetDiagnosticCode(), qt.Equals, "ydb.statement-rejected")
+	c.Assert(err, qt.ErrorMatches, `provider execution: NOT_APPLIED \(0 units confirmed applied\): YDB refused the statement: the YDB release the cluster runs has no unique `+
+		`secondary index \(GENERIC_ERROR, issue 1060, line 1, column \d+\)`)
+	c.Assert(result.GetMessage(), qt.Contains, "Unknown index type: syncGlobalUnique")
+	c.Assert(heldIndexKinds(c, opened, table), qt.HasLen, 0)
 }

@@ -109,3 +109,37 @@ func TestOperatorStatementTypedArgumentsSubprocess(t *testing.T) {
 		})
 	}
 }
+
+// Ported from the host's TestYDBErrors_CarryTheServersAnswerWithoutSDKFrames:
+// a statement on a table that does not exist fails with what the server said,
+// its status as the error code and its issue as the error, and without the
+// stack frames ydb-go-sdk writes into the text, whether it writes or reads
+// rows.
+func TestOperatorStatementsCarryTheServersAnswer_FailurePath(t *testing.T) {
+	const missing = "ptah_errors_live_missing"
+	for _, test := range []struct {
+		name   string
+		sql    string
+		access protocol.RunStatementRequest_Access
+	}{
+		{name: "a statement", sql: "DELETE FROM " + missing, access: protocol.RunStatementRequest_READ_WRITE},
+		{name: "a query", sql: "SELECT COUNT(*) FROM " + missing, access: protocol.RunStatementRequest_READ_WRITE},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			binary, digest := providerBinary(c)
+			client := startProvider(c, binary, digest)
+			session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+			c.Assert(err, qt.IsNil)
+			c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+
+			result, err := client.RunStatement(c.Context(), &protocol.RunStatementRequest{SessionId: session.Id, RequestId: "missing", Sql: test.sql, Access: test.access, MaxRows: 1})
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.GetOutcome(), qt.Equals, protocol.StatementResult_FAILED)
+			c.Assert(result.GetErrorCode(), qt.Equals, "SCHEME_ERROR")
+			c.Assert(result.GetError(), qt.Matches, `(?s).*Cannot find table 'db\.\[/local/`+missing+`\]' because it does not exist.*`)
+			c.Assert(result.GetError(), qt.Not(qt.Contains), "ydb-go-sdk")
+		})
+	}
+}

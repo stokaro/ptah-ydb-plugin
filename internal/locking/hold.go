@@ -75,10 +75,22 @@ func (h *Hold) Check(ctx context.Context) error {
 	// session it was sent on.
 	bounded, cancel := context.WithTimeout(ctx, freshness-asked.Sub(h.confirmed))
 	defer cancel()
+	// A node that is gone takes its semaphores with it, and a session the
+	// server ended holds none: either is a lost lock, whichever the check
+	// meets first. Measured on 25.1.4.7 and 26.2.1.14, a dropped node answers
+	// DescribeNode with SCHEME_ERROR, and the server ends the session's stream
+	// a few milliseconds later. A call cut by the check's own bound ends the
+	// session too, which proves nothing, so that one stays unknown.
 	if err := h.validate(bounded); err != nil {
+		if errors.Is(err, errNodeMissing) || h.endedByServer(bounded) {
+			return h.fail(ErrLost)
+		}
 		return h.fail(ErrUnknown)
 	}
 	description, err := h.session.DescribeSemaphore(bounded, h.name, options.WithDescribeOwners(true))
+	if err != nil && h.endedByServer(bounded) {
+		return h.fail(ErrLost)
+	}
 	if err != nil || bounded.Err() != nil || confirmationExpired(h.now(), asked) {
 		return h.fail(ErrUnknown)
 	}
@@ -94,6 +106,12 @@ func (h *Hold) Check(ctx context.Context) error {
 	return nil
 }
 func (h *Hold) fail(err error) error { h.failure = err; h.cancel(); return err }
+
+// endedByServer reports a session that ended while the check's context bounded
+// was still live, so the check did not end it.
+func (h *Hold) endedByServer(bounded context.Context) bool {
+	return h.lease.Context().Err() != nil && bounded.Err() == nil
+}
 func (h *Hold) start() {
 	ctx, stop := context.WithCancel(context.Background())
 	h.stop = stop

@@ -175,7 +175,11 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 // limitedClaim leaves outside a document's claim what its ptah:not-described
 // limits name, when the host negotiated source.limits. Without the feature the
 // SDK lets a decoding claim only complete knowledge, and the limits change
-// nothing.
+// nothing. Nor does the SDK let a document without limits claim less, so an
+// HCL document without a coordination_node entry claims every node here,
+// where the host's embedded engine reads it as claiming none: an Atlas file
+// names none of the nodes it leaves out. A host keeps that rule by taking no
+// coverage from such a reply.
 func limitedClaim(ctx context.Context, document *protocol.SourceDocument, coverage *protocol.ModelCoverage) error {
 	if len(document.GetLimits()) == 0 || !slices.Contains(negotiatedFeatures(ctx), provider.SourceLimitsFeature) {
 		return nil
