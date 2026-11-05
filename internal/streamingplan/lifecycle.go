@@ -69,7 +69,10 @@ func (b *lifecycleBuilder) add(prefix string, subject *protocol.ComparisonIdenti
 		if len(steps) > 0 {
 			b.contribution.Dependencies = append(b.contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(steps[len(steps)-1]), After: proto.CloneOf(id)})
 		}
-		b.contribution.Steps = append(b.contribution.Steps, &protocol.PlanningStep{Id: id, Metadata: metadata, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_LIFECYCLE}})
+		b.contribution.Steps = append(b.contribution.Steps, &protocol.PlanningStep{
+			Id: id, Metadata: metadata,
+			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_LIFECYCLE},
+		})
 		steps = append(steps, proto.CloneOf(id))
 	}
 	return steps, nil
