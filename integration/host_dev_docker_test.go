@@ -42,14 +42,15 @@ func dockerManifest(c *qt.C) string {
 }
 
 // devContainers lists the containers the provider started, by the label it
-// gives each one.
+// gives each one, as their names and states.
 func devContainers(c *qt.C) []string {
 	c.Helper()
 	ctx, cancel := context.WithTimeout(c.Context(), 30*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, "docker", "ps", "--all", "--quiet", "--filter", "label="+devdatabase.ContainerLabel).Output()
+	output, err := exec.CommandContext(ctx, "docker", "ps", "--all", "--filter", "label="+devdatabase.ContainerLabel,
+		"--format", "{{.Names}} {{.State}}").Output()
 	c.Assert(err, qt.IsNil)
-	return strings.Fields(string(output))
+	return strings.FieldsFunc(string(output), func(r rune) bool { return r == '\n' })
 }
 
 // devDockerMigrations is the host's migration directory for a dev database:
