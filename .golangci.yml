@@ -23,7 +23,7 @@ linters:
     - gocritic
     # - gocyclo # enabled with the complexity changes
     - goprintffuncname
-    # - gosec # enabled with the gosec changes
+    - gosec
     - govet
     - importas
     - ineffassign
