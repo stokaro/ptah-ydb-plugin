@@ -18,6 +18,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	ydb "github.com/ydb-platform/ydb-go-sdk/v3"
 )
 
@@ -73,7 +74,9 @@ func tryLock(c *qt.C, driver *ydb.Driver, database, name string) error {
 // the database root. The server refuses that session at once and says so, so
 // the refusal names it where the host's embedded engine, whose SDK retries
 // the refused session without a word, reports a timeout. The provider answers
-// a refusal with PermissionDenied, the part of it the SDK hands the host.
+// a refusal with a confirmed NOT_ACQUIRED and its reason, so the session is
+// not fenced: once the user is granted the node, the same session takes the
+// lock.
 func TestNativeLockTellsAUserWhatRightIsMissing(t *testing.T) {
 	c := testcheck.New(t)
 	admin, _, database := lockFixture(c)
@@ -84,8 +87,7 @@ func TestNativeLockTellsAUserWhatRightIsMissing(t *testing.T) {
 		c.Helper()
 		c.Assert(execFixtureSchema(c.Context(), admin.DB, "GRANT "+right+" ON `"+node+"` TO `"+name+"`"), qt.IsNil)
 	}
-	binary, digest := providerBinary(c)
-	client := startProvider(c, binary, digest)
+	client := startProviderFor(c, provider.ErrorReasonsFeature)
 	// YDB 26.2 refuses its feature flags page to a user with no right of its
 	// own, and a session that names no monitoring endpoint takes its
 	// capabilities from the server version, which is all a lock needs.
@@ -93,7 +95,7 @@ func TestNativeLockTellsAUserWhatRightIsMissing(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
 
-	_, refusedThroughProvider := client.TryLock(c.Context(), nativeLockRequest(session.Id, "refused", "ptah_lock_rights"))
+	refusal, refusedThroughProvider := client.TryLock(c.Context(), nativeLockRequest(session.Id, "refused", "ptah_lock_rights"))
 	noNode := tryLock(c, user.Driver, database, "ptah_lock_rights")
 	created := tryLock(c, admin.Driver, database, "ptah_lock_rights")
 	noAccess := tryLock(c, user.Driver, database, "ptah_lock_rights")
@@ -101,9 +103,16 @@ func TestNativeLockTellsAUserWhatRightIsMissing(t *testing.T) {
 	noSession := tryLock(c, user.Driver, database, "ptah_lock_rights")
 	grant("ALL")
 	taken := tryLock(c, user.Driver, database, "ptah_lock_rights")
+	granted, grantedErr := client.TryLock(c.Context(), nativeLockRequest(session.Id, "granted", "ptah_lock_rights"))
 
 	quoted := regexp.QuoteMeta(node)
-	c.Assert(refusedThroughProvider, qt.ErrorMatches, `(?s).*provider lock operation failed \(PermissionDenied\).*`)
+	c.Assert(refusedThroughProvider, qt.ErrorIs, provider.ErrExecution)
+	c.Assert(refusedThroughProvider, qt.Not(qt.ErrorIs), provider.ErrOutcomeUnknown)
+	c.Assert(refusedThroughProvider, qt.ErrorMatches, `provider lock outcome is NOT_ACQUIRED: Ptah's locks live on the YDB coordination node `+
+		quoted+`, which does not exist, and this user may not create it \(UNAUTHORIZED\)\. .*`)
+	c.Assert(refusal.GetOutcome(), qt.Equals, protocol.LockResult_NOT_ACQUIRED)
+	c.Assert(grantedErr, qt.IsNil)
+	c.Assert(granted.GetOutcome(), qt.Equals, protocol.LockResult_ACQUIRED)
 	c.Assert(noNode, qt.ErrorIs, locking.ErrRefused)
 	c.Assert(noNode, qt.ErrorMatches, `Ptah's locks live on the YDB coordination node `+quoted+`, which does not exist, and this user may not `+
 		`create it \(UNAUTHORIZED\)\. Run once as a user who may create a coordination node at the database root, which creates it, `+

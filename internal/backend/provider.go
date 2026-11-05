@@ -243,6 +243,15 @@ func negotiatedFeatures(ctx context.Context) []string {
 // TOKEN_SECRET_PATH` on 25.1 to 25.3). Reading either object also needs the
 // replication API among the cluster's gRPC services, which no flag shows;
 // inspection reports an object it cannot describe as uninspected.
+//
+// returning_clause, common_table_expressions, correlated_subqueries,
+// non_equi_joins and offset_without_limit are the keys the host's query
+// builder reads for a session, at the host's line presets: RETURNING on
+// INSERT, UPDATE and DELETE from 25.3, since 25.1 and 25.2 fail `UPDATE ...
+// RETURNING` on a table with a unique index with `INTERNAL_ERROR ... wrong
+// returning expr type`, and none of the others on any line. The builder reads
+// a key the session leaves out as unknown and refuses the clause it gates,
+// on every line alike.
 func sessionCapabilities(version string) map[string]bool {
 	return map[string]bool{"wide_date_time_types": releaseline.AtLeast(version, 25, 2), "parameterized_decimal": releaseline.AtLeast(version, 25, 2),
 		"alter_column_default":    releaseline.AtLeast(version, 26, 2),
@@ -259,7 +268,8 @@ func sessionCapabilities(version string) map[string]bool {
 		tablecreate.LocalBloomIndexesCapability: releaseline.AtLeast(version, 26, 2), tablecreate.LocalNgramIndexesCapability: releaseline.AtLeast(version, 26, 2),
 		tablecreate.LocalMinMaxIndexesCapability: false,
 		replication.CapabilityReplication:        true, replication.CapabilityTransfers: releaseline.AtLeast(version, 25, 2), replication.CapabilitySecretPaths: releaseline.AtLeast(version, 25, 4),
-		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, tablecreate.UniqueIndexOnExistingTableCapability: false, tablecreate.IndexRenameCapability: true}
+		ydbtype.SerialColumns: true, ydbsequence.Options: true, ydbsequence.KeepsRange: false, tablecreate.UniqueIndexOnExistingTableCapability: false, tablecreate.IndexRenameCapability: true,
+		"returning_clause": releaseline.AtLeast(version, 25, 3), "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false}
 }
 
 // indexRenames returns capabilities with index_rename true only for a host
