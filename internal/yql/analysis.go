@@ -86,37 +86,22 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 		if start < 0 {
 			start, startLine = token.Start, tokenLine
 		}
-		switch token.Type {
-		case TokenComment, TokenUnknown:
+		word, err := statementWord(token, &bodies)
+		if err != nil {
+			return nil, err
+		}
+		if !word {
+			// A semicolon outside a body ends the statement it follows.
+			if token.Type == TokenSemicolon && len(words) > 0 {
+				emit(token.End)
+			}
 			continue
-		case TokenSemicolon:
-			bodies.Separate()
-			if !bodies.Inside() {
-				if len(words) > 0 {
-					emit(token.End)
-				}
-				continue
-			}
-		case TokenIdentifier:
-			bodies.Word(strings.ToUpper(token.Value))
-		case TokenOperator:
-			if token.Value == "}" && bodies.braces == 0 {
-				return nil, invalidSource()
-			}
-			bodies.Symbol(token.Value)
-		default:
-			// A literal separates keyword pairs just as punctuation does.
-			bodies.Separate()
 		}
 		tokenCount++
 		if tokenCount > maxSourceTokens {
 			return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB SQL source exceeds its token limit")
 		}
-		word := token.Value
-		if token.Type != TokenString && !strings.HasPrefix(word, "`") {
-			word = strings.ToUpper(word)
-		}
-		words = append(words, word)
+		words = append(words, canonicalWord(token))
 		original = append(original, token.Value)
 	}
 	if bodies.Inside() {
@@ -133,6 +118,39 @@ func analyzeSource(ctx context.Context, source string) (*protocol.SQLFile, error
 		}
 	}
 	return file, nil
+}
+
+// statementWord records token in bodies and reports whether it is a word of
+// the statement being read. A comment, an unknown token and a semicolon outside
+// a body are not. A closing brace with no open one is refused.
+func statementWord(token Token, bodies *Bodies) (bool, error) {
+	switch token.Type {
+	case TokenComment, TokenUnknown:
+		return false, nil
+	case TokenSemicolon:
+		bodies.Separate()
+		return bodies.Inside(), nil
+	case TokenIdentifier:
+		bodies.Word(strings.ToUpper(token.Value))
+	case TokenOperator:
+		if token.Value == "}" && bodies.braces == 0 {
+			return false, invalidSource()
+		}
+		bodies.Symbol(token.Value)
+	default:
+		// A literal separates keyword pairs just as punctuation does.
+		bodies.Separate()
+	}
+	return true, nil
+}
+
+// canonicalWord is the spelling a statement word carries: upper case, except
+// a string literal or a quoted identifier, which keeps its spelling.
+func canonicalWord(token Token) string {
+	if token.Type != TokenString && !strings.HasPrefix(token.Value, "`") {
+		return strings.ToUpper(token.Value)
+	}
+	return token.Value
 }
 
 func validateToken(token Token) error {

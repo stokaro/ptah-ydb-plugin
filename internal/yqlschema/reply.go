@@ -49,9 +49,21 @@ func ClaimedModels(facets bool) []*protocol.ValueModel {
 }
 
 func claimedModels() []*protocol.ValueModel {
-	return []*protocol.ValueModel{schema.NativeDesiredModel(schema.SecretProperties), schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel(),
-		schema.NativeDesiredModel(schema.StreamingQueryProperties), schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties), schema.NativeDesiredModel(schema.ResourcePoolProperties), schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties),
-		schema.NativeDesiredModel(schema.ReplicationProperties), schema.NativeDesiredModel(schema.TransferProperties)}
+	return []*protocol.ValueModel{
+		schema.NativeDesiredModel(schema.SecretProperties),
+		schema.TableDesiredModel(),
+		schema.ColumnDesiredModel(),
+		schema.NativeDesiredModel(schema.ColumnStorageProperties),
+		schema.CoordinationDesiredModel(),
+		schema.NativeDesiredModel(schema.StreamingQueryProperties),
+		schema.NativeDesiredModel(schema.TopicProperties),
+		schema.NativeDesiredModel(schema.ExternalSourceProperties),
+		schema.NativeDesiredModel(schema.ExternalTableProperties),
+		schema.NativeDesiredModel(schema.ResourcePoolProperties),
+		schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties),
+		schema.NativeDesiredModel(schema.ReplicationProperties),
+		schema.NativeDesiredModel(schema.TransferProperties),
+	}
 }
 
 // Reply reads the documents of a ReadSQLSchema request and answers with the
@@ -168,32 +180,8 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool)
 			Source: &protocol.SourceTrace{DocumentId: source.GetId(), Span: sourceSpan(source.GetText(), text.start, text.end)}})
 	}
 	for _, table := range reading.Tables {
-		if settings := tableSettings(table.Facets); len(settings) != 0 {
-			gaps = append(gaps, gap(table.document, table.span, fmt.Sprintf("table %s declares %s, which a SQL schema reading has no home for: "+
-				"the host refuses the settings of a table in a SQL schema reading", quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "))))
-		}
-		declared := &protocol.DeclaredTable{Name: table.Name, Schema: table.Schema, Comment: table.Comment, PrimaryKey: slices.Clone(table.PrimaryKey)}
-		for _, part := range table.PrimaryKeyParts {
-			declared.PrimaryKeyParts = append(declared.PrimaryKeyParts, &protocol.DeclaredKeyPart{Column: part.Name, Prefix: part.Prefix, Descending: part.Desc})
-		}
-		for _, field := range reading.Fields {
-			if field.Table != table.Qualified() {
-				continue
-			}
-			declared.Columns = append(declared.Columns, &protocol.DeclaredColumn{Name: field.Name, Type: field.Type, Nullable: field.Nullable, Primary: field.Primary,
-				IdentityStart: field.IdentityStart, IdentityIncrement: field.IdentityIncrement, DefaultValue: field.Default, DefaultSet: field.DefaultSet, Comment: field.Comment})
-		}
-		for _, index := range reading.Indexes {
-			if index.TableName != table.Qualified() {
-				continue
-			}
-			if settings := indexSettings(index); len(settings) != 0 {
-				gaps = append(gaps, gap(index.document, index.span, fmt.Sprintf("index %s of table %s declares %s, which a SQL schema reading has no home for",
-					quoteName(index.Name), quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "))))
-			}
-			declared.Indexes = append(declared.Indexes, &protocol.DeclaredIndex{Name: index.Name, Fields: slices.Clone(index.Fields), Unique: index.Unique, Comment: index.Comment,
-				Type: index.Type, IncludeColumns: slices.Clone(index.IncludeColumns), StorageParameters: index.StorageParams, TableName: index.TableName})
-		}
+		declared, refused := declaredTable(reading, table)
+		gaps = append(gaps, refused...)
 		trace(protocol.SQLObjectTrace_TABLES, len(reply.Tables), table.document, table.span)
 		reply.Tables = append(reply.Tables, declared)
 	}
@@ -256,19 +244,59 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool)
 		reply.Facets = append(reply.Facets, envelope)
 	}
 	for i, file := range reading.Files {
-		declared := &protocol.SQLDocumentDeclarations{DocumentId: documents[i].GetId()}
-		for _, object := range file.Objects {
-			declared.Objects = append(declared.Objects, &protocol.SQLDeclaration{Kind: object.Kind, Name: object.Name})
-		}
-		for _, object := range file.Guards {
-			declared.Guards = append(declared.Guards, &protocol.SQLDeclaration{Kind: object.Kind, Name: object.Name})
-		}
-		for _, statement := range file.Tables {
-			declared.Tables = append(declared.Tables, &protocol.SQLTableStatement{Name: statement.Name, Drop: statement.Drop, Guarded: statement.Guarded})
-		}
-		reply.Declarations = append(reply.Declarations, declared)
+		reply.Declarations = append(reply.Declarations, documentDeclarations(documents[i].GetId(), file))
 	}
 	return reply, gaps
+}
+
+// declaredTable writes a table of the reading as the reply declares it, with
+// its key parts, columns and indexes, and returns the refusals of the table
+// and index settings a SQL schema reading has no home for.
+func declaredTable(reading *Reading, table Table) (*protocol.DeclaredTable, []*Refusal) {
+	var gaps []*Refusal
+	if settings := tableSettings(table.Facets); len(settings) != 0 {
+		gaps = append(gaps, gap(table.document, table.span, fmt.Sprintf("table %s declares %s, which a SQL schema reading has no home for: "+
+			"the host refuses the settings of a table in a SQL schema reading", quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "))))
+	}
+	declared := &protocol.DeclaredTable{Name: table.Name, Schema: table.Schema, Comment: table.Comment, PrimaryKey: slices.Clone(table.PrimaryKey)}
+	for _, part := range table.PrimaryKeyParts {
+		declared.PrimaryKeyParts = append(declared.PrimaryKeyParts, &protocol.DeclaredKeyPart{Column: part.Name, Prefix: part.Prefix, Descending: part.Desc})
+	}
+	for _, field := range reading.Fields {
+		if field.Table != table.Qualified() {
+			continue
+		}
+		declared.Columns = append(declared.Columns, &protocol.DeclaredColumn{Name: field.Name, Type: field.Type, Nullable: field.Nullable, Primary: field.Primary,
+			IdentityStart: field.IdentityStart, IdentityIncrement: field.IdentityIncrement, DefaultValue: field.Default, DefaultSet: field.DefaultSet, Comment: field.Comment})
+	}
+	for _, index := range reading.Indexes {
+		if index.TableName != table.Qualified() {
+			continue
+		}
+		if settings := indexSettings(index); len(settings) != 0 {
+			gaps = append(gaps, gap(index.document, index.span, fmt.Sprintf("index %s of table %s declares %s, which a SQL schema reading has no home for",
+				quoteName(index.Name), quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "))))
+		}
+		declared.Indexes = append(declared.Indexes, &protocol.DeclaredIndex{Name: index.Name, Fields: slices.Clone(index.Fields), Unique: index.Unique, Comment: index.Comment,
+			Type: index.Type, IncludeColumns: slices.Clone(index.IncludeColumns), StorageParameters: index.StorageParams, TableName: index.TableName})
+	}
+	return declared, gaps
+}
+
+// documentDeclarations writes what one document of the load declares, in its
+// order: the objects, the guards, and the table statements.
+func documentDeclarations(documentID string, file FileDeclarations) *protocol.SQLDocumentDeclarations {
+	declared := &protocol.SQLDocumentDeclarations{DocumentId: documentID}
+	for _, object := range file.Objects {
+		declared.Objects = append(declared.Objects, &protocol.SQLDeclaration{Kind: object.Kind, Name: object.Name})
+	}
+	for _, object := range file.Guards {
+		declared.Guards = append(declared.Guards, &protocol.SQLDeclaration{Kind: object.Kind, Name: object.Name})
+	}
+	for _, statement := range file.Tables {
+		declared.Tables = append(declared.Tables, &protocol.SQLTableStatement{Name: statement.Name, Drop: statement.Drop, Guarded: statement.Guarded})
+	}
+	return declared
 }
 
 func gap(document int, text span, message string) *Refusal {

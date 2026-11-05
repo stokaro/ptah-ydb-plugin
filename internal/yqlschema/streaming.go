@@ -52,33 +52,7 @@ func (p *parser) streamingQuery(replace bool) *createStreamingQuery {
 	node := &createStreamingQuery{schema: directory, name: name, allowStateReset: replace && !guarded, replace: replace, ifNotExists: guarded}
 	if p.word("WITH") {
 		p.pos++
-		p.optionsUsing(func(key string) string {
-			value := p.expression()
-			switch key {
-			case "run":
-				switch {
-				case strings.EqualFold(value, "TRUE"):
-					node.spec.Run = new(true)
-				case strings.EqualFold(value, "FALSE"):
-					node.spec.Run = new(false)
-				default:
-					p.failf("streaming query run requires TRUE or FALSE")
-				}
-			case "resource_pool":
-				pool, ok := stringLiteral(value, "String")
-				literal := newParser(value)
-				if len(literal.tokens) == 1 && literal.tokens[0].Type == yql.TokenIdentifier {
-					pool, ok = yql.IdentifierValue(value)
-				}
-				if !ok || pool == "" || strings.HasPrefix(pool, "$") {
-					p.failf("streaming query resource_pool requires a literal name")
-				}
-				node.spec.ResourcePool = pool
-			default:
-				p.failf("unsupported streaming query setting %q", key)
-			}
-			return value
-		})
+		p.optionsUsing(func(key string) string { return p.streamingSetting(&node.spec, key) })
 	}
 	p.wantWord("AS")
 	block := newParser(p.queryBody())
@@ -92,4 +66,35 @@ func (p *parser) streamingQuery(replace bool) *createStreamingQuery {
 		p.failf("%v", err)
 	}
 	return node
+}
+
+// streamingSetting reads the value of the WITH setting key of a streaming
+// query into spec, and returns the value as written. It fails on a setting the
+// model has no place for and on a value the setting does not take.
+func (p *parser) streamingSetting(spec *streaming.Spec, key string) string {
+	value := p.expression()
+	switch key {
+	case "run":
+		switch {
+		case strings.EqualFold(value, "TRUE"):
+			spec.Run = new(true)
+		case strings.EqualFold(value, "FALSE"):
+			spec.Run = new(false)
+		default:
+			p.failf("streaming query run requires TRUE or FALSE")
+		}
+	case "resource_pool":
+		pool, ok := stringLiteral(value, "String")
+		literal := newParser(value)
+		if len(literal.tokens) == 1 && literal.tokens[0].Type == yql.TokenIdentifier {
+			pool, ok = yql.IdentifierValue(value)
+		}
+		if !ok || pool == "" || strings.HasPrefix(pool, "$") {
+			p.failf("streaming query resource_pool requires a literal name")
+		}
+		spec.ResourcePool = pool
+	default:
+		p.failf("unsupported streaming query setting %q", key)
+	}
+	return value
 }
