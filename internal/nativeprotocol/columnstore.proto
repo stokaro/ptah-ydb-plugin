@@ -237,10 +237,11 @@ message ColumnTableCreation {
 
 // One step of a change of a column table's local indexes, the payload of the
 // provider's local-index operation: `ALTER TABLE ... ADD INDEX ... LOCAL USING
-// ...` for add, `ALTER TABLE ... DROP INDEX ...` for drop. Exactly one is
-// present. add states the index as a creation does; drop is the index as the
-// table held it when the step was planned, and a table that holds another one
-// under that name refuses the step before it is written.
+// ...` for add alone, `ALTER TABLE ... DROP INDEX ...` for drop alone, and
+// `ALTER TABLE ... RENAME INDEX drop TO add` for both, an index whose name
+// alone changes. add states the index as a creation does; drop is the index as
+// the table held it when the step was planned, and a table that holds another
+// one under that name refuses the step before it is written.
 message ColumnTableLocalIndexAlteration {
     LocalIndexObservation add = 1;
     LocalIndexObservation drop = 2;

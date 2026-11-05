@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -26,7 +27,10 @@ import (
 // does:
 //
 //  1. CREATE TABLE a scratch table from the declaration, its indexes with it,
-//     each setting the declaration leaves out taken from the old table;
+//     each setting the declaration leaves out taken from the old table; then
+//     ALTER INDEX ... SET on the scratch table for each index whose held
+//     partitioning or read replicas differ from a new index's, since the
+//     native call that creates a table takes no index settings;
 //  2. INSERT INTO the scratch table the rows of the old one, each changed
 //     column converted, a row that does not convert failing the copy;
 //  3. ALTER TABLE the old table RENAME TO a second scratch name;
@@ -65,14 +69,16 @@ type rebuildNeed struct {
 	// subject names the change, as the refusal words it.
 	subject string
 	// capability is the host capability key a target would need to make it in
-	// place.
+	// place, and empty for a change no key decides, which subject says why
+	// YDB cannot make in place.
 	capability string
 }
 
 // rebuildNeeds returns the changes of an altered row table that need a
-// rebuild: its key, a column's type, a column becoming NOT NULL. The
-// declaration is compiled with the creation rules; one that does not compile
-// needs no rebuild here, and the alteration refuses it in its own words.
+// rebuild: its key, a column's type, a column becoming NOT NULL, a starting
+// layout the table was not created with (see layoutRefusal). The declaration
+// is compiled with the creation rules; one that does not compile needs no
+// rebuild here, and the alteration refuses it in its own words.
 func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps map[string]bool) ([]rebuildNeed, *Ydb_Table.CreateTableRequest) {
 	desired, err := Compile(owner, table.GetDesired(), caps)
 	if err != nil {
@@ -114,6 +120,14 @@ func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps
 				subject: fmt.Sprintf("making column %q of table %q NOT NULL", column.GetName(), label)})
 		}
 	}
+	// A layout's witness is the minimum it gives a new table, which a rebuild
+	// creates the table with: keepHeldSettings keeps no held minimum beside
+	// a layout.
+	if wanted, err := layoutOfRequest(desired); err == nil {
+		if reason := layoutRefusal(wanted, desired.GetPartitioningSettings(), heldProperties(table.GetCurrent()).GetPartitioningSettings()); reason != "" {
+			needs = append(needs, rebuildNeed{subject: fmt.Sprintf("table %q: %s", label, reason)})
+		}
+	}
 	return needs, desired
 }
 
@@ -121,6 +135,9 @@ func rebuildNeeds(owner *protocol.Reference, table *protocol.PlanningTable, caps
 // plan was not asked to rebuild: the embedded engine's words, naming how the
 // operator asks for one.
 func rebuildRefusal(need rebuildNeed, policy *protocol.PlanningPolicy) string {
+	if need.capability == "" {
+		return fmt.Sprintf("%s; YDB makes it by rebuilding the table, which Ptah plans when asked with %s", need.subject, requestedWith(policy))
+	}
 	return fmt.Sprintf("%s, which requires target capability %s, unavailable on this ydb target; YDB makes it by rebuilding the table, which Ptah plans when asked with %s",
 		need.subject, need.capability, requestedWith(policy))
 }
@@ -140,19 +157,19 @@ func requestedWith(policy *protocol.PlanningPolicy) string {
 // new table has, as the attributes YDB keeps them in. On the common wire a
 // comment is not a table setting, so the read of the table's properties
 // holds none, and the host plans no change for a comment it finds in place.
-func keepHeldComments(request *Ydb_Table.CreateTableRequest, owner *protocol.Reference, common *protocol.ObservedCommonObjects) {
-	comments := ydbcomment.Comments{Columns: map[string]string{}, Indexes: map[string]string{}}
-	for _, comment := range common.GetComments() {
-		object := comment.GetObject()
-		switch {
-		case object.GetSchema() != owner.GetSchema():
-		case object.GetKind() == "table" && object.GetName() == owner.GetName():
-			comments.Own = comment.GetText()
-		case len(object.GetPath()) != 1 || object.GetPath()[0] != owner.GetName():
-		case object.GetKind() == "column" && slices.ContainsFunc(request.GetColumns(), func(column *Ydb_Table.ColumnMeta) bool { return column.GetName() == object.GetName() }):
-			comments.Columns[object.GetName()] = comment.GetText()
-		case object.GetKind() == "index" && slices.ContainsFunc(request.GetIndexes(), func(index *Ydb_Table.TableIndex) bool { return index.GetName() == object.GetName() }):
-			comments.Indexes[object.GetName()] = comment.GetText()
+// The host carries them on the observed table, its columns and its indexes;
+// the planning request's observed common objects hold what lies beyond the
+// tables, and a host fills them for no table.
+func keepHeldComments(request *Ydb_Table.CreateTableRequest, current *protocol.ObservedTable) {
+	comments := ydbcomment.Comments{Own: current.GetComment(), Columns: map[string]string{}, Indexes: map[string]string{}}
+	for _, column := range current.GetColumns() {
+		if column.GetComment() != "" && slices.ContainsFunc(request.GetColumns(), func(created *Ydb_Table.ColumnMeta) bool { return created.GetName() == column.GetName() }) {
+			comments.Columns[column.GetName()] = column.GetComment()
+		}
+	}
+	for _, index := range current.GetIndexes() {
+		if index.GetComment() != "" && slices.ContainsFunc(request.GetIndexes(), func(created *Ydb_Table.TableIndex) bool { return created.GetName() == index.GetName() }) {
+			comments.Indexes[index.GetName()] = index.GetComment()
 		}
 	}
 	for key, value := range comments.Attributes() {
@@ -239,9 +256,11 @@ type rebuild struct {
 // the declaration desired compiles to, numbered with number, or the reason it
 // cannot be rebuilt. names are the tables the request declares or holds, which
 // a scratch name must not take. common is what the read reported of the common
-// objects, whose comments on the table the new one keeps.
+// objects, whose comments on the table the new one keeps. steps are the host's
+// steps, whose index renames name the old index a new one takes its settings
+// from.
 func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names map[string]bool,
-	common *protocol.ObservedCommonObjects, capabilities map[string]bool) (*rebuild, string, error) {
+	capabilities map[string]bool, steps []*protocol.CommonPlanningStep) (*rebuild, string, error) {
 	label := tableLabel(owner)
 	subject := fmt.Sprintf("rebuilding table %q", label)
 	current := table.GetCurrent()
@@ -269,7 +288,16 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	}
 	request := proto.CloneOf(desired)
 	keepHeldSettings(request, table)
-	keepHeldComments(request, owner, common)
+	keepHeldComments(request, table.GetCurrent())
+	// A cache mode the old table holds is written into the new table too, so
+	// the target must take one.
+	if reason := creationCacheModeRefusal(subject+" with column family cache mode", request, capabilities); reason != "" {
+		return nil, reason, nil
+	}
+	indexSettings, reason := rebuiltIndexSettings(request, table, steps)
+	if reason != "" {
+		return nil, subject + ": " + reason, nil
+	}
 	heldColumns := make([]string, 0, len(current.GetColumns()))
 	for _, column := range current.GetColumns() {
 		heldColumns = append(heldColumns, column.GetName())
@@ -324,9 +352,20 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	planned := []rebuildStep{
 		{operation: create, effects: []*protocol.PlanningEffect{{Subject: scratchSubject, Action: protocol.PlanningEffect_CREATE},
 			{Subject: slot(scratchSubject), Action: protocol.PlanningEffect_CREATE}}, notes: rebuildNotes(label)},
-		{operation: copyOperation, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_READ},
-			{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_ALTER}}},
 	}
+	// The settings of an index change on the empty new table, before the copy
+	// fills it.
+	for n, change := range indexSettings {
+		operation, err := CaptureIndexSettings(fmt.Sprintf("%sindex-settings/%06d", prefix, n), scratchOwner, change)
+		if err != nil {
+			return nil, subject + ": " + err.Error(), nil
+		}
+		planned = append(planned, rebuildStep{operation: operation, effects: []*protocol.PlanningEffect{
+			{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_READ},
+			{Subject: indexSubject(scratchSubject, change.held.GetName()), Action: protocol.PlanningEffect_ALTER}}})
+	}
+	planned = append(planned, rebuildStep{operation: copyOperation, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_READ},
+		{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_ALTER}}})
 	if len(feeds.drops) != 0 {
 		operation, err := schema.CaptureChangefeedOperation(prefix+"drop-changefeeds", owner, feeds.drops)
 		if err != nil {
@@ -436,6 +475,76 @@ func rebuildChangefeeds(owner *protocol.Reference, table *protocol.PlanningTable
 	}
 	result.adds = adds
 	return result, "", nil
+}
+
+// rebuiltIndexSettings returns the changes that give each global index of the
+// new table of a rebuild the partitioning and read replicas the old table's
+// index holds, as the host's embedded engine names every setting of a rebuilt
+// index: the declaration states no setting of an index the new table takes
+// from the common declaration, so each one keeps what the old index holds. The
+// old index is the one under the same name, or under the name the host's step
+// renames it from, as the read describes it: in the native index set, or, for
+// an index the common model describes, beside it. An index the old table does not hold, or whose settings
+// are a new index's, needs no change. The native call that creates the table
+// takes no index settings, so each change runs on the new table after it is
+// created, over the settings YDB gives a new index (see newIndexDescription).
+// A non-empty reason refuses the rebuild.
+func rebuiltIndexSettings(request *Ydb_Table.CreateTableRequest, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep) ([]indexSettingsChange, string) {
+	var held native.IndexObservations
+	for _, record := range table.GetCurrent().GetFeatures().GetFacets().GetRecords() {
+		if record.GetKind() == schema.IndexProperties {
+			if err := protojson.Unmarshal(record.GetValue().GetValue().GetPayload(), &held); err != nil {
+				return nil, fmt.Sprintf("the read of the table's indexes does not decode: %v", err)
+			}
+		}
+	}
+	formerName := map[string]string{}
+	for _, step := range steps {
+		if rename := step.GetRenamedIndex(); rename != nil && step.GetParent() != nil && provider.CompareIdentities(step.GetParent(), table.GetSubject()) == 0 {
+			formerName[rename.GetTo()] = rename.GetFrom()
+		}
+	}
+	var changes []indexSettingsChange
+	for _, index := range request.GetIndexes() {
+		name := index.GetName()
+		if former, renamed := formerName[name]; renamed {
+			name = former
+		}
+		var old *native.TableIndexDescription
+		if at := slices.IndexFunc(held.GetIndexes(), func(observed *native.ObservedIndex) bool { return observed.GetDescription().GetName() == name }); at >= 0 {
+			old = held.GetIndexes()[at].GetDescription()
+		}
+		if at := slices.IndexFunc(held.GetCommonIndexes(), func(observed *native.TableIndexDescription) bool { return observed.GetName() == name }); at >= 0 {
+			old = held.GetCommonIndexes()[at]
+		}
+		if old == nil {
+			continue
+		}
+		change, reason := planIndexSettings(index.GetName(), keptIndexSettings(HeldIndexSettings(old)), newIndexDescription(indexIntentOf(index)))
+		if reason != "" {
+			return nil, reason
+		}
+		if change != nil {
+			changes = append(changes, *change)
+		}
+	}
+	return changes, ""
+}
+
+// keptIndexSettings is what a new index states to keep the settings held
+// describes: every automatic partitioning setting, the partition size only
+// where it splits by size, since YDB reports none otherwise, and the read
+// replicas. The partition columns and a starting layout are left out: YDB
+// partitions an index on its own key and takes no layout for one.
+func keptIndexSettings(held *native.GlobalIndexSettings) *native.GlobalIndexSettings {
+	partitioning := proto.CloneOf(held.GetPartitioningSettings())
+	if partitioning != nil {
+		partitioning.PartitionBy = nil
+		if partitioning.GetPartitioningBySize() != Ydb.FeatureFlag_ENABLED {
+			partitioning.PartitionSizeMb = 0
+		}
+	}
+	return &native.GlobalIndexSettings{PartitioningSettings: partitioning, ReadReplicasSettings: proto.CloneOf(held.GetReadReplicasSettings())}
 }
 
 // rebuildNotes are the notes the first step of a rebuild carries above it:
@@ -568,23 +677,32 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 	}
 	placements := heldColumnProperties(current)
 	families := map[string]bool{}
-	for _, family := range request.GetColumnFamilies() {
-		families[familyKey(family.GetName())] = true
-		if held := findFamily(held.GetColumnFamilies(), family.GetName()); held != nil {
-			if family.GetData().GetMedia() == "" && held.GetData().GetMedia() != "" {
-				family.Data = proto.CloneOf(held.GetData())
-			}
-			if family.GetCompression() == Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED {
-				family.Compression = held.GetCompression()
-			}
+	for i, requested := range request.GetColumnFamilies() {
+		families[familyKey(requested.GetName())] = true
+		held := findFamily(held.GetColumnFamilies(), requested.GetName())
+		family, err := schema.NativeFamily(requested)
+		if held == nil || err != nil {
+			// A family the request cannot read is refused when the creation
+			// is captured.
+			continue
 		}
+		if family.GetData().GetMedia() == "" && held.GetData().GetMedia() != "" {
+			family.Data = proto.CloneOf(held.GetData())
+		}
+		if family.GetCompression() == Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED {
+			family.Compression = held.GetCompression()
+		}
+		if family.GetCacheMode() == native.ColumnFamily_CACHE_MODE_UNSPECIFIED {
+			family.CacheMode = held.GetCacheMode()
+		}
+		request.ColumnFamilies[i] = schema.RequestFamily(family)
 	}
 	for _, family := range held.GetColumnFamilies() {
 		if families[familyKey(family.GetName())] {
 			continue
 		}
-		request.ColumnFamilies = append(request.ColumnFamilies, &Ydb_Table.ColumnFamily{Name: familyKey(family.GetName()), Data: proto.CloneOf(family.GetData()),
-			Compression: family.GetCompression()})
+		request.ColumnFamilies = append(request.ColumnFamilies, schema.RequestFamily(&native.ColumnFamily{Name: familyKey(family.GetName()),
+			Data: proto.CloneOf(family.GetData()), Compression: family.GetCompression(), CacheMode: family.GetCacheMode()}))
 		families[familyKey(family.GetName())] = true
 	}
 	placed := map[string]bool{}

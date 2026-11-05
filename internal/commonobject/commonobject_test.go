@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -82,7 +83,8 @@ func TestRender_FailurePath(t *testing.T) {
 		change *protocol.CommonObjectChange
 		want   string
 	}{
-		{"replacement", createView(true, view(nil)), `unsupported feature: CREATE OR REPLACE VIEW app/v: YDB has no CREATE OR REPLACE VIEW`},
+		{"replacement", createView(true, view(nil)), `unsupported feature: CREATE OR REPLACE VIEW app/v: YDB has no CREATE OR REPLACE VIEW, and a host ` +
+			`that reads the session's create_or_replace_view drops a changed view and creates it again`},
 		{"materialized", createView(false, view(func(v *protocol.SQLView) { v.Materialized = true })), `unsupported feature: view app/v: YDB has no materialized view`},
 		{"no query", createView(false, view(func(v *protocol.SQLView) { v.Body = "-- nothing\n;" })), `unsupported feature: view app/v: a YDB view needs a query`},
 		{"check option", createView(false, view(func(v *protocol.SQLView) { v.WithCheck = true })),
@@ -162,4 +164,30 @@ func TestSupport(t *testing.T) {
 	capabilities := commonobject.Capabilities()
 	c.Assert(capabilities["views"] && capabilities["view_comments"] && capabilities["comment_attributes"], qt.IsTrue)
 	c.Assert(capabilities["create_or_replace_view"] || capabilities["materialized_views"] || capabilities["schema_comments"], qt.IsFalse)
+}
+
+// A refused view change is a reason the host prints after the call's code,
+// in the words the refusal has: it names the view and what YDB lacks.
+func TestRenderViewRefusalIsAReason_FailurePath(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change *protocol.CommonObjectChange
+		reason string
+	}{
+		{"replacement", createView(true, view(nil)), "unsupported feature: CREATE OR REPLACE VIEW app/v: YDB has no CREATE OR REPLACE VIEW, " +
+			"and a host that reads the session's create_or_replace_view drops a changed view and creates it again"},
+		{"materialized", createView(false, view(func(v *protocol.SQLView) { v.Materialized = true })), "unsupported feature: view app/v: YDB has no materialized view"},
+		{"materialized view removal", &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_DropView{
+			DropView: &protocol.Reference{Engine: "ydb", Kind: "materialized_view", Name: "m"}}}, "unsupported feature: DROP of materialized_view m: YDB has no materialized view"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			got, err := commonobject.Render(tc.change, nil)
+			c.Assert(err, qt.ErrorIs, commonobject.ErrUnsupported)
+			var written *authored.Error
+			c.Assert(err, qt.ErrorAs, &written)
+			c.Assert(written.Error(), qt.Equals, tc.reason)
+			c.Assert(got, qt.Equals, "")
+		})
+	}
 }

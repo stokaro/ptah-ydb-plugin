@@ -141,6 +141,8 @@ func TestDecode_HappyPath(t *testing.T) {
 			`{"columnFamilies":[{"name":"cold"}],"keyBloomFilter":"ENABLED","ttlSettings":{"dateTypeColumn":{"columnName":"created_at","expireAfterSeconds":3600}}}`},
 		{"a family that states nothing", `{"tables":{"items":{"column_families":{"default":{}}}}}`, `{"columnFamilies":[{"name":"default"}]}`},
 		{"a storage pool keeps its case", `{"tables":{"items":{"column_families":{" Cold ":{"data":" HDD "}}}}}`, `{"columnFamilies":[{"data":{"media":"HDD"},"name":"Cold"}]}`},
+		{"cache modes in any case", `{"tables":{"items":{"column_families":{"hot":{"cache_mode":" In_Memory "},"cold":{"compression":"lz4","cache_mode":"REGULAR"}}}}}`,
+			`{"columnFamilies":[{"cacheMode":"CACHE_MODE_IN_MEMORY","name":"hot"},{"cacheMode":"CACHE_MODE_REGULAR","compression":"COMPRESSION_LZ4","name":"cold"}]}`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -302,7 +304,8 @@ func TestDecode_FailurePath(t *testing.T) {
 		{"families that are not a mapping", `{"tables":{"items":{"column_families":["cold"]}}}`, `table "items": column_families: expected a mapping of family names to settings`},
 		{"a setting no family has", `{"tables":{"items":{"column_families":{"cold":{"barriers":"x"}}}}}`, `table "items": column family "cold": unknown setting "barriers"`},
 		{"a family without a name", `{"tables":{"items":{"column_families":{" ":{}}}}}`, `table "items": column family " ": invalid name "": a column family needs a name`},
-		{"a cache mode", `{"tables":{"items":{"column_families":{"cold":{"cache_mode":"regular"}}}}}`, `table "items": column family "cold": cache_mode is not supported by the YDB provider yet: .*`},
+		{"an unknown cache mode", `{"tables":{"items":{"column_families":{"cold":{"cache_mode":"ram"}}}}}`, `table "items": column family "cold": invalid cache_mode "ram": takes regular or in_memory`},
+		{"an empty cache mode", `{"tables":{"items":{"column_families":{"cold":{"cache_mode":""}}}}}`, `table "items": column family "cold": invalid cache_mode "": takes regular or in_memory`},
 		{"nested fields", `{"tables":{"items":{"column_families":{"cold":{"fields":[["body"]]}}}}}`, `table "items": column family "cold": fields: expected a scalar`},
 		{"null field", `{"tables":{"items":{"column_families":{"cold":{"fields":[null]}}}}}`, `table "items": column family "cold": invalid fields "": .*`},
 		{"empty fields list", `{"tables":{"items":{"column_families":{"cold":{"fields":[]}}}}}`, `table "items": column family "cold": invalid fields "": .*`},
