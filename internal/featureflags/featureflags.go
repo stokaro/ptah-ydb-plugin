@@ -106,6 +106,11 @@ var gates = []Gate{
 	// Turned off, CREATE ASYNC REPLICATION answers `Asynchronous replication
 	// is disabled`.
 	{Key: "async_replication", Flag: "EnableReplication", refusals: []string{"Asynchronous replication is disabled"}},
+	// A column family's cache mode: on by default on 26.2.1.14, absent from
+	// the 25.1.4.7 page, which leaves the preset's false. With it off, YDB
+	// answers `Setting cache_mode is not allowed`, as the host measured on
+	// 25.3.
+	{Key: "column_family_cache_mode", Flag: "EnableTableCacheModes", refusals: []string{"Setting cache_mode is not allowed"}},
 }
 
 // streaming is the gate of streaming_queries, which needs EnableStreamingQueries
