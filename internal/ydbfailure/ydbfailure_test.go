@@ -400,3 +400,53 @@ func TestWithoutLinesCountsFromTheUnitsText(t *testing.T) {
 		})
 	}
 }
+
+// flagSentence is the reason of an answer whose refusal says flag is off,
+// around the provider's own reason.
+func flagSentence(key, flag, reason string) string {
+	return "capability " + key + " is off on this YDB cluster, which runs with feature flag " + flag + " off: " + reason +
+		". Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans"
+}
+
+// A refusal YDB answers because a feature flag is off names the capability and
+// the flag, in the host's embedded engine's words, around the provider's own
+// reason where the host's engine quotes YDB's text. The flag's text, which is
+// YDB's, is not in it. The texts are measured ones: an index rename on a
+// cluster with EnableMoveIndex off, and a resource pool on one with
+// EnableResourcePools off, which every line has by default.
+func TestRefusedReasonNamesTheFlag_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		answer ydbfailure.Answer
+		want   string
+	}{
+		{name: "a refused statement", answer: ydbfailure.Answer{Status: Ydb.StatusIds_PRECONDITION_FAILED, Issues: []string{"Execution failed", "Move index is not supported yet"}},
+			want: flagSentence("index_rename", "EnableMoveIndex", "YDB refused the statement (PRECONDITION_FAILED)")},
+		{name: "a statement refused while YDB compiled it", answer: ydbfailure.Answer{Status: Ydb.StatusIds_GENERIC_ERROR, Compiled: true, Code: 1030, Row: 1, Column: 1,
+			Issues: []string{"Resource pools are disabled. Please contact your system administrator"}},
+			want: flagSentence("resource_pools", "EnableResourcePools", "YDB refused the statement while compiling it (GENERIC_ERROR, issue 1030, line 1, column 1)")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			got := test.answer.RefusedReason()
+			c.Assert(got, qt.Equals, test.want)
+			c.Assert(provider.ValidateDiagnostic(&protocol.ProviderDiagnostic{Reason: got}), qt.IsNil)
+		})
+	}
+}
+
+// A unit whose outcome is unknown says which flag YDB refused it for too.
+func TestUnknownReasonNamesTheFlag_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	unknown := ydbfailure.Answer{Status: Ydb.StatusIds_GENERIC_ERROR, Issues: []string{"Streaming queries are disabled"}}
+	c.Assert(unknown.UnknownReason(), qt.Equals, flagSentence("streaming_queries", "EnableStreamingQueries",
+		"the unit's outcome is unknown: YDB answered GENERIC_ERROR, which does not show whether the unit applied"))
+}
+
+// An answer whose issues say nothing of a flag keeps the provider's reason as
+// it is.
+func TestRefusedReasonNamesTheFlag_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	refused := ydbfailure.Answer{Status: Ydb.StatusIds_PRECONDITION_FAILED, Code: 2012, Issues: []string{"Constraint violated", "Conflict with existing key."}}
+	c.Assert(refused.RefusedReason(), qt.Equals, "YDB refused the statement: it violates a constraint of the table, such as a key the table holds (PRECONDITION_FAILED, issue 2012)")
+}

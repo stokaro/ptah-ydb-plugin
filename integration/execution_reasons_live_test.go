@@ -80,3 +80,25 @@ func TestRefusedUnitGivesItsReasonSubprocess(t *testing.T) {
 	c.Assert(unlistedErr.Error(), qt.Equals, "provider execution: NOT_APPLIED (0 units confirmed applied)")
 	assertRowCount(c, opened, table, 1)
 }
+
+// A unit YDB refuses because a feature flag is off names the capability and
+// the flag in the host's embedded engine's words, around the provider's own
+// reason, and not YDB's text. A resource pool is refused on every line, which
+// runs with EnableResourcePools off by default.
+func TestRefusedUnitNamesTheFeatureFlagSubprocess(t *testing.T) {
+	c := testcheck.New(t)
+	client := startProviderFor(c, provider.ErrorReasonsFeature)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	c.Assert(session.GetCapabilities()["resource_pools"], qt.IsFalse)
+
+	result, err := executeFailing(c, client, session.Id, "CREATE RESOURCE POOL `ptah_flag_reason_pool` WITH (CONCURRENT_QUERY_LIMIT = 1)")
+
+	c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
+	c.Assert(err.Error(), qt.Equals, "provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, "+
+		"which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on, or name the cluster's "+
+		"monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans")
+	c.Assert(result.GetMessage(), qt.Contains, "Resource pools are disabled")
+	c.Assert(err.Error(), qt.Not(qt.Contains), "Resource pools are disabled")
+}

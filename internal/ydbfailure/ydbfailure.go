@@ -9,9 +9,10 @@
 // error text, which names connection addresses. No host prints the message.
 // The reason of an Execute or FinishTransaction reply, which a host that
 // lists errors.reasons prints, is a sentence of the provider's own: what YDB
-// did, its status, and the issue code and the position YDB gave, and never
-// YDB's issue text, which quotes the statement's text, a literal in it or the
-// database's path.
+// did, its status, and the issue code and the position YDB gave, with the
+// capability and the feature flag where YDB refused for want of the flag, and
+// never YDB's issue text, which quotes the statement's text, a literal in it
+// or the database's path.
 package ydbfailure
 
 import (
@@ -20,6 +21,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/rowdata"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yqlquery"
@@ -218,7 +220,8 @@ func (a Answer) detail() string {
 
 // RefusedReason is the reason of a reply to a unit YDB refused. It says that
 // YDB refused the statement, whether while compiling it, what the issue code
-// means when the provider knows, and the detail.
+// means when the provider knows, and the detail, and names the feature flag
+// the refusal says is off (see [Answer.flagged]).
 func (a Answer) RefusedReason() string {
 	reason := "YDB refused the statement"
 	if a.Compiled {
@@ -227,7 +230,25 @@ func (a Answer) RefusedReason() string {
 	if meaning, known := issueMeanings[a.Code]; known {
 		reason += ": " + meaning
 	}
-	return reason + " (" + a.detail() + ")"
+	return a.flagged(reason + " (" + a.detail() + ")")
+}
+
+// flagged is reason for an answer whose issues say a feature flag YDB keeps a
+// capability behind is off, in the words the host's embedded engine writes
+// for such a refusal: the capability, the flag, then reason where the host's
+// engine quotes YDB's text, and how to have the session report the
+// capability. The plan took the capability from the release line's
+// default, and this cluster runs with the flag off. A session reads the
+// flags only when the address names the monitoring endpoint. reason is
+// returned as it is for any other answer.
+func (a Answer) flagged(reason string) string {
+	gate, off := featureflags.Refused(a.Issues)
+	if !off {
+		return reason
+	}
+	return fmt.Sprintf("capability %s is off on this YDB cluster, which runs with feature flag %s off: %s. "+
+		"Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans",
+		gate.Key, gate.Flag, reason)
 }
 
 // AbortedReason is the reason of a reply to a unit or a commit whose
@@ -244,7 +265,7 @@ func (a Answer) UnknownReason() string {
 	if a.Status == Ydb.StatusIds_STATUS_CODE_UNSPECIFIED {
 		return "the unit's outcome is unknown: no answer of YDB's shows whether it applied"
 	}
-	return "the unit's outcome is unknown: YDB answered " + a.detail() + ", which does not show whether the unit applied"
+	return a.flagged("the unit's outcome is unknown: YDB answered " + a.detail() + ", which does not show whether the unit applied")
 }
 
 // Unit is a unit of an Execute request that failed after it was dispatched.
