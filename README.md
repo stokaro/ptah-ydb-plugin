@@ -3130,7 +3130,8 @@ sits in included, with the settings the declaration leaves out (its cache mode
 among them, which a target without `column_family_cache_mode` refuses to
 write), the family each column sits in where the declaration does not say (see
 [Column families](#column-families)), the automatic partitioning, the read replicas, the key bloom
-filter, the TTL where the declaration states no table properties, and the run
+filter (`KEY_BLOOM_FILTER = DISABLED` for a table that states none, as the host's
+embedded engine names it), the TTL where the declaration states no table properties, and the run
 interval of the TTL it holds where the declaration states a TTL, which names
 none since YQL has no setting for one. A cluster's table profile may have
 given the old table any of them, and YQL drops neither a family nor a setting,
@@ -3169,8 +3170,12 @@ target. YDB renames no table that carries a changefeed, so a rebuild of a
 table that holds changefeeds drops them in a step before the old table moves
 and gives the new table its changefeeds in a step after it is in place: the
 ones the declaration states, or the ones the old table held where the
-declaration does not state them, with their consumers. Each stream restarts,
-and the plan's note says so. A changefeed an asynchronous replication
+declaration does not state them, with their consumers. Each stream restarts.
+The rebuild's first step carries the note, after the rebuild's own notes, in
+the host's embedded engine's words: `Changefeed feed of table app/cf is dropped
+before the swap and added again after it, because YDB moves no table that
+carries a changefeed`, and a changefeed the new table does not get is noted as
+dropped with its topic. A changefeed an asynchronous replication
 controls refuses the rebuild, as does a column table, whose rebuild needs an
 explicit data migration.
 The live tests rebuild a table natively and by text on both release lines,

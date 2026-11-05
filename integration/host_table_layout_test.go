@@ -17,13 +17,13 @@ import (
 // refuse it without a rebuild, and the settings the rebuilt table reads back
 // with. YDB keeps no record of a layout, and the minimum it set from the
 // layout reads back; every other setting the declaration leaves out keeps
-// what the old table held, a key bloom filter nobody set included, which a
-// table reports as no value.
+// what the old table held. A key bloom filter nobody set reads back as
+// DISABLED, which the rebuild names, as the host's embedded engine named it.
 var layoutRebuilds = []struct {
 	name, before, after, refusal, partitioning, bloom string
 }{
 	{"a starting layout", "", ` uniform_partitions="4"`,
-		"it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table", "by_size=ENABLED size=2048 by_load=DISABLED min=4 max=0", ""},
+		"it declares UNIFORM_PARTITIONS = 4, which YDB takes only when it creates a table", "by_size=ENABLED size=2048 by_load=DISABLED min=4 max=0", "DISABLED"},
 	{"a starting layout over held settings", ` auto_partitioning_by_size="DISABLED" auto_partitioning_max_partitions_count="9" key_bloom_filter="ENABLED"`,
 		` partition_at_keys="(10)"`, "it declares PARTITION_AT_KEYS with one split point, which YDB takes only when it creates a table",
 		"by_size=DISABLED size=0 by_load=DISABLED min=2 max=9", "ENABLED"},

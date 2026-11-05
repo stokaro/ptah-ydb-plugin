@@ -38,22 +38,20 @@ func RecreatedNote(table string, changefeed Feed) string {
 	}
 }
 
-// RebuiltNote says why a rebuild of table drops changefeed and adds it again
-// to the new table, and what the restart costs its readers.
-func RebuiltNote(table string, changefeed Feed) string {
-	note := fmt.Sprintf("Changefeed %s of table %s is dropped before the swap, because YDB moves no table that carries one, "+
-		"and added again to the new table. Its stream restarts: the records nobody read are lost", changefeed.Name, table)
-	consumers := consumerNames(changefeed)
-	switch len(consumers) {
-	case 0:
-		return note + "."
-	case 1:
-		return note + ", and consumer " + consumers[0] + " loses its position and starts again from the beginning " +
-			"of the new stream."
-	default:
-		return note + ", and consumers " + strings.Join(consumers, ", ") + " lose their position and start again " +
-			"from the beginning of the new stream."
+// RebuiltNote says why a rebuild of table drops the changefeeds names and adds
+// them again once the new table holds its name, and what the restart costs
+// their readers, in the host's embedded engine's words. names holds one name
+// at least.
+func RebuiltNote(table string, names []string) string {
+	const why = "because YDB moves no table that carries a changefeed."
+	if len(names) == 1 {
+		return fmt.Sprintf("Changefeed %s of table %s is dropped before the swap and added again after it, %s Its "+
+			"stream restarts: the records nobody read are lost, and its consumers start again from the beginning of "+
+			"the new stream.", names[0], table, why)
 	}
+	return fmt.Sprintf("Changefeeds %s of table %s are dropped before the swap and added again after it, %s Each "+
+		"stream restarts: the records nobody read are lost, and the consumers start again from the beginning of "+
+		"the new stream.", strings.Join(names, ", "), table, why)
 }
 
 // RestartedConsumersNote says why consumers of a changefeed of table are
