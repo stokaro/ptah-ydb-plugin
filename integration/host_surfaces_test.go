@@ -17,6 +17,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-sdk/v3/coordination"
 )
 
@@ -33,10 +34,8 @@ func execAll(c *qt.C, f migrationsFixture, statements ...string) {
 }
 
 // `schema stats` counts the tables, columns and indexes of a directory that
-// also holds a topic, a changefeed, their consumers and a coordination node,
-// and the provider counts the topic, the changefeed, their consumers and the
-// node. The lines are the built-in YDB engine's, help text included. The
-// labels name the dialect and the directory the counts came from.
+// also holds a topic, a changefeed, their consumers and a coordination node.
+// The labels name the dialect and the directory the counts came from.
 func TestHostSchemaStatsCountsWhatTheReadDescribes_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	f := newMigrationsFixture(c)
@@ -60,6 +59,37 @@ func TestHostSchemaStatsCountsWhatTheReadDescribes_HappyPath(t *testing.T) {
 		"ptah_schema_indexes" + labels + " 1\n",
 		"ptah_schema_constraints" + labels + " 0\n",
 		"ptah_schema_views" + labels + " 0\n",
+	} {
+		c.Assert(stdout, qt.Contains, sample)
+	}
+	c.Assert(stdout, qt.Matches, `(?s).*# EOF\n`)
+}
+
+// The host's TestYDBSchemaStats_CountsWhatTheReaderDescribes. For a host that
+// negotiates models.report-counts, the provider counts the topic, the
+// changefeed, their consumers and the coordination node of the directory the
+// test above counts, under the lines of the built-in YDB engine, help text
+// included.
+func TestHostSchemaStatsCountsTheNativeObjects_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ReportCountsFeature)
+	f := newMigrationsFixture(c)
+	absolute := func(name string) string { return path.Join(f.database, f.dir, name) }
+	execAll(c, f,
+		"CREATE TABLE `"+absolute("a")+"` (id Int64 NOT NULL, name Utf8, PRIMARY KEY (id), INDEX a_name GLOBAL SYNC ON (name))",
+		"CREATE TABLE `"+absolute("b")+"` (x Uint64 NOT NULL, y Utf8 NOT NULL, z Bool, PRIMARY KEY (x, y))",
+		"CREATE TOPIC `"+absolute("events")+"` (CONSUMER `one`, CONSUMER `two`)",
+		"ALTER TABLE `"+absolute("a")+"` ADD CHANGEFEED `changes` WITH (MODE = 'UPDATES', FORMAT = 'JSON')",
+		"ALTER TOPIC `"+absolute("a/changes")+"` ADD CONSUMER `reader`",
+	)
+	c.Assert(f.opened.Driver.Coordination().CreateNode(c.Context(), absolute("locks"), coordination.NodeConfig{}), qt.IsNil)
+
+	stdout, err := hostCommand(c, "schema", "stats", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", f.dir)
+
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", stdout))
+	labels := `{dialect="ydb",schemas="` + f.dir + `"}`
+	for _, sample := range []string{
+		"ptah_schema_tables" + labels + " 2\n",
 		"ptah_schema_topics" + labels + " 1\n",
 		"ptah_schema_topic_consumers" + labels + " 2\n",
 		"ptah_schema_changefeeds" + labels + " 1\n",
@@ -75,7 +105,6 @@ func TestHostSchemaStatsCountsWhatTheReadDescribes_HappyPath(t *testing.T) {
 	} {
 		c.Assert(stdout, qt.Contains, sample)
 	}
-	c.Assert(stdout, qt.Matches, `(?s).*# EOF\n`)
 }
 
 // `schema security` over a directory holding a table granted to a group with
