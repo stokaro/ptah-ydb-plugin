@@ -1,6 +1,7 @@
 package tablecreate_test
 
 import (
+	"fmt"
 	"maps"
 	"strings"
 	"testing"
@@ -525,4 +526,70 @@ func TestRebuildPlanCreatesAStartingLayout_FailurePath(t *testing.T) {
 		"(`UNIFORM_PARTITIONS alter is not supported`) and which gives a new table a minimum of 4 partitions, where this table holds 2. Declare "+
 		"auto_partitioning_min_partitions_count to change the minimum in place; YDB makes it by rebuilding the table, which Ptah plans when asked with --allow-table-rebuild")
 	check.Assert(plan.Contributions, qt.HasLen, 0)
+}
+
+// ttlRebuildRequest is rebuildRequest on a table that also holds a Timestamp
+// column ts and a TTL on it after a day, run on an interval of half an hour,
+// whose declaration states a TTL on ts after seconds.
+func ttlRebuildRequest(c *qt.C, seconds int) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	request := rebuildRequest(c, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+	table := request.Tables[0]
+	table.Desired.Columns = append(table.Desired.Columns, &protocol.DeclaredColumn{Name: "ts", Type: "Timestamp", Nullable: true})
+	table.Current.Columns = append(table.Current.Columns, &protocol.ObservedColumn{Name: "ts", DataType: "Timestamp", IsNullable: "YES"})
+	held := alterRequest(c, alterCase{heldTable: `{"primaryKey":["id"],"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":86400},"runIntervalSeconds":1800}}`})
+	table.Current.Features = held.Tables[0].Current.Features
+	table.Desired.Features.Facets.Records = []*protocol.ComparisonRecord{facet(c, schema.TableProperties, "",
+		fmt.Sprintf(`{"primaryKey":["id"],"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":%d}}}`, seconds))}
+	return request
+}
+
+// A declared TTL names no run interval, so a table rebuilt with the TTL its
+// declaration states keeps the run interval the old table holds, whether the
+// declaration keeps the held TTL or changes it, as a TTL changed in place
+// does. Without it the new table would run its TTL on YDB's default, and the
+// next plan would find nothing to change.
+func TestRebuildPlanKeepsTheHeldTTLRunInterval_HappyPath(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		seconds int
+	}{
+		{name: "the held TTL", seconds: 86400},
+		{name: "another TTL", seconds: 259200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			check := testcheck.New(t)
+			plan, err := backend.New().PlanFeatures(check.Context(), ttlRebuildRequest(check, tc.seconds))
+			check.Assert(err, qt.IsNil)
+			check.Assert(plan.Diagnostics, qt.HasLen, 0)
+
+			created, err := tablecreate.Request(plan.Contributions[0].Steps[0].Operation.Value.Value)
+
+			check.Assert(err, qt.IsNil)
+			check.Assert(created.GetTtlSettings().GetDateTypeColumn().GetColumnName(), qt.Equals, "ts")
+			check.Assert(created.GetTtlSettings().GetDateTypeColumn().GetExpireAfterSeconds(), qt.Equals, uint32(tc.seconds))
+			check.Assert(created.GetTtlSettings().GetRunIntervalSeconds(), qt.Equals, uint32(1800))
+		})
+	}
+}
+
+// YQL's TTL setting carries no run interval, so the text form of a rebuild
+// that keeps one is refused at the new table: a migration file cannot drop
+// the interval the table holds.
+func TestRebuildPlanKeepsTheHeldTTLRunInterval_FailurePath(t *testing.T) {
+	check := testcheck.New(t)
+	request := ttlRebuildRequest(check, 259200)
+	plan, err := backend.New().PlanFeatures(check.Context(), request)
+	check.Assert(err, qt.IsNil)
+	check.Assert(plan.Diagnostics, qt.HasLen, 0)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
+	rendering.Form = protocol.RenderRequest_TEXT
+
+	rendered, err := backend.New().Render(check.Context(), rendering)
+
+	check.Assert(err, qt.IsNil)
+	check.Assert(rendered.GetUnits(), qt.HasLen, 0)
+	check.Assert(rendered.GetRefusal().GetChangeId(), qt.Equals, plan.Contributions[0].Steps[0].Operation.Value.Id)
+	check.Assert(rendered.GetRefusal().GetReason(), qt.Equals, protocol.RenderRefusal_NO_TEXT_FORM)
+	check.Assert(rendered.GetRefusal().GetMessage(), qt.Equals, "no YQL text form: the TTL runs on an interval of its own, and YQL's TTL setting has none")
 }

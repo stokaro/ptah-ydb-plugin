@@ -49,7 +49,7 @@ func TestHostRenamesIndexesOfEveryKindInPlace_HappyPath(t *testing.T) {
 	const (
 		// Two alterations of the table and nothing else: a removal and an
 		// addition would be four, and the removals would print their reason.
-		renamed = `(?s)Planned changes:\n(Native operation: \S+/row-table-alter-operation\n(  [^\n]*\n)*){2}Auto-approval enabled.*Schema apply completed successfully.*`
+		renamed = `(?s)(` + unitPrefix + `\S+/row-table-alter-operation [^\n]*\n){2}Planned changes:\n.*Schema apply completed successfully.*`
 		synced  = `(?s).*Schema is synced, no changes to be made.*`
 	)
 	for _, run := range []struct{ name, priceIndex, skuIndex, want string }{

@@ -217,12 +217,14 @@ const (
 )
 
 // tableSettings is the strategy and the limitations of the reverse of a
-// change of a table's own settings of kind, in the words of the host's
-// engine. A TTL the forward change set or changed has deleted rows the
+// change of a table's own settings of kind, or of a column's family, in the
+// words of the host's engine. A TTL the forward change set or changed has deleted rows the
 // reverse cannot bring back.
 func tableSettings(kind, table string, ttl ttlChange) (string, []string) {
 	lost := []string{"Restoring the prior TTL cannot recover rows YDB deleted under the forward TTL."}
 	switch {
+	case kind == schema.ColumnProperties:
+		return "move the column back to its family", nil
 	case kind == schema.IndexProperties:
 		return "restore the indexes the table held", []string{fmt.Sprintf("an index of table %s the rollback adds again is built anew from the table's rows", table)}
 	case kind == schema.ChangefeedProperties:
