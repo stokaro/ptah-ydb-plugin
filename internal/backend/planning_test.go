@@ -49,7 +49,9 @@ func TestCoordinationPlanningAndNativeRendering(t *testing.T) {
 			c.Assert(proto.Equal(request, original), qt.IsTrue)
 			step := plan.Contributions[0].Steps[0]
 			c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
-			c.Assert(step.Metadata.Effects, qt.HasLen, 2)
+			// The node and its path, and for a creation the directory above
+			// it, for a drop the directory it leaves room for.
+			c.Assert(step.Metadata.Effects, qt.HasLen, map[string]int{"create": 3, "alter": 2, "drop": 3}[action])
 			c.Assert(step.Metadata.Effects[1].Subject.Kind, qt.Equals, coordinationplan.PathKind)
 			c.Assert(step.Operation.Value.Value.Kind, qt.Equals, schema.CoordinationOperation)
 			rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
@@ -174,11 +176,6 @@ func TestCoordinationPlanningRefusesUnestablishedFootprints(t *testing.T) {
 		{"unknown kind", func(s *protocol.CommonPlanningStep) { s.Metadata.Effects[0].Subject.Kind = "foreign-object" }},
 		{"directory", func(s *protocol.CommonPlanningStep) { s.Metadata.Effects[0].Subject.Kind = "schema" }},
 		{"folded name", func(s *protocol.CommonPlanningStep) { s.Metadata.Effects[0].Subject.Name.Source = "NODE" }},
-		{"ancestor", func(s *protocol.CommonPlanningStep) {
-			s.Metadata.Effects[0].Subject.Schema = nil
-			s.Metadata.Effects[0].Subject.Name.Source = "app"
-			s.Metadata.Effects[0].Subject.Name.Normalized = "app"
-		}},
 		{"descendant", func(s *protocol.CommonPlanningStep) {
 			s.Metadata.Effects[0].Subject.Schema.Source = "app/node"
 			s.Metadata.Effects[0].Subject.Schema.Normalized = "app/node"

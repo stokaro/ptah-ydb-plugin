@@ -1052,7 +1052,8 @@ managed observation.
 
 Operational storage reservations support host collision and reference guards. They do not
 establish native directory-cascade safety; containment qualification remains
-pending. Coordination planning refuses overlapping directory lifecycles. Markers
+pending. Planning orders an object created below a path after the drop of the object there, and refuses
+any other overlap of directory lifecycles. Markers
 are storage-format identifiers, not an access-control mechanism against a database administrator.
 
 ## Schema observations
@@ -1093,6 +1094,12 @@ first object of a new directory. A directory its parent names but the session
 cannot list is still refused, and so is a path below an object that is not a
 directory. Execution reads the directory of each object it creates through
 the same rule; see [Execution and transactions](#execution-and-transactions).
+
+A selected path that an object holds reads as an empty directory, with
+nothing below it: YDB needs every path above an object to be a directory. The
+object itself is read with the directory that lists it. So `schema apply
+--schemas app,app/holder` reads the table `app/holder` in `app`, and a secret
+declared in `app/holder` is planned after the table's drop.
 
 A read with no selector claims more than the directories it lists. With a
 host that lists `schema.subtree-coverage` (contract 25.22, ADR 0064 in Ptah),
@@ -1998,9 +2005,16 @@ require an explicit common path handoff. A view the host creates or drops
 occupies its path as a table does: a node beside it needs no order, and a node
 that takes the path of a dropped view comes after the drop. A grant or a revoke
 on a table or a view, and a comment, change a resource of the object's own and
-occupy no path; the step's read of the object carries the path. Unsupported
-common footprints and overlapping parent/descendant paths are refused until a
-directory lifecycle is captured. The host's window markers (such as `common/feature-creations`) and the
+occupy no path; the step's read of the object carries the path. YDB needs every
+path above an object to be a directory, so a node created below a path follows
+the step that drops the object there, and a node dropped at a path precedes a
+step that creates an object below it. That holds whichever planning service
+plans the other step: a drop records a `ydb.scheme-directory` creation at its
+path, a creation reads each directory above its own, and the host runs a
+creation before another service's read. A drop below a path where the plan
+creates an object is refused, since YDB keeps a directory after its last object
+goes and YQL has no statement that removes one. Any other overlap of parent and
+descendant paths, and an unsupported common footprint, is refused. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
 the change is refused. A parent directory that does not exist holds no node,

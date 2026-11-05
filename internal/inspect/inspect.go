@@ -173,14 +173,25 @@ type traversal struct {
 // schema, in name order, and returns the subdirectories a traversal of the
 // whole database descends into. A hidden directory, and a directory at the
 // root that leaveOut names, is neither read nor returned. Once every entry is
-// read, the directory's native objects are known completely.
+// read, the directory's native objects are known completely. A selected path
+// that an object holds is a directory with no entries.
 func (t *traversal) directory(ctx context.Context, selected string) ([]string, error) {
 	listed, err := nativeapi.ListDirectory(ctx, t.source.directory, t.database, selected)
 	if err != nil {
 		return nil, err
 	}
-	if listed.GetSelf().GetName() != path.Base(path.Join(t.database, selected)) ||
-		(listed.GetSelf().GetType() != Ydb_Scheme.Entry_DIRECTORY && (selected != "" || listed.GetSelf().GetType() != Ydb_Scheme.Entry_DATABASE)) {
+	if listed.GetSelf().GetName() != path.Base(path.Join(t.database, selected)) {
+		return nil, fmt.Errorf("YDB schema selector did not describe the expected directory")
+	}
+	// An object at the selected path, such as a table a plan replaces with a
+	// directory of secrets, leaves no directory there: YDB needs every path
+	// above an object to be a directory, so nothing is below it. The read of
+	// the object belongs to the directory that lists it.
+	if selected != "" && occupant(listed.GetSelf().GetType()) {
+		t.completeDirectory(selected)
+		return nil, nil
+	}
+	if listed.GetSelf().GetType() != Ydb_Scheme.Entry_DIRECTORY && (selected != "" || listed.GetSelf().GetType() != Ydb_Scheme.Entry_DATABASE) {
 		return nil, fmt.Errorf("YDB schema selector did not describe the expected directory")
 	}
 	children := slices.Clone(listed.GetChildren())
@@ -242,6 +253,18 @@ func (t *traversal) completeDirectory(selected string) {
 			record.Regions = append(record.Regions, directoryRegion(t.database, selected))
 		}
 	}
+}
+
+// occupant reports whether an entry of kind is an object entry reads: one
+// that holds its path, so that no directory can be there.
+func occupant(kind Ydb_Scheme.Entry_Type) bool {
+	switch kind {
+	case streamingQueryEntry, Ydb_Scheme.Entry_TABLE, Ydb_Scheme.Entry_COLUMN_TABLE, Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP,
+		Ydb_Scheme.Entry_REPLICATION, Ydb_Scheme.Entry_TRANSFER, Ydb_Scheme.Entry_COORDINATION_NODE, Ydb_Scheme.Entry_SECRET, Ydb_Scheme.Entry_VIEW,
+		Ydb_Scheme.Entry_EXTERNAL_DATA_SOURCE, Ydb_Scheme.Entry_EXTERNAL_TABLE:
+		return true
+	}
+	return false
 }
 
 // entry reads the listed entry name of the directory selected into the schema.

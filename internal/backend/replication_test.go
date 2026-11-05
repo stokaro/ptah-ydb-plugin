@@ -478,6 +478,8 @@ func reads(planned *protocol.PlannedFeatures) []string {
 // the topic by its path, and a dropped one by the topic's own identity, so a
 // drop is not ordered after an object the plan creates at the path once the
 // topic is gone. A source of another database is read in none of these ways.
+// Last comes the directory a creation reads above its path, or the one a drop
+// leaves room for at it.
 func TestTransferPlanningReadsWhatItReads(t *testing.T) {
 	remote := ingest()
 	remote.Connection.ConnectionString = "grpc://standby:2136/?database=/other"
@@ -490,12 +492,13 @@ func TestTransferPlanningReadsWhatItReads(t *testing.T) {
 		want           []string
 	}{
 		{name: "a creation from a changefeed", declared: new(ingest()), want: []string{
-			"ydb.scheme-path |||order_log READ", "ydb.scheme-path |orders||feed READ", "ydb.changefeed ||orders|feed READ"}},
+			"ydb.scheme-path |||order_log READ", "ydb.scheme-path |orders||feed READ", "ydb.changefeed ||orders|feed READ", "ydb.scheme-directory |||app READ"}},
 		{name: "a creation from a topic", declared: &topic, want: []string{
-			"ydb.scheme-path |||order_log READ", "ydb.scheme-path |app||events READ", "ydb.changefeed ||app|events READ"}},
+			"ydb.scheme-path |||order_log READ", "ydb.scheme-path |app||events READ", "ydb.changefeed ||app|events READ", "ydb.scheme-directory |||app READ"}},
 		{name: "a drop of one from a changefeed", read: new(ingest()), want: []string{
-			"ydb.scheme-path |||order_log READ", schema.TopicProperties + " |orders||feed READ", schema.TopicProperties + " /local|orders||feed READ", "ydb.changefeed ||orders|feed READ"}},
-		{name: "a creation from another database", declared: &remote, want: []string{"ydb.scheme-path |||order_log READ"}},
+			"ydb.scheme-path |||order_log READ", schema.TopicProperties + " |orders||feed READ", schema.TopicProperties + " /local|orders||feed READ", "ydb.changefeed ||orders|feed READ",
+			"ydb.scheme-directory |app||ingest CREATE"}},
+		{name: "a creation from another database", declared: &remote, want: []string{"ydb.scheme-path |||order_log READ", "ydb.scheme-directory |||app READ"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
