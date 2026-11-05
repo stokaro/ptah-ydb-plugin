@@ -23,11 +23,11 @@ import (
 // AlterOperationKind identifies a native alteration of an existing row table:
 // its column families and their placements, the addition of nullable columns,
 // the removal of columns, its TTL, its settings (the automatic partitioning,
-// the read replicas and the key bloom filter), or one global secondary index.
-// One operation does exactly one of the six.
+// the read replicas and the key bloom filter), or one global secondary index,
+// which it adds, drops or renames. One operation does exactly one of the six.
 const AlterOperationKind = schema.ProviderID + "/row-table-alter-operation"
 
-var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns", "add_columns", "drop_columns", "set_ttl_settings", "drop_ttl_settings", "alter_partitioning_settings", "set_key_bloom_filter", "set_read_replicas_settings", "add_indexes", "drop_indexes"}
+var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns", "add_columns", "drop_columns", "set_ttl_settings", "drop_ttl_settings", "alter_partitioning_settings", "set_key_bloom_filter", "set_read_replicas_settings", "add_indexes", "drop_indexes", "rename_indexes"}
 var alterModel = buildAlterModel()
 
 // AlterModel binds the alteration payload grammar, its preconditions, and its
@@ -42,7 +42,7 @@ func buildAlterModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": AlterOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
 		"request": json.RawMessage(descriptor), "allowed_request_fields": alterFields,
-		"payload":      "request: native AlterTableRequest without session or path; held_families: the touched families as the table held them; held_columns: the family each moved column sat in; held_ttl: the TTL the table held, absent for none; held_partitioning: the whole partitioning the table held; held_key_bloom_filter: the key bloom filter the table held; held_read_replicas: the read replicas the table held, empty for none; held_indexes: the index a removal drops, as the table held it",
+		"payload":      "request: native AlterTableRequest without session or path; held_families: the touched families as the table held them; held_columns: the family each moved column sat in; held_ttl: the TTL the table held, absent for none; held_partitioning: the whole partitioning the table held; held_key_bloom_filter: the key bloom filter the table held; held_read_replicas: the read replicas the table held, empty for none; held_indexes: the index a removal drops or a rename renames, as the table held it",
 		"families":     "families are added or have only the settings the declaration states changed; a family is never dropped, a setting is never reset, keep_in_memory is never set",
 		"columns":      "a column moves between families by name; key columns stay in the default family; a column the plan drops is never named",
 		"additions":    "add_columns names columns that are nullable, have no default and sit in the default family; a column that must be placed in another family is moved by a separate family operation after the addition",
@@ -50,11 +50,11 @@ func buildAlterModel() *protocol.ValueModel {
 		"ttl":          "set_ttl_settings states the whole TTL the table holds afterward, a date column with seconds or an integer column with a unit and seconds, and a run interval only to keep or set one; drop_ttl_settings removes it; the column must exist with a type the mode reads",
 		"partitioning": "alter_partitioning_settings states only the settings that change, among the automatic partitioning by size and by load, the preferred partition size and the minimum and maximum partition counts; the partition columns are never named, a setting is never reset, and the minimum never exceeds a nonzero maximum",
 		"settings":     "set_key_bloom_filter states ENABLED or DISABLED where the filter changes, an unspecified filter reading as DISABLED; set_read_replicas_settings states PER_AZ or ANY_AZ replicas where they change, a count of zero removing them; each carries the value the table held, and either may go with a partitioning change",
-		"indexes":      "add_indexes names one global sync, async or unique index with its ordered key columns and covered columns and no settings of its own; drop_indexes names one index and held_indexes states it as the table held it; an index is never altered in place",
-		"exclusive":    "an operation changes families and placements, or adds columns, or drops columns, or sets or drops the TTL, or changes the partitioning settings, the read replicas and the key bloom filter, or adds or drops one index, never a mix",
+		"indexes":      "add_indexes names one global sync, async or unique index with its ordered key columns and covered columns and no settings of its own; drop_indexes names one index and held_indexes states it as the table held it; rename_indexes names one index the table holds, a different name it does not hold and no replace_destination, and held_indexes states the index as the table held it; an index's definition is never altered in place",
+		"exclusive":    "an operation changes families and placements, or adds columns, or drops columns, or sets or drops the TTL, or changes the partitioning settings, the read replicas and the key bloom filter, or adds, drops or renames one index, never a mix",
 		"execution":    "native AlterTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
-		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add must be absent; a family to move into must exist or be added by the same request; a column to add must be absent; a column to drop must exist and must not be a key column, an index column, the TTL column or a partitioning column; the table must hold exactly the TTL captured, or none; the table must hold exactly the partitioning settings, the key bloom filter and the read replicas captured for the settings it changes; a TTL to set must read an existing column of a type its mode reads; an index to add must be absent and read existing columns; an index to drop must exist exactly as captured",
-		"confirmation": "read back the whole family set and every column; each family and column the request does not name must be unchanged, an added column must exist with its type and in the default family, a dropped column must be gone, the TTL must be the one set, or gone for a drop and otherwise unchanged, the partitioning must be the captured settings with the stated ones replaced and otherwise unchanged, the key bloom filter and the read replicas must be the ones set or else unchanged, an added index must exist, be ready and hold the requested definition, a dropped index must be gone, every other index must be unchanged, and the key must be unchanged",
+		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add must be absent; a family to move into must exist or be added by the same request; a column to add must be absent; a column to drop must exist and must not be a key column, an index column, the TTL column or a partitioning column; the table must hold exactly the TTL captured, or none; the table must hold exactly the partitioning settings, the key bloom filter and the read replicas captured for the settings it changes; a TTL to set must read an existing column of a type its mode reads; an index to add must be absent and read existing columns; an index to drop must exist exactly as captured; an index to rename must exist exactly as captured and its new name must be free",
+		"confirmation": "read back the whole family set and every column; each family and column the request does not name must be unchanged, an added column must exist with its type and in the default family, a dropped column must be gone, the TTL must be the one set, or gone for a drop and otherwise unchanged, the partitioning must be the captured settings with the stated ones replaced and otherwise unchanged, the key bloom filter and the read replicas must be the ones set or else unchanged, an added index must exist, be ready and hold the requested definition, a dropped index must be gone, a renamed index must be gone under its old name and hold its definition and settings under the new one, every other index must be unchanged, and the key must be unchanged",
 		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
@@ -91,8 +91,8 @@ type Alteration struct {
 	// HeldReadReplicas are the read replicas the table held when planned, with
 	// no mode for none. Only an alteration that sets the replicas carries them.
 	HeldReadReplicas *Ydb_Table.ReadReplicasSettings
-	// HeldIndexes is the index an index removal drops, as the table held it.
-	// Only a removal carries it.
+	// HeldIndexes is the index an index removal drops or an index rename
+	// renames, as the table held it. Only a removal and a rename carry it.
 	HeldIndexes []*native.TableIndexDescription
 }
 
@@ -158,6 +158,10 @@ func CaptureIndexAlteration(id string, owner *protocol.Reference, change indexCh
 	if change.add != nil && nativeOnlyIndex(change.add) {
 		// The native call adds no vector or full-text index; YQL does.
 		return CaptureNativeIndex(id, owner, change.add)
+	}
+	if change.rename != nil {
+		request := &Ydb_Table.AlterTableRequest{RenameIndexes: []*Ydb_Table.RenameIndexItem{{SourceName: change.rename.held.Name, DestinationName: change.rename.to}}}
+		return captureRequest(id, owner, &Alteration{Request: request, HeldColumns: map[string]string{}, HeldIndexes: []*native.TableIndexDescription{change.rename.held}})
 	}
 	if change.add == nil {
 		request := &Ydb_Table.AlterTableRequest{DropIndexes: []string{change.drop.Name}}
@@ -258,6 +262,8 @@ func NormalizeAlteration(input *protocol.ValueInput) (*protocol.NormalizedValue,
 	result.Payload = payload
 	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Adds column families"
 	switch {
+	case len(alteration.Request.RenameIndexes) > 0:
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Renames a secondary index in place; a query that names the old name stops reading through it"
 	case len(alteration.Request.DropIndexes) > 0:
 		impact, reason = protocol.ChangeSemantics_DESTRUCTIVE, "Drops a secondary index and the table that implements it"
 	case len(alteration.Request.AddIndexes) > 0:
@@ -382,7 +388,7 @@ func validateAlteration(alteration *Alteration) error {
 	groups := 0
 	for _, used := range []bool{len(request.AddColumnFamilies)+len(request.AlterColumnFamilies)+len(request.AlterColumns) > 0,
 		len(request.AddColumns) > 0, len(request.DropColumns) > 0, request.TtlAction != nil, request.AlterPartitioningSettings != nil || changesSettings(request),
-		len(request.AddIndexes)+len(request.DropIndexes) > 0} {
+		len(request.AddIndexes)+len(request.DropIndexes)+len(request.RenameIndexes) > 0} {
 		if used {
 			groups++
 		}
@@ -582,21 +588,30 @@ func validateSettingsAlteration(alteration *Alteration) error {
 	return nil
 }
 
-// validateIndexAlteration checks an index alteration. It adds or drops exactly
-// one index. An addition names a global sync, async or unique index with at
-// least one key column, no repeated column and no settings of its own; a
-// removal states the index the table held. A request that does not touch the
-// indexes carries no held index.
+// validateIndexAlteration checks an index alteration. It adds, drops or
+// renames exactly one index. An addition names a global sync, async or unique
+// index with at least one key column, no repeated column and no settings of
+// its own; a removal states the index the table held; a rename states it too,
+// and names another name without replacing an index that holds it. A request
+// that does not touch the indexes carries no held index.
 func validateIndexAlteration(alteration *Alteration) error {
 	request := alteration.Request
-	if len(request.AddIndexes)+len(request.DropIndexes) == 0 {
+	if len(request.AddIndexes)+len(request.DropIndexes)+len(request.RenameIndexes) == 0 {
 		if len(alteration.HeldIndexes) != 0 {
 			return fmt.Errorf("a held YDB index disagrees with the alteration")
 		}
 		return nil
 	}
-	if len(request.AddIndexes)+len(request.DropIndexes) != 1 {
+	if len(request.AddIndexes)+len(request.DropIndexes)+len(request.RenameIndexes) != 1 {
 		return fmt.Errorf("YDB index alteration changes exactly one index")
+	}
+	if len(request.RenameIndexes) == 1 {
+		rename := request.RenameIndexes[0]
+		if len(alteration.HeldIndexes) != 1 || alteration.HeldIndexes[0].Name != rename.SourceName || !validName(rename.SourceName) ||
+			!validName(rename.DestinationName) || rename.DestinationName == rename.SourceName || rename.ReplaceDestination {
+			return fmt.Errorf("YDB index rename requires the held index and another name it does not replace")
+		}
+		return nil
 	}
 	if len(request.DropIndexes) == 1 {
 		if len(alteration.HeldIndexes) != 1 || alteration.HeldIndexes[0].Name != request.DropIndexes[0] || !validName(request.DropIndexes[0]) {

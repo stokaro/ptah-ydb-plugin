@@ -223,6 +223,7 @@ defaults of every supported line.
 | `full_text_indexes` | `EnableFulltextIndex` | `false` through 26.1, `true` from 26.2 |
 | `local_bloom_indexes` | `EnableLocalBloomFilterIndex` | `false` through 26.1, `true` from 26.2 |
 | `local_ngram_indexes` | `EnableLocalBloomNgramFilterIndex` | `false` through 26.1, `true` from 26.2 |
+| `index_rename` | `EnableMoveIndex` | `true` on every line from 25.1 to 26.2, for a host that lists `planning.index-renames` |
 | `local_min_max_indexes` | `EnableLocalMinMaxIndex` | `false` on every line from 25.1 to 26.2 |
 
 The release line alone decides the other vector capabilities, as the host's
@@ -233,9 +234,10 @@ vectors over rows: `bit vector type is not supported`, `Unsupported
 vector_type: VECTOR_TYPE_BIT`).
 
 The host maps more flags than these. The provider reports only the
-capabilities it plans with, because the host plans with the others itself: an
-`index_rename` read as true would make the host plan a `RENAME INDEX` that the
-provider's alteration does not carry out. `internal/featureflags/testdata`
+capabilities it plans with, because the host plans with the others itself.
+`index_rename` is `false` for a host that does not list
+`planning.index-renames`: such a host has no step to send a renamed index
+with, and would refuse the plan. `internal/featureflags/testdata`
 holds the pages the mapping is checked against, and a live test turns the
 flag on and off through the server's dynamic configuration and reads the
 capability each new session reports.
@@ -786,9 +788,12 @@ errors the provider receives: `authored.New` marks one, and `authored.Status`
 sends it as the reason, with the error's whole text as the status message,
 which no host prints. The reasons the provider gives are its refusals of a
 connection address, of a monitoring page it could not read, of a capability
-the target lacks, of a lock the server refuses this user, and the refusals
-whose text is a fixed sentence, such as a closed session or a reached handle
-limit. A YDB driver's error is never a
+the target lacks, of a lock the server refuses this user, the refusals whose
+text is a fixed sentence, such as a closed session or a reached handle limit,
+and the refusal of a table's declaration by table preparation or the creation
+projection. That last reason names the table and gives the sentence schema
+validation reports for the same declaration; the compilation behind it reads no
+server. A YDB driver's error is never a
 reason, because YDB can quote a statement and its values, or a credential
 source: the host prints its code alone.
 
@@ -1316,9 +1321,9 @@ ADD INDEX ... LOCAL USING ...` or `ALTER TABLE ... DROP INDEX ...` through the
 query service. An index whose kind, column or settings differ is dropped and
 added again under its name, the removal first, and a renamed index is dropped
 under its old name and added under its new one, as the host's embedded engine
-plans both on a target without `index_rename`, which this provider never
-reports. 26.2.1.14 also renames a local index (`RENAME INDEX`) and changes its
-probability in place (`ALTER INDEX ... SET (false_positive_probability = ...)`),
+plans both on a target without `index_rename`; the host compares no local
+index, so it pairs none. 26.2.1.14 also renames a local index (`RENAME
+INDEX`) and changes its probability in place (`ALTER INDEX ... SET (false_positive_probability = ...)`),
 which neither engine plans. Only an index a plan adds needs its capability.
 Execution reads the table from the table service and the monitoring endpoint
 and refuses before it writes when the table holds an index of the name to add,
@@ -2240,7 +2245,11 @@ They require `add_column_with_default`, established from the release line and
 A removal checks its captured column definition and refuses key, index, TTL, or
 partitioning dependencies before dispatch. Each operation verifies the remaining
 columns and table settings after its single write. The graph orders additions
-before dependent settings and removals after them.
+before the default and sequence changes, and removals after them. The table's
+family, TTL, partitioning, index and changefeed steps are outside that
+sequence. Each carries its own edges to the column steps it depends on, and
+otherwise runs where the host places it: the host drops an index before it
+adds a column.
 
 The negotiated `schema.columns` service compares the exact columns the host
 pairs inside their full captured tables. It reports type and default
@@ -2747,6 +2756,24 @@ effect. An addition is `ADD INDEX name GLOBAL [SYNC|ASYNC] [UNIQUE] ON (keys)
 [COVER (columns)]`; a removal is `DROP INDEX name`. Impact is additive for an
 addition and destructive for a removal.
 
+A host that lists `planning.index-renames` pairs an index the table holds with
+one the declaration states under another name and one definition, and sends
+the pair as one rename step. The service claims it with
+`row-table-rename-index/N`, a native `AlterTable` call with `rename_indexes`,
+whose text form is `RENAME INDEX old TO new`. The step reads the table, drops
+the old name and creates the new one. The index keeps its kind, its columns
+and its partitioning settings, and is not built again (measured on 25.1.4.7
+and 26.2.1.14). Impact is
+behavioral: a query that names the old name stops reading through the index.
+The host moves the index's comment to the new name with its own steps.
+Execution refuses before it writes when the table no longer holds the index as
+planned or holds an index under the new name. After the call it requires the
+old name to be gone and the new one to hold the index as it was, settings
+included. YDB renames an index only with `EnableMoveIndex` on, so a rename
+step on a session without `index_rename` is refused when it is planned. A session
+reports the capability only to a host that lists the feature; any other host
+plans a rename as a removal and an addition.
+
 The common indexes a source declares, such as a `ptah:schema:index` directive,
 are compared by the host. Inspection reports a row table's global indexes as
 its common indexes: a synchronous one, unique or not, with no method, and an
@@ -2779,9 +2806,14 @@ that table itself.
 - The rules above are those of global sync, async and unique indexes. A vector
   or full-text index follows its own (see
   [Vector and full-text indexes](#vector-and-full-text-indexes)). An index to
-  add that states its partitioning or read replicas is refused by name: the step
-  that adds it carries none, so add the index first and declare its settings in
-  a later plan.
+  add that states its partitioning or read replicas is added without them,
+  since no call that adds an index takes them, and a
+  `row-table-index-settings/N` step after the addition gives it the declared
+  ones over the settings YDB gives a new index (automatic partitioning by size
+  at 2048 MB, none by load, at least one partition, no read replicas; measured
+  on 25.1.4.7 and 26.2.1.14), as the host's embedded engine writes `ALTER INDEX
+  ... SET` after `ADD INDEX`. Execution of that step requires the new index to
+  hold exactly those settings.
 - A unique index needs a server that accepts `ALTER TABLE ... ADD INDEX ...
   GLOBAL UNIQUE`; YDB 25.1 refuses it unless `enable_add_unique_index` is set.
 - An index reads columns the declaration states. A declared index that reads a
