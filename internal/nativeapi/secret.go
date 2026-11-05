@@ -105,16 +105,9 @@ func (s *Secret) read(ctx context.Context, owner *protocol.Reference) (*Ydb_Sche
 		len(listing.Children) > 4096 {
 		return nil, fmt.Errorf("invalid secret namespace")
 	}
-	names := make(map[string]bool)
-	var found *Ydb_Scheme.Entry
-	for _, entry := range listing.Children {
-		if entry.GetName() == "" || names[entry.GetName()] || strings.ContainsAny(entry.GetName(), "/\\\x00") || entry.Name == "." || entry.Name == ".." {
-			return nil, fmt.Errorf("invalid secret namespace entry")
-		}
-		names[entry.Name] = true
-		if entry.Name == owner.Name {
-			found = entry
-		}
+	found, err := secretNamespaceEntry(listing.Children, owner.Name)
+	if err != nil {
+		return nil, err
 	}
 	if found == nil {
 		return nil, nil
@@ -136,8 +129,32 @@ func (s *Secret) read(ctx context.Context, owner *protocol.Reference) (*Ydb_Sche
 	if result.GetSelf().GetName() != owner.Name || result.GetSelf().GetType() != Ydb_Scheme.Entry_SECRET {
 		return nil, fmt.Errorf("secret description has a different identity")
 	}
+	return secretAccess(result.Self)
+}
+
+// secretNamespaceEntry returns the entry of children named name, or nil when there
+// is none, and refuses a listing with an empty, repeated or path-like name.
+func secretNamespaceEntry(children []*Ydb_Scheme.Entry, name string) (*Ydb_Scheme.Entry, error) {
+	names := make(map[string]bool)
+	var found *Ydb_Scheme.Entry
+	for _, entry := range children {
+		if entry.GetName() == "" || names[entry.GetName()] || strings.ContainsAny(entry.GetName(), "/\\\x00") || entry.Name == "." || entry.Name == ".." {
+			return nil, fmt.Errorf("invalid secret namespace entry")
+		}
+		names[entry.Name] = true
+		if entry.Name == name {
+			found = entry
+		}
+	}
+	return found, nil
+}
+
+// secretAccess returns the owner and the access entries of the secret's own
+// entry, each list sorted by subject with its permission names sorted, and
+// refuses an entry with no subject or a subject listed twice.
+func secretAccess(self *Ydb_Scheme.Entry) (*Ydb_Scheme.Entry, error) {
 	// Compare access only. Runtime size and creation metadata do not describe it.
-	entry := &Ydb_Scheme.Entry{Owner: result.Self.Owner, Permissions: result.Self.Permissions, EffectivePermissions: result.Self.EffectivePermissions}
+	entry := &Ydb_Scheme.Entry{Owner: self.Owner, Permissions: self.Permissions, EffectivePermissions: self.EffectivePermissions}
 	for _, permissions := range [][]*Ydb_Scheme.Permissions{entry.Permissions, entry.EffectivePermissions} {
 		seen := make(map[string]bool)
 		for _, permission := range permissions {

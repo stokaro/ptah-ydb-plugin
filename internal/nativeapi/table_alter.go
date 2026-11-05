@@ -431,6 +431,26 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 	if !slices.Equal(before.PrimaryKey, observed.PrimaryKey) || len(before.Columns)-len(request.DropColumns)+len(request.AddColumns) != len(observed.Columns) {
 		return fmt.Errorf("YDB altered table key or columns differ from the request")
 	}
+	if err := confirmAlteredFamilies(request, before, observed); err != nil {
+		return err
+	}
+	if err := confirmAlteredColumns(request, before, observed); err != nil {
+		return err
+	}
+	if err := confirmTTL(request, before, observed); err != nil {
+		return err
+	}
+	if err := confirmIndexes(request, before, observed); err != nil {
+		return err
+	}
+	return confirmPartitioning(request, before, observed)
+}
+
+// confirmAlteredFamilies requires every column family the table held before
+// the call to hold its settings, or the ones the request alters it to, and
+// every family the request adds to hold the settings it names. The table holds
+// no other family.
+func confirmAlteredFamilies(request *Ydb_Table.AlterTableRequest, before, observed *native.DescribeTableResult) error {
 	altered, err := requestFamilies(request.AlterColumnFamilies)
 	if err != nil {
 		return err
@@ -442,18 +462,7 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 	for _, family := range before.ColumnFamilies {
 		changed := familyByName(altered, family.Name)
 		actual := familyByName(observed.ColumnFamilies, family.Name)
-		want := proto.CloneOf(family)
-		if changed != nil {
-			if changed.GetData() != nil {
-				want.Data = changed.Data
-			}
-			if changed.Compression != Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED {
-				want.Compression = changed.Compression
-			}
-			if changed.CacheMode != native.ColumnFamily_CACHE_MODE_UNSPECIFIED {
-				want.CacheMode = changed.CacheMode
-			}
-		}
+		want := alteredFamily(family, changed)
 		if actual == nil || actual.GetData().GetMedia() != want.GetData().GetMedia() ||
 			compression(actual.Compression) != compression(want.Compression) || actual.KeepInMemory != want.KeepInMemory || actual.CacheMode != want.CacheMode {
 			return fmt.Errorf("YDB altered column family differs from the request")
@@ -470,8 +479,33 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 	if len(observed.ColumnFamilies) != len(before.ColumnFamilies)+len(request.AddColumnFamilies) {
 		return fmt.Errorf("YDB altered table holds unexpected column families")
 	}
-	// The columns the request leaves in place keep their order, type and family
-	// (or the one the request moves them to); the added ones follow.
+	return nil
+}
+
+// alteredFamily is family as the alteration changed asks for it: the data,
+// the compression and the cache mode changed sets replace family's, and a nil
+// changed leaves family as it is. It returns a copy.
+func alteredFamily(family, changed *native.ColumnFamily) *native.ColumnFamily {
+	want := proto.CloneOf(family)
+	if changed != nil {
+		if changed.GetData() != nil {
+			want.Data = changed.Data
+		}
+		if changed.Compression != Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED {
+			want.Compression = changed.Compression
+		}
+		if changed.CacheMode != native.ColumnFamily_CACHE_MODE_UNSPECIFIED {
+			want.CacheMode = changed.CacheMode
+		}
+	}
+	return want
+}
+
+// confirmAlteredColumns requires the columns the request leaves in place to
+// keep their order, type and family (or the one the request moves them to),
+// and the added ones to follow them with the requested type and nullability
+// in the default family.
+func confirmAlteredColumns(request *Ydb_Table.AlterTableRequest, before, observed *native.DescribeTableResult) error {
 	var kept []*native.ColumnMeta
 	for _, column := range before.Columns {
 		if !slices.Contains(request.DropColumns, column.Name) {
@@ -497,13 +531,7 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 			return fmt.Errorf("YDB added column differs from the request")
 		}
 	}
-	if err := confirmTTL(request, before, observed); err != nil {
-		return err
-	}
-	if err := confirmIndexes(request, before, observed); err != nil {
-		return err
-	}
-	return confirmPartitioning(request, before, observed)
+	return nil
 }
 
 // confirmIndexes requires an added index to exist, be ready and hold the
