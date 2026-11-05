@@ -63,9 +63,16 @@ func hostManifest(c *qt.C) (string, string) {
 // ptah-compat's PTAH_PROVIDER_CONFIG alike.
 func providerManifest(c *qt.C) string {
 	c.Helper()
+	return providerManifestWith(c, []string{})
+}
+
+// providerManifestWith is providerManifest whose provider starts with the
+// name=value entries of environment and nothing else of the host's.
+func providerManifestWith(c *qt.C, environment []string) string {
+	c.Helper()
 	binary, digest := providerBinary(c)
 	configuration := map[string]any{"format_version": 2, "providers": []any{map[string]any{
-		"executable": binary, "sha256": digest, "provider_id": schema.ProviderID, "engines": []any{map[string]any{"id": "ydb", "aliases": []string{"ydbs"}}}, "environment": []string{},
+		"executable": binary, "sha256": digest, "provider_id": schema.ProviderID, "engines": []any{map[string]any{"id": "ydb", "aliases": []string{"ydbs"}}}, "environment": environment,
 	}}}
 	encoded, err := json.Marshal(configuration)
 	c.Assert(err, qt.IsNil)
