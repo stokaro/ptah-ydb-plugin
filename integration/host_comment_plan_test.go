@@ -29,20 +29,21 @@ func setStoredAttributes(c *qt.C, opened *connection.Connection, absolute string
 
 // Ported from the host's TestYDBComments_ChangesInPlace, without the index
 // rows, whose comments and rename other ports hold: every kind of table and
-// column comment change at once, beside a column dropped and one added. The
-// table's comment is rewritten, and a column's is removed and another's
-// rewritten. Attributes another tool set, one under no key of Ptah's and
-// one under Ptah's prefix that names no column, are neither read nor
-// removed, and nothing is left to plan. A comment ordered after the column's
-// removal closed a cycle with the host's order, which puts a removal after
-// the comments (`plan dependency cycle`).
+// column comment change at once, beside a commented column dropped and one
+// added. The table's comment is rewritten, a column's is removed and
+// another's rewritten, and the dropped column's comment goes with it, where
+// YDB would keep the attribute once the column is gone and give it to a
+// column added later under that name. Attributes another tool set, one under
+// no key of Ptah's and one under Ptah's prefix that names no column, are
+// neither read nor removed, and nothing is left to plan. A comment ordered
+// after the column's removal closed a cycle with the host's order, which puts
+// a removal after the comments (`plan dependency cycle`).
 //
 // The table is created without its comments first, and the added column
 // comes without one, since the provider path of the pinned host leaves the
 // comments of a created table and of an added column out (stokaro/ptah#5256),
-// and a change of comments is what the test is about. The dropped column has
-// no comment: a column the provider drops leaves its comment on the table,
-// where the host's engine removes it (gap G111 of stokaro/ptah#4204).
+// and a change of comments is what the test is about. The host removes the
+// dropped column's comment with a comment step (stokaro/ptah#5280).
 func TestHostChangesCommentsInPlace_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -51,9 +52,9 @@ func TestHostChangesCommentsInPlace_HappyPath(t *testing.T) {
 	before := []string{"email", "label", "legacy"}
 	applyRuns(c, directory, "yaml", commentedUsers(directory, "", before, nil))
 	applyRuns(c, directory, "yaml", commentedUsers(directory, "People who sign in", before,
-		map[string]string{"id": "Key", "email": "Login", "label": "Shown name"}))
+		map[string]string{"id": "Key", "email": "Login", "label": "Shown name", "legacy": "Going away"}))
 	c.Assert(storedAttributes(c, opened, absolute), qt.DeepEquals, map[string]string{"ptah.comment": "People who sign in", "ptah.comment.column.id": "Key",
-		"ptah.comment.column.email": "Login", "ptah.comment.column.label": "Shown name"})
+		"ptah.comment.column.email": "Login", "ptah.comment.column.label": "Shown name", "ptah.comment.column.legacy": "Going away"})
 	setStoredAttributes(c, opened, absolute, map[string]string{"owner": "team", "ptah.comment.other": "kept"})
 
 	applyRuns(c, directory, "yaml", commentedUsers(directory, "Customers", []string{"email", "label", "phone"},
@@ -113,4 +114,23 @@ func heldColumnNames(c *qt.C, opened *connection.Connection, absolute string) []
 	}, table.WithIdempotent())
 	c.Assert(err, qt.IsNil)
 	return names
+}
+
+// A column added under the name of a commented column the plan dropped
+// starts without a comment: the drop took the comment with it, where YDB
+// would keep the attribute and the new column would read the old comment
+// back, so the run after the addition would plan its removal.
+func TestHostAddsAColumnWithoutTheCommentOfADroppedOne_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	absolute := path.Join(database, directory, "users")
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	applyRuns(c, directory, "yaml", commentedUsers(directory, "", []string{"legacy"}, nil))
+	applyRuns(c, directory, "yaml", commentedUsers(directory, "", []string{"legacy"}, map[string]string{"legacy": "Going away"}))
+	applyRuns(c, directory, "yaml", commentedUsers(directory, "", nil, nil))
+
+	applyRuns(c, directory, "yaml", commentedUsers(directory, "", []string{"legacy"}, nil))
+
+	c.Assert(storedAttributes(c, opened, absolute), qt.DeepEquals, map[string]string{})
+	c.Assert(heldColumnNames(c, opened, absolute), qt.DeepEquals, []string{"id", "legacy"})
 }
