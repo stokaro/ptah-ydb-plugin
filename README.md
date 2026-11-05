@@ -3305,7 +3305,15 @@ the facts an offline command plans `ydb` with: those a session states for a
 common objects. Each release line states its own the same way, and a
 `--server-version` selects the line it equals or the longest line it starts
 with followed by a dot, so `26.2.1.14` selects 26.2. `ptah schema render`, `sql
-lint` and the other commands that plan without a database read them. A command that connects plans with the session's facts.
+lint` and the other commands that plan without a database read them. A command
+that connects plans with the session's facts.
+
+The facts also carry the keys the host reads and no session states, with the
+values of the built-in engine's presets, on every line. The host reads them
+through its capability registry when it plans a connected command too:
+`index_covering_columns`, for one, makes an unchanged list of covered columns
+compare as unchanged, so a second apply of the same schema plans nothing for
+the index.
 A host of an earlier contract receives no facts, plans offline against unknown
 facts, and the provider refuses what needs one, such as a table creation,
 which needs nontransactional DDL established.
