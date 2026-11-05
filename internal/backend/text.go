@@ -174,7 +174,7 @@ func tableStatementText(value *protocol.Envelope, path string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return tablecreate.CopyStatement(path, copied)
+		return tablecreate.CopyStatement(path, value.GetOwner().GetSchema(), copied)
 	case tablecreate.RenameOperationKind:
 		rename, err := tablecreate.DecodeRename(value)
 		if err != nil {

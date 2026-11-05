@@ -67,6 +67,15 @@ UPDATE `app/items` SET note = $name WHERE id = 1l;
 It runs as four queries: the `CREATE TABLE`, the definition with the `UPSERT`,
 the definition with the `ALTER TABLE`, and the definition with the `UPDATE`.
 
+YDB 26.2 fails an `UPSERT` on a table with a unique index when the statement
+names no column that a synchronous global index is keyed on. The server answers
+`INTERNAL_ERROR` with
+`verification=!hasUniqIndex || !usedIndexes.empty();fline=kqp_opt_phy_upsert_index.cpp:359`
+and writes nothing. This is a defect in the server: 25.1 runs the same
+statement. Ptah reports the query as refused, with the reason, and the run
+stops there. Name every column of the table in such an `UPSERT`, or use
+`UPDATE` or `INSERT`, which 26.2 runs.
+
 The queries are what the revision counts, what partial hashes digest and what a
 resume skips. Progress is recorded after each query. An interrupted schema query
 leaves its outcome unknown, as an interrupted statement does in a file whose

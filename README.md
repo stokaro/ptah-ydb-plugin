@@ -1027,7 +1027,25 @@ paths of the objects a refused DROP leaves in place, it never quotes YDB's
 issue text: measured on 25.1.4.7 and 26.2.1.14, that text quotes the
 token YDB refused, a string literal of the statement and the table's path, and
 a statement can carry a password or a bound secret. The issue text stays in the
-result's message. A unit the provider refused before YDB answered, a statement
+result's message. The one sentence a reason takes from YDB's answer is the
+check a rebuild's copy fails with, which the provider wrote into the statement
+and which names the table and the column, as the host's embedded engine printed
+it:
+
+```text
+provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the statement: rebuilding table app.items: column n holds a value that does not convert to its new type (PRECONDITION_FAILED)
+```
+
+INTERNAL_ERROR shows nothing about a statement, with one measured exception:
+26.2.1.14 fails an `UPSERT` on a table with a unique index that names no column
+a synchronous index is keyed on while it plans the query
+(`verification=!hasUniqIndex || !usedIndexes.empty()` in
+`kqp_opt_phy_upsert_index.cpp`), and writes nothing; 25.1.4.7 runs the same
+statement. Such a data statement is refused rather than unknown: a unit is
+NOT_APPLIED with the reason that YDB cannot plan the `UPSERT` and that naming
+every column of the table, or `UPDATE` or `INSERT`, avoids it, and a statement
+the host runs for an operator, such as a check or a test assertion, FAILED
+with YDB's issues. A unit the provider refused before YDB answered, a statement
 timeout, a lost lock and a commit YDB did not confirm each give a fixed
 sentence.
 
@@ -3089,6 +3107,9 @@ The copy reads each column as the new table declares it. A changed type is
 converted with `CAST` and unwrapped, so a value that does not convert fails the
 copy with a message naming the table and the column instead of becoming NULL;
 a column made NOT NULL is unwrapped too, which fails the copy on a NULL row.
+The copy is one data query, so YDB's refusal shows that nothing of it applied:
+`schema apply` stops PARTIAL after the new table's creation, and the reason
+carries the message (see [Error reasons](#error-reasons)).
 The new table keeps the old table's attributes, and with them the comments Ptah
 keeps there, and each storage setting the declaration does not state, as the
 old table holds it: every column family, the default one and one no column
