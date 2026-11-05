@@ -272,8 +272,18 @@ func compileColumn(table string, column *protocol.DeclaredColumn, settings *nati
 	if settings == nil {
 		return result, nil
 	}
-	if err := only(settings, "family", "literal", "sequence", "drop_default"); err != nil {
+	if err := applyColumnSettings(subject, column, settings, stored, sequence, result); err != nil {
 		return nil, err
+	}
+	return result, nil
+}
+
+// applyColumnSettings gives the compiled column result the family and the
+// default its native settings state. stored is the column's type and
+// sequence its Serial sequence, nil for none; subject names the column.
+func applyColumnSettings(subject string, column *protocol.DeclaredColumn, settings *native.ColumnIntent, stored string, sequence *Ydb_Table.SequenceDescription, result *Ydb_Table.ColumnMeta) error {
+	if err := only(settings, "family", "literal", "sequence", "drop_default"); err != nil {
+		return err
 	}
 	// A declaration converted from a read states a column's default twice,
 	// as the common column's default and as the native one, and the two must
@@ -281,22 +291,22 @@ func compileColumn(table string, column *protocol.DeclaredColumn, settings *nati
 	switch {
 	case settings.GetSequence() != nil:
 		if err := sameSerial(subject, column.Name, stored, sequence, settings.GetSequence()); err != nil {
-			return nil, err
+			return err
 		}
 	case settings.GetLiteral() != nil && proto.Equal(settings.GetLiteral(), result.GetFromLiteral()):
 	case settings.GetDefaultValue() != nil && (column.DefaultSet || column.DefaultValue != "" || sequence != nil):
-		return nil, unsupported("a column default must have one declaration, common or native")
+		return unsupported("a column default must have one declaration, common or native")
 	}
 	result.Family = settings.Family
 	if literal := settings.GetLiteral(); literal != nil {
 		// A literal is a typed native value, never SQL text. Type conversion
 		// belongs to the server; require an exact type to avoid implicit casts.
-		if !proto.Equal(literal.Type, value) {
-			return nil, fmt.Errorf("YDB literal default type differs from the column type")
+		if !proto.Equal(literal.Type, result.Type) {
+			return fmt.Errorf("YDB literal default type differs from the column type")
 		}
 		result.DefaultValue = &Ydb_Table.ColumnMeta_FromLiteral{FromLiteral: proto.CloneOf(literal)}
 	}
-	return result, nil
+	return nil
 }
 
 func validateReferences(request *Ydb_Table.CreateTableRequest, names map[string]bool) error {

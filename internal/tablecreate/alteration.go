@@ -28,7 +28,8 @@ import (
 // which it adds, drops or renames. One operation does exactly one of the six.
 const AlterOperationKind = schema.ProviderID + "/row-table-alter-operation"
 
-var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns", "add_columns", "drop_columns", "set_ttl_settings", "drop_ttl_settings", "alter_partitioning_settings", "set_key_bloom_filter", "set_read_replicas_settings", "add_indexes", "drop_indexes", "rename_indexes"}
+var alterFields = []string{"add_column_families", "alter_column_families", "alter_columns", "add_columns", "drop_columns", "set_ttl_settings",
+	"drop_ttl_settings", "alter_partitioning_settings", "set_key_bloom_filter", "set_read_replicas_settings", "add_indexes", "drop_indexes", "rename_indexes"}
 var alterModel = buildAlterModel()
 
 // AlterModel binds the alteration payload grammar, its preconditions, and its
@@ -47,20 +48,45 @@ func buildAlterModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": AlterOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
 		"request": json.RawMessage(descriptor), "allowed_request_fields": alterFields, "column_family": json.RawMessage(family),
-		"payload":      "request: native AlterTableRequest without session or path, each family written as column_family describes it; held_families: the touched families as the table held them, written the same way; held_columns: the family each moved column sat in; held_ttl: the TTL the table held, absent for none; held_partitioning: the whole partitioning the table held; held_key_bloom_filter: the key bloom filter the table held; held_read_replicas: the read replicas the table held, empty for none; held_indexes: the index a removal drops or a rename renames, as the table held it",
-		"families":     "families are added or have only the settings the declaration states changed, the storage pool, the compression and the cache mode, which the request carries to the table service at its upstream field 6 and which requires the column_family_cache_mode capability; a family is never dropped, a setting is never reset, keep_in_memory is never set",
-		"columns":      "a column moves between families by name; key columns stay in the default family; a column the plan drops is never named",
-		"additions":    "add_columns names columns that are nullable, have no default and sit in the default family; a column that must be placed in another family is moved by a separate family operation after the addition",
-		"removals":     "drop_columns names columns that are not part of the key, an index, the TTL or the partitioning",
-		"ttl":          "set_ttl_settings states the whole TTL the table holds afterward, a date column with seconds or an integer column with a unit and seconds, and a run interval only to keep or set one; drop_ttl_settings removes it; the column must exist with a type the mode reads",
-		"partitioning": "alter_partitioning_settings states only the settings that change, among the automatic partitioning by size and by load, the preferred partition size and the minimum and maximum partition counts; the partition columns are never named, a setting is never reset, and the minimum never exceeds a nonzero maximum",
-		"settings":     "set_key_bloom_filter states ENABLED or DISABLED where the filter changes, an unspecified filter reading as DISABLED; set_read_replicas_settings states PER_AZ or ANY_AZ replicas where they change, a count of zero removing them; each carries the value the table held, and either may go with a partitioning change",
-		"indexes":      "add_indexes names one global sync, async or unique index with its ordered key columns and covered columns and no settings of its own; drop_indexes names one index and held_indexes states it as the table held it; rename_indexes names one index the table holds, a different name it does not hold and no replace_destination, and held_indexes states the index as the table held it; an index's definition is never altered in place",
-		"exclusive":    "an operation changes families and placements, or adds columns, or drops columns, or sets or drops the TTL, or changes the partitioning settings, the read replicas and the key bloom filter, or adds, drops or renames one index, never a mix",
-		"execution":    "native AlterTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
-		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add must be absent; a family to move into must exist or be added by the same request; a column to add must be absent; a column to drop must exist and must not be a key column, an index column, the TTL column or a partitioning column; the table must hold exactly the TTL captured, or none; the table must hold exactly the partitioning settings, the key bloom filter and the read replicas captured for the settings it changes; a TTL to set must read an existing column of a type its mode reads; an index to add must be absent and read existing columns; an index to drop must exist exactly as captured; an index to rename must exist exactly as captured and its new name must be free",
-		"confirmation": "read back the whole family set and every column; each family and column the request does not name must be unchanged, an added column must exist with its type and in the default family, a dropped column must be gone, the TTL must be the one set, or gone for a drop and otherwise unchanged, the partitioning must be the captured settings with the stated ones replaced and otherwise unchanged, the key bloom filter and the read replicas must be the ones set or else unchanged, an added index must exist, be ready and hold the requested definition, a dropped index must be gone, a renamed index must be gone under its old name and hold its definition and settings under the new one, every other index must be unchanged, and the key must be unchanged",
-		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
+		"payload": "request: native AlterTableRequest without session or path, each family written as column_family describes it; held_families: " +
+			"the touched families as the table held them, written the same way; held_columns: the family each moved column sat in; held_ttl: the TTL the " +
+			"table held, absent for none; held_partitioning: the whole partitioning the table held; held_key_bloom_filter: the key bloom filter the table " +
+			"held; held_read_replicas: the read replicas the table held, empty for none; held_indexes: the index a removal drops or a rename renames, as " +
+			"the table held it",
+		"families": "families are added or have only the settings the declaration states changed, the storage pool, the compression and the cache " +
+			"mode, which the request carries to the table service at its upstream field 6 and which requires the column_family_cache_mode capability; a " +
+			"family is never dropped, a setting is never reset, keep_in_memory is never set",
+		"columns":   "a column moves between families by name; key columns stay in the default family; a column the plan drops is never named",
+		"additions": "add_columns names columns that are nullable, have no default and sit in the default family; a column that must be placed in another family is moved by a separate family operation after the addition",
+		"removals":  "drop_columns names columns that are not part of the key, an index, the TTL or the partitioning",
+		"ttl": "set_ttl_settings states the whole TTL the table holds afterward, a date column with seconds or an integer column with a unit " +
+			"and seconds, and a run interval only to keep or set one; drop_ttl_settings removes it; the column must exist with a type the mode reads",
+		"partitioning": "alter_partitioning_settings states only the settings that change, among the automatic partitioning by size and by load, the " +
+			"preferred partition size and the minimum and maximum partition counts; the partition columns are never named, a setting is never reset, and " +
+			"the minimum never exceeds a nonzero maximum",
+		"settings": "set_key_bloom_filter states ENABLED or DISABLED where the filter changes, an unspecified filter reading as DISABLED; " +
+			"set_read_replicas_settings states PER_AZ or ANY_AZ replicas where they change, a count of zero removing them; each carries the value the table " +
+			"held, and either may go with a partitioning change",
+		"indexes": "add_indexes names one global sync, async or unique index with its ordered key columns and covered columns and no settings of " +
+			"its own; drop_indexes names one index and held_indexes states it as the table held it; rename_indexes names one index the table holds, a " +
+			"different name it does not hold and no replace_destination, and held_indexes states the index as the table held it; an index's definition is " +
+			"never altered in place",
+		"exclusive": "an operation changes families and placements, or adds columns, or drops columns, or sets or drops the TTL, or changes the " +
+			"partitioning settings, the read replicas and the key bloom filter, or adds, drops or renames one index, never a mix",
+		"execution": "native AlterTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
+		"precondition": "the table must exist as a row table and hold every touched family and every moved column exactly as captured; a family to add " +
+			"must be absent; a family to move into must exist or be added by the same request; a column to add must be absent; a column to drop must exist " +
+			"and must not be a key column, an index column, the TTL column or a partitioning column; the table must hold exactly the TTL captured, or none; " +
+			"the table must hold exactly the partitioning settings, the key bloom filter and the read replicas captured for the settings it changes; a TTL " +
+			"to set must read an existing column of a type its mode reads; an index to add must be absent and read existing columns; an index to drop must " +
+			"exist exactly as captured; an index to rename must exist exactly as captured and its new name must be free",
+		"confirmation": "read back the whole family set and every column; each family and column the request does not name must be unchanged, an added " +
+			"column must exist with its type and in the default family, a dropped column must be gone, the TTL must be the one set, or gone for a drop and " +
+			"otherwise unchanged, the partitioning must be the captured settings with the stated ones replaced and otherwise unchanged, the key bloom " +
+			"filter and the read replicas must be the ones set or else unchanged, an added index must exist, be ready and hold the requested definition, a " +
+			"dropped index must be gone, a renamed index must be gone under its old name and hold its definition and settings under the new one, every " +
+			"other index must be unchanged, and the key must be unchanged",
+		"database": "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
 		panic(err)
@@ -271,33 +297,40 @@ func NormalizeAlteration(input *protocol.ValueInput) (*protocol.NormalizedValue,
 	}
 	result := proto.CloneOf(value)
 	result.Payload = payload
-	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Adds column families"
-	switch {
-	case len(alteration.Request.RenameIndexes) > 0:
-		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Renames a secondary index in place; a query that names the old name stops reading through it"
-	case len(alteration.Request.DropIndexes) > 0:
-		impact, reason = protocol.ChangeSemantics_DESTRUCTIVE, "Drops a secondary index and the table that implements it"
-	case len(alteration.Request.AddIndexes) > 0:
-		impact, reason = protocol.ChangeSemantics_ADDITIVE, "Adds a secondary index; YDB builds it in the background"
-	case alteration.Request.AlterPartitioningSettings != nil && changesSettings(alteration.Request):
-		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes when YDB splits and merges the table's partitions, and its read replicas or key bloom filter"
-	case alteration.Request.AlterPartitioningSettings != nil:
-		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes when YDB splits and merges the table's partitions"
-	case changesSettings(alteration.Request):
-		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes the table's read replicas or key bloom filter, which decide how YDB serves reads; no value is rewritten"
-	case alteration.Request.TtlAction != nil:
-		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "A TTL decides which rows YDB deletes; restoring a prior TTL cannot recover deleted rows"
-	case len(alteration.Request.DropColumns) > 0:
-		impact, reason = protocol.ChangeSemantics_DESTRUCTIVE, "Drops columns and the data they hold"
-	case len(alteration.Request.AddColumns) > 0:
-		impact, reason = protocol.ChangeSemantics_ADDITIVE, "Adds nullable columns"
-	case len(alteration.Request.AlterColumnFamilies)+len(alteration.Request.AlterColumns) > 0:
-		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes column family settings or moves columns between families"
-	}
+	impact, reason := alterationSemantics(alteration.Request)
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner),
 		CanonicalFormat: definition.CanonicalFormat, CanonicalProjection: bytes.Clone(payload),
 		OperationSemantics: &protocol.OperationSemantics{Impact: impact, Reason: reason,
 			Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: alteredAccess}}, nil
+}
+
+// alterationSemantics is the impact of a valid alteration request, and why,
+// by the one kind of change it makes.
+func alterationSemantics(request *Ydb_Table.AlterTableRequest) (protocol.ChangeSemantics_Impact, string) {
+	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Adds column families"
+	switch {
+	case len(request.RenameIndexes) > 0:
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Renames a secondary index in place; a query that names the old name stops reading through it"
+	case len(request.DropIndexes) > 0:
+		impact, reason = protocol.ChangeSemantics_DESTRUCTIVE, "Drops a secondary index and the table that implements it"
+	case len(request.AddIndexes) > 0:
+		impact, reason = protocol.ChangeSemantics_ADDITIVE, "Adds a secondary index; YDB builds it in the background"
+	case request.AlterPartitioningSettings != nil && changesSettings(request):
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes when YDB splits and merges the table's partitions, and its read replicas or key bloom filter"
+	case request.AlterPartitioningSettings != nil:
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes when YDB splits and merges the table's partitions"
+	case changesSettings(request):
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes the table's read replicas or key bloom filter, which decide how YDB serves reads; no value is rewritten"
+	case request.TtlAction != nil:
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "A TTL decides which rows YDB deletes; restoring a prior TTL cannot recover deleted rows"
+	case len(request.DropColumns) > 0:
+		impact, reason = protocol.ChangeSemantics_DESTRUCTIVE, "Drops columns and the data they hold"
+	case len(request.AddColumns) > 0:
+		impact, reason = protocol.ChangeSemantics_ADDITIVE, "Adds nullable columns"
+	case len(request.AlterColumnFamilies)+len(request.AlterColumns) > 0:
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Changes column family settings or moves columns between families"
+	}
+	return impact, reason
 }
 
 // DecodeAlteration returns independent native operands after validating the envelope.
@@ -331,59 +364,14 @@ func decodeAlteration(raw []byte) (*Alteration, error) {
 	if err := only(alteration.Request, alterFields...); err != nil {
 		return nil, err
 	}
-	for _, encoded := range payload.HeldFamilies {
-		var family native.ColumnFamily
-		if err := protojson.Unmarshal(encoded, &family); err != nil {
-			return nil, fmt.Errorf("invalid held YDB column family")
-		}
-		if err := only(&family, "name", "data", "compression", "keep_in_memory", "cache_mode"); err != nil {
-			return nil, err
-		}
-		alteration.HeldFamilies = append(alteration.HeldFamilies, &family)
+	if alteration.HeldFamilies, err = decodeHeldFamilies(payload.HeldFamilies); err != nil {
+		return nil, err
 	}
-	if payload.HeldTTL != nil {
-		var held Ydb_Table.TtlSettings
-		if err := protojson.Unmarshal(payload.HeldTTL, &held); err != nil {
-			return nil, fmt.Errorf("invalid held YDB TTL")
-		}
-		if err := validateTTLSettings(&held); err != nil {
-			return nil, err
-		}
-		alteration.HeldTTL = &held
+	if err := decodeHeldSettings(&payload, alteration); err != nil {
+		return nil, err
 	}
-	if payload.HeldPartitioning != nil {
-		var held Ydb_Table.PartitioningSettings
-		if err := protojson.Unmarshal(payload.HeldPartitioning, &held); err != nil {
-			return nil, fmt.Errorf("invalid held YDB partitioning")
-		}
-		alteration.HeldPartitioning = &held
-	}
-	if payload.HeldKeyBloomFilter != "" {
-		value, known := Ydb.FeatureFlag_Status_value[payload.HeldKeyBloomFilter]
-		if !known {
-			return nil, fmt.Errorf("invalid held YDB key bloom filter")
-		}
-		alteration.HeldKeyBloomFilter = new(Ydb.FeatureFlag_Status(value))
-	}
-	if payload.HeldReadReplicas != nil {
-		var held Ydb_Table.ReadReplicasSettings
-		if err := protojson.Unmarshal(payload.HeldReadReplicas, &held); err != nil {
-			return nil, fmt.Errorf("invalid held YDB read replicas")
-		}
-		if err := schema.Known(&held); err != nil {
-			return nil, err
-		}
-		alteration.HeldReadReplicas = &held
-	}
-	for _, encoded := range payload.HeldIndexes {
-		var held native.TableIndexDescription
-		if err := protojson.Unmarshal(encoded, &held); err != nil {
-			return nil, fmt.Errorf("invalid held YDB index")
-		}
-		if err := schema.Known(&held); err != nil {
-			return nil, err
-		}
-		alteration.HeldIndexes = append(alteration.HeldIndexes, &held)
+	if alteration.HeldIndexes, err = decodeHeldIndexes(payload.HeldIndexes); err != nil {
+		return nil, err
 	}
 	for _, held := range payload.HeldColumns {
 		if _, duplicate := alteration.HeldColumns[held.Name]; duplicate {
@@ -394,16 +382,82 @@ func decodeAlteration(raw []byte) (*Alteration, error) {
 	return alteration, validateAlteration(alteration)
 }
 
+// decodeHeldFamilies decodes the families an alteration holds, each naming
+// only the settings a family has.
+func decodeHeldFamilies(encoded []json.RawMessage) ([]*native.ColumnFamily, error) {
+	var families []*native.ColumnFamily
+	for _, raw := range encoded {
+		var family native.ColumnFamily
+		if err := protojson.Unmarshal(raw, &family); err != nil {
+			return nil, fmt.Errorf("invalid held YDB column family")
+		}
+		if err := only(&family, "name", "data", "compression", "keep_in_memory", "cache_mode"); err != nil {
+			return nil, err
+		}
+		families = append(families, &family)
+	}
+	return families, nil
+}
+
+// decodeHeldSettings decodes into alteration the TTL, the partitioning, the
+// key bloom filter and the read replicas the payload holds, each it states.
+func decodeHeldSettings(payload *alterPayload, alteration *Alteration) error {
+	if payload.HeldTTL != nil {
+		var held Ydb_Table.TtlSettings
+		if err := protojson.Unmarshal(payload.HeldTTL, &held); err != nil {
+			return fmt.Errorf("invalid held YDB TTL")
+		}
+		if err := validateTTLSettings(&held); err != nil {
+			return err
+		}
+		alteration.HeldTTL = &held
+	}
+	if payload.HeldPartitioning != nil {
+		var held Ydb_Table.PartitioningSettings
+		if err := protojson.Unmarshal(payload.HeldPartitioning, &held); err != nil {
+			return fmt.Errorf("invalid held YDB partitioning")
+		}
+		alteration.HeldPartitioning = &held
+	}
+	if payload.HeldKeyBloomFilter != "" {
+		value, known := Ydb.FeatureFlag_Status_value[payload.HeldKeyBloomFilter]
+		if !known {
+			return fmt.Errorf("invalid held YDB key bloom filter")
+		}
+		alteration.HeldKeyBloomFilter = new(Ydb.FeatureFlag_Status(value))
+	}
+	if payload.HeldReadReplicas != nil {
+		var held Ydb_Table.ReadReplicasSettings
+		if err := protojson.Unmarshal(payload.HeldReadReplicas, &held); err != nil {
+			return fmt.Errorf("invalid held YDB read replicas")
+		}
+		if err := schema.Known(&held); err != nil {
+			return err
+		}
+		alteration.HeldReadReplicas = &held
+	}
+	return nil
+}
+
+// decodeHeldIndexes decodes the indexes an alteration holds.
+func decodeHeldIndexes(encoded []json.RawMessage) ([]*native.TableIndexDescription, error) {
+	var indexes []*native.TableIndexDescription
+	for _, raw := range encoded {
+		var held native.TableIndexDescription
+		if err := protojson.Unmarshal(raw, &held); err != nil {
+			return nil, fmt.Errorf("invalid held YDB index")
+		}
+		if err := schema.Known(&held); err != nil {
+			return nil, err
+		}
+		indexes = append(indexes, &held)
+	}
+	return indexes, nil
+}
+
 func validateAlteration(alteration *Alteration) error {
 	request := alteration.Request
-	groups := 0
-	for _, used := range []bool{len(request.AddColumnFamilies)+len(request.AlterColumnFamilies)+len(request.AlterColumns) > 0,
-		len(request.AddColumns) > 0, len(request.DropColumns) > 0, request.TtlAction != nil, request.AlterPartitioningSettings != nil || changesSettings(request),
-		len(request.AddIndexes)+len(request.DropIndexes)+len(request.RenameIndexes) > 0} {
-		if used {
-			groups++
-		}
-	}
+	groups := alterationGroups(request)
 	if groups == 0 {
 		return fmt.Errorf("YDB table alteration changes nothing")
 	}
@@ -425,6 +479,34 @@ func validateAlteration(alteration *Alteration) error {
 	if err := validateIndexAlteration(alteration); err != nil {
 		return err
 	}
+	if err := validateFamilyAlteration(request); err != nil {
+		return err
+	}
+	if err := validateHeldFamilies(alteration); err != nil {
+		return err
+	}
+	return validateColumnMoves(alteration)
+}
+
+// alterationGroups counts the kinds of change a request makes, among the
+// families with the column placements, the column additions, the column
+// removals, the TTL, the table settings, and the indexes.
+func alterationGroups(request *Ydb_Table.AlterTableRequest) int {
+	groups := 0
+	for _, used := range []bool{len(request.AddColumnFamilies)+len(request.AlterColumnFamilies)+len(request.AlterColumns) > 0,
+		len(request.AddColumns) > 0, len(request.DropColumns) > 0, request.TtlAction != nil, request.AlterPartitioningSettings != nil || changesSettings(request),
+		len(request.AddIndexes)+len(request.DropIndexes)+len(request.RenameIndexes) > 0} {
+		if used {
+			groups++
+		}
+	}
+	return groups
+}
+
+// validateFamilyAlteration checks the families a request adds or changes:
+// each has a valid distinct name and only the settings a request writes, and
+// a changed family states a setting.
+func validateFamilyAlteration(request *Ydb_Table.AlterTableRequest) error {
 	named := make(map[string]bool)
 	for _, family := range slices.Concat(request.AddColumnFamilies, request.AlterColumnFamilies) {
 		if err := only(family, "name", "data", "compression"); err != nil {
@@ -450,6 +532,13 @@ func validateAlteration(alteration *Alteration) error {
 			return fmt.Errorf("YDB family alteration states no setting")
 		}
 	}
+	return nil
+}
+
+// validateHeldFamilies requires the families an alteration holds to be the
+// families its request changes, each once.
+func validateHeldFamilies(alteration *Alteration) error {
+	request := alteration.Request
 	held := make(map[string]bool)
 	for _, family := range alteration.HeldFamilies {
 		held[family.Name] = true
@@ -462,6 +551,14 @@ func validateAlteration(alteration *Alteration) error {
 			return fmt.Errorf("held YDB column families disagree with the alteration")
 		}
 	}
+	return nil
+}
+
+// validateColumnMoves checks the columns an alteration moves: each has a
+// valid distinct name and a valid family, and the held columns name exactly
+// the moved ones.
+func validateColumnMoves(alteration *Alteration) error {
+	request := alteration.Request
 	columns := make(map[string]bool)
 	for _, column := range request.AlterColumns {
 		if err := only(column, "name", "family"); err != nil {
@@ -638,7 +735,13 @@ func validateIndexAlteration(alteration *Alteration) error {
 	if len(alteration.HeldIndexes) != 0 {
 		return fmt.Errorf("a held YDB index disagrees with the alteration")
 	}
-	index := request.AddIndexes[0]
+	return validateIndexAddition(request.AddIndexes[0])
+}
+
+// validateIndexAddition checks the index an alteration adds: a global sync,
+// async or unique index with at least one key column, no repeated column and
+// no settings of its own.
+func validateIndexAddition(index *Ydb_Table.TableIndex) error {
 	if err := only(index, "name", "index_columns", "data_columns", "global_index", "global_async_index", "global_unique_index"); err != nil {
 		return err
 	}
