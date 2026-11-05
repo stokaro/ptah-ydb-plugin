@@ -302,7 +302,7 @@ func TestLintRulesReportWhatTheServerRefuses(t *testing.T) {
 func TestLintUniqueIndexRuleFollowsTheFlag(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
-	requireSessionCapability(c, newLintSession(c).session, tablecreate.UniqueIndexOnExistingTableCapability, true)
+	requireSessionCapability(c, newLintSession(c).session, tablecreate.UniqueIndexOnExistingTableCapability)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	newClusterFlags(c, opened).set(c, map[string]bool{"EnableAddUniqueIndex": false})
 	lint := newLintSession(c)

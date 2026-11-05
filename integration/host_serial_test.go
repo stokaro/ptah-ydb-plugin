@@ -41,9 +41,9 @@ func hostSerials(directory, ordersIncrement, countersIncrement, plain string) st
 
 // serialFixture is the lock fixture with the Serial tables dropped when the
 // test ends.
-func serialFixture(c *qt.C) (*connection.Connection, string, string) {
+func serialFixture(c *qt.C) (opened *connection.Connection, directory, database string) {
 	c.Helper()
-	opened, directory, database := lockFixture(c)
+	opened, directory, database = lockFixture(c)
 	c.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()

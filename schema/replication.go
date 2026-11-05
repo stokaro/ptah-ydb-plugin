@@ -116,7 +116,7 @@ func NormalizeReplicationChange(input *protocol.ValueInput) (*protocol.Normalize
 
 // ReplicationOperands returns a change's normalized operands, nil for an
 // absent one.
-func ReplicationOperands(change *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error) {
+func ReplicationOperands(change *protocol.Envelope) (before, after *protocol.Envelope, err error) {
 	return replicationChanges.operands(change)
 }
 
@@ -148,7 +148,7 @@ func NormalizeTransferChange(input *protocol.ValueInput) (*protocol.NormalizedVa
 
 // TransferOperands returns a change's normalized operands, nil for an absent
 // one.
-func TransferOperands(change *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error) {
+func TransferOperands(change *protocol.Envelope) (before, after *protocol.Envelope, err error) {
 	return transferChanges.operands(change)
 }
 

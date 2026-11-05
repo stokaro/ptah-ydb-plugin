@@ -163,6 +163,17 @@ func (c *converter) convert(statement statement) error {
 		return c.membership(node)
 	case *privilege:
 		return c.privilege(node)
+	default:
+		return c.convertObject(statement)
+	}
+}
+
+// convertObject applies the statements convert leaves to it: topics and their
+// consumers, secrets, coordination nodes, external data, streaming queries,
+// replications, transfers and resource pools. It refuses a construct the
+// provider has no model for, and any other statement as unmodeled.
+func (c *converter) convertObject(statement statement) error {
+	switch node := statement.(type) {
 	case *createTopic:
 		return c.declareTopic(node)
 	case *addConsumer:
@@ -390,15 +401,7 @@ func (c *converter) comment(text string) error {
 func (c *converter) commentTarget(statement ydbcomment.Statement) *string {
 	written := quoteName(statement.Path)
 	if statement.Object == ydbcomment.View {
-		qualified := qualifiedTableName(written)
-		for _, reading := range c.readings() {
-			for i := range reading.Views {
-				if reading.Views[i].Name == qualified {
-					return &reading.Views[i].Comment
-				}
-			}
-		}
-		return nil
+		return c.viewComment(qualifiedTableName(written))
 	}
 	_, table := c.tableNamed(written)
 	if table == nil {
@@ -422,6 +425,19 @@ func (c *converter) commentTarget(statement ydbcomment.Statement) *string {
 				if reading.Indexes[i].TableName == table.Qualified() && reading.Indexes[i].Name == statement.Name {
 					return &reading.Indexes[i].Comment
 				}
+			}
+		}
+	}
+	return nil
+}
+
+// viewComment returns the comment of the view a reading declares under the
+// qualified name, or nil when no reading declares one.
+func (c *converter) viewComment(qualified string) *string {
+	for _, reading := range c.readings() {
+		for i := range reading.Views {
+			if reading.Views[i].Name == qualified {
+				return &reading.Views[i].Comment
 			}
 		}
 	}

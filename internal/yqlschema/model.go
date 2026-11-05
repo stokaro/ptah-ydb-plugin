@@ -2,6 +2,7 @@ package yqlschema
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
@@ -242,19 +243,23 @@ func SortedObjects(r *Reading) []Object {
 }
 
 // ObjectPayload is an object's specification in the form the host's codec
-// writes its payload.
-func ObjectPayload(object Object) any {
+// writes its payload. A streaming query whose specification is not one is an
+// error.
+func ObjectPayload(object Object) (any, error) {
 	if object.Kind == KindSecret {
-		return object.Spec
+		return object.Spec, nil
 	}
 	if object.Kind == KindStreamingQuery {
-		node := object.Spec.(*createStreamingQuery)
+		node, ok := object.Spec.(*createStreamingQuery)
+		if !ok {
+			return nil, fmt.Errorf("streaming query %s holds no streaming query specification", ydbPath(object.Schema, object.Name))
+		}
 		return struct {
 			Spec            any  `json:"spec"`
 			AllowStateReset bool `json:"allow_state_reset"`
-		}{node.spec, node.allowStateReset}
+		}{node.spec, node.allowStateReset}, nil
 	}
 	return struct {
 		Spec any `json:"spec"`
-	}{Spec: object.Spec}
+	}{Spec: object.Spec}, nil
 }

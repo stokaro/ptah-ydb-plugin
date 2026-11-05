@@ -55,16 +55,35 @@ func (s *secretScheme) DescribePath(_ context.Context, _ *Ydb_Scheme.DescribePat
 	}
 	return &Ydb_Scheme.DescribePathResponse{Operation: secretResult(&Ydb_Scheme.DescribePathResult{Self: &Ydb_Scheme.Entry{Name: "pg.pw", Type: Ydb_Scheme.Entry_SECRET, Owner: owner}})}, nil
 }
-func secretOperation(c *qt.C, before, after bool) *protocol.Envelope {
+
+// secretStep is the change a secret operation carries.
+type secretStep int
+
+const (
+	// createSecret creates the secret.
+	createSecret secretStep = iota
+	// rotateSecret gives the secret it finds a new value.
+	rotateSecret
+	// dropSecret drops the secret it finds.
+	dropSecret
+)
+
+// found reports whether the step finds the secret, its before operand.
+func (s secretStep) found() bool { return s != createSecret }
+
+// leaves reports whether the step leaves a secret, its after operand.
+func (s secretStep) leaves() bool { return s != dropSecret }
+
+func secretOperation(c *qt.C, step secretStep) *protocol.Envelope {
 	c.Helper()
 	owner := &protocol.Reference{Engine: "ydb", Kind: schema.SecretProperties, Database: "/local", Schema: "app", Name: "pg.pw"}
 	var current, desired *protocol.Envelope
 	var err error
-	if before {
+	if step.found() {
 		current, err = schema.CaptureObject(owner, &native.SecretPresence{})
 		c.Assert(err, qt.IsNil)
 	}
-	if after {
+	if step.leaves() {
 		desired, err = schema.CaptureSecretIntent(owner, &native.SecretIntent{ValueEnv: "PTAH_SECRET_PG"})
 		c.Assert(err, qt.IsNil)
 	}
@@ -76,26 +95,27 @@ func secretOperation(c *qt.C, before, after bool) *protocol.Envelope {
 }
 func TestSecretNativeLifecycle(t *testing.T) {
 	for _, test := range []struct {
-		name                  string
-		before, after, parent bool
-		statement             string
+		name      string
+		step      secretStep
+		parent    bool
+		statement string
 	}{
-		{name: "create with new parent", after: true, statement: "CREATE SECRET `/local/app/pg.pw` WITH (value = $PTAH_SECRET_PG);"},
-		{name: "rotate", before: true, after: true, parent: true, statement: "ALTER SECRET `/local/app/pg.pw` WITH (value = $PTAH_SECRET_PG);"},
-		{name: "drop", before: true, parent: true, statement: "DROP SECRET `/local/app/pg.pw`;"},
+		{name: "create with new parent", step: createSecret, statement: "CREATE SECRET `/local/app/pg.pw` WITH (value = $PTAH_SECRET_PG);"},
+		{name: "rotate", step: rotateSecret, parent: true, statement: "ALTER SECRET `/local/app/pg.pw` WITH (value = $PTAH_SECRET_PG);"},
+		{name: "drop", step: dropSecret, parent: true, statement: "DROP SECRET `/local/app/pg.pw`;"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			scheme := &secretScheme{present: test.before, parent: test.parent}
+			scheme := &secretScheme{present: test.step.found(), parent: test.parent}
 			var statements []string
 			runner := &nativeapi.Secret{Scheme: scheme, Execute: func(_ context.Context, query string) error {
 				scheme.calls++
 				scheme.parent = true
-				scheme.present = test.after
+				scheme.present = test.step.leaves()
 				statements = append(statements, query)
 				return nil
 			}}
-			dispatched, err := runner.Apply(c.Context(), "/local", secretOperation(c, test.before, test.after), func(context.Context) error { return nil })
+			dispatched, err := runner.Apply(c.Context(), "/local", secretOperation(c, test.step), func(context.Context) error { return nil })
 			c.Assert(err, qt.IsNil)
 			c.Assert(dispatched, qt.IsTrue)
 			c.Assert(statements, qt.DeepEquals, []string{test.statement})
@@ -107,16 +127,16 @@ func TestSecretNativeRefusalsAndUnknownOutcome(t *testing.T) {
 	for _, test := range []struct {
 		name            string
 		scheme          secretScheme
-		before          bool
+		step            secretStep
 		guard, dispatch error
 		writes          bool
 	}{
 		{name: "occupied creation", scheme: secretScheme{parent: true, present: true}},
-		{name: "missing rotation", before: true, scheme: secretScheme{parent: true}},
-		{name: "wrong object kind", before: true, scheme: secretScheme{parent: true, present: true, wrongType: true}},
+		{name: "missing rotation", step: rotateSecret, scheme: secretScheme{parent: true}},
+		{name: "wrong object kind", step: rotateSecret, scheme: secretScheme{parent: true, present: true, wrongType: true}},
 		{name: "lock lost", guard: errors.New("lost lock")},
 		{name: "dispatch uncertain", dispatch: errors.New("uncertain"), writes: true},
-		{name: "rotation access changed", before: true, scheme: secretScheme{parent: true, present: true, changedAccess: true}, writes: true},
+		{name: "rotation access changed", step: rotateSecret, scheme: secretScheme{parent: true, present: true, changedAccess: true}, writes: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -127,7 +147,7 @@ func TestSecretNativeRefusalsAndUnknownOutcome(t *testing.T) {
 				scheme.parent = true
 				return test.dispatch
 			}}
-			dispatched, err := runner.Apply(c.Context(), "/local", secretOperation(c, test.before, true), func(context.Context) error { return test.guard })
+			dispatched, err := runner.Apply(c.Context(), "/local", secretOperation(c, test.step), func(context.Context) error { return test.guard })
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(dispatched, qt.Equals, test.writes)
 			c.Assert(scheme.calls > 0, qt.Equals, test.writes)

@@ -32,28 +32,47 @@ func HeaderKinds() []string {
 		"external_data_source", "external_table", "replication", "transfer"}
 }
 
-// ClaimedModels are the desired models whose coverage a YQL document claims:
-// a row table's settings, a column's, a column table's storage, a
-// coordination node, a topic, an external data source, an external table, an
-// async replication and a transfer, and a table's changefeeds when the host
-// takes the facets of a reading (provider.SQLFacetsFeature). Their source
+// ClaimedModels are the desired models whose coverage a YQL document read for
+// request claims: a row table's settings, a column's, a column table's
+// storage, a coordination node, a topic, an external data source, an external
+// table, an async replication and a transfer, and a table's changefeeds when
+// the host takes the facets of a reading (see [takesFacets]). Their source
 // formats include SQL. Without that feature the reading cannot say a
 // changefeed, so it claims nothing about the changefeeds of its tables and
 // leaves those a table holds unmanaged. A table's settings, a column's and a
 // column table's storage are claimed either way, as a YAML or Go source claims
 // them; without the feature a load that declares one is refused.
-func ClaimedModels(facets bool) []*protocol.ValueModel {
+func ClaimedModels(request *protocol.ReadSQLSchemaRequest) []*protocol.ValueModel {
 	models := claimedModels()
-	if facets {
+	if takesFacets(request) {
 		models = append(models, schema.NativeDesiredModel(schema.ChangefeedProperties))
 	}
 	return models
 }
 
+// takesFacets reports whether the host that sent request takes the facets of
+// a reading, provider.SQLFacetsFeature, which a table's settings, the family of
+// a column and a table's changefeeds need.
+func takesFacets(request *protocol.ReadSQLSchemaRequest) bool {
+	return slices.Contains(request.GetTargetFeatures(), provider.SQLFacetsFeature)
+}
+
 func claimedModels() []*protocol.ValueModel {
-	return []*protocol.ValueModel{schema.NativeDesiredModel(schema.SecretProperties), schema.TableDesiredModel(), schema.ColumnDesiredModel(), schema.NativeDesiredModel(schema.ColumnStorageProperties), schema.CoordinationDesiredModel(),
-		schema.NativeDesiredModel(schema.StreamingQueryProperties), schema.NativeDesiredModel(schema.TopicProperties), schema.NativeDesiredModel(schema.ExternalSourceProperties), schema.NativeDesiredModel(schema.ExternalTableProperties), schema.NativeDesiredModel(schema.ResourcePoolProperties), schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties),
-		schema.NativeDesiredModel(schema.ReplicationProperties), schema.NativeDesiredModel(schema.TransferProperties)}
+	return []*protocol.ValueModel{
+		schema.NativeDesiredModel(schema.SecretProperties),
+		schema.TableDesiredModel(),
+		schema.ColumnDesiredModel(),
+		schema.NativeDesiredModel(schema.ColumnStorageProperties),
+		schema.CoordinationDesiredModel(),
+		schema.NativeDesiredModel(schema.StreamingQueryProperties),
+		schema.NativeDesiredModel(schema.TopicProperties),
+		schema.NativeDesiredModel(schema.ExternalSourceProperties),
+		schema.NativeDesiredModel(schema.ExternalTableProperties),
+		schema.NativeDesiredModel(schema.ResourcePoolProperties),
+		schema.NativeDesiredModel(schema.ResourcePoolClassifierProperties),
+		schema.NativeDesiredModel(schema.ReplicationProperties),
+		schema.NativeDesiredModel(schema.TransferProperties),
+	}
 }
 
 // Reply reads the documents of a ReadSQLSchema request and answers with the
@@ -72,8 +91,7 @@ func Reply(request *protocol.ReadSQLSchemaRequest) *protocol.SQLSchema {
 	if refusal != nil {
 		return refused(request, []*Refusal{refusal})
 	}
-	facets := slices.Contains(request.GetTargetFeatures(), provider.SQLFacetsFeature)
-	coverage, refusal := claim(request.GetLimits(), ClaimedModels(facets))
+	coverage, refusal := claim(request.GetLimits(), ClaimedModels(request))
 	if refusal != nil {
 		refusal.Document, refusal.Start, refusal.End = limitDocument(request, refusal.limit)
 		return refused(request, []*Refusal{refusal})
@@ -82,7 +100,7 @@ func Reply(request *protocol.ReadSQLSchemaRequest) *protocol.SQLSchema {
 	// two documents declare is one table, with the columns of both.
 	settled := reading.clone()
 	finalize(settled)
-	reply, gaps := wire(request, settled, facets)
+	reply, gaps := wire(request, settled)
 	if len(gaps) != 0 {
 		return refused(request, gaps)
 	}
@@ -160,91 +178,25 @@ func sourcePosition(text string, offset int) *protocol.SourcePosition {
 }
 
 // wire writes a reading as the reply's schema, and returns the refusals of
-// everything in it a SQL schema reading has no home for. facets says whether
-// the host takes the facets of a reading, which a table's settings, the family
-// of a column and a table's changefeeds need.
-func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool) (*protocol.SQLSchema, []*Refusal) {
-	reply := &protocol.SQLSchema{Complete: true}
-	var gaps []*Refusal
-	documents := request.GetDocuments()
-	trace := func(collection protocol.SQLObjectTrace_Collection, index int, document int, text span) {
-		source := documents[document]
-		// #nosec G115 -- index counts the objects read from the request's documents, which runtime.MaxMessageBytes bounds to 4 MiB
-		reply.Traces = append(reply.Traces, &protocol.SQLObjectTrace{Collection: collection, Index: uint32(index),
-			Source: &protocol.SourceTrace{DocumentId: source.GetId(), Span: sourceSpan(source.GetText(), text.start, text.end)}})
-	}
-	for _, table := range reading.Tables {
-		if settings := tableSettings(table.Facets); len(settings) != 0 && !facets {
-			gaps = append(gaps, gap(table.document, table.span, fmt.Sprintf("table %s declares %s, which a SQL schema reading has no home for: "+
-				"the host does not take the facets of a table in a SQL schema reading (%s)", quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "),
-				provider.SQLFacetsFeature)))
-		}
-		declared := &protocol.DeclaredTable{Name: table.Name, Schema: table.Schema, Comment: table.Comment, PrimaryKey: slices.Clone(table.PrimaryKey)}
-		for _, part := range table.PrimaryKeyParts {
-			declared.PrimaryKeyParts = append(declared.PrimaryKeyParts, &protocol.DeclaredKeyPart{Column: part.Name, Prefix: part.Prefix, Descending: part.Desc})
-		}
-		for _, field := range reading.Fields {
-			if field.Table != table.Qualified() {
-				continue
-			}
-			declared.Columns = append(declared.Columns, &protocol.DeclaredColumn{Name: field.Name, Type: field.Type, Nullable: field.Nullable, Primary: field.Primary,
-				IdentityStart: field.IdentityStart, IdentityIncrement: field.IdentityIncrement, DefaultValue: field.Default, DefaultSet: field.DefaultSet, Comment: field.Comment})
-		}
-		for _, index := range reading.Indexes {
-			if index.TableName != table.Qualified() {
-				continue
-			}
-			if settings := indexSettings(index); len(settings) != 0 {
-				gaps = append(gaps, gap(index.document, index.span, fmt.Sprintf("index %s of table %s declares %s, which a SQL schema reading has no home for: "+
-					"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes",
-					quoteName(index.Name), quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "))))
-			}
-			declared.Indexes = append(declared.Indexes, &protocol.DeclaredIndex{Name: index.Name, Fields: slices.Clone(index.Fields), Unique: index.Unique, Comment: index.Comment,
-				Type: index.Type, IncludeColumns: slices.Clone(index.IncludeColumns), StorageParameters: index.StorageParams, TableName: index.TableName})
-		}
-		trace(protocol.SQLObjectTrace_TABLES, len(reply.Tables), table.document, table.span)
-		reply.Tables = append(reply.Tables, declared)
-		if !facets {
-			continue
-		}
-		envelopes, err := tableFacets(table)
-		if err != nil {
-			gaps = append(gaps, &Refusal{Document: table.document, Start: table.span.start, End: table.span.end, Code: Invalid,
-				Message: fmt.Sprintf("table %s: %v", quoteName(ydbPath(table.Schema, table.Name)), err)})
-			continue
-		}
-		for _, envelope := range envelopes {
-			trace(protocol.SQLObjectTrace_FACETS, len(reply.Facets), table.document, table.span)
-			reply.Facets = append(reply.Facets, envelope)
-		}
-	}
+// everything in it a SQL schema reading has no home for: a table's settings
+// and changefeeds among them where the host does not take the facets of a
+// reading (see [takesFacets]).
+func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading) (*protocol.SQLSchema, []*Refusal) {
+	w := &wiring{request: request, reply: &protocol.SQLSchema{Complete: true}, facets: takesFacets(request)}
+	w.tables(reading)
 	for _, view := range reading.Views {
-		trace(protocol.SQLObjectTrace_VIEWS, len(reply.Views), view.document, view.span)
-		reply.Views = append(reply.Views, &protocol.SQLView{Schema: view.schema, Name: view.leaf, Body: view.Body, Comment: view.Comment})
+		w.trace(protocol.SQLObjectTrace_VIEWS, len(w.reply.Views), view.document, view.span)
+		w.reply.Views = append(w.reply.Views, &protocol.SQLView{Schema: view.schema, Name: view.leaf, Body: view.Body, Comment: view.Comment})
 	}
 	for _, role := range reading.Roles {
 		if role.passwordAt != nil {
-			gaps = append(gaps, gap(role.passwordDocument, *role.passwordAt, fmt.Sprintf("user %s declares a password, which a SQL schema reading has no home for: "+
+			w.gaps = append(w.gaps, gap(role.passwordDocument, *role.passwordAt, fmt.Sprintf("user %s declares a password, which a SQL schema reading has no home for: "+
 				"the host compares no secret a schema file holds", quoteName(role.Name))))
 		}
-		trace(protocol.SQLObjectTrace_ROLES, len(reply.Roles), role.document, role.span)
-		reply.Roles = append(reply.Roles, &protocol.SQLRole{Name: role.Name, Login: role.Login, Inherit: role.Inherit, Group: role.Group, MemberOf: slices.Clone(role.MemberOf)})
+		w.trace(protocol.SQLObjectTrace_ROLES, len(w.reply.Roles), role.document, role.span)
+		w.reply.Roles = append(w.reply.Roles, &protocol.SQLRole{Name: role.Name, Login: role.Login, Inherit: role.Inherit, Group: role.Group, MemberOf: slices.Clone(role.MemberOf)})
 	}
-	for _, revoked := range []bool{false, true} {
-		grants := reading.Grants
-		if revoked {
-			grants = reading.RevokedGrants
-		}
-		for _, grant := range grants {
-			if grant.target.kind == "resource pool" && strings.ContainsAny(grant.target.name, ".\"`[]") {
-				gaps = append(gaps, gap(grant.document, grant.span, fmt.Sprintf("a grant on resource pool %s has no home in a SQL schema reading: "+
-					"the host names a pool it reads from a provider as it names a table, which renames a pool whose name holds a dot, a quote or a bracket", quoteName(grant.target.name))))
-			}
-			trace(protocol.SQLObjectTrace_GRANTS, len(reply.Grants), grant.document, grant.span)
-			reply.Grants = append(reply.Grants, &protocol.SQLGrant{Role: grant.Role, Privileges: slices.Clone(grant.Privileges), Revoked: revoked,
-				Target: &protocol.Reference{Kind: grant.target.kind, Schema: grant.target.schema, Name: grant.target.name}})
-		}
-	}
+	w.grants(reading)
 	var feeds []Object
 	for _, object := range SortedObjects(reading) {
 		if object.Kind == KindChangefeed {
@@ -253,16 +205,95 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool)
 		}
 		envelope, refusal := nativeObject(object)
 		if refusal != nil {
-			gaps = append(gaps, refusal)
+			w.gaps = append(w.gaps, refusal)
 			continue
 		}
-		trace(protocol.SQLObjectTrace_NATIVE_OBJECTS, len(reply.NativeObjects), object.document, object.span)
-		reply.NativeObjects = append(reply.NativeObjects, envelope)
+		w.trace(protocol.SQLObjectTrace_NATIVE_OBJECTS, len(w.reply.NativeObjects), object.document, object.span)
+		w.reply.NativeObjects = append(w.reply.NativeObjects, envelope)
 	}
+	w.changefeeds(feeds)
+	for i, file := range reading.Files {
+		w.reply.Declarations = append(w.reply.Declarations, documentDeclarations(request.GetDocuments()[i].GetId(), file))
+	}
+	return w.reply, w.gaps
+}
+
+// wiring is the reply wire writes: the request it answers, the refusals it
+// collects, and whether the host takes the facets of a reading.
+type wiring struct {
+	request *protocol.ReadSQLSchemaRequest
+	reply   *protocol.SQLSchema
+	gaps    []*Refusal
+	facets  bool
+}
+
+// trace traces the object at index of a reply collection to the text of its
+// statement in a document of the request.
+func (w *wiring) trace(collection protocol.SQLObjectTrace_Collection, index, document int, text span) {
+	source := w.request.GetDocuments()[document]
+	// #nosec G115 -- index counts the objects read from the request's documents, which runtime.MaxMessageBytes bounds to 4 MiB
+	w.reply.Traces = append(w.reply.Traces, &protocol.SQLObjectTrace{Collection: collection, Index: uint32(index),
+		Source: &protocol.SourceTrace{DocumentId: source.GetId(), Span: sourceSpan(source.GetText(), text.start, text.end)}})
+}
+
+// tables writes the tables of the reading, and the facets of their settings
+// for a host that takes them. Settings a host without the facets has no home
+// for are refused.
+func (w *wiring) tables(reading *Reading) {
+	for _, table := range reading.Tables {
+		if settings := tableSettings(table.Facets); len(settings) != 0 && !w.facets {
+			w.gaps = append(w.gaps, gap(table.document, table.span, fmt.Sprintf("table %s declares %s, which a SQL schema reading has no home for: "+
+				"the host does not take the facets of a table in a SQL schema reading (%s)", quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "),
+				provider.SQLFacetsFeature)))
+		}
+		declared, refused := declaredTable(reading, table)
+		w.gaps = append(w.gaps, refused...)
+		w.trace(protocol.SQLObjectTrace_TABLES, len(w.reply.Tables), table.document, table.span)
+		w.reply.Tables = append(w.reply.Tables, declared)
+		if !w.facets {
+			continue
+		}
+		envelopes, err := tableFacets(table)
+		if err != nil {
+			w.gaps = append(w.gaps, &Refusal{Document: table.document, Start: table.span.start, End: table.span.end, Code: Invalid,
+				Message: fmt.Sprintf("table %s: %v", quoteName(ydbPath(table.Schema, table.Name)), err)})
+			continue
+		}
+		for _, envelope := range envelopes {
+			w.trace(protocol.SQLObjectTrace_FACETS, len(w.reply.Facets), table.document, table.span)
+			w.reply.Facets = append(w.reply.Facets, envelope)
+		}
+	}
+}
+
+// grants writes the grants of the reading, then its revocations. A grant on a
+// resource pool whose name the host would rename is refused.
+func (w *wiring) grants(reading *Reading) {
+	for _, revoked := range []bool{false, true} {
+		grants := reading.Grants
+		if revoked {
+			grants = reading.RevokedGrants
+		}
+		for _, grant := range grants {
+			if grant.target.kind == "resource pool" && strings.ContainsAny(grant.target.name, ".\"`[]") {
+				w.gaps = append(w.gaps, gap(grant.document, grant.span, fmt.Sprintf("a grant on resource pool %s has no home in a SQL schema reading: "+
+					"the host names a pool it reads from a provider as it names a table, which renames a pool whose name holds a dot, a quote or a bracket", quoteName(grant.target.name))))
+			}
+			w.trace(protocol.SQLObjectTrace_GRANTS, len(w.reply.Grants), grant.document, grant.span)
+			w.reply.Grants = append(w.reply.Grants, &protocol.SQLGrant{Role: grant.Role, Privileges: slices.Clone(grant.Privileges), Revoked: revoked,
+				Target: &protocol.Reference{Kind: grant.target.kind, Schema: grant.target.schema, Name: grant.target.name}})
+		}
+	}
+}
+
+// changefeeds writes the changefeeds of each table as one facet of the table
+// for a host that takes the facets of a reading, and refuses each of them for
+// a host that does not.
+func (w *wiring) changefeeds(feeds []Object) {
 	for _, table := range changefeedTables(feeds) {
-		if !facets {
+		if !w.facets {
 			for _, feed := range table {
-				gaps = append(gaps, gap(feed.document, feed.span, fmt.Sprintf("changefeed %s of table %s has no home in a SQL schema reading: "+
+				w.gaps = append(w.gaps, gap(feed.document, feed.span, fmt.Sprintf("changefeed %s of table %s has no home in a SQL schema reading: "+
 					"the host does not take the facets of a table in a SQL schema reading (%s)", quoteName(feed.Name), quoteName(ydbPath(feed.Schema, feed.Parent)),
 					provider.SQLFacetsFeature)))
 			}
@@ -270,26 +301,59 @@ func wire(request *protocol.ReadSQLSchemaRequest, reading *Reading, facets bool)
 		}
 		envelope, refusal := changefeedFacet(table)
 		if refusal != nil {
-			gaps = append(gaps, refusal)
+			w.gaps = append(w.gaps, refusal)
 			continue
 		}
-		trace(protocol.SQLObjectTrace_FACETS, len(reply.Facets), table[0].document, table[0].span)
-		reply.Facets = append(reply.Facets, envelope)
+		w.trace(protocol.SQLObjectTrace_FACETS, len(w.reply.Facets), table[0].document, table[0].span)
+		w.reply.Facets = append(w.reply.Facets, envelope)
 	}
-	for i, file := range reading.Files {
-		declared := &protocol.SQLDocumentDeclarations{DocumentId: documents[i].GetId()}
-		for _, object := range file.Objects {
-			declared.Objects = append(declared.Objects, &protocol.SQLDeclaration{Kind: object.Kind, Name: object.Name})
-		}
-		for _, object := range file.Guards {
-			declared.Guards = append(declared.Guards, &protocol.SQLDeclaration{Kind: object.Kind, Name: object.Name})
-		}
-		for _, statement := range file.Tables {
-			declared.Tables = append(declared.Tables, &protocol.SQLTableStatement{Name: statement.Name, Drop: statement.Drop, Guarded: statement.Guarded})
-		}
-		reply.Declarations = append(reply.Declarations, declared)
+}
+
+// declaredTable writes a table of the reading as the reply declares it, with
+// its key parts, columns and indexes, and returns the refusals of the index
+// settings a SQL schema reading has no home for.
+func declaredTable(reading *Reading, table Table) (*protocol.DeclaredTable, []*Refusal) {
+	var gaps []*Refusal
+	declared := &protocol.DeclaredTable{Name: table.Name, Schema: table.Schema, Comment: table.Comment, PrimaryKey: slices.Clone(table.PrimaryKey)}
+	for _, part := range table.PrimaryKeyParts {
+		declared.PrimaryKeyParts = append(declared.PrimaryKeyParts, &protocol.DeclaredKeyPart{Column: part.Name, Prefix: part.Prefix, Descending: part.Desc})
 	}
-	return reply, gaps
+	for _, field := range reading.Fields {
+		if field.Table != table.Qualified() {
+			continue
+		}
+		declared.Columns = append(declared.Columns, &protocol.DeclaredColumn{Name: field.Name, Type: field.Type, Nullable: field.Nullable, Primary: field.Primary,
+			IdentityStart: field.IdentityStart, IdentityIncrement: field.IdentityIncrement, DefaultValue: field.Default, DefaultSet: field.DefaultSet, Comment: field.Comment})
+	}
+	for _, index := range reading.Indexes {
+		if index.TableName != table.Qualified() {
+			continue
+		}
+		if settings := indexSettings(index); len(settings) != 0 {
+			gaps = append(gaps, gap(index.document, index.span, fmt.Sprintf("index %s of table %s declares %s, which a SQL schema reading has no home for: "+
+				"an index states no settings of its own in the row-table model, and the provider adds only plain global indexes",
+				quoteName(index.Name), quoteName(ydbPath(table.Schema, table.Name)), strings.Join(settings, ", "))))
+		}
+		declared.Indexes = append(declared.Indexes, &protocol.DeclaredIndex{Name: index.Name, Fields: slices.Clone(index.Fields), Unique: index.Unique, Comment: index.Comment,
+			Type: index.Type, IncludeColumns: slices.Clone(index.IncludeColumns), StorageParameters: index.StorageParams, TableName: index.TableName})
+	}
+	return declared, gaps
+}
+
+// documentDeclarations writes what one document of the load declares, in its
+// order: the objects, the guards, and the table statements.
+func documentDeclarations(documentID string, file FileDeclarations) *protocol.SQLDocumentDeclarations {
+	declared := &protocol.SQLDocumentDeclarations{DocumentId: documentID}
+	for _, object := range file.Objects {
+		declared.Objects = append(declared.Objects, &protocol.SQLDeclaration{Kind: object.Kind, Name: object.Name})
+	}
+	for _, object := range file.Guards {
+		declared.Guards = append(declared.Guards, &protocol.SQLDeclaration{Kind: object.Kind, Name: object.Name})
+	}
+	for _, statement := range file.Tables {
+		declared.Tables = append(declared.Tables, &protocol.SQLTableStatement{Name: statement.Name, Drop: statement.Drop, Guarded: statement.Guarded})
+	}
+	return declared
 }
 
 func gap(document int, text span, message string) *Refusal {
@@ -335,19 +399,18 @@ func indexSettings(index Index) []string {
 }
 
 // nativeObject is the reply's envelope for a YDB object, or the refusal of
-// one the reading cannot write. A changefeed is a facet of its table and
-// never reaches it.
+// one the reading cannot write. It reads the object by its specification,
+// whose type the reading sets from the object's kind. A changefeed is a facet
+// of its table and never reaches it.
 func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
-	switch object.Kind {
-	case KindSecret:
-		spec := object.Spec.(*secrets.Spec)
+	switch spec := object.Spec.(type) {
+	case *secrets.Spec:
 		value, err := schema.CaptureSecretIntent(&protocol.Reference{Engine: "ydb", Kind: schema.SecretProperties, Schema: object.Schema, Name: object.Name}, &native.SecretIntent{ValueEnv: spec.ValueEnv})
 		if err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: "invalid secret declaration"}
 		}
 		return value, nil
-	case KindCoordinationNode:
-		spec := object.Spec.(*ydbdecl.CoordinationNode)
+	case *ydbdecl.CoordinationNode:
 		owner := &protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: object.Schema, Name: object.Name}
 		if err := schema.ValidateManagedCoordinationOwner(owner); err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
@@ -359,29 +422,25 @@ func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 				Message: fmt.Sprintf("coordination node %s: %v", quoteName(ydbPath(object.Schema, object.Name)), err)}
 		}
 		return envelope, nil
-	case KindReplication:
-		spec := object.Spec.(*replication.ReplicationSpec)
+	case *replication.ReplicationSpec:
 		envelope, err := schema.CaptureReplicationIntent(&protocol.Reference{Engine: "ydb", Kind: schema.ReplicationProperties, Schema: object.Schema, Name: object.Name}, *spec)
 		if err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: replicationRefusal}
 		}
 		return envelope, nil
-	case KindTransfer:
-		spec := object.Spec.(*replication.TransferSpec)
+	case *replication.TransferSpec:
 		envelope, err := schema.CaptureTransferIntent(&protocol.Reference{Engine: "ydb", Kind: schema.TransferProperties, Schema: object.Schema, Name: object.Name}, *spec)
 		if err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: replicationRefusal}
 		}
 		return envelope, nil
-	case KindStreamingQuery:
-		node := object.Spec.(*createStreamingQuery)
-		envelope, err := schema.CaptureStreamingQueryIntent(&protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: object.Schema, Name: object.Name}, node.spec, node.allowStateReset)
+	case *createStreamingQuery:
+		envelope, err := schema.CaptureStreamingQueryIntent(&protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: object.Schema, Name: object.Name}, spec.spec, spec.allowStateReset)
 		if err != nil {
 			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid, Message: err.Error()}
 		}
 		return envelope, nil
-	case KindTopic:
-		spec := object.Spec.(*ydbdecl.Topic)
+	case *ydbdecl.Topic:
 		invalid := func(err error) *Refusal {
 			return &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
 				Message: fmt.Sprintf("topic %s: %v", quoteName(ydbPath(object.Schema, object.Name)), err)}
@@ -395,22 +454,25 @@ func nativeObject(object Object) (*protocol.Envelope, *Refusal) {
 			return nil, invalid(err)
 		}
 		return envelope, nil
-	case KindResourcePool, KindResourcePoolClassifier:
-		kind, settings, noun := schema.ResourcePoolProperties, proto.Message(nil), "resource pool"
-		if spec, ok := object.Spec.(*workload.PoolSpec); ok {
-			settings = schema.PoolSettings(*spec)
-		} else {
-			kind, settings, noun = schema.ResourcePoolClassifierProperties, schema.ClassifierSettings(*object.Spec.(*workload.ClassifierSpec)), "resource pool classifier"
-		}
-		envelope, err := schema.CaptureWorkloadIntent(&protocol.Reference{Engine: "ydb", Kind: kind, Name: object.Name}, settings)
-		if err != nil {
-			return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
-				Message: fmt.Sprintf("%s %s: %v", noun, quoteName(object.Name), err)}
-		}
-		return envelope, nil
+	case *workload.PoolSpec:
+		return workloadObject(object, schema.ResourcePoolProperties, schema.PoolSettings(*spec), "resource pool")
+	case *workload.ClassifierSpec:
+		return workloadObject(object, schema.ResourcePoolClassifierProperties, schema.ClassifierSettings(*spec), "resource pool classifier")
 	default:
 		return externalObject(object)
 	}
+}
+
+// workloadObject is the reply's envelope for a resource pool or a
+// classifier, an object of model kind with settings, or the refusal that
+// names it as noun.
+func workloadObject(object Object, kind string, settings proto.Message, noun string) (*protocol.Envelope, *Refusal) {
+	envelope, err := schema.CaptureWorkloadIntent(&protocol.Reference{Engine: "ydb", Kind: kind, Name: object.Name}, settings)
+	if err != nil {
+		return nil, &Refusal{Document: object.document, Start: object.span.start, End: object.span.end, Code: Invalid,
+			Message: fmt.Sprintf("%s %s: %v", noun, quoteName(object.Name), err)}
+	}
+	return envelope, nil
 }
 
 // changefeedTables groups the changefeeds of a reading by their table, in the
@@ -590,11 +652,11 @@ func CheckLimits(limits []*protocol.SchemaCoverageLimit) error {
 
 // workloadLimit is the name of the pool or the classifier a header names,
 // which belongs to the database and has no directory.
-func workloadLimit(written string) (string, string) { return "", written }
+func workloadLimit(written string) (directory, name string) { return "", written }
 
 // topicLimit is the directory and the name of the topic a header names: a
 // path relative to the database root, a dot being part of a name.
-func topicLimit(written string) (string, string) {
+func topicLimit(written string) (directory, name string) {
 	path, err := ydbdecl.ParseTopicPath(written)
 	if err != nil {
 		return "", written
@@ -605,7 +667,7 @@ func topicLimit(written string) (string, string) {
 // externalLimit is the directory and the name of the external object a
 // header names: a path relative to the database root, a dot being part of a
 // name.
-func externalLimit(written string) (string, string) {
+func externalLimit(written string) (directory, name string) {
 	path, err := ydbdecl.ParseExternalPath(written)
 	if err != nil {
 		return "", written
@@ -615,7 +677,7 @@ func externalLimit(written string) (string, string) {
 
 // coordinationLimit is the directory and the name of the node a header
 // names: a path, or a name qualified by its directory with a dot.
-func coordinationLimit(written string) (string, string) {
+func coordinationLimit(written string) (directory, name string) {
 	physical := written
 	if !strings.Contains(written, "/") {
 		if ref, ok := parseTableRef(written); ok {
@@ -635,9 +697,9 @@ func coordinationLimit(written string) (string, string) {
 // first `ptah:not-described` line naming its kind and its name. A limit
 // arrives without its document, and the load's first document stands in when
 // no line is found.
-func limitDocument(request *protocol.ReadSQLSchemaRequest, limit *protocol.SchemaCoverageLimit) (int, int, int) {
-	for index, document := range request.GetDocuments() {
-		text := document.GetText()
+func limitDocument(request *protocol.ReadSQLSchemaRequest, limit *protocol.SchemaCoverageLimit) (document, start, end int) {
+	for index, source := range request.GetDocuments() {
+		text := source.GetText()
 		offset := 0
 		for line := range strings.SplitAfterSeq(text, "\n") {
 			if strings.Contains(line, "ptah:not-described") && strings.Contains(strings.ToLower(line), strings.ToLower(limit.GetKind())) &&

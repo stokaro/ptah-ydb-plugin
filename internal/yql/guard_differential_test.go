@@ -34,14 +34,15 @@ func TestGuardReplayAgreesWithHost(t *testing.T) {
 	}
 	c.Assert(json.Unmarshal(raw, &golden), qt.IsNil)
 	c.Assert(len(golden.Rows) >= 90, qt.IsTrue, qt.Commentf("the corpus holds %d rows", len(golden.Rows)))
-	server := map[string]bool{"database": false, "session": false, "databases": false, "server": true, "provisioned": true}
+	guards := map[string]func(string) error{"database": yql.GuardReplay, "session": yql.GuardReplay, "databases": yql.GuardReplay,
+		"server": yql.GuardServerReplay, "provisioned": yql.GuardServerReplay}
 	for _, row := range golden.Rows {
-		c.Assert(row.Scopes, qt.HasLen, len(server))
+		c.Assert(row.Scopes, qt.HasLen, len(guards))
 		for scope, verdict := range row.Scopes {
 			t.Run(scope+"/"+row.Statement, func(t *testing.T) {
 				c := testcheck.New(t)
 
-				err := yql.GuardReplay(row.Statement, server[scope])
+				err := guards[scope](row.Statement)
 
 				var refusal *yql.RealmRefusal
 				c.Assert(errors.As(err, &refusal), qt.Equals, verdict.Outcome == "refused")

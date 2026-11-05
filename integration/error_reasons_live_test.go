@@ -86,7 +86,7 @@ func TestHostPrintsTheProvidersReasonSubprocess(t *testing.T) {
 	}
 	opened, directory, database := lockFixture(c)
 	source := filepath.Join(c.TempDir(), "schema.sql")
-	c.Assert(os.WriteFile(source, []byte(streaming.Create(directory, "refused", streaming.Spec{Text: "SELECT 1;"}, false)), 0o600), qt.IsNil)
+	c.Assert(os.WriteFile(source, []byte(streaming.Create(directory, "refused", streaming.Spec{Text: "SELECT 1;"})), 0o600), qt.IsNil)
 	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
 	defer cancel()
 	command := testCommand(ctx, host, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--provider-config", manifest, "--provider-engine", "ydb",

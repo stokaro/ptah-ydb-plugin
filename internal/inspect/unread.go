@@ -27,22 +27,29 @@ const maxReasonBytes = 512
 // replication's items name it, and the replication planner refuses a table
 // declared there.
 //
-// targets are the paths every async replication of the database writes, and
-// complete reports that they are every replication's: then a replica no
-// target covers is one no replication writes any more, left behind by a
+// targets are the paths every async replication of the database writes.
+// When they are every replication's, a replica no target covers is one no replication writes any more, left behind by a
 // replication dropped without CASCADE, and the reason says so as the host's
 // embedded engine does. Without them, as when the cluster does not serve the
 // replication API, the reason says the read does not know which replication
 // writes the table.
-func unreadReplicas(replicas []*protocol.Reference, targets []string, complete bool) []*protocol.UnreadTable {
+func unreadReplicas(replicas []*protocol.Reference, targets replicationTargets) []*protocol.UnreadTable {
 	var result []*protocol.UnreadTable
 	for _, ref := range replicas {
-		if replication.UnderTarget(replication.TablePath(ref.GetSchema(), ref.GetName()), targets) {
+		if replication.UnderTarget(replication.TablePath(ref.GetSchema(), ref.GetName()), targets.paths) {
 			continue
 		}
-		result = append(result, &protocol.UnreadTable{Table: proto.CloneOf(ref), Diagnostic: &protocol.ProviderDiagnostic{Reason: replicaReason(ref, complete)}})
+		result = append(result, &protocol.UnreadTable{Table: proto.CloneOf(ref), Diagnostic: &protocol.ProviderDiagnostic{Reason: targets.reason(ref)}})
 	}
 	return result
+}
+
+// replicationTargets are the paths the replications a read describes write,
+// and whether the read described every replication of the database, so that
+// a replica under none of them is written by none.
+type replicationTargets struct {
+	paths    []string
+	complete bool
 }
 
 // snapshotTargets are the paths the replications a snapshot holds write.
@@ -113,13 +120,13 @@ func (s *source) databaseTargets(ctx context.Context, database string, leaveOut 
 	return targets, complete, nil
 }
 
-// replicaReason says why the read leaves the replica table ref out, naming
+// reason says why the read leaves the replica table ref out, naming
 // it as the host names a table, or as "it" where the name would make the
 // reason longer than a host shows.
-func replicaReason(ref *protocol.Reference, complete bool) string {
+func (t replicationTargets) reason(ref *protocol.Reference) string {
 	format := "%s is a replica table no replication of this database writes any more, which YDB keeps read-only for good " +
 		"(`path is an async replica table`); drop it by hand with DROP TABLE, which YDB accepts, or remove it from the schema"
-	if !complete {
+	if !t.complete {
 		format = "%s is a replica table of an async replication this read cannot describe, and YDB keeps a replica table " +
 			"read-only (`path is an async replica table`); remove it from the schema"
 	}

@@ -253,22 +253,22 @@ func (p *planner) planTableDrop(i int, table *protocol.PlanningTable) (*protocol
 // a row table.
 func (p *planner) planTableAlteration(i int, table *protocol.PlanningTable, owner *protocol.Reference) (*protocol.PlannedFeatures, error) {
 	request := p.request
-	column, reason, columnChange, err := planColumnAlteration(owner, table, request.CommonSteps, request.Capabilities)
+	columnPlan, err := planColumnAlteration(owner, table, request.CommonSteps, request.Capabilities)
 	if err != nil {
 		return nil, err
 	}
-	if reason != "" {
-		return refused(i, reason), nil
+	if columnPlan.reason != "" {
+		return refused(i, columnPlan.reason), nil
 	}
-	if column {
+	if columnPlan.columnTable {
 		if slices.Contains(request.TargetFeatures, provider.ColumnsFeature) {
 			if reason := completeColumnAlteration(owner, table, nil, nil, nil, nil, request.Capabilities); reason != "" {
 				return refused(i, reason), nil
 			}
 		}
 		p.columnAlterations = append(p.columnAlterations, i)
-		if columnChange != nil {
-			p.columnChanges = append(p.columnChanges, columnTableStep{index: i, table: table, owner: owner, root: cmp.Or(request.DatabasePath, owner.Database), change: *columnChange})
+		if columnPlan.change != nil {
+			p.columnChanges = append(p.columnChanges, columnTableStep{index: i, table: table, owner: owner, root: cmp.Or(request.DatabasePath, owner.Database), change: *columnPlan.change})
 		}
 		return nil, nil
 	}

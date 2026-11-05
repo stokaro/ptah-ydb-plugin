@@ -281,7 +281,7 @@ var sameAnswer = qt.CmpEquals(cmpopts.EquateEmpty())
 // pluginSplit is the provider's split of the sources of a recorded split.
 func pluginSplit(c *qt.C, call splitCall) splitCall {
 	c.Helper()
-	result, err := migrationlint.SplitRequest(c.Context(), &protocol.SplitLintRequest{Engine: "ydb", Sources: wireSources(call.Sources)}, false)
+	result, err := migrationlint.SplitRequest(c.Context(), &protocol.SplitLintRequest{Engine: "ydb", Sources: wireSources(call.Sources)})
 	c.Assert(err, qt.IsNil)
 	answer := splitCall{Sources: call.Sources}
 	for _, file := range result.GetFiles() {

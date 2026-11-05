@@ -64,7 +64,10 @@ func (c *converter) addConsumer(node *addConsumer) error {
 	display := ydbdecl.TopicDisplay(node.schema, node.name)
 	for _, reading := range c.readings() {
 		if topic := reading.object(Object{Kind: KindTopic, Schema: node.schema, Name: node.name}); topic != nil {
-			spec := topic.Spec.(*ydbdecl.Topic)
+			spec, ok := topic.Spec.(*ydbdecl.Topic)
+			if !ok {
+				return fmt.Errorf("topic %s holds no topic specification", display)
+			}
 			consumers, err := withConsumer(spec.Consumers, node.consumer, display)
 			if err != nil {
 				return err
@@ -86,7 +89,10 @@ func (c *converter) addConsumer(node *addConsumer) error {
 				continue
 			}
 			held := reading.object(feed)
-			spec := held.Spec.(*ydbdecl.Changefeed)
+			spec, ok := held.Spec.(*ydbdecl.Changefeed)
+			if !ok {
+				return fmt.Errorf("changefeed %s holds no changefeed specification", display)
+			}
 			consumers, err := withConsumer(spec.Consumers, node.consumer, display)
 			if err != nil {
 				return err

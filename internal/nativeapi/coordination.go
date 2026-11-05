@@ -81,27 +81,7 @@ func (c *Coordination) Apply(ctx context.Context, database string, value *protoc
 		return false, err
 	}
 	absolute := path.Join(database, owner.Schema, owner.Name)
-	switch {
-	case before == nil:
-		response, callErr := c.Nodes.CreateNode(ctx, &Ydb_Coordination.CreateNodeRequest{Path: absolute, Config: config})
-		if callErr != nil {
-			return true, fmt.Errorf("create YDB coordination node: transport failed")
-		}
-		err = Status(response.GetOperation())
-	case after == nil:
-		response, callErr := c.Nodes.DropNode(ctx, &Ydb_Coordination.DropNodeRequest{Path: absolute})
-		if callErr != nil {
-			return true, fmt.Errorf("drop YDB coordination node: transport failed")
-		}
-		err = Status(response.GetOperation())
-	default:
-		response, callErr := c.Nodes.AlterNode(ctx, &Ydb_Coordination.AlterNodeRequest{Path: absolute, Config: config})
-		if callErr != nil {
-			return true, fmt.Errorf("alter YDB coordination node: transport failed")
-		}
-		err = Status(response.GetOperation())
-	}
-	if err != nil {
+	if err := c.dispatch(ctx, absolute, before, after, config); err != nil {
 		return true, err
 	}
 	observed, err := c.read(ctx, owner)
@@ -112,6 +92,32 @@ func (c *Coordination) Apply(ctx context.Context, database string, value *protoc
 		return true, err
 	}
 	return true, nil
+}
+
+// dispatch sends the one write the operands ask for: a creation when there is
+// no node before, a drop when there is none after, and an alteration to config
+// otherwise. It reports a transport failure or the operation's status.
+func (c *Coordination) dispatch(ctx context.Context, absolute string, before, after *protocol.Envelope, config *Ydb_Coordination.Config) error {
+	switch {
+	case before == nil:
+		response, callErr := c.Nodes.CreateNode(ctx, &Ydb_Coordination.CreateNodeRequest{Path: absolute, Config: config})
+		if callErr != nil {
+			return fmt.Errorf("create YDB coordination node: transport failed")
+		}
+		return Status(response.GetOperation())
+	case after == nil:
+		response, callErr := c.Nodes.DropNode(ctx, &Ydb_Coordination.DropNodeRequest{Path: absolute})
+		if callErr != nil {
+			return fmt.Errorf("drop YDB coordination node: transport failed")
+		}
+		return Status(response.GetOperation())
+	default:
+		response, callErr := c.Nodes.AlterNode(ctx, &Ydb_Coordination.AlterNodeRequest{Path: absolute, Config: config})
+		if callErr != nil {
+			return fmt.Errorf("alter YDB coordination node: transport failed")
+		}
+		return Status(response.GetOperation())
+	}
 }
 
 // read lists the node's directory and describes the node, or returns nil

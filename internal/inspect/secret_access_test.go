@@ -80,7 +80,7 @@ func TestAccessMarksTheEntriesYDBGivesASecret_HappyPath(t *testing.T) {
 		{Subject: "team", PermissionNames: []string{"ydb.granular.create_table", "ydb.generic.read"}},
 		{Subject: "app", PermissionNames: []string{"ydb.granular.select_row"}},
 	}}
-	err := inspect.Access(c.Context(), snapshot, "/local", false, answers(secretEntries(directory)),
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, answers(secretEntries(directory)),
 		func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
 	c.Assert(err, qt.IsNil)
 	c.Assert(secretGrants(snapshot.CommonObjects), qt.DeepEquals, []secretGrant{
@@ -108,7 +108,7 @@ func TestAccessMarksTheEntriesYDBGivesASecret_FailurePath(t *testing.T) {
 			c := testcheck.New(t)
 			snapshot := accessSecret()
 			before := proto.CloneOf(snapshot)
-			err := inspect.Access(c.Context(), snapshot, "/local", false, answers(secretEntries(test.directory)),
+			err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, answers(secretEntries(test.directory)),
 				func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
 			c.Assert(err, qt.ErrorMatches, test.wantErr)
 			c.Assert(proto.Equal(snapshot, before), qt.IsTrue)

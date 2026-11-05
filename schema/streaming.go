@@ -65,7 +65,7 @@ func NormalizeStreamingQueryChange(input *protocol.ValueInput) (*protocol.Normal
 
 // StreamingQueryOperands returns a change's normalized operands, nil for an
 // absent one.
-func StreamingQueryOperands(change *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error) {
+func StreamingQueryOperands(change *protocol.Envelope) (before, after *protocol.Envelope, err error) {
 	return streamingChanges.operands(change)
 }
 

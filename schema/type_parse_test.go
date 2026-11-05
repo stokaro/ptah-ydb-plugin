@@ -18,8 +18,9 @@ func TestStorageTypeRoundTrip(t *testing.T) {
 		for _, nullable := range []bool{false, true} {
 			t.Run(spelling+map[bool]string{false: "", true: " nullable"}[nullable], func(t *testing.T) {
 				c := testcheck.New(t)
-				native, err := schema.StorageType(spelling, nullable)
+				native, err := schema.StorageType(spelling)
 				c.Assert(err, qt.IsNil)
+				native = map[bool]*Ydb.Type{false: native, true: schema.Optional(native)}[nullable]
 				actual, optional, err := schema.ColumnType(native)
 				c.Assert(err, qt.IsNil)
 				c.Assert(actual, qt.Equals, spelling)
@@ -31,12 +32,12 @@ func TestStorageTypeRoundTrip(t *testing.T) {
 
 func TestStorageTypeGrammar(t *testing.T) {
 	c := testcheck.New(t)
-	result, err := schema.StorageType("uInT64", false)
+	result, err := schema.StorageType("uInT64")
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(result, primitive(Ydb.Type_UINT64)), qt.IsTrue)
-	result, err = schema.StorageType("decimal( 22 , 9 )", true)
+	result, err = schema.StorageType("decimal( 22 , 9 )")
 	c.Assert(err, qt.IsNil)
-	name, nullable, err := schema.ColumnType(result)
+	name, nullable, err := schema.ColumnType(schema.Optional(result))
 	c.Assert(err, qt.IsNil)
 	c.Assert(name, qt.Equals, "Decimal(22,9)")
 	c.Assert(nullable, qt.IsTrue)
@@ -45,7 +46,7 @@ func TestStorageTypeGrammar(t *testing.T) {
 		"Decimal(+2,1)", "Decimal(2,-1)", "Decimal(4294967296,0)", "Decimal(2,1e0)", "Decimal(2,1) trailing"} {
 		t.Run(spelling, func(t *testing.T) {
 			c := testcheck.New(t)
-			value, err := schema.StorageType(spelling, false)
+			value, err := schema.StorageType(spelling)
 			c.Assert(err, qt.IsNotNil)
 			c.Assert(value, qt.IsNil)
 		})

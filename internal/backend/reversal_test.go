@@ -119,19 +119,19 @@ func restoredReadMode(c *qt.C, after *protocol.Envelope) string {
 func TestReverseChanges_UndoesASecretChange(t *testing.T) {
 	for _, test := range []struct {
 		name        string
-		present     bool
+		read        secretRead
 		rotate      bool
 		strategy    string
 		limitations []string
 		value       bool
 	}{
 		{name: "a created secret", strategy: "drop the created secret", value: true},
-		{name: "a rotated secret", present: true, rotate: true, strategy: "keep the secret and the value it holds",
+		{name: "a rotated secret", read: secretPresent, rotate: true, strategy: "keep the secret and the value it holds",
 			limitations: []string{"the value secret app/pg.pw held before the rotation was never read; the rollback keeps the rotated value"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := secretRequest(c, test.present)
+			request := secretRequest(c, test.read)
 			request.Requests = map[bool][]*protocol.RequestedChange{true: {{Action: "rotate", Written: "app/pg.pw"}}}[test.rotate]
 
 			_, _, reversed := reverseOf(c, request)
@@ -149,7 +149,7 @@ func TestReverseChanges_UndoesASecretChange(t *testing.T) {
 // The reverse of a created secret plans the secret's drop.
 func TestReverseChanges_PlansTheDropOfACreatedSecret(t *testing.T) {
 	c := testcheck.New(t)
-	_, reverse, reversed := reverseOf(c, secretRequest(c, false))
+	_, reverse, reversed := reverseOf(c, secretRequest(c, secretAbsent))
 
 	before, after, err := schema.SecretOperands(reversed.Value.Value)
 
@@ -184,7 +184,7 @@ func TestReverseChanges_ReversesABatch(t *testing.T) {
 	node, err := testcomparison.Request(&schema.CoordinationIntent{}, nil)
 	c.Assert(err, qt.IsNil)
 	var changes []*protocol.PlanningChange
-	for _, request := range []*protocol.CompareModelsRequest{node, secretRequest(c, false)} {
+	for _, request := range []*protocol.CompareModelsRequest{node, secretRequest(c, secretAbsent)} {
 		compared, err := backend.New().CompareModels(c.Context(), request)
 		c.Assert(err, qt.IsNil)
 		c.Assert(compared.Changes, qt.HasLen, 1)

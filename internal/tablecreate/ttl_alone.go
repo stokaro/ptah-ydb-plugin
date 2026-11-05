@@ -21,7 +21,7 @@ import (
 // alteration planner read a TTL alone through this one function, so a change
 // the comparison reports is one the planner makes.
 func TTLAloneStorage(coverage *protocol.ComparisonCoverage, record *protocol.ComparisonRecord) (*protocol.NormalizedValue, error) {
-	if record.GetKind() != schema.TableProperties || record.GetValue() == nil || FacetKnown(coverage, schema.ColumnStorageProperties, record.GetSubject(), true) {
+	if record.GetKind() != schema.TableProperties || record.GetValue() == nil || FacetKnown(coverage, schema.ColumnStorageProperties, record.GetSubject(), DesiredSide) {
 		return nil, nil
 	}
 	envelope, err := normalizedFacet(record, protocol.ValueInput_DESIRED)

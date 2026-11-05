@@ -11,22 +11,37 @@ import (
 // SDK validates a request before it arrives and a reply before it leaves.
 
 // SplitRequest answers a SplitLintRequest: one file per source, in request
-// order, and the facts every statement was judged for. describeStatements
-// adds the statement facts, which only a host that lists
-// lint.statement-facts reads.
-func SplitRequest(ctx context.Context, request *protocol.SplitLintRequest, describeStatements bool) (*protocol.SplitLint, error) {
-	sources := sourcesOf(request.GetSources())
-	files, err := Split(ctx, sources, describeStatements)
+// order, and the facts every statement was judged for.
+func SplitRequest(ctx context.Context, request *protocol.SplitLintRequest) (*protocol.SplitLint, error) {
+	files, err := Split(ctx, sourcesOf(request.GetSources()))
 	if err != nil {
 		return nil, err
 	}
-	result := &protocol.SplitLint{Judged: Judged(describeStatements)}
+	return splitAnswer(request, files, Judged()), nil
+}
+
+// DescribedSplitRequest answers a SplitLintRequest as [SplitRequest] does,
+// and every statement also carries the statement facts, which only a host
+// that lists lint.statement-facts reads.
+func DescribedSplitRequest(ctx context.Context, request *protocol.SplitLintRequest) (*protocol.SplitLint, error) {
+	files, err := Split(ctx, sourcesOf(request.GetSources()))
+	if err != nil {
+		return nil, err
+	}
+	addStatementFacts(files)
+	return splitAnswer(request, files, slices.Concat(Judged(), statementFacts)), nil
+}
+
+// splitAnswer is the reply to request: its split files, one per source in
+// request order, and judged, the facts every statement was judged for.
+func splitAnswer(request *protocol.SplitLintRequest, files [][]Statement, judged []protocol.LintFact) *protocol.SplitLint {
+	result := &protocol.SplitLint{Judged: judged}
 	for i, statements := range files {
 		source := request.GetSources()[i]
 		result.Files = append(result.Files, &protocol.LintFile{Name: source.GetName(), Version: source.GetVersion(), Up: source.GetUp(),
 			Down: source.GetDown(), Repeatable: source.GetRepeatable(), Statements: wireStatements(statements)})
 	}
-	return result, nil
+	return result
 }
 
 // AnnotateRequest answers an AnnotateLintRequest: one annotation per

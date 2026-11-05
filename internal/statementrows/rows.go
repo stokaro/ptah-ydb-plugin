@@ -3,6 +3,7 @@
 package statementrows
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -27,9 +28,32 @@ type Cursor struct {
 	closeErr error
 }
 
-// New captures the driver's column metadata. Ownership transfers only on
-// success; the caller closes rows after an error.
-func New(rows *sql.Rows) (*Cursor, error) {
+// Querier runs a statement: the pinned connection or the transaction a
+// statement result lives on.
+type Querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+// Query runs query on q and returns a cursor that owns its result, so the
+// rows never leave this package, whose [Cursor.Page] checks their terminal
+// error. statementErr is the database's answer to a statement it did not
+// run; err is a result the cursor cannot page, whose rows Query closes.
+func Query(ctx context.Context, q Querier, query string, args ...any) (cursor *Cursor, statementErr, err error) {
+	rows, statementErr := q.QueryContext(ctx, query, args...)
+	if statementErr != nil {
+		return nil, statementErr, nil
+	}
+	cursor, err = newCursor(rows)
+	if err != nil {
+		_ = rows.Close()
+		return nil, nil, err
+	}
+	return cursor, nil, nil
+}
+
+// newCursor captures the driver's column metadata. Ownership transfers only
+// on success; the caller closes rows after an error.
+func newCursor(rows *sql.Rows) (*Cursor, error) {
 	types, err := rows.ColumnTypes()
 	if err != nil {
 		return nil, err

@@ -179,9 +179,9 @@ func TestExternalComparison_HappyPath(t *testing.T) {
 				normalized, err := backend.New().NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: backend.Description().Engines[0].Features, Values: []*protocol.ValueInput{{Id: change.Value.Id, Representation: protocol.ValueInput_CHANGE, Value: change.Value.Value}}})
 				c.Assert(err, qt.IsNil)
 				c.Assert(proto.Equal(normalized.Values[0], change.Value), qt.IsTrue)
-				_, _, database, err := schema.ExternalOperands(change.Value.Value)
+				parts, err := schema.ExternalOperands(change.Value.Value)
 				c.Assert(err, qt.IsNil)
-				c.Assert(database, qt.Equals, "/local")
+				c.Assert(parts.Database, qt.Equals, "/local")
 			}
 			c.Assert(changed, qt.DeepEquals, test.changes)
 		})

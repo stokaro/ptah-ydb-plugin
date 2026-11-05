@@ -26,9 +26,9 @@ import (
 
 // Lock qualification requires an isolated database. Refuse to modify an
 // existing reserved node; cleanup owns only the node this test creates.
-func lockFixture(c *qt.C) (*connection.Connection, string, string) {
+func lockFixture(c *qt.C) (opened *connection.Connection, directory, database string) {
 	c.Helper()
-	opened, directory, database := inspectionFixture(c)
+	opened, directory, database = inspectionFixture(c)
 	listing, err := opened.Driver.Scheme().ListDirectory(c.Context(), database)
 	c.Assert(err, qt.IsNil)
 	for _, entry := range listing.Children {

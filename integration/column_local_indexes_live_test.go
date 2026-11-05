@@ -84,8 +84,8 @@ func (f *columnTableFixture) requireLocalIndexes(c *qt.C, indexes ...string) {
 func TestColumnTableLocalIndexesRoundTripSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
-	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability, true)
-	requireSessionCapability(c, fixture.session, tablecreate.LocalNgramIndexesCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability)
+	requireSessionCapability(c, fixture.session, tablecreate.LocalNgramIndexesCapability)
 	storage := localIndexStorage(localBloom, localNgram)
 	execution, err := fixture.create(c, fixture.session, "create-local-indexes", storage)
 	c.Assert(err, qt.IsNil)
@@ -107,8 +107,8 @@ func TestColumnTableLocalIndexesRoundTripSubprocess(t *testing.T) {
 func TestColumnTableLocalIndexChangesSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
-	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability, true)
-	requireSessionCapability(c, fixture.session, tablecreate.LocalNgramIndexesCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability)
+	requireSessionCapability(c, fixture.session, tablecreate.LocalNgramIndexesCapability)
 	execution, err := fixture.create(c, fixture.session, "create-local-indexes", localIndexStorage(localBloom, localNgram))
 	c.Assert(err, qt.IsNil)
 	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
@@ -142,7 +142,7 @@ func TestColumnTableLocalIndexChangesSubprocess(t *testing.T) {
 func TestColumnTableLocalIndexStalePlanSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
-	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability)
 	execution, err := fixture.create(c, fixture.session, "create-local-indexes", localIndexStorage(localBloom))
 	c.Assert(err, qt.IsNil)
 	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
@@ -166,7 +166,7 @@ func TestColumnTableLocalIndexStalePlanSubprocess(t *testing.T) {
 func TestColumnTableLocalIndexOlderLineSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
-	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability, false)
+	requireNoSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability)
 	plan := fixture.creationPlan(c, fixture.session, localIndexStorage(localBloom))
 	c.Assert(plan.Diagnostics, qt.HasLen, 1)
 	c.Assert(plan.Diagnostics[0].Message, qt.Matches, `local index "bf" is a bloom_filter index, which requires target capability local_bloom_indexes, unavailable on this ydb target .*`)
@@ -188,7 +188,7 @@ func TestColumnTableLocalMinMaxIndexSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	address := monitoredAddress(c)
 	fixture := newColumnTableFixture(c, address)
-	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability)
 	c.Assert(fixture.session.Capabilities[tablecreate.LocalMinMaxIndexesCapability], qt.IsFalse)
 	minMax := `{"name":"mm","columns":["id"],"minMax":{}}`
 	storage := `{"hashColumns":["id"],"partitions":"1","localIndexes":[` + minMax + `]}`

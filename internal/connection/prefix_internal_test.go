@@ -63,7 +63,9 @@ func TestPrefixConnector_HappyPath(t *testing.T) {
 
 	_, err := db.ExecContext(c.Context(), "CREATE TABLE t (id Int64 NOT NULL, PRIMARY KEY (id))")
 	c.Assert(err, qt.IsNil)
-	_, _ = db.QueryContext(c.Context(), "SELECT 1")
+	// The stand-in serves no rows, so the query fails once the connection has
+	// recorded it.
+	c.Assert(db.QueryRowContext(c.Context(), "SELECT 1").Err(), qt.ErrorIs, driver.ErrSkip)
 
 	const prefix = "PRAGMA TablePathPrefix(\"/local/ptah_dev/r1\");\n"
 	c.Assert(seen.exec, qt.DeepEquals, []string{prefix + "CREATE TABLE t (id Int64 NOT NULL, PRIMARY KEY (id))"})

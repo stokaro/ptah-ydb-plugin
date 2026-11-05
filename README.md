@@ -1035,9 +1035,10 @@ instead of managed tables. A reservation occupies the name for every supported n
 kind and for common tables. Exact UNREPRESENTABLE subject coverage overrides
 directory completeness at these occupied names, so omission does not assert
 absence. A comparison leaves a reserved name out. When a plan changes an object
-a streaming query could read, it counts no query at a reserved name. Filtered
-reads return reservations only from the exact directories they inspect. Names
-or layout alone never establish ownership.
+a streaming query could read, it counts no query at a reserved name, even where
+the desired source claims nothing there, as an HCL document without a coverage
+header does. Filtered reads return reservations only from the exact directories
+they inspect. Names or layout alone never establish ownership.
 
 The coordination node `ptah_locks` at the root of the session's database is
 reserved with purpose LOCK by its name alone. The lock service takes whatever
@@ -3614,7 +3615,9 @@ without a changefeed is one with none. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
-name, for the kind.
+name, for the kind. An object the claim leaves out keeps the entries of its
+access list too: the host plans no REVOKE on an object its source does not
+describe.
 
 A replication or a transfer is read as the host's reader reads it: the items
 of `FOR ... AS ...`, `ENDPOINT` and `DATABASE` as the connection string they

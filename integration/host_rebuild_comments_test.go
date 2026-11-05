@@ -12,13 +12,21 @@ import (
 )
 
 // countedItems is table items of the fixture directory in YAML, its count
-// column of the type given, with the table's and the columns' comments where
-// commented is set.
-func countedItems(directory, count string, commented bool) string {
-	table, key, counted := "", "", ""
-	if commented {
-		table, key, counted = "    comment: \"Items\"\n", ", comment: \"Key\"", ", comment: \"Count\""
-	}
+// column of the type given, with no comment.
+func countedItems(directory, count string) string {
+	return countedItemsWith(directory, count, "", "", "")
+}
+
+// commentedCountedItems is countedItems with the table's and the columns'
+// comments.
+func commentedCountedItems(directory, count string) string {
+	return countedItemsWith(directory, count, "    comment: \"Items\"\n", ", comment: \"Key\"", ", comment: \"Count\"")
+}
+
+// countedItemsWith is table items of the fixture directory in YAML, its count
+// column of the type given, with the YAML given after the table's schema and
+// after each column's attributes.
+func countedItemsWith(directory, count, table, key, counted string) string {
 	return "tables:\n  items:\n    schema: " + directory + "\n" + table + "    columns:\n" +
 		"      id: {type: Uint64, primary: true, not_null: true" + key + "}\n" +
 		"      n: {type: " + count + counted + "}\n"
@@ -39,11 +47,11 @@ func TestHostRebuildKeepsTheTableAndColumnComments_HappyPath(t *testing.T) {
 	opened, directory, database := lockFixture(c)
 	absolute := path.Join(database, directory, "items")
 	emptyAtCleanup(c, opened, path.Join(database, directory))
-	applyRuns(c, directory, "yaml", countedItems(directory, "Int32", false))
-	applyRuns(c, directory, "yaml", countedItems(directory, "Int32", true))
+	applyRuns(c, directory, "yaml", countedItems(directory, "Int32"))
+	applyRuns(c, directory, "yaml", commentedCountedItems(directory, "Int32"))
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "UPSERT INTO `"+absolute+"` (id, n) VALUES (1ul, 7)"), qt.IsNil)
 
-	applyUntilSynced(c, directory, "yaml", countedItems(directory, "Int64", true), "--allow-table-rebuild")
+	applyUntilSynced(c, directory, "yaml", commentedCountedItems(directory, "Int64"), "--allow-table-rebuild")
 
 	c.Assert(storedAttributes(c, opened, absolute), qt.DeepEquals, map[string]string{"ptah.comment": "Items", "ptah.comment.column.id": "Key", "ptah.comment.column.n": "Count"})
 	c.Assert(heldColumnTypes(c, opened, absolute)["n"], qt.Equals, "Optional<Int64>")

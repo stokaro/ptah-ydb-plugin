@@ -244,7 +244,7 @@ func TestCompileNativeIndexSet(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(empty, plain), qt.IsTrue)
 	table = withSettings(c)
-	table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.IndexProperties, "", vectorIndexes(false)))
+	table.Features.Facets.Records = append(table.Features.Facets.Records, facet(c, schema.IndexProperties, "", declaredVectorIndexes()))
 	vector, err := tablecreate.Compile(owner(), table, nil)
 	c.Assert(err, qt.IsNil)
 	c.Assert(proto.Equal(vector, plain), qt.IsTrue)

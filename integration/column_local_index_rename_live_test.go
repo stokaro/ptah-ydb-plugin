@@ -47,8 +47,8 @@ func renamingColumnTableFixture(c *qt.C) *columnTableFixture {
 func TestColumnTableLocalIndexRenamesInPlaceSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := renamingColumnTableFixture(c)
-	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability, true)
-	requireSessionCapability(c, fixture.session, tablecreate.LocalNgramIndexesCapability, true)
+	requireSessionCapability(c, fixture.session, tablecreate.LocalBloomIndexesCapability)
+	requireSessionCapability(c, fixture.session, tablecreate.LocalNgramIndexesCapability)
 	c.Assert(fixture.session.Capabilities[tablecreate.IndexRenameCapability], qt.IsTrue)
 	execution, err := fixture.create(c, fixture.session, "create-local-indexes", localIndexStorage(localBloom, localNgram))
 	c.Assert(err, qt.IsNil)

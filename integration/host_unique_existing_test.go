@@ -28,7 +28,7 @@ func TestHostRefusesAUniqueIndexOnATableThatExists_FailurePath(t *testing.T) {
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
-	requireSessionCapability(c, session, tablecreate.UniqueIndexOnExistingTableCapability, false)
+	requireNoSessionCapability(c, session, tablecreate.UniqueIndexOnExistingTableCapability)
 
 	output, err := hostApply(c, directory, hostGlobalItems(directory, "idx_items_kind", ""))
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
@@ -52,7 +52,7 @@ func TestHostRefusesAUniqueIndexWithTheFlagOff_FailurePath(t *testing.T) {
 	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
-	requireSessionCapability(c, session, tablecreate.UniqueIndexOnExistingTableCapability, true)
+	requireSessionCapability(c, session, tablecreate.UniqueIndexOnExistingTableCapability)
 	newClusterFlags(c, opened).set(c, map[string]bool{"EnableAddUniqueIndex": false})
 
 	output, err := hostApply(c, directory, hostGlobalItems(directory, "idx_items_kind", ""))

@@ -24,5 +24,5 @@ that called `validateYDBReplayStatement` with an empty `replay.Scope`; the
 One difference from the host is deliberate: the host refuses every `--!` line,
 and `ConfineToRealm`, which guards the units a realm session runs, lets
 `--!syntax_v1` through, since that is the syntax the server reads without it.
-`GuardReplay`, which answers the host's replay guard requests, refuses it as
-the host does.
+`GuardReplay` and `GuardServerReplay`, which answer the host's replay guard
+requests, refuse it as the host does.

@@ -167,24 +167,30 @@ func Display(schema, name string) string {
 }
 
 // Create writes the CREATE STREAMING QUERY of a query, naming whether it runs
-// and its pool. orReplace replaces a query that exists at the path, which
-// resets its aggregation state and keeps its topic offsets.
-func Create(schema, name string, spec Spec, orReplace bool) string {
-	prefix := "CREATE "
-	if orReplace {
-		prefix += "OR REPLACE "
-	}
+// and its pool.
+func Create(schema, name string, spec Spec) string {
+	return create("CREATE ", schema, name, spec)
+}
+
+// CreateOrReplace writes the CREATE OR REPLACE STREAMING QUERY of a query,
+// which replaces a query that exists at the path: that resets its
+// aggregation state and keeps its topic offsets.
+func CreateOrReplace(schema, name string, spec Spec) string {
+	return create("CREATE OR REPLACE ", schema, name, spec)
+}
+
+// create writes the creation statement prefix starts, naming whether the
+// query runs and its pool.
+func create(prefix, schema, name string, spec Spec) string {
 	return prefix + "STREAMING QUERY " + Path(schema, name) + " WITH (" + settings(spec) + ") AS DO BEGIN\n" + strings.TrimSpace(spec.Text) + "\nEND DO;"
 }
 
 // Alter writes the ALTER STREAMING QUERY that moves the query from current
-// to desired in place. A changed body needs allowStateReset, because YDB
-// discards the aggregation state with it; the topic offsets stay in the
-// checkpoint, and no drop and creation stands in for it.
-func Alter(schema, name string, desired, current Spec, allowStateReset bool) (string, error) {
-	if err := ValidateAlter(schema, name, desired, current, allowStateReset); err != nil {
-		return "", err
-	}
+// to desired in place. A changed body resets the aggregation state, which
+// YDB discards with it, so a change is checked by [ValidateAlter] first; the
+// topic offsets stay in the checkpoint, and no drop and creation stands in
+// for it.
+func Alter(schema, name string, desired, current Spec) string {
 	changed := !SameBody(desired.Text, current.Text)
 	values := settings(desired)
 	if changed {
@@ -194,14 +200,15 @@ func Alter(schema, name string, desired, current Spec, allowStateReset bool) (st
 	if changed {
 		statement += " AS DO BEGIN\n" + strings.TrimSpace(desired.Text) + "\nEND DO"
 	}
-	return statement + ";", nil
+	return statement + ";"
 }
 
-// ValidateAlter refuses a body change without the permission to reset the
-// query's state.
-func ValidateAlter(schema, name string, desired, current Spec, allowStateReset bool) error {
-	if !SameBody(desired.Text, current.Text) && !allowStateReset {
-		return authored.New(fmt.Sprintf("streaming query %q: changing text resets aggregation state; declare allow_state_reset=true to permit it", Display(schema, name)))
+// ValidateAlter refuses a change of a query that exists, Before and After
+// both set, whose body changes without the declaration's permission to reset
+// the query's state.
+func ValidateAlter(change Change) error {
+	if !SameBody(change.After.Text, change.Before.Text) && !change.AllowStateReset {
+		return authored.New(fmt.Sprintf("streaming query %q: changing text resets aggregation state; declare allow_state_reset=true to permit it", Display(change.Schema, change.Name)))
 	}
 	return nil
 }
@@ -232,14 +239,16 @@ func Statements(change Change) ([]string, error) {
 	switch {
 	case change.Before == nil && change.After == nil:
 		return nil, fmt.Errorf("streaming query %q: the change has no operand", Display(change.Schema, change.Name))
+	case change.Before == nil && change.AllowStateReset:
+		return []string{CreateOrReplace(change.Schema, change.Name, *change.After)}, nil
 	case change.Before == nil:
-		return []string{Create(change.Schema, change.Name, *change.After, change.AllowStateReset)}, nil
+		return []string{Create(change.Schema, change.Name, *change.After)}, nil
 	case change.After == nil:
 		return []string{Drop(change.Schema, change.Name)}, nil
 	case Equal(*change.Before, *change.After):
 		return nil, fmt.Errorf("streaming query %q: the change holds no difference", Display(change.Schema, change.Name))
 	}
-	if err := ValidateAlter(change.Schema, change.Name, *change.After, *change.Before, change.AllowStateReset); err != nil {
+	if err := ValidateAlter(change); err != nil {
 		return nil, err
 	}
 	current := *change.Before
@@ -247,21 +256,13 @@ func Statements(change Change) ([]string, error) {
 	if Running(current) {
 		stopped := current
 		stopped.Run = new(false)
-		stop, err := Alter(change.Schema, change.Name, stopped, current, false)
-		if err != nil {
-			return nil, err
-		}
-		statements = append(statements, stop)
+		statements = append(statements, Alter(change.Schema, change.Name, stopped, current))
 		if Equal(stopped, *change.After) {
 			return statements, nil
 		}
 		current = stopped
 	}
-	statement, err := Alter(change.Schema, change.Name, *change.After, current, change.AllowStateReset)
-	if err != nil {
-		return nil, err
-	}
-	return append(statements, statement), nil
+	return append(statements, Alter(change.Schema, change.Name, *change.After, current)), nil
 }
 
 // LosesCheckpoint reports whether a change discards the query's state: a

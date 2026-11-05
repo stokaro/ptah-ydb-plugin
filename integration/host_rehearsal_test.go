@@ -37,9 +37,9 @@ const rehearsalScore = "\t//ptah:schema:field name=\"score\" type=\"INT\"\n\tSco
 
 // rehearsalFixture is a locked directory the tests' table goes in, emptied
 // when the test ends.
-func rehearsalFixture(c *qt.C) (*connection.Connection, string, string) {
+func rehearsalFixture(c *qt.C) (opened *connection.Connection, directory, database string) {
 	c.Helper()
-	opened, directory, database := lockFixture(c)
+	opened, directory, database = lockFixture(c)
 	c.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()

@@ -427,7 +427,7 @@ func TestHostExportRefusesANullableKeyColumnSubprocess(t *testing.T) {
 // hostExportHCL runs the host's `schema export --to hcl` over a Go file with
 // this provider selected for ydb, and returns the HCL document and what the
 // host reported.
-func hostExportHCL(c *qt.C, goSource string) (string, string) {
+func hostExportHCL(c *qt.C, goSource string) (exported, reported string) {
 	c.Helper()
 	host, manifest := hostManifest(c)
 	root, out := c.TempDir(), filepath.Join(c.TempDir(), "schema.hcl")

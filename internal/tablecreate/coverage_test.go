@@ -32,23 +32,23 @@ func TestFacetKnown_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name     string
 		coverage *protocol.ComparisonCoverage
-		desired  bool
+		side     tablecreate.Side
 		want     bool
 	}{
-		{"complete knowledge of the kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(complete))}}, true, true},
-		{"an explicit absence of the kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(absent))}}, false, true},
-		{"defaults requested on the desired side", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(defaulted))}}, true, true},
-		{"every source of the kind is complete", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(complete), outside(absent))}}, true, true},
+		{"complete knowledge of the kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(complete))}}, tablecreate.DesiredSide, true},
+		{"an explicit absence of the kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(absent))}}, tablecreate.ObservedSide, true},
+		{"defaults requested on the desired side", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(defaulted))}}, tablecreate.DesiredSide, true},
+		{"every source of the kind is complete", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(complete), outside(absent))}}, tablecreate.DesiredSide, true},
 		{"a subject record overrides unknown knowledge of the kind", &protocol.ComparisonCoverage{
 			Kinds:    []*protocol.ComparisonKindCoverage{kindCoverage(outside(protocol.ModelKnowledge_UNINSPECTED))},
-			Subjects: []*protocol.ComparisonSubjectCoverage{subjectCoverage(complete)}}, true, true},
-		{"a subject record for this engine", &protocol.ComparisonCoverage{Subjects: []*protocol.ComparisonSubjectCoverage{subjectCoverage(complete, "ydb")}}, true, true},
+			Subjects: []*protocol.ComparisonSubjectCoverage{subjectCoverage(complete)}}, tablecreate.DesiredSide, true},
+		{"a subject record for this engine", &protocol.ComparisonCoverage{Subjects: []*protocol.ComparisonSubjectCoverage{subjectCoverage(complete, "ydb")}}, tablecreate.DesiredSide, true},
 		{"a known region beside complete knowledge", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(&protocol.ComparisonKnowledgeSource{
-			Outside: knowledgeOf(complete), Regions: []*protocol.ComparisonRegion{{Scope: &protocol.ComparisonNamespace{PathExact: true}, Knowledge: knowledgeOf(complete)}}})}}, true, true},
+			Outside: knowledgeOf(complete), Regions: []*protocol.ComparisonRegion{{Scope: &protocol.ComparisonNamespace{PathExact: true}, Knowledge: knowledgeOf(complete)}}})}}, tablecreate.DesiredSide, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			c.Assert(tablecreate.FacetKnown(test.coverage, schema.TableProperties, tableSubject(), test.desired), qt.IsTrue)
+			c.Assert(tablecreate.FacetKnown(test.coverage, schema.TableProperties, tableSubject(), test.side), qt.IsTrue)
 		})
 	}
 }
@@ -58,26 +58,26 @@ func TestFacetKnown_NotKnown(t *testing.T) {
 	for _, test := range []struct {
 		name     string
 		coverage *protocol.ComparisonCoverage
-		desired  bool
+		side     tablecreate.Side
 	}{
-		{"no coverage", nil, true},
-		{"no coverage of the kind", &protocol.ComparisonCoverage{}, true},
-		{"a kind with no source", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage()}}, true},
-		{"unknown knowledge of the kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(uninspected))}}, true},
-		{"unrepresentable knowledge of the kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(protocol.ModelKnowledge_UNREPRESENTABLE))}}, true},
-		{"one unknown source among complete ones", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(complete), outside(uninspected))}}, true},
-		{"defaults requested on the observed side", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(protocol.ModelKnowledge_DEFAULTED))}}, false},
+		{"no coverage", nil, tablecreate.DesiredSide},
+		{"no coverage of the kind", &protocol.ComparisonCoverage{}, tablecreate.DesiredSide},
+		{"a kind with no source", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage()}}, tablecreate.DesiredSide},
+		{"unknown knowledge of the kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(uninspected))}}, tablecreate.DesiredSide},
+		{"unrepresentable knowledge of the kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(protocol.ModelKnowledge_UNREPRESENTABLE))}}, tablecreate.DesiredSide},
+		{"one unknown source among complete ones", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(complete), outside(uninspected))}}, tablecreate.DesiredSide},
+		{"defaults requested on the observed side", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(outside(protocol.ModelKnowledge_DEFAULTED))}}, tablecreate.ObservedSide},
 		{"an unknown region", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{kindCoverage(&protocol.ComparisonKnowledgeSource{
-			Outside: knowledgeOf(complete), Regions: []*protocol.ComparisonRegion{{Scope: &protocol.ComparisonNamespace{PathExact: true}, Knowledge: knowledgeOf(uninspected)}}})}}, true},
+			Outside: knowledgeOf(complete), Regions: []*protocol.ComparisonRegion{{Scope: &protocol.ComparisonNamespace{PathExact: true}, Knowledge: knowledgeOf(uninspected)}}})}}, tablecreate.DesiredSide},
 		{"a subject record that is unknown beside complete knowledge of the kind", &protocol.ComparisonCoverage{
 			Kinds:    []*protocol.ComparisonKindCoverage{kindCoverage(outside(complete))},
-			Subjects: []*protocol.ComparisonSubjectCoverage{subjectCoverage(uninspected)}}, true},
-		{"complete knowledge of another kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{{Model: schema.ColumnDesiredModel(), Sources: []*protocol.ComparisonKnowledgeSource{outside(complete)}}}}, true},
-		{"a subject record for another engine", &protocol.ComparisonCoverage{Subjects: []*protocol.ComparisonSubjectCoverage{subjectCoverage(complete, "mysql")}}, true},
+			Subjects: []*protocol.ComparisonSubjectCoverage{subjectCoverage(uninspected)}}, tablecreate.DesiredSide},
+		{"complete knowledge of another kind", &protocol.ComparisonCoverage{Kinds: []*protocol.ComparisonKindCoverage{{Model: schema.ColumnDesiredModel(), Sources: []*protocol.ComparisonKnowledgeSource{outside(complete)}}}}, tablecreate.DesiredSide},
+		{"a subject record for another engine", &protocol.ComparisonCoverage{Subjects: []*protocol.ComparisonSubjectCoverage{subjectCoverage(complete, "mysql")}}, tablecreate.DesiredSide},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			c.Assert(tablecreate.FacetKnown(test.coverage, schema.TableProperties, tableSubject(), test.desired), qt.IsFalse)
+			c.Assert(tablecreate.FacetKnown(test.coverage, schema.TableProperties, tableSubject(), test.side), qt.IsFalse)
 		})
 	}
 }

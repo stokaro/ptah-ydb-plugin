@@ -56,7 +56,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	if err := provider.ValidateEncodeSourceRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	limits, err := encodeCoverage(request, description.GetEngines()[0], sourceLimitsNegotiated(description.GetEngines()[0]))
+	limits, err := encodeCoverage(request, description.GetEngines()[0])
 	if err != nil {
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
@@ -65,12 +65,9 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	// the host reads the block; see tablesource.HCLPlatformBlock.
 	platform := slices.Contains(description.GetEngines()[0].GetFeatures(), provider.HCLPlatformFeature)
 	result := &protocol.EncodedSource{Complete: true, Limits: limits}
-	var units []encodedUnit
-	var nodes []encodedNode
+	encoding := &sourceEncoding{result: result, tables: make(map[string]*sourceencode.Table), platform: platform}
 	// subjects names each value as a loss line names it.
 	subjects := make(map[string]string, len(request.GetValues()))
-	tables := make(map[string]*sourceencode.Table)
-	var order []string
 	for _, value := range request.GetValues() {
 		if err := ctx.Err(); err != nil {
 			return nil, status.FromContextError(err).Err()
@@ -81,82 +78,26 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 		if value.GetPlacement() == protocol.SourceModelValue_NATIVE_OBJECT {
 			subjects[id] = sourceencode.Noun(envelope.GetKind()) + " " + sourceencode.Subject(envelope.GetOwner())
 		}
-		switch {
-		case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL && envelope.GetKind() == schema.IndexSettingsProperties:
-			parts, err := sourceencode.EncodeIndexHCL(value)
-			if err != nil {
-				return nil, authored.Status(codes.InvalidArgument, err)
-			}
-			units = append(units, encodedUnit{ids: []string{id}, parts: parts})
-		case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL &&
-			(!platform || envelope.GetKind() != schema.TableProperties && envelope.GetKind() != schema.ColumnStorageProperties):
-			result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: id, Message: lossMessage(format, envelope)})
-		case value.GetPlacement() == protocol.SourceModelValue_FACET:
-			table, bound := tables[value.GetBindingId()]
-			if !bound {
-				table = &sourceencode.Table{Binding: bindingOf(request, value.GetBindingId())}
-				tables[value.GetBindingId()] = table
-				order = append(order, value.GetBindingId())
-			}
-			table.Values = append(table.Values, value)
-		case envelope.GetKind() == schema.CoordinationProperties:
-			node, err := nodeOf(value.GetValue())
-			if err != nil {
-				return nil, authored.Status(codes.InvalidArgument, err)
-			}
-			if node.access {
-				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: node.id, Message: sourceencode.AccessLoss("coordination node", node.owner).Loss})
-				continue
-			}
-			nodes = append(nodes, node)
-		default:
-			encoded, err := encodeNative(format, value.GetValue())
-			if err != nil {
-				return nil, authored.Status(codes.InvalidArgument, err)
-			}
-			if encoded.Loss != "" {
-				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: id, Message: encoded.Loss})
-				continue
-			}
-			units = append(units, encodedUnit{ids: []string{id}, parts: encoded.Parts})
+		if err := encoding.add(request, format, value); err != nil {
+			return nil, err
 		}
 	}
-	slices.SortFunc(nodes, func(a, b encodedNode) int {
+	slices.SortFunc(encoding.nodes, func(a, b encodedNode) int {
 		return cmp.Or(strings.Compare(a.owner.GetSchema(), b.owner.GetSchema()), strings.Compare(a.owner.GetName(), b.owner.GetName()))
 	})
-	fragments, err := nodeFragments(format, nodes)
+	fragments, err := nodeFragments(format, encoding.nodes)
 	if err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	for _, fragment := range fragments {
-		units = append(units, encodedUnit{ids: fragment.GetValueIds(), parts: []*protocol.EncodedSourcePart{{Fragment: fragment.GetFragment(), Placement: fragment.GetPlacement()}}})
+		encoding.units = append(encoding.units, encodedUnit{ids: fragment.GetValueIds(), parts: []*protocol.EncodedSourcePart{{Fragment: fragment.GetFragment(), Placement: fragment.GetPlacement()}}})
 	}
 	// A table with a column no declaration can ask for is lost whole. The
 	// loss carries the reason to the host, which refuses a Go export with it;
 	// an error's text does not reach the host.
 	refused := nullableKeys(request)
-	for _, binding := range order {
-		if reason, found := refused[binding]; found {
-			for _, value := range tables[binding].Values {
-				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: value.GetValue().GetId(), Message: reason})
-			}
-			delete(refused, binding)
-			continue
-		}
-		encode := func(table sourceencode.Table) (sourceencode.TableResult, error) {
-			return sourceencode.EncodeTable(format, table)
-		}
-		if format == protocol.SourceDocument_HCL {
-			encode = sourceencode.EncodeTableHCL
-		}
-		encoded, err := encode(*tables[binding])
-		if err != nil {
-			return nil, authored.Status(codes.InvalidArgument, err)
-		}
-		result.Losses = append(result.Losses, encoded.Losses...)
-		if len(encoded.Written) != 0 {
-			units = append(units, encodedUnit{ids: encoded.Written, parts: encoded.Parts})
-		}
+	if err := encoding.addTables(format, refused); err != nil {
+		return nil, err
 	}
 	// A table the request binds and holds no facet of has no value to carry
 	// the loss.
@@ -166,20 +107,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	if format == protocol.SourceDocument_GO_ANNOTATIONS {
 		result.FieldTypes = fieldTypes(request)
 	}
-	grouped := slices.Contains(description.GetEngines()[0].GetFeatures(), provider.EncodeGroupsFeature)
-	for _, unit := range units {
-		switch {
-		case grouped:
-			result.Groups = append(result.Groups, &protocol.EncodedSourceGroup{ValueIds: unit.ids, Parts: unit.parts})
-		case len(unit.parts) == 1:
-			result.Fragments = append(result.Fragments, &protocol.EncodedFragment{ValueIds: unit.ids, Fragment: unit.parts[0].GetFragment(), Placement: unit.parts[0].GetPlacement()})
-		default:
-			for _, id := range unit.ids {
-				result.Losses = append(result.Losses, &protocol.EncodeLoss{ValueId: id,
-					Message: fmt.Sprintf("%s needs several declarations, which a host that does not negotiate %s cannot write", subjects[id], provider.EncodeGroupsFeature)})
-			}
-		}
-	}
+	encoding.place(description.GetEngines()[0], subjects)
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
@@ -194,6 +122,122 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 type encodedUnit struct {
 	ids   []string
 	parts []*protocol.EncodedSourcePart
+}
+
+// sourceEncoding is what EncodeSource collects from the request's values: the
+// result that takes the losses, the units native objects write, the
+// coordination nodes, and the facets of each table, in the order the values
+// first bind the tables.
+type sourceEncoding struct {
+	result *protocol.EncodedSource
+	units  []encodedUnit
+	nodes  []encodedNode
+	tables map[string]*sourceencode.Table
+	order  []string
+	// platform is whether the host reads a table's platform "ydb" block in
+	// HCL, which spells the table's TTL.
+	platform bool
+}
+
+// add sorts one value of the request into the encoding: a facet joins its
+// table, or in HCL is written alone where HCL spells it and is a loss
+// otherwise; a coordination node joins the nodes; any other
+// native object is written now, as a unit or a loss. Its error is the call's
+// status.
+func (e *sourceEncoding) add(request *protocol.EncodeSourceRequest, format protocol.SourceDocument_Format, value *protocol.EncodeSourceValue) error {
+	envelope := value.GetValue().GetValue()
+	id := value.GetValue().GetId()
+	switch {
+	case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL && envelope.GetKind() == schema.IndexSettingsProperties:
+		parts, err := sourceencode.EncodeIndexHCL(value)
+		if err != nil {
+			return authored.Status(codes.InvalidArgument, err)
+		}
+		e.units = append(e.units, encodedUnit{ids: []string{id}, parts: parts})
+	case value.GetPlacement() == protocol.SourceModelValue_FACET && format == protocol.SourceDocument_HCL &&
+		(!e.platform || envelope.GetKind() != schema.TableProperties && envelope.GetKind() != schema.ColumnStorageProperties):
+		e.result.Losses = append(e.result.Losses, &protocol.EncodeLoss{ValueId: id, Message: lossMessage(format, envelope)})
+	case value.GetPlacement() == protocol.SourceModelValue_FACET:
+		table, bound := e.tables[value.GetBindingId()]
+		if !bound {
+			table = &sourceencode.Table{Binding: bindingOf(request, value.GetBindingId())}
+			e.tables[value.GetBindingId()] = table
+			e.order = append(e.order, value.GetBindingId())
+		}
+		table.Values = append(table.Values, value)
+	case envelope.GetKind() == schema.CoordinationProperties:
+		node, err := nodeOf(value.GetValue())
+		if err != nil {
+			return authored.Status(codes.InvalidArgument, err)
+		}
+		if node.access {
+			e.result.Losses = append(e.result.Losses, &protocol.EncodeLoss{ValueId: node.id, Message: sourceencode.AccessLoss("coordination node", node.owner).Loss})
+			return nil
+		}
+		e.nodes = append(e.nodes, node)
+	default:
+		encoded, err := encodeNative(format, value.GetValue())
+		if err != nil {
+			return authored.Status(codes.InvalidArgument, err)
+		}
+		if encoded.Loss != "" {
+			e.result.Losses = append(e.result.Losses, &protocol.EncodeLoss{ValueId: id, Message: encoded.Loss})
+			return nil
+		}
+		e.units = append(e.units, encodedUnit{ids: []string{id}, parts: encoded.Parts})
+	}
+	return nil
+}
+
+// addTables writes each table's facets together, in the order the values
+// first bound the tables. A table refused names is a loss of every facet it
+// holds, with the reason refused gives, and leaves refused. Its error is the
+// call's status.
+func (e *sourceEncoding) addTables(format protocol.SourceDocument_Format, refused map[string]string) error {
+	for _, binding := range e.order {
+		if reason, found := refused[binding]; found {
+			for _, value := range e.tables[binding].Values {
+				e.result.Losses = append(e.result.Losses, &protocol.EncodeLoss{ValueId: value.GetValue().GetId(), Message: reason})
+			}
+			delete(refused, binding)
+			continue
+		}
+		encode := func(table sourceencode.Table) (sourceencode.TableResult, error) {
+			return sourceencode.EncodeTable(format, table)
+		}
+		if format == protocol.SourceDocument_HCL {
+			encode = sourceencode.EncodeTableHCL
+		}
+		encoded, err := encode(*e.tables[binding])
+		if err != nil {
+			return authored.Status(codes.InvalidArgument, err)
+		}
+		e.result.Losses = append(e.result.Losses, encoded.Losses...)
+		if len(encoded.Written) != 0 {
+			e.units = append(e.units, encodedUnit{ids: encoded.Written, parts: encoded.Parts})
+		}
+	}
+	return nil
+}
+
+// place puts each unit on the result: as a group when engine negotiated
+// source.encode-groups, as a fragment when it has one part, and otherwise as a
+// loss of each of its values, which subjects names.
+func (e *sourceEncoding) place(engine *protocol.Engine, subjects map[string]string) {
+	grouped := slices.Contains(engine.GetFeatures(), provider.EncodeGroupsFeature)
+	for _, unit := range e.units {
+		switch {
+		case grouped:
+			e.result.Groups = append(e.result.Groups, &protocol.EncodedSourceGroup{ValueIds: unit.ids, Parts: unit.parts})
+		case len(unit.parts) == 1:
+			e.result.Fragments = append(e.result.Fragments, &protocol.EncodedFragment{ValueIds: unit.ids, Fragment: unit.parts[0].GetFragment(), Placement: unit.parts[0].GetPlacement()})
+		default:
+			for _, id := range unit.ids {
+				e.result.Losses = append(e.result.Losses, &protocol.EncodeLoss{ValueId: id,
+					Message: fmt.Sprintf("%s needs several declarations, which a host that does not negotiate %s cannot write", subjects[id], provider.EncodeGroupsFeature)})
+			}
+		}
+	}
 }
 
 // bindingOf is the request's binding of id. The SDK checked that a facet's

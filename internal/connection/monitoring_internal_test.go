@@ -96,7 +96,8 @@ func TestSendable(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			c.Assert(sendable(test.ticket, test.secure, test.endpoint) != nil, qt.Equals, test.refused)
+			connection := &Connection{secure: test.secure, monitoring: test.endpoint}
+			c.Assert(connection.sendable(test.ticket) != nil, qt.Equals, test.refused)
 		})
 	}
 }

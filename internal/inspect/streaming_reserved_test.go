@@ -17,7 +17,7 @@ import (
 func TestStreamingInventoryKeepsIndependentReservationConflicts(t *testing.T) {
 	c := testcheck.New(t)
 	snapshot := &protocol.Schema{Coverage: &protocol.ModelCoverage{Representation: protocol.ValueInput_OBSERVED}}
-	reserve(snapshot, &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Name: "history"}, protocol.ReservedObject_HISTORY, false)
+	Common{}.reserve(snapshot, &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Name: "history"}, protocol.ReservedObject_HISTORY)
 	reservations, subjects := proto.CloneOf(snapshot).ReservedObjects, proto.CloneOf(snapshot).Coverage.Subjects
 	var observed *protocol.ValueModel
 	for _, model := range schema.ObservedModels() {

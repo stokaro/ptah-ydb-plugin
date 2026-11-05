@@ -98,7 +98,7 @@ type changefeedInput struct {
 // rebuild gives the new table the ones the old table held.
 func changefeedsManaged(table *protocol.PlanningTable, desired, observed capturedFacets) bool {
 	return desired.changefeeds != nil || observed.changefeeds != nil &&
-		FacetKnown(table.GetDesired().GetFeatures().GetFacets().GetCoverage(), schema.ChangefeedProperties, table.GetSubject(), true)
+		FacetKnown(table.GetDesired().GetFeatures().GetFacets().GetCoverage(), schema.ChangefeedProperties, table.GetSubject(), DesiredSide)
 }
 
 // planChangefeeds returns the changes that give the table the declared
@@ -259,9 +259,12 @@ func firstKeyType(table *protocol.DeclaredTable) string {
 		if column.GetName() != key {
 			continue
 		}
-		value, err := schema.StorageType(column.GetType(), column.GetNullable())
+		value, err := schema.StorageType(column.GetType())
 		if err != nil {
 			return ""
+		}
+		if column.GetNullable() {
+			value = schema.Optional(value)
 		}
 		name, _, err := schema.ColumnType(value)
 		if err != nil {

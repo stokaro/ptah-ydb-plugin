@@ -18,7 +18,7 @@ const skippedReason = "The read leaves out dot-prefixed directories and the dev 
 // exist yet is then absent rather than unknown. Streaming queries keep their
 // coverage: the streaming inventory that follows decides it. Views the common
 // wire carries are not read as native objects and have no region.
-func subtreeRegions(result *protocol.Schema, database string, skipped []string, commonViews bool) {
+func (c Common) subtreeRegions(result *protocol.Schema, database string, skipped []string) {
 	slices.Sort(skipped)
 	skipped = slices.Compact(skipped)
 	region := func(directory string, knowledge *protocol.ModelKnowledge) *protocol.ModelNamespaceKnowledge {
@@ -29,7 +29,7 @@ func subtreeRegions(result *protocol.Schema, database string, skipped []string, 
 	}
 	for _, record := range result.Coverage.Kinds {
 		kind := record.Model.Kind
-		if !schema.IsNativeObject(kind) || kind == schema.StreamingQueryProperties || (kind == schema.ViewProperties && commonViews) {
+		if !schema.IsNativeObject(kind) || kind == schema.StreamingQueryProperties || (kind == schema.ViewProperties && c.Views) {
 			continue
 		}
 		record.Regions = []*protocol.ModelNamespaceKnowledge{region("", &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE})}

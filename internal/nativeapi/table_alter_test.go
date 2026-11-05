@@ -94,7 +94,7 @@ func alterEnvelope(c *qt.C, database, payload string) *protocol.Envelope {
 		Owner: &protocol.Reference{Engine: "ydb", Kind: "table", Database: database, Schema: "app", Name: "records"}}
 }
 
-func applyAlteration(c *qt.C, fixture *alterFixture, database, payload string, guardFailure bool) (bool, error) {
+func applyAlteration(c *qt.C, fixture *alterFixture, database, payload string, guard error) (bool, error) {
 	c.Helper()
 	api := &nativeapi.TableAlteration{Open: func(context.Context) (nativeapi.AlterationSession, error) {
 		fixture.events = append(fixture.events, "open")
@@ -104,10 +104,7 @@ func applyAlteration(c *qt.C, fixture *alterFixture, database, payload string, g
 	original := proto.CloneOf(envelope)
 	dispatched, err := api.Apply(c.Context(), "/local", envelope, func(context.Context) error {
 		fixture.events = append(fixture.events, "guard")
-		if guardFailure {
-			return errors.New("lease lost")
-		}
-		return nil
+		return guard
 	})
 	c.Assert(proto.Equal(original, envelope), qt.IsTrue)
 	return dispatched, err
@@ -134,7 +131,7 @@ func TestNativeTableAlteration_HappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			fixture := &alterFixture{before: test.before, after: test.after}
-			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
+			dispatched, err := applyAlteration(c, fixture, "", test.payload, nil)
 			c.Assert(err, qt.IsNil)
 			c.Assert(dispatched, qt.IsTrue)
 			c.Assert(fixture.events, qt.DeepEquals, []string{"open", "describe", "guard", "alter", "describe", "close"})
@@ -154,45 +151,45 @@ func TestNativeTableAlteration_FailurePath(t *testing.T) {
 		fixture    alterFixture
 		database   string
 		payload    string
-		guard      bool
+		guard      error
 		dispatched bool
 		events     []string
 		message    string
 	}{
-		{"missing table", alterFixture{missing: true, before: beforeTable}, "", addAndMove, false, false, []string{"open", "describe", "close"}, "describe failed"},
-		{"family to add exists", alterFixture{before: archived, after: archived}, "", addAndMove, false, false, []string{"open", "describe", "close"}, "YDB column family to add already exists"},
-		{"column family drifted", alterFixture{before: beforeTable, after: afterTable}, "", alterOnly, false, false, []string{"open", "describe", "close"}, "YDB column family differs from the plan"},
-		{"column drifted", alterFixture{before: archived}, "", `{"request":{"alterColumns":[{"name":"payload","family":"archive"}]},"held_columns":[{"name":"payload","family":""}]}`, false, false, []string{"open", "describe", "close"}, "YDB column differs from the plan"},
-		{"move into an unknown family", alterFixture{before: beforeTable}, "", `{"request":{"alterColumns":[{"name":"payload","family":"cold"}]},"held_columns":[{"name":"payload","family":""}]}`, false, false, []string{"open", "describe", "close"}, "YDB column moves into a family the table does not hold"},
-		{"not a row table", alterFixture{before: notRow}, "", addAndMove, false, false, []string{"open", "describe", "close"}, "YDB table identity differs from the alteration"},
-		{"another table", alterFixture{before: renamed}, "", addAndMove, false, false, []string{"open", "describe", "close"}, "YDB table identity differs from the alteration"},
-		{"foreign database", alterFixture{before: beforeTable}, "/other", addAndMove, false, false, nil, "YDB table alteration targets another database"},
-		{"lease lost", alterFixture{before: beforeTable}, "", addAndMove, true, false, []string{"open", "describe", "guard", "close"}, "lease lost"},
-		{"lost reply", alterFixture{before: beforeTable, alterFailure: true}, "", addAndMove, false, true, []string{"open", "describe", "guard", "alter", "close"}, "lost native reply"},
-		{"lost read", alterFixture{before: beforeTable, readFailure: true}, "", addAndMove, false, true, []string{"open", "describe", "guard", "alter", "describe", "close"}, "describe failed"},
-		{"nothing changed", alterFixture{before: beforeTable, after: beforeTable}, "", addAndMove, false, true, []string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB added column family differs from the request"},
-		{"column stayed", alterFixture{before: beforeTable, after: tableHead + `"columns":[` + idColumn + `,{"name":"payload","type":{"typeId":"UTF8"}}],"columnFamilies":[{"name":"default"},{"name":"archive","compression":"COMPRESSION_LZ4"}]}`}, "", addAndMove, false, true,
+		{"missing table", alterFixture{missing: true, before: beforeTable}, "", addAndMove, nil, false, []string{"open", "describe", "close"}, "describe failed"},
+		{"family to add exists", alterFixture{before: archived, after: archived}, "", addAndMove, nil, false, []string{"open", "describe", "close"}, "YDB column family to add already exists"},
+		{"column family drifted", alterFixture{before: beforeTable, after: afterTable}, "", alterOnly, nil, false, []string{"open", "describe", "close"}, "YDB column family differs from the plan"},
+		{"column drifted", alterFixture{before: archived}, "", `{"request":{"alterColumns":[{"name":"payload","family":"archive"}]},"held_columns":[{"name":"payload","family":""}]}`, nil, false, []string{"open", "describe", "close"}, "YDB column differs from the plan"},
+		{"move into an unknown family", alterFixture{before: beforeTable}, "", `{"request":{"alterColumns":[{"name":"payload","family":"cold"}]},"held_columns":[{"name":"payload","family":""}]}`, nil, false, []string{"open", "describe", "close"}, "YDB column moves into a family the table does not hold"},
+		{"not a row table", alterFixture{before: notRow}, "", addAndMove, nil, false, []string{"open", "describe", "close"}, "YDB table identity differs from the alteration"},
+		{"another table", alterFixture{before: renamed}, "", addAndMove, nil, false, []string{"open", "describe", "close"}, "YDB table identity differs from the alteration"},
+		{"foreign database", alterFixture{before: beforeTable}, "/other", addAndMove, nil, false, nil, "YDB table alteration targets another database"},
+		{"lease lost", alterFixture{before: beforeTable}, "", addAndMove, errors.New("lease lost"), false, []string{"open", "describe", "guard", "close"}, "lease lost"},
+		{"lost reply", alterFixture{before: beforeTable, alterFailure: true}, "", addAndMove, nil, true, []string{"open", "describe", "guard", "alter", "close"}, "lost native reply"},
+		{"lost read", alterFixture{before: beforeTable, readFailure: true}, "", addAndMove, nil, true, []string{"open", "describe", "guard", "alter", "describe", "close"}, "describe failed"},
+		{"nothing changed", alterFixture{before: beforeTable, after: beforeTable}, "", addAndMove, nil, true, []string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB added column family differs from the request"},
+		{"column stayed", alterFixture{before: beforeTable, after: tableHead + `"columns":[` + idColumn + `,{"name":"payload","type":{"typeId":"UTF8"}}],"columnFamilies":[{"name":"default"},{"name":"archive","compression":"COMPRESSION_LZ4"}]}`}, "", addAndMove, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB altered column differs from the request"},
-		{"another column moved", alterFixture{before: beforeTable, after: tableHead + `"columns":[{"name":"id","type":{"typeId":"UINT64"},"notNull":true,"family":"archive"},{"name":"payload","type":{"typeId":"UTF8"},"family":"archive"}],"columnFamilies":[{"name":"default"},{"name":"archive","compression":"COMPRESSION_LZ4"}]}`}, "", addAndMove, false, true,
+		{"another column moved", alterFixture{before: beforeTable, after: tableHead + `"columns":[{"name":"id","type":{"typeId":"UINT64"},"notNull":true,"family":"archive"},{"name":"payload","type":{"typeId":"UTF8"},"family":"archive"}],"columnFamilies":[{"name":"default"},{"name":"archive","compression":"COMPRESSION_LZ4"}]}`}, "", addAndMove, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB altered column differs from the request"},
-		{"another family appeared", alterFixture{before: beforeTable, after: tableHead + `"columns":[` + idColumn + `,{"name":"payload","type":{"typeId":"UTF8"},"family":"archive"}],"columnFamilies":[{"name":"default"},{"name":"archive","compression":"COMPRESSION_LZ4"},{"name":"extra"}]}`}, "", addAndMove, false, true,
+		{"another family appeared", alterFixture{before: beforeTable, after: tableHead + `"columns":[` + idColumn + `,{"name":"payload","type":{"typeId":"UTF8"},"family":"archive"}],"columnFamilies":[{"name":"default"},{"name":"archive","compression":"COMPRESSION_LZ4"},{"name":"extra"}]}`}, "", addAndMove, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB altered table holds unexpected column families"},
-		{"setting not applied", alterFixture{before: heldArchive, after: heldArchive}, "", `{"request":{"alterColumnFamilies":[{"name":"archive","compression":"COMPRESSION_NONE"}]},"held_families":[{"name":"archive","compression":"COMPRESSION_LZ4"}]}`, false, true,
+		{"setting not applied", alterFixture{before: heldArchive, after: heldArchive}, "", `{"request":{"alterColumnFamilies":[{"name":"archive","compression":"COMPRESSION_NONE"}]},"held_families":[{"name":"archive","compression":"COMPRESSION_LZ4"}]}`, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB altered column family differs from the request"},
-		{"family settings drifted", alterFixture{before: heldArchive}, "", alterOnly, false, false, []string{"open", "describe", "close"}, "YDB column family differs from the plan"},
-		{"key changed", alterFixture{before: beforeTable, after: strings.Replace(afterTable, `"primaryKey":["id"]`, `"primaryKey":["id","payload"]`, 1)}, "", addAndMove, false, true,
+		{"family settings drifted", alterFixture{before: heldArchive}, "", alterOnly, nil, false, []string{"open", "describe", "close"}, "YDB column family differs from the plan"},
+		{"key changed", alterFixture{before: beforeTable, after: strings.Replace(afterTable, `"primaryKey":["id"]`, `"primaryKey":["id","payload"]`, 1)}, "", addAndMove, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB altered table key or columns differ from the request"},
-		{"column lost", alterFixture{before: beforeTable, after: tableHead + `"columns":[` + idColumn + `],"columnFamilies":[{"name":"default"},{"name":"archive","compression":"COMPRESSION_LZ4"}]}`}, "", addAndMove, false, true,
+		{"column lost", alterFixture{before: beforeTable, after: tableHead + `"columns":[` + idColumn + `],"columnFamilies":[{"name":"default"},{"name":"archive","compression":"COMPRESSION_LZ4"}]}`}, "", addAndMove, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB altered table key or columns differ from the request"},
-		{"column type changed", alterFixture{before: beforeTable, after: strings.Replace(afterTable, `{"typeId":"UTF8"}`, `{"typeId":"STRING"}`, 1)}, "", addAndMove, false, true,
+		{"column type changed", alterFixture{before: beforeTable, after: strings.Replace(afterTable, `{"typeId":"UTF8"}`, `{"typeId":"STRING"}`, 1)}, "", addAndMove, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB altered column differs from the request"},
-		{"pool not applied", alterFixture{before: pooled("hdd"), after: pooled("hdd")}, "", `{"request":{"alterColumnFamilies":[{"name":"archive","data":{"media":"ssd"}}]},"held_families":[{"name":"archive","data":{"media":"hdd"}}]}`, false, true,
+		{"pool not applied", alterFixture{before: pooled("hdd"), after: pooled("hdd")}, "", `{"request":{"alterColumnFamilies":[{"name":"archive","data":{"media":"ssd"}}]},"held_families":[{"name":"archive","data":{"media":"hdd"}}]}`, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB altered column family differs from the request"},
-		{"added pool not applied", alterFixture{before: beforeTable, after: afterTable}, "", `{"request":{"addColumnFamilies":[{"name":"archive","data":{"media":"ssd"},"compression":"COMPRESSION_LZ4"}],"alterColumns":[{"name":"payload","family":"archive"}]},"held_columns":[{"name":"payload","family":""}]}`, false, true,
+		{"added pool not applied", alterFixture{before: beforeTable, after: afterTable}, "", `{"request":{"addColumnFamilies":[{"name":"archive","data":{"media":"ssd"},"compression":"COMPRESSION_LZ4"}],"alterColumns":[{"name":"payload","family":"archive"}]},"held_columns":[{"name":"payload","family":""}]}`, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB added column family differs from the request"},
-		{"keep_in_memory appeared", alterFixture{before: heldArchive, after: strings.Replace(heldArchive, `"compression":"COMPRESSION_LZ4"`, `"compression":"COMPRESSION_NONE","keepInMemory":"ENABLED"`, 1)}, "", `{"request":{"alterColumnFamilies":[{"name":"archive","compression":"COMPRESSION_NONE"}]},"held_families":[{"name":"archive","compression":"COMPRESSION_LZ4"}]}`, false, true,
+		{"keep_in_memory appeared", alterFixture{before: heldArchive, after: strings.Replace(heldArchive, `"compression":"COMPRESSION_LZ4"`, `"compression":"COMPRESSION_NONE","keepInMemory":"ENABLED"`, 1)}, "", `{"request":{"alterColumnFamilies":[{"name":"archive","compression":"COMPRESSION_NONE"}]},"held_families":[{"name":"archive","compression":"COMPRESSION_LZ4"}]}`, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "YDB altered column family differs from the request"},
-		{"unconfirmed cleanup", alterFixture{before: beforeTable, after: afterTable, closeErr: true}, "", addAndMove, false, true,
+		{"unconfirmed cleanup", alterFixture{before: beforeTable, after: afterTable, closeErr: true}, "", addAndMove, nil, true,
 			[]string{"open", "describe", "guard", "alter", "describe", "close"}, "unconfirmed session release"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -258,7 +255,7 @@ func TestNativeTableAlteration_ColumnsHappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			fixture := &alterFixture{before: test.before, after: test.after}
-			dispatched, err := applyAlteration(c, fixture, "", test.payload, false)
+			dispatched, err := applyAlteration(c, fixture, "", test.payload, nil)
 			c.Assert(err, qt.IsNil)
 			c.Assert(dispatched, qt.IsTrue)
 			c.Assert(fixture.events, qt.DeepEquals, []string{"open", "describe", "guard", "alter", "describe", "close"})
@@ -302,7 +299,7 @@ func TestNativeTableAlteration_ColumnsFailurePath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			fixture := test.fixture
-			dispatched, err := applyAlteration(c, &fixture, "", test.payload, false)
+			dispatched, err := applyAlteration(c, &fixture, "", test.payload, nil)
 			c.Assert(err, qt.ErrorMatches, test.message)
 			c.Assert(dispatched, qt.Equals, test.dispatched)
 			c.Assert(fixture.events, qt.DeepEquals, test.events)

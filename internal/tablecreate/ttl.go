@@ -123,7 +123,7 @@ func planTTL(in ttlInput) (ttlChange, string) {
 func declaredTypes(columns []*protocol.DeclaredColumn) map[string]string {
 	result := make(map[string]string, len(columns))
 	for _, column := range columns {
-		kind, err := schema.StorageType(column.Type, column.Nullable)
+		kind, err := schema.StorageType(column.Type)
 		if err != nil {
 			result[column.Name] = column.Type
 			continue

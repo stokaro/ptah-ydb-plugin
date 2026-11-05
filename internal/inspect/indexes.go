@@ -60,9 +60,9 @@ func (s *source) readIndexes(ctx context.Context, tablePath string, table *descr
 // its kind's common spelling ([ydbdecl.IndexKind.CommonMethod]), the one table
 // preparation states for a declared index: "async" for an asynchronous index
 // and none for a synchronous one. The comment travels on the common-object
-// wire. With facets, each index carries its partitioning and read replicas as
-// the facet it owns.
-func commonIndexes(table *protocol.Reference, observed *native.IndexObservations, facets bool) ([]*protocol.ObservedIndex, error) {
+// wire. With IndexFacets, each index carries its partitioning and read
+// replicas as the facet it owns.
+func (c Common) commonIndexes(table *protocol.Reference, observed *native.IndexObservations) ([]*protocol.ObservedIndex, error) {
 	var result []*protocol.ObservedIndex
 	for _, index := range observed.GetIndexes() {
 		description := index.GetDescription()
@@ -79,7 +79,7 @@ func commonIndexes(table *protocol.Reference, observed *native.IndexObservations
 		// kind has a common spelling.
 		common.Method, _ = kind.CommonMethod()
 		common.Unique = description.GetGlobalUniqueIndex() != nil
-		if facets {
+		if c.IndexFacets {
 			facet, err := schema.CaptureIndexSettings(provider.IndexReference(table, description.GetName()), heldSettings(description))
 			if err != nil {
 				return nil, err

@@ -123,7 +123,7 @@ type decimal struct {
 	precision, scale uint32
 }
 
-func (d decimal) Decimal() ([16]byte, uint32, uint32) {
+func (d decimal) Decimal() (unscaled [16]byte, precision, scale uint32) {
 	var bytes [16]byte
 	binary.BigEndian.PutUint64(bytes[8:], uint64(d.unscaled)) // #nosec G115 -- keeps the low 64 bits of the two's complement value; high carries the sign
 	high := uint64(0)

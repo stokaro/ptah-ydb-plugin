@@ -196,7 +196,7 @@ func TestNamedPathsRefusesUnresolvedPaths(t *testing.T) {
 func TestValidateAlterRefusalIsAReason(t *testing.T) {
 	c := testcheck.New(t)
 
-	err := streaming.ValidateAlter("app", "copy", streaming.Spec{Text: "SELECT 2;"}, streaming.Spec{Text: "SELECT 1;"}, false)
+	err := streaming.ValidateAlter(streaming.Change{Schema: "app", Name: "copy", Before: &streaming.Spec{Text: "SELECT 1;"}, After: &streaming.Spec{Text: "SELECT 2;"}})
 
 	written, isReason := errors.AsType[*authored.Error](err)
 	c.Assert(isReason, qt.IsTrue, qt.Commentf("%v", err))

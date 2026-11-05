@@ -54,13 +54,13 @@ func TestHostStreamingQueryGraph(t *testing.T) {
 	for _, statement := range []string{
 		"CREATE TOPIC " + quoted("source"), "CREATE TOPIC " + quoted("sink"),
 		"CREATE TABLE " + quoted("next") + " (id Uint64 NOT NULL, PRIMARY KEY (id))",
-		streaming.Create(directory, "copy", streaming.Spec{Text: body}, false),
+		streaming.Create(directory, "copy", streaming.Spec{Text: body}),
 	} {
 		c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil)
 	}
 	_, err = client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session.Id, Schemas: []string{directory}})
 	c.Assert(err, qt.IsNil)
-	declared := "CREATE TOPIC " + quoted("next") + ";\nCREATE TOPIC " + quoted("sink") + ";\n" + streaming.Create(directory, "copy", streaming.Spec{Text: changed}, true)
+	declared := "CREATE TOPIC " + quoted("next") + ";\nCREATE TOPIC " + quoted("sink") + ";\n" + streaming.CreateOrReplace(directory, "copy", streaming.Spec{Text: changed})
 	output, err := hostApplySource(c, directory, "sql", declared)
 	c.Logf("host graph: %s", output)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
@@ -117,7 +117,7 @@ func TestInspectionRefusesAStreamingQueryWithoutObjectContext(t *testing.T) {
 	body := "INSERT INTO `" + path.Join(database, directory, "sink") + "` SELECT * FROM `" + path.Join(database, directory, "source") + "`;"
 	for _, statement := range []string{
 		"CREATE TOPIC " + quoted("source"), "CREATE TOPIC " + quoted("sink"),
-		streaming.Create(directory, "copy", streaming.Spec{Text: body}, false),
+		streaming.Create(directory, "copy", streaming.Spec{Text: body}),
 	} {
 		c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil)
 	}
@@ -139,7 +139,7 @@ func TestHostRefusesStreamingWithoutCapability(t *testing.T) {
 	if session.Capabilities[streaming.Capability] {
 		c.Skip("the target supports streaming queries")
 	}
-	output, err := hostApplySource(c, directory, "sql", streaming.Create(directory, "refused", streaming.Spec{Text: "SELECT 1;"}, false))
+	output, err := hostApplySource(c, directory, "sql", streaming.Create(directory, "refused", streaming.Spec{Text: "SELECT 1;"}))
 	c.Assert(err, qt.IsNotNil)
 	c.Assert(output, qt.Contains, "provider compare models failed (InvalidArgument)")
 	listing, err := opened.Driver.Scheme().ListDirectory(c.Context(), path.Join(database, directory))

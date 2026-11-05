@@ -12,40 +12,49 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
+// accessStep is what accessContext reads of a common step: a principal
+// change, or the native object a grant or a revoke reads and the access
+// resource it changes. The zero value is a step of neither.
+type accessStep struct {
+	principal      bool
+	object, access *protocol.ComparisonIdentity
+	revoke         bool
+}
+
 // accessContext separates common principal changes from scheme occupants.
 // Native grants read their object and change a distinct access resource. The
 // host's typed operand and both effects must agree before this distinction is
 // allowed to remove a step from physical-path conflict detection.
-func accessContext(common *protocol.CommonPlanningStep) (principal bool, object, access *protocol.ComparisonIdentity, revoke bool, err error) {
-	principal, err = principalStep(common)
+func accessContext(common *protocol.CommonPlanningStep) (accessStep, error) {
+	principal, err := principalStep(common)
 	if err != nil {
-		return false, nil, nil, false, err
+		return accessStep{}, err
 	}
 	if principal {
-		return true, nil, nil, false, nil
+		return accessStep{principal: true}, nil
 	}
 	change := common.GetCommonObject()
-	grant := change.GetGrant()
+	grant, revoke := change.GetGrant(), false
 	if grant == nil {
 		grant, revoke = change.GetRevoke(), true
 	}
 	if grant == nil {
-		return false, nil, nil, false, nil
+		return accessStep{}, nil
 	}
-	object, access, err = accessEffects(common)
+	object, access, err := accessEffects(common)
 	if err != nil {
-		return false, nil, nil, false, err
+		return accessStep{}, err
 	}
 	if access == nil && object == nil {
-		return false, nil, nil, false, nil
+		return accessStep{}, nil
 	}
 	if access == nil || object == nil || len(common.GetMetadata().GetEffects()) != 2 {
-		return false, nil, nil, false, fmt.Errorf("access step needs its native object and access resource")
+		return accessStep{}, fmt.Errorf("access step needs its native object and access resource")
 	}
-	if err = checkAccessOperand(grant.GetTarget(), object, access); err != nil {
-		return false, nil, nil, false, err
+	if err := checkAccessOperand(grant.GetTarget(), object, access); err != nil {
+		return accessStep{}, err
 	}
-	return false, object, access, revoke, nil
+	return accessStep{object: object, access: access, revoke: revoke}, nil
 }
 
 // principalStep reports whether common changes a principal: it creates,
@@ -117,7 +126,7 @@ func PathContext(request *protocol.PlanFeaturesRequest) (*protocol.PlanFeaturesR
 	result := proto.CloneOf(request)
 	result.CommonSteps = nil
 	for _, common := range request.GetCommonSteps() {
-		principal, object, _, _, err := accessContext(common)
+		step, err := accessContext(common)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +134,7 @@ func PathContext(request *protocol.PlanFeaturesRequest) (*protocol.PlanFeaturesR
 		if err != nil {
 			return nil, err
 		}
-		if !principal && object == nil && !directory {
+		if !step.principal && step.object == nil && !directory {
 			result.CommonSteps = append(result.CommonSteps, proto.CloneOf(common))
 		}
 	}
@@ -190,37 +199,39 @@ func OrderAccess(request *protocol.PlanFeaturesRequest, family Family, subject *
 	var result AccessOrdering
 	var seen []*protocol.ComparisonIdentity
 	for _, common := range request.GetCommonSteps() {
-		principal, object, access, revoke, err := accessContext(common)
+		step, err := accessContext(common)
 		if err != nil {
 			return result, err
 		}
-		if principal {
+		if step.principal {
 			continue
 		}
-		if object == nil || !sameAccessSubject(object, subject) {
+		if step.object == nil || !sameAccessSubject(step.object, subject) {
 			continue
 		}
 		grant := common.GetCommonObject().GetGrant()
-		if revoke {
+		if step.revoke {
 			grant = common.GetCommonObject().GetRevoke()
 		}
 		if err = checkAccessTarget(request, family, subject, grant); err != nil {
 			return result, err
 		}
 		if action == protocol.PlanningEffect_DROP {
-			if !revoke {
+			if !step.revoke {
 				return result, fmt.Errorf("a grant targets a native object the plan drops")
 			}
 			result.Sources = append(result.Sources, proto.CloneOf(common.Id))
 		} else {
-			if action == protocol.PlanningEffect_CREATE && revoke {
+			if action == protocol.PlanningEffect_CREATE && step.revoke {
 				return result, fmt.Errorf("a revoke targets a native object whose captured state is absent")
 			}
 			result.Dependencies = append(result.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(id), After: proto.CloneOf(common.Id)})
 		}
-		if !slices.ContainsFunc(seen, func(known *protocol.ComparisonIdentity) bool { return provider.CompareIdentities(known, access) == 0 }) {
-			seen = append(seen, access)
-			result.Effects = append(result.Effects, &protocol.PlanningEffect{Subject: proto.CloneOf(access), Action: accessEffectAction(action)})
+		if !slices.ContainsFunc(seen, func(known *protocol.ComparisonIdentity) bool {
+			return provider.CompareIdentities(known, step.access) == 0
+		}) {
+			seen = append(seen, step.access)
+			result.Effects = append(result.Effects, &protocol.PlanningEffect{Subject: proto.CloneOf(step.access), Action: accessEffectAction(action)})
 		}
 	}
 	return result, nil
@@ -271,8 +282,7 @@ func BeforePrincipalChanges(request *protocol.PlanFeaturesRequest, action protoc
 	}
 	var result []*protocol.PlanningDependency
 	for _, common := range request.GetCommonSteps() {
-		principal, _, _, _, _ := accessContext(common)
-		if principal {
+		if step, _ := accessContext(common); step.principal {
 			result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(id), After: proto.CloneOf(common.Id)})
 		}
 	}

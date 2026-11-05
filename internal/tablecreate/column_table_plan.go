@@ -86,7 +86,7 @@ func readStorage(owner *protocol.Reference, table *protocol.PlanningTable) (stor
 			}
 		}
 	}
-	result.known = FacetKnown(table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.ColumnStorageProperties, table.Subject, true)
+	result.known = FacetKnown(table.Desired.GetFeatures().GetFacets().GetCoverage(), schema.ColumnStorageProperties, table.Subject, DesiredSide)
 	return result, nil
 }
 
@@ -97,41 +97,50 @@ type columnTableChange struct {
 	ttl     *columnTTLChange
 }
 
+// columnAlteration is what planColumnAlteration decides for a table: whether
+// it is a column table on either side, the reason its change is refused or
+// "", and the changes of its local indexes and TTL, nil for none.
+type columnAlteration struct {
+	columnTable bool
+	reason      string
+	change      *columnTableChange
+}
+
 // planColumnAlteration plans the ALTER of a table that is a column table on
 // either side, and reports whether it is one. A column table whose storage
 // already satisfies the declaration needs no step, and one whose local indexes
 // or TTL differ gets the changes of each. A change of storage kind, hash key or
 // shard count is refused with the reason, and so is any common step of the
 // table: the provider carries out none for a column table.
-func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, capabilities map[string]bool) (bool, string, *columnTableChange, error) {
+func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, capabilities map[string]bool) (columnAlteration, error) {
 	table, err := columnTableTTL(table)
 	if err != nil {
-		return false, "", nil, err
+		return columnAlteration{}, err
 	}
 	sides, err := readStorage(owner, table)
 	if err != nil || !sides.columnTable() {
-		return false, "", nil, err
+		return columnAlteration{}, err
 	}
 	subject := fmt.Sprintf("table %q", tableLabel(owner))
 	if reason := storageKindRefusal(sides, subject); reason != "" {
-		return true, reason, nil, nil
+		return columnAlteration{columnTable: true, reason: reason}, nil
 	}
 	for _, step := range steps {
 		if step.Parent != nil && provider.CompareIdentities(step.Parent, table.Subject) == 0 {
-			return true, columnStepRefusal, nil, nil
+			return columnAlteration{columnTable: true, reason: columnStepRefusal}, nil
 		}
 	}
 	if sides.desired == nil {
 		// The source could not describe the table's storage, so the table
 		// keeps it.
-		return true, "", nil, nil
+		return columnAlteration{columnTable: true}, nil
 	}
 	if !LayoutSatisfied(sides.desired, sides.held) {
-		return true, subject + ": " + layoutChangeRefusal + layoutDetail(sides.desired, sides.held), nil, nil
+		return columnAlteration{columnTable: true, reason: subject + ": " + layoutChangeRefusal + layoutDetail(sides.desired, sides.held)}, nil
 	}
 	ttlKept := ColumnTTLEqual(sides.desired.Ttl, sides.held.Ttl)
 	if ttlKept && !localIndexesDiffer(sides.desired, sides.held) {
-		return true, "", nil, nil
+		return columnAlteration{columnTable: true}, nil
 	}
 	// The declaration is held to the rules of a creation, which a TTL the
 	// table takes in place obeys too: its column is declared, first in the
@@ -139,20 +148,20 @@ func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTab
 	// its capability; one the table keeps does not.
 	creation, err := CompileColumnTable(owner, table.Desired, capabilities)
 	if err != nil {
-		return true, err.Error(), nil, nil
+		return columnAlteration{columnTable: true, reason: err.Error()}, nil
 	}
 	indexes, reason := planLocalIndexes(sides.desired, sides.held, creationTypes(creation), capabilities)
 	if reason != "" {
-		return true, reason, nil, nil
+		return columnAlteration{columnTable: true, reason: reason}, nil
 	}
 	change := &columnTableChange{indexes: indexes}
 	if !ttlKept {
 		change.ttl = &columnTTLChange{held: enabledTTL(sides.held.Ttl), set: enabledTTL(sides.desired.Ttl)}
 		if reason := tieredTTLRefusal(capabilities, subject, change.ttl.set); reason != "" {
-			return true, reason, nil, nil
+			return columnAlteration{columnTable: true, reason: reason}, nil
 		}
 	}
-	return true, "", change, nil
+	return columnAlteration{columnTable: true, change: change}, nil
 }
 
 // storageKindRefusal says why the storage of a table that is a column table

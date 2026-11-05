@@ -79,7 +79,7 @@ func enableResourcePools(c *qt.C, opened *connection.Connection) {
 
 // workloadRanks are two ranks of the database no other run of this test
 // takes, since a rank is the database's, not the directory's.
-func workloadRanks(directory string) (int64, int64) {
+func workloadRanks(directory string) (first, second int64) {
 	sum := fnv.New32a()
 	_, _ = sum.Write([]byte(directory))
 	base := 10000 + int64(sum.Sum32()%100000)*2

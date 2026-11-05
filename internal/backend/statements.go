@@ -46,18 +46,11 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	refuse := func(reason string) (*protocol.StatementResult, error) {
-		return &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_REFUSED, Refusal: rowdata.OneLine(reason)}, nil
+		return refusedStatement(request.RequestId, reason), nil
 	}
-	piece, reason := statementText(ctx, request.Sql, request.Access)
+	piece, arguments, reason := readStatement(ctx, request)
 	if reason != "" {
 		return refuse(reason)
-	}
-	if piece.service() && (request.TransactionId != "" || len(request.Arguments) != 0 || len(request.TypedArguments) != 0) {
-		return refuse("a comment or coordination statement runs without a transaction or bound arguments")
-	}
-	arguments, err := statementArguments(request)
-	if err != nil {
-		return refuse(err.Error())
 	}
 	s, err := p.lookup(request.SessionId)
 	if err != nil {
@@ -68,22 +61,8 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 	if s.closed {
 		return nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
-	if s.realm {
-		if err := yql.ConfineToRealm(request.Sql); err != nil {
-			return refuse(err.Error())
-		}
-	}
-	if len(s.statementResults) >= statementLimit || s.activeStatements() >= activeStatementLimit {
-		return refuse("statement result limit reached; close results or open another session")
-	}
-	if request.TransactionId == "" && s.active != "" {
-		return refuse("a transaction is active on this session")
-	}
-	if request.TransactionId != "" {
-		tx := s.transactions[request.TransactionId]
-		if tx == nil || tx.tx == nil || tx.failed || s.active != request.TransactionId {
-			return refuse("statement transaction is inactive")
-		}
+	if reason := s.statementRefusal(request); reason != "" {
+		return refuse(reason)
 	}
 	guarded, stop, err := s.guard(ctx)
 	if err != nil {
@@ -100,17 +79,7 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 		return refuse("statement was canceled before execution")
 	}
 	if piece.service() {
-		dispatched, err := s.runPiece(ctx, nil, piece, s.verifyLocks)
-		if err != nil {
-			if !dispatched {
-				return refuse(err.Error())
-			}
-			return statementFailure(request.RequestId, err, request.Sql), nil
-		}
-		if ctx.Err() != nil || s.verifyLocks(ctx) != nil {
-			return &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_UNKNOWN}, nil
-		}
-		return &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_SUCCEEDED}, nil
+		return s.runServiceStatement(ctx, request, piece), nil
 	}
 	// The RPC cancellation controls work while this call is active. A returned
 	// cursor owns its lifetime until a later page, close, or transaction end.
@@ -118,33 +87,17 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 	detach := context.AfterFunc(ctx, cancel)
 	defer detach()
 	record := &statementResult{transaction: request.TransactionId, cancel: cancel}
-	var runner rowReader
-	if request.TransactionId != "" {
-		runner = s.transactions[request.TransactionId].tx
-	} else {
-		record.conn, err = s.connection.DB.Conn(ctx)
-		if err != nil {
-			cancel()
-			return refuse("statement connection is unavailable")
-		}
-		runner = record.conn
-		if request.Access == protocol.RunStatementRequest_READ_ONLY {
-			record.readOnly, err = record.conn.BeginTx(lifetime, &sql.TxOptions{Isolation: sql.LevelSnapshot, ReadOnly: true})
-			if err != nil {
-				_ = s.releaseStatement(record)
-				return refuse("cannot open a snapshot read-only transaction")
-			}
-			runner = record.readOnly
-		}
+	runner, reason := s.statementRunner(ctx, lifetime, request, record)
+	if reason != "" {
+		return refuse(reason)
 	}
-	rows, err := runner.QueryContext(lifetime, request.Sql, arguments...)
-	if err != nil {
+	var statementErr error
+	record.cursor, statementErr, err = statementrows.Query(lifetime, runner, request.Sql, arguments...)
+	if statementErr != nil {
 		s.failStatement(record)
-		return statementFailure(request.RequestId, err, request.Sql), nil
+		return statementFailure(request.RequestId, statementErr, request.Sql), nil
 	}
-	record.cursor, err = statementrows.New(rows)
 	if err != nil {
-		_ = rows.Close()
 		s.failStatement(record)
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
@@ -161,15 +114,114 @@ func (p *Provider) RunStatement(ctx context.Context, request *protocol.RunStatem
 		return &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_UNKNOWN}, nil
 	}
 	if more {
-		if s.statementResults == nil {
-			s.statementResults = make(map[string]*statementResult)
-		}
-		result.NextPageToken = rand.Text()
-		s.statementResults[result.NextPageToken] = record
+		s.keepStatement(result, record)
 	} else if err := s.releaseStatement(record); err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+// refusedStatement is the result of a statement RunStatement refuses for
+// reason, which it writes on one line.
+func refusedStatement(requestID, reason string) *protocol.StatementResult {
+	return &protocol.StatementResult{RequestId: requestID, Outcome: protocol.StatementResult_REFUSED, Refusal: rowdata.OneLine(reason)}
+}
+
+// readStatement reads a request's statement and its bound arguments before
+// anything is opened for it, and returns why RunStatement refuses them, or ""
+// when it does not; see statementText. A comment or coordination statement
+// takes no transaction and no bound argument.
+func readStatement(ctx context.Context, request *protocol.RunStatementRequest) (sqlPiece, []any, string) {
+	piece, reason := statementText(ctx, request.Sql, request.Access)
+	if reason != "" {
+		return sqlPiece{}, nil, reason
+	}
+	if piece.service() && (request.TransactionId != "" || len(request.Arguments) != 0 || len(request.TypedArguments) != 0) {
+		return sqlPiece{}, nil, "a comment or coordination statement runs without a transaction or bound arguments"
+	}
+	arguments, err := statementArguments(request)
+	if err != nil {
+		return sqlPiece{}, nil, err.Error()
+	}
+	return piece, arguments, ""
+}
+
+// statementRefusal returns why the session refuses to run the request's
+// statement now, or "" when it does not: a statement a dev realm cannot
+// confine, a session at its result limit, and a transaction the request names
+// that is not the active one, or none named while one is active.
+func (s *session) statementRefusal(request *protocol.RunStatementRequest) string {
+	if s.realm {
+		if err := yql.ConfineToRealm(request.Sql); err != nil {
+			return err.Error()
+		}
+	}
+	if len(s.statementResults) >= statementLimit || s.activeStatements() >= activeStatementLimit {
+		return "statement result limit reached; close results or open another session"
+	}
+	if request.TransactionId == "" && s.active != "" {
+		return "a transaction is active on this session"
+	}
+	if request.TransactionId != "" {
+		tx := s.transactions[request.TransactionId]
+		if tx == nil || tx.tx == nil || tx.failed || s.active != request.TransactionId {
+			return "statement transaction is inactive"
+		}
+	}
+	return ""
+}
+
+// runServiceStatement runs a comment or coordination statement once, outside
+// the query service, and answers for it. A statement that was never sent is
+// refused; one whose locks or context did not hold to the end is UNKNOWN.
+func (s *session) runServiceStatement(ctx context.Context, request *protocol.RunStatementRequest, piece sqlPiece) *protocol.StatementResult {
+	dispatched, err := s.runPiece(ctx, nil, piece, s.verifyLocks)
+	if err != nil {
+		if !dispatched {
+			return refusedStatement(request.RequestId, err.Error())
+		}
+		return statementFailure(request.RequestId, err, request.Sql)
+	}
+	if ctx.Err() != nil || s.verifyLocks(ctx) != nil {
+		return &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_UNKNOWN}
+	}
+	return &protocol.StatementResult{RequestId: request.RequestId, Outcome: protocol.StatementResult_SUCCEEDED}
+}
+
+// statementRunner returns what runs the request's statement: the transaction
+// it names, or a connection pinned to record, inside a snapshot read-only
+// transaction opened for lifetime when the request is READ_ONLY. When the
+// connection or that transaction does not open, it ends record's lifetime and
+// returns why RunStatement refuses the statement.
+func (s *session) statementRunner(ctx, lifetime context.Context, request *protocol.RunStatementRequest, record *statementResult) (rowReader, string) {
+	if request.TransactionId != "" {
+		return s.transactions[request.TransactionId].tx, ""
+	}
+	var err error
+	record.conn, err = s.connection.DB.Conn(ctx)
+	if err != nil {
+		record.cancel()
+		return nil, "statement connection is unavailable"
+	}
+	if request.Access != protocol.RunStatementRequest_READ_ONLY {
+		return record.conn, ""
+	}
+	record.readOnly, err = record.conn.BeginTx(lifetime, &sql.TxOptions{Isolation: sql.LevelSnapshot, ReadOnly: true})
+	if err != nil {
+		_ = s.releaseStatement(record)
+		return nil, "cannot open a snapshot read-only transaction"
+	}
+	return record.readOnly, ""
+}
+
+// keepStatement keeps a result that has more rows under a fresh page token,
+// which it writes on result.
+func (s *session) keepStatement(result *protocol.StatementResult, record *statementResult) {
+	if s.statementResults == nil {
+		s.statementResults = make(map[string]*statementResult)
+	}
+	result.NextPageToken = rand.Text()
+	s.statementResults[result.NextPageToken] = record
 }
 
 // statementText reads an operator's statement before anything is opened for
@@ -316,9 +368,18 @@ func (s *session) releaseStatement(record *statementResult) error {
 	return record.closeErr
 }
 
-func (s *session) closeStatements(transaction string, all bool) {
+// closeStatements releases every statement result of the session.
+func (s *session) closeStatements() {
 	for _, record := range s.statementResults {
-		if all || record.transaction == transaction {
+		_ = s.releaseStatement(record)
+	}
+}
+
+// closeTransactionStatements releases the statement results that run in
+// transaction.
+func (s *session) closeTransactionStatements(transaction string) {
+	for _, record := range s.statementResults {
+		if record.transaction == transaction {
 			_ = s.releaseStatement(record)
 		}
 	}

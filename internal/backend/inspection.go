@@ -57,35 +57,16 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	common.UnreadTables = slices.Contains(negotiatedFeatures(ctx), provider.UnreadTablesFeature)
 	result, err := inspect.ReadObjects(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), common, session.streaming(), session.leftOut()...)
 	if err != nil {
-		if ctx.Err() != nil {
-			return nil, status.FromContextError(ctx.Err()).Err()
-		}
-		return nil, authored.Status(codes.FailedPrecondition, err)
+		return nil, inspectError(ctx, err)
 	}
 	read, unread := session.workload()
 	databaseKinds := slices.Contains(negotiatedFeatures(ctx), provider.DatabaseKindsFeature)
 	if err := inspect.Workload(ctx, result, session.database, request.GetSchemas(), databaseKinds, read, unread); err != nil {
-		if ctx.Err() != nil {
-			return nil, status.FromContextError(ctx.Err()).Err()
-		}
-		return nil, authored.Status(codes.FailedPrecondition, err)
+		return nil, inspectError(ctx, err)
 	}
 	if carriesCommon(provider.HostFeatures(ctx)) {
-		if slices.Contains(provider.HostFeatures(ctx), provider.CommonAccessFeature) {
-			principals := func(ctx context.Context) (nativeapi.Principals, error) {
-				return nativeapi.ReadPrincipals(ctx, session.connection.DB, session.connection.Database())
-			}
-			if err := inspect.Access(ctx, result, session.database, session.realm, nativeapi.AccessReader(session.connection.Driver), principals); err != nil {
-				if ctx.Err() != nil {
-					return nil, status.FromContextError(ctx.Err()).Err()
-				}
-				return nil, authored.Status(codes.FailedPrecondition, err)
-			}
-		} else {
-			for _, kind := range []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_ROLE, protocol.CommonObjectSupport_GRANT} {
-				result.CommonObjects.Coverage = append(result.CommonObjects.Coverage, &protocol.CommonObjectCoverage{Kind: kind,
-					Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Access inspection requires schema.common-access"}})
-			}
+		if err := session.inspectAccess(ctx, result); err != nil {
+			return nil, err
 		}
 	}
 	if !session.capabilities["secrets"] {
@@ -109,6 +90,35 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	return result, nil
 }
 
+// inspectAccess reads the owners, grants and principals of what the snapshot
+// holds when the host takes common access, and otherwise records role and
+// grant knowledge as uninspected. Its error is the call's status.
+func (s *session) inspectAccess(ctx context.Context, result *protocol.Schema) error {
+	if !slices.Contains(provider.HostFeatures(ctx), provider.CommonAccessFeature) {
+		for _, kind := range []protocol.CommonObjectSupport_Kind{protocol.CommonObjectSupport_ROLE, protocol.CommonObjectSupport_GRANT} {
+			result.CommonObjects.Coverage = append(result.CommonObjects.Coverage, &protocol.CommonObjectCoverage{Kind: kind,
+				Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: "Access inspection requires schema.common-access"}})
+		}
+		return nil
+	}
+	principals := func(ctx context.Context) (nativeapi.Principals, error) {
+		return nativeapi.ReadPrincipals(ctx, s.connection.DB, s.connection.Database())
+	}
+	if err := inspect.Access(ctx, result, s.database, s.scope(), nativeapi.AccessReader(s.connection.Driver), principals); err != nil {
+		return inspectError(ctx, err)
+	}
+	return nil
+}
+
+// inspectError is the status of a failed inspection: the context's when the
+// context has ended, and FailedPrecondition otherwise.
+func inspectError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return status.FromContextError(ctx.Err()).Err()
+	}
+	return authored.Status(codes.FailedPrecondition, err)
+}
+
 // inspectedValues returns every value a snapshot carries: native objects and
 // the facets of tables and columns.
 func inspectedValues(snapshot *protocol.Schema) []*protocol.Envelope {
@@ -120,6 +130,15 @@ func inspectedValues(snapshot *protocol.Schema) []*protocol.Envelope {
 		}
 	}
 	return values
+}
+
+// scope is what the session's reads are confined to: its dev realm, or the
+// whole database.
+func (s *session) scope() inspect.Scope {
+	if s.realm {
+		return inspect.RealmScope
+	}
+	return inspect.DatabaseScope
 }
 
 func (s *session) streaming() inspect.StreamingQuery {
@@ -181,28 +200,7 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 			result.Values = append(result.Values, normalized)
 			continue
 		case protocol.ValueInput_CHANGE:
-			normalize := schema.NormalizeCoordinationChange
-			switch input.GetValue().GetKind() {
-			case schema.TablePropertiesChange:
-				normalize = schema.NormalizeTablePropertiesChange
-			case schema.ColumnStorageChange:
-				normalize = schema.NormalizeColumnStorageChange
-			case schema.SecretChange:
-				normalize = schema.NormalizeSecretChange
-			case schema.TopicChange:
-				normalize = schema.NormalizeTopicChange
-			case schema.ExternalSourceChange, schema.ExternalTableChange:
-				normalize = schema.NormalizeExternalChange
-			case schema.ResourcePoolChange, schema.ResourcePoolClassifierChange:
-				normalize = schema.NormalizeWorkloadChange
-			case schema.StreamingQueryChange:
-				normalize = schema.NormalizeStreamingQueryChange
-			case schema.ReplicationChange:
-				normalize = schema.NormalizeReplicationChange
-			case schema.TransferChange:
-				normalize = schema.NormalizeTransferChange
-			}
-			normalized, changeErr := normalize(input)
+			normalized, changeErr := changeNormalizer(input.GetValue().GetKind())(input)
 			if changeErr != nil {
 				return nil, authored.Status(codes.InvalidArgument, changeErr)
 			}
@@ -230,4 +228,31 @@ func (*Provider) NormalizeValues(ctx context.Context, request *protocol.Normaliz
 		return nil, status.FromContextError(err).Err()
 	}
 	return result, nil
+}
+
+// changeNormalizer returns the normalizer of a change of kind; a kind of no
+// other change is a coordination node's.
+func changeNormalizer(kind string) func(*protocol.ValueInput) (*protocol.NormalizedValue, error) {
+	switch kind {
+	case schema.TablePropertiesChange:
+		return schema.NormalizeTablePropertiesChange
+	case schema.ColumnStorageChange:
+		return schema.NormalizeColumnStorageChange
+	case schema.SecretChange:
+		return schema.NormalizeSecretChange
+	case schema.TopicChange:
+		return schema.NormalizeTopicChange
+	case schema.ExternalSourceChange, schema.ExternalTableChange:
+		return schema.NormalizeExternalChange
+	case schema.ResourcePoolChange, schema.ResourcePoolClassifierChange:
+		return schema.NormalizeWorkloadChange
+	case schema.StreamingQueryChange:
+		return schema.NormalizeStreamingQueryChange
+	case schema.ReplicationChange:
+		return schema.NormalizeReplicationChange
+	case schema.TransferChange:
+		return schema.NormalizeTransferChange
+	default:
+		return schema.NormalizeCoordinationChange
+	}
 }

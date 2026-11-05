@@ -42,82 +42,100 @@ func (s Store) Lookup(ctx context.Context, runner Runner, name string) (*protoco
 func (s Store) Mutate(ctx context.Context, runner Runner, request *protocol.MutateMetadataRequest, beforeWrite func(context.Context) error) (outcome protocol.MetadataResult_Outcome, deleted bool, err error) {
 	switch mutation := request.Mutation.(type) {
 	case *protocol.MutateMetadataRequest_AppendLog:
-		row := mutation.AppendLog
-		payload, err := s.Encode(row)
-		if err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		declarations := "DECLARE $run AS Utf8; DECLARE $sequence AS Int64; "
-		args := []any{sql.Named("run", row.RunId), sql.Named("sequence", row.Sequence)}
-		var previous []byte
-		err = runner.QueryRowContext(ctx, declarations+"SELECT `record` FROM "+s.QuotedPath()+" WHERE `run_id` = $run AND `sequence` = $sequence", args...).Scan(&previous)
-		if err == nil {
-			existing, decodeErr := s.Decode(previous)
-			if decodeErr != nil {
-				return protocol.MetadataResult_REJECTED, false, decodeErr
-			}
-			event, ok := existing.(*protocol.MigrationLogRecord)
-			if !ok || event.RunId != row.RunId || event.Sequence != row.Sequence {
-				return protocol.MetadataResult_REJECTED, false, fmt.Errorf("YDB log identity changed")
-			}
-			return protocol.MetadataResult_REJECTED, false, nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return protocol.MetadataResult_REJECTED, false, fmt.Errorf("read YDB log identity: query failed")
-		}
-		args = append(args, sql.Named("record", payload))
-		if err := beforeWrite(ctx); err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		if err := ctx.Err(); err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		_, err = runner.ExecContext(ctx, declarations+"DECLARE $record AS String; INSERT INTO "+s.QuotedPath()+" (`run_id`, `sequence`, `record`) VALUES ($run, $sequence, $record)", args...)
-		if err != nil {
-			return protocol.MetadataResult_UNKNOWN, false, fmt.Errorf("append YDB log: query failed")
-		}
+		return s.appendLog(ctx, runner, mutation.AppendLog, beforeWrite)
 	case *protocol.MutateMetadataRequest_PutTag:
-		row := mutation.PutTag
-		payload, err := s.Encode(row)
-		if err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		if _, err := s.Lookup(ctx, runner, row.Name); err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		if err := beforeWrite(ctx); err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		if err := ctx.Err(); err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		_, err = runner.ExecContext(ctx, "DECLARE $name AS Utf8; DECLARE $record AS String; UPSERT INTO "+s.QuotedPath()+" (`name`, `record`) VALUES ($name, $record)", sql.Named("name", row.Name), sql.Named("record", payload))
-		if err != nil {
-			return protocol.MetadataResult_UNKNOWN, false, fmt.Errorf("write YDB tag: query failed")
-		}
+		return s.putTag(ctx, runner, mutation.PutTag, beforeWrite)
 	case *protocol.MutateMetadataRequest_DeleteTag:
-		row, err := s.Lookup(ctx, runner, mutation.DeleteTag)
-		if err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		if row == nil {
-			return protocol.MetadataResult_APPLIED, false, nil
-		}
-		if err := beforeWrite(ctx); err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		if err := ctx.Err(); err != nil {
-			return protocol.MetadataResult_REJECTED, false, err
-		}
-		_, err = runner.ExecContext(ctx, "DECLARE $name AS Utf8; DELETE FROM "+s.QuotedPath()+" WHERE `name` = $name", sql.Named("name", mutation.DeleteTag))
-		if err != nil {
-			return protocol.MetadataResult_UNKNOWN, false, fmt.Errorf("delete YDB tag: query failed")
-		}
-		return protocol.MetadataResult_APPLIED, true, nil
+		return s.deleteTag(ctx, runner, mutation.DeleteTag, beforeWrite)
 	default:
 		return protocol.MetadataResult_REJECTED, false, fmt.Errorf("invalid YDB metadata mutation")
 	}
+}
+
+// appendLog inserts a log record unless its run and sequence already hold
+// one. An existing record is rejected after its identity is checked, and the
+// write runs only after beforeWrite and the context allow it.
+func (s Store) appendLog(ctx context.Context, runner Runner, row *protocol.MigrationLogRecord, beforeWrite func(context.Context) error) (protocol.MetadataResult_Outcome, bool, error) {
+	payload, err := s.Encode(row)
+	if err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	declarations := "DECLARE $run AS Utf8; DECLARE $sequence AS Int64; "
+	args := []any{sql.Named("run", row.RunId), sql.Named("sequence", row.Sequence)}
+	var previous []byte
+	err = runner.QueryRowContext(ctx, declarations+"SELECT `record` FROM "+s.QuotedPath()+" WHERE `run_id` = $run AND `sequence` = $sequence", args...).Scan(&previous)
+	if err == nil {
+		existing, decodeErr := s.Decode(previous)
+		if decodeErr != nil {
+			return protocol.MetadataResult_REJECTED, false, decodeErr
+		}
+		event, ok := existing.(*protocol.MigrationLogRecord)
+		if !ok || event.RunId != row.RunId || event.Sequence != row.Sequence {
+			return protocol.MetadataResult_REJECTED, false, fmt.Errorf("YDB log identity changed")
+		}
+		return protocol.MetadataResult_REJECTED, false, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return protocol.MetadataResult_REJECTED, false, fmt.Errorf("read YDB log identity: query failed")
+	}
+	args = append(args, sql.Named("record", payload))
+	if err := beforeWrite(ctx); err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	_, err = runner.ExecContext(ctx, declarations+"DECLARE $record AS String; INSERT INTO "+s.QuotedPath()+" (`run_id`, `sequence`, `record`) VALUES ($run, $sequence, $record)", args...)
+	if err != nil {
+		return protocol.MetadataResult_UNKNOWN, false, fmt.Errorf("append YDB log: query failed")
+	}
 	return protocol.MetadataResult_APPLIED, false, nil
+}
+
+// putTag writes a tag over any valid stored one with the same name, once
+// beforeWrite and the context allow it.
+func (s Store) putTag(ctx context.Context, runner Runner, row *protocol.MigrationTagRecord, beforeWrite func(context.Context) error) (protocol.MetadataResult_Outcome, bool, error) {
+	payload, err := s.Encode(row)
+	if err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	if _, err := s.Lookup(ctx, runner, row.Name); err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	if err := beforeWrite(ctx); err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	_, err = runner.ExecContext(ctx, "DECLARE $name AS Utf8; DECLARE $record AS String; UPSERT INTO "+s.QuotedPath()+" (`name`, `record`) VALUES ($name, $record)", sql.Named("name", row.Name), sql.Named("record", payload))
+	if err != nil {
+		return protocol.MetadataResult_UNKNOWN, false, fmt.Errorf("write YDB tag: query failed")
+	}
+	return protocol.MetadataResult_APPLIED, false, nil
+}
+
+// deleteTag deletes the named tag and reports whether the serializable read
+// found it. A missing tag is applied with nothing deleted.
+func (s Store) deleteTag(ctx context.Context, runner Runner, name string, beforeWrite func(context.Context) error) (protocol.MetadataResult_Outcome, bool, error) {
+	row, err := s.Lookup(ctx, runner, name)
+	if err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	if row == nil {
+		return protocol.MetadataResult_APPLIED, false, nil
+	}
+	if err := beforeWrite(ctx); err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return protocol.MetadataResult_REJECTED, false, err
+	}
+	_, err = runner.ExecContext(ctx, "DECLARE $name AS Utf8; DELETE FROM "+s.QuotedPath()+" WHERE `name` = $name", sql.Named("name", name))
+	if err != nil {
+		return protocol.MetadataResult_UNKNOWN, false, fmt.Errorf("delete YDB tag: query failed")
+	}
+	return protocol.MetadataResult_APPLIED, true, nil
 }
 
 // Snapshot captures a complete immutable read without retaining a SQL cursor.
@@ -152,49 +170,9 @@ func (s Store) Snapshot(ctx context.Context, runner Runner) (snapshot *Snapshot,
 			snapshot = nil
 		}
 	}()
-	var count uint64
-	var lastName string
-	var lastSequence int64
-	for rows.Next() {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		var name string
-		var sequence int64
-		var payload []byte
-		if s.Kind == protocol.MetadataScope_LOG {
-			err = rows.Scan(&name, &sequence, &payload)
-		} else {
-			err = rows.Scan(&name, &payload)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("read YDB metadata: invalid row")
-		}
-		record, err := s.Decode(payload)
-		if err != nil {
-			return nil, err
-		}
-		switch value := record.(type) {
-		case *protocol.MigrationLogRecord:
-			if value.RunId != name || value.Sequence != sequence {
-				return nil, fmt.Errorf("YDB log identity changed")
-			}
-		case *protocol.MigrationTagRecord:
-			if value.Name != name {
-				return nil, fmt.Errorf("YDB tag identity changed")
-			}
-		}
-		if count > 0 && (name < lastName || (name == lastName && sequence <= lastSequence)) {
-			return nil, fmt.Errorf("YDB metadata ordering changed or repeated a key")
-		}
-		if count >= expected {
-			return nil, fmt.Errorf("YDB metadata count changed")
-		}
-		if err := snapshot.append(payload); err != nil {
-			return nil, err
-		}
-		lastName, lastSequence = name, sequence
-		count++
+	count, err := s.capture(ctx, rows, snapshot, expected)
+	if err != nil {
+		return nil, err
 	}
 	if rows.Err() != nil {
 		return nil, fmt.Errorf("read YDB metadata: stream failed")
@@ -212,4 +190,65 @@ func (s Store) Snapshot(ctx context.Context, runner Runner) (snapshot *Snapshot,
 		return nil, err
 	}
 	return snapshot, nil
+}
+
+// capture appends each streamed row's record to snapshot and returns how many
+// it appended. It refuses a row whose record names another key, a key out of
+// order or repeated, and a row beyond the expected count.
+func (s Store) capture(ctx context.Context, rows *sql.Rows, snapshot *Snapshot, expected uint64) (uint64, error) {
+	var count uint64
+	var lastName string
+	var lastSequence int64
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		var name string
+		var sequence int64
+		var payload []byte
+		var err error
+		if s.Kind == protocol.MetadataScope_LOG {
+			err = rows.Scan(&name, &sequence, &payload)
+		} else {
+			err = rows.Scan(&name, &payload)
+		}
+		if err != nil {
+			return 0, fmt.Errorf("read YDB metadata: invalid row")
+		}
+		if err := s.checkIdentity(payload, name, sequence); err != nil {
+			return 0, err
+		}
+		if count > 0 && (name < lastName || (name == lastName && sequence <= lastSequence)) {
+			return 0, fmt.Errorf("YDB metadata ordering changed or repeated a key")
+		}
+		if count >= expected {
+			return 0, fmt.Errorf("YDB metadata count changed")
+		}
+		if err := snapshot.append(payload); err != nil {
+			return 0, err
+		}
+		lastName, lastSequence = name, sequence
+		count++
+	}
+	return count, nil
+}
+
+// checkIdentity decodes a stored record and refuses one whose own key differs
+// from the key of the row that holds it.
+func (s Store) checkIdentity(payload []byte, name string, sequence int64) error {
+	record, err := s.Decode(payload)
+	if err != nil {
+		return err
+	}
+	switch value := record.(type) {
+	case *protocol.MigrationLogRecord:
+		if value.RunId != name || value.Sequence != sequence {
+			return fmt.Errorf("YDB log identity changed")
+		}
+	case *protocol.MigrationTagRecord:
+		if value.Name != name {
+			return fmt.Errorf("YDB tag identity changed")
+		}
+	}
+	return nil
 }

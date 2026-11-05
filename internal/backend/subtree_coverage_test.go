@@ -44,7 +44,7 @@ func TestSecretComparisonReadsSubtreeRegions(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			request := secretRequest(c, false)
+			request := secretRequest(c, secretAbsent)
 			request.Current.Coverage.Kinds[0].Sources[0].Regions = test.regions
 			ctx := provider.ContextWithHostFeatures(c.Context(), []string{provider.SchemaSubtreeCoverageFeature})
 
@@ -63,7 +63,7 @@ func TestSecretComparisonReadsSubtreeRegions(t *testing.T) {
 func TestIdentifierRulesWithoutTheSubtreeFeature(t *testing.T) {
 	c := testcheck.New(t)
 	engine := backend.Description().Engines[0]
-	request := secretRequest(c, false)
+	request := secretRequest(c, secretAbsent)
 	request.Identifiers.Rules.SchemaSeparator = ""
 
 	result, err := backend.New().CompareModels(c.Context(), request)

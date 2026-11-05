@@ -78,9 +78,9 @@ func renderAccess(change *protocol.CommonObjectChange, capabilities map[string]b
 	case *protocol.CommonObjectChange_RemoveMember:
 		return membership(operation.RemoveMember, "DROP USER", capabilities)
 	case *protocol.CommonObjectChange_Grant:
-		return grant(operation.Grant, false, capabilities)
+		return grant(operation.Grant, "GRANT", "TO", capabilities)
 	case *protocol.CommonObjectChange_Revoke:
-		return grant(operation.Revoke, true, capabilities)
+		return grant(operation.Revoke, "REVOKE", "FROM", capabilities)
 	default:
 		return "", unsupported("this change is not a YDB access operation")
 	}
@@ -195,7 +195,9 @@ func passwordClause(user, value string, input *protocol.ExecutionInput) (string,
 	}
 }
 
-func grant(declared *protocol.SQLGrant, revoke bool, capabilities map[string]bool) (string, error) {
+// grant renders the access statement verb names for declared: GRANT with
+// direction TO, or REVOKE with direction FROM.
+func grant(declared *protocol.SQLGrant, verb, direction string, capabilities map[string]bool) (string, error) {
 	if err := GrantRefusal(declared); err != nil {
 		return "", err
 	}
@@ -207,10 +209,6 @@ func grant(declared *protocol.SQLGrant, revoke bool, capabilities map[string]boo
 	for _, privilege := range declared.GetPrivileges() {
 		permission, _ := ydbacl.Permission(privilege)
 		names = append(names, ydbtype.StringLiteral(permission))
-	}
-	verb, direction := "GRANT", "TO"
-	if revoke {
-		verb, direction = "REVOKE", "FROM"
 	}
 	return accessComment(declared.GetComment()) + fmt.Sprintf("%s %s ON %s %s %s;", verb, strings.Join(names, ", "), ydbtype.QuoteIdentifier(object), direction, ydbtype.QuoteIdentifier(declared.GetRole())), nil
 }

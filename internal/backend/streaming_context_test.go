@@ -262,7 +262,7 @@ func TestUnchangedStreamingQueryOrdersCommonInputReplacement(t *testing.T) {
 func TestUnchangedStreamingRestartRetainsAccessOrdering(t *testing.T) {
 	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
-	access := commonAccessFor(request.DesiredObjects.Records[0].Subject, "streaming query", true)
+	access := commonAccessFor(request.DesiredObjects.Records[0].Subject, "streaming query", revokeAccess)
 	request.CommonSteps = []*protocol.CommonPlanningStep{access}
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
@@ -440,6 +440,37 @@ func TestUnchangedStreamingQueryBesideAReservedName_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	request := unchangedStreamingRequest(c, nil)
 	request.CurrentObjects.Coverage.Subjects = append(request.CurrentObjects.Coverage.Subjects, reservedContextName("unread", "The query uses a setting the provider does not model"))
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Contributions, qt.HasLen, 0)
+	c.Assert(result.Objects, qt.HasLen, 0)
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].Message, qt.Equals, `streaming query "unread" has no complete captured definition: The query uses a setting the provider does not model`)
+}
+
+// A desired source that claims nothing, such as an HCL document without a
+// coverage header, knows nothing of the lock node's name, which the read
+// reserves. The read's reservation alone says no query is there, so the plan
+// that changes an input still restarts the query that reads it.
+func TestUnchangedStreamingQueryBesideAReservedNameTheSourceDoesNotClaim_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := unchangedStreamingRequest(c, nil)
+	request.CurrentObjects.Coverage.Subjects = append(request.CurrentObjects.Coverage.Subjects, reservedContextName(locking.NodeName, schema.ReservedNameReason))
+	request.DesiredObjects.Coverage.Kinds = nil
+	result, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Diagnostics, qt.HasLen, 0)
+	c.Assert(contextSteps(result), qt.DeepEquals, map[string]int{"copy": 2, locking.NodeName: 0})
+}
+
+// Beside a desired source that claims nothing, a name the read could not
+// represent for another reason may still hold a query that reads the changed
+// input: only a reservation stands for both sides.
+func TestUnchangedStreamingQueryBesideAReservedNameTheSourceDoesNotClaim_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := unchangedStreamingRequest(c, nil)
+	request.CurrentObjects.Coverage.Subjects = append(request.CurrentObjects.Coverage.Subjects, reservedContextName("unread", "The query uses a setting the provider does not model"))
+	request.DesiredObjects.Coverage.Kinds = nil
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Contributions, qt.HasLen, 0)

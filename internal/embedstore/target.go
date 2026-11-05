@@ -349,30 +349,9 @@ func (s *Store) dropGeneration(ctx context.Context, location *protocol.Embedding
 		return err
 	}
 	column := location.GetColumn()
-	var drops []string
-	switch storage {
-	case protocol.DropEmbeddingGenerationRequest_TABLE:
-		if found, mark := described.Attributes[ownCommentKey], location.GetNames().GetOwnershipMark(); found != mark {
-			return refuse(protocol.EmbeddingRefusal_NOT_OWNED,
-				"table %s is not Ptah's to drop: retiring generation %s would remove it and every row in it, and it carries the "+
-					"comment %q rather than %q. Drop it by hand if it really is this generation's storage", name, short(location.GetGeneration()), found, mark)
-		}
-	case protocol.DropEmbeddingGenerationRequest_COLUMNS:
-		if found, wanted := described.Attributes[columnCommentKey+column], location.GetNames().GetColumnComment(); found != "" && wanted != "" && found != wanted {
-			return refuse(protocol.EmbeddingRefusal_NOT_OWNED, "column %s on %s carries the comment %q rather than %q, so it is not this generation's to drop",
-				column, name, found, wanted)
-		}
-		if _, found := described.Column(column + generationSuffix); found {
-			if err := s.refuseAnotherGeneration(ctx, &protocol.EmbeddingSpec{Generation: location.GetGeneration(),
-				Target: &protocol.EmbeddingTarget{Table: location.GetTable(), Column: column}}); err != nil {
-				return err
-			}
-		}
-		for _, wanted := range generationColumns(column) {
-			if _, found := described.Column(wanted.Name); found {
-				drops = append(drops, "DROP COLUMN "+Quote(wanted.Name))
-			}
-		}
+	drops, err := s.generationDrops(ctx, described, name, location, storage)
+	if err != nil {
+		return err
 	}
 	done := 0
 	if _, found := described.Index(location.GetNames().GetIndex()); found {
@@ -406,4 +385,40 @@ func (s *Store) dropGeneration(ctx context.Context, location *protocol.Embedding
 		}
 	}
 	return nil
+}
+
+// generationDrops refuses a retirement whose storage is not this generation's
+// to drop, and returns the DROP COLUMN clauses for the generation columns the
+// table still has. A table retirement drops the whole table, so it returns no
+// clauses.
+func (s *Store) generationDrops(
+	ctx context.Context, described RowTable, name string, location *protocol.EmbeddingLocation, storage protocol.DropEmbeddingGenerationRequest_Storage,
+) ([]string, error) {
+	column := location.GetColumn()
+	var drops []string
+	switch storage {
+	case protocol.DropEmbeddingGenerationRequest_TABLE:
+		if found, mark := described.Attributes[ownCommentKey], location.GetNames().GetOwnershipMark(); found != mark {
+			return nil, refuse(protocol.EmbeddingRefusal_NOT_OWNED,
+				"table %s is not Ptah's to drop: retiring generation %s would remove it and every row in it, and it carries the "+
+					"comment %q rather than %q. Drop it by hand if it really is this generation's storage", name, short(location.GetGeneration()), found, mark)
+		}
+	case protocol.DropEmbeddingGenerationRequest_COLUMNS:
+		if found, wanted := described.Attributes[columnCommentKey+column], location.GetNames().GetColumnComment(); found != "" && wanted != "" && found != wanted {
+			return nil, refuse(protocol.EmbeddingRefusal_NOT_OWNED, "column %s on %s carries the comment %q rather than %q, so it is not this generation's to drop",
+				column, name, found, wanted)
+		}
+		if _, found := described.Column(column + generationSuffix); found {
+			if err := s.refuseAnotherGeneration(ctx, &protocol.EmbeddingSpec{Generation: location.GetGeneration(),
+				Target: &protocol.EmbeddingTarget{Table: location.GetTable(), Column: column}}); err != nil {
+				return nil, err
+			}
+		}
+		for _, wanted := range generationColumns(column) {
+			if _, found := described.Column(wanted.Name); found {
+				drops = append(drops, "DROP COLUMN "+Quote(wanted.Name))
+			}
+		}
+	}
+	return drops, nil
 }

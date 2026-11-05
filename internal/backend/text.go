@@ -59,12 +59,46 @@ func textOf(value *protocol.Envelope) (string, error) {
 	owner := value.GetOwner()
 	path := tablecreate.TextPath(owner.GetSchema(), owner.GetName())
 	switch value.GetKind() {
+	case schema.ChangefeedOperation:
+		return changefeedText(path, value)
+	case schema.SecretOperation:
+		return schema.SecretStatement(value)
+	case schema.CoordinationOperation:
+		return coordinationText(path, value)
+	case schema.ExternalSourceOperation, schema.ExternalTableOperation:
+		return externalText(path, value)
+	case schema.StreamingQueryOperation:
+		return streamingText(value)
+	case schema.WorkloadOperation:
+		return workloadText(value)
+	case schema.ReplicationOperation:
+		step, err := schema.ReplicationStepOf(schema.ReplicationOperationChange(value))
+		if err != nil {
+			return "", err
+		}
+		return replicationText(path, step), nil
+	case schema.TransferOperation:
+		step, err := schema.TransferStepOf(schema.TransferOperationChange(value))
+		if err != nil {
+			return "", err
+		}
+		return transferText(path, step), nil
+	default:
+		return rowTableText(value, owner.GetDatabase(), path)
+	}
+}
+
+// rowTableText writes the creation or an alteration of a row table as its YQL
+// statement in database, at path, and leaves every other operation to
+// tableStatementText.
+func rowTableText(value *protocol.Envelope, database, path string) (string, error) {
+	switch value.GetKind() {
 	case tablecreate.OperationKind:
 		request, err := tablecreate.Request(value)
 		if err != nil {
 			return "", err
 		}
-		return tablecreate.RowTableStatementIn(owner.GetDatabase(), path, request)
+		return tablecreate.RowTableStatementIn(database, path, request)
 	case tablecreate.InventoryOperationKind:
 		change, err := tablecreate.DecodeInventory(value)
 		if err != nil {
@@ -89,6 +123,29 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.IndexSettingsStatement(path, settings), nil
+	case tablecreate.NativeIndexOperationKind:
+		addition, err := tablecreate.DecodeNativeIndex(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.NativeIndexStatement(path, addition), nil
+	case tablecreate.SequenceOperationKind:
+		change, err := tablecreate.DecodeSequence(value)
+		if err != nil {
+			return "", err
+		}
+		return tablecreate.SequenceAlterationStatement(database, path, change)
+	default:
+		return tableStatementText(value, path)
+	}
+}
+
+// tableStatementText writes the creation or an alteration of a column table,
+// and the drop, copy or rename of any table, as its YQL statement at path, or
+// an error wrapping [tablecreate.ErrNoTextForm] for an operation YQL cannot
+// spell.
+func tableStatementText(value *protocol.Envelope, path string) (string, error) {
+	switch value.GetKind() {
 	case tablecreate.ColumnOperationKind:
 		creation, err := tablecreate.ColumnTable(value)
 		if err != nil {
@@ -112,12 +169,6 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.DropStatement(path), nil
-	case tablecreate.NativeIndexOperationKind:
-		addition, err := tablecreate.DecodeNativeIndex(value)
-		if err != nil {
-			return "", err
-		}
-		return tablecreate.NativeIndexStatement(path, addition), nil
 	case tablecreate.CopyOperationKind:
 		copied, err := tablecreate.DecodeCopy(value)
 		if err != nil {
@@ -130,50 +181,27 @@ func textOf(value *protocol.Envelope) (string, error) {
 			return "", err
 		}
 		return tablecreate.RenameStatement(path, rename), nil
-	case tablecreate.SequenceOperationKind:
-		change, err := tablecreate.DecodeSequence(value)
-		if err != nil {
-			return "", err
-		}
-		return tablecreate.SequenceAlterationStatement(owner.GetDatabase(), path, change)
-	case schema.ChangefeedOperation:
-		return changefeedText(path, value)
-	case schema.SecretOperation:
-		return schema.SecretStatement(value)
-	case schema.CoordinationOperation:
-		return coordinationText(path, value)
-	case schema.ExternalSourceOperation, schema.ExternalTableOperation:
-		return externalText(path, value)
-	case schema.StreamingQueryOperation:
-		change, err := schema.StreamingChangeOf(schema.StreamingQueryOperationChange(value))
-		if err != nil {
-			return "", err
-		}
-		statements, err := streaming.Statements(change)
-		if err != nil {
-			return "", err
-		}
-		if len(statements) != 1 {
-			return "", fmt.Errorf("%w: a running streaming query alteration needs separate stop and restart operations", tablecreate.ErrNoTextForm)
-		}
-		return statements[0], nil
-	case schema.WorkloadOperation:
-		return workloadText(value)
-	case schema.ReplicationOperation:
-		step, err := schema.ReplicationStepOf(schema.ReplicationOperationChange(value))
-		if err != nil {
-			return "", err
-		}
-		return replicationText(path, step), nil
-	case schema.TransferOperation:
-		step, err := schema.TransferStepOf(schema.TransferOperationChange(value))
-		if err != nil {
-			return "", err
-		}
-		return transferText(path, step), nil
 	default:
 		return "", fmt.Errorf("%w: the native operation %s has no YQL statement", tablecreate.ErrNoTextForm, value.GetKind())
 	}
+}
+
+// streamingText writes a streaming query operation as its one YQL statement.
+// A running query's alteration needs a stop and a restart, which no single
+// statement spells.
+func streamingText(value *protocol.Envelope) (string, error) {
+	change, err := schema.StreamingChangeOf(schema.StreamingQueryOperationChange(value))
+	if err != nil {
+		return "", err
+	}
+	statements, err := streaming.Statements(change)
+	if err != nil {
+		return "", err
+	}
+	if len(statements) != 1 {
+		return "", fmt.Errorf("%w: a running streaming query alteration needs separate stop and restart operations", tablecreate.ErrNoTextForm)
+	}
+	return statements[0], nil
 }
 
 // changefeedText writes the changefeed changes of the table at path as the
@@ -254,10 +282,11 @@ func externalText(path string, value *protocol.Envelope) (string, error) {
 	if operation == schema.ExternalReplace {
 		creation = externals.Replace
 	}
-	_, after, _, err := schema.ExternalOperands(change)
+	parts, err := schema.ExternalOperands(change)
 	if err != nil {
 		return "", err
 	}
+	after := parts.After
 	// An empty root keeps every path as the declaration writes it.
 	if source {
 		_, spec, err := externals.SourcePair(nil, after, "")

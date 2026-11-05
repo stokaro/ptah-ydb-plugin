@@ -170,9 +170,12 @@ func TableIntent(spec ydbdecl.ExternalTable) (*native.ExternalTableIntent, error
 	}
 	intent := &native.ExternalTableIntent{SourceType: new(objectStorage), DataSourcePath: new(spec.DataSource), Location: new(spec.Location), Content: make(map[string]string)}
 	for _, column := range spec.Columns {
-		storage, err := schema.StorageType(column.Type, !column.NotNull)
+		storage, err := schema.StorageType(column.Type)
 		if err != nil {
 			return nil, fmt.Errorf("column %s: %w", column.Name, err)
+		}
+		if !column.NotNull {
+			storage = schema.Optional(storage)
 		}
 		declared := &native.ColumnDeclaration{Name: column.Name, Type: storage, Settings: &native.ColumnIntent{}}
 		if column.NotNull {
