@@ -261,11 +261,9 @@ func TestColumnTableLocalIndexPlan_HappyPath(t *testing.T) {
 				"ALTER TABLE `/local/app/records` ADD INDEX `renamed_bloom` LOCAL USING bloom_filter ON (`body`) WITH (false_positive_probability = 0.01);"}, nil},
 		{"a min_max index added beside a TTL change",
 			`{"ttl":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"7200","delete":{}}]}},"localIndexes":[` + declaredMinMax + `]}`, heldStorage,
-			[]string{"column-table-ttl/000000/reset", "column-table-ttl/000000/set", "column-table-add-local-index/000000"},
-			[]string{"ALTER TABLE `/local/app/records` RESET (TTL);",
-				"ALTER TABLE `/local/app/records` SET (TTL = Interval(\"PT7200S\") DELETE ON `ts`);",
-				"ALTER TABLE `/local/app/records` ADD INDEX `mm` LOCAL USING min_max ON (`id`);"},
-			[]string{"column-table-ttl/000000/reset > column-table-ttl/000000/set"}},
+			[]string{"column-table-ttl/000000/set", "column-table-add-local-index/000000"},
+			[]string{"ALTER TABLE `/local/app/records` SET (TTL = Interval(\"PT7200S\") DELETE ON `ts`);",
+				"ALTER TABLE `/local/app/records` ADD INDEX `mm` LOCAL USING min_max ON (`id`);"}, nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -374,7 +372,7 @@ func TestColumnTableLocalIndexPlan_KeptIndexNeedsNoCapability(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
 	names, _ := plannedLocalIndexSteps(c, plan)
-	c.Assert(names, qt.DeepEquals, []string{"column-table-ttl/000000/reset", "column-table-ttl/000000/set"})
+	c.Assert(names, qt.DeepEquals, []string{"column-table-ttl/000000/set"})
 }
 
 // TestColumnTableLocalIndexComparison reports a column table whose local

@@ -284,10 +284,10 @@ func TestColumnTableTieredTTLCreationSubprocess(t *testing.T) {
 }
 
 // TestColumnTableTTLChangeSubprocess changes the TTL of a column table in place
-// through the native planning path, as the host's embedded engine does: a
-// RESET of the held TTL, then a SET of the declared one. It removes the TTL,
-// sets one on the table without it, and refuses a step planned against a TTL
-// the table no longer holds before anything is written.
+// through the native planning path, as the host's embedded engine does: a SET
+// of the declared TTL in place of a held one that moves no row. It removes the
+// TTL, sets one on the table without it, and refuses a step planned against a
+// TTL the table no longer holds before anything is written.
 func TestColumnTableTTLChangeSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newColumnTableFixture(c, monitoredAddress(c))
@@ -303,7 +303,7 @@ func TestColumnTableTTLChangeSubprocess(t *testing.T) {
 		steps         []string
 		seconds       []uint64
 	}{
-		{"another interval", twoDays, []string{"column-table-ttl/000000/reset", "column-table-ttl/000000/set"}, []uint64{172800}},
+		{"another interval", twoDays, []string{"column-table-ttl/000000/set"}, []uint64{172800}},
 		{"no TTL", noTTL, []string{"column-table-ttl/000000/reset"}, nil},
 		{"a TTL on a table without one", columnStorage, []string{"column-table-ttl/000000/set"}, []uint64{86400}},
 	} {

@@ -83,7 +83,8 @@ func refusedChange(index int, message string) *protocol.PlannedFeatures {
 func changeReceipt(change *protocol.PlanningChange, steps []*protocol.StepIdentity) *protocol.PlanningReceipt {
 	strategy := "The table alteration sets or drops the TTL, changes the automatic partitioning settings, the read replicas and the key bloom filter, and alters the column families and column placements through the native table service"
 	if change.GetValue().GetValue().GetKind() == schema.ColumnStorageChange {
-		strategy = "The column table alteration resets the TTL the table holds and sets the declared one with YQL's ALTER TABLE through the query service"
+		strategy = "The column table alteration sets the declared TTL in place of the one the table holds with YQL's ALTER TABLE through the query service, " +
+			"resetting a held TTL that moves rows to an external data source first"
 	}
 	if len(steps) == 0 {
 		strategy = "The captured table already satisfies the declaration, so the alteration has no step to carry out"

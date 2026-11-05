@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
 const (
@@ -350,4 +351,14 @@ func ValidateExternalAccess(before, after *protocol.Envelope) error {
 		return fmt.Errorf("external object access requirements differ from established access")
 	}
 	return nil
+}
+
+// ExternalSourceSubject names the external data source at path, a directory
+// and a name relative to the database root, as a planning effect names it.
+// Every owner that orders a step against a data source names it this way: a
+// step that reads the source through another identity would not be ordered
+// against the step that writes it.
+func ExternalSourceSubject(path ydbdecl.Path) *protocol.ComparisonIdentity {
+	return &protocol.ComparisonIdentity{Kind: ExternalSourceProperties, Database: &protocol.ComparisonPart{},
+		Schema: &protocol.ComparisonPart{Source: path.Schema, Normalized: path.Schema}, Name: &protocol.ComparisonPart{Source: path.Name, Normalized: path.Name}}
 }

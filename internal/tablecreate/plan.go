@@ -1,6 +1,7 @@
 package tablecreate
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -90,7 +91,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	if refusal, err := p.contributeCreations(); err != nil || refusal != nil {
 		return refusal, err
 	}
-	p.contributeDrops()
+	if err := p.contributeDrops(); err != nil {
+		return nil, err
+	}
 	p.contributeRebuilds()
 	p.contributeAlterations()
 	if refusal := p.contributeColumnTables(); refusal != nil {
@@ -265,7 +268,7 @@ func (p *planner) planTableAlteration(i int, table *protocol.PlanningTable, owne
 		}
 		p.columnAlterations = append(p.columnAlterations, i)
 		if columnChange != nil {
-			p.columnChanges = append(p.columnChanges, columnTableStep{index: i, table: table, owner: owner, change: *columnChange})
+			p.columnChanges = append(p.columnChanges, columnTableStep{index: i, table: table, owner: owner, root: cmp.Or(request.DatabasePath, owner.Database), change: *columnChange})
 		}
 		return nil, nil
 	}
@@ -560,8 +563,12 @@ func creationStep(item *creation) (*protocol.PlanningStep, error) {
 }
 
 // contributeDrops numbers the removals in subject order and contributes the
-// step of each, which drops the table and its scheme path.
-func (p *planner) contributeDrops() {
+// step of each, which drops the table and its scheme path. A column table
+// whose TTL moves rows to external data sources also reads them, as an early
+// reader, as the host's embedded engine drops it: YDB refuses to drop or
+// replace a data source a table's TTL names, so the table goes before the
+// source's owner drops or replaces the source.
+func (p *planner) contributeDrops() error {
 	slices.SortFunc(p.drops, func(a, b removal) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
 	for number := range p.drops {
 		item := &p.drops[number]
@@ -570,13 +577,27 @@ func (p *planner) contributeDrops() {
 		facts := item.operation.OperationSemantics
 		slot := proto.CloneOf(item.table.Subject)
 		slot.Kind = "ydb.scheme-path"
+		held, err := heldTTL(item.table)
+		if err != nil {
+			return err
+		}
+		owner, err := boundOwner(item.table.Subject)
+		if err != nil {
+			return err
+		}
+		reads := sourceReads(cmp.Or(p.request.DatabasePath, owner.Database), held)
+		placement := protocol.PlanningMetadata_DEFAULT
+		if len(reads) != 0 {
+			placement = protocol.PlanningMetadata_EARLY
+		}
 		p.contribution.Steps = append(p.contribution.Steps, &protocol.PlanningStep{Id: item.id,
 			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: item.operation, Phase: protocol.PlanningOperation_LIFECYCLE},
-			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
-				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(item.table.Subject), Action: protocol.PlanningEffect_DROP},
-					{Subject: slot, Action: protocol.PlanningEffect_DROP}}}})
+			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Placement: placement,
+				Effects: append([]*protocol.PlanningEffect{{Subject: proto.CloneOf(item.table.Subject), Action: protocol.PlanningEffect_DROP},
+					{Subject: slot, Action: protocol.PlanningEffect_DROP}}, reads...)}})
 		p.receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
 	}
+	return nil
 }
 
 // contributeRebuilds contributes the steps of each rebuild, each after the
@@ -973,7 +994,8 @@ func (p *planner) strategy(i int, table *protocol.PlanningTable, steps []*protoc
 	if slices.Contains(p.columnAlterations, i) {
 		strategy = "The column table already holds the declared storage: its kind, its hash key and its shard count are fixed when YDB creates it, and its local indexes and its TTL are the declared ones"
 		if len(p.receiptSteps[i]) != 0 {
-			strategy = "Drop and add the column table's local indexes, and reset its TTL and set the declared one, with YQL's ALTER TABLE through the query service; " +
+			strategy = "Drop and add the column table's local indexes, and set its declared TTL in place of the one it holds, resetting a held TTL that moves rows " +
+				"to an external data source first, with YQL's ALTER TABLE through the query service; " +
 				"its kind, its hash key and its shard count are fixed when YDB creates it and already match"
 		}
 	}

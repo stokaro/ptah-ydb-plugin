@@ -219,11 +219,14 @@ func isColumnCreation(value *protocol.NormalizedValue) bool {
 	return value.GetValue().GetKind() == ColumnOperationKind
 }
 
-// columnTableStep is the change of one altered column table.
+// columnTableStep is the change of one altered column table. root is the
+// database the plan runs in, which the paths of the data sources its TTL
+// names are read against.
 type columnTableStep struct {
 	index  int
 	table  *protocol.PlanningTable
 	owner  *protocol.Reference
+	root   string
 	change columnTableChange
 }
 
@@ -237,16 +240,22 @@ type localIndexNumbers struct {
 // between them. number orders the table among the others of the plan, and
 // numbers numbers its local-index steps among theirs.
 //
-// The TTL changes as the host's embedded engine plans it: a RESET of the TTL
-// the table holds, placed early, and a SET of the declared one after it. YDB
-// keeps no external data source a table's TTL names, so the held TTL lets go
-// of its sources before their owner drops or replaces them, and the declared
-// one is set once its sources exist. A change to a TTL from none is the SET
-// alone, and a change to none the RESET alone. A lone RESET drops the table's
-// TTL setting and a lone SET creates it. When both run, each alters it: the
-// host refuses a provider step that creates what another provider step drops,
-// since it orders every creation of a phase before every drop, and the
-// dependency here orders the two steps.
+// The TTL changes in place. `SET (TTL = ...)` replaces the TTL a column table
+// holds, whatever either one moves rows to (measured on 25.1.4.7 and
+// 26.2.1.14), so a TTL that moves no row is replaced by the SET alone, as the
+// host's embedded engine replaces it: no window without a TTL, and one schema
+// operation. A held TTL that moves rows to an external data source is reset
+// first, placed early, and the declared one set after it, as the embedded
+// engine changes a tiered TTL: YDB refuses to drop or replace a data source a
+// table's TTL names, so the held TTL lets go of its sources before their owner
+// drops or replaces them, which the SET cannot do when it is to name the same
+// source again, and the declared one is set once its sources exist. Each step
+// reads the sources its TTL names, which orders it against their owner. A
+// change to a TTL from none is the SET alone, and a change to none the RESET
+// alone. A lone RESET drops the table's TTL setting and a lone SET creates it.
+// Otherwise each step alters it: the host refuses a provider step that creates
+// what another provider step drops, since it orders every creation of a phase
+// before every drop, and the dependency here orders the two steps.
 //
 // Each local index is one step, in the lifecycle phase, so that a removal and
 // the addition that replaces the index under its name can be ordered in one
@@ -307,35 +316,34 @@ func (s columnTableStep) plan(number int, numbers *localIndexNumbers) ([]*protoc
 // ttlSteps are the steps of a TTL change, as plan describes them.
 func (s columnTableStep) ttlSteps(number int, change columnTTLChange) ([]*protocol.PlanningStep, []*protocol.PlanningDependency, error) {
 	name := fmt.Sprintf("column-table-ttl/%06d", number)
-	slot := proto.CloneOf(s.table.Subject)
-	slot.Kind = "ydb.ttl"
-	var steps []*protocol.PlanningStep
-	add := func(suffix string, alteration *native.ColumnTableTTLAlteration, action protocol.PlanningEffect_Action, placement protocol.PlanningMetadata_Placement) error {
-		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: name + suffix}
-		operation, err := CaptureColumnTTLAlteration(id.Name, s.owner, alteration)
-		if err != nil {
-			return err
-		}
-		facts := operation.OperationSemantics
-		steps = append(steps, &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: operation},
-			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Placement: placement,
-				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(s.table.Subject), Action: protocol.PlanningEffect_READ}, {Subject: proto.CloneOf(slot), Action: action}}}})
-		return nil
-	}
+	id := func(suffix string) *protocol.StepIdentity { return &protocol.StepIdentity{Owner: schema.ProviderID, Name: name + suffix} }
 	held, set := change.held, change.set
+	if held != nil && set != nil && !MovesRows(held) {
+		step, err := ttlStep(id("/set"), s.owner, s.table.Subject, &native.ColumnTableTTLAlteration{Held: held, Set: set}, protocol.PlanningEffect_ALTER,
+			protocol.PlanningMetadata_DEFAULT, sourceReads(s.root, set))
+		if err != nil {
+			return nil, nil, err
+		}
+		return []*protocol.PlanningStep{step}, nil, nil
+	}
 	reset, install := protocol.PlanningEffect_DROP, protocol.PlanningEffect_CREATE
 	if held != nil && set != nil {
 		reset, install = protocol.PlanningEffect_ALTER, protocol.PlanningEffect_ALTER
 	}
+	var steps []*protocol.PlanningStep
 	if held != nil {
-		if err := add("/reset", &native.ColumnTableTTLAlteration{Held: held}, reset, protocol.PlanningMetadata_EARLY); err != nil {
+		step, err := ttlStep(id("/reset"), s.owner, s.table.Subject, &native.ColumnTableTTLAlteration{Held: held}, reset, protocol.PlanningMetadata_EARLY, sourceReads(s.root, held))
+		if err != nil {
 			return nil, nil, err
 		}
+		steps = append(steps, step)
 	}
 	if set != nil {
-		if err := add("/set", &native.ColumnTableTTLAlteration{Set: set}, install, protocol.PlanningMetadata_DEFAULT); err != nil {
+		step, err := ttlStep(id("/set"), s.owner, s.table.Subject, &native.ColumnTableTTLAlteration{Set: set}, install, protocol.PlanningMetadata_DEFAULT, sourceReads(s.root, set))
+		if err != nil {
 			return nil, nil, err
 		}
+		steps = append(steps, step)
 	}
 	if len(steps) != 2 {
 		return steps, nil, nil
