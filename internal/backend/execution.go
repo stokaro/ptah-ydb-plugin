@@ -242,6 +242,13 @@ func (s *session) unitFailure(ctx context.Context, request *protocol.ExecuteRequ
 				}
 			}
 		}
+		if first, ok := errors.AsType[*firstPieceFailure](err); ok && unit.GetNative() != nil {
+			// A native unit whose first statement failed applied nothing
+			// of itself, and YDB's answer to that statement says what it
+			// proves: a DROP YDB refuses because other objects depend on
+			// what it drops is NOT_APPLIED.
+			failure.Text = first.piece.text
+		}
 		answer := ydbfailure.Read(err)
 		answer.FlagsRead = s.connection.HasMonitoring()
 		if s.realm {
@@ -262,7 +269,7 @@ func (s *session) unitFailure(ctx context.Context, request *protocol.ExecuteRequ
 func (s *session) unitRunner(runner sqlExecutor, batch *executionBatch, bindings map[string]string, checkLocks func(context.Context) error) func(context.Context, *protocol.Unit) (bool, error) {
 	return func(ctx context.Context, unit *protocol.Unit) (bool, error) {
 		if unit.GetNative() != nil {
-			return s.applyNative(ctx, unit.GetNative(), bindings, checkLocks)
+			return s.applyNative(ctx, unit.GetNative(), bindings, checkLocks, &firstStatement{})
 		}
 		if pieces, split := batch.services[unit]; split {
 			return s.runPieces(ctx, runner, pieces, bindings, checkLocks)
@@ -273,78 +280,92 @@ func (s *session) unitRunner(runner sqlExecutor, batch *executionBatch, bindings
 
 // applyNative applies one native unit on a table through the service of its
 // kind, and leaves every other unit to applyObject.
-func (s *session) applyNative(ctx context.Context, native *protocol.Envelope, bindings map[string]string, checkLocks func(context.Context) error) (bool, error) {
+//
+// Every service but the column inventory and the rebuild copy writes only
+// through the statements it sends, after it has read and checked, so first
+// marks the failure of the first one: it leaves nothing of the unit applied.
+// The column inventory alters a table through the table service before its
+// statements, and the copy keeps the answer it gives today.
+func (s *session) applyNative(ctx context.Context, native *protocol.Envelope, bindings map[string]string, checkLocks func(context.Context) error,
+	first *firstStatement,
+) (bool, error) {
+	execute := first.wrap(s.executeSchema)
 	switch native.GetKind() {
 	case tablecreate.OperationKind:
 		return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.InventoryOperationKind:
 		return nativeapi.NewColumnInventory(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, s.capabilities, checkLocks)
 	case tablecreate.DefaultOperationKind:
-		return nativeapi.NewColumnDefault(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewColumnDefault(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.AlterOperationKind:
 		return nativeapi.NewTableAlteration(s.connection.Driver).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.IndexSettingsOperationKind:
-		return nativeapi.NewIndexSettings(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewIndexSettings(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.ColumnOperationKind:
-		return nativeapi.NewColumnTableCreation(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewColumnTableCreation(s.connection.Driver, execute, s.columnTables()).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.ColumnTTLOperationKind:
-		return nativeapi.NewColumnTableTTL(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewColumnTableTTL(s.connection.Driver, execute, s.columnTables()).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.ColumnLocalIndexOperationKind:
-		return nativeapi.NewColumnTableLocalIndex(s.connection.Driver, s.executeSchema, s.columnTables()).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewColumnTableLocalIndex(s.connection.Driver, execute, s.columnTables()).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.DropOperationKind:
-		return nativeapi.NewTableDrop(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewTableDrop(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.CopyOperationKind:
 		return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyCopy(ctx, s.database, native, checkLocks)
 	case tablecreate.RenameOperationKind:
-		return nativeapi.NewTableStatements(s.connection.Driver, s.executeSchema, s.connection.DB).ApplyRename(ctx, s.database, native, checkLocks)
+		return nativeapi.NewTableStatements(s.connection.Driver, execute, s.connection.DB).ApplyRename(ctx, s.database, native, checkLocks)
 	case tablecreate.NativeIndexOperationKind:
-		return nativeapi.NewNativeIndexAddition(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewNativeIndexAddition(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.SequenceOperationKind:
-		return nativeapi.NewSerialSequence(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, s.capabilities, checkLocks)
+		return nativeapi.NewSerialSequence(s.connection.Driver, execute).Apply(ctx, s.database, native, s.capabilities, checkLocks)
 	default:
-		return s.applyObject(ctx, native, bindings, checkLocks)
+		return s.applyObject(ctx, native, bindings, checkLocks, first)
 	}
 }
 
 // applyObject applies one native unit on an object other than a table through
 // the service of its kind, and a unit of any other kind as a coordination node
 // operation.
-func (s *session) applyObject(ctx context.Context, native *protocol.Envelope, bindings map[string]string, checkLocks func(context.Context) error) (bool, error) {
+func (s *session) applyObject(ctx context.Context, native *protocol.Envelope, bindings map[string]string, checkLocks func(context.Context) error,
+	first *firstStatement,
+) (bool, error) {
+	execute := first.wrap(s.executeSchema)
 	switch native.GetKind() {
 	case schema.SecretOperation:
 		if !s.capabilities["secrets"] {
 			return false, fmt.Errorf("the target does not support scheme secrets")
 		}
-		execute := func(ctx context.Context, query string) error {
+		// The first statement is marked as written, before its inputs are
+		// expanded, so the failure holds no secret value.
+		expanded := first.wrap(func(ctx context.Context, query string) error {
 			expansion, err := expandInputs(query, bindings)
 			if err != nil {
 				return err
 			}
 			return inputError(expansion, s.executeSchema(ctx, expansion.Text))
-		}
-		return nativeapi.NewSecret(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
+		})
+		return nativeapi.NewSecret(s.connection.Driver, expanded).Apply(ctx, s.database, native, checkLocks)
 	case schema.TopicOperation:
-		return nativeapi.NewTopic(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewTopic(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
 	case schema.ChangefeedOperation:
-		return nativeapi.NewChangefeed(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewChangefeed(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
 	case schema.ExternalSourceOperation, schema.ExternalTableOperation:
-		return nativeapi.NewExternal(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, checkLocks)
+		return nativeapi.NewExternal(s.connection.Driver, execute).Apply(ctx, s.database, native, checkLocks)
 	case schema.StreamingQueryOperation:
 		read := s.streaming()
 		if read == nil {
 			return false, fmt.Errorf("streaming queries require an established capability")
 		}
-		return (&nativeapi.StreamingQuery{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, native, checkLocks)
+		return (&nativeapi.StreamingQuery{Read: read, Execute: execute}).Apply(ctx, s.database, native, checkLocks)
 	case schema.ReplicationOperation:
-		return nativeapi.NewReplications(s.connection.Driver, s.executeSchema).ApplyReplication(ctx, s.database, native, checkLocks)
+		return nativeapi.NewReplications(s.connection.Driver, execute).ApplyReplication(ctx, s.database, native, checkLocks)
 	case schema.TransferOperation:
-		return nativeapi.NewReplications(s.connection.Driver, s.executeSchema).ApplyTransfer(ctx, s.database, native, checkLocks)
+		return nativeapi.NewReplications(s.connection.Driver, execute).ApplyTransfer(ctx, s.database, native, checkLocks)
 	case schema.WorkloadOperation:
 		read, unread := s.workload()
 		if read == nil {
 			return false, fmt.Errorf("resource pools cannot change here: %s", unread)
 		}
-		return (&nativeapi.Workload{Read: read, Execute: s.executeSchema}).Apply(ctx, s.database, native, checkLocks)
+		return (&nativeapi.Workload{Read: read, Execute: execute}).Apply(ctx, s.database, native, checkLocks)
 	}
 	return nativeapi.NewCoordination(s.connection.Driver).Apply(ctx, s.database, native, checkLocks)
 }
@@ -365,10 +386,28 @@ func (s *session) runPieces(ctx context.Context, runner sqlExecutor, pieces []sq
 }
 
 // firstPieceFailure is the failure of the first piece of a SQL unit cut into
-// pieces, which leaves nothing of the unit applied.
+// pieces, or of the first statement a native unit's service sent, which
+// leaves nothing of the unit applied.
 type firstPieceFailure struct {
 	piece sqlPiece
 	err   error
+}
+
+// firstStatement marks the failure of the first statement a native unit's
+// service sends as a firstPieceFailure holding that statement as written.
+type firstStatement struct{ sent bool }
+
+// wrap returns run with the failure of the first statement it runs marked.
+func (f *firstStatement) wrap(run func(context.Context, string) error) func(context.Context, string) error {
+	return func(ctx context.Context, statement string) error {
+		first := !f.sent
+		f.sent = true
+		err := run(ctx, statement)
+		if err != nil && first {
+			return &firstPieceFailure{piece: sqlPiece{text: statement}, err: err}
+		}
+		return err
+	}
 }
 
 func (f *firstPieceFailure) Error() string { return f.err.Error() }
