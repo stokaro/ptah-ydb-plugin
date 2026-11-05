@@ -3,10 +3,10 @@
 package integration_test
 
 import (
-	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -103,11 +103,13 @@ func TestIndexAlterationRefusesTheColumnOfAKeptIndex(t *testing.T) {
 	c.Assert(len(plan.Contributions), qt.Equals, 0)
 }
 
-// TestIndexAlterationUniqueSubprocess adds a unique index. YDB 25.1 accepts it
-// only with the enable_add_unique_index flag, which its test server leaves off.
+// TestIndexAlterationUniqueSubprocess adds a unique index to a table that
+// exists, on a session that establishes it can: a 26.2 server started with
+// enable_add_unique_index.
 func TestIndexAlterationUniqueSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	fixture := newFacetFixture(c, "", "")
+	requireSessionCapability(c, fixture.session, tablecreate.UniqueIndexOnExistingTableCapability, true)
 	declared := declaredIndexes(indexSpec("by_payload", "globalUniqueIndex", `["payload"]`, ""))
 	found := fixture.compareIndexes(c, declared)
 	c.Assert(len(found.Changes), qt.Equals, 1)
@@ -115,15 +117,32 @@ func TestIndexAlterationUniqueSubprocess(t *testing.T) {
 		desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
 	c.Assert(len(plan.Diagnostics), qt.Equals, 0, qt.Commentf("%s", plan))
 	execution, err := fixture.tryExecute(c, "unique-add", plan)
-	if strings.HasPrefix(fixture.version, "25.1.") {
-		// The server refuses the call, and the provider reports an outcome it
-		// cannot confirm; the table is unchanged.
-		c.Assert(err, qt.ErrorMatches, `provider execution: UNKNOWN.*`)
-		c.Assert(len(fixture.heldIndexes(c)), qt.Equals, 0)
-		return
-	}
 	c.Assert(err, qt.IsNil)
 	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", execution))
 	c.Assert(fixture.heldIndexes(c)["by_payload"].GetGlobalUniqueIndex(), qt.IsNotNil)
 	c.Assert(len(fixture.compareIndexes(c, declared).Changes), qt.Equals, 0)
+}
+
+// TestIndexAlterationUniqueRefusedSubprocess is the host's
+// TestYDBUniqueConstraint_AddedToATableThatExists_FailurePath for the index
+// YDB holds a UNIQUE as. A session without unique_index_on_existing_table,
+// as on 25.1, or on a later line with EnableAddUniqueIndex off, cannot add a
+// unique index to a table that exists: YDB answers `Adding a unique index to
+// an existing table is disabled` after the call, with an outcome the provider
+// cannot confirm. The plan refuses it first, in the host's words, and the
+// table keeps its indexes.
+func TestIndexAlterationUniqueRefusedSubprocess(t *testing.T) {
+	c := testcheck.New(t)
+	fixture := newFacetFixture(c, "", "")
+	requireSessionCapability(c, fixture.session, tablecreate.UniqueIndexOnExistingTableCapability, false)
+	declared := declaredIndexes(indexSpec("by_payload", "globalUniqueIndex", `["payload"]`, ""))
+	found := fixture.compareIndexes(c, declared)
+	c.Assert(len(found.Changes), qt.Equals, 1)
+	plan := fixture.plan(c, found.Changes, desiredFacet(c, fixture.client, fixture.owner, schema.TableProperties, noTTLDeclaration),
+		desiredFacet(c, fixture.client, fixture.owner, schema.IndexProperties, declared))
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].Message, qt.Matches, `adding unique index "by_payload" to table "[^"]+\.records", which exists already, `+
+		`which requires target capability unique_index_on_existing_table, unavailable on this ydb target`)
+	c.Assert(plan.Contributions, qt.HasLen, 0)
+	c.Assert(fixture.heldIndexes(c), qt.HasLen, 0)
 }
