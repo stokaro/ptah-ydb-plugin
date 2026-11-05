@@ -86,7 +86,7 @@ func (p *Provider) PrepareMetadata(ctx context.Context, request *protocol.Prepar
 	ctx = guarded
 	var attempted bool
 	if request.Scope.TransactionId != "" {
-		exists, checkErr := store.Check(ctx, s.connection.Driver)
+		_, exists, checkErr := store.Locate(ctx, s.connection.Driver)
 		if checkErr != nil || !exists {
 			return metadataResult(request.Scope, request.RequestId, protocol.MetadataResult_REJECTED), nil
 		}
@@ -162,7 +162,7 @@ func (p *Provider) MutateMetadata(ctx context.Context, request *protocol.MutateM
 	if !recordEncodes(store, request) {
 		return metadataResult(request.Scope, request.RequestId, protocol.MetadataResult_REJECTED), nil
 	}
-	exists, err := store.Check(ctx, s.connection.Driver)
+	store, exists, err := store.Locate(ctx, s.connection.Driver)
 	if err != nil {
 		return metadataResult(request.Scope, request.RequestId, protocol.MetadataResult_REJECTED), nil
 	}
@@ -239,7 +239,7 @@ func (p *Provider) LookupMetadataTag(ctx context.Context, request *protocol.Look
 	defer s.mu.Unlock()
 	defer func() { err = metadataFailure(s, request.Scope, err) }()
 	result = &protocol.MetadataTagResult{Scope: proto.CloneOf(request.Scope), RequestId: request.RequestId}
-	exists, err := store.Check(ctx, s.connection.Driver)
+	store, exists, err := store.Locate(ctx, s.connection.Driver)
 	if err != nil {
 		return nil, err
 	}
