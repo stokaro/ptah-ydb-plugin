@@ -103,6 +103,10 @@ type columnTableChange struct {
 // shard count is refused with the reason, and so is any common step of the
 // table: the provider carries out none for a column table.
 func planColumnAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, capabilities map[string]bool) (bool, string, *columnTableChange, error) {
+	table, err := columnTableTTL(table)
+	if err != nil {
+		return false, "", nil, err
+	}
 	sides, err := readStorage(owner, table)
 	if err != nil || !sides.columnTable() {
 		return false, "", nil, err
@@ -179,6 +183,10 @@ func layoutDetail(desired *native.ColumnStorageIntent, held *native.ColumnStorag
 // columnRebuild reports a REBUILD of a table that is a column table on either
 // side.
 func columnRebuild(owner *protocol.Reference, table *protocol.PlanningTable) (bool, error) {
+	table, err := columnTableTTL(table)
+	if err != nil {
+		return false, err
+	}
 	sides, err := readStorage(owner, table)
 	if err != nil {
 		return false, err

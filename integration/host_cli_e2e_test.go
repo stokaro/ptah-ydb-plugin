@@ -159,13 +159,15 @@ func TestHostSchemaApplyDryRunCreatesNoLockNode_HappyPath(t *testing.T) {
 		defer cancel()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	entities := writeFiles(c, c.TempDir(), map[string]string{"items.go": "package entities\n\n//ptah:schema:table name=\"lock_items\" schema=\"" + directory + "\"\n" +
-		"type LockItem struct {\n\t//ptah:schema:field name=\"id\" type=\"BIGINT\" primary\n\tID int64\n}\n"})
+	source := "package entities\n\n//ptah:schema:table name=\"lock_items\" schema=\"" + directory + "\"\n" +
+		"type LockItem struct {\n\t//ptah:schema:field name=\"id\" type=\"BIGINT\" primary\n\tID int64\n}\n"
+	entities := writeFiles(c, c.TempDir(), map[string]string{"items.go": source})
 	root := func() []string { return entryNames(heldEntries(c, opened, database)) }
 	before := root()
 
 	previewed, previewErr := hostCommand(c, "schema", "apply", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", entities,
 		"--schemas", directory, "--dry-run")
+	planned := hostPlanned(c, directory, "go", source)
 	afterPreview := root()
 	applied, applyErr := hostCommand(c, "schema", "apply", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", entities,
 		"--schemas", directory, "--auto-approve", "--tx-mode", "none")
@@ -175,8 +177,7 @@ func TestHostSchemaApplyDryRunCreatesNoLockNode_HappyPath(t *testing.T) {
 	snapshot, inspectErr := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session, Schemas: []string{"/"}})
 
 	c.Assert(previewErr, qt.IsNil, qt.Commentf("schema apply --dry-run:\n%s", previewed))
-	c.Assert(previewed, qt.Contains, "row-table-create-operation")
-	c.Assert(previewed, qt.Contains, directory+".lock_items")
+	c.Assert(planned, qt.DeepEquals, []string{"row-table-create-operation " + directory + ".lock_items"})
 	c.Assert(afterPreview, qt.DeepEquals, before)
 	c.Assert(before, qt.Not(qt.Contains), locking.NodeName)
 	c.Assert(applyErr, qt.IsNil, qt.Commentf("schema apply:\n%s", applied))

@@ -1,5 +1,6 @@
 // Package secretvalue expands approved YDB secret inputs only at valid secret
-// value positions. It never reads the provider process environment.
+// value positions, and writes a user's approved password input into the
+// statement that sets it. It never reads the provider process environment.
 package secretvalue
 
 import (
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/internal/yql"
 )
@@ -22,6 +24,15 @@ type Expansion struct {
 	Text string
 	// values are the values Text defines, longest first.
 	values []string
+	// secrets is set when Text defines a secret's value, which only a target
+	// with schema secrets takes; a user's password needs no such capability.
+	secrets bool
+}
+
+// DefinesSecrets reports whether the expansion defined a secret's value, as
+// opposed to writing in only users' passwords.
+func (e Expansion) DefinesSecrets() bool {
+	return e.secrets
 }
 
 // Redact returns text with every value the expansion defined written as
@@ -44,7 +55,8 @@ func (e Expansion) Defines() bool {
 
 // ErrReference is the error [Expand] wraps when a query refers to a secret
 // value where Ptah does not define it.
-var ErrReference = errors.New("a secret value is referred to outside the value of CREATE SECRET or ALTER SECRET")
+var ErrReference = errors.New("a secret value is referred to outside the value of CREATE SECRET or ALTER SECRET " +
+	"and the password of CREATE USER or ALTER USER")
 
 // Expand defines, in query, every secret value it refers to, reading each from
 // the host-approved binding that names it through lookup, and returns the query
@@ -64,50 +76,136 @@ var ErrReference = errors.New("a secret value is referred to outside the value o
 // them, after any translation setting and PRAGMA ahead of it, and each value
 // is a String literal: YDB takes a secret's value as a String and refuses a
 // Utf8 one (`String (or named expression with type String) was expected`).
+//
+// A reference also stands where `CREATE USER` or `ALTER USER` takes a
+// password, right after PASSWORD, which is where the provider names a
+// password input (schema.password-inputs, ADR 0071). YDB takes a password only
+// as a string literal (`mismatched input '$' expecting {NULL, STRING_VALUE}`
+// on 26.2.1.14, `Unexpected token '$'` on 25.1.4.7), so the value is written
+// in place of the reference rather than defined ahead of the statement. A
+// value that is a password hash ([ydbacl.IsPasswordHash]) is written with
+// HASH in place of PASSWORD, as YDB takes a hash.
 func Expand(query string, lookup func(string) (string, bool)) (Expansion, error) {
 	if !mentionsPrefix(query) {
 		return Expansion{Text: query}, nil
 	}
 	tokens := significantTokens(query)
 	accepted, firstStatement := valuePositions(tokens)
+	passwords := passwordPositions(tokens)
 	var variables []string
+	var inline []int
 	for i, token := range tokens {
 		variable, isReference := referenceName(token)
 		if !isReference {
 			continue
 		}
-		if !accepted[i] {
+		_, isPassword := passwords[i]
+		if !accepted[i] && !isPassword {
 			return Expansion{}, fmt.Errorf("%w: %s at offset %d; Ptah defines it only there", ErrReference,
 				token.Value, token.Start)
 		}
 		if err := secrets.CheckValueEnv(variable); err != nil {
 			return Expansion{}, fmt.Errorf("secret value %s: %w", token.Value, err)
 		}
-		if !slices.Contains(variables, variable) {
+		switch {
+		case isPassword:
+			inline = append(inline, i)
+		case !slices.Contains(variables, variable):
 			variables = append(variables, variable)
 		}
 	}
-	if len(variables) == 0 {
+	if len(variables) == 0 && len(inline) == 0 {
 		return Expansion{Text: query}, nil
 	}
-	var definitions strings.Builder
-	values := make([]string, 0, len(variables))
-	for _, variable := range variables {
+	var edits []edit
+	var values []string
+	if len(variables) > 0 {
+		var definitions strings.Builder
+		for _, variable := range variables {
+			value, set := lookup(variable)
+			if !set {
+				return Expansion{}, fmt.Errorf("a secret requires approved input %s, which was not supplied",
+					variable)
+			}
+			literal := ydbtype.StringLiteral(value)
+			values = append(values, redactionForms(value, literal)...)
+			fmt.Fprintf(&definitions, "%s = %s;\n", secrets.Reference(variable), literal)
+		}
+		at := tokens[firstStatement].Start
+		edits = append(edits, edit{start: at, end: at, text: definitions.String()})
+	}
+	for _, i := range inline {
+		variable, _ := referenceName(tokens[i])
 		value, set := lookup(variable)
 		if !set {
-			return Expansion{}, fmt.Errorf("a secret requires approved input %s, which was not supplied",
+			return Expansion{}, fmt.Errorf("a user's password requires approved input %s, which was not supplied",
 				variable)
 		}
-		literal := ydbtype.StringLiteral(value)
-		values = append(values, redactionForms(value, literal)...)
-		fmt.Fprintf(&definitions, "%s = %s;\n", secrets.Reference(variable), literal)
+		clause := edit{start: tokens[i].Start, end: tokens[i].End, text: ydbtype.StringLiteral(value)}
+		if ydbacl.IsPasswordHash(value) {
+			hash := ydbtype.StringLiteral(strings.TrimSpace(value))
+			clause = edit{start: tokens[passwords[i]].Start, end: tokens[i].End, text: "HASH " + hash}
+			values = append(values, redactionForms(strings.TrimSpace(value), hash)...)
+		}
+		values = append(values, redactionForms(value, ydbtype.StringLiteral(value))...)
+		edits = append(edits, clause)
 	}
 	slices.SortFunc(values, func(a, b string) int { return len(b) - len(a) })
-	insertAt := tokens[firstStatement].Start
-	return Expansion{
-		Text:   query[:insertAt] + definitions.String() + query[insertAt:],
-		values: values,
-	}, nil
+	return Expansion{Text: applyEdits(query, edits), values: values, secrets: len(variables) > 0}, nil
+}
+
+// edit replaces query[start:end] with text; an insertion has start == end.
+type edit struct {
+	start, end int
+	text       string
+}
+
+// applyEdits writes edits, which do not overlap, into query.
+func applyEdits(query string, edits []edit) string {
+	slices.SortFunc(edits, func(a, b edit) int { return a.start - b.start })
+	var b strings.Builder
+	last := 0
+	for _, e := range edits {
+		b.WriteString(query[last:e.start])
+		b.WriteString(e.text)
+		last = e.end
+	}
+	b.WriteString(query[last:])
+	return b.String()
+}
+
+// passwordPositions finds, among tokens, the references that stand as the
+// password of a CREATE USER or ALTER USER statement: the token right after
+// PASSWORD. It maps each to the index of its PASSWORD keyword, which a hash
+// replaces with HASH. A statement is the tokens between two semicolons
+// outside parentheses, as [valuePositions] reads one.
+func passwordPositions(tokens []yql.Token) map[int]int {
+	positions := make(map[int]int)
+	start, depth := 0, 0
+	for i := 0; i <= len(tokens); i++ {
+		end := i == len(tokens)
+		if !end {
+			switch {
+			case tokens[i].IsOperator("("):
+				depth++
+			case tokens[i].IsOperator(")"):
+				depth--
+			}
+		}
+		if !end && (tokens[i].Type != yql.TokenSemicolon || depth != 0) {
+			continue
+		}
+		statement := tokens[start:i]
+		if len(statement) > 2 && (keyword(statement[0], "CREATE") || keyword(statement[0], "ALTER")) && keyword(statement[1], "USER") {
+			for k := 2; k+1 < len(statement); k++ {
+				if _, isReference := referenceName(statement[k+1]); isReference && keyword(statement[k], "PASSWORD") {
+					positions[start+k+1] = start + k
+				}
+			}
+		}
+		start = i + 1
+	}
+	return positions
 }
 
 // redactionForms includes the bytes sent in YQL and their quoted diagnostic
