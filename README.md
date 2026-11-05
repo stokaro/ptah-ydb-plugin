@@ -20,6 +20,12 @@ through the public Ptah SDK. It supports anonymous, URL user/password, and URL t
 Session receipts contain the selected database and measured server version.
 The implementation does not import the Ptah application module.
 
+Install it with `ptah providers install ydb`. The documentation says what YDB
+does in Ptah, from installing and selecting the provider to the objects it
+declares and how it runs a migration. It is published on
+[docs.ptah.run](https://docs.ptah.run/edge/extend/providers/ydb/), and its pages
+live in [docs/](docs/README.md).
+
 The provider ID is `github.com/stokaro/ptah-ydb-plugin`. Model kinds use the `github.com/stokaro/ptah-ydb-plugin/` namespace. This changes
 the experimental model identities; pre-v1, no compatibility with the earlier
 unpublished names is owed. Older envelopes and plans are refused.
@@ -76,8 +82,8 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.14.1-0.20261104150804-7e71a23c3a16, a
-pseudo-version of the SDK that speaks provider contract 25.16. The provider
+The module pins `provider-sdk` v0.17.1-0.20261105053415-00cd95ca0040, a
+pseudo-version of the SDK that speaks provider contract 25.23. The provider
 still requires 25.7 of its host and offers each later feature to a host that
 lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -544,7 +550,12 @@ caller transaction (`ABORTED`, `Transaction locks invalidated`) is
 `NOT_APPLIED` with `Execution.transaction_aborted`, and a commit YDB aborted is
 `ROLLED_BACK` with `TransactionResult.aborted`. Neither applied anything, and
 the host may run the transaction again. A host that does not list the feature
-gets the same outcomes without the flags.
+gets the same outcomes without the flags. An `ABORTED` answer YDB gives for the
+transaction itself, not for a conflict, sets neither flag, since every new
+attempt answers the same: measured on 25.1.4.7, a transaction whose writes do
+not fit one datashard program, such as the copy of a table rebuild over about
+48 MiB, commits with issue 200509 (`Datashard program size limit exceeded`),
+and the commit is `ROLLED_BACK` with the reason that says so.
 
 ## Text units
 
@@ -583,6 +594,40 @@ declares its access, an external data source or external table dropped and
 created again around the plan's other statements, which the native call gives
 the owner and the access entries of the old one, and every topic
 operation. A host that does not list the feature gets native units.
+
+## Reverse migrations
+
+The provider lists `models.reverse` (contract 25.19, ADR 0062 in Ptah) and
+declares one reversal service, `ydb-objects`, for the changes of its
+standalone objects: coordination nodes, secrets, topics, streaming queries,
+external data sources and external tables, resource pools and classifiers,
+async replications and transfers. `ptah migrations generate` writes the down
+file of such a change from this service's reverse of it, as the host's
+embedded engine writes it from its own:
+
+- The reverse asks for the declaration of what the forward change found, the
+  conversion of the read, and finds what the forward change leaves, the
+  conversion of its declaration. A creation reverses to a drop, a drop to a
+  creation and a change to the settings the object held. The prediction of
+  what the forward change leaves is the forward state the host plans the
+  reverse against; it is never read from the server.
+- The down file carries the strategy and the limitations, in the embedded
+  engine's words: a dropped topic loses its messages and its consumers'
+  positions, a dropped coordination node its semaphores, a restored workload
+  setting cannot undo the queries run under the forward one.
+- A rotated secret has nothing to run in reverse: the value it replaced was
+  never read. A secret created again takes the value of the variable for its
+  path when the rollback runs.
+- A changed streaming query text keeps `allow_state_reset` in the reverse,
+  which resets the query's checkpoint again.
+
+A change of a table's own settings has no reversal yet: for a change of a row
+table's TTL, partitioning, families, indexes or changefeeds, or of a column
+table's storage, `migrations generate` writes no migration, and the host
+names the change kind that has no reversal. A host that does not list the
+feature gets no reversal service and refuses every such change the same way.
+A topic reverses like any other object, but no migration file holds a topic
+(see [Text units](#text-units)).
 
 ## Common objects
 
@@ -656,10 +701,20 @@ membership, including edges whose principals are outside the managed role list.
 
 A user's password is set when the user is created, from a YAML or Go
 declaration, and is never read back: a declaration that names another password
-plans nothing, as the host's embedded engine plans it. The statement holds the
-password in plain text below a warning, as the host's engine writes it; a
-declared password hash (`CREATE USER ... HASH`) keeps the password out of the
-plan.
+plans nothing, as the host's embedded engine plans it.
+
+The password never enters a plan. Under `schema.password-inputs` (contract
+25.22, ADR 0071) the host sends a declared password, or a password hash, as an
+execution input, and the statement names the input where the password stands:
+``CREATE USER `app` PASSWORD $PTAH_SECRET_PASSWORD_APP;``. YDB refuses that
+statement as written. `DescribeExecutionInputs` reports the input, and the
+provider writes the bound value in as a string literal only when it runs the
+statement, with `HASH` for a password hash, and keeps it out of any error the
+server answers with. The host binds the declared password when it plans from
+the schema and applies in one run, and the variable's value for a saved plan
+or a migration file. A host that does not negotiate the feature sends the
+password itself, and the provider refuses the user rather than write the
+password into the plan.
 
 `schema.common-access` (contract 25.5) carries independently covered owners and
 memberships. An owner's login state is optional: unknown remains unknown,
@@ -921,15 +976,25 @@ sentence.
 
 Where YDB's issues say a feature flag is off, the reason names the capability
 and the flag, as the host's embedded engine words such a refusal, around the
-provider's own reason where the host's engine quotes YDB's text. The plan took
-the capability from the release line's default, and the cluster runs with the
-flag off. The texts and the flags they name are the host's measured ones
-(`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and 26.2.1.14, where
-`EnableResourcePools` is off by default:
+provider's own reason where the host's engine quotes YDB's text, then what to
+do. A session whose address names no monitoring endpoint took the capability
+from its release line's default, and is told to name the endpoint as well as
+to turn the flag on; one whose address names it read the flags already, and is
+told only to turn the flag on. The texts and the flags they name are the
+host's measured ones (`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and
+26.2.1.14, where `EnableResourcePools` is off by default, without the endpoint:
 
 ```text
 provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans
 ```
+
+and with it, the same sentence up to `Turn the flag on`.
+
+25.1.4.7 has no unique secondary index, and refuses one with `Unknown index
+type: syncGlobalUnique` inside its execution stage, before it proposes a
+schema operation. The unit is NOT_APPLIED (PARTIAL after an applied prefix),
+with the reason `YDB refused the statement: the YDB release the cluster runs
+has no unique secondary index (GENERIC_ERROR, issue 1060, line 1, column N)`.
 
 ## Operational storage reservations
 
@@ -979,10 +1044,11 @@ Use `/` for its root. An unfiltered read walks subdirectories. System
 because their names begin with a dot. Traversal and snapshot size are bounded.
 Coverage names inspected subjects and records native-object completeness for
 each directory whose listing and child reads finished. These regions bind the
-exact database, empty catalog, and exact schema directory. An empty directory
-therefore establishes native-object absence there. Unread descendants, excluded
-system directories, and other namespaces remain unknown. Table and column
-facets keep subject-only coverage.
+exact database, empty catalog, and exact schema directory; an unfiltered read
+sends subtree regions instead where the host negotiates them (see below). An
+empty directory therefore establishes native-object absence there. Unread
+descendants, excluded system directories, and other namespaces remain unknown.
+Table and column facets keep subject-only coverage.
 
 A selected directory YDB does not show (it answers SCHEME_ERROR) reads as
 empty when its parent's listing, proved the same way up to the database root,
@@ -993,13 +1059,19 @@ cannot list is still refused, and so is a path below an object that is not a
 directory. Execution reads the directory of each object it creates through
 the same rule; see [Execution and transactions](#execution-and-transactions).
 
-A read with no selector cannot do the same for a directory it never listed. It
-claims each directory it lists complete, and a coverage region names one exact
-directory, so no region covers a directory that does not exist. A claim for the
-whole database would also cover the dot-prefixed directories and the dev realm
-directory the walk leaves out, and everything below them, which the read does
-not know. So `schema apply` with no `--schemas` leaves a native object in a new
-directory unplanned, prints why, and exits 0, as for a topic in `fresh/nested`:
+A read with no selector claims more than the directories it lists. With a
+host that lists `schema.subtree-coverage` (contract 25.22, ADR 0064 in Ptah),
+the provider declares `/` as its schema separator, and the read sends one
+complete region over the root and every directory below it, and an unknown
+region over each directory the walk leaves out, the dot-prefixed directories
+and the dev realm directory, with everything below them. A native object in a
+directory that does not exist yet is then absent, and `schema apply` or
+`migrations generate` with no `--schemas` creates it, as the host's embedded
+engine does. One declared below a directory the walk leaves out stays
+unplanned. A filtered read keeps one exact region per directory, since a
+selector names one directory. With an older host, the read claims each
+directory it lists alone, and a native object in a new directory is left
+unplanned with a warning, as for a topic in `fresh/nested`:
 
 ```text
 Warning: github.com/stokaro/ptah-ydb-plugin/topic fresh/nested.events could not be compared between the database and the desired schema: The current topic or its absence was not established.
@@ -1143,6 +1215,20 @@ name no node can take with the host's words. With `source.limits` negotiated,
 the document's claim leaves the node it names, or every node, unmanaged. A host
 that does not list `source.hcl` reads no such block.
 
+An HCL document is an Atlas file, which names none of the nodes it leaves out,
+so it claims the nodes only through its header, as the host's embedded engine
+reads it: a `coordination_node` entry, or the captured `ptah:feature-coverage`
+header an export writes, which the host reads itself. A document with neither
+claims nothing of them, and a plan from it creates and alters the nodes it
+declares and drops none. The provider cannot keep this rule alone: the SDK lets
+a decoding claim less than complete only through header limits, so its reply
+for a document without them claims every node. A host that takes an HCL
+document's claim only from its header asks the provider about no other
+document; one that asks about every document plans to drop each node the
+document does not declare, and writes its HCL exports without the captured
+header. `TestHostKeepsTheNodesAnHCLDocumentDoesNotName` measures the first
+kind of host and skips on the second.
+
 A Go source carries the same entries as `ptah:schema:notdescribed`
 declarations, under `source.limits`, of the kinds the engine lists in
 `go_header_kinds`: `coordination_node`, `streaming_query`, `resource_pool`,
@@ -1216,7 +1302,9 @@ and a declared table whose facet knowledge is not complete refuses the export.
 Knowledge left unmanaged by a source's own entry is passed on with
 `provenance="declared"`. YAML writes no header, and neither does a format for a
 host that does not negotiate `source.limits`, so there such knowledge refuses
-the export, as does a kind no entry names.
+the export, as does a kind no entry names. A host that writes an HCL export's
+account itself, as its captured `ptah:feature-coverage` header, sends the
+provider no coverage for HCL, and the provider writes no entry there.
 
 The subprocess tests exercise decoding, encoding, normalization, and
 representation conversion without a database address; a YQL schema declares
@@ -2733,10 +2821,11 @@ sits in included, with the settings the declaration leaves out (its cache mode
 among them, which a target without `column_family_cache_mode` refuses to
 write), the family each column sits in where the declaration does not say (see
 [Column families](#column-families)), the automatic partitioning, the read replicas, the key bloom
-filter, and the TTL where the declaration states no table properties. A
-cluster's table profile may have given the old table any of them, and YQL
-drops neither a family nor a setting, so a rebuild changes none that nobody
-declared. Each index of the new table keeps the automatic partitioning and the
+filter, the TTL where the declaration states no table properties, and the run
+interval of the TTL it holds where the declaration states a TTL, which names
+none since YQL has no setting for one. A cluster's table profile may have
+given the old table any of them, and YQL drops neither a family nor a setting,
+so a rebuild changes none that nobody declared. Each index of the new table keeps the automatic partitioning and the
 read replicas the old index under its name holds, or the old index the host
 renames it from. The call that creates a table takes no index settings, so a
 `table-rebuild/N/index-settings/M` step after the creation and before the copy
@@ -2748,9 +2837,9 @@ in the embedded engine's words, naming the request the host passes, such as
 `--allow-table-rebuild`.
 
 Every step writes as a YQL statement in the TEXT form, so a migration file
-holds the rebuild, unless the old table holds user attributes: YQL's CREATE
-TABLE sets none, so such a rebuild has no TEXT form (`NO_TEXT_FORM`) and runs
-natively. A native execution checks each step's precondition first:
+holds the rebuild, unless the old table holds user attributes or a TTL run
+interval other than YDB's own: YQL's CREATE TABLE sets neither, so such a
+rebuild has no TEXT form (`NO_TEXT_FORM`) and runs natively. A native execution checks each step's precondition first:
 the copy needs the new table empty and the source holding every copied column,
 a rename needs the table holding the captured columns and key, and a free
 target. YDB renames no table that carries a changefeed, so a rebuild of a
@@ -3269,11 +3358,17 @@ streaming query definitions as the streaming query model; and secrets whose
 values are approved input references; and the async replications and transfers
 `CREATE ASYNC REPLICATION` and `CREATE TRANSFER` declare, with what a later
 `ALTER ASYNC REPLICATION ... SET` or `ALTER TRANSFER ... SET` of the load
-changes folded in, as this provider's replication and transfer models. It
-says what each document declares, traces every object to its statement, and
-claims complete coverage of the row-table, column, column-storage,
-coordination, topic, external data source, external table, streaming query,
-secret, async replication and transfer models. A
+changes folded in, as this provider's replication and transfer models. For a
+host that lists `schema.sql-facets` (contract 25.23), it carries the
+changefeeds `ALTER TABLE ... ADD CHANGEFEED` declares, with the consumers
+`ALTER TOPIC <table>/<changefeed> ADD CONSUMER` adds to their topics, as one
+facet of each table in this provider's changefeed model, the value a YAML
+`changefeeds:` key of the table declares. It says what each document declares,
+traces every object to its statement, and claims complete coverage of the
+row-table, column, column-storage, coordination, topic, external data source,
+external table, streaming query, secret, async replication and transfer models,
+and of the changefeed model under that feature, so a table a load declares
+without a changefeed is one with none. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
@@ -3302,10 +3397,9 @@ carry is refused by name, with no partial reading:
 - the partitioning settings, column families, TTL and column storage of a
   table, which Ptah refuses in a SQL schema reading;
 - the partitioning and vector settings of an index;
-- changefeeds and the consumers of their topics: the host refuses the facets
-  of a table in a SQL schema reading, and a changefeed is one. A YQL source
-  therefore leaves the changefeeds of its tables as they are; declare them in
-  YAML or Go;
+- changefeeds and the consumers of their topics, for a host that does not list
+  `schema.sql-facets`, which has no home for a facet of a table. The load then
+  claims nothing about changefeeds and leaves those of its tables as they are;
 - a user's password: the reply's role carries none, so the host would create
   the user without it; a YAML or Go declaration carries the password, which
   the host sets when it creates the user;
@@ -3359,6 +3453,40 @@ A request contains at most 256 sources and 3 MiB. Each source contains at most
 Cancellation returns no analysis. The native CLI still requires integration of
 YDB's table comparison rules; the provider does not claim the common table
 identity contract to bypass that requirement.
+
+### Offline capabilities
+
+The provider lists `engine.default-capabilities` (contract 25.27) and states
+the facts an offline command plans `ydb` with: those a session states for a
+26.2 server whose address names no monitoring endpoint, with the facts of the
+common objects. Each release line states its own the same way, and a
+`--server-version` selects the line it equals or the longest line it starts
+with followed by a dot, so `26.2.1.14` selects 26.2. `ptah schema render`, `sql
+lint` and the other commands that plan without a database read them. A command
+that connects plans with the session's facts.
+
+The facts also carry the keys the host reads and no session states, with the
+values of the built-in engine's presets, on every line. The host reads them
+through its capability registry when it plans a connected command too:
+`index_covering_columns`, for one, makes an unchanged list of covered columns
+compare as unchanged, so a second apply of the same schema plans nothing for
+the index.
+A host of an earlier contract receives no facts, plans offline against unknown
+facts, and the provider refuses what needs one, such as a table creation,
+which needs nontransactional DDL established.
+
+### Text scanning
+
+The provider lists `sql.scan` (contract 25.26). `ScanSQL` returns the tokens of
+one YQL text with the same scanner, so the host reads YQL wherever it reads SQL
+text without parsing it: the lineage of view bodies, the indentation of the
+`sql` template function, and the scans of migration bodies. Both quote styles
+and `@@...@@` delimit strings, a type suffix belongs to its string, and a
+backticked name carries the path it stands for. A `--!` comment is a setting
+the server reads only at the head of a text; the host clears `head` for a range
+inside one, where the comment is a comment. A string whose escape YDB refuses
+carries no value. A host of an earlier contract never calls the RPC and reads
+YQL by its shared rules.
 
 ## Migration lint
 
