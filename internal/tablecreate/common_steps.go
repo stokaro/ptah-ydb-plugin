@@ -9,13 +9,19 @@ import (
 // the steps this service contributes, as the host's embedded YDB planner
 // orders them.
 //
-// Views go around every table step: YDB checks a view's query against the
+// Views go around the table steps: YDB checks a view's query against the
 // schema when the view is created and never again, and records no
 // dependency on a view or on the table it reads, so a view is dropped before
-// any table changes and created after every table is in place. A comment is an
+// any table changes and created once every table is in place. A comment is an
 // attribute of its table, or of a view, and YDB sets one only on an object
 // that exists: a comment on a table, its column or its index comes after every
 // step this service makes on that table.
+//
+// A step that only removes is the exception for both. The host places a
+// removal, such as a column's, after its views and comments, so a view or a
+// comment ordered after it closes a cycle; and neither needs it, since what a
+// removal drops is no longer declared, so no view the plan creates reads it and
+// no comment the plan sets names it.
 func commonObjectDependencies(common []*protocol.CommonPlanningStep, steps []*protocol.PlanningStep) []*protocol.PlanningDependency {
 	var result []*protocol.PlanningDependency
 	for _, host := range common {
@@ -28,9 +34,11 @@ func commonObjectDependencies(common []*protocol.CommonPlanningStep, steps []*pr
 			case *protocol.CommonObjectChange_DropView:
 				result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(host.Id), After: proto.CloneOf(step.Id)})
 			case *protocol.CommonObjectChange_CreateView:
-				result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(step.Id), After: proto.CloneOf(host.Id)})
+				if !removalOnly(step) {
+					result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(step.Id), After: proto.CloneOf(host.Id)})
+				}
 			case *protocol.CommonObjectChange_SetComment:
-				if schema, table, onTable := commentedTable(operation.SetComment.GetObject()); onTable && names(step, schema, table) {
+				if schema, table, onTable := commentedTable(operation.SetComment.GetObject()); onTable && names(step, schema, table) && !removalOnly(step) {
 					result = append(result, &protocol.PlanningDependency{Before: proto.CloneOf(step.Id), After: proto.CloneOf(host.Id)})
 				}
 			}
@@ -63,4 +71,21 @@ func names(step *protocol.PlanningStep, schema, table string) bool {
 		}
 	}
 	return false
+}
+
+// removalOnly reports a step that only removes: each of its effects reads or
+// drops, and at least one drops, as a column's removal reads its table and
+// drops the column.
+func removalOnly(step *protocol.PlanningStep) bool {
+	dropped := false
+	for _, effect := range step.GetMetadata().GetEffects() {
+		switch effect.GetAction() {
+		case protocol.PlanningEffect_DROP:
+			dropped = true
+		case protocol.PlanningEffect_READ:
+		default:
+			return false
+		}
+	}
+	return dropped
 }

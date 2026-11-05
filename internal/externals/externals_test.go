@@ -126,7 +126,7 @@ func TestCheck_FailurePath(t *testing.T) {
 		want string
 	}{
 		{name: "a data source on a line with the flag off", got: externals.CheckDataSource("ext/pg", postgresSource(), map[string]bool{}),
-			want: "external data source ext/pg, which requires target capability external_data_sources, unavailable on this ydb target"},
+			want: "external data source ext/pg, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: .*"},
 		{name: "a secret path on a line that reads it as a name", got: externals.CheckDataSource("ext/pg", postgresSource(), sources),
 			want: "external data source ext/pg option PASSWORD_SECRET_PATH, which requires target capability external_data_source_secret_paths, unavailable on this ydb target"},
 		{name: "no source type", got: externals.CheckDataSource("ext/pg", ydbdecl.ExternalDataSource{AuthMethod: "NONE"}, sources),
@@ -134,14 +134,14 @@ func TestCheck_FailurePath(t *testing.T) {
 		{name: "no auth method", got: externals.CheckDataSource("ext/pg", ydbdecl.ExternalDataSource{SourceType: "ObjectStorage"}, sources),
 			want: "external data source ext/pg: it needs an auth_method, such as NONE or BASIC \\(`AUTH_METHOD requires key`\\)"},
 		{name: "a table on a line with the flag off", got: externals.CheckTable("ext/events", eventsTable(), map[string]bool{}),
-			want: "external table ext/events, which requires target capability external_data_sources, unavailable on this ydb target"},
+			want: "external table ext/events, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: .*"},
 		{name: "no data source", got: externals.CheckTable("ext/events", noSource, sources), want: "external table ext/events: it needs a data_source, the path of the data source it reads"},
 		{name: "no location", got: externals.CheckTable("ext/events", noLocation, sources), want: "external table ext/events: it needs a location \\(`LOCATION requires key`\\)"},
 		{name: "no column", got: externals.CheckTable("ext/events", noColumns, sources), want: "external table ext/events: it needs a column"},
 		{name: "a drop on a line with the flag off", got: externals.CheckDrop("DROP EXTERNAL TABLE ext/events", map[string]bool{}),
-			want: "DROP EXTERNAL TABLE ext/events, which requires target capability external_data_sources, unavailable on this ydb target"},
+			want: "DROP EXTERNAL TABLE ext/events, which requires target capability external_data_sources, unavailable on this ydb target; YDB keeps it behind feature flag EnableExternalDataSources: .*"},
 		{name: "a replacement without the replace flag", got: externals.CheckReplace("external table ext/events", sources),
-			want: "external table ext/events replaced in place, which requires target capability external_object_replace, unavailable on this ydb target"},
+			want: "external table ext/events replaced in place, which requires target capability external_object_replace, unavailable on this ydb target; YDB keeps it behind feature flag EnableReplaceIfExistsForExternalEntities: .*"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/monitoring"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -83,7 +84,7 @@ func (c *Connection) ReadMonitoring(ctx context.Context, resource, page string, 
 		return nil, fmt.Errorf("read the YDB %s: %w", resource, err)
 	}
 	if err := sendable(ticket, c.secure, c.monitoring); err != nil {
-		return nil, fmt.Errorf("read the YDB %s: %w", resource, err)
+		return nil, authored.New(fmt.Sprintf("read the YDB %s: %s", resource, err))
 	}
 	return monitoring.Read(ctx, c.monitoring, resource, page, c.database, ticket, query)
 }

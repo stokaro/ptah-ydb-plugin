@@ -98,12 +98,13 @@ var refusals = []Ydb.StatusIds_StatusCode{
 // Confirmed reports an answer that establishes that the statement text failed:
 // a status in which YDB refused it or aborted its transaction, or
 // GENERIC_ERROR for a data statement the query service runs in one implicit
-// transaction, or for any text YDB refused while compiling it. GENERIC_ERROR
-// is also what YDB answers a compound statement, a batch write or transaction
-// control that may have applied a prefix, so for those it establishes nothing
-// unless YDB refused the text before any of it ran.
+// transaction, for one ANALYZE statement, or for any text YDB refused while
+// compiling it. GENERIC_ERROR is also what YDB answers a compound statement, a
+// batch write or transaction control that may have applied a prefix, so for
+// those it establishes nothing unless YDB refused the text before any of it
+// ran.
 func (a Answer) Confirmed(text string) bool {
-	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || a.Compiled)
+	return slices.Contains(refusals, a.Status) || a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || statisticsStatement(text) || a.Compiled)
 }
 
 // Rejected reports an answer that proves nothing of a unit of text was
@@ -159,6 +160,11 @@ type Unit struct {
 	// the provider runs one by one, and a unit that holds a comment or
 	// coordination node statement.
 	Text string
+	// Call reports a unit whose failure is the answer to one call of a YDB
+	// service other than the query service, which YDB applies whole or not at
+	// all, with nothing of the unit applied before it: a comment statement,
+	// which sets one user attribute with one AlterTable.
+	Call bool
 	// Transaction reports a unit that ran in a caller transaction.
 	Transaction bool
 	// Aborts reports a host that listed units.migration-split, which carries
@@ -176,11 +182,14 @@ const (
 // Failed is the reply to an Execute whose first applied units were applied and
 // whose next unit failed after dispatch with answer. A unit YDB rejected
 // without applying any of it is NOT_APPLIED, or PARTIAL after an applied
-// prefix, with the server's issues as its message. One that YDB aborted for a
-// conflict in a caller transaction, as the request's first unit, also sets
-// transaction_aborted when the host negotiated it. Anything else is UNKNOWN.
+// prefix, with the server's issues as its message: a unit of text whose
+// answer is [Answer.Rejected], and a call whose answer is a status in which
+// YDB refuses it. One that YDB aborted for a conflict in a caller
+// transaction, as the request's first unit, also sets transaction_aborted
+// when the host negotiated it. Anything else is UNKNOWN.
 func Failed(answer Answer, unit Unit, applied uint32) *protocol.Execution {
-	if unit.Text == "" || !answer.Rejected(unit.Text, unit.Transaction) {
+	rejected := unit.Text != "" && answer.Rejected(unit.Text, unit.Transaction) || unit.Call && slices.Contains(refusals, answer.Status)
+	if !rejected {
 		return &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: applied, DiagnosticCode: "ydb.execution-unconfirmed", Message: unknownMessage}
 	}
 	result := &protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, AppliedCount: applied, DiagnosticCode: "ydb.statement-rejected", Message: answer.Message(rejectedMessage)}
@@ -233,6 +242,29 @@ func opensBlock(statement string) bool {
 			continue
 		}
 		return token.IsWord("DO") || token.IsWord("EVALUATE")
+	}
+	return false
+}
+
+// statisticsStatement reports text that is one ANALYZE statement. ANALYZE
+// collects column statistics: it creates, changes and drops no schema object
+// and writes no row, so a failed one applied nothing a plan or a migration
+// changes, whichever stage of YDB refused it. Measured on 26.2.1.14 with
+// default flags, YDB refuses it in its execution stage, GENERIC_ERROR with
+// `ANALYZE command is not supported because EnableColumnStatistics feature
+// flag is off` and no position in the text, where 25.1.4.7 refuses it while
+// compiling (`analyze is not supported for oltp tables`).
+func statisticsStatement(text string) bool {
+	queries, err := yqlquery.Split(text)
+	if err != nil || len(queries) != 1 || queries[0].Kind != yqlquery.Scheme || len(queries[0].Statements) != 1 {
+		return false
+	}
+	for _, token := range yql.Tokens(queries[0].Statements[0]) {
+		switch token.Type {
+		case yql.TokenWhitespace, yql.TokenComment, yql.TokenUnknown:
+			continue
+		}
+		return token.IsWord("ANALYZE")
 	}
 	return false
 }

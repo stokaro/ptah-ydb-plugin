@@ -205,8 +205,11 @@ say. When the address names a monitoring endpoint, opening a session reads
 `/viewer/json/feature_flags?database=<db>` and folds the flags that gate a
 capability the provider owns into the session's capabilities, `false`
 included. A failed read fails the session rather than falling back to the
-defaults, as in the host's embedded engine. Without the endpoint the session
-reports the defaults of every supported line.
+defaults, as in the host's embedded engine. The refusal is a reason the host
+prints, and it names the right a user lacks: on 26.x the page is served only
+to a user with `DESCRIBE SCHEMA` on the database. What the endpoint answered
+stays out of the reason. Without the endpoint the session reports the
+defaults of every supported line.
 
 | Capability | Flag | Default |
 | --- | --- | --- |
@@ -239,6 +242,13 @@ with, and would refuse the plan. `internal/featureflags/testdata`
 holds the pages the mapping is checked against, and a live test turns the
 flag on and off through the server's dynamic configuration and reads the
 capability each new session reports.
+
+A plan refused for want of a capability a flag decides names the flag, after
+the host's words for the capability: `...; YDB keeps it behind feature flag
+<Flag>: turn the flag on, and name the cluster's monitoring endpoint in the
+URL (monitoring=http://host:8765) so Ptah reads the flags before it plans`. A
+session without the endpoint takes its release line's default, so the flag
+alone does not change the answer.
 
 Session close releases both the SQL pool and its parent native driver, even
 when the RPC context is canceled. Cleanup results are retained for repeated
@@ -373,7 +383,8 @@ dispatched unit YDB refused is `NOT_APPLIED`, or `PARTIAL` after a confirmed
 prefix, when nothing of it can have been applied. That takes a status that
 establishes the refusal (`BAD_REQUEST`, `SCHEME_ERROR`, `PRECONDITION_FAILED`,
 `ALREADY_EXISTS`, `NOT_FOUND`, `UNSUPPORTED`, `ABORTED`, or `GENERIC_ERROR` for
-a plain data statement or for a text YDB refused while compiling it, which its
+a plain data statement, for one `ANALYZE` statement, which changes no schema
+object and no row, or for a text YDB refused while compiling it, which its
 issues show by naming a position in the text and no execution stage) and a
 unit that ran in a caller transaction, which YDB
 applies only by its commit, or that is one query YDB applies whole: a data
@@ -381,8 +392,13 @@ query or one scheme statement. Its message is YDB's own issue text on one line.
 Every other failed dispatched unit reports `UNKNOWN`, even when earlier units
 succeeded: a block or action call that runs scheme statements, a `BATCH`
 statement, a unit of several scheme statements, a native unit, a unit that
-holds a comment or coordination node statement, a unit that expands secret
-inputs, and a failure that carries no server status. Cancellation between
+holds a coordination node statement, a unit that expands secret inputs, and a
+failure that carries no server status. A unit that holds a comment statement
+runs as its statements one after another, and reads by the first one when that
+one fails, since nothing of the unit ran before it: a query by the rules above,
+and a comment statement, one `AlterTable` YDB applies whole, by a status that
+establishes the refusal, such as `BAD_REQUEST` for attributes past YDB's
+budget. A later one failing leaves the unit `UNKNOWN`. Cancellation between
 units reports the confirmed prefix. Diagnostics omit raw driver errors.
 
 A unit YDB refused in a caller transaction ends the transaction: measured on
@@ -552,7 +568,7 @@ Views and comments use these shared stages:
 | PrepareCommonObjects | The query in the server's form: its tokens joined by single spaces, comments and terminators left out | As declared |
 | ValidateSchema | Refuses a view without a query, `WITH CHECK OPTION`, view attributes and materialized views | Refuses what an attribute cannot hold: a key over 100 bytes, a value over 4096 bytes, text that is not UTF-8, more than 10240 bytes on one table |
 | Render | `CREATE VIEW ... WITH (security_invoker = TRUE) AS`, the query and `;` on lines of their own, then the view's comment; `DROP VIEW` | Ptah's `COMMENT ON TABLE`, `COLUMN`, `INDEX ... ON` and `VIEW`, `IS NULL` to remove one |
-| PlanFeatures | Dropped before every table step and created after them | After every step on the table that keeps it |
+| PlanFeatures | Dropped before every table step and created after each one that does not only remove | After every step on the table that keeps it, except one that only removes |
 
 The server's form of a query was measured on 25.1.4.7 and 26.2.1.14 alike: a
 two- or three-character operator is one token except `>>`, which YDB writes
@@ -560,11 +576,18 @@ two- or three-character operator is one token except `>>`, which YDB writes
 string or name, a multi-line string among them, is kept whole. A read of a view
 applied once therefore equals the preparation of its declaration.
 
+A step that only removes, such as a column's removal, is ordered after the
+views and comments of the plan, not before them: the host places a removal
+after its views and comments, and what a removal drops is no longer declared,
+so no view the plan creates reads it and no comment the plan sets names it.
+
 YQL has no comment statement. `Execute` reads Ptah's `COMMENT ON` as the host's
 YDB connection does and sets the one attribute it names through the table
 service, after checking that the object is in the session's database or realm,
 is a row table or a view of the kind the statement names, and for a non-empty
-comment has the column or the index. A unit holding a comment statement beside
+comment has the column or the index. A statement whose path holds nothing, or
+one the session may not see, is refused before any write with a message that
+names the path. A unit holding a comment statement beside
 other statements, such as a commented view, runs as the queries a migration
 file is split into, one statement after another. A comment statement in a
 transaction, or one that cannot be read, refuses the batch before any unit
@@ -785,12 +808,15 @@ credential. Package `internal/authored` keeps such sentences apart from the
 errors the provider receives: `authored.New` marks one, and `authored.Status`
 sends it as the reason, with the error's whole text as the status message,
 which no host prints. The reasons the provider gives are its refusals of a
-connection address, of a capability the target lacks, of a lock the server
-refuses this user, the refusals whose text is a fixed sentence, such as a
+connection address, of a monitoring page it could not read, of a capability
+the target lacks, a declared external object among them, of a lock the server
+refuses this user, of a streaming query body changed without
+`allow_state_reset`, the refusals whose text is a fixed sentence, such as a
 closed session or a reached handle limit, and the refusal of a table's
-declaration by table preparation or the creation projection. That last reason
-names the table and gives the sentence schema validation reports for the same
-declaration; the compilation behind it reads no server. A YDB driver's error is never a
+declaration by table preparation or the creation
+projection. That last reason names the table and gives the sentence schema
+validation reports for the same declaration; the compilation behind it reads no
+server. A YDB driver's error is never a
 reason, because YDB can quote a statement and its values, or a credential
 source: the host prints its code alone.
 
@@ -806,8 +832,10 @@ Confirmed history, journal, and tag stores are returned as SDK reservations
 instead of managed tables. A reservation occupies the name for every supported native scheme-object
 kind and for common tables. Exact UNREPRESENTABLE subject coverage overrides
 directory completeness at these occupied names, so omission does not assert
-absence. Filtered reads return reservations only from the exact directories
-they inspect. Names or layout alone never establish ownership.
+absence. A comparison leaves a reserved name out. When a plan changes an object
+a streaming query could read, it counts no query at a reserved name. Filtered
+reads return reservations only from the exact directories they inspect. Names
+or layout alone never establish ownership.
 
 The coordination node `ptah_locks` at the root of the session's database is
 reserved with purpose LOCK by its name alone. The lock service takes whatever
@@ -2526,7 +2554,8 @@ The new table keeps the old table's attributes, and with them the comments Ptah
 keeps there, and each storage setting the declaration does not state, as the
 old table holds it: every column family, the default one and one no column
 sits in included, with the settings the declaration leaves out, the family each
-column sits in, the automatic partitioning, the read replicas, the key bloom
+column sits in where the declaration does not say (see
+[Column families](#column-families)), the automatic partitioning, the read replicas, the key bloom
 filter, and the TTL where the declaration states no table properties. A
 cluster's table profile may have given the old table any of them, and YQL
 drops neither a family nor a setting, so a rebuild changes none that nobody
@@ -2632,8 +2661,14 @@ rules:
   A declared `COMPRESSION_NONE` matches a family that reads back unspecified.
 - A family only the table holds stays. No family is dropped, because YDB has no
   way to drop one.
-- A column moves only when a column property record names it. A column with no
-  record keeps its family. An empty family in a record means the default family.
+- A column sits where the declaration places it. A column property record
+  names its family, and an empty family in a record means the default family.
+  A source that describes the column properties of every column it declares (a
+  Go, YAML or YQL source) places a column it names in no family in the default
+  family, so a column the table holds elsewhere moves back, as the host's
+  embedded engine moves it. A source that could not describe them, such as
+  HCL, says nothing of where a column sits, and the column keeps its family. A
+  rebuild places the columns of the new table by the same rule.
 - A key column stays in the default family. A column that names a family
   neither the declaration nor the table has is refused. So is a `keep_in_memory`
   that only one side sets, and a declaration that states families when the

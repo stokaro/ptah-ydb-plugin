@@ -321,23 +321,23 @@ func TestHostKeepsTheClusterTableProfile_HappyPath(t *testing.T) {
 	c.Assert(heldStorage(c, opened, absolute).Partitioning, qt.Equals, "by_size=ENABLED size=2048 by_load=DISABLED min=1 max=0")
 }
 
-// Ported from the host's TestYDBColumnFamilies_WhatTheDeclarationLeavesOutStays,
-// for a storage pool the declaration leaves out: the pool stays, since a
-// cluster's table profile can give one to every new table and YQL drops
-// none. The plan is the same with a rebuild allowed and without one, it
-// plans nothing, and the table keeps the family, the pool and the row.
-//
-// The host's other row leaves a family out, and the host's engine moves the
-// column the family held back to the default family; this provider keeps it
-// where it sits, because only a column property record moves a column (gap
-// G91 of stokaro/ptah#4204), so that row is not ported.
-func TestHostKeepsAStoragePoolADeclarationLeavesOut_HappyPath(t *testing.T) {
+// Ported from the host's TestYDBColumnFamilies_WhatTheDeclarationLeavesOutStays:
+// a family and a storage pool the declaration leaves out stay, since a
+// cluster's table profile can give them to every new table and YQL drops
+// neither. A Go source states where every column sits, so the column a
+// left-out family held moves back to the default family, in one alteration.
+// The plan is the same with a rebuild allowed and without one, it rebuilds
+// nothing, and the table keeps the family, the pool and the row.
+func TestHostKeepsWhatAColumnFamilyDeclarationLeavesOut_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, families string
-		want           []string
-		wantRead       []string
+		// moves is whether the plan moves a column, in one alteration of docs.
+		moves    bool
+		wantRead []string
 	}{
-		{name: "a pool left out", families: "//ptah:schema:columnfamily name=\"cold\" fields=\"body\"\n//ptah:schema:columnfamily name=\"warm\" fields=\"blob\"\n", want: []string{},
+		{name: "a family left out", families: "//ptah:schema:columnfamily name=\"cold\" data=\"" + storagePool + "\" fields=\"body\"\n", moves: true,
+			wantRead: []string{"cold data=hdd compression=off columns=body", "default compression=off", "warm compression=off"}},
+		{name: "a pool left out", families: "//ptah:schema:columnfamily name=\"cold\" fields=\"body\"\n//ptah:schema:columnfamily name=\"warm\" fields=\"blob\"\n",
 			wantRead: []string{"cold data=hdd compression=off columns=body", "default compression=off", "warm compression=off columns=blob"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -351,9 +351,10 @@ func TestHostKeepsAStoragePoolADeclarationLeavesOut_HappyPath(t *testing.T) {
 			_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body) VALUES (1l, 'a'u, 'one'u)")
 			c.Assert(err, qt.IsNil)
 			source := replaceDirectory(familyDocs(test.families, ""), directory)
+			want := map[bool][]string{true: {"row-table-alter-operation " + directory + ".docs"}, false: {}}[test.moves]
 
 			c.Assert(hostPlanned(c, directory, "go", source, "--allow-table-rebuild"), qt.DeepEquals, hostPlanned(c, directory, "go", source))
-			c.Assert(hostPlanned(c, directory, "go", source), qt.DeepEquals, test.want)
+			c.Assert(hostPlanned(c, directory, "go", source), qt.DeepEquals, want)
 			output, err := hostApplySource(c, directory, "go", source)
 			c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
 			c.Assert(hostPlanned(c, directory, "go", source), qt.HasLen, 0)
@@ -361,4 +362,55 @@ func TestHostKeepsAStoragePoolADeclarationLeavesOut_HappyPath(t *testing.T) {
 			c.Assert(rowCount(c, opened, absolute, "body = 'one'u"), qt.Equals, int64(1))
 		})
 	}
+}
+
+// Ported from the host's TestYDBColumnFamilies_ChangesInPlace: on a table
+// holding rows, a family is added holding a column added and one moved;
+// then settings change, a pool is given, a column goes back to the default
+// family because the declaration places it in no family, and another column
+// is dropped; then the declaration leaves out every setting and two families
+// and finds nothing to change, since the table keeps what it holds. Each run
+// leaves nothing to plan, the server holds the families the step names, and
+// the rows stay. The host's test pins the statements; the server accepting
+// them in one run and the read after it is the measure here, since the
+// provider runs them as native operations.
+func TestHostChangesColumnFamiliesInPlace_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	absolute := path.Join(database, directory, "docs")
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	note := "\t//ptah:schema:field name=\"note\" type=\"Utf8\"\n\tNote string\n"
+	created, err := hostApplySource(c, directory, "go",
+		replaceDirectory(familyDocs("//ptah:schema:columnfamily name=\"cold\" compression=\"lz4\" fields=\"body,blob\"\n", ""), directory))
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
+	_, err = opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+absolute+"` (id, title, body, blob) VALUES (1l, 'a'u, 'one'u, 'x'), (2l, 'b'u, NULL, NULL)")
+	c.Assert(err, qt.IsNil)
+
+	for _, step := range []struct {
+		name, families, extra, want string
+		wantRead                    []string
+	}{
+		{name: "a family added, holding a column added and one moved",
+			families: "//ptah:schema:columnfamily name=\"cold\" compression=\"lz4\" fields=\"body\"\n//ptah:schema:columnfamily name=\"warm\" fields=\"blob,note\"\n",
+			extra:    note, want: `(?s).*Schema apply completed successfully.*`,
+			wantRead: []string{"cold compression=lz4 columns=body", "default compression=off", "warm compression=off columns=blob,note"}},
+		{name: "settings changed, a pool given, a column back in the default family, another dropped",
+			families: "//ptah:schema:columnfamily name=\"default\" compression=\"lz4\"\n" +
+				"//ptah:schema:columnfamily name=\"cold\" data=\"" + storagePool + "\" compression=\"off\" fields=\"blob\"\n" +
+				"//ptah:schema:columnfamily name=\"warm\" compression=\"lz4\"\n",
+			want:     `(?s).*Schema apply completed successfully.*`,
+			wantRead: []string{"cold data=hdd compression=off columns=blob", "default compression=lz4", "warm compression=lz4"}},
+		{name: "settings and families left out", families: "//ptah:schema:columnfamily name=\"cold\" fields=\"blob\"\n",
+			want:     `(?s).*Schema is synced, no changes to be made.*`,
+			wantRead: []string{"cold data=hdd compression=off columns=blob", "default compression=lz4", "warm compression=lz4"}},
+	} {
+		source := replaceDirectory(familyDocs(step.families, step.extra), directory)
+		output, err := hostApplySource(c, directory, "go", source)
+		c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", step.name, output))
+		c.Assert(output, qt.Matches, step.want, qt.Commentf("%s: %s", step.name, output))
+		c.Assert(hostPlanned(c, directory, "go", source), qt.HasLen, 0, qt.Commentf("%s", step.name))
+		c.Assert(heldStorage(c, opened, absolute).Families, qt.DeepEquals, step.wantRead, qt.Commentf("%s", step.name))
+	}
+	c.Assert(rowCount(c, opened, absolute, "body = 'one'u AND blob = 'x'"), qt.Equals, int64(1))
+	c.Assert(rowCount(c, opened, absolute, ""), qt.Equals, int64(2))
 }

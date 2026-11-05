@@ -4,9 +4,33 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/protobuf/proto"
 )
+
+// PlacedInDefault reports whether the desired side places a column it carries
+// no column properties for in the default family. A source that describes the
+// column properties of every column it declares (complete desired knowledge)
+// states where each column sits: one it places in no family sits in the
+// default family, as the host's embedded engine reads a Go, YAML or YQL
+// source. A source that could not describe them, such as HCL, states nothing,
+// and the column keeps the family it holds. The comparison, the alteration
+// and the rebuild read a column without a record through this one predicate:
+// a comparison that reported a move the alteration did not make would never
+// settle, and a rebuild that kept a family the comparison reads as left would
+// replan the move. column names the column under its table.
+func PlacedInDefault(coverage *protocol.ComparisonCoverage, column *protocol.ComparisonIdentity) bool {
+	return FacetKnown(coverage, schema.ColumnProperties, column, true)
+}
+
+// ColumnSubject names the column called name of table.
+func ColumnSubject(table *protocol.ComparisonIdentity, name string) *protocol.ComparisonIdentity {
+	subject := proto.CloneOf(table)
+	subject.Kind, subject.Parent, subject.Name = "column", proto.CloneOf(table.GetName()), &protocol.ComparisonPart{Source: name, Normalized: name}
+	return subject
+}
 
 // FacetKnown reports whether a captured side states what its facets of the
 // given kind say about the subject, so that a facet the side does not carry is

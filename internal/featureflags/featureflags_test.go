@@ -228,3 +228,21 @@ func TestDecode_FailurePath(t *testing.T) {
 		})
 	}
 }
+
+// TestClause_HappyPath pins what a refusal adds for a capability a flag
+// decides, and that a key no flag decides adds nothing.
+func TestClause_HappyPath(t *testing.T) {
+	for _, test := range []struct{ key, want string }{
+		{"unique_index_on_existing_table", "; YDB keeps it behind feature flag EnableAddUniqueIndex: turn the flag on, and name the cluster's monitoring endpoint " +
+			"in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans"},
+		{"external_data_sources", "; YDB keeps it behind feature flag EnableExternalDataSources: turn the flag on, and name the cluster's monitoring endpoint " +
+			"in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans"},
+		{"topics", ""},
+		{"external_data_source_secret_paths", ""},
+	} {
+		t.Run(test.key, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(featureflags.Clause(test.key), qt.Equals, test.want)
+		})
+	}
+}

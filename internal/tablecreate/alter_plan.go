@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -125,6 +126,18 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	for name := range in.placement {
 		if !slices.Contains(in.columns, name) {
 			return alterationChanges{}, fmt.Sprintf("Column properties name column %q, which the table does not declare", name), nil
+		}
+	}
+	// A source that describes where every column sits places a column it
+	// names in no family in the default family, so a column the table holds
+	// elsewhere moves back (see PlacedInDefault).
+	for _, name := range in.columns {
+		if _, placed := in.placement[name]; placed {
+			continue
+		}
+		if held, read := in.heldPlacement[name]; read && familyKey(held) != DefaultFamily &&
+			PlacedInDefault(table.Desired.GetFeatures().GetFacets().GetCoverage(), ColumnSubject(table.Subject, name)) {
+			in.placement[name] = ""
 		}
 	}
 	change, reason := planFamilies(in)
@@ -263,8 +276,9 @@ func uniqueAdditionRefusal(table *protocol.ComparisonIdentity, changes []indexCh
 	}
 	for _, change := range changes {
 		if change.add.GetGlobalUniqueIndex() != nil {
-			return fmt.Sprintf("adding unique index %q to table %q, which exists already, which requires target capability %s, unavailable on this ydb target",
-				change.add.GetName(), table.GetSchema().GetSource()+"."+table.GetName().GetSource(), UniqueIndexOnExistingTableCapability)
+			return fmt.Sprintf("adding unique index %q to table %q, which exists already, which requires target capability %s, unavailable on this ydb target%s",
+				change.add.GetName(), table.GetSchema().GetSource()+"."+table.GetName().GetSource(), UniqueIndexOnExistingTableCapability,
+				featureflags.Clause(UniqueIndexOnExistingTableCapability))
 		}
 	}
 	return ""
