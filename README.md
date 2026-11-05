@@ -1132,6 +1132,20 @@ name no node can take with the host's words. With `source.limits` negotiated,
 the document's claim leaves the node it names, or every node, unmanaged. A host
 that does not list `source.hcl` reads no such block.
 
+An HCL document is an Atlas file, which names none of the nodes it leaves out,
+so it claims the nodes only through its header, as the host's embedded engine
+reads it: a `coordination_node` entry, or the captured `ptah:feature-coverage`
+header an export writes, which the host reads itself. A document with neither
+claims nothing of them, and a plan from it creates and alters the nodes it
+declares and drops none. The provider cannot keep this rule alone: the SDK lets
+a decoding claim less than complete only through header limits, so its reply
+for a document without them claims every node. A host that takes an HCL
+document's claim only from its header asks the provider about no other
+document; one that asks about every document plans to drop each node the
+document does not declare, and writes its HCL exports without the captured
+header. `TestHostKeepsTheNodesAnHCLDocumentDoesNotName` measures the first
+kind of host and skips on the second.
+
 A Go source carries the same entries as `ptah:schema:notdescribed`
 declarations, under `source.limits`, of the kinds the engine lists in
 `go_header_kinds`: `coordination_node`, `streaming_query`, `resource_pool`,
@@ -1205,7 +1219,9 @@ and a declared table whose facet knowledge is not complete refuses the export.
 Knowledge left unmanaged by a source's own entry is passed on with
 `provenance="declared"`. YAML writes no header, and neither does a format for a
 host that does not negotiate `source.limits`, so there such knowledge refuses
-the export, as does a kind no entry names.
+the export, as does a kind no entry names. A host that writes an HCL export's
+account itself, as its captured `ptah:feature-coverage` header, sends the
+provider no coverage for HCL, and the provider writes no entry there.
 
 The subprocess tests exercise decoding, encoding, normalization, and
 representation conversion without a database address; a YQL schema declares

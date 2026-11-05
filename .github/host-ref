@@ -1,0 +1,4 @@
+# The HCL claim tests of this pull request need the host branch below, which
+# takes a provider's HCL claim only from a document's header and writes the
+# captured header in an HCL export. Remove this file once it merges.
+fix/hcl-provider-coverage-header
