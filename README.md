@@ -616,7 +616,9 @@ file is split into, one statement after another. A comment statement in a
 transaction, or one that cannot be read, refuses the batch before any unit
 runs. A comment is never a table property: the table facet leaves Ptah's
 comment keys out, a declared attribute under one of them is refused, and the
-new table of a rebuild takes the comments the read reported.
+new table of a rebuild takes the comments the read reported, which the host
+carries on the observed table, its columns and its indexes of a planning
+request.
 
 Users and groups share YDB's principal namespace. Creation accepts lower-case
 ASCII letters and digits. Groups have no login or password settings. Membership
