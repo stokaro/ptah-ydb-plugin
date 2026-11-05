@@ -621,11 +621,19 @@ embedded engine writes it from its own:
 - A changed streaming query text keeps `allow_state_reset` in the reverse,
   which resets the query's checkpoint again.
 
-A change of a table's own settings has no reversal yet: for a change of a row
-table's TTL, partitioning, families, indexes or changefeeds, or of a column
-table's storage, `migrations generate` writes no migration, and the host
-names the change kind that has no reversal. A host that does not list the
-feature gets no reversal service and refuses every such change the same way.
+The service also undoes a change of a table's own settings: a row table's
+properties, such as its TTL and its partitioning, and a column table's
+storage. What the forward change leaves is the description the table held
+with the declared settings in place of its own; a setting the declaration
+leaves unset stays as the table held it, except the TTL, which a table the
+declaration gives none loses. A column's move to another family reverses to
+a move back: what the forward change leaves is the column in the declared
+family, with a default or storage setting the declaration does not state
+kept as the column held it. A host that does not project a reverse's state
+onto a column cannot plan that reverse and refuses it. A host that does not
+list the feature gets no reversal service and refuses
+every such change, naming the change kind that has no reversal.
+
 A topic reverses like any other object, but no migration file holds a topic
 (see [Text units](#text-units)).
 
