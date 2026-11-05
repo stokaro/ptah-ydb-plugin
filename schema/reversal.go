@@ -152,9 +152,8 @@ func ReversibleTableChanges() []string { return []string{ColumnStorageChange, Ta
 // or its changefeed set, or a column table's storage. Both operands of such a
 // change are present, and the reverse swaps them as ReverseObjectChange does:
 // what the forward change leaves, as a read would report it, and what it
-// found, as a declaration. A column's change has no reversal: the host
-// projects a reverse's state onto the table and its indexes, not onto a
-// column.
+// found, as a declaration. A column's change, its move to another family,
+// reverses the same way under the column.
 func ReverseTableChange(id string, change *protocol.Envelope, commonAccess bool) (Reversed, error) {
 	var before, after *protocol.Envelope
 	var err error
@@ -173,18 +172,23 @@ func ReverseTableChange(id string, change *protocol.Envelope, commonAccess bool)
 		return Reversed{}, err
 	}
 	convert := ConvertNative
-	if before.Kind == TableProperties {
-		convert = ConvertTable
+	var altered func(before, after *protocol.Envelope) (*protocol.Envelope, error)
+	switch before.Kind {
+	case TableProperties:
+		convert, altered = ConvertTable, alteredTable
+	case ColumnProperties:
+		convert, altered = ConvertColumn, alteredColumn
 	}
 	left, restored, err := reversedOperands(before, after, convert, commonAccess)
-	if before.Kind == TableProperties {
-		// A table's properties are the whole table's description, and the
-		// declaration states only its settings: what the forward change
-		// leaves is the description the table held with the declared
-		// settings in place of its own.
+	if altered != nil {
+		// A table's properties are the whole table's description, and a
+		// column's its family with its default and its storage settings,
+		// while the declaration states only some of them: what the forward
+		// change leaves is what the owner held with the declared settings in
+		// place of its own.
 		left, restored, err = reversedOperands(before, nil, convert, commonAccess)
 		if err == nil {
-			left, err = alteredTable(before, after)
+			left, err = altered(before, after)
 		}
 	}
 	if err != nil {
@@ -202,12 +206,9 @@ func ReverseTableChange(id string, change *protocol.Envelope, commonAccess bool)
 }
 
 // tablePropertiesOperands returns the normalized operands of a table
-// properties change of a table: its properties, its index set or its
-// changefeed set, each under the change's owner.
+// properties change: a table's properties, its index set or its changefeed
+// set, or a column's properties, each under the change's owner.
 func tablePropertiesOperands(change *protocol.Envelope) (*protocol.Envelope, *protocol.Envelope, error) {
-	if change.GetOwner().GetKind() != "table" {
-		return nil, nil, fmt.Errorf("a column's change of family has no reversal")
-	}
 	normalized, err := NormalizeTablePropertiesChange(&protocol.ValueInput{Id: "operands", Representation: protocol.ValueInput_CHANGE, Value: change})
 	if err != nil {
 		return nil, nil, err
@@ -216,7 +217,10 @@ func tablePropertiesOperands(change *protocol.Envelope) (*protocol.Envelope, *pr
 	if err := json.Unmarshal(normalized.Value.Payload, &operands); err != nil {
 		return nil, nil, err
 	}
-	kind := TableProperties
+	kind, err := tableChangeOperandKind(change.GetOwner())
+	if err != nil {
+		return nil, nil, err
+	}
 	if selector, found := operands[facetKey]; found {
 		if err := json.Unmarshal(selector, &kind); err != nil {
 			return nil, nil, err
@@ -270,6 +274,42 @@ func alteredTable(before, after *protocol.Envelope) (*protocol.Envelope, error) 
 		result.Attributes = settings.Attributes
 	}
 	altered, err := convertedEnvelope(before, model(TableProperties), result, Normalize)
+	if err != nil {
+		return nil, err
+	}
+	altered.Context = proto.CloneOf(after.Context)
+	return altered, nil
+}
+
+// alteredColumn is the column a read reports once the forward change gives a
+// column held as before what after declares: the family is the
+// declaration's, since a column the declaration places in no family sits in
+// the default one, and a default, a compression or an encoding the
+// declaration does not state stays as the column held it.
+func alteredColumn(before, after *protocol.Envelope) (*protocol.Envelope, error) {
+	held, declared := &native.ColumnMeta{}, &native.ColumnMeta{}
+	if err := protojson.Unmarshal(before.GetPayload(), held); err != nil {
+		return nil, err
+	}
+	stated, err := ConvertColumn(after, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return nil, err
+	}
+	if err := protojson.Unmarshal(stated.GetPayload(), declared); err != nil {
+		return nil, err
+	}
+	result := proto.CloneOf(held)
+	result.Family = declared.Family
+	if declared.DefaultValue != nil {
+		result.DefaultValue = declared.DefaultValue
+	}
+	if declared.Compression != nil {
+		result.Compression = declared.Compression
+	}
+	if len(declared.Encoding) != 0 {
+		result.Encoding = declared.Encoding
+	}
+	altered, err := convertedEnvelope(before, model(ColumnProperties), result, Normalize)
 	if err != nil {
 		return nil, err
 	}
