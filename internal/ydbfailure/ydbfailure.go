@@ -10,9 +10,11 @@
 // The reason of an Execute or FinishTransaction reply, which a host that
 // lists errors.reasons prints, is a sentence of the provider's own: what YDB
 // did, its status, and the issue code and the position YDB gave, with the
-// capability and the feature flag where YDB refused for want of the flag, and
-// never YDB's issue text, which quotes the statement's text, a literal in it
-// or the database's path. The one part of it a reason repeats is the paths of
+// capability and the feature flag where YDB refused for want of the flag. It
+// never repeats YDB's issue text as a whole, which quotes the statement's
+// text, a literal in it or the database's path. The parts of it a reason
+// repeats are the fixed sentences YDB writes, which quote none of those (see
+// [Answer.said]), as the host's embedded engine printed them, and the paths of
 // the objects YDB says depend on one a statement drops, which the operator
 // has to drop first.
 package ydbfailure
@@ -200,6 +202,37 @@ func (a Answer) plannerFailure() string {
 	return ""
 }
 
+// fixedTexts are the sentences YDB writes into an issue that quote nothing a
+// statement or a database holds, measured on 25.1.4.7 and 26.2.1.14, each as
+// a pattern whose first group is the part a reason carries. The host's
+// embedded engine printed YDB's issues whole, so its user read these words;
+// the reason carries them alone.
+var fixedTexts = []*regexp.Regexp{
+	// 25.1.4.7 has no unique secondary index (see unproposed).
+	regexp.MustCompile(`^(Unknown index type: syncGlobalUnique)$`),
+	// A name YDB does not take in a path: `Check failed: path:
+	// '/local/<dir>/bad name', error: symbol ' ' is not allowed in the path
+	// part 'bad name'`, for CREATE SECRET on 26.2.1.14. The path and the
+	// part are the statement's and are left out. YDB writes a symbol outside
+	// ASCII as '?', so the symbol is one printable ASCII character.
+	regexp.MustCompile(`(symbol '[[:print:]]' is not allowed in the path part)`),
+}
+
+// said is what YDB said in the answer in a sentence of its own that a reason
+// may carry: the first of [fixedTexts] an issue holds, or else the text of a
+// feature flag's refusal (see featureflags.RefusalText). It is "" for an
+// answer with neither.
+func (a Answer) said() string {
+	for _, issue := range a.Issues {
+		for _, text := range fixedTexts {
+			if found := text.FindStringSubmatch(strings.TrimSpace(issue)); found != nil {
+				return found[1]
+			}
+		}
+	}
+	return featureflags.RefusalText(a.Issues)
+}
+
 // refusedUnproposed is the meaning of the answer's issue that refused a
 // schema statement before YDB proposed its operation, or "" for an answer
 // with no such issue.
@@ -342,9 +375,10 @@ func (a Answer) detail() string {
 }
 
 // RefusedReason is the reason of a reply to a unit YDB refused. It says that
-// YDB refused the statement, whether while compiling it, what the issue code
-// means when the provider knows, and the detail, and names the feature flag
-// the refusal says is off (see [Answer.flagged]).
+// YDB refused the statement, whether while compiling it, what YDB said where
+// it said it in a sentence of its own (see [Answer.said]), what the issue
+// code means when the provider knows, and the detail, and names the feature
+// flag the refusal says is off (see [Answer.flagged]).
 func (a Answer) RefusedReason() string {
 	return a.refusedReason("YDB refused the statement")
 }
@@ -384,6 +418,9 @@ func (a Answer) refusedDependents() string {
 func (a Answer) refusedReason(reason string) string {
 	if a.Compiled {
 		reason += " while compiling it"
+	}
+	if said := a.said(); said != "" {
+		reason += `, saying "` + said + `"`
 	}
 	switch meaning, known := issueMeanings[a.Code]; {
 	case a.Check != "" && fits(reason+": "+a.Check+" ("+a.detail()+")"):

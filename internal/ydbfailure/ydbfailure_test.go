@@ -315,7 +315,8 @@ func TestFailed(t *testing.T) {
 			"YDB refused the statement while compiling it (GENERIC_ERROR, line 1, column 27)"},
 		{"refused before its operation", uniqueIndexOn251, ydbfailure.Unit{Text: "ALTER TABLE t ADD INDEX u GLOBAL UNIQUE SYNC ON (v)"}, 1,
 			&protocol.Execution{Outcome: protocol.Execution_PARTIAL, AppliedCount: 1, DiagnosticCode: "ydb.statement-rejected", Message: "Execution; Unknown index type: syncGlobalUnique"},
-			"YDB refused the statement: the YDB release the cluster runs has no unique secondary index (GENERIC_ERROR, issue 1060, line 1, column 56)"},
+			`YDB refused the statement, saying "Unknown index type: syncGlobalUnique": the YDB release the cluster runs has no unique secondary index ` +
+				`(GENERIC_ERROR, issue 1060, line 1, column 56)`},
 		{"refused while running", answer(Ydb.StatusIds_GENERIC_ERROR, "Scheme operation failed"), ydbfailure.Unit{Text: "CREATE TOPIC t"}, 0, unknown,
 			"the unit's outcome is unknown: YDB answered GENERIC_ERROR, which does not show whether the unit applied"},
 		// 26.2.1.14 refuses ANALYZE in its execution stage with default flags.
@@ -447,7 +448,8 @@ func TestPathBusy(t *testing.T) {
 // The answers below are the ones 25.1.4.7 and 26.2.1.14 gave, measured, for
 // statements YDB refused. Each issue text quotes a token of the statement, a
 // literal in it or the table's path; the reason says what YDB did with the
-// status, the issue code and the position alone, and quotes none of it.
+// status, the issue code and the position, and of YDB's words it carries only
+// a fixed sentence that quotes none of them.
 func TestRefusedReasonQuotesNothingOfTheAnswer(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -501,6 +503,22 @@ func TestRefusedReasonQuotesNothingOfTheAnswer(t *testing.T) {
 			"YDB refused the statement: YDB cannot plan an UPSERT on a table with a unique index when the statement names no column a synchronous index is keyed on; " +
 				"name every column of the table, or use UPDATE or INSERT (INTERNAL_ERROR, issue 1, line 1, column 165)",
 			"kqp_opt_phy_upsert_index"},
+		// 26.2 refuses a secret whose name holds a space; the issue quotes the
+		// path and the name, and the reason carries YDB's sentence without
+		// them, as the host's embedded engine printed it.
+		{"a name YDB does not take in a path", Ydb.StatusIds_SCHEME_ERROR, []*Ydb_Issue.IssueMessage{
+			issue(2003, 0, 0, "Executing ESchemeOpCreateSecret", issue(2003, 0, 0,
+				"Check failed: path: '/local/g75/bad name', error: symbol ' ' is not allowed in the path part 'bad name'")),
+			issue(2019, 0, 0, "Query invalidated on scheme/internal error during Scheme execution")},
+			"CREATE SECRET `g75/bad name` WITH (value = $PTAH_SECRET_HUNTER2)",
+			`YDB refused the statement, saying "symbol ' ' is not allowed in the path part" (SCHEME_ERROR, issue 2019)`, "bad name"},
+		// 25.1 has no unique secondary index: YDB's sentence names the index
+		// type, not the statement's index.
+		{"a unique index 25.1 does not know", Ydb.StatusIds_GENERIC_ERROR, []*Ydb_Issue.IssueMessage{
+			issue(1060, 0, 0, "Execution", issue(0, 1, 56, "Unknown index type: syncGlobalUnique"))},
+			"ALTER TABLE `g75/hunter2` ADD INDEX hunter2_u GLOBAL UNIQUE SYNC ON (v)",
+			`YDB refused the statement, saying "Unknown index type: syncGlobalUnique": the YDB release the cluster runs has no unique secondary index ` +
+				`(GENERIC_ERROR, issue 1060, line 1, column 56)`, "Execution"},
 		{"a password the server refuses", Ydb.StatusIds_PRECONDITION_FAILED, []*Ydb_Issue.IssueMessage{issue(2029, 0, 0, "Executing ESchemeOpAlterLogin",
 			issue(2029, 0, 0, "Kikimr precondition failed", issue(0, 0, 0, "Password contains unacceptable characters")))},
 			"CREATE USER g75u PASSWORD 'hunter2-secret'",
@@ -552,10 +570,11 @@ func flagSentence(key, flag, reason string) string {
 
 // A refusal YDB answers because a feature flag is off names the capability and
 // the flag, in the host's embedded engine's words, around the provider's own
-// reason where the host's engine quotes YDB's text. The flag's text, which is
-// YDB's, is not in it. The texts are measured ones: an index rename on a
-// cluster with EnableMoveIndex off, and a resource pool on one with
-// EnableResourcePools off, which every line has by default.
+// reason where the host's engine quotes YDB's text. The reason carries YDB's
+// sentence for the flag, without what YDB wrote around it. The texts are
+// measured ones: an index rename on a cluster with EnableMoveIndex off, and a
+// resource pool on one with EnableResourcePools off, which every line has by
+// default.
 func TestRefusedReasonNamesTheFlag_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -563,14 +582,16 @@ func TestRefusedReasonNamesTheFlag_HappyPath(t *testing.T) {
 		want   string
 	}{
 		{name: "a refused statement", answer: ydbfailure.Answer{Status: Ydb.StatusIds_PRECONDITION_FAILED, Issues: []string{"Execution failed", "Move index is not supported yet"}},
-			want: flagSentence("index_rename", "EnableMoveIndex", "YDB refused the statement (PRECONDITION_FAILED)")},
+			want: flagSentence("index_rename", "EnableMoveIndex", `YDB refused the statement, saying "Move index is not supported yet" (PRECONDITION_FAILED)`)},
 		{name: "a statement refused while YDB compiled it", answer: ydbfailure.Answer{Status: Ydb.StatusIds_GENERIC_ERROR, Compiled: true, Code: 1030, Row: 1, Column: 1,
 			Issues: []string{"Resource pools are disabled. Please contact your system administrator"}},
-			want: flagSentence("resource_pools", "EnableResourcePools", "YDB refused the statement while compiling it (GENERIC_ERROR, issue 1030, line 1, column 1)")},
+			want: flagSentence("resource_pools", "EnableResourcePools",
+				`YDB refused the statement while compiling it, saying "Resource pools are disabled" (GENERIC_ERROR, issue 1030, line 1, column 1)`)},
 		// A session that read the cluster's flags names the monitoring
 		// endpoint already, so the sentence does not ask for it.
 		{name: "a session that read the flags", answer: ydbfailure.Answer{Status: Ydb.StatusIds_PRECONDITION_FAILED, Issues: []string{"Execution failed", "Move index is not supported yet"}, FlagsRead: true},
-			want: "capability index_rename is off on this YDB cluster, which runs with feature flag EnableMoveIndex off: YDB refused the statement (PRECONDITION_FAILED). Turn the flag on"},
+			want: "capability index_rename is off on this YDB cluster, which runs with feature flag EnableMoveIndex off: " +
+				`YDB refused the statement, saying "Move index is not supported yet" (PRECONDITION_FAILED). Turn the flag on`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -595,6 +616,29 @@ func TestRefusedReasonNamesTheFlag_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	refused := ydbfailure.Answer{Status: Ydb.StatusIds_PRECONDITION_FAILED, Code: 2012, Issues: []string{"Constraint violated", "Conflict with existing key."}}
 	c.Assert(refused.RefusedReason(), qt.Equals, "YDB refused the statement: it violates a constraint of the table, such as a key the table holds (PRECONDITION_FAILED, issue 2012)")
+}
+
+// A reason carries only YDB's sentence as it was measured: a symbol YDB wrote
+// as a control character, and the index type's sentence with more text after
+// it, are not carried, and the reason is the provider's alone.
+func TestRefusedReasonCarriesOnlyYDBsFixedTexts_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		answer ydbfailure.Answer
+		want   string
+	}{
+		{"a symbol outside printable ASCII", located(answer(Ydb.StatusIds_SCHEME_ERROR, "Executing ESchemeOpCreateSecret",
+			"Check failed: path: '/local/g75/a\x01b', error: symbol '\x01' is not allowed in the path part 'a\x01b'"), 2019, 0, 0),
+			"YDB refused the statement (SCHEME_ERROR, issue 2019)"},
+		{"the index type's sentence with more after it", located(answer(Ydb.StatusIds_GENERIC_ERROR, "Execution",
+			"Unknown index type: syncGlobalUnique in hunter2"), 1060, 1, 56),
+			"YDB refused the statement (GENERIC_ERROR, issue 1060, line 1, column 56)"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(test.answer.RefusedReason(), qt.Equals, test.want)
+		})
+	}
 }
 
 // YDB refuses a DROP of an object other objects depend on before it changes
