@@ -2551,8 +2551,11 @@ for is refused in the embedded engine's words: an expression, an order, a
 prefix, a NULLS order or an operator class on a key column, an index on the
 table's key, a covered key column. A vector, full-text or local index is
 refused as a common index, since the pinned table protocol builds none of them
-with a table. Execution confirms each index by reading it back. In the TEXT
-form each index is an INDEX clause of the CREATE TABLE.
+with a table. An index names its table as the host names it: by its name, by
+its directory and name, or, where a part holds a dot, by the quoted reference
+`"app.records"` for the root table app.records and `app."v.1"` for the table
+v.1 of the directory app. Execution confirms each index by reading it back. In
+the TEXT form each index is an INDEX clause of the CREATE TABLE.
 
 YDB has no UNIQUE constraint: it refuses one as a parse error and holds the
 same rows with a global unique index, a second row with the same value refused
