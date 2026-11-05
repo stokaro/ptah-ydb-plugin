@@ -1375,22 +1375,30 @@ The local indexes are managed when the declaration states at least one: an
 index the table holds and the declaration leaves out is dropped, and a
 declaration that states none leaves the table's own alone, since no other
 source declares them. Each change is one step in the lifecycle phase,
-`column-table-add-local-index/N` or `column-table-drop-local-index/N`, of the
-operation kind `column-table-local-index-operation`, running `ALTER TABLE ...
-ADD INDEX ... LOCAL USING ...` or `ALTER TABLE ... DROP INDEX ...` through the
-query service. An index whose kind, column or settings differ is dropped and
-added again under its name, the removal first, and a renamed index is dropped
-under its old name and added under its new one, as the host's embedded engine
-plans both on a target without `index_rename`; the host compares no local
-index, so it pairs none. 26.2.1.14 also renames a local index (`RENAME
-INDEX`) and changes its probability in place (`ALTER INDEX ... SET (false_positive_probability = ...)`),
-which neither engine plans. Only an index a plan adds needs its capability.
-Execution reads the table from the table service and the monitoring endpoint
-and refuses before it writes when the table holds an index of the name to add,
-lacks its column or holds it with another type than an n-gram index reads, or
-holds the index to drop otherwise than the plan captured it; after the call it
-requires the added index to read back as requested or the dropped one to be
-gone, and every other local index, the layout and the TTL to be unchanged.
+`column-table-add-local-index/N`, `column-table-drop-local-index/N` or
+`column-table-rename-local-index/N`, of the operation kind
+`column-table-local-index-operation`, running `ALTER TABLE ... ADD INDEX ...
+LOCAL USING ...`, `ALTER TABLE ... DROP INDEX ...` or `ALTER TABLE ... RENAME
+INDEX ... TO ...` through the query service. An index whose kind, column or
+settings differ is dropped and added again under its name, the removal first.
+An index whose name alone changes is renamed in place on a target with
+`index_rename`, and dropped under its old name and added under its new one on
+a target without it, as the host's embedded engine plans both. The host
+compares no local index, so the provider pairs them as the host's comparison
+pairs a renamed index: each new name, in name order, takes the first old name
+in name order whose index has the same column, kind and settings. The session
+reports `index_rename` from `EnableMoveIndex`, and 26.2.1.14 renames a local
+index with the flag off too, so a plan without it rebuilds an index the server
+could rename. 26.2.1.14 also changes a bloom index's probability in place
+(`ALTER INDEX ... SET (false_positive_probability = ...)`), which neither
+engine plans. Only an index a plan adds needs its capability. Execution reads
+the table from the table service and the monitoring endpoint and refuses
+before it writes when the table holds an index of the name to add or to rename
+to, lacks its column or holds it with another type than an n-gram index reads,
+or holds the index to drop or rename otherwise than the plan captured it;
+after the call it requires the added or renamed index to read back as
+requested under its name, the dropped or renamed one to be gone under its old
+name, and every other local index, the layout and the TTL to be unchanged.
 
 The TTL changes in place, as the host's embedded engine changes it: `ALTER
 TABLE ... RESET (TTL)` removes the TTL the table holds and `ALTER TABLE ... SET

@@ -287,6 +287,66 @@ func TestColumnTableLocalIndexPlan_HappyPath(t *testing.T) {
 	}
 }
 
+// renameCapabilities are localIndexCapabilities on a target that renames an
+// index in place.
+var renameCapabilities = map[string]bool{tablecreate.LocalBloomIndexesCapability: true, tablecreate.LocalNgramIndexesCapability: true,
+	tablecreate.LocalMinMaxIndexesCapability: true, tablecreate.IndexRenameCapability: true}
+
+// TestColumnTableLocalIndexPlan_RenamesInPlace renames a local index whose
+// name alone changes with one RENAME INDEX on a target with index_rename, as
+// the host's embedded engine plans it, and keeps the drop and the add for an
+// index whose settings change too. Two indexes of one definition renamed at
+// once pair in name order, each new name taking the first old one.
+func TestColumnTableLocalIndexPlan_RenamesInPlace(t *testing.T) {
+	const (
+		renamedBloom = `{"name":"renamed_bloom","columns":["body"],"bloom":{"falsePositiveProbability":0.01}}`
+		otherBloom   = `{"name":"bf_other","columns":["body"],"storageId":"__DEFAULT","bloom":{"dataExtractor":"DEFAULT","bitsStorage":"SIMPLE_STRING","falsePositiveProbability":0.01}}`
+	)
+	for _, test := range []struct {
+		name, declared, held string
+		steps, statements    []string
+	}{
+		{"an index renamed", withLocalIndexes(renamedBloom, declaredNgram), heldWithLocalIndexes(heldLocalBloom, heldLocalNgram),
+			[]string{"column-table-rename-local-index/000000"}, []string{"ALTER TABLE `/local/app/records` RENAME INDEX `bf` TO `renamed_bloom`;"}},
+		{"an index renamed with another setting", withLocalIndexes(`{"name":"renamed_bloom","columns":["body"],"bloom":{"falsePositiveProbability":0.02}}`),
+			heldWithLocalIndexes(heldLocalBloom), []string{"column-table-drop-local-index/000000", "column-table-add-local-index/000000"},
+			[]string{"ALTER TABLE `/local/app/records` DROP INDEX `bf`;",
+				"ALTER TABLE `/local/app/records` ADD INDEX `renamed_bloom` LOCAL USING bloom_filter ON (`body`) WITH (false_positive_probability = 0.02);"}},
+		{"two equal indexes renamed", withLocalIndexes(renamedBloom, `{"name":"z_bloom","columns":["body"],"bloom":{"falsePositiveProbability":0.01}}`),
+			heldWithLocalIndexes(heldLocalBloom, otherBloom), []string{"column-table-rename-local-index/000000", "column-table-rename-local-index/000001"},
+			[]string{"ALTER TABLE `/local/app/records` RENAME INDEX `bf` TO `renamed_bloom`;", "ALTER TABLE `/local/app/records` RENAME INDEX `bf_other` TO `z_bloom`;"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := columnTTLRequest(c, test.declared, test.held, renameCapabilities)
+			plan, err := backend.New().PlanFeatures(t.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Diagnostics, qt.HasLen, 0)
+			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
+			names, statements := plannedLocalIndexSteps(c, plan)
+			c.Assert(names, qt.DeepEquals, test.steps)
+			c.Assert(statements, qt.DeepEquals, test.statements)
+			c.Assert(plan.Parents[0].Receipt.Steps, qt.HasLen, len(test.steps))
+		})
+	}
+}
+
+// A rename reads its table, drops the index's held name and creates its
+// declared one.
+func TestColumnTableLocalIndexPlan_RenameEffects(t *testing.T) {
+	c := testcheck.New(t)
+	request := columnTTLRequest(c, withLocalIndexes(`{"name":"renamed_bloom","columns":["body"],"bloom":{"falsePositiveProbability":0.01}}`),
+		heldWithLocalIndexes(heldLocalBloom), renameCapabilities)
+	plan, err := backend.New().PlanFeatures(t.Context(), request)
+	c.Assert(err, qt.IsNil)
+	var effects []string
+	for _, effect := range plan.GetContributions()[0].GetSteps()[0].GetMetadata().GetEffects() {
+		effects = append(effects, effect.GetAction().String()+" "+effect.GetSubject().GetKind()+" "+effect.GetSubject().GetName().GetSource())
+	}
+	c.Assert(effects, qt.DeepEquals, []string{"READ table records", "DROP index bf", "CREATE index renamed_bloom"})
+	c.Assert(plan.GetContributions()[0].GetSteps()[0].GetMetadata().GetImpact(), qt.Equals, protocol.ChangeSemantics_BEHAVIORAL)
+}
+
 // TestColumnTableLocalIndexPlan_NoChange plans nothing where the table holds
 // the declared local indexes as a read describes them, or the declaration
 // states none, which leaves the table's own alone.
@@ -359,6 +419,8 @@ func TestColumnLocalIndexStep_HappyPath(t *testing.T) {
 	}{
 		{"an addition", `{"add":{"name":"bf","columns":["body"],"bloom":{"falsePositiveProbability":0.1}}}`, protocol.ChangeSemantics_ADDITIVE},
 		{"a removal of an index as a read describes it", `{"drop":` + heldLocalNgram + `}`, protocol.ChangeSemantics_DESTRUCTIVE},
+		{"a rename of an index as a read describes it", `{"add":{"name":"bf2","columns":["body"],"bloom":{"falsePositiveProbability":0.01}},"drop":` + heldLocalBloom + `}`,
+			protocol.ChangeSemantics_BEHAVIORAL},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -371,9 +433,11 @@ func TestColumnLocalIndexStep_HappyPath(t *testing.T) {
 
 func TestColumnLocalIndexStep_FailurePath(t *testing.T) {
 	for _, test := range []struct{ name, payload, wantErr string }{
-		{"both an addition and a removal", `{"add":{"name":"bf","columns":["body"],"bloom":{"falsePositiveProbability":0.1}},"drop":` + heldLocalNgram + `}`,
-			`a column table local-index step adds or drops one index`},
-		{"neither", `{}`, `a column table local-index step adds or drops one index`},
+		{"a rename that changes the index", `{"add":{"name":"bf2","columns":["body"],"bloom":{"falsePositiveProbability":0.1}},"drop":` + heldLocalBloom + `}`,
+			`a column table local-index rename keeps every setting of the index and changes its name`},
+		{"a rename onto its own name", `{"add":{"name":"bf","columns":["body"],"bloom":{"falsePositiveProbability":0.01}},"drop":` + heldLocalBloom + `}`,
+			`a column table local-index rename keeps every setting of the index and changes its name`},
+		{"neither", `{}`, `a column table local-index step adds, drops or renames one index`},
 		{"an addition that leaves a setting to the server", `{"add":{"name":"bf","columns":["body"],"bloom":{}}}`,
 			`a column table local-index step names every setting of the index it adds and no storage`},
 		{"an addition that states its storage", `{"add":{"name":"bf","columns":["body"],"storageId":"__DEFAULT","bloom":{"falsePositiveProbability":0.1}}}`,
