@@ -17,7 +17,7 @@ const ServiceID = "ydb-streaming-queries"
 // where the desired source does not establish absence.
 func Compare(ctx context.Context, request *protocol.CompareModelsRequest) (*protocol.ComparedModels, error) {
 	return objectcompare.Compare(ctx, request, objectcompare.Family{
-		ServiceID: ServiceID, Kind: schema.StreamingQueryProperties, Capability: streaming.Capability, Noun: "streaming query",
+		ServiceID: ServiceID, Kind: schema.StreamingQueryProperties, ChangeKind: schema.StreamingQueryChange, Capability: streaming.Capability, Noun: "streaming query",
 		DesiredModel: func() *protocol.ValueModel { return schema.NativeDesiredModel(schema.StreamingQueryProperties) },
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 			return schema.NativeBoundOwner(schema.StreamingQueryProperties, subject)

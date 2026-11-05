@@ -116,6 +116,11 @@ func providerFeatures() []string {
 		provider.PlanFeaturesFeature,
 		provider.RenderFeature,
 		provider.CompareModelsFeature,
+		// An object comparison counts what it compares, so a drift inventory
+		// reports the provider's native kinds; see objectcompare.countDecided.
+		// The row-table facet comparison counts nothing: a table's settings
+		// stand for no object, and a table's changefeeds change as one set.
+		provider.ComparisonCountsFeature,
 		provider.DecodeSourceFeature,
 		// A table's facets, a topic with its consumers and a changefeed set
 		// are each written by several declarations; see EncodeSource.
