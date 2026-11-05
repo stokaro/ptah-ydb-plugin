@@ -2509,10 +2509,11 @@ YDB changes neither a table's key nor a column's type in place, and makes no
 column NOT NULL. With the host's planning policy asking for a rebuild (contract
 25.3, `planning.policy`; `--allow-table-rebuild` on the native CLI), the
 planner makes such a change the way the host's embedded engine does, in five
-steps: it creates the table anew from the declaration under a scratch name
-(`__ptah_rebuild_<table>`), copies the rows with one `INSERT ... SELECT`,
-renames the old table out of the way (`__ptah_replaced_<table>`), renames the
-new one into its place, and drops the old one. The host's steps for the table
+steps and one more for each index whose held settings differ from a new
+index's (see below): it creates the table anew from the declaration under a
+scratch name (`__ptah_rebuild_<table>`), copies the rows with one `INSERT ...
+SELECT`, renames the old table out of the way (`__ptah_replaced_<table>`),
+renames the new one into its place, and drops the old one. The host's steps for the table
 are rewritten to the rename that puts the new table in place. A REBUILD the
 host proposes is planned the same way, and refused like any other rebuild
 without the policy.
@@ -2529,8 +2530,14 @@ column sits in, the automatic partitioning, the read replicas, the key bloom
 filter, and the TTL where the declaration states no table properties. A
 cluster's table profile may have given the old table any of them, and YQL
 drops neither a family nor a setting, so a rebuild changes none that nobody
-declared. The new table's indexes take YDB's defaults rather than the
-partitioning their old indexes hold. Without the policy, the change is refused
+declared. Each index of the new table keeps the automatic partitioning and the
+read replicas the old index under its name holds, or the old index the host
+renames it from. The call that creates a table takes no index settings, so a
+`table-rebuild/N/index-settings/M` step after the creation and before the copy
+gives the index every setting with `ALTER TABLE ... ALTER INDEX ... SET`, over
+the settings YDB gives a new index. The read describes each index the common
+model describes beside the native index set for that reason. Without the
+policy, the change is refused
 in the embedded engine's words, naming the request the host passes, such as
 `--allow-table-rebuild`.
 
