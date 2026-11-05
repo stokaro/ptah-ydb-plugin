@@ -25,7 +25,12 @@ func one([]byte, protocol.ValueInput_Representation) (uint64, error) { return 1,
 // the metric names and help texts of the host's built-in YDB engine, so a
 // scrape through this provider has the lines a scrape through that engine
 // has. Each metric counts what a value holds: a topic is one topic and its
-// consumers, a table's changefeed set its feeds and the consumers across them.
+// consumers, a table's changefeed set its feeds and the consumers across them,
+// a row table's properties its TTL, its column families and its settings, a
+// column table's storage the table and its TTL, and a table's index set its
+// global indexes with settings and its vector indexes. Two models count into
+// ydb_ttl_tables, as the built-in engine counted a column table whose TTL only
+// deletes rows among the tables with a TTL.
 var reportedKinds = []struct {
 	kind    string
 	metrics []reportedMetric
@@ -41,7 +46,18 @@ var reportedKinds = []struct {
 	{SecretProperties, []reportedMetric{{"secrets", "Secret objects, without their values", one}}},
 	{ResourcePoolProperties, []reportedMetric{{"resource_pools", "Resource pools", one}}},
 	{ResourcePoolClassifierProperties, []reportedMetric{{"resource_pool_classifiers", "Resource pool classifiers", one}}},
+	{TableProperties, []reportedMetric{{"ydb_ttl_tables", ttlTablesHelp, ttlTable},
+		{"ydb_column_families", "YDB column families a table states, without a default family that states nothing", statedFamilies},
+		{"ydb_table_partitioning", "YDB row tables stating partitioning, read replicas or a key bloom filter", tablePartitioning}}},
+	{ColumnStorageProperties, []reportedMetric{{"ydb_ttl_tables", ttlTablesHelp, columnTTLTable},
+		{"ydb_column_tables", "YDB tables stored by column", one},
+		{"ydb_tiered_ttl_tables", "YDB column tables whose TTL moves rows to an external data source", tieredTTLTable}}},
+	{IndexProperties, []reportedMetric{{"ydb_index_partitioning", "YDB global indexes stating partitioning or read replicas", indexPartitioning},
+		{"ydb_vector_indexes", "YDB vector indexes with captured settings", vectorIndexes}}},
 }
+
+// ttlTablesHelp is the help of the metric two models count into.
+const ttlTablesHelp = "Tables with a captured YDB TTL"
 
 // Reports returns the count metrics of the provider's desired and observed
 // models, one report per reported model and representation, for a host that

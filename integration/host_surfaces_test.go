@@ -69,7 +69,8 @@ func TestHostSchemaStatsCountsWhatTheReadDescribes_HappyPath(t *testing.T) {
 // negotiates models.report-counts, the provider counts the topic, the
 // changefeed, their consumers and the coordination node of the directory the
 // test above counts, under the lines of the built-in YDB engine, help text
-// included.
+// included. The directory states no table setting, and each table setting
+// family has its line at zero, as the built-in engine printed it.
 func TestHostSchemaStatsCountsTheNativeObjects_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.ReportCountsFeature)
@@ -96,6 +97,13 @@ func TestHostSchemaStatsCountsTheNativeObjects_HappyPath(t *testing.T) {
 		"ptah_schema_changefeed_consumers" + labels + " 1\n",
 		"ptah_schema_coordination_nodes" + labels + " 1\n",
 		"ptah_schema_streaming_queries" + labels + " 0\n",
+		"ptah_schema_ydb_ttl_tables" + labels + " 0\n",
+		"ptah_schema_ydb_column_families" + labels + " 0\n",
+		"ptah_schema_ydb_table_partitioning" + labels + " 0\n",
+		"ptah_schema_ydb_index_partitioning" + labels + " 0\n",
+		"ptah_schema_ydb_column_tables" + labels + " 0\n",
+		"ptah_schema_ydb_tiered_ttl_tables" + labels + " 0\n",
+		"ptah_schema_ydb_vector_indexes" + labels + " 0\n",
 		"# HELP ptah_schema_topics Standalone topics.\n",
 		"# HELP ptah_schema_topic_consumers Consumers of standalone topics.\n",
 		"# HELP ptah_schema_changefeeds Table changefeeds.\n",

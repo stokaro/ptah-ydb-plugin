@@ -10,6 +10,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Topic"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -56,9 +57,10 @@ func TestReportValues_HappyPath(t *testing.T) {
 
 func TestReportValues_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
-	indexes, err := schema.CaptureIndexes(&protocol.Reference{Engine: "ydb", Database: "/local", Kind: "table", Name: "t"}, &native.IndexObservations{})
+	column, err := schema.CaptureColumn(&protocol.Reference{Engine: "ydb", Database: "/local", Kind: "column", Path: []string{"t"}, Name: "c"},
+		&native.ColumnMeta{Name: "c", Type: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_UTF8}}})
 	c.Assert(err, qt.IsNil)
-	request := &protocol.ReportValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "0", Representation: protocol.ValueInput_OBSERVED, Value: indexes}}}
+	request := &protocol.ReportValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: "0", Representation: protocol.ValueInput_OBSERVED, Value: column}}}
 
 	reply, err := backend.New().ReportValues(c.Context(), request)
 

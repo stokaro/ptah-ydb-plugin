@@ -9,6 +9,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Coordination"
 )
 
@@ -54,6 +55,22 @@ func TestReports_NameTheBuiltInEnginesMetrics(t *testing.T) {
 		`resource-pool/DESIRED: resource_pools "Resource pools"`, `resource-pool/OBSERVED: resource_pools "Resource pools"`,
 		`resource-pool-classifier/DESIRED: resource_pool_classifiers "Resource pool classifiers"`,
 		`resource-pool-classifier/OBSERVED: resource_pool_classifiers "Resource pool classifiers"`,
+		`row-table-properties/DESIRED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
+		`row-table-properties/DESIRED: ydb_column_families "YDB column families a table states, without a default family that states nothing"`,
+		`row-table-properties/DESIRED: ydb_table_partitioning "YDB row tables stating partitioning, read replicas or a key bloom filter"`,
+		`row-table-properties/OBSERVED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
+		`row-table-properties/OBSERVED: ydb_column_families "YDB column families a table states, without a default family that states nothing"`,
+		`row-table-properties/OBSERVED: ydb_table_partitioning "YDB row tables stating partitioning, read replicas or a key bloom filter"`,
+		`column-storage-properties/DESIRED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
+		`column-storage-properties/DESIRED: ydb_column_tables "YDB tables stored by column"`,
+		`column-storage-properties/DESIRED: ydb_tiered_ttl_tables "YDB column tables whose TTL moves rows to an external data source"`,
+		`column-storage-properties/OBSERVED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
+		`column-storage-properties/OBSERVED: ydb_column_tables "YDB tables stored by column"`,
+		`column-storage-properties/OBSERVED: ydb_tiered_ttl_tables "YDB column tables whose TTL moves rows to an external data source"`,
+		`table-indexes/DESIRED: ydb_index_partitioning "YDB global indexes stating partitioning or read replicas"`,
+		`table-indexes/DESIRED: ydb_vector_indexes "YDB vector indexes with captured settings"`,
+		`table-indexes/OBSERVED: ydb_index_partitioning "YDB global indexes stating partitioning or read replicas"`,
+		`table-indexes/OBSERVED: ydb_vector_indexes "YDB vector indexes with captured settings"`,
 	})
 }
 
@@ -94,9 +111,12 @@ func TestCountValue_HappyPath(t *testing.T) {
 // does before it counts a read.
 func convertedDesired(c *qt.C, observed *protocol.Envelope) *protocol.Envelope {
 	c.Helper()
+	converters := map[string]func(*protocol.Envelope, protocol.ValueInput_Representation, protocol.ValueInput_Representation) (*protocol.Envelope, error){
+		schema.CoordinationProperties: schema.ConvertCoordination, schema.TableProperties: schema.ConvertTable,
+	}
 	convert := schema.ConvertNative
-	if observed.GetKind() == schema.CoordinationProperties {
-		convert = schema.ConvertCoordination
+	if found, ok := converters[observed.GetKind()]; ok {
+		convert = found
 	}
 	desired, err := convert(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 	c.Assert(err, qt.IsNil)
@@ -107,7 +127,7 @@ func TestCountValue_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
 	topic, err := schema.CaptureObject(topicOwner(), nativeTopic())
 	c.Assert(err, qt.IsNil)
-	indexes, err := schema.CaptureIndexes(tableOwner(), &native.IndexObservations{})
+	column, err := schema.CaptureColumn(columnOwner(), &native.ColumnMeta{Name: "label", Type: primitive(Ydb.Type_UTF8)})
 	c.Assert(err, qt.IsNil)
 	forged, err := schema.CaptureObject(topicOwner(), nativeTopic())
 	c.Assert(err, qt.IsNil)
@@ -118,7 +138,7 @@ func TestCountValue_FailurePath(t *testing.T) {
 		representation protocol.ValueInput_Representation
 		wantErr        string
 	}{
-		{"a model no report names", indexes, protocol.ValueInput_OBSERVED, `the YDB provider counts no YDB index sets`},
+		{"a model no report names", column, protocol.ValueInput_OBSERVED, `the YDB provider counts no YDB column properties`},
 		{"a change representation", topic, protocol.ValueInput_CHANGE, `only a desired or observed YDB value is counted`},
 		{"an observation counted as a declaration", topic, protocol.ValueInput_DESIRED, `.*`},
 		{"a payload that does not validate", forged, protocol.ValueInput_OBSERVED, `invalid YDB observation JSON`},
