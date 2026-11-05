@@ -105,13 +105,18 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 	slices.SortFunc(changes, func(a, b change) int { return provider.CompareIdentities(a.input.Subject, b.input.Subject) })
 	result := &protocol.PlannedFeatures{Complete: true, Changes: make([]*protocol.PlanningReceipt, len(changes))}
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
+	siblings := make([]sibling, len(changes))
+	for i, item := range changes {
+		siblings[i] = sibling{subject: item.input.Subject, action: item.action,
+			id: &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", family.StepPrefix, i)}}
+	}
 	for i, item := range changes {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", family.StepPrefix, i)}
+		id := siblings[i].id
 		item.value.Id = id.Name
-		if refused := planStep(request, family, item, id, result, contribution); refused != nil {
+		if refused := planStep(request, family, item, id, siblings, result, contribution); refused != nil {
 			return refused, nil
 		}
 	}
@@ -199,16 +204,17 @@ func captureChange(request *protocol.PlanFeaturesRequest, family Family, i int, 
 }
 
 // planStep adds the step id that carries out item to contribution, with its
-// effects and its dependencies on the common steps and captured tables of
-// request, and records the change's receipt in result. A step ordered against
-// access needs the planning.lifecycle target feature, and one that accounts
-// for revokes replaces them in a rewrite. A failure returns a refusal of the
-// change.
+// effects and its dependencies on the common steps, the captured tables and
+// the siblings of request, and records the change's receipt in result. A step
+// ordered against access needs the planning.lifecycle target feature, and one
+// that accounts for revokes replaces them in a rewrite. A failure returns a
+// refusal of the change.
 func planStep(
 	request *protocol.PlanFeaturesRequest,
 	family Family,
 	item change,
 	id *protocol.StepIdentity,
+	siblings []sibling,
 	result *protocol.PlannedFeatures,
 	contribution *protocol.PlanningContribution,
 ) *protocol.PlannedFeatures {
@@ -226,7 +232,7 @@ func planStep(
 	if err != nil {
 		return refusal(family, item.index, err.Error())
 	}
-	edges, err := dependencies(pathRequest, family, item, id)
+	edges, err := dependencies(pathRequest, family, item, id, siblings)
 	if err != nil {
 		return refusal(family, item.index, err.Error())
 	}
@@ -263,6 +269,7 @@ func planStep(
 		step.Metadata.Effects = append(step.Metadata.Effects, effects...)
 		edges = append(edges, ordered...)
 	}
+	step.Metadata.Effects = append(step.Metadata.Effects, directoryEffects(item)...)
 	contribution.Steps = append(contribution.Steps, step)
 	contribution.Dependencies = append(contribution.Dependencies, edges...)
 	result.Changes[item.index] = &protocol.PlanningReceipt{

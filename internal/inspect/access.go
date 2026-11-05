@@ -108,6 +108,11 @@ func targetAccess(ctx context.Context, objects *protocol.ObservedCommonObjects, 
 	if err != nil {
 		return err
 	}
+	// Nor does one whose path an object holds (see traversal.directory): the
+	// access list there is the object's, read with the object.
+	if target.reference.Kind == "schema" && entry.GetName() == path.Base(target.absolute) && occupant(entry.GetType()) {
+		return nil
+	}
 	if entry.GetName() != path.Base(target.absolute) || !slices.Contains(target.types, entry.GetType()) {
 		return fmt.Errorf("YDB access description disagrees with the captured object")
 	}
@@ -146,9 +151,6 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 	if err := targets.add(&protocol.Reference{Engine: "ydb", Database: database, Kind: "database"}, database, Ydb_Scheme.Entry_DATABASE, Ydb_Scheme.Entry_DIRECTORY); err != nil {
 		return nil, err
 	}
-	if err := targets.addDirectories(snapshot.GetCoverage().GetKinds()); err != nil {
-		return nil, err
-	}
 	for _, table := range snapshot.GetTables() {
 		ref := table.GetIdentity()
 		if err := targets.add(ref, path.Join(database, ref.GetSchema(), ref.GetName()), Ydb_Scheme.Entry_TABLE, Ydb_Scheme.Entry_COLUMN_TABLE); err != nil {
@@ -178,6 +180,11 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 		if err := targets.add(ref, absolute, types...); err != nil {
 			return nil, err
 		}
+	}
+	// The directories go last: one whose path an object of the read holds is
+	// no directory, and its access list is the object's.
+	if err := targets.addDirectories(snapshot.GetCoverage().GetKinds()); err != nil {
+		return nil, err
 	}
 	slices.SortFunc(targets.result, func(a, b accessTarget) int { return strings.Compare(a.absolute, b.absolute) })
 	return targets.result, nil
@@ -219,7 +226,8 @@ func (s *accessTargetSet) add(reference *protocol.Reference, absolute string, ty
 }
 
 // addDirectories adds every directory below the root that a kind's coverage
-// knows completely, in the order the coverage lists them.
+// knows completely, in the order the coverage lists them, except one whose
+// path an object target already added holds.
 func (s *accessTargetSet) addDirectories(kinds []*protocol.ModelKindCoverage) error {
 	for _, kind := range kinds {
 		for _, region := range kind.GetRegions() {
@@ -232,6 +240,9 @@ func (s *accessTargetSet) addDirectories(kinds []*protocol.ModelKindCoverage) er
 			}
 			if region.GetScope().GetDatabase().GetSource() != s.database {
 				return fmt.Errorf("YDB directory knowledge is outside the captured database")
+			}
+			if held, found := s.seen[path.Join(s.database, directory)]; found && held.GetKind() != "schema" {
+				continue
 			}
 			if err := s.add(&protocol.Reference{Engine: "ydb", Database: s.database, Kind: "schema", Name: directory}, path.Join(s.database, directory), Ydb_Scheme.Entry_DIRECTORY); err != nil {
 				return err

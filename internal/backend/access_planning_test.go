@@ -57,7 +57,9 @@ func TestNativeAccessOrderingPreservesCapturedACLChecks(t *testing.T) {
 			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
 			step := result.Contributions[0].Steps[0]
 			c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
-			c.Assert(step.Metadata.Effects, qt.HasLen, 3)
+			// The node, its path and its access list, and last the directory
+			// a creation reads above it or the one a drop leaves room for.
+			c.Assert(step.Metadata.Effects, qt.HasLen, map[string]int{"create": 4, "alter": 3, "drop": 4}[action])
 			if action == "drop" {
 				c.Assert(result.Rewrites, qt.HasLen, 1)
 				c.Assert(proto.Equal(result.Rewrites[0].Sources[0], request.CommonSteps[0].Id), qt.IsTrue)
