@@ -627,10 +627,12 @@ embedded engine writes it from its own:
   creation and a change to the settings the object held. The prediction of
   what the forward change leaves is the forward state the host plans the
   reverse against; it is never read from the server.
-- The down file carries the strategy and the limitations, in the embedded
-  engine's words: a dropped topic loses its messages and its consumers'
-  positions, a dropped coordination node its semaphores, a restored workload
-  setting cannot undo the queries run under the forward one.
+- The down file holds the reverse's statements, in the exact statement style
+  the host plans in, and a `-- Recovery limit:` line for what the rollback
+  cannot undo, in the embedded engine's words: a dropped topic loses its
+  messages and its consumers' positions, a dropped coordination node its
+  semaphores, a restored workload setting cannot undo the queries run under
+  the forward one.
 - A rotated secret has nothing to run in reverse: the value it replaced was
   never read. A secret created again takes the value of the variable for its
   path when the rollback runs.
