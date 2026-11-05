@@ -55,7 +55,7 @@ func compatInspect(c *qt.C, directory string) (document, notes, reapplied string
 // blocks for this provider's table settings. HCL has no spelling for a column
 // family, a table's splitting settings, its changefeeds or a vector index's
 // settings through this provider. A TTL has one, its platform "ydb" block
-// (host_hcl_platform_test.go). `ptah-compat schema inspect` warns
+// (host_hcl_platform_test.go). `ptah-compat schema inspect` reports
 // that the table's settings are not in the document, and the document applied
 // back to the database it came from plans nothing: what a description leaves
 // out keeps what the table holds, so the table does not return to YDB's
@@ -95,6 +95,7 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			requireCapability(c, targetCapabilities(c), test.capability)
+			listLosses(c)
 			opened, directory, database := lockFixture(c)
 			absolute := path.Join(database, directory, test.table)
 			emptyAtCleanup(c, opened, path.Join(database, directory))
@@ -106,7 +107,7 @@ func TestHostCompatInspectedHCLKeepsWhatItCannotWrite_HappyPath(t *testing.T) {
 			_, notes, reapplied := compatInspect(c, directory)
 
 			c.Assert(before, qt.DeepEquals, test.want)
-			c.Assert(notes, qt.Matches, `(?s).*\nwarning: table\.`+regexp.QuoteMeta(directory+"."+test.table)+`: [^\n]* is not represented in HCL\n.*`)
+			c.Assert(notes, qt.Matches, `(?s).*table\.`+regexp.QuoteMeta(directory+"."+test.table)+`: [^\n]* is not represented in HCL.*`)
 			c.Assert(reapplied, qt.Equals, "Schema is synced, no changes to be made\n")
 			c.Assert(heldTableOf(c, opened, absolute), qt.DeepEquals, test.want)
 		})
