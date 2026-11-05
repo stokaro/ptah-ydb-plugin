@@ -27,18 +27,27 @@ import (
 // external data source; and vector indexes. Each value is the one the built-in
 // engine printed for the same directory, on 25.1.4.7 and 26.2.1.14 alike.
 //
-// The global index here holds YDB's settings, and the built-in engine counted
-// no index with settings. Where the host reads global indexes as common
-// indexes, the declaration it counts holds none of their settings, so a count
-// of an index with settings needs the index's own model (see
-// stokaro/ptah-ydb-plugin#186).
+// A global index is counted once where its partitioning or read replicas
+// differ from the ones YDB gives a new index: four here, one of them
+// asynchronous and one unique, and neither the index that keeps YDB's
+// settings nor the vector indexes. The host reads a global index as a common
+// index, so the count comes from the index's own settings, which a host reads
+// when it negotiates schema.observed-index-facets.
 func TestHostSchemaStatsCountsTheTableSettings_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.ReportCountsFeature)
+	requireHostNegotiates(c, provider.ObservedIndexFacetsFeature)
 	f := newMigrationsFixture(c)
 	absolute := func(name string) string { return path.Join(f.database, f.dir, name) }
 	execAll(c, f,
 		"CREATE TABLE `"+absolute("plain")+"` (id Uint64 NOT NULL, name Utf8, PRIMARY KEY (id), INDEX plain_name GLOBAL ON (name))",
+		"CREATE TABLE `"+absolute("tuned")+"` (id Uint64 NOT NULL, a Utf8, b Utf8, d Utf8, e Utf8, PRIMARY KEY (id), "+
+			"INDEX by_load GLOBAL ON (a), INDEX by_replicas GLOBAL ASYNC ON (b), INDEX by_minimum GLOBAL ON (d), INDEX untouched GLOBAL ON (e))",
+		"ALTER TABLE `"+absolute("tuned")+"` ALTER INDEX by_load SET (AUTO_PARTITIONING_BY_LOAD = ENABLED)",
+		"ALTER TABLE `"+absolute("tuned")+"` ALTER INDEX by_replicas SET (READ_REPLICAS_SETTINGS = 'PER_AZ:1')",
+		"ALTER TABLE `"+absolute("tuned")+"` ALTER INDEX by_minimum SET (AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3)",
+		"CREATE TABLE `"+absolute("unique")+"` (id Uint64 NOT NULL, u Utf8, PRIMARY KEY (id), INDEX by_u GLOBAL UNIQUE SYNC ON (u))",
+		"ALTER TABLE `"+absolute("unique")+"` ALTER INDEX by_u SET (AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9)",
 		"CREATE TABLE `"+absolute("ttl_date")+"` (id Uint64 NOT NULL, ts Timestamp, PRIMARY KEY (id)) WITH (TTL = Interval(\"P1D\") ON ts)",
 		"CREATE TABLE `"+absolute("ttl_epoch")+"` (id Uint64 NOT NULL, expiry Uint64, PRIMARY KEY (id)) WITH (TTL = Interval(\"PT1H\") ON expiry AS SECONDS)",
 		"CREATE TABLE `"+absolute("families")+"` (id Uint64 NOT NULL, a Utf8 FAMILY cold, b Utf8, PRIMARY KEY (id), "+
@@ -87,11 +96,11 @@ func TestHostSchemaStatsCountsTheTableSettings_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", stdout))
 	labels := `{dialect="ydb",schemas="` + f.dir + `"}`
 	for _, sample := range []string{
-		"ptah_schema_tables" + labels + " 14\n",
+		"ptah_schema_tables" + labels + " 16\n",
 		"ptah_schema_ydb_ttl_tables" + labels + " 3\n",
 		"ptah_schema_ydb_column_families" + labels + " 3\n",
 		"ptah_schema_ydb_table_partitioning" + labels + " 5\n",
-		"ptah_schema_ydb_index_partitioning" + labels + " 0\n",
+		"ptah_schema_ydb_index_partitioning" + labels + " 4\n",
 		"ptah_schema_ydb_column_tables" + labels + " 3\n",
 		"ptah_schema_ydb_tiered_ttl_tables" + labels + " 1\n",
 		"ptah_schema_ydb_vector_indexes" + labels + " 2\n",

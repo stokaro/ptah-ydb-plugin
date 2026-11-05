@@ -12,6 +12,10 @@
 //
 // The package reads text only. Which column a TTL reads, and whether that
 // column's type fits the unit, is decided where the table's columns are known.
+//
+// A refusal is an *Error. Its text quotes the declaration, and its reason says
+// the same without it, for a host that prints a provider's reasons: a reason
+// never quotes a value the declaration wrote.
 package ttlgrammar
 
 import (
@@ -31,6 +35,30 @@ const (
 // units are the accepted units, in the order a refusal lists them.
 var units = []string{Seconds, Milliseconds, Microseconds, Nanoseconds}
 
+// Error is an interval or a unit YDB does not take.
+type Error struct {
+	text, reason string
+}
+
+// Error returns the refusal with the declared value it quotes.
+func (e *Error) Error() string { return e.text }
+
+// Reason returns the refusal without the declared value, as one sentence a
+// host may print, such as `the interval is not an ISO 8601 duration YDB takes
+// (such as P30D or PT1H30M): it does not begin with P`.
+func (e *Error) Reason() string { return e.reason }
+
+// Within returns the refusal with prefix in front of both its text and its
+// reason, such as the tier of a TTL the refused interval belongs to.
+func (e *Error) Within(prefix string) *Error {
+	return &Error{text: prefix + e.text, reason: prefix + e.reason}
+}
+
+// refusal is an Error whose text quotes value where its reason names it.
+func refusal(noun, value, rest string) *Error {
+	return &Error{text: fmt.Sprintf("%s %q %s", noun, value, rest), reason: "the " + noun + " " + rest}
+}
+
 // MaxSeconds is the longest interval YDB's Interval type holds: P49672DT23H59M59S
 // is accepted and P49673D answers `Invalid value "P49673D" for type Interval`.
 const MaxSeconds = 4291747199
@@ -48,7 +76,7 @@ func Unit(declared string) (string, error) {
 			return unit, nil
 		}
 	}
-	return "", fmt.Errorf("unit %q is not one YDB takes: use %s", declared, strings.Join(units, ", "))
+	return "", refusal("unit", declared, "is not one YDB takes: use "+strings.Join(units, ", "))
 }
 
 // IntervalSeconds reads an interval as YDB's Interval literal takes it and
@@ -57,13 +85,14 @@ func Unit(declared string) (string, error) {
 func IntervalSeconds(interval string) (uint64, error) {
 	parsed, err := parseDuration(interval)
 	if err != nil {
-		return 0, fmt.Errorf("interval %q is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): %w", interval, err)
+		return 0, &Error{text: fmt.Sprintf("interval %q is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): %s", interval, err.text),
+			reason: "the interval is not an ISO 8601 duration YDB takes (such as P30D or PT1H30M): " + err.reason}
 	}
 	if parsed.fraction {
-		return 0, fmt.Errorf("interval %q has a fraction of a second, and YDB keeps whole seconds only (PT1.5S reads back as PT1S)", interval)
+		return 0, refusal("interval", interval, "has a fraction of a second, and YDB keeps whole seconds only (PT1.5S reads back as PT1S)")
 	}
 	if parsed.seconds > MaxSeconds {
-		return 0, fmt.Errorf("interval %q is longer than YDB's Interval type holds (P49672DT23H59M59S)", interval)
+		return 0, refusal("interval", interval, "is longer than YDB's Interval type holds (P49672DT23H59M59S)")
 	}
 	return parsed.seconds, nil
 }
@@ -75,36 +104,39 @@ type duration struct {
 }
 
 // parseDuration reads `P[nW][nD][T[nH][nM][n[.f]S]]` with at least one part and
-// the T present only when a time part follows it.
-func parseDuration(text string) (duration, error) {
+// the T present only when a time part follows it. A refusal's text quotes the
+// part it refuses, and its reason describes the part.
+func parseDuration(text string) (duration, *Error) {
+	plain := func(problem string) *Error { return &Error{text: problem, reason: problem} }
 	rest, ok := strings.CutPrefix(text, "P")
 	if !ok {
-		return duration{}, fmt.Errorf("it does not begin with P")
+		return duration{}, plain("it does not begin with P")
 	}
 	datePart, timePart, hasTime := strings.Cut(rest, "T")
 	if hasTime && timePart == "" {
-		return duration{}, fmt.Errorf("the T is not followed by hours, minutes or seconds")
+		return duration{}, plain("the T is not followed by hours, minutes or seconds")
 	}
 	var parsed duration
 	parts := 0
-	read := func(part string, designators []designator) error {
+	read := func(part string, designators []designator) *Error {
 		next := 0
 		for part != "" {
 			end := strings.IndexFunc(part, func(r rune) bool { return (r < '0' || r > '9') && r != '.' })
 			if end <= 0 {
-				return fmt.Errorf("%q is not a number followed by a designator", part)
+				return &Error{text: fmt.Sprintf("%q is not a number followed by a designator", part), reason: "a part is not a number followed by a designator"}
 			}
 			number, letter := part[:end], part[end]
 			index := designatorIndex(designators, letter, next)
 			if index < 0 {
-				return fmt.Errorf("designator %q is out of place or not one YDB takes (weeks, days, hours, minutes, seconds)", string(letter))
+				const takes = "is out of place or not one YDB takes (weeks, days, hours, minutes, seconds)"
+				return &Error{text: fmt.Sprintf("designator %q %s", string(letter), takes), reason: "a designator " + takes}
 			}
 			whole, decimals, err := readNumber(number)
 			if err != nil {
 				return err
 			}
 			if decimals != "" && !designators[index].fractional {
-				return fmt.Errorf("%q is not a number YDB takes there", number)
+				return &Error{text: fmt.Sprintf("%q is not a number YDB takes there", number), reason: "a number has a fraction where YDB takes a whole number"}
 			}
 			parsed.seconds += whole * designators[index].seconds
 			parsed.fraction = parsed.fraction || strings.Trim(decimals, "0") != ""
@@ -121,7 +153,7 @@ func parseDuration(text string) (duration, error) {
 		return duration{}, err
 	}
 	if parts == 0 {
-		return duration{}, fmt.Errorf("it names no weeks, days, hours, minutes or seconds")
+		return duration{}, plain("it names no weeks, days, hours, minutes or seconds")
 	}
 	return parsed, nil
 }
@@ -151,17 +183,17 @@ func designatorIndex(designators []designator, letter byte, from int) int {
 
 // readNumber reads a duration part's number: its whole part, and the digits
 // after a decimal point, which only seconds may carry.
-func readNumber(number string) (whole uint64, decimals string, _ error) {
+func readNumber(number string) (whole uint64, decimals string, _ *Error) {
 	integer, decimals, hasDecimals := strings.Cut(number, ".")
 	if hasDecimals && (decimals == "" || strings.Contains(decimals, ".")) {
-		return 0, "", fmt.Errorf("%q is not a number YDB takes there", number)
+		return 0, "", &Error{text: fmt.Sprintf("%q is not a number YDB takes there", number), reason: "a number is not one YDB takes there"}
 	}
 	if integer == "" {
-		return 0, "", fmt.Errorf("%q has no whole part", number)
+		return 0, "", &Error{text: fmt.Sprintf("%q has no whole part", number), reason: "a number has no whole part"}
 	}
 	value, err := strconv.ParseUint(integer, 10, 64)
 	if err != nil || value > MaxSeconds {
-		return 0, "", fmt.Errorf("%q is too large", number)
+		return 0, "", &Error{text: fmt.Sprintf("%q is too large", number), reason: "a number is too large"}
 	}
 	return value, decimals, nil
 }

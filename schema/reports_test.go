@@ -62,6 +62,8 @@ func TestReports_NameTheBuiltInEnginesMetrics(t *testing.T) {
 		`row-table-properties/OBSERVED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
 		`row-table-properties/OBSERVED: ydb_column_families "YDB column families a table states, without a default family that states nothing"`,
 		`row-table-properties/OBSERVED: ydb_table_partitioning "YDB row tables stating partitioning, read replicas or a key bloom filter"`,
+		`index-properties/DESIRED: ydb_index_partitioning "YDB global indexes stating partitioning or read replicas"`,
+		`index-properties/OBSERVED: ydb_index_partitioning "YDB global indexes stating partitioning or read replicas"`,
 		`column-storage-properties/DESIRED: ydb_ttl_tables "Tables with a captured YDB TTL"`,
 		`column-storage-properties/DESIRED: ydb_column_tables "YDB tables stored by column"`,
 		`column-storage-properties/DESIRED: ydb_tiered_ttl_tables "YDB column tables whose TTL moves rows to an external data source"`,

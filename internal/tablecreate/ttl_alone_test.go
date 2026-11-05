@@ -29,8 +29,8 @@ func rowTTLFacet(c *qt.C, payload string) *protocol.ComparisonRecord {
 
 // TestColumnTablePlan_TTLAlone plans the TTL alone a declaration that cannot
 // say a table's storage states for a column table as the column table's TTL:
-// the RESET and the SET a declared column storage with that TTL takes, for
-// the change the comparison reports. The table keeps its storage, where the
+// the SET a declared column storage with that TTL takes, for the change the
+// comparison reports. The table keeps its storage, where the
 // declaration would otherwise ask for a row table.
 func TestColumnTablePlan_TTLAlone(t *testing.T) {
 	c := testcheck.New(t)
@@ -53,10 +53,10 @@ func TestColumnTablePlan_TTLAlone(t *testing.T) {
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
 	c.Assert(plan.Changes, qt.HasLen, 1)
 	c.Assert(plan.Changes[0].Kind, qt.Equals, schema.ColumnStorageChange)
-	c.Assert(plan.Changes[0].Steps, qt.HasLen, 2)
-	c.Assert(plan.Changes[0].Steps[0].Name, qt.Equals, "column-table-ttl/000000/reset")
-	c.Assert(plan.Changes[0].Steps[1].Name, qt.Equals, "column-table-ttl/000000/set")
-	c.Assert(jsonValue(c, string(plan.Contributions[0].Steps[1].Operation.Value.Value.Payload)), qt.DeepEquals, jsonValue(c, `{"set":`+deleteTwoDays+`}`))
+	c.Assert(plan.Changes[0].Steps, qt.HasLen, 1)
+	c.Assert(plan.Changes[0].Steps[0].Name, qt.Equals, "column-table-ttl/000000/set")
+	c.Assert(jsonValue(c, string(plan.Contributions[0].Steps[0].Operation.Value.Value.Payload)), qt.DeepEquals,
+		jsonValue(c, `{"held":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}},"set":`+deleteTwoDays+`}`))
 	c.Assert(proto.Equal(request, original), qt.IsTrue)
 }
 

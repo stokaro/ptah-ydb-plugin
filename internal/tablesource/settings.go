@@ -26,11 +26,17 @@ type DeclarationError struct {
 	Value string
 	// Reason says what the attribute takes.
 	Reason string
+	// cause is the refusal Reason was written from, if any.
+	cause error
 }
 
 func (e *DeclarationError) Error() string {
 	return fmt.Sprintf("invalid %s %q: %s", e.Attribute, e.Value, e.Reason)
 }
+
+// Unwrap returns the refusal Reason was written from, such as the grammar's
+// refusal of a TTL interval, or nil.
+func (e *DeclarationError) Unwrap() error { return e.cause }
 
 // UnsupportedError is a setting the bundled decoder in the host reads and the
 // provider cannot carry yet. It is refused by name, never dropped.
@@ -357,11 +363,11 @@ func (s *settings) setTTL(values map[string]string) error {
 	}
 	canonicalUnit, err := ttlgrammar.Unit(unit)
 	if err != nil {
-		return &DeclarationError{Attribute: AttributeTTLUnit, Value: unit, Reason: err.Error()}
+		return &DeclarationError{Attribute: AttributeTTLUnit, Value: unit, Reason: err.Error(), cause: err}
 	}
 	seconds, err := ttlgrammar.IntervalSeconds(interval)
 	if err != nil {
-		return &DeclarationError{Attribute: AttributeTTLInterval, Value: interval, Reason: err.Error()}
+		return &DeclarationError{Attribute: AttributeTTLInterval, Value: interval, Reason: err.Error(), cause: err}
 	}
 	if s.intent.TtlSettings != nil {
 		return fmt.Errorf("it declares a TTL twice")

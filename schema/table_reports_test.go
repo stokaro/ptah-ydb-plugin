@@ -186,12 +186,13 @@ func TestCountValue_TableSettings_HappyPath(t *testing.T) {
 	}
 }
 
-// A read counts the settings of the global indexes the host reads as common
-// indexes from their descriptions. The declaration the host converts the read
-// to holds none of them, so it counts none: through such a host the built-in
-// engine's count of indexes with settings needs a model of the index's own.
+// A global index the host reads as a common index is counted from its own
+// settings, once where they differ from the documented ones, in a read and in
+// the declaration the host converts it to. Its table's index set counts it
+// nowhere: the read keeps the index's description beside the set, and the
+// declaration drops it, so counting it there would count it twice in a read
+// and not at all in its declaration.
 func TestCountValue_CommonIndexes_HappyPath(t *testing.T) {
-	c := testcheck.New(t)
 	settings := func(partitioning *Ydb_Table.PartitioningSettings, replicas *Ydb_Table.ReadReplicasSettings) *native.GlobalIndexSettings {
 		return &native.GlobalIndexSettings{PartitioningSettings: partitioning, ReadReplicasSettings: replicas}
 	}
@@ -199,19 +200,71 @@ func TestCountValue_CommonIndexes_HappyPath(t *testing.T) {
 	minimum.MinPartitionsCount, minimum.MaxPartitionsCount = 2, 5
 	byLoad := documentedPartitioning()
 	byLoad.PartitioningByLoad = Ydb.FeatureFlag_ENABLED
-	read := capturedIndexes(c, &native.IndexObservations{CommonIndexes: []*native.TableIndexDescription{
-		commonIndex("a", settings(minimum, nil)), commonIndex("b", settings(byLoad, nil)),
-		commonIndex("c", settings(documentedPartitioning(), &Ydb_Table.ReadReplicasSettings{Settings: &Ydb_Table.ReadReplicasSettings_PerAzReadReplicasCount{PerAzReadReplicasCount: 1}})),
-		commonIndex("d", settings(documentedPartitioning(), nil)), commonIndex("e", nil),
-	}})
+	bySize := documentedPartitioning()
+	bySize.PartitioningBySize, bySize.PartitionSizeMb = Ydb.FeatureFlag_DISABLED, 0
+	for _, row := range []struct {
+		name string
+		held *native.GlobalIndexSettings
+		want []string
+	}{
+		{"a minimum and a maximum", settings(minimum, nil), []string{"ydb_index_partitioning=1"}},
+		{"split by load", settings(byLoad, nil), []string{"ydb_index_partitioning=1"}},
+		{"not split by size", settings(bySize, nil), []string{"ydb_index_partitioning=1"}},
+		{"a read replica in each zone", settings(documentedPartitioning(),
+			&Ydb_Table.ReadReplicasSettings{Settings: &Ydb_Table.ReadReplicasSettings_PerAzReadReplicasCount{PerAzReadReplicasCount: 1}}),
+			[]string{"ydb_index_partitioning=1"}},
+		{"the documented settings", settings(documentedPartitioning(), nil), []string{"ydb_index_partitioning=0"}},
+		{"no settings described", nil, []string{"ydb_index_partitioning=0"}},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			read, err := schema.CaptureIndexSettings(indexOwner(), row.held)
+			c.Assert(err, qt.IsNil)
+			observed, err := schema.CountValue(read, protocol.ValueInput_OBSERVED)
+			c.Assert(err, qt.IsNil)
+			c.Assert(countText(observed), qt.DeepEquals, row.want)
+			desired, err := schema.CountValue(convertedDesired(c, read), protocol.ValueInput_DESIRED)
+			c.Assert(err, qt.IsNil)
+			c.Assert(countText(desired), qt.DeepEquals, row.want)
+		})
+	}
+	t.Run("the index set beside them", func(t *testing.T) {
+		c := testcheck.New(t)
+		read := capturedIndexes(c, &native.IndexObservations{CommonIndexes: []*native.TableIndexDescription{
+			commonIndex("a", settings(minimum, nil)), commonIndex("b", settings(byLoad, nil)), commonIndex("c", nil),
+		}})
+		observed, err := schema.CountValue(read, protocol.ValueInput_OBSERVED)
+		c.Assert(err, qt.IsNil)
+		c.Assert(countText(observed), qt.DeepEquals, []string{"ydb_index_partitioning=0", "ydb_vector_indexes=0"})
+		desired, err := schema.CountValue(convertedDesired(c, read), protocol.ValueInput_DESIRED)
+		c.Assert(err, qt.IsNil)
+		c.Assert(countText(desired), qt.DeepEquals, []string{"ydb_index_partitioning=0", "ydb_vector_indexes=0"})
+	})
+}
 
-	observed, err := schema.CountValue(read, protocol.ValueInput_OBSERVED)
-	c.Assert(err, qt.IsNil)
-	desired, desiredErr := schema.CountValue(convertedDesired(c, read), protocol.ValueInput_DESIRED)
-
-	c.Assert(countText(observed), qt.DeepEquals, []string{"ydb_index_partitioning=3", "ydb_vector_indexes=0"})
-	c.Assert(desiredErr, qt.IsNil)
-	c.Assert(countText(desired), qt.DeepEquals, []string{"ydb_index_partitioning=0", "ydb_vector_indexes=0"})
+// A declared index counts the settings it gives the index once YDB builds
+// it: a setting stated at the documented value is no difference.
+func TestCountValue_DeclaredIndexSettings_HappyPath(t *testing.T) {
+	for _, row := range []struct {
+		name    string
+		payload string
+		want    []string
+	}{
+		{"nothing stated", `{}`, []string{"ydb_index_partitioning=0"}},
+		{"the documented size stated", `{"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048"}}`, []string{"ydb_index_partitioning=0"}},
+		{"split by load", `{"partitioningSettings":{"partitioningByLoad":"ENABLED"}}`, []string{"ydb_index_partitioning=1"}},
+		{"a maximum", `{"partitioningSettings":{"maxPartitionsCount":"9"}}`, []string{"ydb_index_partitioning=1"}},
+		{"read replicas", `{"readReplicasSettings":{"anyAzReadReplicasCount":"2"}}`, []string{"ydb_index_partitioning=1"}},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			value, err := schema.NormalizeDesired(desiredIndexSettings(row.payload))
+			c.Assert(err, qt.IsNil)
+			counts, err := schema.CountValue(value, protocol.ValueInput_DESIRED)
+			c.Assert(err, qt.IsNil)
+			c.Assert(countText(counts), qt.DeepEquals, row.want)
+		})
+	}
 }
 
 // desiredValue is a desired value of kind under model with payload.

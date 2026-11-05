@@ -22,10 +22,16 @@ import (
 // viewAccess declares, in directory, a table src, a view active over it with
 // query, a group and a grant to the group on the view.
 func viewAccess(directory string, names accessNames, query string) string {
+	return ungrantedView(directory, names, query) +
+		"grants:\n  view:\n    role: " + names.group + "\n    privileges: [SELECT ROW]\n    on_table: " + directory + ".active\n"
+}
+
+// ungrantedView is viewAccess without the grant: the table src, the view
+// active and the group.
+func ungrantedView(directory string, names accessNames, query string) string {
 	return "tables:\n  src:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n" +
 		"views:\n  active:\n    name: " + directory + ".active\n    body: " + strconv.Quote(query) + "\n" +
-		"roles:\n  " + names.group + ":\n    group: true\n" +
-		"grants:\n  view:\n    role: " + names.group + "\n    privileges: [SELECT ROW]\n    on_table: " + directory + ".active\n"
+		"roles:\n  " + names.group + ":\n    group: true\n"
 }
 
 // viewlessAccess is viewAccess without the view and its grant: the table src
@@ -53,10 +59,9 @@ func heldView(c *qt.C, opened *connection.Connection, absolute string) (string, 
 // view and creates it again. The drop takes the view's access entries with
 // it, and the plan grants the entry again after the new view. The view then
 // holds the new query and the entry, and the next run is synced. A source
-// that leaves the view out drops it; nothing is left to plan, and no entry on
-// the view is left. The host's engine drops the view in one statement, since
-// the drop takes the entry; the host plans a REVOKE of the entry before the
-// DROP VIEW on the provider path, which the server takes (G127).
+// that leaves the view out drops it in one statement, as the host's engine
+// does: the drop takes the entry, so no REVOKE comes before it. Nothing is
+// left to plan, and no entry on the view is left.
 func TestHostReplacesAChangedView_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -90,12 +95,75 @@ func TestHostReplacesAChangedView_HappyPath(t *testing.T) {
 	c.Assert(query, qt.Equals, source+" WHERE id > 0")
 	c.Assert(entries, qt.DeepEquals, []string{names.group + " ydb.granular.select_row"})
 	c.Assert(err, qt.IsNil, qt.Commentf("the drop: %s", output))
-	c.Assert(drop, qt.DeepEquals, []string{
-		// G127: the host's engine plans no REVOKE of an entry the drop takes.
-		"REVOKE 'ydb.granular.select_row' ON `" + directory + "/active` FROM `" + names.group + "`",
-		"DROP VIEW `" + directory + "/active`",
-	})
+	c.Assert(drop, qt.DeepEquals, []string{"DROP VIEW `" + directory + "/active`"})
 	c.Assert(hostPlanned(c, directory, "yaml", dropped), qt.HasLen, 0)
 	c.Assert(grantsIn(c, client, session, directory, []string{"table"}, []string{names.group}), qt.HasLen, 0)
 	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.DeepEquals, []string{"src"})
+}
+
+// A change of the view's query that also removes the group's grant drops the
+// view and creates it again, and plans neither a REVOKE nor a GRANT: the drop
+// takes the entry, and the new view has none to restore. The view holds the
+// new query and no entry, and the next run is synced. The host's engine plans
+// the replacement alone too.
+func TestHostReplacesAViewWhoseGrantGoes_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	names := newAccessNames()
+	removeAccess(c, opened, database, names)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		c.Check(execFixtureSchema(ctx, opened.DB, "DROP VIEW IF EXISTS `"+path.Join(database, directory, "active")+"`"), qt.IsNil)
+		c.Check(execFixtureSchema(ctx, opened.DB, "DROP TABLE IF EXISTS `"+path.Join(database, directory, "src")+"`"), qt.IsNil)
+	})
+	source := "SELECT id FROM `" + directory + "/src`"
+	changed := ungrantedView(directory, names, source+" WHERE id > 0")
+	output, err := hostApplySelected(c, directory, "yaml", viewAccess(directory, names, source))
+	c.Assert(err, qt.IsNil, qt.Commentf("the creation: %s", output))
+
+	replacement := hostPlanned(c, directory, "yaml", changed)
+	output, err = hostApplySelected(c, directory, "yaml", changed)
+	query, entries := heldView(c, opened, path.Join(database, directory, "active"))
+
+	c.Assert(replacement, qt.DeepEquals, []string{
+		"DROP VIEW `" + directory + "/active`",
+		"CREATE VIEW `" + directory + "/active` WITH (security_invoker = TRUE) AS",
+	})
+	c.Assert(err, qt.IsNil, qt.Commentf("the change: %s", output))
+	c.Assert(query, qt.Equals, source+" WHERE id > 0")
+	c.Assert(entries, qt.HasLen, 0)
+	c.Assert(hostPlanned(c, directory, "yaml", changed), qt.HasLen, 0)
+}
+
+// A source that leaves out a table holding the group's grant drops the table
+// and plans no REVOKE before the drop, which takes the entry, as the host's
+// engine plans it. Nothing is left to plan, and the directory is empty.
+func TestHostDropsATableHoldingAGrant_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	client, session := accessSession(c)
+	names := newAccessNames()
+	removeAccess(c, opened, database, names)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		c.Check(execFixtureSchema(ctx, opened.DB, "DROP TABLE IF EXISTS `"+path.Join(database, directory, "src")+"`"), qt.IsNil)
+	})
+	group := "roles:\n  " + names.group + ":\n    group: true\n"
+	granted := "tables:\n  src:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n" + group +
+		"grants:\n  src:\n    role: " + names.group + "\n    privileges: [SELECT ROW]\n    on_table: " + directory + ".src\n"
+	dropped := "tables: {}\n" + group
+	output, err := hostApplySelected(c, directory, "yaml", granted)
+	c.Assert(err, qt.IsNil, qt.Commentf("the table: %s", output))
+	held := grantsIn(c, client, session, directory, []string{"table"}, []string{names.group})
+
+	drop := hostPlanned(c, directory, "yaml", dropped)
+	output, err = hostApplySelected(c, directory, "yaml", dropped)
+
+	c.Assert(held, qt.DeepEquals, []grantEntry{{Role: names.group, Privilege: "ydb.granular.select_row", Kind: "table", Name: directory + "/src"}})
+	c.Assert(drop, qt.DeepEquals, []string{"table-drop-operation " + directory + ".src"})
+	c.Assert(err, qt.IsNil, qt.Commentf("the drop: %s", output))
+	c.Assert(hostPlanned(c, directory, "yaml", dropped), qt.HasLen, 0)
+	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.HasLen, 0)
 }
