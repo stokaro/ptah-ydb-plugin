@@ -107,7 +107,9 @@ func (c *Comments) RunStatement(ctx context.Context, database, root string, quer
 		return false, err
 	}
 	if err := session.Alter(ctx, &Ydb_Table.AlterTableRequest{Path: absolute, AlterAttributes: map[string]string{query.Key(): query.Comment}}); err != nil {
-		return true, fmt.Errorf("set %s: %w", subject, err)
+		// The write is one AlterTable, which YDB applies whole or not at all,
+		// so its own answer is what the outcome is read from.
+		return true, fmt.Errorf("set %s: %w", subject, answered(err))
 	}
 	described, err := session.Describe(ctx, absolute)
 	if err != nil {

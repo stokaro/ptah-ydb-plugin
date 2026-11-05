@@ -160,6 +160,11 @@ type Unit struct {
 	// the provider runs one by one, and a unit that holds a comment or
 	// coordination node statement.
 	Text string
+	// Call reports a unit whose failure is the answer to one call of a YDB
+	// service other than the query service, which YDB applies whole or not at
+	// all, with nothing of the unit applied before it: a comment statement,
+	// which sets one user attribute with one AlterTable.
+	Call bool
 	// Transaction reports a unit that ran in a caller transaction.
 	Transaction bool
 	// Aborts reports a host that listed units.migration-split, which carries
@@ -177,11 +182,14 @@ const (
 // Failed is the reply to an Execute whose first applied units were applied and
 // whose next unit failed after dispatch with answer. A unit YDB rejected
 // without applying any of it is NOT_APPLIED, or PARTIAL after an applied
-// prefix, with the server's issues as its message. One that YDB aborted for a
-// conflict in a caller transaction, as the request's first unit, also sets
-// transaction_aborted when the host negotiated it. Anything else is UNKNOWN.
+// prefix, with the server's issues as its message: a unit of text whose
+// answer is [Answer.Rejected], and a call whose answer is a status in which
+// YDB refuses it. One that YDB aborted for a conflict in a caller
+// transaction, as the request's first unit, also sets transaction_aborted
+// when the host negotiated it. Anything else is UNKNOWN.
 func Failed(answer Answer, unit Unit, applied uint32) *protocol.Execution {
-	if unit.Text == "" || !answer.Rejected(unit.Text, unit.Transaction) {
+	rejected := unit.Text != "" && answer.Rejected(unit.Text, unit.Transaction) || unit.Call && slices.Contains(refusals, answer.Status)
+	if !rejected {
 		return &protocol.Execution{Outcome: protocol.Execution_UNKNOWN, AppliedCount: applied, DiagnosticCode: "ydb.execution-unconfirmed", Message: unknownMessage}
 	}
 	result := &protocol.Execution{Outcome: protocol.Execution_NOT_APPLIED, AppliedCount: applied, DiagnosticCode: "ydb.statement-rejected", Message: answer.Message(rejectedMessage)}
