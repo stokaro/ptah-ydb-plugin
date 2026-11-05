@@ -10,9 +10,9 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
-// ttlItems declares table items in directory with a key id, a column n of
+// ttlItemsYAML declares table items in directory with a key id, a column n of
 // nType and a timestamp seen its TTL of interval reads.
-func ttlItems(directory, nType, interval string) string {
+func ttlItemsYAML(directory, nType, interval string) string {
 	return "tables:\n  items:\n    schema: " + directory + "\n" +
 		"    platform:\n      ydb: {row_deletion_column: seen, row_deletion_interval: " + interval + "}\n" +
 		"    columns:\n      id: {type: Int64, primary: true, not_null: true}\n      n: {type: " + nType + "}\n      seen: {type: Timestamp}\n"
@@ -31,10 +31,10 @@ func TestHostRebuildMigrationCarriesTheTTL_HappyPath(t *testing.T) {
 	opened, directory, database := lockFixture(c)
 	emptyAtCleanup(c, opened, path.Join(database, directory))
 	absolute := path.Join(database, directory, "items")
-	hostRun(c, directory, "the table", ttlItems(directory, "Int32", "P1D"), `(?s).*Schema apply completed successfully.*`)
+	hostRun(c, directory, "the table", ttlItemsYAML(directory, "Int32", "P1D"), `(?s).*Schema apply completed successfully.*`)
 	f := migrationsFixture{opened: opened, dir: directory, database: database}
 	c.Assert(execFixtureSchema(c.Context(), opened.DB, "UPSERT INTO `"+absolute+"` (`id`, `n`, `seen`) VALUES (1l, 10, CurrentUtcTimestamp()), (2l, NULL, CurrentUtcTimestamp())"), qt.IsNil)
-	after := ttlItems(directory, "Int64", "P3D")
+	after := ttlItemsYAML(directory, "Int64", "P3D")
 
 	migrations, up, down := hostGenerate(c, directory, "yaml", after, "--allow-table-rebuild")
 	applied, upErr := hostMigrate(c, directory, migrations, "migrations", "up")
