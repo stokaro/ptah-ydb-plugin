@@ -3,14 +3,17 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"testing"
+	"time"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
+	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
@@ -22,7 +25,14 @@ func subtreeRealm(c *qt.C) (address, root string, opened *connection.Connection)
 	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
 	address, root = realmFixture(c, opened, base)
-	c.Cleanup(func() { dropSecretsBelow(c, opened, root) })
+	// The migrator takes its lock on a node at the realm's root, which keeps
+	// the realm's directory until it goes.
+	c.Cleanup(func() {
+		dropSecretsBelow(c, opened, root)
+		cleanup, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_ = opened.Driver.Coordination().DropNode(cleanup, path.Join(root, locking.NodeName))
+	})
 	return address, root, opened
 }
 
