@@ -71,8 +71,8 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.14.1-0.20261104150804-7e71a23c3a16, a
-pseudo-version of the SDK that speaks provider contract 25.16. The provider
+The module pins `provider-sdk` v0.17.1-0.20261105053415-00cd95ca0040, a
+pseudo-version of the SDK that speaks provider contract 25.23. The provider
 still requires 25.7 of its host and offers each later feature to a host that
 lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -3172,11 +3172,17 @@ streaming query definitions as the streaming query model; and secrets whose
 values are approved input references; and the async replications and transfers
 `CREATE ASYNC REPLICATION` and `CREATE TRANSFER` declare, with what a later
 `ALTER ASYNC REPLICATION ... SET` or `ALTER TRANSFER ... SET` of the load
-changes folded in, as this provider's replication and transfer models. It
-says what each document declares, traces every object to its statement, and
-claims complete coverage of the row-table, column, column-storage,
-coordination, topic, external data source, external table, streaming query,
-secret, async replication and transfer models. A
+changes folded in, as this provider's replication and transfer models. For a
+host that lists `schema.sql-facets` (contract 25.23), it carries the
+changefeeds `ALTER TABLE ... ADD CHANGEFEED` declares, with the consumers
+`ALTER TOPIC <table>/<changefeed> ADD CONSUMER` adds to their topics, as one
+facet of each table in this provider's changefeed model, the value a YAML
+`changefeeds:` key of the table declares. It says what each document declares,
+traces every object to its statement, and claims complete coverage of the
+row-table, column, column-storage, coordination, topic, external data source,
+external table, streaming query, secret, async replication and transfer models,
+and of the changefeed model under that feature, so a table a load declares
+without a changefeed is one with none. A
 `ptah:not-described` header entry of kind `coordination_node`, `topic`,
 `external_data_source`, `external_table`, `streaming_query`, `secret`,
 `replication` or `transfer` limits that claim, for one object or, without a
@@ -3205,10 +3211,9 @@ carry is refused by name, with no partial reading:
 - the partitioning settings, column families, TTL and column storage of a
   table, which Ptah refuses in a SQL schema reading;
 - the partitioning and vector settings of an index;
-- changefeeds and the consumers of their topics: the host refuses the facets
-  of a table in a SQL schema reading, and a changefeed is one. A YQL source
-  therefore leaves the changefeeds of its tables as they are; declare them in
-  YAML or Go;
+- changefeeds and the consumers of their topics, for a host that does not list
+  `schema.sql-facets`, which has no home for a facet of a table. The load then
+  claims nothing about changefeeds and leaves those of its tables as they are;
 - a user's password: the reply's role carries none, so the host would create
   the user without it; a YAML or Go declaration carries the password, which
   the host sets when it creates the user;

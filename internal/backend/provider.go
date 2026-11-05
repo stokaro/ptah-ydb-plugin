@@ -150,7 +150,10 @@ func providerFeatures() []string {
 		// The host sends an index it pairs with one declared under another
 		// name as one rename step, which the table service claims with
 		// RENAME INDEX; see indexRenames.
-		provider.IndexRenamesFeature}
+		provider.IndexRenamesFeature,
+		// A YQL reading carries a table's changefeeds as a facet of the
+		// table; see yqlschema.Reply.
+		provider.SQLFacetsFeature}
 }
 
 // engineFeatures is the feature list of the ydb engine: every feature of the
