@@ -157,8 +157,9 @@ func providerFeatures() []string {
 		// name as one rename step, which the table service claims with
 		// RENAME INDEX; see indexRenames.
 		provider.IndexRenamesFeature,
-		// `ptah schema stats` counts topics, changefeeds and the other native
-		// objects with the provider's counts; see ReportValues.
+		// `ptah schema stats` counts topics, changefeeds, the other native
+		// objects and the table settings with the provider's counts; see
+		// ReportValues.
 		provider.ReportCountsFeature}
 }
 

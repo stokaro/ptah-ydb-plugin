@@ -1064,17 +1064,37 @@ content options without rewriting their native keys or JSON values.
 For a host that lists `models.report-counts`, the provider reports count
 metrics for its topic, changefeed, coordination node, streaming query, external
 data source, external table, async replication, transfer, secret, resource pool
-and resource pool classifier models, desired and observed, under the metric
-names and help texts of the host's built-in YDB engine. It counts each value
-offline: a topic is one topic and its consumers, a table's changefeed set its
-feeds and the consumers across them, an external table one table and its
-columns, and every other object one. `ptah schema stats` then writes these lines
-through the provider as through the built-in engine.
+and resource pool classifier models, and for its row-table properties, column
+storage and index set models, desired and observed, under the metric names and
+help texts of the host's built-in YDB engine. It counts each value offline: a
+topic is one topic and its consumers, a table's changefeed set its feeds and
+the consumers across them, an external table one table and its columns, and
+every other object one. `ptah schema stats` then writes these lines through the
+provider as through the built-in engine.
 
-The built-in engine's table setting families are not reported yet:
-`ydb_ttl_tables`, `ydb_column_families`, `ydb_table_partitioning`,
-`ydb_index_partitioning`, `ydb_column_tables`, `ydb_tiered_ttl_tables` and
-`ydb_vector_indexes`. A scrape through the provider leaves them out.
+The table setting families count as the built-in engine counted them:
+
+| Metric | Counts |
+| --- | --- |
+| `ydb_ttl_tables` | Row tables with a TTL, and column tables whose TTL is one tier that deletes rows. |
+| `ydb_column_families` | The column families of each row table, without a `default` family that has no storage pool of its own, no compression, the regular cache and `keep_in_memory` off. |
+| `ydb_table_partitioning` | Row tables whose partitioning, read replicas or key bloom filter differ from what YDB gives a new table, and declarations that state a starting layout. |
+| `ydb_index_partitioning` | Global sync, async and unique indexes whose partitioning or read replicas differ from what YDB gives a new index. |
+| `ydb_column_tables` | Column tables. |
+| `ydb_tiered_ttl_tables` | Column tables whose TTL has any other tiers, such as one that moves rows to an external data source. |
+| `ydb_vector_indexes` | Vector indexes. |
+
+What YDB gives a new table or global index is automatic partitioning by size
+at 2048 MB, none by load, at least one partition, no maximum, no read replicas
+and no key bloom filter; an unspecified setting is that value. A read holds
+every setting the server describes and is counted against these values, as is
+the declaration the host converts it to before it counts.
+
+A host that reads global indexes as common indexes (`schema.observed-indexes`)
+counts the declaration it converts a read to, and that declaration holds none
+of their settings. Through such a host `ydb_index_partitioning` counts no
+global index, where the built-in engine counted each one with settings; the
+observed index set counts them.
 
 ## Offline coordination declarations
 
