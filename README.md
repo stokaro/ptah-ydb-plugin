@@ -1127,9 +1127,16 @@ The observations carry their complete native field definitions and digests.
 Normalization works offline after the database session closes.
 
 Schema selectors name exact directories relative to the selected database.
-Use `/` for its root. An unfiltered read walks subdirectories. System
-(dot-prefixed) directories are excluded; user tables are not excluded merely
-because their names begin with a dot. Traversal and snapshot size are bounded.
+Use `/` for its root. An unfiltered read walks subdirectories. A directory
+whose name starts with a dot is not read, as the host's embedded engine read
+none: `.sys`, `.metadata` and the other directories YDB keeps for itself, and
+a user's directory such as `.hidden`. The read claims such a directory, and a
+selected path below one, as empty, so a declared object there is created, and
+nothing there is dropped. Measured on 26.2.1.14, that engine also plans the
+creation again on the next run, which YDB refuses (`path exist`); through the
+provider the next run is refused before the unit is sent.
+A table whose own name begins with a dot is read like any other. Traversal and
+snapshot size are bounded.
 Coverage names inspected subjects and records native-object completeness for
 each directory whose listing and child reads finished. These regions bind the
 exact database, empty catalog, and exact schema directory; an unfiltered read
@@ -1165,8 +1172,8 @@ A read with no selector claims more than the directories it lists. With a
 host that lists `schema.subtree-coverage` (contract 25.22, ADR 0064 in Ptah),
 the provider declares `/` as its schema separator, and the read sends one
 complete region over the root and every directory below it, and an unknown
-region over each directory the walk leaves out, the dot-prefixed directories
-and the dev realm directory, with everything below them. A native object in a
+region over the directory the walk leaves out, the dev realm directory, with
+everything below it. A native object in a
 directory that does not exist yet is then absent, and `schema apply` or
 `migrations generate` with no `--schemas` creates it, as the host's embedded
 engine does. One declared below a directory the walk leaves out stays
