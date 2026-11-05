@@ -79,6 +79,15 @@ func TestValidateSchema_HappyPath(t *testing.T) {
 		request.Namespaces = []*protocol.DeclaredNamespace{{Subject: &protocol.ComparisonIdentity{Kind: "schema", Name: testcomparison.Part("app")}, Name: "app", Comment: "notes"}}
 		c.Assert(diagnostics(c, request), qt.HasLen, 0)
 	})
+	// YDB holds a UNIQUE as a global unique index, which the host reads it as
+	// before it plans.
+	t.Run("a UNIQUE constraint and a UNIQUE column", func(t *testing.T) {
+		c := testcheck.New(t)
+		unique := keyed("app", "accounts")
+		unique.Declaration.Columns[1].Unique = true
+		unique.Declaration.Constraints = []*protocol.DeclaredConstraint{{Name: "uq_accounts_body", Type: "unique", Columns: []string{"body", "id"}}}
+		c.Assert(diagnostics(c, newRequest(unique)), qt.HasLen, 0)
+	})
 	t.Run("standalone enums are accepted unless nothing may be skipped", func(t *testing.T) {
 		c := testcheck.New(t)
 		request := newRequest()
@@ -117,6 +126,11 @@ func TestValidateSchema_Diagnostics(t *testing.T) {
 			return newRequest(indexed)
 		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "indexed",
 			`index "by_body": it is a vector_kmeans_tree index, and this provider creates a table with its global indexes, synchronous or asynchronous`},
+		{"a CHECK constraint", func() *protocol.ValidateSchemaRequest {
+			checked := keyed("", "checked")
+			checked.Declaration.Constraints = []*protocol.DeclaredConstraint{{Name: "ck_checked_body", Type: "CHECK", CheckExpression: "body <> ''"}}
+			return newRequest(checked)
+		}, protocol.SchemaDiagnostic_UNSUPPORTED_FEATURE, "table", "checked", `YDB table creation does not support .*DeclaredTable\.constraints`},
 		{"table inside a table", func() *protocol.ValidateSchemaRequest {
 			return newRequest(keyed("", "a"), keyed("a", "b"))
 		}, protocol.SchemaDiagnostic_INVALID_SCHEMA, "table path", "a/b", `YDB table a/b lies inside table a; a table holds no children`},

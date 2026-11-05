@@ -214,10 +214,16 @@ func familyEntries(families []*Ydb_Table.ColumnFamily) ([]string, error) {
 	return entries, nil
 }
 
-// familySettings are the `SETTING = value` items a family states.
+// familySettings are the `SETTING = value` items a family states, in the
+// order the host's embedded engine writes them: DATA, COMPRESSION and
+// CACHE_MODE.
 func familySettings(family *Ydb_Table.ColumnFamily) ([]string, error) {
 	if family.GetKeepInMemory() == Ydb.FeatureFlag_ENABLED {
 		return nil, noTextForm("column family %q keeps its columns in memory, and YQL has no family setting for it", familyKey(family.GetName()))
+	}
+	stated, err := schema.NativeFamily(family)
+	if err != nil {
+		return nil, err
 	}
 	var items []string
 	if media := family.GetData().GetMedia(); media != "" {
@@ -225,6 +231,9 @@ func familySettings(family *Ydb_Table.ColumnFamily) ([]string, error) {
 	}
 	if compression := compressionText(family.GetCompression()); compression != "" {
 		items = append(items, "COMPRESSION = "+ydbtype.StringLiteral(compression))
+	}
+	if mode := cacheModeText(stated.GetCacheMode()); mode != "" {
+		items = append(items, "CACHE_MODE = "+ydbtype.StringLiteral(mode))
 	}
 	return items, nil
 }
@@ -490,12 +499,19 @@ func familyActions(alteration *Alteration) ([]string, error) {
 		if family.GetKeepInMemory() != Ydb.FeatureFlag_STATUS_UNSPECIFIED {
 			return nil, noTextForm("column family %q changes keep_in_memory, and YQL has no family setting for it", familyKey(family.GetName()))
 		}
+		stated, err := schema.NativeFamily(family)
+		if err != nil {
+			return nil, err
+		}
 		set := "ALTER FAMILY " + QuoteIdentifier(familyKey(family.GetName())) + " SET "
 		if media := family.GetData().GetMedia(); media != "" {
 			actions = append(actions, set+"DATA "+ydbtype.StringLiteral(media))
 		}
 		if compression := compressionText(family.GetCompression()); compression != "" {
 			actions = append(actions, set+"COMPRESSION "+ydbtype.StringLiteral(compression))
+		}
+		if mode := cacheModeText(stated.GetCacheMode()); mode != "" {
+			actions = append(actions, set+"CACHE_MODE "+ydbtype.StringLiteral(mode))
 		}
 	}
 	moved := slices.Clone(request.GetAlterColumns())

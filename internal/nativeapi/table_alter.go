@@ -162,13 +162,27 @@ func holdsRowTable(owner *protocol.Reference, table *native.DescribeTableResult)
 	return nil
 }
 
-func familyByName(families []*Ydb_Table.ColumnFamily, name string) *Ydb_Table.ColumnFamily {
+func familyByName(families []*native.ColumnFamily, name string) *native.ColumnFamily {
 	for _, family := range families {
 		if familyName(family.Name) == familyName(name) {
 			return family
 		}
 	}
 	return nil
+}
+
+// requestFamilies reads the families of a request as the provider's
+// ColumnFamily, with the cache mode each carries (see schema.RequestFamily).
+func requestFamilies(families []*Ydb_Table.ColumnFamily) ([]*native.ColumnFamily, error) {
+	result := make([]*native.ColumnFamily, 0, len(families))
+	for _, family := range families {
+		read, err := schema.NativeFamily(family)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, read)
+	}
+	return result, nil
 }
 
 func columnByName(columns []*native.ColumnMeta, name string) *native.ColumnMeta {
@@ -189,7 +203,7 @@ func checkAlterationPrecondition(owner *protocol.Reference, alteration *tablecre
 	}
 	request := alteration.Request
 	for _, family := range request.AddColumnFamilies {
-		if familyByName(table.ColumnFamilies, family.Name) != nil {
+		if familyByName(table.ColumnFamilies, family.GetName()) != nil {
 			return fmt.Errorf("YDB column family to add already exists")
 		}
 	}
@@ -416,8 +430,16 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 	if !slices.Equal(before.PrimaryKey, observed.PrimaryKey) || len(before.Columns)-len(request.DropColumns)+len(request.AddColumns) != len(observed.Columns) {
 		return fmt.Errorf("YDB altered table key or columns differ from the request")
 	}
+	altered, err := requestFamilies(request.AlterColumnFamilies)
+	if err != nil {
+		return err
+	}
+	added, err := requestFamilies(request.AddColumnFamilies)
+	if err != nil {
+		return err
+	}
 	for _, family := range before.ColumnFamilies {
-		changed := familyByName(request.AlterColumnFamilies, family.Name)
+		changed := familyByName(altered, family.Name)
 		actual := familyByName(observed.ColumnFamilies, family.Name)
 		want := proto.CloneOf(family)
 		if changed != nil {
@@ -427,16 +449,20 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 			if changed.Compression != Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED {
 				want.Compression = changed.Compression
 			}
+			if changed.CacheMode != native.ColumnFamily_CACHE_MODE_UNSPECIFIED {
+				want.CacheMode = changed.CacheMode
+			}
 		}
 		if actual == nil || actual.GetData().GetMedia() != want.GetData().GetMedia() ||
-			compression(actual.Compression) != compression(want.Compression) || actual.KeepInMemory != want.KeepInMemory {
+			compression(actual.Compression) != compression(want.Compression) || actual.KeepInMemory != want.KeepInMemory || actual.CacheMode != want.CacheMode {
 			return fmt.Errorf("YDB altered column family differs from the request")
 		}
 	}
-	for _, family := range request.AddColumnFamilies {
+	for _, family := range added {
 		actual := familyByName(observed.ColumnFamilies, family.Name)
 		if actual == nil || (family.GetData().GetMedia() != "" && actual.GetData().GetMedia() != family.Data.Media) ||
-			(family.Compression != Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED && compression(actual.Compression) != compression(family.Compression)) {
+			(family.Compression != Ydb_Table.ColumnFamily_COMPRESSION_UNSPECIFIED && compression(actual.Compression) != compression(family.Compression)) ||
+			(family.CacheMode != native.ColumnFamily_CACHE_MODE_UNSPECIFIED && actual.CacheMode != family.CacheMode) {
 			return fmt.Errorf("YDB added column family differs from the request")
 		}
 	}

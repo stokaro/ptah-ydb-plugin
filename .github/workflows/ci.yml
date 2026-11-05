@@ -108,6 +108,9 @@ jobs:
       # the description of each column table, which the table service leaves
       # incomplete.
       PTAH_YDB_TEST_URL: ydb://127.0.0.1:2136/local?go_balancer=disable&monitoring=http://127.0.0.1:8765
+      # A second server, for the tests whose dev database must be on a server
+      # other than the target's. Both name their database /local.
+      PTAH_YDB_OTHER_TEST_URL: ydb://127.0.0.1:2236/local?go_balancer=disable&monitoring=http://127.0.0.1:8766
     services:
       ydb:
         image: ${{ matrix.line.image }}
@@ -121,6 +124,21 @@ jobs:
         ports:
           - 2136:2136
           - 8765:8765
+        options: >-
+          --hostname localhost
+          --health-cmd "sh /health_check"
+          --health-interval 5s
+          --health-timeout 20s
+          --health-retries 30
+      ydb-other:
+        image: ${{ matrix.line.image }}
+        env:
+          YDB_USE_IN_MEMORY_PDISKS: 'true'
+          YDB_FEATURE_FLAGS: ${{ matrix.line.features }}
+          YDB_GRPC_SERVICES: replication
+        ports:
+          - 2236:2136
+          - 8766:8765
         options: >-
           --hostname localhost
           --health-cmd "sh /health_check"
