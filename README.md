@@ -20,10 +20,6 @@ through the public Ptah SDK. It supports anonymous, URL user/password, and URL t
 Session receipts contain the selected database and measured server version.
 The implementation does not import the Ptah application module.
 
-The [documentation](docs/README.md) says what YDB does in Ptah, from installing
-and selecting the provider to the objects it declares and how it runs a
-migration.
-
 The provider ID is `github.com/stokaro/ptah-ydb-plugin`. Model kinds use the `github.com/stokaro/ptah-ydb-plugin/` namespace. This changes
 the experimental model identities; pre-v1, no compatibility with the earlier
 unpublished names is owed. Older envelopes and plans are refused.
@@ -1798,9 +1794,13 @@ The offline planner preserves complete before and after operands. Each step
 has an object effect, a shared `ydb.scheme-path` effect, and a forbidden SQL
 transaction requirement. The path effect names no database, as the host names
 a path of the session's database. Table-to-node and node-to-table replacements
-require an explicit common path handoff. Unsupported common footprints and
-overlapping parent/descendant paths are refused until a directory lifecycle is
-captured. The host's window markers (such as `common/feature-creations`) and the
+require an explicit common path handoff. A view the host creates or drops
+occupies its path as a table does: a node beside it needs no order, and a node
+that takes the path of a dropped view comes after the drop. A grant or a revoke
+on a table or a view, and a comment, change a resource of the object's own and
+occupy no path; the step's read of the object carries the path. Unsupported
+common footprints and overlapping parent/descendant paths are refused until a
+directory lifecycle is captured. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
 the change is refused. A parent directory that does not exist holds no node,
@@ -2613,8 +2613,11 @@ for is refused in the embedded engine's words: an expression, an order, a
 prefix, a NULLS order or an operator class on a key column, an index on the
 table's key, a covered key column. A vector, full-text or local index is
 refused as a common index, since the pinned table protocol builds none of them
-with a table. Execution confirms each index by reading it back. In the TEXT
-form each index is an INDEX clause of the CREATE TABLE.
+with a table. An index names its table as the host names it: by its name, by
+its directory and name, or, where a part holds a dot, by the quoted reference
+`"app.records"` for the root table app.records and `app."v.1"` for the table
+v.1 of the directory app. Execution confirms each index by reading it back. In
+the TEXT form each index is an INDEX clause of the CREATE TABLE.
 
 YDB has no UNIQUE constraint: it refuses one as a parse error and holds the
 same rows with a global unique index, a second row with the same value refused

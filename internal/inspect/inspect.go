@@ -84,6 +84,9 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 	}
 	visited := map[string]bool{}
 	skippedRealm := false
+	// The directories an unscoped walk leaves out, below which a subtree
+	// claim of the root must stay unknown.
+	var skipped []string
 	for len(schemas) != 0 {
 		selected := schemas[0]
 		schemas = schemas[1:]
@@ -112,10 +115,12 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 			}
 			names[name] = true
 			if strings.HasPrefix(name, ".") && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY {
+				skipped = append(skipped, path.Join(selected, name))
 				continue
 			}
 			if selected == "" && entry.GetType() == Ydb_Scheme.Entry_DIRECTORY && slices.Contains(leaveOut, name) {
 				skippedRealm = true
+				skipped = append(skipped, name)
 				continue
 			}
 			switch entry.GetType() {
@@ -285,6 +290,9 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 				})
 			}
 		}
+	}
+	if len(selectors) == 0 && slices.Contains(provider.HostFeatures(ctx), provider.SchemaSubtreeCoverageFeature) {
+		subtreeRegions(result, database, skipped, common.Views)
 	}
 	// Complete streaming dependency assessment needs queries in every user
 	// directory, including dot-prefixed paths. Explicit selectors retain the

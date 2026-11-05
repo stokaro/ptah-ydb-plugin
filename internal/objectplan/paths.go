@@ -20,8 +20,12 @@ func slot(subject *protocol.ComparisonIdentity) *protocol.ComparisonIdentity {
 	value.Database = &protocol.ComparisonPart{}
 	return value
 }
+
+// isSchemeSubject reports whether subject occupies a scheme path of its own:
+// a path, a table, a view or a native object. A view the host creates or
+// drops is an entry of its directory, as a table is.
 func isSchemeSubject(subject *protocol.ComparisonIdentity) bool {
-	return subject.GetKind() == PathKind || subject.GetKind() == "table" || schema.IsNativeObject(subject.GetKind())
+	return subject.GetKind() == PathKind || subject.GetKind() == "table" || subject.GetKind() == "view" || schema.IsNativeObject(subject.GetKind())
 }
 func samePath(a, b *protocol.ComparisonIdentity) bool {
 	return isSchemeSubject(a) && isSchemeSubject(b) && provider.CompareIdentities(slot(a), slot(b)) == 0
@@ -73,6 +77,13 @@ func dependencies(request *protocol.PlanFeaturesRequest, family Family, item cha
 			// A column or an index lives in its table and occupies no path of
 			// its own; the table's effect beside it carries the path.
 			if effect.GetSubject().GetParent().GetNormalized() != "" {
+				continue
+			}
+			// The access list of a table or a view, which a grant or a revoke
+			// on it changes, and a comment are resources of their own, named
+			// by the object with the kind access or comment. They occupy no
+			// path; the step's read of the object beside them carries it.
+			if kind := effect.GetSubject().GetKind(); kind == "access" || kind == "comment" {
 				continue
 			}
 			// A directory effect needs its own path projection. Until that

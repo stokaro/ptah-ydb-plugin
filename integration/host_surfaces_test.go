@@ -164,11 +164,19 @@ func TestHostSchemaLineageTracesViews_HappyPath(t *testing.T) {
 // reply to that call.
 func mcpCall(c *qt.C, tool string, arguments map[string]any) string {
 	c.Helper()
+	return mcpCallOn(c, os.Getenv("PTAH_YDB_TEST_URL"), nil, tool, arguments)
+}
+
+// mcpCallOn is mcpCall against the database at address, with the further
+// flags of `ptah mcp` given, such as the roots a specification may be read
+// from.
+func mcpCallOn(c *qt.C, address string, flags []string, tool string, arguments map[string]any) string {
+	c.Helper()
 	host, manifest := hostManifest(c)
 	ctx, cancel := context.WithTimeout(c.Context(), 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host, "mcp", "--database-url", os.Getenv("PTAH_YDB_TEST_URL"), "--database-class", "ephemeral",
-		"--allow-database-inspect", "allow", "--provider-config", manifest, "--provider-engine", "ydb")
+	cmd := exec.CommandContext(ctx, host, append(append([]string{"mcp", "--database-url", address, "--database-class", "ephemeral",
+		"--allow-database-inspect", "allow"}, flags...), "--provider-config", manifest, "--provider-engine", "ydb")...)
 	stdin, err := cmd.StdinPipe()
 	c.Assert(err, qt.IsNil)
 	stdout, err := cmd.StdoutPipe()
