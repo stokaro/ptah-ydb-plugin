@@ -157,11 +157,16 @@ func TestNativeObjectsAndNamespaceCoverageSubprocess(t *testing.T) {
 	})
 }
 
+// assertExactObjectRegions asserts that a read claims each native object kind,
+// and the settings of the indexes, complete in exactly the listed directories
+// and nowhere else, and claims no region for any other kind. A directory read
+// in full states every global index's settings, so an HCL export of it needs
+// no not-described entry for them.
 func assertExactObjectRegions(c *qt.C, snapshot *protocol.Schema, database string, schemas []string) {
 	c.Helper()
 	for _, record := range snapshot.Coverage.Kinds {
 		c.Assert(record.Knowledge.State, qt.Equals, protocol.ModelKnowledge_UNINSPECTED)
-		if !schema.IsNativeObject(record.Model.Kind) {
+		if !schema.IsNativeObject(record.Model.Kind) && record.Model.Kind != schema.IndexSettingsProperties {
 			c.Assert(record.Regions, qt.HasLen, 0)
 			continue
 		}
