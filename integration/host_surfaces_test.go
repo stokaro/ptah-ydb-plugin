@@ -33,8 +33,10 @@ func execAll(c *qt.C, f migrationsFixture, statements ...string) {
 }
 
 // `schema stats` counts the tables, columns and indexes of a directory that
-// also holds a topic, a changefeed, their consumers and a coordination node.
-// The labels name the dialect and the directory the counts came from.
+// also holds a topic, a changefeed, their consumers and a coordination node,
+// and the provider counts the topic, the changefeed, their consumers and the
+// node. The lines are the built-in YDB engine's, help text included. The
+// labels name the dialect and the directory the counts came from.
 func TestHostSchemaStatsCountsWhatTheReadDescribes_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	f := newMigrationsFixture(c)
@@ -58,6 +60,18 @@ func TestHostSchemaStatsCountsWhatTheReadDescribes_HappyPath(t *testing.T) {
 		"ptah_schema_indexes" + labels + " 1\n",
 		"ptah_schema_constraints" + labels + " 0\n",
 		"ptah_schema_views" + labels + " 0\n",
+		"ptah_schema_topics" + labels + " 1\n",
+		"ptah_schema_topic_consumers" + labels + " 2\n",
+		"ptah_schema_changefeeds" + labels + " 1\n",
+		"ptah_schema_changefeed_consumers" + labels + " 1\n",
+		"ptah_schema_coordination_nodes" + labels + " 1\n",
+		"ptah_schema_streaming_queries" + labels + " 0\n",
+		"# HELP ptah_schema_topics Standalone topics.\n",
+		"# HELP ptah_schema_topic_consumers Consumers of standalone topics.\n",
+		"# HELP ptah_schema_changefeeds Table changefeeds.\n",
+		"# HELP ptah_schema_changefeed_consumers Consumers of table changefeeds.\n",
+		"# HELP ptah_schema_coordination_nodes Standalone coordination nodes.\n",
+		"# HELP ptah_schema_streaming_queries Standalone streaming queries.\n",
 	} {
 		c.Assert(stdout, qt.Contains, sample)
 	}

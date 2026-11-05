@@ -1024,6 +1024,23 @@ retain source type, location, authentication references, and native properties.
 External tables retain source references, location, ordered typed columns, and
 content options without rewriting their native keys or JSON values.
 
+## Object counts
+
+For a host that lists `models.report-counts`, the provider reports count
+metrics for its topic, changefeed, coordination node, streaming query, external
+data source, external table, async replication, transfer, secret, resource pool
+and resource pool classifier models, desired and observed, under the metric
+names and help texts of the host's built-in YDB engine. It counts each value
+offline: a topic is one topic and its consumers, a table's changefeed set its
+feeds and the consumers across them, an external table one table and its
+columns, and every other object one. `ptah schema stats` then writes these lines
+through the provider as through the built-in engine.
+
+The built-in engine's table setting families are not reported yet:
+`ydb_ttl_tables`, `ydb_column_families`, `ydb_table_partitioning`,
+`ydb_index_partitioning`, `ydb_column_tables`, `ydb_tiered_ttl_tables` and
+`ydb_vector_indexes`. A scrape through the provider leaves them out.
+
 ## Offline coordination declarations
 
 The source service accepts the captured YAML document key `coordination_nodes`.
@@ -3553,7 +3570,7 @@ settings other than column families, planning, rendering and operation models fo
 and the capabilities of the feature flags the host plans with. The provider advertises implemented
 inspection, normalization, coordination YAML, Go and HCL source decoding and encoding, index entry key claims, comparison, planning,
 rendering, text units, table rebuilds the planning policy asks for, views and comments on the common wire, SQL, offline schema validation, native coordination, topic, external object, resource pool, streaming query, async replication, transfer and secret lifecycles, approved execution inputs, row-table creation and row-table alteration execution, transaction, history, metadata,
-lock, offline SQL analysis, SQL schema reading, migration lint, migration splits, row and seed services, dev database cleanup, replay guard and embedding store services. The remaining
+lock, offline SQL analysis, SQL schema reading, migration lint, migration splits, row and seed services, dev database cleanup, replay guard, embedding store and object count services. The remaining
 capabilities stay unadvertised.
 
 The host's embedded implementation still needs removal when these operations

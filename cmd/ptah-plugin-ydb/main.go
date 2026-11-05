@@ -58,7 +58,8 @@ func main() {
 		EmbeddingStore:  owner,
 		CommonObjects:   owner,
 		SourceEncoder:   owner,
-		MigrationSplits: owner})
+		MigrationSplits: owner,
+		ValueReporter:   owner})
 	if closeErr := dev.Close(); closeErr != nil {
 		fmt.Fprintln(os.Stderr, closeErr)
 	}
