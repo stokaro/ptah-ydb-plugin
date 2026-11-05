@@ -22,7 +22,15 @@ type reader struct {
 // Tokens returns every token of text read from its head, where a -- comment
 // starting with ! is a translation setting, without the end token.
 func Tokens(text string) []Token {
-	stream := reader{input: text}
+	return Scan(text, true)
+}
+
+// Scan returns every token of text without the end token. head reports that
+// the text begins at the head of a query, where a -- comment starting with !
+// is a translation setting; a text that starts inside a query has no head, so
+// such a comment there is a comment.
+func Scan(text string, head bool) []Token {
+	stream := reader{input: text, pastHead: !head}
 	var tokens []Token
 	for {
 		token := stream.NextToken()
