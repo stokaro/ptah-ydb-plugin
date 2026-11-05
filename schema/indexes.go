@@ -120,6 +120,12 @@ func CaptureIndexes(owner *protocol.Reference, observed *native.IndexObservation
 			}
 		}
 	}
+	for _, index := range value.CommonIndexes {
+		if index == nil {
+			return nil, fmt.Errorf("missing YDB index observation")
+		}
+		index.SizeBytes = 0
+	}
 	return capture(IndexProperties, owner, value)
 }
 
@@ -156,6 +162,25 @@ func normalizeIndexes(value *native.IndexObservations) error {
 		slices.SortFunc(index.Tables, func(a, b *native.ImplementationTable) int { return strings.Compare(a.Name, b.Name) })
 	}
 	slices.SortFunc(value.Indexes, func(a, b *native.ObservedIndex) int { return strings.Compare(a.Description.Name, b.Description.Name) })
+	// A common index is described for its settings alone. Its status is not
+	// read: the common model compares the index, and a rebuild reads only
+	// its settings.
+	for _, index := range value.GetCommonIndexes() {
+		if err := Known(index); err != nil {
+			return err
+		}
+		if !componentName(index.GetName()) || len(index.GetIndexColumns()) == 0 || !CommonIndex(index) {
+			return fmt.Errorf("invalid YDB common index description")
+		}
+		if seen[index.GetName()] {
+			return fmt.Errorf("duplicate observed YDB index")
+		}
+		seen[index.GetName()] = true
+		if index.GetSizeBytes() != 0 {
+			return fmt.Errorf("index properties cannot contain runtime statistics")
+		}
+	}
+	slices.SortFunc(value.CommonIndexes, func(a, b *native.TableIndexDescription) int { return strings.Compare(a.Name, b.Name) })
 	return nil
 }
 

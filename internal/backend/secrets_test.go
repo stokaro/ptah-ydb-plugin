@@ -211,3 +211,34 @@ func TestSecretInputDiscoveryRejectsAnUnsafeSuffixBeforeExecution(t *testing.T) 
 	c.Assert(execution.Outcome, qt.Equals, protocol.Execution_NOT_STARTED)
 	c.Assert(execution.DiagnosticCode, qt.Equals, "ydb.invalid-execution-inputs")
 }
+
+// A source that leaves out a secret a declared object reads by its path asks
+// for a drop that would leave the reader naming a secret that is gone, since
+// YDB drops a secret a data source still names. The comparison refuses it by
+// name, as the host's engine refuses a plan that drops a secret one of its
+// statements reads.
+func TestSecretComparisonRefusesDroppingASecretADeclarationReads_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := secretRequest(c, true)
+	request.Required = []*protocol.ComparisonIdentity{proto.CloneOf(request.Desired.Records[0].Subject)}
+	request.Desired.Records = nil
+
+	result, err := backend.New().CompareModels(c.Context(), request)
+
+	c.Assert(err, qt.ErrorMatches, `rpc error: code = InvalidArgument desc = secret app/pg.pw is dropped while a declared object reads it by its path`)
+	c.Assert(result, qt.IsNil)
+}
+
+// The control: the same omission with nothing declared reading the secret is
+// a drop.
+func TestSecretComparisonDropsASecretNoDeclarationReads_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := secretRequest(c, true)
+	request.Desired.Records = nil
+
+	result, err := backend.New().CompareModels(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Changes, qt.HasLen, 1)
+	c.Assert(result.Undecided, qt.HasLen, 0)
+}

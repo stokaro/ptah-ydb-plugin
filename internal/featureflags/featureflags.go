@@ -31,6 +31,10 @@ type Gate struct {
 	Key string
 	// Flag is the flag's name as the monitoring page spells it.
 	Flag string
+	// refusals are texts YDB's refusal holds when the flag is off, each
+	// measured by the host's embedded engine (internal/ydbflags in Ptah); a
+	// gate whose refusal was never seen has none.
+	refusals []string
 }
 
 // gates are the flags that decide a capability the provider plans with.
@@ -54,56 +58,79 @@ type Gate struct {
 // every external data source and external table (`External data sources are
 // disabled`), and the second refuses CREATE OR REPLACE of either object.
 var gates = []Gate{
-	{Key: "secrets", Flag: "EnableSchemaSecrets"},
+	{Key: "secrets", Flag: "EnableSchemaSecrets", refusals: []string{"Secrets are disabled"}},
 	// Off by default on every line that lists it, 25.3 and later; 25.1 and
 	// 25.2 do not list it and refuse a unique index on an existing table with
 	// `Adding a unique index to an existing table is disabled`, which keeps
 	// the preset's false.
-	{Key: "unique_index_on_existing_table", Flag: "EnableAddUniqueIndex"},
-	{Key: "index_rename", Flag: "EnableMoveIndex"},
-	{Key: "alter_column_default", Flag: "EnableSetDropDefaultValue"},
-	{Key: "add_column_with_default", Flag: "EnableAddColumsWithDefaults"},
-	{Key: "wide_date_time_types", Flag: "EnableTableDatetime64"},
-	{Key: "parameterized_decimal", Flag: "EnableParameterizedDecimal"},
-	{Key: "tiered_ttl", Flag: "EnableTieringInColumnShard"},
+	{Key: "unique_index_on_existing_table", Flag: "EnableAddUniqueIndex", refusals: []string{"Adding a unique index to an existing table is disabled"}},
+	{Key: "index_rename", Flag: "EnableMoveIndex", refusals: []string{"Move index is not supported yet"}},
+	{Key: "alter_column_default", Flag: "EnableSetDropDefaultValue", refusals: []string{"Set/drop default value is not enabled"}},
+	{Key: "add_column_with_default", Flag: "EnableAddColumsWithDefaults",
+		refusals: []string{"Adding columns with defaults is disabled", "Column addition with default value is not supported now"}},
+	{Key: "wide_date_time_types", Flag: "EnableTableDatetime64", refusals: []string{"EnableTableDatetime64 feature flag is off"}},
+	{Key: "parameterized_decimal", Flag: "EnableParameterizedDecimal", refusals: []string{"EnableParameterizedDecimal feature flag is off"}},
+	{Key: "tiered_ttl", Flag: "EnableTieringInColumnShard", refusals: []string{"Tiering functionality is disabled for OLAP tables"}},
 	// Off on 25.1 and on from 25.2. With the flag on, 25.1 takes a changefeed
 	// with TOPIC_AUTO_PARTITIONING = 'ENABLED' and reads it back as an
 	// auto-partitioned topic; with it off, YDB answers `Topic autopartitioning
 	// for CDC is disabled`.
-	{Key: "changefeed_topic_auto_partitioning", Flag: "EnableTopicAutopartitioningForCDC"},
-	{Key: "external_data_sources", Flag: "EnableExternalDataSources"},
-	{Key: "external_object_replace", Flag: "EnableReplaceIfExistsForExternalEntities"},
+	{Key: "changefeed_topic_auto_partitioning", Flag: "EnableTopicAutopartitioningForCDC", refusals: []string{"Topic autopartitioning for CDC is disabled"}},
+	{Key: "external_data_sources", Flag: "EnableExternalDataSources", refusals: []string{"External data sources are disabled"}},
+	{Key: "external_object_replace", Flag: "EnableReplaceIfExistsForExternalEntities",
+		refusals: []string{"feature flag EnableReplaceIfExistsForExternalEntities is off"}},
 	// Off by default on every line from 25.1.4.7 to 26.2.1.14. With it off,
 	// YDB answers `Resource pools are disabled` and `Resource pool classifiers
 	// are disabled`, and .sys/resource_pools lists nothing.
-	{Key: "resource_pools", Flag: "EnableResourcePools"},
+	{Key: "resource_pools", Flag: "EnableResourcePools", refusals: []string{"Resource pools are disabled", "Resource pool classifiers are disabled"}},
 	// Off by default on 25.1.4.7 and on on 26.2.1.14. With it off, a vector
 	// index is refused with `Vector index support is disabled`.
-	{Key: "vector_indexes", Flag: "EnableVectorIndex"},
+	{Key: "vector_indexes", Flag: "EnableVectorIndex", refusals: []string{"Vector index support is disabled"}},
 	// On by default on 26.2.1.14, and absent from the 25.1.4.7 page, which
 	// leaves the preset's answer. With it off, a full-text index is refused
 	// with `Fulltext index support is disabled`.
-	{Key: "full_text_indexes", Flag: "EnableFulltextIndex"},
+	{Key: "full_text_indexes", Flag: "EnableFulltextIndex", refusals: []string{"Fulltext index support is disabled"}},
 	// Off on 25.1 and on from 25.2. With the flag on, 25.1 creates a
 	// transfer, moves a topic's message into its table, describes it and
 	// changes its lambda and batch settings in place.
-	{Key: "transfers", Flag: "EnableTopicTransfer"},
+	{Key: "transfers", Flag: "EnableTopicTransfer", refusals: []string{"Topic transfer creation is disabled"}},
 	// The local indexes of a column table, listed on 26.2 only: bloom_filter
 	// and bloom_ngram_filter on by default, min_max off. With EnableLocalMinMaxIndex
 	// off, 26.2.1.14 answers `Local min_max index is disabled with
 	// EnableLocalMinMaxIndex feature flag`.
-	{Key: "local_bloom_indexes", Flag: "EnableLocalBloomFilterIndex"},
-	{Key: "local_ngram_indexes", Flag: "EnableLocalBloomNgramFilterIndex"},
-	{Key: "local_min_max_indexes", Flag: "EnableLocalMinMaxIndex"},
+	{Key: "local_bloom_indexes", Flag: "EnableLocalBloomFilterIndex", refusals: []string{"Local bloom filter index support is disabled"}},
+	{Key: "local_ngram_indexes", Flag: "EnableLocalBloomNgramFilterIndex", refusals: []string{"Local bloom ngram filter index support is disabled"}},
+	{Key: "local_min_max_indexes", Flag: "EnableLocalMinMaxIndex", refusals: []string{"Local min_max index is disabled"}},
 	// Listed on 26.2 only, on by default; the lines before it create a
 	// replication with no flag at all, so an absent flag keeps their preset.
 	// Turned off, CREATE ASYNC REPLICATION answers `Asynchronous replication
 	// is disabled`.
-	{Key: "async_replication", Flag: "EnableReplication"},
+	{Key: "async_replication", Flag: "EnableReplication", refusals: []string{"Asynchronous replication is disabled"}},
 }
+
+// streaming is the gate of streaming_queries, which needs EnableStreamingQueries
+// and EnableExternalDataSources together (see [Flags.Refine]), so it is not
+// one of gates. A refusal still names the flag YDB refused it for.
+var streaming = Gate{Key: "streaming_queries", Flag: "EnableStreamingQueries", refusals: []string{"Streaming queries are disabled"}}
 
 // Gates returns every capability a flag decides, in a fixed order.
 func Gates() []Gate { return slices.Clone(gates) }
+
+// Refused returns the gate whose flag YDB's refusal says is off, and false
+// when the refusal is about something else. issues are the messages of the
+// issues YDB answered with; a refusal holds one of the gate's texts. The
+// texts and their gates are the host's embedded engine's (internal/ydbflags
+// in Ptah), so both name the same flag for the same answer.
+func Refused(issues []string) (Gate, bool) {
+	for _, gate := range append(slices.Clone(gates), streaming) {
+		for _, refusal := range gate.refusals {
+			if slices.ContainsFunc(issues, func(issue string) bool { return strings.Contains(issue, refusal) }) {
+				return gate, true
+			}
+		}
+	}
+	return Gate{}, false
+}
 
 // Clause is what a refusal for want of capability key adds when a feature
 // flag decides the key: the flag, and how to have a session report the

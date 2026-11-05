@@ -146,9 +146,12 @@ func (f *tableFacets) add(value *protocol.EncodeSourceValue) error {
 			return err
 		}
 		owner := envelope.GetOwner()
+		// A Serial's sequence is the common column's: the read reports its
+		// start and its increment as the column's identity_start and
+		// identity_increment beside auto_increment, which a source writes,
+		// and refuses a sequence with any other setting. The facet adds
+		// nothing to it.
 		switch {
-		case intent.GetSequence() != nil:
-			f.lose(id, "column %s: its sequence has no source spelling", Subject(owner))
 		case intent.Compression != nil || len(intent.GetEncoding()) != 0:
 			f.lose(id, "column %s: its compression or encoding has no source spelling", Subject(owner))
 		case intent.GetFamily() == "" || intent.GetFamily() == defaultFamily:
