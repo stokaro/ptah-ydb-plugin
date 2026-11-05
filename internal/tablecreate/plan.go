@@ -102,7 +102,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	if refusal, err := p.rewriteCommonSteps(); err != nil || refusal != nil {
 		return refusal, err
 	}
-	p.rewriteReplacedTables()
+	if refusal := p.rewriteReplacedTables(); refusal != nil {
+		return refusal, nil
+	}
 	if refusal := p.receiveChanges(); refusal != nil {
 		return refusal, nil
 	}
@@ -214,7 +216,7 @@ func (p *planner) planTableRebuild(i int, table *protocol.PlanningTable) (*proto
 // addRebuild plans the rebuild of table i into the request desired, and
 // keeps it with the rebuilds of the plan.
 func (p *planner) addRebuild(i int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest) (*protocol.PlannedFeatures, error) {
-	item, reason, err := planRebuild(len(p.rebuilds), owner, table, desired, p.names, p.request.Capabilities, p.request.CommonSteps)
+	item, reason, err := planRebuild(len(p.rebuilds), owner, table, desired, p.names, p.request.Capabilities, p.request.CommonSteps, p.request.Changes)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +286,7 @@ func (p *planner) planTableAlteration(i int, table *protocol.PlanningTable, owne
 // planRowAlteration plans the native alteration of row table i: the changes
 // planAlteration finds, their operations, and the column steps of the table.
 func (p *planner) planRowAlteration(i int, table *protocol.PlanningTable, owner *protocol.Reference) (*protocol.PlannedFeatures, error) {
-	changes, reason, err := planAlteration(owner, table, p.request.CommonSteps, p.request.Capabilities)
+	changes, reason, err := planAlteration(owner, table, p.request.CommonSteps, p.request.Changes, p.request.Capabilities)
 	if err != nil {
 		return nil, err
 	}
@@ -903,7 +905,7 @@ func (p *planner) settleCommonStep(step *protocol.CommonPlanningStep) bool {
 	if rebuilt := slices.IndexFunc(p.rebuilds, func(item *rebuild) bool { return provider.CompareIdentities(step.Parent, item.table.Subject) == 0 }); rebuilt >= 0 {
 		// The new table takes every change the host would make to the old
 		// one: it is written from the declaration.
-		p.rebuilds[rebuilt].sources = append(p.rebuilds[rebuilt].sources, proto.CloneOf(step.Id))
+		p.rebuilds[rebuilt].absorb(step)
 		return true
 	}
 	if dropped := slices.IndexFunc(p.drops, func(item removal) bool { return provider.CompareIdentities(step.Parent, item.table.Subject) == 0 }); dropped >= 0 {
@@ -939,19 +941,24 @@ func (p *planner) rewriteCreation(step *protocol.CommonPlanningStep, claimed map
 }
 
 // rewriteReplacedTables rewrites the host steps a rebuild takes to the step
-// that swaps the new table into place, and the host steps a removal takes to
-// the removal.
-func (p *planner) rewriteReplacedTables() {
+// that swaps the new table into place, or to the one that moves the old table
+// out of the way (see rebuild.rewrites), and the host steps a removal takes to
+// the removal. A rebuild that cannot take its table's steps refuses the
+// request.
+func (p *planner) rewriteReplacedTables() *protocol.PlannedFeatures {
 	for _, item := range p.rebuilds {
-		if len(item.sources) != 0 {
-			p.result.Rewrites = append(p.result.Rewrites, &protocol.PlanningRewrite{Sources: item.sources, Replacement: proto.CloneOf(item.steps[item.swap].Id)})
+		rewrites, reason := item.rewrites()
+		if reason != "" {
+			return refused(item.index, fmt.Sprintf("rebuilding table %q: %s", tableLabel(item.owner), reason))
 		}
+		p.result.Rewrites = append(p.result.Rewrites, rewrites...)
 	}
 	for _, item := range p.drops {
 		if len(item.sources) != 0 {
 			p.result.Rewrites = append(p.result.Rewrites, &protocol.PlanningRewrite{Sources: item.sources, Replacement: proto.CloneOf(item.id)})
 		}
 	}
+	return nil
 }
 
 // receiveChanges answers each table property change of the request with the

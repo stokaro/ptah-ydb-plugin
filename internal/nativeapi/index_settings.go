@@ -72,9 +72,9 @@ func (s *IndexSettings) Apply(ctx context.Context, database string, value *proto
 	if err := holdsRowTable(owner, before); err != nil {
 		return false, err
 	}
-	// The specification compared carries the index's settings, so settings
-	// changed since planning refuse the statement too.
-	if actual := indexByName(before.Indexes, settings.Index); actual == nil || !sameIndex(settings.Held, actual) {
+	// The index's settings are compared too, so settings changed since
+	// planning refuse the statement.
+	if actual := indexByName(before.Indexes, settings.Index); actual == nil || !heldAsPlanned(settings.Held, actual) {
 		return false, fmt.Errorf("YDB index %q differs from the plan", settings.Index)
 	}
 	if err := beforeWrite(ctx); err != nil {
@@ -144,6 +144,17 @@ func confirmIndexSettings(owner *protocol.Reference, settings *tablecreate.Index
 		return fmt.Errorf("YDB index %q read replicas differ from the request", settings.Index)
 	}
 	return nil
+}
+
+// heldAsPlanned reports whether actual is the index a change of its settings
+// was planned against: the definition, the partitioning exactly, and the read
+// replicas, a count of zero being none. YDB reports replicas removed with
+// `PER_AZ:0` as a count of zero, and a plan made against a reverse's
+// prediction of the index, which the read of an index states, has none.
+func heldAsPlanned(planned, actual *native.TableIndexDescription) bool {
+	held, got := tablecreate.HeldIndexSettings(planned), tablecreate.HeldIndexSettings(actual)
+	return sameDefinition(planned, actual) && proto.Equal(held.GetPartitioningSettings(), got.GetPartitioningSettings()) &&
+		tablecreate.SameReplicas(held.GetReadReplicasSettings(), got.GetReadReplicasSettings())
 }
 
 // sameDefinition reports whether two descriptions state one index apart from

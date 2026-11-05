@@ -2,6 +2,7 @@ package tablecreate
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,9 +30,9 @@ import (
 //
 //  1. CREATE TABLE a scratch table from the declaration, its indexes with it,
 //     each setting the declaration leaves out taken from the old table; then
-//     ALTER INDEX ... SET on the scratch table for each index whose held
-//     partitioning or read replicas differ from a new index's, since the
-//     native call that creates a table takes no index settings;
+//     ALTER INDEX ... SET on the scratch table for each index whose declared
+//     or held partitioning or read replicas differ from a new index's, since
+//     the native call that creates a table takes no index settings;
 //  2. INSERT INTO the scratch table the rows of the old one, each changed
 //     column converted, a row that does not convert failing the copy;
 //  3. ALTER TABLE the old table RENAME TO a second scratch name;
@@ -240,25 +241,122 @@ func heldType(column *protocol.ObservedColumn) string {
 type rebuild struct {
 	index int
 	// swap is the step that moves the new table into place, which a common
-	// step on the table is rewritten to.
-	swap     int
-	table    *protocol.PlanningTable
-	owner    *protocol.Reference
-	steps    []*protocol.PlanningStep
-	sources  []*protocol.StepIdentity
+	// step on the table is rewritten to, and retire the step before it, which
+	// moves the old table out of the way (see rewrites).
+	swap, retire int
+	table        *protocol.PlanningTable
+	owner        *protocol.Reference
+	steps        []*protocol.PlanningStep
+	// absorbed are the host's steps on the table, which the rebuild takes.
+	absorbed []*protocol.CommonPlanningStep
 	scratch  string
 	replaced string
+}
+
+// absorb takes the host's step on the rebuilt table into the rebuild: the new
+// table is written from the declaration, so it makes every change the host
+// would make to the old one. rewrites says what each step is rewritten to.
+func (r *rebuild) absorb(step *protocol.CommonPlanningStep) {
+	r.absorbed = append(r.absorbed, step)
+}
+
+// rewrites rewrites the host's steps the rebuild absorbed to its renames, and
+// names on each rename every object the steps rewritten to it change, since
+// the host's graph refuses a rewrite whose replacement leaves out an object
+// its sources change: an index or a column a step adds or drops, besides the
+// table. A step is rewritten to the rename that puts the new table in place.
+// An object one step drops and another adds again, such as an index whose
+// definition changes, cannot be named twice by one step, so the step that
+// drops it is rewritten to the rename before, which moves the old table, and
+// the object with it, out of the way. The host orders its steps on a table one
+// after the other, its removals first, so every step up to the last such drop
+// is rewritten there too, or the renames would have to run in both orders. A
+// reason refuses the rebuild where one of those steps adds or changes
+// something.
+func (r *rebuild) rewrites() ([]*protocol.PlanningRewrite, string) {
+	var created []*protocol.ComparisonIdentity
+	for _, step := range r.absorbed {
+		for _, effect := range step.GetMetadata().GetEffects() {
+			if effect.GetAction() == protocol.PlanningEffect_CREATE {
+				created = append(created, effect.GetSubject())
+			}
+		}
+	}
+	readded := func(effect *protocol.PlanningEffect) bool {
+		return effect.GetAction() == protocol.PlanningEffect_DROP && slices.ContainsFunc(created, func(subject *protocol.ComparisonIdentity) bool {
+			return provider.CompareIdentities(subject, effect.GetSubject()) == 0
+		})
+	}
+	retired := -1
+	for i, step := range r.absorbed {
+		if slices.ContainsFunc(step.GetMetadata().GetEffects(), readded) {
+			retired = i
+		}
+	}
+	sources := make(map[int][]*protocol.StepIdentity)
+	for i, step := range r.absorbed {
+		target := r.swap
+		if i <= retired {
+			if !dropsOnlyParts(step.GetMetadata().GetEffects(), r.table.GetSubject()) {
+				return nil, fmt.Sprintf("the host's step %s changes the table before it drops an index or a column the table gains again, "+
+					"and the rebuild drops what the old table holds before it puts the new table in place", step.GetId().GetName())
+			}
+			target = r.retire
+		}
+		sources[target] = append(sources[target], proto.CloneOf(step.GetId()))
+		r.name(target, step.GetMetadata().GetEffects())
+	}
+	var result []*protocol.PlanningRewrite
+	for _, target := range []int{r.retire, r.swap} {
+		if len(sources[target]) != 0 {
+			result = append(result, &protocol.PlanningRewrite{Sources: sources[target], Replacement: proto.CloneOf(r.steps[target].GetId())})
+		}
+	}
+	return result, ""
+}
+
+// dropsOnlyParts reports whether effects drop something of table, such as an
+// index or a column, and change nothing else.
+func dropsOnlyParts(effects []*protocol.PlanningEffect, table *protocol.ComparisonIdentity) bool {
+	dropped := false
+	for _, effect := range effects {
+		switch {
+		case effect.GetAction() == protocol.PlanningEffect_READ:
+		case effect.GetAction() != protocol.PlanningEffect_DROP || provider.CompareIdentities(effect.GetSubject(), table) == 0:
+			return false
+		default:
+			dropped = true
+		}
+	}
+	return dropped
+}
+
+// name adds to step n of the rebuild each object effects change that it does
+// not name yet.
+func (r *rebuild) name(n int, effects []*protocol.PlanningEffect) {
+	metadata := r.steps[n].GetMetadata()
+	for _, effect := range effects {
+		if effect.GetAction() == protocol.PlanningEffect_READ {
+			continue
+		}
+		if !slices.ContainsFunc(metadata.GetEffects(), func(held *protocol.PlanningEffect) bool {
+			return provider.CompareIdentities(held.GetSubject(), effect.GetSubject()) == 0
+		}) {
+			metadata.Effects = append(metadata.Effects, proto.CloneOf(effect))
+		}
+	}
 }
 
 // planRebuild builds the steps of a rebuild of the table owner names into
 // the declaration desired compiles to, numbered with number, or the reason it
 // cannot be rebuilt. names are the tables the request declares or holds, which
-// a scratch name must not take. common is what the read reported of the common
-// objects, whose comments on the table the new one keeps. steps are the host's
-// steps, whose index renames name the old index a new one takes its settings
-// from.
+// a scratch name must not take. steps are the host's steps, whose index renames
+// name the old index a new one takes its settings from, and changes the
+// request's changes, whose changes of an index's settings state what the index
+// is to hold (see changedIndexSettings).
 func planRebuild(number int, owner *protocol.Reference, table *protocol.PlanningTable, desired *Ydb_Table.CreateTableRequest, names,
-	capabilities map[string]bool, steps []*protocol.CommonPlanningStep) (*rebuild, string, error) {
+	capabilities map[string]bool, steps []*protocol.CommonPlanningStep, changes []*protocol.PlanningChange,
+) (*rebuild, string, error) {
 	label := tableLabel(owner)
 	subject := fmt.Sprintf("rebuilding table %q", label)
 	current := table.GetCurrent()
@@ -288,7 +386,10 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	if reason := creationCacheModeRefusal(subject+" with column family cache mode", request, capabilities); reason != "" {
 		return nil, reason, nil
 	}
-	indexSettings, reason := rebuiltIndexSettings(request, table, steps)
+	indexSettings, reason, err := rebuiltIndexSettings(owner, request, table, steps, changes)
+	if err != nil {
+		return nil, "", err
+	}
 	if reason != "" {
 		return nil, subject + ": " + reason, nil
 	}
@@ -357,7 +458,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 			{Subject: replacedSubject, Action: protocol.PlanningEffect_CREATE}, {Subject: slot(replacedSubject), Action: protocol.PlanningEffect_CREATE}}},
 		rebuildStep{operation: moveNew, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(scratchSubject), Action: protocol.PlanningEffect_DROP},
 			{Subject: slot(scratchSubject), Action: protocol.PlanningEffect_DROP}, {Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_ALTER}}})
-	result := &rebuild{owner: owner, table: table, scratch: scratch, replaced: replaced, swap: len(planned) - 1}
+	result := &rebuild{owner: owner, table: table, scratch: scratch, replaced: replaced, swap: len(planned) - 1, retire: len(planned) - 2}
 	if len(feeds.adds) != 0 {
 		operation, err := schema.CaptureChangefeedOperation(prefix+"add-changefeeds", owner, feeds.adds)
 		if err != nil {
@@ -511,24 +612,43 @@ func rebuildChangefeeds(owner *protocol.Reference, table *protocol.PlanningTable
 }
 
 // rebuiltIndexSettings returns the changes that give each global index of the
-// new table of a rebuild the partitioning and read replicas the old table's
-// index holds, as the host's embedded engine names every setting of a rebuilt
-// index: the declaration states no setting of an index the new table takes
-// from the common declaration, so each one keeps what the old index holds. The
-// old index is the one under the same name, or under the name the host's step
-// renames it from, as the read describes it: in the native index set, or, for
-// an index the common model describes, beside it. An index the old table does not hold, or whose settings
-// are a new index's, needs no change. The native call that creates the table
-// takes no index settings, so each change runs on the new table after it is
-// created, over the settings YDB gives a new index (see newIndexDescription).
-// A non-empty reason refuses the rebuild.
-func rebuiltIndexSettings(request *Ydb_Table.CreateTableRequest, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep) ([]indexSettingsChange, string) {
+// new table of a rebuild, which the table owner names declares as request, its
+// partitioning and read replicas, as the host's embedded engine names every
+// setting of a rebuilt index: each setting the index's own facet declares, and
+// for every other one what the old index holds. The old index is the one under
+// the same name, or under the name the host's step renames it from, as the read
+// describes it: in the native index set, or, for an index the common model
+// describes, beside it. An index the old table does not hold takes the
+// settings it declares over the ones YDB gives a new index, and one that
+// neither declares nor holds settings other than a new index's needs no
+// change. The native call that creates the table takes no index settings, so
+// each change runs on the new table after it is created, over the settings YDB
+// gives a new index (see newIndexDescription). A non-empty reason refuses the
+// rebuild; an index facet the declaration states for an index the new table
+// does not create is one.
+func rebuiltIndexSettings(owner *protocol.Reference, request *Ydb_Table.CreateTableRequest, table *protocol.PlanningTable,
+	steps []*protocol.CommonPlanningStep, changes []*protocol.PlanningChange,
+) ([]indexSettingsChange, string, error) {
 	var held native.IndexObservations
 	for _, record := range table.GetCurrent().GetFeatures().GetFacets().GetRecords() {
 		if record.GetKind() == schema.IndexProperties {
 			if err := protojson.Unmarshal(record.GetValue().GetValue().GetPayload(), &held); err != nil {
-				return nil, fmt.Sprintf("the read of the table's indexes does not decode: %v", err)
+				return nil, fmt.Sprintf("the read of the table's indexes does not decode: %v", err), nil
 			}
+		}
+	}
+	declared, _, err := indexSettingsFacets(owner, table.GetDesired().GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
+	if err != nil {
+		return nil, "", err
+	}
+	changed, err := changedIndexSettings(table.GetSubject(), changes)
+	if err != nil {
+		return nil, "", err
+	}
+	maps.Copy(declared, changed)
+	for _, name := range slices.Sorted(maps.Keys(declared)) {
+		if !slices.ContainsFunc(request.GetIndexes(), func(index *Ydb_Table.TableIndex) bool { return index.GetName() == name }) {
+			return nil, fmt.Sprintf("index %q declares its partitioning or read replicas, and the new table creates no global index of that name", name), nil
 		}
 	}
 	formerName := make(map[string]string)
@@ -537,7 +657,7 @@ func rebuiltIndexSettings(request *Ydb_Table.CreateTableRequest, table *protocol
 			formerName[rename.GetTo()] = rename.GetFrom()
 		}
 	}
-	var changes []indexSettingsChange
+	var result []indexSettingsChange
 	for _, index := range request.GetIndexes() {
 		name := index.GetName()
 		if former, renamed := formerName[name]; renamed {
@@ -550,18 +670,48 @@ func rebuiltIndexSettings(request *Ydb_Table.CreateTableRequest, table *protocol
 		if at := slices.IndexFunc(held.GetCommonIndexes(), func(observed *native.TableIndexDescription) bool { return observed.GetName() == name }); at >= 0 {
 			old = held.GetCommonIndexes()[at]
 		}
-		if old == nil {
-			continue
+		var kept *native.GlobalIndexSettings
+		if old != nil {
+			kept = keptIndexSettings(HeldIndexSettings(old))
 		}
-		change, reason := planIndexSettings(index.GetName(), keptIndexSettings(HeldIndexSettings(old)), newIndexDescription(indexIntentOf(index)))
+		change, reason := planIndexSettings(index.GetName(), declaredOver(declared[index.GetName()], kept), newIndexDescription(indexIntentOf(index)))
 		if reason != "" {
-			return nil, reason
+			return nil, reason, nil
 		}
 		if change != nil {
-			changes = append(changes, *change)
+			result = append(result, *change)
 		}
 	}
-	return changes, ""
+	return result, "", nil
+}
+
+// declaredOver is what an index of the new table of a rebuild is given: each
+// setting stated declares, and the one kept holds for every other, as the
+// host's embedded engine resolves a rebuilt index's declaration over the
+// settings the old index holds. A size stated without partitioning by size
+// turns it on, as YDB does, and an index left without partitioning by size
+// keeps no size it did not state. Read replicas stated as none are none. A nil
+// stated is kept itself, and a nil kept is an index the old table does not
+// hold.
+func declaredOver(stated *native.IndexSettingsIntent, kept *native.GlobalIndexSettings) *native.GlobalIndexSettings {
+	if stated == nil {
+		return kept
+	}
+	result := proto.CloneOf(kept)
+	if result == nil {
+		result = &native.GlobalIndexSettings{}
+	}
+	if partitioning := stated.GetPartitioningSettings(); partitioning != nil {
+		merged := ApplyPartitioning(result.GetPartitioningSettings(), withSizeSplitting(partitioning))
+		if merged.GetPartitioningBySize() != Ydb.FeatureFlag_ENABLED && partitioning.GetPartitionSizeMb() == 0 {
+			merged.PartitionSizeMb = 0
+		}
+		result.PartitioningSettings = merged
+	}
+	if replicas := stated.GetReadReplicasSettings(); replicas.GetSettings() != nil {
+		result.ReadReplicasSettings = proto.CloneOf(replicas)
+	}
+	return result
 }
 
 // keptIndexSettings is what a new index states to keep the settings held

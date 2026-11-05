@@ -647,10 +647,20 @@ a move back: what the forward change leaves is the column in the declared
 family, with a default or storage setting the declaration does not state
 kept as the column held it. A host that does not project a reverse's state
 onto a column cannot plan that reverse and refuses it. A change of a global
-index's settings is refused: its declaration keeps every setting it leaves
-out, so a reverse would have to state each setting the index held. A host
-that does not list the feature gets no reversal service and refuses every
-such change, naming the change kind that has no reversal.
+index's partitioning and read replicas reverses to every setting the index
+held, as the host's embedded engine restores them (`restore every setting the
+index held in place`), read replicas the forward change removed included: the
+declaration keeps every setting it leaves out, so a reverse that stated only
+some would keep the rest as the forward change left them. What the forward
+change leaves is the index's own facet with the declared settings in place of
+the ones it held. YDB removes no maximum partition count, so a maximum the
+forward change gives an index that held none stays, and the down file says so
+in the embedded engine's words. The host plans such a reverse with the
+declaration the forward change started from; the planner gives the index what
+the reverse change asks for, against the facet the reverse predicts, rather
+than what that declaration states. A host that does not list the feature gets
+no reversal service and refuses every such change, naming the change kind
+that has no reversal.
 
 A topic reverses like any other object, but no migration file holds a topic
 (see [Text units](#text-units)).
@@ -3018,16 +3028,30 @@ filter, the TTL where the declaration states no table properties, and the run
 interval of the TTL it holds where the declaration states a TTL, which names
 none since YQL has no setting for one. A cluster's table profile may have
 given the old table any of them, and YQL drops neither a family nor a setting,
-so a rebuild changes none that nobody declared. Each index of the new table keeps the automatic partitioning and the
-read replicas the old index under its name holds, or the old index the host
-renames it from. The call that creates a table takes no index settings, so a
-`table-rebuild/N/index-settings/M` step after the creation and before the copy
-gives the index every setting with `ALTER TABLE ... ALTER INDEX ... SET`, over
-the settings YDB gives a new index. The read describes each index the common
-model describes beside the native index set for that reason. Without the
-policy, the change is refused
-in the embedded engine's words, naming the request the host passes, such as
+so a rebuild changes none that nobody declared. Each index of the new table
+takes the automatic partitioning and the read replicas its own facet declares
+(see [Index settings from a source](#index-settings-from-a-source)), and for
+every setting the facet leaves out what the old index under its name holds,
+or the old index the host renames it from, as the host's embedded engine
+resolves a rebuilt index's declaration. An index the rebuild adds takes its
+declared settings over the ones YDB gives a new index. The call that creates a
+table takes no index settings, so a `table-rebuild/N/index-settings/M` step
+after the creation and before the copy gives the index every setting with
+`ALTER TABLE ... ALTER INDEX ... SET`, over the settings YDB gives a new index.
+The read describes each index the common model describes beside the native
+index set for that reason. A facet for an index the new table does not create
+refuses the rebuild. Without the policy, the change is refused in the embedded
+engine's words, naming the request the host passes, such as
 `--allow-table-rebuild`.
+
+The host's own steps for the table, such as the addition or the removal of an
+index or a column, are rewritten to the rename that puts the new table in
+place, and that rename names every object they change, as the host's plan
+graph requires. An index the plan drops and adds again under its name, such as
+one whose columns change, cannot be named twice by one step, so the removal,
+and every removal the host orders before it, is rewritten to the rename that
+moves the old table out of the way. A host step that changes something before
+such a removal refuses the rebuild.
 
 Every step writes as a YQL statement in the TEXT form, so a migration file
 holds the rebuild, unless the old table holds user attributes or a TTL run
@@ -3362,6 +3386,12 @@ setting from it, since the comparison could not see what the index holds.
   INDEX` and then `ALTER INDEX ... SET`. An index the plan drops is left alone.
 - Settings declared on an index that is not a global sync, async or unique
   index, or on one the table neither holds nor gains, are refused.
+- A table rebuild gives each index of the new table its declared settings, and
+  what the old index holds for every other (see
+  [Native table rebuild](#native-table-rebuild)).
+- `migrations generate` writes the reverse of a change of an index's settings
+  into the down file: every setting the index held, restored in place (see
+  [Reverse migrations](#reverse-migrations)).
 - An export writes an index's facet as the settings that differ from the ones
   YDB gives a new index, as the host's embedded engine writes them, so `ptah
   introspect` writes `auto_partitioning_by_load="ENABLED"

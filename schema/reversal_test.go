@@ -136,12 +136,12 @@ func TestReverseTableChange_MovesAColumnBack(t *testing.T) {
 }
 
 // A change whose owner is not a table, a column or an index is refused, and
-// so is a change of an index's settings, whose reverse would have to state
-// every setting the index held.
+// so is a change under an index owner whose operands are not an index's
+// settings.
 func TestReverseTableChange_FailurePath(t *testing.T) {
 	for _, test := range []struct{ name, owner, want string }{
 		{"a view owner", "view", `.*table, column or index owner.*`},
-		{"an index owner", "index", `a change of a global index's settings has no reversal yet`},
+		{"an index owner with a column's operands", "index", `invalid YDB observation JSON`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -152,6 +152,72 @@ func TestReverseTableChange_FailurePath(t *testing.T) {
 
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(reversed.Value, qt.IsNil)
+		})
+	}
+}
+
+// observedIndexSettings is a read index facet with payload, as the read
+// writes it.
+func observedIndexSettings(c *qt.C, payload string) *protocol.Envelope {
+	c.Helper()
+	held := &native.GlobalIndexSettings{}
+	c.Assert(protojson.Unmarshal([]byte(payload), held), qt.IsNil)
+	observed, err := schema.CaptureIndexSettings(indexOwner(), held)
+	c.Assert(err, qt.IsNil)
+	return observed
+}
+
+// The reverse of a change of a global index's settings asks for every setting
+// the index held, as the host's embedded engine restores them: a declaration
+// that states only the settings that differ from a new index's would keep
+// each setting the forward change moved away from one. What the forward
+// change leaves is what the index held with the declared settings in place of
+// its own, as YDB reads it back: a size turns splitting by size on, an index
+// that stops splitting by size reports no size, and replicas declared as none
+// are none. No declaration removes a maximum partition count, so an index that
+// held none declares none.
+func TestReverseTableChange_RestoresEveryIndexSetting(t *testing.T) {
+	const (
+		defaults = `"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","minPartitionsCount":"1"}`
+		tuned    = `"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","minPartitionsCount":"2"}`
+		none     = `"readReplicasSettings":{"perAzReadReplicasCount":"0"}`
+	)
+	for _, test := range []struct {
+		name, held, declared, left, restored string
+	}{
+		{name: "partitioning by load and a minimum", held: `{` + tuned + `}`,
+			declared: `{"partitioningSettings":{"minPartitionsCount":"3","partitioningByLoad":"ENABLED"}}`,
+			left:     `{"partitioningSettings":{"minPartitionsCount":"3","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","partitioningBySize":"ENABLED"}}`,
+			restored: `{"partitioningSettings":{"minPartitionsCount":"2","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","partitioningBySize":"ENABLED"},` + none + `}`},
+		{name: "read replicas removed", held: `{` + defaults + `,"readReplicasSettings":{"perAzReadReplicasCount":"1"}}`, declared: `{` + none + `}`,
+			left:     `{"partitioningSettings":{"minPartitionsCount":"1","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","partitioningBySize":"ENABLED"}}`,
+			restored: `{"partitioningSettings":{"minPartitionsCount":"1","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","partitioningBySize":"ENABLED"},"readReplicasSettings":{"perAzReadReplicasCount":"1"}}`},
+		{name: "a maximum the index did not hold", held: `{` + defaults + `}`, declared: `{"partitioningSettings":{"maxPartitionsCount":"9"}}`,
+			left:     `{"partitioningSettings":{"maxPartitionsCount":"9","minPartitionsCount":"1","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","partitioningBySize":"ENABLED"}}`,
+			restored: `{"partitioningSettings":{"minPartitionsCount":"1","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","partitioningBySize":"ENABLED"},` + none + `}`},
+		{name: "a size where the index did not split by size",
+			held:     `{"partitioningSettings":{"partitioningBySize":"DISABLED","partitioningByLoad":"DISABLED","minPartitionsCount":"1"}}`,
+			declared: `{"partitioningSettings":{"partitionSizeMb":"512"}}`,
+			left:     `{"partitioningSettings":{"minPartitionsCount":"1","partitionSizeMb":"512","partitioningByLoad":"DISABLED","partitioningBySize":"ENABLED"}}`,
+			restored: `{"partitioningSettings":{"minPartitionsCount":"1","partitioningByLoad":"DISABLED","partitioningBySize":"DISABLED"},` + none + `}`},
+		{name: "splitting by size turned off", held: `{` + defaults + `}`, declared: `{"partitioningSettings":{"partitioningBySize":"DISABLED"}}`,
+			left:     `{"partitioningSettings":{"minPartitionsCount":"1","partitioningByLoad":"DISABLED","partitioningBySize":"DISABLED"}}`,
+			restored: `{"partitioningSettings":{"minPartitionsCount":"1","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","partitioningBySize":"ENABLED"},` + none + `}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			change, err := schema.CaptureTablePropertiesChange("change", indexOwner(), observedIndexSettings(c, test.held), desiredIndexSettings(test.declared))
+			c.Assert(err, qt.IsNil)
+
+			reversed, err := schema.ReverseTableChange("reverse", change.Value, schema.NativeAccess)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(string(reversed.Left.Payload), qt.Equals, test.left)
+			c.Assert(string(reversed.Restored.Payload), qt.Equals, test.restored)
+			c.Assert(reversed.Kind, qt.Equals, schema.IndexSettingsProperties)
+			c.Assert(proto.Equal(reversed.Left.Owner, indexOwner()), qt.IsTrue)
+			c.Assert(reversed.Value.Value.Kind, qt.Equals, schema.TablePropertiesChange)
+			c.Assert(reversed.Value.Id, qt.Equals, "reverse")
 		})
 	}
 }
