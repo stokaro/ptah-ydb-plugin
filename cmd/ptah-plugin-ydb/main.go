@@ -48,6 +48,7 @@ func main() {
 		Locks:           owner,
 		Metadata:        owner,
 		SQLAnalyzer:     owner,
+		SQLScanner:      owner,
 		Linter:          owner,
 		RowTyper:        owner,
 		RowReader:       owner,
