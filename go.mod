@@ -8,7 +8,7 @@ require (
 	github.com/frankban/quicktest v1.14.6
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
-	github.com/stokaro/ptah/provider-sdk v0.18.1-0.20261105074335-91e4cec0bcd9
+	github.com/stokaro/ptah/provider-sdk v0.19.1-0.20261105085431-7654449d796e
 	github.com/ydb-platform/ydb-go-genproto v0.0.0-20260810123728-f0c151ab31b9
 	github.com/ydb-platform/ydb-go-sdk-auth-environ v0.5.3
 	github.com/ydb-platform/ydb-go-sdk/v3 v3.155.1
