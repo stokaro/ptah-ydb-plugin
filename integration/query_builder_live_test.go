@@ -19,10 +19,13 @@ import (
 )
 
 // The statements here are the texts the host's query builder renders for YDB
-// (ptah core/query, pinned in its render_ydb_test.go): backticked names, a
-// table path as one name, and YQL parameters $p1, $p2 and on, bound at the Go
-// type the caller passed. The host sends each through a provider as a
-// statement with typed arguments, as these tests do.
+// with the query dialect this provider declares: backticked names, a table
+// path as one name, and YQL parameters $p1, $p2 and on, bound at the Go type
+// the caller passed. The host's core/query/registeredtest/yql_test.go
+// registers that dialect and pins the same texts: a change to the builder
+// shows there, and a change to what YDB answers shows here. The host sends
+// each through a provider as a statement with typed arguments, as these tests
+// do.
 
 // int64Argument and the others are one argument of a rendered statement, typed
 // as the host types the Go value the builder was given.
@@ -92,7 +95,7 @@ func resultRows(result *protocol.StatementResult) []string {
 // through the provider with the arguments typed as the host types them, and
 // each answer is the host's. The UPSERT writes the name of user 1 over the
 // stored one, keeps the age it does not name, and inserts user 3. The
-// builder itself is the host's, and the host's unit tests pin its texts.
+// builder itself is the host's, and its yql_test.go pins these texts.
 func TestQueryBuilderStatementsRunThroughTheProvider_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
