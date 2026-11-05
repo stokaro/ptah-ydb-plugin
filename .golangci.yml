@@ -1,0 +1,53 @@
+version: "2"
+
+run:
+  timeout: 30m
+
+linters:
+  # The standard set (errcheck, govet, ineffassign, staticcheck, unused) and
+  # the linters below, each of which the tree satisfies. Enable another one
+  # with the changes that satisfy it, never with an exclusion that hides what
+  # it reports.
+  default: standard
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - depguard
+    - durationcheck
+    - errorlint
+    - exptostd
+    - fatcontext
+    - gocheckcompilerdirectives
+    - importas
+    - makezero
+    - mirror
+    - misspell
+    - nolintlint
+    - nosprintfhostport
+    - reassign
+    - unconvert
+    - usestdlibvars
+  settings:
+    depguard:
+      rules:
+        tests:
+          deny:
+            - pkg: github.com/stretchr/testify
+              desc: tests assert with quicktest, through internal/testcheck
+    importas:
+      no-unaliased: true
+      alias:
+        - pkg: github.com/frankban/quicktest
+          alias: qt
+    misspell:
+      locale: US
+      # YDB names a status CANCELLED (Ydb.StatusIds_CANCELLED), and a comment
+      # or a test that names the status spells it as YDB does.
+      ignore-rules:
+        - cancelled
+
+formatters:
+  enable:
+    - gofmt

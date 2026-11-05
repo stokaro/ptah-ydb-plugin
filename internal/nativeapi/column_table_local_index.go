@@ -1,6 +1,7 @@
 package nativeapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -88,13 +89,18 @@ func (c *ColumnTableLocalIndex) Apply(ctx context.Context, database string, valu
 // checkLocalIndexPrecondition requires the table to be the one the step was
 // planned against. An addition needs the index absent and its column held,
 // Utf8 for an n-gram index; a removal needs the table to hold the index as the
-// plan captured it. The server refuses an absent column or a wrong type only
-// after the call, which would leave the outcome uncertain.
+// plan captured it, and a rename that and no index under the new name, which
+// the server refuses only after the call (`Index ... exists, but overwrite
+// flag has not been set`). The server refuses an absent column or a wrong
+// type only after the call too, which would leave the outcome uncertain.
 func checkLocalIndexPrecondition(alteration *native.ColumnTableLocalIndexAlteration, described *native.ColumnTableDescribeResult, observed *native.ColumnStorageObservation) error {
 	held := localIndexNamed(observed.LocalIndexes, alteration.GetDrop().GetName())
 	if drop := alteration.GetDrop(); drop != nil {
 		if held == nil || !tablecreate.LocalIndexEqual(drop, held) {
 			return fmt.Errorf("YDB column table local index %q differs from the plan", drop.GetName())
+		}
+		if add := alteration.GetAdd(); add != nil && localIndexNamed(observed.LocalIndexes, add.GetName()) != nil {
+			return fmt.Errorf("YDB column table already holds local index %q", add.GetName())
 		}
 		return nil
 	}
@@ -118,22 +124,24 @@ func checkLocalIndexPrecondition(alteration *native.ColumnTableLocalIndexAlterat
 }
 
 // confirmLocalIndex requires the table read back after the step to hold the
-// index it added as requested, or no longer to hold the one it dropped, with
-// every other local index, the layout and the TTL as they were.
+// index it added as requested and no longer to hold the one it dropped, a
+// renamed index both, with every other local index, the layout and the TTL as
+// they were.
 func confirmLocalIndex(alteration *native.ColumnTableLocalIndexAlteration, before, after *native.ColumnStorageObservation) error {
-	name := alteration.GetAdd().GetName()
-	if alteration.GetDrop() != nil {
-		name = alteration.GetDrop().GetName()
+	added, dropped := alteration.GetAdd().GetName(), alteration.GetDrop().GetName()
+	if add := alteration.GetAdd(); add != nil {
+		if held := localIndexNamed(after.LocalIndexes, added); held == nil || !tablecreate.LocalIndexEqual(add, held) {
+			return fmt.Errorf("YDB column table local index %q differs from the request after the change", added)
+		}
 	}
-	held := localIndexNamed(after.LocalIndexes, name)
-	switch {
-	case alteration.GetAdd() != nil && (held == nil || !tablecreate.LocalIndexEqual(alteration.GetAdd(), held)):
-		return fmt.Errorf("YDB column table local index %q differs from the request after the change", name)
-	case alteration.GetDrop() != nil && held != nil:
-		return fmt.Errorf("YDB column table still holds local index %q after the change", name)
+	if alteration.GetDrop() != nil && localIndexNamed(after.LocalIndexes, dropped) != nil {
+		return fmt.Errorf("YDB column table still holds local index %q after the change", dropped)
 	}
+	name := cmp.Or(dropped, added)
 	others := func(indexes []*native.LocalIndexObservation) []*native.LocalIndexObservation {
-		return slices.DeleteFunc(slices.Clone(indexes), func(index *native.LocalIndexObservation) bool { return index.GetName() == name })
+		return slices.DeleteFunc(slices.Clone(indexes), func(index *native.LocalIndexObservation) bool {
+			return index.GetName() == added || index.GetName() == dropped
+		})
 	}
 	if !sameLocalIndexes(others(before.LocalIndexes), others(after.LocalIndexes)) || !slices.Equal(before.HashColumns, after.HashColumns) ||
 		before.Partitions != after.Partitions || !tablecreate.ColumnTTLEqual(before.Ttl, after.Ttl) {

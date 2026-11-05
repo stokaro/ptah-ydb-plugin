@@ -175,7 +175,7 @@ func TestWorkloadComparison_FailurePath(t *testing.T) {
 	request := workloadRequest(c, schema.ResourcePoolProperties, map[string]proto.Message{"batch": pool(workload.PoolSpec{})}, nil)
 	request.Capabilities = map[string]bool{}
 	result, err := backend.New().CompareModels(c.Context(), request)
-	c.Assert(err, qt.ErrorMatches, `.*changing resource pools requires resource_pools`)
+	c.Assert(err, qt.ErrorMatches, `.*changing resource pools requires resource_pools; YDB keeps it behind feature flag EnableResourcePools: .*`)
 	c.Assert(result, qt.IsNil)
 
 	kept := workloadRequest(c, schema.ResourcePoolProperties, nil, map[string]proto.Message{"default": pool(workload.PoolSpec{})})

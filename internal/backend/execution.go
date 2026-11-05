@@ -32,8 +32,14 @@ type sqlExecutor interface {
 
 // Execute dispatches SQL and native units once. SQL uses a pinned connection
 // to avoid database/sql retries. Native calls validate captured preconditions
-// and cannot join a SQL transaction. Unknown outcomes are never retried.
+// and cannot join a SQL transaction. Unknown outcomes are never retried. A
+// result that did not apply every unit gives its reason in its diagnostic.
 func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest) (*protocol.Execution, error) {
+	result, err := p.execute(ctx, request)
+	return withReason(result), err
+}
+
+func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest) (*protocol.Execution, error) {
 	if request.GetSessionId() == "" || request.GetRequestId() == "" || len(request.GetUnits()) == 0 {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "session, request ID, and units are required")
 	}
@@ -157,10 +163,25 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 		failure := ydbfailure.Unit{Text: unit.GetSql(), Transaction: request.TransactionId != "", Aborts: aborts}
 		if _, split := services[unit]; split {
 			// A comment or coordination node statement runs outside the
-			// query service, beside the queries the unit holds.
+			// query service, beside the queries the unit holds, so the
+			// unit's text says nothing of what failed. A failure of its first
+			// piece left nothing of the unit applied: the piece's own answer
+			// says what it proves.
 			failure.Text = ""
+			if first, ok := errors.AsType[*firstPieceFailure](err); ok {
+				switch {
+				case first.piece.comment != nil:
+					failure.Call = true
+				case !first.piece.service():
+					failure.Text = first.piece.text
+				}
+			}
 		}
-		result := ydbfailure.Failed(ydbfailure.Read(err), failure, applied)
+		answer := ydbfailure.Read(err)
+		if s.realm {
+			answer = answer.WithoutLines(realmPrefixLines)
+		}
+		result := ydbfailure.Failed(answer, failure, applied)
 		if result.GetOutcome() != protocol.Execution_UNKNOWN && request.TransactionId != "" {
 			s.abandonTransaction(ctx, request.TransactionId)
 		}
@@ -236,6 +257,9 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 			for i, piece := range pieces {
 				if dispatched, err := s.runInputPiece(ctx, runner, piece, bindings); err != nil {
 					// A piece after the first leaves the unit partly applied.
+					if i == 0 {
+						err = &firstPieceFailure{piece: piece, err: err}
+					}
 					return dispatched || i > 0, err
 				}
 			}
@@ -246,9 +270,22 @@ func (p *Provider) Execute(ctx context.Context, request *protocol.ExecuteRequest
 	if s.verifyLocks(ctx) != nil && (result.AppliedCount > 0 || result.Outcome == protocol.Execution_UNKNOWN) {
 		result.Outcome = protocol.Execution_UNKNOWN
 		result.DiagnosticCode = "ydb.lock-guarantee-lost"
+		// The loss decides the outcome, so the reason YDB's answer gave for
+		// the unit no longer explains it.
+		result.Diagnostic = nil
 	}
 	return result, nil
 }
+
+// firstPieceFailure is the failure of the first piece of a SQL unit cut into
+// pieces, which leaves nothing of the unit applied.
+type firstPieceFailure struct {
+	piece sqlPiece
+	err   error
+}
+
+func (f *firstPieceFailure) Error() string { return f.err.Error() }
+func (f *firstPieceFailure) Unwrap() error { return f.err }
 
 // sqlPiece is one query a SQL unit runs as: a comment statement, a
 // coordination node statement, or a query YDB's query service runs.

@@ -2470,10 +2470,11 @@ func (x *ColumnTableCreation) GetLocalIndexes() []*LocalIndexObservation {
 
 // One step of a change of a column table's local indexes, the payload of the
 // provider's local-index operation: `ALTER TABLE ... ADD INDEX ... LOCAL USING
-// ...` for add, `ALTER TABLE ... DROP INDEX ...` for drop. Exactly one is
-// present. add states the index as a creation does; drop is the index as the
-// table held it when the step was planned, and a table that holds another one
-// under that name refuses the step before it is written.
+// ...` for add alone, `ALTER TABLE ... DROP INDEX ...` for drop alone, and
+// `ALTER TABLE ... RENAME INDEX drop TO add` for both, an index whose name
+// alone changes. add states the index as a creation does; drop is the index as
+// the table held it when the step was planned, and a table that holds another
+// one under that name refuses the step before it is written.
 type ColumnTableLocalIndexAlteration struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Add           *LocalIndexObservation `protobuf:"bytes,1,opt,name=add,proto3" json:"add,omitempty"`

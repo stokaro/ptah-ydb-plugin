@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
@@ -15,6 +16,17 @@ func (e *unsupportedError) Error() string { return e.message }
 
 func unsupported(format string, args ...any) error {
 	return &unsupportedError{message: fmt.Sprintf(format, args...)}
+}
+
+// declarationRefusal is the refusal of the declaration of the table owner
+// names, as a reason the host shows after the call's code: the table and the
+// sentence this provider wrote, the one schema validation reports for the same
+// declaration. A compilation of a declaration reads no server, so every error
+// it returns is this provider's sentence about what the declaration states; it
+// names a table, a column, an index or a setting, never a value. err still
+// matches with errors.Is and errors.As.
+func declarationRefusal(owner *protocol.Reference, err error) error {
+	return authored.Wrap(err, fmt.Sprintf("table %s: %s", tableLabel(owner), err))
 }
 
 // IsUnsupported reports whether err refuses a declaration for a feature the

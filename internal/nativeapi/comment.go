@@ -72,6 +72,13 @@ func (c *Comments) RunStatement(ctx context.Context, database, root string, quer
 	}
 	subject := commentSubject(query.Statement, absolute)
 	entry, err := c.describePath(ctx, absolute)
+	if isSchemeError(err) {
+		// YDB answers SCHEME_ERROR for a path that holds nothing, or that the
+		// session may not see. Nothing was written, and the path is the
+		// statement's own, so the refusal names it.
+		return false, &Refusal{Err: fmt.Errorf("%w: set %s: YDB holds no object at the path, or the session may not see it (SCHEME_ERROR)",
+			ydbcomment.ErrStatement, subject)}
+	}
 	if err != nil {
 		return false, fmt.Errorf("set %s: %w", subject, err)
 	}
@@ -100,7 +107,9 @@ func (c *Comments) RunStatement(ctx context.Context, database, root string, quer
 		return false, err
 	}
 	if err := session.Alter(ctx, &Ydb_Table.AlterTableRequest{Path: absolute, AlterAttributes: map[string]string{query.Key(): query.Comment}}); err != nil {
-		return true, fmt.Errorf("set %s: %w", subject, err)
+		// The write is one AlterTable, which YDB applies whole or not at all,
+		// so its own answer is what the outcome is read from.
+		return true, fmt.Errorf("set %s: %w", subject, answered(err))
 	}
 	described, err := session.Describe(ctx, absolute)
 	if err != nil {

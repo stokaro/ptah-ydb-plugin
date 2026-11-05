@@ -9,7 +9,7 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 )
 
-// distanceOrder is the ORDER BY a nearest-neighbour search sorts by: the Knn
+// distanceOrder is the ORDER BY a nearest-neighbor search sorts by: the Knn
 // distance ascending, or the inner-product similarity descending, from a
 // closed set, because a wrong function answers every query with plausible
 // rows in the wrong order.

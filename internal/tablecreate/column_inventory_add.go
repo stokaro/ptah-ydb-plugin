@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 )
@@ -40,7 +41,7 @@ func validateInventoryAddition(column *Ydb_Table.ColumnMeta) error {
 // fill existing rows. Planning, rendering, and execution share this boundary.
 func (c *ColumnInventory) CheckCapabilities(caps map[string]bool) error {
 	if c.Add.GetFromLiteral() != nil && !caps["add_column_with_default"] {
-		return fmt.Errorf("adding a column with a default requires add_column_with_default")
+		return fmt.Errorf("adding a column with a default requires add_column_with_default%s", featureflags.Clause("add_column_with_default"))
 	}
 	return nil
 }

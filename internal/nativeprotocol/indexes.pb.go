@@ -1090,8 +1090,13 @@ func (*TableIndexDescription_GlobalFulltextRelevanceIndex) isTableIndexDescripti
 
 // IndexObservations binds every index to the physical tables read for it.
 type IndexObservations struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Indexes       []*ObservedIndex       `protobuf:"bytes,1,rep,name=indexes,proto3" json:"indexes,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Indexes []*ObservedIndex       `protobuf:"bytes,1,rep,name=indexes,proto3" json:"indexes,omitempty"`
+	// common_indexes describes each index the common model describes, when a
+	// read leaves those indexes out of indexes. It is read for what the common
+	// model has no place for, the partitioning and the read replicas, which a
+	// rebuild gives the new table's index.
+	CommonIndexes []*TableIndexDescription `protobuf:"bytes,2,rep,name=common_indexes,json=commonIndexes,proto3" json:"common_indexes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1129,6 +1134,13 @@ func (*IndexObservations) Descriptor() ([]byte, []int) {
 func (x *IndexObservations) GetIndexes() []*ObservedIndex {
 	if x != nil {
 		return x.Indexes
+	}
+	return nil
+}
+
+func (x *IndexObservations) GetCommonIndexes() []*TableIndexDescription {
+	if x != nil {
+		return x.CommonIndexes
 	}
 	return nil
 }
@@ -2706,9 +2718,10 @@ const file_internal_nativeprotocol_indexes_proto_rawDesc = "" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fSTATUS_READY\x10\x01\x12\x13\n" +
 	"\x0fSTATUS_BUILDING\x10\x02B\x06\n" +
-	"\x04type\"M\n" +
+	"\x04type\"\x9c\x01\n" +
 	"\x11IndexObservations\x128\n" +
-	"\aindexes\x18\x01 \x03(\v2\x1e.ptah.ydb.native.ObservedIndexR\aindexes\"\x97\x01\n" +
+	"\aindexes\x18\x01 \x03(\v2\x1e.ptah.ydb.native.ObservedIndexR\aindexes\x12M\n" +
+	"\x0ecommon_indexes\x18\x02 \x03(\v2&.ptah.ydb.native.TableIndexDescriptionR\rcommonIndexes\"\x97\x01\n" +
 	"\rObservedIndex\x12H\n" +
 	"\vdescription\x18\x01 \x01(\v2&.ptah.ydb.native.TableIndexDescriptionR\vdescription\x12<\n" +
 	"\x06tables\x18\x02 \x03(\v2$.ptah.ydb.native.ImplementationTableR\x06tables\"q\n" +
@@ -2966,57 +2979,58 @@ var file_internal_nativeprotocol_indexes_proto_depIdxs = []int32{
 	14, // 26: ptah.ydb.native.TableIndexDescription.global_fulltext_relevance_index:type_name -> ptah.ydb.native.GlobalFulltextRelevanceIndex
 	3,  // 27: ptah.ydb.native.TableIndexDescription.status:type_name -> ptah.ydb.native.TableIndexDescription.Status
 	17, // 28: ptah.ydb.native.IndexObservations.indexes:type_name -> ptah.ydb.native.ObservedIndex
-	15, // 29: ptah.ydb.native.ObservedIndex.description:type_name -> ptah.ydb.native.TableIndexDescription
-	18, // 30: ptah.ydb.native.ObservedIndex.tables:type_name -> ptah.ydb.native.ImplementationTable
-	23, // 31: ptah.ydb.native.ImplementationTable.description:type_name -> ptah.ydb.native.DescribeTableResult
-	31, // 32: ptah.ydb.native.SequenceDescription.set_val:type_name -> ptah.ydb.native.SequenceDescription.SetVal
-	39, // 33: ptah.ydb.native.SequenceDescription.data_type:type_name -> Ydb.Type
-	4,  // 34: ptah.ydb.native.ColumnCompression.algorithm:type_name -> ptah.ydb.native.ColumnCompression.Algorithm
-	32, // 35: ptah.ydb.native.ColumnEncoding.off:type_name -> ptah.ydb.native.ColumnEncoding.Off
-	33, // 36: ptah.ydb.native.ColumnEncoding.dictionary:type_name -> ptah.ydb.native.ColumnEncoding.Dictionary
-	39, // 37: ptah.ydb.native.ColumnMeta.type:type_name -> Ydb.Type
-	40, // 38: ptah.ydb.native.ColumnMeta.from_literal:type_name -> Ydb.TypedValue
-	19, // 39: ptah.ydb.native.ColumnMeta.from_sequence:type_name -> ptah.ydb.native.SequenceDescription
-	41, // 40: ptah.ydb.native.ColumnMeta.empty_default:type_name -> google.protobuf.NullValue
-	20, // 41: ptah.ydb.native.ColumnMeta.compression:type_name -> ptah.ydb.native.ColumnCompression
-	21, // 42: ptah.ydb.native.ColumnMeta.encoding:type_name -> ptah.ydb.native.ColumnEncoding
-	42, // 43: ptah.ydb.native.DescribeTableResult.self:type_name -> Ydb.Scheme.Entry
-	22, // 44: ptah.ydb.native.DescribeTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
-	40, // 45: ptah.ydb.native.DescribeTableResult.shard_key_bounds:type_name -> Ydb.TypedValue
-	15, // 46: ptah.ydb.native.DescribeTableResult.indexes:type_name -> ptah.ydb.native.TableIndexDescription
-	43, // 47: ptah.ydb.native.DescribeTableResult.table_stats:type_name -> Ydb.Table.TableStats
-	44, // 48: ptah.ydb.native.DescribeTableResult.ttl_settings:type_name -> Ydb.Table.TtlSettings
-	45, // 49: ptah.ydb.native.DescribeTableResult.storage_settings:type_name -> Ydb.Table.StorageSettings
-	46, // 50: ptah.ydb.native.DescribeTableResult.column_families:type_name -> Ydb.Table.ColumnFamily
-	34, // 51: ptah.ydb.native.DescribeTableResult.attributes:type_name -> ptah.ydb.native.DescribeTableResult.AttributesEntry
-	37, // 52: ptah.ydb.native.DescribeTableResult.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
-	47, // 53: ptah.ydb.native.DescribeTableResult.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
-	38, // 54: ptah.ydb.native.DescribeTableResult.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
-	48, // 55: ptah.ydb.native.DescribeTableResult.changefeeds:type_name -> ptah.ydb.native.ChangefeedDescription
-	49, // 56: ptah.ydb.native.DescribeTableResult.store_type:type_name -> Ydb.Table.StoreType
-	40, // 57: ptah.ydb.native.ColumnIntent.literal:type_name -> Ydb.TypedValue
-	25, // 58: ptah.ydb.native.ColumnIntent.sequence:type_name -> ptah.ydb.native.SequenceIntent
-	20, // 59: ptah.ydb.native.ColumnIntent.compression:type_name -> ptah.ydb.native.ColumnCompression
-	21, // 60: ptah.ydb.native.ColumnIntent.encoding:type_name -> ptah.ydb.native.ColumnEncoding
-	39, // 61: ptah.ydb.native.SequenceIntent.data_type:type_name -> Ydb.Type
-	50, // 62: ptah.ydb.native.AccessIntent.direct_grants:type_name -> Ydb.Scheme.Permissions
-	50, // 63: ptah.ydb.native.AccessIntent.required_effective_permissions:type_name -> Ydb.Scheme.Permissions
-	26, // 64: ptah.ydb.native.RowTableIntent.access:type_name -> ptah.ydb.native.AccessIntent
-	44, // 65: ptah.ydb.native.RowTableIntent.ttl_settings:type_name -> Ydb.Table.TtlSettings
-	45, // 66: ptah.ydb.native.RowTableIntent.storage_settings:type_name -> Ydb.Table.StorageSettings
-	46, // 67: ptah.ydb.native.RowTableIntent.column_families:type_name -> Ydb.Table.ColumnFamily
-	35, // 68: ptah.ydb.native.RowTableIntent.attributes:type_name -> ptah.ydb.native.RowTableIntent.AttributesEntry
-	37, // 69: ptah.ydb.native.RowTableIntent.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
-	47, // 70: ptah.ydb.native.RowTableIntent.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
-	38, // 71: ptah.ydb.native.RowTableIntent.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
-	27, // 72: ptah.ydb.native.RowTableIntent.partition_at_keys:type_name -> ptah.ydb.native.SplitPoint
-	2,  // 73: ptah.ydb.native.FulltextIndexSettings.Analyzers.tokenizer:type_name -> ptah.ydb.native.FulltextIndexSettings.Tokenizer
-	29, // 74: ptah.ydb.native.FulltextIndexSettings.ColumnAnalyzers.analyzers:type_name -> ptah.ydb.native.FulltextIndexSettings.Analyzers
-	75, // [75:75] is the sub-list for method output_type
-	75, // [75:75] is the sub-list for method input_type
-	75, // [75:75] is the sub-list for extension type_name
-	75, // [75:75] is the sub-list for extension extendee
-	0,  // [0:75] is the sub-list for field type_name
+	15, // 29: ptah.ydb.native.IndexObservations.common_indexes:type_name -> ptah.ydb.native.TableIndexDescription
+	15, // 30: ptah.ydb.native.ObservedIndex.description:type_name -> ptah.ydb.native.TableIndexDescription
+	18, // 31: ptah.ydb.native.ObservedIndex.tables:type_name -> ptah.ydb.native.ImplementationTable
+	23, // 32: ptah.ydb.native.ImplementationTable.description:type_name -> ptah.ydb.native.DescribeTableResult
+	31, // 33: ptah.ydb.native.SequenceDescription.set_val:type_name -> ptah.ydb.native.SequenceDescription.SetVal
+	39, // 34: ptah.ydb.native.SequenceDescription.data_type:type_name -> Ydb.Type
+	4,  // 35: ptah.ydb.native.ColumnCompression.algorithm:type_name -> ptah.ydb.native.ColumnCompression.Algorithm
+	32, // 36: ptah.ydb.native.ColumnEncoding.off:type_name -> ptah.ydb.native.ColumnEncoding.Off
+	33, // 37: ptah.ydb.native.ColumnEncoding.dictionary:type_name -> ptah.ydb.native.ColumnEncoding.Dictionary
+	39, // 38: ptah.ydb.native.ColumnMeta.type:type_name -> Ydb.Type
+	40, // 39: ptah.ydb.native.ColumnMeta.from_literal:type_name -> Ydb.TypedValue
+	19, // 40: ptah.ydb.native.ColumnMeta.from_sequence:type_name -> ptah.ydb.native.SequenceDescription
+	41, // 41: ptah.ydb.native.ColumnMeta.empty_default:type_name -> google.protobuf.NullValue
+	20, // 42: ptah.ydb.native.ColumnMeta.compression:type_name -> ptah.ydb.native.ColumnCompression
+	21, // 43: ptah.ydb.native.ColumnMeta.encoding:type_name -> ptah.ydb.native.ColumnEncoding
+	42, // 44: ptah.ydb.native.DescribeTableResult.self:type_name -> Ydb.Scheme.Entry
+	22, // 45: ptah.ydb.native.DescribeTableResult.columns:type_name -> ptah.ydb.native.ColumnMeta
+	40, // 46: ptah.ydb.native.DescribeTableResult.shard_key_bounds:type_name -> Ydb.TypedValue
+	15, // 47: ptah.ydb.native.DescribeTableResult.indexes:type_name -> ptah.ydb.native.TableIndexDescription
+	43, // 48: ptah.ydb.native.DescribeTableResult.table_stats:type_name -> Ydb.Table.TableStats
+	44, // 49: ptah.ydb.native.DescribeTableResult.ttl_settings:type_name -> Ydb.Table.TtlSettings
+	45, // 50: ptah.ydb.native.DescribeTableResult.storage_settings:type_name -> Ydb.Table.StorageSettings
+	46, // 51: ptah.ydb.native.DescribeTableResult.column_families:type_name -> Ydb.Table.ColumnFamily
+	34, // 52: ptah.ydb.native.DescribeTableResult.attributes:type_name -> ptah.ydb.native.DescribeTableResult.AttributesEntry
+	37, // 53: ptah.ydb.native.DescribeTableResult.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
+	47, // 54: ptah.ydb.native.DescribeTableResult.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
+	38, // 55: ptah.ydb.native.DescribeTableResult.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
+	48, // 56: ptah.ydb.native.DescribeTableResult.changefeeds:type_name -> ptah.ydb.native.ChangefeedDescription
+	49, // 57: ptah.ydb.native.DescribeTableResult.store_type:type_name -> Ydb.Table.StoreType
+	40, // 58: ptah.ydb.native.ColumnIntent.literal:type_name -> Ydb.TypedValue
+	25, // 59: ptah.ydb.native.ColumnIntent.sequence:type_name -> ptah.ydb.native.SequenceIntent
+	20, // 60: ptah.ydb.native.ColumnIntent.compression:type_name -> ptah.ydb.native.ColumnCompression
+	21, // 61: ptah.ydb.native.ColumnIntent.encoding:type_name -> ptah.ydb.native.ColumnEncoding
+	39, // 62: ptah.ydb.native.SequenceIntent.data_type:type_name -> Ydb.Type
+	50, // 63: ptah.ydb.native.AccessIntent.direct_grants:type_name -> Ydb.Scheme.Permissions
+	50, // 64: ptah.ydb.native.AccessIntent.required_effective_permissions:type_name -> Ydb.Scheme.Permissions
+	26, // 65: ptah.ydb.native.RowTableIntent.access:type_name -> ptah.ydb.native.AccessIntent
+	44, // 66: ptah.ydb.native.RowTableIntent.ttl_settings:type_name -> Ydb.Table.TtlSettings
+	45, // 67: ptah.ydb.native.RowTableIntent.storage_settings:type_name -> Ydb.Table.StorageSettings
+	46, // 68: ptah.ydb.native.RowTableIntent.column_families:type_name -> Ydb.Table.ColumnFamily
+	35, // 69: ptah.ydb.native.RowTableIntent.attributes:type_name -> ptah.ydb.native.RowTableIntent.AttributesEntry
+	37, // 70: ptah.ydb.native.RowTableIntent.partitioning_settings:type_name -> Ydb.Table.PartitioningSettings
+	47, // 71: ptah.ydb.native.RowTableIntent.key_bloom_filter:type_name -> Ydb.FeatureFlag.Status
+	38, // 72: ptah.ydb.native.RowTableIntent.read_replicas_settings:type_name -> Ydb.Table.ReadReplicasSettings
+	27, // 73: ptah.ydb.native.RowTableIntent.partition_at_keys:type_name -> ptah.ydb.native.SplitPoint
+	2,  // 74: ptah.ydb.native.FulltextIndexSettings.Analyzers.tokenizer:type_name -> ptah.ydb.native.FulltextIndexSettings.Tokenizer
+	29, // 75: ptah.ydb.native.FulltextIndexSettings.ColumnAnalyzers.analyzers:type_name -> ptah.ydb.native.FulltextIndexSettings.Analyzers
+	76, // [76:76] is the sub-list for method output_type
+	76, // [76:76] is the sub-list for method input_type
+	76, // [76:76] is the sub-list for extension type_name
+	76, // [76:76] is the sub-list for extension extendee
+	0,  // [0:76] is the sub-list for field type_name
 }
 
 func init() { file_internal_nativeprotocol_indexes_proto_init() }

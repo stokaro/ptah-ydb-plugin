@@ -88,9 +88,10 @@ type Item struct {
 `
 
 // `schema apply` builds the declared table in a nested directory, `schema
-// compare` finds nothing left to change, and `db drop-all` drops it and removes
-// the directories it emptied. The run is in a dev realm, which the commands
-// read as a database of their own.
+// compare` finds nothing left to change, `db read` writes the table back as
+// the YQL that creates it, and `db drop-all` drops it and removes the
+// directories it emptied. The run is in a dev realm, which the commands read as
+// a database of their own.
 func TestHostAppliesComparesAndDropsASchema_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	realm := newCLIRealm(c)
@@ -100,12 +101,18 @@ func TestHostAppliesComparesAndDropsASchema_HappyPath(t *testing.T) {
 	held := realm.entries(c, "ptah_ydb_e2e", "nested")
 	compared, compareErr := hostCommand(c, "schema", "compare", "--db-url", realm.address, "--root-dir", entities,
 		"--schemas", "ptah_ydb_e2e/nested", "--exit-code")
+	read, readErr := hostCommand(c, "db", "read", "--db-url", realm.address, "--schemas", "ptah_ydb_e2e/nested")
 	dropped, dropErr := hostCommand(c, "db", "drop-all", "--db-url", realm.address, "--auto-approve")
 
 	c.Assert(applyErr, qt.IsNil, qt.Commentf("schema apply:\n%s", applied))
 	c.Assert(held, qt.DeepEquals, map[string]Ydb_Scheme.Entry_Type{"items": Ydb_Scheme.Entry_TABLE})
 	c.Assert(compareErr, qt.IsNil, qt.Commentf("schema compare:\n%s", compared))
 	c.Assert(compared, qt.Contains, "No schema differences detected")
+	c.Assert(readErr, qt.IsNil, qt.Commentf("db read:\n%s", read))
+	c.Assert(read, qt.Contains, "CREATE TABLE `ptah_ydb_e2e/nested/items` (")
+	c.Assert(read, qt.Contains, "`id` BigSerial NOT NULL,")
+	c.Assert(read, qt.Contains, "`title` Utf8 NOT NULL DEFAULT 'untitled'u,")
+	c.Assert(read, qt.Contains, "INDEX `idx_items_title` GLOBAL SYNC ON (`title`)")
 	c.Assert(dropErr, qt.IsNil, qt.Commentf("db drop-all:\n%s", dropped))
 	c.Assert(entryNames(realm.entries(c)), qt.Not(qt.Contains), "ptah_ydb_e2e")
 }

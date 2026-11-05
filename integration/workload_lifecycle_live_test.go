@@ -9,7 +9,6 @@ import (
 	"hash/fnv"
 	"os"
 	"path"
-	"strings"
 	"testing"
 	"time"
 
@@ -86,38 +85,30 @@ func workloadRanks(directory string) (int64, int64) {
 	return base, base + 1
 }
 
-// awaitPoolRouting waits until a query is no longer routed to a dropped
-// resource pool. The workload manager reads its classifiers from a cache, so
-// for a while after a classifier and its pool are dropped a query can still
-// be sent to the pool and fail with "Failed to resolve pool id", whichever
-// test sends it.
-func awaitPoolRouting(ctx context.Context, db *sql.DB) error {
-	for {
-		var one int32
-		err := db.QueryRowContext(ctx, "SELECT 1").Scan(&one)
-		if err == nil || !strings.Contains(err.Error(), "Failed to resolve pool id") {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return err
-		case <-time.After(time.Second):
-		}
-	}
+// workloadMember is the member name a run's classifier routes: a name no
+// user holds, as in the host's test. A classifier without one routes every
+// query of the database, the provider's and the server's own included, to a
+// pool the run changes and drops. With such a classifier the provider's read
+// that confirms the drop failed in about one run of fifteen on 26.2.1.14,
+// refused as routed to the gone pool, and on 25.1.4.7 in about one of thirty,
+// unanswered within the host's 30-second call.
+func workloadMember(directory string) string {
+	return directory + "_member"
 }
 
 // TestWorkloadLifecycleSubprocess drives resource pools and classifiers
 // through the provider's services the way the host does, and reads them back
 // from the system views after each step: a creation, a rank swap written as
 // a migration file's text, a change another writer made after the plan read
-// the pool, and a removal.
+// the pool, and a removal. The classifiers route members no user holds (see
+// workloadMember).
 func TestWorkloadLifecycleSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
 	enableResourcePools(c, opened)
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Minute)
 	defer cancel()
-	poolName, first, second := directory+"_pool", directory+"_a", directory+"_b"
+	poolName, first, second, member := directory+"_pool", directory+"_a", directory+"_b", workloadMember(directory)
 	low, high := workloadRanks(directory)
 	pools, classifiers := []string{poolName}, []string{first, second}
 	c.Cleanup(func() {
@@ -127,7 +118,6 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 			_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL CLASSIFIER `"+name+"`")
 		}
 		_ = execFixtureSchema(cleanup, opened.DB, "DROP RESOURCE POOL `"+poolName+"`")
-		c.Check(awaitPoolRouting(cleanup, opened.DB), qt.IsNil)
 	})
 	client := startProviderFor(c, provider.PlanningLifecycleFeature, provider.TextUnitsFeature)
 	session, err := client.Open(ctx, &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
@@ -204,26 +194,26 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 	}
 
 	created := map[string]workload.PoolSpec{poolName: {ConcurrentQueryLimit: new(int32(2)), QueueSize: new(int32(4))}}
-	routes := map[string]workload.ClassifierSpec{first: {ResourcePool: poolName, Rank: low}, second: {ResourcePool: "default", MemberName: "etl", Rank: high}}
+	routes := map[string]workload.ClassifierSpec{first: {ResourcePool: poolName, MemberName: member, Rank: low}, second: {ResourcePool: "default", MemberName: "etl", Rank: high}}
 	units := plan(protocol.RenderRequest_ANY, created, routes)
 	c.Assert(units, qt.HasLen, 1)
 	execute(protocol.Execution_APPLIED, units...)
 	heldPools, heldClassifiers := held()
 	c.Assert(heldPools, qt.DeepEquals, map[string]heldPool{poolName: {ConcurrentQueryLimit: 2, QueueSize: 4, ResourceWeight: -1}})
-	c.Assert(heldClassifiers, qt.DeepEquals, map[string]heldClassifier{first: {Pool: poolName, Rank: low}, second: {Pool: "default", Member: "etl", Rank: high}})
+	c.Assert(heldClassifiers, qt.DeepEquals, map[string]heldClassifier{first: {Pool: poolName, Member: member, Rank: low}, second: {Pool: "default", Member: "etl", Rank: high}})
 	c.Assert(plan(protocol.RenderRequest_ANY, created, routes), qt.HasLen, 0)
 
 	// Two classifiers trade ranks and the pool loses its queue, written as
 	// the text a migration file holds and run as one query.
 	changed := map[string]workload.PoolSpec{poolName: {ConcurrentQueryLimit: new(int32(5))}}
-	swapped := map[string]workload.ClassifierSpec{first: {ResourcePool: poolName, Rank: high}, second: {ResourcePool: poolName, Rank: low}}
+	swapped := map[string]workload.ClassifierSpec{first: {ResourcePool: poolName, MemberName: member, Rank: high}, second: {ResourcePool: poolName, MemberName: "etl", Rank: low}}
 	units = plan(protocol.RenderRequest_TEXT, changed, swapped)
 	c.Assert(units, qt.HasLen, 1)
 	c.Assert(units[0].GetSql(), qt.Not(qt.Equals), "")
 	execute(protocol.Execution_APPLIED, units...)
 	heldPools, heldClassifiers = held()
 	c.Assert(heldPools, qt.DeepEquals, map[string]heldPool{poolName: {ConcurrentQueryLimit: 5, QueueSize: -1, ResourceWeight: -1}})
-	c.Assert(heldClassifiers, qt.DeepEquals, map[string]heldClassifier{first: {Pool: poolName, Rank: high}, second: {Pool: poolName, Rank: low}})
+	c.Assert(heldClassifiers, qt.DeepEquals, map[string]heldClassifier{first: {Pool: poolName, Member: member, Rank: high}, second: {Pool: poolName, Member: "etl", Rank: low}})
 	c.Assert(plan(protocol.RenderRequest_ANY, changed, swapped), qt.HasLen, 0)
 
 	// A change planned against a pool another writer changed since is

@@ -108,7 +108,7 @@ func parseDuration(text string) (duration, error) {
 	}
 	datePart, timePart, hasTime := strings.Cut(rest, "T")
 	if hasTime && timePart == "" {
-		return duration{}, fmt.Errorf("T is not followed by hours, minutes or seconds")
+		return duration{}, fmt.Errorf("the T is not followed by hours, minutes or seconds")
 	}
 	var parsed duration
 	parts := 0

@@ -293,6 +293,18 @@ func checkIndexPrecondition(alteration *tablecreate.Alteration, table *native.De
 			return fmt.Errorf("YDB index differs from the plan")
 		}
 	}
+	for _, rename := range request.RenameIndexes {
+		actual := indexByName(table.Indexes, rename.SourceName)
+		if actual == nil {
+			return fmt.Errorf("YDB index to rename is absent")
+		}
+		if !plannedIndex(alteration.HeldIndexes[0], actual) {
+			return fmt.Errorf("YDB index differs from the plan")
+		}
+		if indexByName(table.Indexes, rename.DestinationName) != nil {
+			return fmt.Errorf("YDB index name to rename to is taken")
+		}
+	}
 	return nil
 }
 
@@ -468,10 +480,19 @@ func confirmTableAlteration(owner *protocol.Reference, alteration *tablecreate.A
 }
 
 // confirmIndexes requires an added index to exist, be ready and hold the
-// definition the request states, a dropped index to be gone, and every other
-// index to be as it was before the call.
+// definition the request states, a dropped index to be gone, a renamed index
+// to be gone under its old name and to hold under the new one the definition
+// and the settings it held, and every other index to be as it was before the
+// call.
 func confirmIndexes(request *Ydb_Table.AlterTableRequest, before, observed *native.DescribeTableResult) error {
 	named := map[string]bool{}
+	for _, rename := range request.RenameIndexes {
+		named[rename.SourceName], named[rename.DestinationName] = true, true
+		held, actual := indexByName(before.Indexes, rename.SourceName), indexByName(observed.Indexes, rename.DestinationName)
+		if indexByName(observed.Indexes, rename.SourceName) != nil || held == nil || actual == nil || !sameIndex(renamedIndex(held, rename.DestinationName), actual) {
+			return fmt.Errorf("YDB renamed index differs from the index it renames")
+		}
+	}
 	for _, index := range request.AddIndexes {
 		named[index.Name] = true
 		actual := indexByName(observed.Indexes, index.Name)
@@ -498,6 +519,13 @@ func confirmIndexes(request *Ydb_Table.AlterTableRequest, before, observed *nati
 		return fmt.Errorf("YDB altered table holds unexpected indexes")
 	}
 	return nil
+}
+
+// renamedIndex is held under the name to.
+func renamedIndex(held *native.TableIndexDescription, to string) *native.TableIndexDescription {
+	renamed := proto.CloneOf(held)
+	renamed.Name = to
+	return renamed
 }
 
 // sameIndexKind reports whether an observed index is the kind the request adds.

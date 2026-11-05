@@ -345,9 +345,11 @@ func splitPath(written string) (directory, name string, err error) {
 // keeps at a path relative to the database root: a name without a slash, and
 // a clean directory.
 func pathIdentity(schema, name string) bool {
-	return !(strings.TrimSpace(name) == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\x00") || strings.ContainsRune(schema, 0) ||
-		!utf8.ValidString(schema) || !utf8.ValidString(name) ||
-		(schema != "" && (path.IsAbs(schema) || path.Clean(schema) != schema || schema == "." || schema == ".." || strings.HasPrefix(schema, "../"))))
+	if strings.TrimSpace(name) == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\x00") || strings.ContainsRune(schema, 0) ||
+		!utf8.ValidString(schema) || !utf8.ValidString(name) {
+		return false
+	}
+	return schema == "" || !path.IsAbs(schema) && path.Clean(schema) == schema && schema != "." && schema != ".." && !strings.HasPrefix(schema, "../")
 }
 
 // Path is an object's directory relative to the database root and its name.

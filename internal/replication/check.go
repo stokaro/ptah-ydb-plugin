@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 )
 
@@ -38,7 +39,7 @@ type Refusal struct {
 // Error explains the missing capability or the unsupported state change.
 func (r *Refusal) Error() string {
 	if r.Key != "" {
-		return fmt.Sprintf("%s requires target capability %s", r.Subject, r.Key)
+		return fmt.Sprintf("%s requires target capability %s%s", r.Subject, r.Key, featureflags.Clause(r.Key))
 	}
 	return r.Subject + ": " + r.Reason
 }

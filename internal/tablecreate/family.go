@@ -19,9 +19,10 @@ const DefaultFamily = "default"
 //
 // A setting the declaration leaves out is not compared, because a cluster's
 // table profile gives every new table settings of its own: the table keeps what
-// it holds. A family the declaration leaves out stays. A column is placed only
-// by a declaration that names it, so a column without a declared placement
-// keeps the family it sits in.
+// it holds. A family the declaration leaves out stays. A column is placed by a
+// declaration that names it, and by a source that describes where every column
+// sits, which places a column it names in no family in the default family
+// (see PlacedInDefault); any other column keeps the family it sits in.
 type familyInput struct {
 	// desired are the families the declaration states, with the settings it states.
 	desired []*Ydb_Table.ColumnFamily

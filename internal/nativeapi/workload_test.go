@@ -3,8 +3,11 @@ package nativeapi_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
@@ -134,4 +137,78 @@ func TestWorkloadApply_RefusesBeforeWriting(t *testing.T) {
 	c.Assert(err, qt.ErrorMatches, "lock lost")
 	c.Assert(dispatched, qt.IsFalse)
 	c.Assert(fake.executed, qt.HasLen, 0)
+}
+
+// errRouted is what YDB answers a query the workload manager routes to a
+// pool that is gone, as the SDK spells it.
+var errRouted = errors.New("operation/NOT_FOUND (code = 400140, issues = [{'Failed to resolve pool id batch' [{'Resource pool batch not found or you " +
+	"don't have access permissions'}]},{'Query failed during adding/waiting in workload pool '}])")
+
+// stillRouted binds fake, as a session does, with a read through
+// nativeapi.RoutedRead that YDB refuses, as routed to a gone pool, the given
+// number of times once a statement ran, and reads the fake after that.
+func stillRouted(fake *fakeWorkload, refusals int) *nativeapi.Workload {
+	bound := fake.bind()
+	read := bound.Read
+	bound.Read = nativeapi.RoutedRead(func(ctx context.Context) (nativeapi.HeldWorkload, error) {
+		if len(fake.executed) > 0 && refusals > 0 {
+			refusals--
+			return nativeapi.HeldWorkload{}, errRouted
+		}
+		return read(ctx)
+	})
+	return bound
+}
+
+// The read that confirms an operation is sent again while YDB refuses it as
+// routed to a pool that is gone: YDB refuses such a read before it runs it,
+// and a read changes nothing. Without that, the removal of a classifier that
+// routes every query to its pool, and of the pool, is reported unconfirmed
+// whenever the workload manager's cache still holds the classifier.
+func TestWorkloadApply_WaitsOutAPoolStillRouted(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := testcheck.New(t)
+		fake := &fakeWorkload{held: heldBefore(), after: heldAfter()}
+
+		dispatched, err := stillRouted(fake, 3).Apply(c.Context(), "/local", workloadOperation(c, rankSwap()), func(context.Context) error { return nil })
+
+		c.Assert(err, qt.IsNil)
+		c.Assert(dispatched, qt.IsTrue)
+		c.Assert(fake.executed, qt.HasLen, 5)
+	})
+}
+
+// A routing refusal that outlasts nativeapi.PoolRoutingBudget is returned,
+// and the operation is reported dispatched, since its statements ran.
+func TestWorkloadApply_StopsWaitingForAPoolStillRouted_FailurePath(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		c := testcheck.New(t)
+		fake := &fakeWorkload{held: heldBefore(), after: heldAfter()}
+		started := time.Now()
+
+		dispatched, err := stillRouted(fake, 1<<30).Apply(c.Context(), "/local", workloadOperation(c, rankSwap()), func(context.Context) error { return nil })
+
+		c.Assert(err, qt.ErrorIs, errRouted)
+		c.Assert(dispatched, qt.IsTrue)
+		c.Assert(time.Since(started) >= nativeapi.PoolRoutingBudget, qt.IsTrue)
+	})
+}
+
+// Only YDB's routing refusal is sent again: another failed read is returned
+// at once.
+func TestPoolUnresolved(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "a query routed to a gone pool", err: fmt.Errorf("read YDB resource pools: %w", errRouted), want: true},
+		{name: "another refusal", err: errors.New("operation/SCHEME_ERROR (issues = [{'Path does not exist'}])")},
+		{name: "no error"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			c.Assert(nativeapi.PoolUnresolved(test.err), qt.Equals, test.want)
+		})
+	}
 }

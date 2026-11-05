@@ -171,7 +171,8 @@ func LocalIndexClause(index *native.LocalIndexObservation) string {
 
 // localIndexChange is one change of a column table's local indexes: an
 // addition carries the declared index, a removal the index as the table holds
-// it.
+// it, and a rename both, the index under its new name and as held under its
+// old one.
 type localIndexChange struct {
 	add, drop *native.LocalIndexObservation
 }
@@ -181,6 +182,49 @@ func (c localIndexChange) name() string {
 		return c.add.GetName()
 	}
 	return c.drop.GetName()
+}
+
+// rename reports a change that renames an index in place.
+func (c localIndexChange) rename() bool { return c.add != nil && c.drop != nil }
+
+// renamedTo is index under name, every setting kept.
+func renamedTo(index *native.LocalIndexObservation, name string) *native.LocalIndexObservation {
+	result := proto.CloneOf(index)
+	result.Name = name
+	return result
+}
+
+// localIndexRenames pairs each index the declaration names and the table does
+// not hold with an index the table holds and the declaration does not name,
+// of the same definition, as the host's comparison pairs a renamed index on a
+// target with index_rename: the additions in name order, each taking the first
+// unpaired removal in name order that matches it. It returns the held name of
+// each paired declared name.
+func localIndexRenames(wanted, have map[string]*native.LocalIndexObservation) map[string]string {
+	var additions, removals []string
+	for name := range wanted {
+		if have[name] == nil {
+			additions = append(additions, name)
+		}
+	}
+	for name := range have {
+		if wanted[name] == nil {
+			removals = append(removals, name)
+		}
+	}
+	slices.Sort(additions)
+	slices.Sort(removals)
+	renames := map[string]string{}
+	paired := map[string]bool{}
+	for _, to := range additions {
+		for _, from := range removals {
+			if !paired[from] && LocalIndexEqual(renamedTo(have[from], to), wanted[to]) {
+				renames[to], paired[from] = from, true
+				break
+			}
+		}
+	}
+	return renames
 }
 
 // localIndexesManaged reports whether a declaration manages the local
@@ -195,11 +239,13 @@ func localIndexesManaged(desired *native.ColumnStorageIntent) bool {
 // indexes the declaration states, in name order, a removal before the addition
 // that replaces an index under its name. An index the table holds under a
 // declared name with another kind, column or setting is dropped and added
-// again, and an index the declaration renames is dropped under its old name
-// and added under its new one, as the host's embedded engine plans either on a
-// target without index_rename, which this provider never reports. An index to
-// add is held to the rules of its creation. A non-empty reason refuses the
-// plan.
+// again. An index whose name alone changes is renamed in place on a target
+// with index_rename (`RENAME INDEX`, which keeps the index's data), and
+// dropped under its old name and added under its new one on a target without
+// it, as the host's embedded engine plans either; the host compares no local
+// index, so the pairing is this planner's. An index to add is held to the
+// rules of its creation; a renamed one is the index the table holds. A
+// non-empty reason refuses the plan.
 func planLocalIndexes(desired *native.ColumnStorageIntent, held *native.ColumnStorageObservation, types map[string]string, capabilities map[string]bool) ([]localIndexChange, string) {
 	if !localIndexesManaged(desired) {
 		return nil, ""
@@ -222,11 +268,23 @@ func planLocalIndexes(desired *native.ColumnStorageIntent, held *native.ColumnSt
 		}
 	}
 	slices.Sort(names)
+	renames := map[string]string{}
+	if capabilities[IndexRenameCapability] {
+		renames = localIndexRenames(wanted, have)
+	}
+	renamed := map[string]bool{}
+	for _, from := range renames {
+		renamed[from] = true
+	}
 	var changes []localIndexChange
 	for _, name := range names {
 		want, declared := wanted[name]
 		current, present := have[name]
-		if declared && present && LocalIndexEqual(want, current) {
+		if declared && present && LocalIndexEqual(want, current) || renamed[name] {
+			continue
+		}
+		if from, paired := renames[name]; paired {
+			changes = append(changes, localIndexChange{add: ResolvedLocalIndex(want), drop: proto.CloneOf(have[from])})
 			continue
 		}
 		if present {
@@ -276,11 +334,11 @@ func buildColumnLocalIndexOperationModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": ColumnLocalIndexOperationKind, "representation": "operation", "schema_version": 1, "encoding": "ydb-protojson",
 		"message":      string((&native.ColumnTableLocalIndexAlteration{}).ProtoReflect().Descriptor().FullName()),
-		"index":        "exactly one of add and drop; add names one column, its kind and every setting, defaults included, and no storage; drop is the index as the table held it",
-		"render":       "YQL ALTER TABLE ... ADD INDEX `name` LOCAL USING kind ON (`column`) WITH (...) for add, ALTER TABLE ... DROP INDEX `name` for drop, as the host's embedded engine writes them",
+		"index":        "add, drop, or both for a rename; add names one column, its kind and every setting, defaults included, and no storage; drop is the index as the table held it; a rename's add is drop under another name",
+		"render":       "YQL ALTER TABLE ... ADD INDEX `name` LOCAL USING kind ON (`column`) WITH (...) for add, ALTER TABLE ... DROP INDEX `name` for drop, ALTER TABLE ... RENAME INDEX `old` TO `new` for a rename, as the host's embedded engine writes them",
 		"execution":    "the statement once through the query service, outside SQL transactions; no retries; the absolute path is bound at dispatch",
-		"precondition": "the table is a column table; for add it holds no index of that name and holds the column, Utf8 for an n-gram index; for drop it holds the index as captured; the session must name the monitoring endpoint, which the read uses",
-		"confirmation": "read the table service's and the monitoring endpoint's descriptions back: the added index is held as requested or the dropped one is gone, and every other local index, the layout and the TTL are unchanged",
+		"precondition": "the table is a column table; for add it holds no index of that name and holds the column, Utf8 for an n-gram index; for drop and a rename it holds the index as captured, and for a rename no index under the new name; the session must name the monitoring endpoint, which the read uses",
+		"confirmation": "read the table service's and the monitoring endpoint's descriptions back: the added index is held as requested, the dropped one is gone, or the renamed one is gone under its old name and held as captured under its new one, and every other local index, the layout and the TTL are unchanged",
 		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
@@ -334,7 +392,10 @@ func NormalizeColumnLocalIndex(input *protocol.ValueInput) (*protocol.Normalized
 	result := proto.CloneOf(value)
 	result.Payload = payload
 	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Adds a local index to a column table; YDB builds it over the table's data"
-	if alteration.Drop != nil {
+	switch {
+	case alteration.Add != nil && alteration.Drop != nil:
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Renames a local index of a column table in place; the index keeps its data"
+	case alteration.Drop != nil:
 		impact, reason = protocol.ChangeSemantics_DESTRUCTIVE, "Drops a local index of a column table"
 	}
 	return &protocol.NormalizedValue{Id: input.GetId(), Value: result, NormalizedOwner: proto.CloneOf(result.Owner),
@@ -372,11 +433,23 @@ func decodeColumnLocalIndex(payload []byte) (*native.ColumnTableLocalIndexAltera
 	if err := schema.Known(&alteration); err != nil {
 		return nil, err
 	}
-	if (alteration.Add == nil) == (alteration.Drop == nil) {
-		return nil, fmt.Errorf("a column table local-index step adds or drops one index")
+	if alteration.Add == nil && alteration.Drop == nil {
+		return nil, fmt.Errorf("a column table local-index step adds, drops or renames one index")
 	}
-	if err := validateStepLocalIndex(alteration.Add, alteration.Drop); err != nil {
-		return nil, err
+	if alteration.Add != nil && alteration.Drop != nil {
+		if alteration.Add.GetName() == alteration.Drop.GetName() || !LocalIndexEqual(renamedTo(alteration.Drop, alteration.Add.GetName()), alteration.Add) {
+			return nil, fmt.Errorf("a column table local-index rename keeps every setting of the index and changes its name")
+		}
+	}
+	if alteration.Add != nil {
+		if err := validateStepLocalIndex(alteration.Add, nil); err != nil {
+			return nil, err
+		}
+	}
+	if alteration.Drop != nil {
+		if err := validateStepLocalIndex(nil, alteration.Drop); err != nil {
+			return nil, err
+		}
 	}
 	return &alteration, nil
 }
@@ -399,9 +472,13 @@ func validateStepLocalIndex(add, drop *native.LocalIndexObservation) error {
 
 // ColumnLocalIndexStatement writes the statement of a valid local-index step
 // at an absolute path, as the host's embedded engine writes it: `ALTER TABLE
-// `path` ADD INDEX ...;` or `ALTER TABLE `path` DROP INDEX `name`;`.
+// `path` ADD INDEX ...;`, `ALTER TABLE `path` DROP INDEX `name`;` or `ALTER
+// TABLE `path` RENAME INDEX `old` TO `new`;`.
 func ColumnLocalIndexStatement(path string, alteration *native.ColumnTableLocalIndexAlteration) string {
 	prefix := "ALTER TABLE " + QuoteIdentifier(path) + " "
+	if alteration.Add != nil && alteration.Drop != nil {
+		return prefix + "RENAME INDEX " + QuoteIdentifier(alteration.Drop.GetName()) + " TO " + QuoteIdentifier(alteration.Add.GetName()) + ";"
+	}
 	if alteration.Drop != nil {
 		return prefix + "DROP INDEX " + QuoteIdentifier(alteration.Drop.GetName()) + ";"
 	}

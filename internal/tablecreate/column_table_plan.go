@@ -206,10 +206,10 @@ type columnTableStep struct {
 	change columnTableChange
 }
 
-// localIndexNumbers numbers the local-index steps of a plan, the removals and
-// the additions apart.
+// localIndexNumbers numbers the local-index steps of a plan, the removals,
+// the additions and the renames apart.
 type localIndexNumbers struct {
-	drops, adds int
+	drops, adds, renames int
 }
 
 // plan returns the steps of one column table's change and the dependencies
@@ -246,7 +246,11 @@ func (s columnTableStep) plan(number int, numbers *localIndexNumbers) ([]*protoc
 	for _, change := range s.change.indexes {
 		prefix, counter, action := "column-table-drop-local-index", &numbers.drops, protocol.PlanningEffect_DROP
 		alteration := &native.ColumnTableLocalIndexAlteration{Drop: change.drop}
-		if change.add != nil {
+		switch {
+		case change.rename():
+			prefix, counter = "column-table-rename-local-index", &numbers.renames
+			alteration = &native.ColumnTableLocalIndexAlteration{Add: change.add, Drop: change.drop}
+		case change.add != nil:
 			prefix, counter, action = "column-table-add-local-index", &numbers.adds, protocol.PlanningEffect_CREATE
 			alteration = &native.ColumnTableLocalIndexAlteration{Add: change.add}
 		}
@@ -256,16 +260,24 @@ func (s columnTableStep) plan(number int, numbers *localIndexNumbers) ([]*protoc
 		if err != nil {
 			return nil, nil, err
 		}
+		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(s.table.Subject), Action: protocol.PlanningEffect_READ},
+			{Subject: indexSubject(s.table.Subject, change.name()), Action: action}}
+		if change.rename() {
+			// A rename drops the held name and creates the declared one.
+			effects = []*protocol.PlanningEffect{{Subject: proto.CloneOf(s.table.Subject), Action: protocol.PlanningEffect_READ},
+				{Subject: indexSubject(s.table.Subject, change.drop.GetName()), Action: protocol.PlanningEffect_DROP},
+				{Subject: indexSubject(s.table.Subject, change.add.GetName()), Action: protocol.PlanningEffect_CREATE}}
+		}
 		facts := operation.OperationSemantics
 		steps = append(steps, &protocol.PlanningStep{Id: id,
 			Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: operation, Phase: protocol.PlanningOperation_LIFECYCLE},
-			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
-				Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(s.table.Subject), Action: protocol.PlanningEffect_READ},
-					{Subject: indexSubject(s.table.Subject, change.name()), Action: action}}}})
-		if change.drop != nil {
+			Metadata:  &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}})
+		switch {
+		case change.rename():
+		case change.drop != nil:
 			dropped[change.name()] = id
-		} else if before := dropped[change.name()]; before != nil {
-			dependencies = append(dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(before), After: proto.CloneOf(id)})
+		case dropped[change.name()] != nil:
+			dependencies = append(dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(dropped[change.name()]), After: proto.CloneOf(id)})
 		}
 	}
 	return steps, dependencies, nil
