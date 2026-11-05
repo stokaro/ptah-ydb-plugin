@@ -2569,14 +2569,18 @@ below), where a table the native call creates can change them.
 The planner refuses, in the embedded engine's words, an auto-increment column
 of a type YDB has no Serial for, `GENERATED ALWAYS`, identity options other than
 the start and the increment, a default on a Serial, a start or an increment
-below 1 or not a whole number, and a start or an increment on a 16-bit or
-32-bit Serial. Every line reports `serial_sequence_keeps_range` false: any
-`ALTER SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the
-column then stores the value after its own maximum as a negative number without
-an error. The native call could create such a sequence with its range kept,
-but no later change and no migration file could, so it is refused at creation
-too. A column table takes no Serial, and YDB adds no Serial column to a table
-that exists (`Column addition with serial data type is unsupported`).
+below 1 or not a whole number, and a start or an increment a creation or a
+change would give a 16-bit or 32-bit Serial, a change back to the defaults
+included. Every line reports `serial_sequence_keeps_range` false: any `ALTER
+SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the column
+then stores the value after its own maximum as a negative number without an
+error. The native call could create such a sequence with its range kept, but no
+later change and no migration file could, so it is refused at creation too. A
+table whose 16-bit or 32-bit Serial already holds the declared start and
+increment needs no statement and plans nothing, and validation, which cannot
+tell, takes the declaration, as the host's embedded engine does. A column table
+takes no Serial, and YDB adds no Serial column to a table that exists (`Column
+addition with serial data type is unsupported`).
 
 When the declared start or increment of an existing Serial differs from what
 the read reports, the planner writes one step, `serial-sequence/N`: one YQL

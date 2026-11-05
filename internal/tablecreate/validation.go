@@ -44,7 +44,11 @@ func ValidateIdentifiers(facts *protocol.ComparisonIdentifiers) error {
 
 // ValidateDeclaration checks one captured row-table declaration against the
 // rules CREATE compiles with, without the policy that only creation needs.
-// It reads the declaration and opens nothing.
+// It reads the declaration and opens nothing. Whether the target takes the
+// settings of a Serial's sequence is a question about the plan: a creation
+// and a change of the sequence refuse what the target cannot keep, and a
+// table that already holds the settings changes nothing, as the host's
+// embedded engine plans it.
 func ValidateDeclaration(subject *protocol.ComparisonIdentity, table *protocol.DeclaredTable, caps map[string]bool) error {
 	owner, err := boundOwner(subject)
 	if err != nil {
@@ -54,11 +58,8 @@ func ValidateDeclaration(subject *protocol.ComparisonIdentity, table *protocol.D
 		_, err = CompileColumnTable(owner, table, caps)
 		return err
 	}
-	request, _, err := compile(owner, table, caps)
-	if err != nil {
-		return err
-	}
-	return serialSettingsRefusal(request, tableLabel(owner), caps)
+	_, _, err = compile(owner, table, caps)
+	return err
 }
 
 // TablePath returns the database and the slash-separated scheme path a table
