@@ -1178,12 +1178,12 @@ For a host that lists `models.report-counts`, the provider reports count
 metrics for its topic, changefeed, coordination node, streaming query, external
 data source, external table, async replication, transfer, secret, resource pool
 and resource pool classifier models, and for its row-table properties, column
-storage and index set models, desired and observed, under the metric names and
-help texts of the host's built-in YDB engine. It counts each value offline: a
-topic is one topic and its consumers, a table's changefeed set its feeds and
-the consumers across them, an external table one table and its columns, and
-every other object one. `ptah schema stats` then writes these lines through the
-provider as through the built-in engine.
+storage, index set and index settings models, desired and observed, under the
+metric names and help texts of the host's built-in YDB engine. It counts each
+value offline: a topic is one topic and its consumers, a table's changefeed set
+its feeds and the consumers across them, an external table one table and its
+columns, and every other object one. `ptah schema stats` then writes these
+lines through the provider as through the built-in engine.
 
 The table setting families count as the built-in engine counted them:
 
@@ -1204,10 +1204,10 @@ every setting the server describes and is counted against these values, as is
 the declaration the host converts it to before it counts.
 
 A host that reads global indexes as common indexes (`schema.observed-indexes`)
-counts the declaration it converts a read to, and that declaration holds none
-of their settings. Through such a host `ydb_index_partitioning` counts no
-global index, where the built-in engine counted each one with settings; the
-observed index set counts them.
+leaves them out of a table's index set, so `ydb_index_partitioning` counts each
+such index from its own settings, the index settings model. A host reads those
+when it negotiates `schema.observed-index-facets`; through a host that does
+not, the count leaves the common indexes out.
 
 ## Offline coordination declarations
 

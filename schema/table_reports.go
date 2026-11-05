@@ -157,12 +157,13 @@ type indexSettings struct {
 // implementationTable is the table YDB keeps a global secondary index in.
 const implementationTable = "indexImplTable"
 
-// tableIndexes returns the indexes of a table's index set. An observation
-// holds the global secondary indexes in common_indexes where the host reads
-// them as common indexes; the declaration converted from it holds none of
-// them, so a count of a declaration counts only the indexes it holds. A
-// global index the set holds is read from its implementation table, as the
-// built-in engine read it, and a common index from its description.
+// tableIndexes returns the indexes a table's index set holds. A global
+// secondary index the host reads as a common index is not among them: an
+// observation keeps its description in common_indexes, which the declaration
+// converted from it drops, and its settings are counted from the index's own
+// settings (IndexSettingsProperties), so a read and its declaration count
+// alike. A global index the set holds is read from its implementation table,
+// as the built-in engine read it.
 func tableIndexes(payload []byte, representation protocol.ValueInput_Representation) ([]indexSettings, error) {
 	var result []indexSettings
 	if representation == protocol.ValueInput_DESIRED {
@@ -189,9 +190,6 @@ func tableIndexes(payload []byte, representation protocol.ValueInput_Representat
 			}
 		}
 		result = append(result, settings)
-	}
-	for _, index := range set.GetCommonIndexes() {
-		result = append(result, observedIndexSettings(index))
 	}
 	return result, err
 }
@@ -242,6 +240,31 @@ func indexPartitioning(payload []byte, representation protocol.ValueInput_Repres
 		}
 	}
 	return total, err
+}
+
+// indexSettingsStated counts a global index whose own settings differ from
+// the documented ones: the settings a read holds, or the ones a declaration
+// gives the index once YDB builds it, so a declaration converted from a read
+// counts what the read counts.
+func indexSettingsStated(payload []byte, representation protocol.ValueInput_Representation) (uint64, error) {
+	held, err := heldIndexSettings(payload, representation)
+	if partitioningStated(held.GetPartitioningSettings(), held.GetReadReplicasSettings()) {
+		return 1, err
+	}
+	return 0, err
+}
+
+// heldIndexSettings returns the settings of an index from a read or from a
+// declaration.
+func heldIndexSettings(payload []byte, representation protocol.ValueInput_Representation) (*native.IndexSettingsObservation, error) {
+	if representation == protocol.ValueInput_DESIRED {
+		var intent native.IndexSettingsIntent
+		err := unmarshalCounted(payload, &intent)
+		return indexSettingsObservation(&intent), err
+	}
+	var held native.IndexSettingsObservation
+	err := unmarshalCounted(payload, &held)
+	return &held, err
 }
 
 // vectorIndexes counts the vector indexes of a table's index set.
