@@ -5,7 +5,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"strings"
+	"path"
 	"testing"
 	"time"
 
@@ -17,11 +17,12 @@ import (
 // `migrations generate` writes the creation of a resource pool, a user and
 // the user's grant on the pool, and the reverse; `migrations up` applies them
 // and the read reports the grant, and `migrations down` drops the pool, whose
-// entries go with it, so the down file holds no REVOKE, and the declaration
-// then plans the pool's creation again.
+// entries go with it, so the down file holds no REVOKE, and the user; the
+// declaration then plans what it planned before the generation.
 func TestHostRollsBackAccessOnAResourcePool_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	f := objectAccessFixture(c)
+	emptyAtCleanup(c, f.opened, path.Join(f.database, f.directory))
 	enableResourcePools(c, f.opened)
 	// A session establishes resource pools when it opens, so the read takes
 	// one opened after the flag.
@@ -43,6 +44,7 @@ func TestHostRollsBackAccessOnAResourcePool_HappyPath(t *testing.T) {
 		return grantsInSchemas(c, client, session, []string{f.directory, "/"}, []string{"resource pool"}, []string{f.names.user})
 	}
 
+	initial := hostPlanned(c, selectors, "yaml", declared)
 	migrations, up, down := hostGenerate(c, selectors, "yaml", declared)
 	applied, upErr := hostMigrate(c, f.directory, migrations, "migrations", "up")
 	granted := poolGrants()
@@ -57,5 +59,5 @@ func TestHostRollsBackAccessOnAResourcePool_HappyPath(t *testing.T) {
 	c.Assert(down, qt.Not(qt.Contains), "REVOKE")
 	c.Assert(downErr, qt.IsNil, qt.Commentf("down:\n%s\n%s", rolledBack, down))
 	c.Assert(poolGrants(), qt.HasLen, 0)
-	c.Assert(strings.Join(hostPlanned(c, selectors, "yaml", declared), "\n"), qt.Contains, "CREATE RESOURCE POOL `"+pool+"`")
+	c.Assert(hostPlanned(c, selectors, "yaml", declared), qt.DeepEquals, initial)
 }
