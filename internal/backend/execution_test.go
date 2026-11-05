@@ -407,6 +407,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"vector_indexes": true, "vector_index_maintained_on_write": true, "vector_bit_type": true, "full_text_indexes": true,
 		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false,
 		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_index_on_existing_table": false, "index_rename": true,
+		"returning_clause": true, "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
 	})
 	// 25.1 takes none of the later changefeed options and no transfer, and
 	// 25.1 to 25.3 take no availability period on a consumer and no secret
@@ -423,6 +424,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"vector_indexes": false, "vector_index_maintained_on_write": false, "vector_bit_type": false, "full_text_indexes": false,
 		"local_bloom_indexes": false, "local_ngram_indexes": false, "local_min_max_indexes": false,
 		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_index_on_existing_table": false, "index_rename": true,
+		"returning_clause": false, "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
 	})
 	// Each option arrives on the line the host's presets name.
 	for _, test := range []struct {
@@ -450,6 +452,8 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		{"26.2.1", "local_bloom_indexes", true},
 		{"26.1.1", "local_ngram_indexes", false},
 		{"26.2.1", "local_ngram_indexes", true},
+		{"25.2.1", "returning_clause", false},
+		{"25.3.1", "returning_clause", true},
 	} {
 		c.Assert(sessionCapabilities(test.version)[test.key], qt.Equals, test.want, qt.Commentf("%s on %s", test.key, test.version))
 	}
