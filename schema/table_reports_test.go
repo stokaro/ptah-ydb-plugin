@@ -48,6 +48,14 @@ func capturedStorage(c *qt.C, ttl *native.ColumnTTLPolicy) *protocol.Envelope {
 	return value
 }
 
+// capturedStorageOf is the observed column storage storage.
+func capturedStorageOf(c *qt.C, storage *native.ColumnStorageObservation) *protocol.Envelope {
+	c.Helper()
+	value, err := schema.CaptureColumnStorage(tableOwner(), storage)
+	c.Assert(err, qt.IsNil)
+	return value
+}
+
 // enabledTTL is a column table's TTL on ts with tiers.
 func enabledTTL(tiers ...*native.ColumnTTLTier) *native.ColumnTTLPolicy {
 	return &native.ColumnTTLPolicy{State: &native.ColumnTTLPolicy_Enabled{Enabled: &native.ColumnTTLEnabled{Column: "ts", Tiers: tiers}}}
@@ -90,7 +98,8 @@ func vectorIndex(name string) *native.ObservedIndex {
 // The counts of the built-in engine's table setting families, for a read and
 // for the declaration the host converts it to before it counts, which count
 // alike. A row table or a global index counts once where a setting differs
-// from what YDB's documentation gives a new one.
+// from what YDB's documentation gives a new one, and each index a model holds
+// counts among the indexes.
 func TestCountValue_TableSettings_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	setHeld := indexObservation("held")
@@ -160,19 +169,21 @@ func TestCountValue_TableSettings_HappyPath(t *testing.T) {
 		{"a key bloom filter turned off", capturedTable(c, rowTable(func(table *native.DescribeTableResult) { table.KeyBloomFilter = Ydb.FeatureFlag_DISABLED })),
 			[]string{"ydb_ttl_tables=0", "ydb_column_families=0", "ydb_table_partitioning=0"}},
 		{"a column table without a TTL", capturedStorage(c, nil),
-			[]string{"ydb_ttl_tables=0", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0", "indexes=0"}},
 		{"a column table whose TTL is off", capturedStorage(c, &native.ColumnTTLPolicy{State: &native.ColumnTTLPolicy_Disabled{Disabled: &emptypb.Empty{}}}),
-			[]string{"ydb_ttl_tables=0", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0", "indexes=0"}},
 		{"a column table whose TTL deletes rows", capturedStorage(c, enabledTTL(&native.ColumnTTLTier{ApplyAfterSeconds: 86400, Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}})),
-			[]string{"ydb_ttl_tables=1", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0"}},
+			[]string{"ydb_ttl_tables=1", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0", "indexes=0"}},
 		{"a column table whose TTL moves rows to an external data source", capturedStorage(c, enabledTTL(
 			&native.ColumnTTLTier{ApplyAfterSeconds: 86400, Action: &native.ColumnTTLTier_ExternalStorage{ExternalStorage: "/local/app/archive"}},
 			&native.ColumnTTLTier{ApplyAfterSeconds: 604800, Action: &native.ColumnTTLTier_Delete{Delete: &emptypb.Empty{}}})),
-			[]string{"ydb_ttl_tables=0", "ydb_column_tables=1", "ydb_tiered_ttl_tables=1"}},
+			[]string{"ydb_ttl_tables=0", "ydb_column_tables=1", "ydb_tiered_ttl_tables=1", "indexes=0"}},
+		{"a column table with two local indexes and a TTL that moves rows", capturedStorageOf(c, storageObservation()),
+			[]string{"ydb_ttl_tables=0", "ydb_column_tables=1", "ydb_tiered_ttl_tables=1", "indexes=2"}},
 		{"global indexes the set holds, read from their implementation tables", capturedIndexes(c, &native.IndexObservations{Indexes: []*native.ObservedIndex{setHeld, setDocumented}}),
-			[]string{"ydb_index_partitioning=1", "ydb_vector_indexes=0"}},
+			[]string{"ydb_index_partitioning=1", "ydb_vector_indexes=0", "indexes=2"}},
 		{"two vector indexes", capturedIndexes(c, &native.IndexObservations{Indexes: []*native.ObservedIndex{vectorIndex("v1"), vectorIndex("v2")}}),
-			[]string{"ydb_index_partitioning=0", "ydb_vector_indexes=2"}},
+			[]string{"ydb_index_partitioning=0", "ydb_vector_indexes=2", "indexes=2"}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -235,10 +246,10 @@ func TestCountValue_CommonIndexes_HappyPath(t *testing.T) {
 		}})
 		observed, err := schema.CountValue(read, protocol.ValueInput_OBSERVED)
 		c.Assert(err, qt.IsNil)
-		c.Assert(countText(observed), qt.DeepEquals, []string{"ydb_index_partitioning=0", "ydb_vector_indexes=0"})
+		c.Assert(countText(observed), qt.DeepEquals, []string{"ydb_index_partitioning=0", "ydb_vector_indexes=0", "indexes=0"})
 		desired, err := schema.CountValue(convertedDesired(c, read), protocol.ValueInput_DESIRED)
 		c.Assert(err, qt.IsNil)
-		c.Assert(countText(desired), qt.DeepEquals, []string{"ydb_index_partitioning=0", "ydb_vector_indexes=0"})
+		c.Assert(countText(desired), qt.DeepEquals, []string{"ydb_index_partitioning=0", "ydb_vector_indexes=0", "indexes=0"})
 	})
 }
 
@@ -298,7 +309,7 @@ func TestCountValue_DeclaredTableSettings_HappyPath(t *testing.T) {
 			[]string{"ydb_ttl_tables=0", "ydb_column_families=1", "ydb_table_partitioning=1"}},
 		{"a column table whose TTL deletes rows", desiredValue(c, schema.ColumnStorageProperties, storage,
 			`{"ttl":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","delete":{}}]}}}`),
-			[]string{"ydb_ttl_tables=1", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0"}},
+			[]string{"ydb_ttl_tables=1", "ydb_column_tables=1", "ydb_tiered_ttl_tables=0", "indexes=0"}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			c := testcheck.New(t)

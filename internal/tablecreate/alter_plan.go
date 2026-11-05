@@ -2,6 +2,7 @@ package tablecreate
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
@@ -70,8 +71,9 @@ func stepKey(id *protocol.StepIdentity) string { return id.GetOwner() + "\x00" +
 // carries on both sides and returns the changes that give the table what the
 // declaration states. features are the request's target features. A
 // non-empty reason refuses the whole request.
-func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, capabilities map[string]bool,
-	features []string) (alterationChanges, string, error) {
+func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep, changes []*protocol.PlanningChange,
+	capabilities map[string]bool, features []string,
+) (alterationChanges, string, error) {
 	desired, err := facetEnvelopes(owner, table.Desired.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
 	if err != nil {
 		return alterationChanges{}, "", err
@@ -80,8 +82,8 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	if err != nil {
 		return alterationChanges{}, "", err
 	}
-	sides := &alterationSides{owner: owner, table: table, desired: desired, observed: observed, intent: &native.RowTableIntent{}, held: &native.DescribeTableResult{},
-		features: features}
+	sides := &alterationSides{owner: owner, table: table, changes: changes, desired: desired, observed: observed, intent: &native.RowTableIntent{},
+		held: &native.DescribeTableResult{}, features: features}
 	change, reason, err := sides.families(capabilities)
 	if err != nil || reason != "" {
 		return alterationChanges{}, reason, err
@@ -104,8 +106,12 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 // alterationSides are the facets both sides of one altered table carry, with
 // what planAlteration decodes from them on its way.
 type alterationSides struct {
-	owner    *protocol.Reference
-	table    *protocol.PlanningTable
+	owner *protocol.Reference
+	table *protocol.PlanningTable
+	// changes are the changes of the request, whose changes of the table's
+	// global index settings state what each index is to hold (see
+	// changedIndexSettings).
+	changes  []*protocol.PlanningChange
 	desired  capturedFacets
 	observed capturedFacets
 	// intent is the declared table properties, empty where none are stated.
@@ -316,6 +322,11 @@ func (a *alterationSides) ownIndexSettings(indexes []indexChange, fromSet []inde
 	if err != nil {
 		return nil, "", err
 	}
+	changed, err := changedIndexSettings(a.table.GetSubject(), a.changes)
+	if err != nil {
+		return nil, "", err
+	}
+	maps.Copy(declaredSettings, changed)
 	_, heldSettings, err := indexSettingsFacets(a.owner, a.table.Current.GetFeatures().GetFacets(), protocol.ValueInput_OBSERVED)
 	if err != nil {
 		return nil, "", err

@@ -17,9 +17,10 @@ import (
 // Ported from the rotation half of the host's
 // TestYDBBinary_KeepsASecretsValueOutOfEveryOutput: `migrations generate
 // --rotate-secret` writes one ALTER SECRET into the up file, and a down file
-// with nothing to run that says why: the value the rotation replaced was
-// never read, so the rollback keeps the rotated one. `migrations up` and
-// `migrations down` run both, and no output and no file holds the value.
+// with no statement on the secret that says why: the value the rotation
+// replaced was never read, so the rollback keeps the secret and its rotated
+// value. `migrations up` and `migrations down` run both, and no output and
+// no file holds the value.
 func TestHostRotatesASecretThroughAMigration_HappyPath(t *testing.T) {
 	first, second := secretValue(), secretValue()
 	variable := secretVariable(t, first)
@@ -43,9 +44,8 @@ func TestHostRotatesASecretThroughAMigration_HappyPath(t *testing.T) {
 
 	c.Assert(generateErr, qt.IsNil, qt.Commentf("migrations generate:\n%s", generated))
 	c.Assert(strings.Count(up, "ALTER SECRET `"+secret+"` WITH (value = $"+variable+");"), qt.Equals, 1)
-	c.Assert(down, qt.Contains, `"keep the secret and the value it holds"`)
 	c.Assert(down, qt.Contains, "the value secret "+secret+" held before the rotation was never read; the rollback keeps the rotated value")
-	c.Assert(down, qt.Not(qt.Contains), "ALTER SECRET")
+	c.Assert(down, qt.Not(qt.Contains), "SECRET `")
 	c.Assert(upErr, qt.IsNil, qt.Commentf("up:\n%s", rotated))
 	c.Assert(downErr, qt.IsNil, qt.Commentf("down:\n%s", rolledBack))
 	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.Contains, "pg_password")

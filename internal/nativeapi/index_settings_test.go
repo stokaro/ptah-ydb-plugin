@@ -120,6 +120,12 @@ func TestNativeIndexSettings_HappyPath(t *testing.T) {
 			settingsIndexedTable("globalIndex", newIndexSettings+","+nonePerZone),
 			indexSettingsPayload(`{"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`, newIndexSettings+","+onePerZone),
 			"ALTER TABLE `/local/app/records` ALTER INDEX `by_label` SET (READ_REPLICAS_SETTINGS = \"PER_AZ:0\");"},
+		// A plan made against a prediction states no replicas where YDB
+		// reports the ones a change removed as a count of zero.
+		{"sets read replicas on an index planned as holding none", settingsIndexedTable("globalIndex", newIndexSettings+","+nonePerZone),
+			settingsIndexedTable("globalIndex", newIndexSettings+","+onePerZone),
+			indexSettingsPayload(`{"readReplicasSettings":{"perAzReadReplicasCount":"1"}}`, newIndexSettings),
+			"ALTER TABLE `/local/app/records` ALTER INDEX `by_label` SET (READ_REPLICAS_SETTINGS = \"PER_AZ:1\");"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -150,6 +156,8 @@ func TestNativeIndexSettings_FailurePath(t *testing.T) {
 		{"the index changed its settings since planning", indexSettingsFixture{before: settingsIndexedTable("globalIndex", minThree)}, raise, false, refused,
 			`YDB index "by_label" differs from the plan`},
 		{"the index changed its kind since planning", indexSettingsFixture{before: settingsIndexedTable("globalAsyncIndex", newIndexSettings)}, raise, false, refused,
+			`YDB index "by_label" differs from the plan`},
+		{"the index gained read replicas since planning", indexSettingsFixture{before: settingsIndexedTable("globalIndex", newIndexSettings+","+onePerZone)}, raise, false, refused,
 			`YDB index "by_label" differs from the plan`},
 		{"the index is gone", indexSettingsFixture{before: tableHead + `"columns":[` + idColumn + `,` + labelColumn + `],"columnFamilies":[{"name":"default"}]}`},
 			raise, false, refused, `YDB index "by_label" differs from the plan`},

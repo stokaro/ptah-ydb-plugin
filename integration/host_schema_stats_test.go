@@ -115,3 +115,52 @@ func TestHostSchemaStatsCountsTheTableSettings_HappyPath(t *testing.T) {
 		c.Assert(stdout, qt.Contains, sample)
 	}
 }
+
+// The built-in engine counted every index of a directory among
+// ptah_schema_indexes: a global index, a vector index, a full-text index and
+// a column table's local index alike. Through the provider the host counts
+// the global indexes it reads as common indexes, and the provider counts the
+// others, which its own models hold, under the host's metric of indexes. Each
+// value is the one the built-in engine at host 74de0b65b printed for the same
+// directory, on 25.1.4.7 and 26.2.1.14; 25.1 has neither full-text nor local
+// indexes.
+func TestHostSchemaStatsCountsTheIndexesTheProviderHolds_HappyPath(t *testing.T) {
+	capabilities := targetCapabilities(testcheck.New(t))
+	for _, test := range []struct {
+		name, capability string
+		statements       []string
+		want             string
+	}{
+		{name: "a global index and two vector indexes", statements: []string{
+			"CREATE TABLE `<dir>/plain` (id Uint64 NOT NULL, name Utf8, PRIMARY KEY (id), INDEX plain_name GLOBAL ON (name))",
+			"CREATE TABLE `<dir>/vectors` (id Uint64 NOT NULL, emb String, PRIMARY KEY (id))",
+			"ALTER TABLE `<dir>/vectors` ADD INDEX by_cosine GLOBAL USING vector_kmeans_tree ON (emb) " +
+				"WITH (distance=cosine, vector_type=float, vector_dimension=2, levels=1, clusters=2)",
+			"ALTER TABLE `<dir>/vectors` ADD INDEX by_product GLOBAL USING vector_kmeans_tree ON (emb) " +
+				"WITH (similarity=inner_product, vector_type=float, vector_dimension=2, levels=1, clusters=2)",
+		}, want: "3"},
+		{name: "a full-text index", capability: "full_text_indexes", statements: []string{
+			"CREATE TABLE `<dir>/texts` (id Uint64 NOT NULL, body Utf8, PRIMARY KEY (id), INDEX ft GLOBAL USING fulltext_plain ON (body) WITH (tokenizer=standard))",
+		}, want: "1"},
+		{name: "a column table's local index", capability: "local_bloom_indexes", statements: []string{
+			"CREATE TABLE `<dir>/columns` (id Uint64 NOT NULL, ts Timestamp NOT NULL, body Utf8, PRIMARY KEY (ts, id), " +
+				"INDEX bf LOCAL USING bloom_filter ON (body)) PARTITION BY HASH (id) WITH (STORE = COLUMN)",
+		}, want: "1"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			requireCapability(c, capabilities, test.capability)
+			requireHostNegotiates(c, provider.ReportCountsFeature)
+			f := newMigrationsFixture(c)
+			for _, statement := range test.statements {
+				execAll(c, f, strings.ReplaceAll(statement, "<dir>", path.Join(f.database, f.dir)))
+			}
+
+			stdout, err := hostCommand(c, "schema", "stats", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--schemas", f.dir)
+
+			c.Assert(err, qt.IsNil, qt.Commentf("%s", stdout))
+			c.Assert(stdout, qt.Contains, "ptah_schema_indexes{dialect=\"ydb\",schemas=\""+f.dir+"\"} "+test.want+"\n")
+			c.Assert(strings.Count(stdout, "# TYPE ptah_schema_indexes "), qt.Equals, 1)
+		})
+	}
+}

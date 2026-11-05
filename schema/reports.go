@@ -56,13 +56,22 @@ var reportedKinds = []struct {
 	{IndexSettingsProperties, []reportedMetric{{"ydb_index_partitioning", "YDB global indexes stating partitioning or read replicas", indexSettingsStated}}},
 	{ColumnStorageProperties, []reportedMetric{{"ydb_ttl_tables", ttlTablesHelp, columnTTLTable},
 		{"ydb_column_tables", "YDB tables stored by column", one},
-		{"ydb_tiered_ttl_tables", "YDB column tables whose TTL moves rows to an external data source", tieredTTLTable}}},
+		{"ydb_tiered_ttl_tables", "YDB column tables whose TTL moves rows to an external data source", tieredTTLTable},
+		{"indexes", indexesHelp, localIndexes}}},
 	{IndexProperties, []reportedMetric{{"ydb_index_partitioning", "YDB global indexes stating partitioning or read replicas", indexPartitioning},
-		{"ydb_vector_indexes", "YDB vector indexes with captured settings", vectorIndexes}}},
+		{"ydb_vector_indexes", "YDB vector indexes with captured settings", vectorIndexes},
+		{"indexes", indexesHelp, heldIndexes}}},
 }
 
 // ttlTablesHelp is the help of the metric two models count into.
 const ttlTablesHelp = "Tables with a captured YDB TTL"
+
+// indexesHelp is the help of the host's common metric of indexes. A vector
+// or full-text index and a column table's local index are held by the
+// provider's models, never by a common index of the read, so the host counts
+// none of them; the built-in engine counted each among the indexes. A count
+// under the common metric's name and help adds to the host's count.
+const indexesHelp = "Indexes"
 
 // Reports returns the count metrics of the provider's desired and observed
 // models, one report per reported model and representation, for a host that

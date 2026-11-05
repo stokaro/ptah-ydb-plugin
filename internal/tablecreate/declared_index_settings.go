@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -46,6 +47,36 @@ func indexSettingsFacets(owner *protocol.Reference, state *protocol.ComparisonSt
 		held[name] = observed
 	}
 	return declared, held, nil
+}
+
+// changedIndexSettings returns what each change of a global index's settings
+// among changes asks the index to hold, by index name, for the indexes of the
+// table table names: the change's after operand. A forward change asks for
+// what the index's own facet declares, which the comparison found it in. The
+// reverse of one asks for every setting the index held before the forward
+// change, while the declaration the host plans the reverse with is the one the
+// forward change started from, which states only some of them: planned from
+// that declaration alone, a setting the forward change gave the index and the
+// declaration leaves out would stay.
+func changedIndexSettings(table *protocol.ComparisonIdentity, changes []*protocol.PlanningChange) (map[string]*native.IndexSettingsIntent, error) {
+	result := make(map[string]*native.IndexSettingsIntent)
+	for _, change := range changes {
+		value := change.GetValue().GetValue()
+		if value.GetKind() != schema.TablePropertiesChange || change.GetSubject().GetKind() != "index" ||
+			provider.CompareIdentities(changedTable(change.GetSubject()), table) != 0 {
+			continue
+		}
+		_, after, err := schema.TablePropertiesOperands(value)
+		if err != nil {
+			return nil, err
+		}
+		intent := &native.IndexSettingsIntent{}
+		if err := protojson.Unmarshal(after.GetPayload(), intent); err != nil {
+			return nil, err
+		}
+		result[change.GetSubject().GetName().GetNormalized()] = intent
+	}
+	return result, nil
 }
 
 // planDeclaredIndexSettings returns the changes that give each index of an
@@ -107,11 +138,18 @@ func planDeclaredIndexSettings(table *protocol.PlanningTable, declared map[strin
 // readIndex is the index named name the table holds, with its settings: as the
 // table's index read describes it, which the operation's precondition compares
 // with what the server describes, or else as the host's read of the table
-// describes it with the settings its own facet reports. It is nil when neither
-// read describes the index's settings.
+// describes it. The settings are the ones the index's own facet reports
+// wherever it reports them: the plan of a reverse change finds there what the
+// forward change leaves, which the reverse predicts, while the table's index
+// read stays as it was read. It is nil when neither read describes the index's
+// settings.
 func readIndex(table *protocol.PlanningTable, heldIndexes *native.IndexObservations, held map[string]*native.IndexSettingsObservation, name string) *native.TableIndexDescription {
 	if at := slices.IndexFunc(heldIndexes.GetCommonIndexes(), func(index *native.TableIndexDescription) bool { return index.GetName() == name }); at >= 0 {
-		return proto.CloneOf(heldIndexes.GetCommonIndexes()[at])
+		index := proto.CloneOf(heldIndexes.GetCommonIndexes()[at])
+		if settings := held[name]; settings != nil {
+			return withIndexSettings(index, settings)
+		}
+		return index
 	}
 	index, settings := heldIndex(table.GetCurrent(), heldIndexes, name), held[name]
 	if index == nil || settings == nil {
@@ -121,10 +159,14 @@ func readIndex(table *protocol.PlanningTable, heldIndexes *native.IndexObservati
 }
 
 // withIndexSettings is index with the partitioning and read replicas settings
-// reports, which the settings rule and the operation's precondition read.
+// reports, which the settings rule and the operation's precondition read. The
+// partition columns stay as index holds them: the facet leaves them out.
 func withIndexSettings(index *native.TableIndexDescription, settings *native.IndexSettingsObservation) *native.TableIndexDescription {
 	result := proto.CloneOf(index)
 	held := &native.GlobalIndexSettings{PartitioningSettings: proto.CloneOf(settings.GetPartitioningSettings()), ReadReplicasSettings: proto.CloneOf(settings.GetReadReplicasSettings())}
+	if columns := HeldIndexSettings(index).GetPartitioningSettings().GetPartitionBy(); len(columns) != 0 && held.PartitioningSettings != nil {
+		held.PartitioningSettings.PartitionBy = slices.Clone(columns)
+	}
 	switch kind := result.GetType().(type) {
 	case *native.TableIndexDescription_GlobalIndex:
 		kind.GlobalIndex.Settings = held

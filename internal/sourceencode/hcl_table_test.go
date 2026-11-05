@@ -97,26 +97,29 @@ func TestEncodeTableHCL_LosesWhatHasNoTTL(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		kind    string
+		column  string
 		payload string
 		loss    string
 	}{
-		{"settings without a TTL", schema.TableProperties, `{"partitioningSettings":{"partitioningByLoad":"ENABLED"},"uniformPartitions":"4"}`,
+		{"settings without a TTL", schema.TableProperties, "", `{"partitioningSettings":{"partitioningByLoad":"ENABLED"},"uniformPartitions":"4"}`,
 			"value: YDB table settings (AUTO_PARTITIONING_BY_LOAD = ENABLED, UNIFORM_PARTITIONS = 4) are not represented in HCL"},
-		{"split points", schema.TableProperties, `{"partitionAtKeys":[{"values":["10"]},{"values":["it's","a,b"]}]}`,
+		{"split points", schema.TableProperties, "", `{"partitionAtKeys":[{"values":["10"]},{"values":["it's","a,b"]}]}`,
 			`value: YDB table settings (PARTITION_AT_KEYS = ('10', ('it\'s', 'a,b'))) are not represented in HCL`},
-		{"a TTL with a run interval", schema.TableProperties,
+		{"a TTL with a run interval", schema.TableProperties, "",
 			`{"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":3600},"runIntervalSeconds":60}}`,
 			"value: table app/events: its TTL run interval has no source spelling"},
-		{"a tiered column TTL", schema.ColumnStorageProperties,
+		{"a tiered column TTL", schema.ColumnStorageProperties, "",
 			`{"ttl":{"enabled":{"column":"at","tiers":[{"applyAfterSeconds":"3600","externalStorage":"/local/app/cold"},{"applyAfterSeconds":"86400","delete":{}}]}}}`,
 			"value: YDB column storage, hash partitioning and tiered TTL are not represented in HCL"},
-		{"a changefeed", schema.ChangefeedProperties, readFeeds, "value: changefeed updates is not represented in HCL"},
-		{"a native index", schema.IndexProperties, nativeIndex, "value: native index by_body is not represented in HCL"},
+		{"a changefeed", schema.ChangefeedProperties, "", readFeeds, "value: changefeed updates is not represented in HCL"},
+		{"a native index", schema.IndexProperties, "", nativeIndex, "value: native index by_body is not represented in HCL"},
+		{"a column in another family", schema.ColumnProperties, "body", `{"family":"cold"}`, "value: its column family cold is not represented in HCL"},
+		{"a column's compression", schema.ColumnProperties, "id", `{"compression":{"algorithm":"ALGORITHM_ZSTD"}}`, "value: its compression or encoding is not represented in HCL"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 
-			result, err := sourceencode.EncodeTableHCL(table(c, facet{"value", test.kind, "", test.payload}))
+			result, err := sourceencode.EncodeTableHCL(table(c, facet{"value", test.kind, test.column, test.payload}))
 
 			c.Assert(err, qt.IsNil)
 			c.Assert(result.Written, qt.HasLen, 0)
@@ -139,9 +142,11 @@ func TestEncodeTableHCL_WritesTheClaim(t *testing.T) {
 }
 
 // What a read reports for every table without changefeeds or native indexes,
-// an empty set of each, is no loss: the table's platform part writes it with
-// no override, beside the TTL, and reads back as the TTL alone, so the table
-// keeps the changefeeds and the native indexes it holds.
+// an empty set of each, and for a column of the default family is no loss:
+// the table's platform part writes it with no override, beside the TTL, and
+// reads back as the TTL alone, so the table keeps the changefeeds, the native
+// indexes and the column families it holds. A Serial's sequence is the common
+// column's, which the host writes.
 func TestEncodeTableHCL_WritesTheEmptySetsAReadReports(t *testing.T) {
 	for _, test := range []struct {
 		name      string
@@ -153,6 +158,8 @@ func TestEncodeTableHCL_WritesTheEmptySetsAReadReports(t *testing.T) {
 			{"feeds", schema.ChangefeedProperties, "", `{}`}, {"indexes", schema.IndexProperties, "", `{}`}},
 			[]string{"row_deletion_column=ts", "row_deletion_interval=PT1M"}, `{"ttlSettings":{"dateTypeColumn":{"columnName":"ts","expireAfterSeconds":60}}}`},
 		{"alone", []facet{{"feeds", schema.ChangefeedProperties, "", `{}`}, {"indexes", schema.IndexProperties, "", `{}`}}, make([]string, 0), ""},
+		{"the columns of the default family", []facet{{"id", schema.ColumnProperties, "id", `{}`}, {"body", schema.ColumnProperties, "body", `{"family":"default"}`},
+			{"seq", schema.ColumnProperties, "seq", `{"sequence":{"startValue":"5"}}`}}, make([]string, 0), ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

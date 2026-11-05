@@ -203,3 +203,19 @@ func TestAccessOfAnObjectItCannotSee_FailurePath(t *testing.T) {
 	c.Assert(err, qt.ErrorIs, nativeapi.ErrAccessPathNotVisible)
 	c.Assert(proto.Equal(snapshot, before), qt.IsTrue)
 }
+
+// A selected directory whose path an object holds, such as a table a plan
+// replaces with a directory of secrets, is no directory: the access list YDB
+// describes there is the object's, and the read records none for the
+// directory.
+func TestAccessOfADirectoryAnObjectHolds_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	snapshot := accessDirectory("app/holder")
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, described(map[string]*Ydb_Scheme.Entry{
+		"/local":            accessRoot("root"),
+		"/local/app/holder": {Name: "holder", Type: Ydb_Scheme.Entry_TABLE, Owner: "alice"},
+	}), func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
+	c.Assert(err, qt.IsNil)
+	c.Assert(snapshot.CommonObjects.ObjectOwners, qt.HasLen, 1)
+	c.Assert(snapshot.CommonObjects.ObjectOwners[0].Object.Kind, qt.Equals, "database")
+}

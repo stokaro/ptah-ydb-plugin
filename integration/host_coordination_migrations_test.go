@@ -19,8 +19,8 @@ import (
 // `migrations generate` writes the provider's statement into the up and the
 // down file, `migrations up` runs it, `schema compare --exit-code` finds
 // nothing left to change, `db read` describes the node, and `migrations
-// down` drops it. Then `schema apply` creates it directly, and a second
-// apply plans nothing.
+// down` drops it. Then `schema apply` creates it directly, its preview
+// showing the provider's statement, and a second apply plans nothing.
 func TestHostGeneratesAndAppliesCoordinationNodes_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := lockFixture(c)
@@ -62,7 +62,7 @@ func TestHostGeneratesAndAppliesCoordinationNodes_HappyPath(t *testing.T) {
 	_, _, appliedErr := opened.Driver.Coordination().DescribeNode(c.Context(), node)
 
 	c.Assert(firstErr, qt.IsNil, qt.Commentf("first apply:\n%s", first))
-	c.Assert(first, qt.Contains, "coordination-node-operation")
+	c.Assert(first, qt.Contains, create)
 	c.Assert(secondErr, qt.IsNil, qt.Commentf("second apply:\n%s", second))
 	c.Assert(second, qt.Contains, "Schema is synced, no changes to be made")
 	c.Assert(appliedErr, qt.IsNil)

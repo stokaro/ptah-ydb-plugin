@@ -97,18 +97,19 @@ const KeyPlatformYDB = "platform.ydb"
 // stays, as on the host's embedded engine.
 //
 // The block is also where an export writes what a table states by writing
-// nothing, as the Go table directive is: no changefeed and no native index.
-// A read reports an empty set of each for every table that has none, and
-// without a claim of their models the host could only report them as details
-// the document leaves out. The block decodes to neither, so a table keeps the
-// changefeeds and the native indexes it holds.
+// nothing, as the Go table directive is: no changefeed, no native index, and
+// a column of the default family. A read reports an empty set of each for
+// every table that has none, and a facet for every column, and without a
+// claim of their models the host could only report them as details the
+// document leaves out. The block decodes to none of them, so a table keeps
+// the changefeeds, the native indexes and the column families it holds.
 func HCLPlatformBlock() *protocol.HCLSourceBlock {
 	attributes := make([]*protocol.HCLSourceAttribute, 0, len(ttlAttributes()))
 	for _, name := range ttlAttributes() {
 		attributes = append(attributes, &protocol.HCLSourceAttribute{Name: strings.TrimPrefix(name, PlatformPrefix), Kind: protocol.HCLSourceAttribute_STRING})
 	}
 	return &protocol.HCLSourceBlock{Site: protocol.HCLSourceBlock_TABLE_PLATFORM, Type: "ydb", Selector: KeyPlatformYDB, Attributes: attributes,
-		Models: []string{schema.TableProperties, schema.ColumnStorageProperties, schema.ChangefeedProperties, schema.IndexProperties}}
+		Models: []string{schema.TableProperties, schema.ColumnStorageProperties, schema.ChangefeedProperties, schema.IndexProperties, schema.ColumnProperties}}
 }
 
 // DirectiveIndex is the host's directive that declares an index. The bundled

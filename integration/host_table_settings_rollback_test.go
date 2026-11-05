@@ -14,21 +14,20 @@ import (
 
 // A change of a row table's own settings rolls back as the host's embedded
 // engine rolls it back: `migrations generate` writes the ALTER TABLE that
-// gives the table its settings back, with the engine's strategy and, where the
-// forward change sets a TTL, the rows it deleted as the limitation;
-// `migrations up` and `migrations down` run both files, and the first
-// declaration plans nothing after them.
+// gives the table its settings back (every partitioning setting the table
+// held, for a changed partitioning) and, where the forward change sets a TTL,
+// the rows it deleted as the limitation; `migrations up` and `migrations
+// down` run both files, and the first declaration plans nothing after them.
 func TestHostRollsBackTableSettings_HappyPath(t *testing.T) {
 	for _, test := range []struct {
-		name, before, after, statement, strategy string
-		lostRows                                 bool
+		name, before, after, statement string
+		lostRows                       bool
 	}{
-		{name: "a changed TTL", before: "P30D", after: "P7D", statement: "ALTER TABLE `{dir}/items` SET (TTL = Interval(\"P30D\") ON `created_at`);",
-			strategy: "restore the captured TTL in place", lostRows: true},
-		{name: "a removed TTL", before: "P30D", statement: "ALTER TABLE `{dir}/items` SET (TTL = Interval(\"P30D\") ON `created_at`);",
-			strategy: "restore the captured TTL in place"},
-		{name: "an added TTL", after: "P7D", statement: "ALTER TABLE `{dir}/items` RESET (TTL);", strategy: "remove the TTL the forward change added", lostRows: true},
-		{name: "a changed partitioning", after: "partitions", statement: "AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1);", strategy: "restore every setting the table held in place"},
+		{name: "a changed TTL", before: "P30D", after: "P7D", statement: "ALTER TABLE `{dir}/items` SET (TTL = Interval(\"P30D\") ON `created_at`);", lostRows: true},
+		{name: "a removed TTL", before: "P30D", statement: "ALTER TABLE `{dir}/items` SET (TTL = Interval(\"P30D\") ON `created_at`);"},
+		{name: "an added TTL", after: "P7D", statement: "ALTER TABLE `{dir}/items` RESET (TTL);", lostRows: true},
+		{name: "a changed partitioning", after: "partitions", statement: "ALTER TABLE `{dir}/items` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, " +
+			"AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1);"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -52,7 +51,6 @@ func TestHostRollsBackTableSettings_HappyPath(t *testing.T) {
 			rolledBack, downErr := hostMigrate(c, directory, migrations, "migrations", "down", "--target", "0", "--confirm")
 
 			c.Assert(down, qt.Contains, strings.ReplaceAll(test.statement, "{dir}", directory))
-			c.Assert(down, qt.Contains, `"`+test.strategy+`"`)
 			c.Assert(strings.Contains(down, "cannot recover rows YDB deleted under the forward TTL"), qt.Equals, test.lostRows)
 			c.Assert(upErr, qt.IsNil, qt.Commentf("up:\n%s", applied))
 			c.Assert(settled, qt.HasLen, 0)

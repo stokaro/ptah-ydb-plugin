@@ -204,16 +204,16 @@ func hostApplyEverywhereAs(c *qt.C, address, name, text string) (string, error) 
 	return output.String(), err
 }
 
-// A run with no schema selector cannot create a topic in a directory that
-// does not exist. The read lists every directory the walk reaches and claims
-// each of them complete, and a coverage region names one exact directory, so
-// nothing establishes the topic's absence in a directory the walk never
-// listed. The host leaves the topic unplanned, says why, and exits as for a
-// run with nothing to change. The run is confined to a dev realm of its own:
-// an unfiltered run on the shared test database would read, and plan to
-// drop, every other run's objects. The run's schema lock is a node at the
-// realm's root, which the cleanup removes before the realm.
-func TestHostCannotCreateInANewDirectoryWithoutASelector_FailurePath(t *testing.T) {
+// A run with no schema selector creates a topic in a directory that does not
+// exist yet. The read lists every directory the walk reaches and claims the
+// root and every directory below it complete in one region, so the topic's
+// absence two levels below the root is established although no listing named
+// its directory: the host plans the topic, YDB creates the missing
+// directories with it, and the next run plans nothing. The run is confined to
+// a dev realm of its own: an unfiltered run on the shared test database would
+// read, and plan to drop, every other run's objects. The run's schema lock is
+// a node at the realm's root, which the cleanup removes before the realm.
+func TestHostCreatesInANewDirectoryWithoutASelector_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	opened, _, _ := lockFixture(c)
 	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
@@ -225,12 +225,46 @@ func TestHostCannotCreateInANewDirectoryWithoutASelector_FailurePath(t *testing.
 		removeTree(ctx, opened, path.Join(root, "fresh"))
 		_ = opened.Driver.Coordination().DropNode(ctx, path.Join(root, locking.NodeName))
 	})
-	output, err := hostApplyEverywhere(c, address, "topics:\n  events:\n    schema: fresh/nested\n    min_active_partitions: 1\n")
+	const source = "topics:\n  events:\n    schema: fresh/nested\n    min_active_partitions: 1\n"
+
+	created, createErr := hostApplyEverywhere(c, address, source)
+	held := heldEntries(c, opened, path.Join(root, "fresh", "nested"))
+	again, againErr := hostApplyEverywhere(c, address, source)
+
+	c.Assert(createErr, qt.IsNil, qt.Commentf("%s", created))
+	c.Assert(created, qt.Not(qt.Contains), "absence was not established")
+	c.Assert(created, qt.Contains, "Schema apply completed successfully")
+	c.Assert(held, qt.DeepEquals, map[string]Ydb_Scheme.Entry_Type{"events": Ydb_Scheme.Entry_TOPIC})
+	c.Assert(againErr, qt.IsNil, qt.Commentf("%s", again))
+	c.Assert(again, qt.Contains, "Schema is synced, no changes to be made")
+}
+
+// A run with no schema selector cannot create a topic in a directory the walk
+// leaves out, here a dot-prefixed one the realm holds. The root's complete
+// claim leaves that directory unknown, so nothing establishes the topic's
+// absence there. The host leaves the topic unplanned, says why, and exits as
+// for a run with nothing to change, and the directory stays empty.
+func TestHostCannotCreateInASkippedDirectoryWithoutASelector_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, _, _ := lockFixture(c)
+	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
+	c.Assert(err, qt.IsNil)
+	address, root := realmFixture(c, opened, base)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		removeTree(ctx, opened, path.Join(root, ".hidden"))
+		_ = opened.Driver.Coordination().DropNode(ctx, path.Join(root, locking.NodeName))
+	})
+	c.Assert(opened.Driver.Scheme().MakeDirectory(c.Context(), path.Join(root, ".hidden")), qt.IsNil)
+
+	output, err := hostApplyEverywhere(c, address, "topics:\n  events:\n    schema: .hidden\n    min_active_partitions: 1\n")
+
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
-	c.Assert(output, qt.Contains, "topic fresh/nested.events could not be compared between the database and the desired schema: "+
-		"The current topic or its absence was not established.")
+	c.Assert(output, qt.Contains, `topic ".hidden".events could not be compared between the database and the desired schema: `+
+		"The current topic or its absence was not established")
 	c.Assert(output, qt.Contains, "No changes planned, but 1 comparison limit remains unresolved.")
-	c.Assert(heldEntries(c, opened, path.Join(root, "fresh")), qt.IsNil)
+	c.Assert(heldEntries(c, opened, path.Join(root, ".hidden")), qt.DeepEquals, make(map[string]Ydb_Scheme.Entry_Type))
 }
 
 // A run with no schema selector reads the realm's root, which holds the

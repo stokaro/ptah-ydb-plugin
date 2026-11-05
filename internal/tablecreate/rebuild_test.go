@@ -3,6 +3,7 @@ package tablecreate_test
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -432,6 +433,243 @@ func TestRebuildPlanKeepsTheIndexSettingsTheTableHolds(t *testing.T) {
 			c.Assert(statements[1+len(test.statements)], qt.Matches, "INSERT INTO `app/__ptah_rebuild_records` .*")
 		})
 	}
+}
+
+// rebuiltIndexRequest is rebuildRequest asked to rebuild, on a table whose
+// index by_payload on payload holds held, which declares the indexes named
+// with an index facet declared for each where declared names one.
+func rebuiltIndexRequest(c *qt.C, held string, indexes []string, declared map[string]string) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	request := rebuildRequest(c, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+	table := request.Tables[0]
+	for _, name := range indexes {
+		table.Desired.Indexes = append(table.Desired.Indexes, &protocol.DeclaredIndex{Name: name, Fields: []string{"payload"}})
+	}
+	for _, name := range slices.Sorted(maps.Keys(declared)) {
+		table.Desired.Features.Facets.Records = append(table.Desired.Features.Facets.Records, indexFacetRecord(c, protocol.ValueInput_DESIRED, name, declared[name]))
+	}
+	table.Current.Features.Facets.Records = append(table.Current.Features.Facets.Records, observedFacet(c, schema.IndexProperties, "", heldPayloadIndex("by_payload", held)))
+	table.Current.Indexes = []*protocol.ObservedIndex{{Name: "by_payload", TableName: "records", Schema: "app", Columns: []string{"payload"}}}
+	return request
+}
+
+// indexSettingsRebuildStatements plans request, renders the plan in the TEXT
+// form and returns the statements of its index settings steps, in step order.
+func indexSettingsRebuildStatements(c *qt.C, request *protocol.PlanFeaturesRequest) []string {
+	c.Helper()
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
+	rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
+	rendering.Form = protocol.RenderRequest_TEXT
+	rendered, err := backend.New().Render(c.Context(), rendering)
+	c.Assert(err, qt.IsNil)
+	var statements []string
+	for _, unit := range rendered.Units {
+		if strings.Contains(unit.GetSql(), " ALTER INDEX ") {
+			statements = append(statements, unit.GetSql())
+		}
+	}
+	return statements
+}
+
+// heldTuned is what a read reports for an index that splits by size at 2048
+// MB, holds at least two partitions and keeps one read replica in each zone.
+const heldTuned = `"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","minPartitionsCount":"2"},` +
+	`"readReplicasSettings":{"perAzReadReplicasCount":"1"}`
+
+// The new table of a rebuild gives each index the partitioning and read
+// replicas its own facet declares, and what the old index holds for every
+// setting the facet leaves out, as the host's embedded engine resolves a
+// rebuilt index's declaration over the settings the old index holds. An index
+// the old table does not hold takes its declared settings over the ones YDB
+// gives a new index.
+func TestRebuildPlanGivesTheIndexesTheirDeclaredSettings_HappyPath(t *testing.T) {
+	const statement = "ALTER TABLE `app/__ptah_rebuild_records` ALTER INDEX "
+	for _, test := range []struct {
+		name     string
+		held     string
+		indexes  []string
+		declared map[string]string
+		want     []string
+	}{
+		{name: "settings declared over the ones held", held: heldTuned, indexes: []string{"by_payload"},
+			declared: map[string]string{"by_payload": `{"partitioningSettings":{"minPartitionsCount":"3","partitioningByLoad":"ENABLED"}}`},
+			want: []string{statement + "`by_payload` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, " +
+				`AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3, READ_REPLICAS_SETTINGS = "PER_AZ:1");`}},
+		{name: "read replicas declared as none", held: heldTuned, indexes: []string{"by_payload"},
+			declared: map[string]string{"by_payload": `{"readReplicasSettings":{"perAzReadReplicasCount":"0"}}`},
+			want: []string{statement + "`by_payload` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, " +
+				"AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2);"}},
+		{name: "a size declared where the old index does not split by size", indexes: []string{"by_payload"},
+			held:     `"partitioningSettings":{"partitioningBySize":"DISABLED","partitioningByLoad":"DISABLED","minPartitionsCount":"1"}`,
+			declared: map[string]string{"by_payload": `{"partitioningSettings":{"partitionSizeMb":"512"}}`},
+			want:     []string{statement + "`by_payload` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 512, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1);"}},
+		{name: "an index the old table does not hold", held: heldTuned, indexes: []string{"by_text"},
+			declared: map[string]string{"by_text": `{"partitioningSettings":{"minPartitionsCount":"4"}}`},
+			want: []string{statement + "`by_text` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, " +
+				"AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 4);"}},
+		{name: "settings declared as the old index holds them", held: heldTuned, indexes: []string{"by_payload"},
+			declared: map[string]string{"by_payload": `{"partitioningSettings":{"minPartitionsCount":"2"}}`},
+			want: []string{statement + "`by_payload` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, " +
+				`AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2, READ_REPLICAS_SETTINGS = "PER_AZ:1");`}},
+		{name: "settings a new index holds, declared for an index the old table does not hold", held: heldTuned, indexes: []string{"by_text"},
+			declared: map[string]string{"by_text": `{"partitioningSettings":{"minPartitionsCount":"1"}}`}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			got := indexSettingsRebuildStatements(c, rebuiltIndexRequest(c, test.held, test.indexes, test.declared))
+			c.Assert(got, qt.CmpEquals(cmpopts.EquateEmpty()), test.want)
+		})
+	}
+}
+
+// Settings declared for an index the new table does not create refuse the
+// rebuild, as they refuse the creation of a table, and so do settings YDB
+// refuses for any index.
+func TestRebuildPlanGivesTheIndexesTheirDeclaredSettings_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name, declared, reason string
+	}{
+		{name: "an index the new table does not create", declared: "by_other",
+			reason: `rebuilding table "app/records": index "by_other" declares its partitioning or read replicas, and the new table creates no global index of that name`},
+		{name: "a size beside partitioning by size turned off", declared: "by_payload",
+			reason: `rebuilding table "app/records": index "by_payload": AUTO_PARTITIONING_PARTITION_SIZE_MB 512 needs AUTO_PARTITIONING_BY_SIZE enabled, ` +
+				`because YDB turns partitioning by size on when a size is set`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := rebuiltIndexRequest(c, heldTuned, []string{"by_payload"},
+				map[string]string{test.declared: `{"partitioningSettings":{"partitioningBySize":"DISABLED","partitionSizeMb":"512"}}`})
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Contributions, qt.HasLen, 0)
+			c.Assert(plan.Diagnostics, qt.HasLen, 1)
+			c.Assert(plan.Diagnostics[0].Message, qt.Equals, test.reason)
+		})
+	}
+}
+
+// uncoveredEffects lists each change a source of a rewrite of plan makes that
+// its replacement does not name with the same action, as "source: subject
+// action". The host's plan graph refuses a rewrite whose replacement does not
+// name every object its sources change.
+func uncoveredEffects(request *protocol.PlanFeaturesRequest, plan *protocol.PlannedFeatures) []string {
+	steps := make(map[string]*protocol.PlanningStep)
+	for _, contribution := range plan.Contributions {
+		for _, step := range contribution.Steps {
+			steps[step.Id.Name] = step
+		}
+	}
+	sources := make(map[string]*protocol.CommonPlanningStep)
+	for _, step := range request.CommonSteps {
+		sources[step.Id.Name] = step
+	}
+	var missing []string
+	for _, rewrite := range plan.Rewrites {
+		replacement := steps[rewrite.Replacement.Name].GetMetadata().GetEffects()
+		for _, id := range rewrite.Sources {
+			for _, effect := range sources[id.Name].GetMetadata().GetEffects() {
+				if !slices.ContainsFunc(replacement, func(held *protocol.PlanningEffect) bool {
+					return provider.CompareIdentities(held.Subject, effect.Subject) == 0 &&
+						(effect.Action == protocol.PlanningEffect_READ || held.Action == effect.Action)
+				}) {
+					missing = append(missing, id.Name+": "+effect.Subject.Kind+" "+effect.Subject.Name.Normalized+" "+effect.Action.String())
+				}
+			}
+		}
+	}
+	return missing
+}
+
+// rebuiltPartsRequest is rebuiltIndexRequest declaring by_payload, by_text and
+// a column extra, with the host's steps named, in the order given, for its
+// table: drop-by-gone and drop-by-payload drop an index, add-extra adds the
+// column, add-by-text and add-by-payload add an index, and modify-n is
+// rebuildRequest's column step.
+func rebuiltPartsRequest(c *qt.C, steps ...string) *protocol.PlanFeaturesRequest {
+	c.Helper()
+	request := rebuiltIndexRequest(c, heldTuned, []string{"by_payload", "by_text"}, nil)
+	table := request.Tables[0]
+	table.Desired.Columns = append(table.Desired.Columns, &protocol.DeclaredColumn{Name: "extra", Type: "Utf8", Nullable: true})
+	extra := proto.CloneOf(table.Subject)
+	extra.Kind, extra.Parent, extra.Name = "column", proto.CloneOf(table.Subject.Name), part("extra")
+	read := &protocol.PlanningEffect{Subject: proto.CloneOf(table.Subject), Action: protocol.PlanningEffect_READ}
+	index := func(name string, action protocol.PlanningEffect_Action) *protocol.PlanningEffect {
+		return &protocol.PlanningEffect{Subject: payloadIndexSubject(table.Subject, name), Action: action}
+	}
+	known := map[string]*protocol.CommonPlanningStep{
+		"modify-n":        request.CommonSteps[0],
+		"add-extra":       commonStep("add-extra", table.Subject, "extra", read, &protocol.PlanningEffect{Subject: extra, Action: protocol.PlanningEffect_CREATE}),
+		"add-by-text":     commonStep("add-by-text", table.Subject, "", read, index("by_text", protocol.PlanningEffect_CREATE)),
+		"drop-by-gone":    commonStep("drop-by-gone", table.Subject, "", read, index("by_gone", protocol.PlanningEffect_DROP)),
+		"drop-by-payload": commonStep("drop-by-payload", table.Subject, "", read, index("by_payload", protocol.PlanningEffect_DROP)),
+		"add-by-payload":  commonStep("add-by-payload", table.Subject, "", read, index("by_payload", protocol.PlanningEffect_CREATE)),
+	}
+	request.CommonSteps = nil
+	for _, name := range steps {
+		request.CommonSteps = append(request.CommonSteps, known[name])
+	}
+	return request
+}
+
+// The host's steps for a rebuilt table are rewritten to the rename that puts
+// the new table in place, which names every object the steps change, since
+// the host's graph refuses a rewrite that leaves one out: an index or a column
+// the new table adds, and an index the old table drops. An index dropped and
+// added again under its name cannot be named twice by one step, so its drop,
+// and the drops the host orders before it, are rewritten to the rename that
+// moves the old table out of the way.
+func TestRebuildPlanNamesWhatTheHostStepsChange_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		steps    []string
+		rewrites map[string][]string
+	}{
+		{name: "an index dropped and added again", steps: []string{"drop-by-gone", "drop-by-payload", "modify-n", "add-extra", "add-by-text", "add-by-payload"},
+			rewrites: map[string][]string{
+				"table-rebuild/000000/rename-old": {"drop-by-gone", "drop-by-payload"},
+				"table-rebuild/000000/rename-new": {"modify-n", "add-extra", "add-by-text", "add-by-payload"},
+			}},
+		{name: "indexes and a column added and dropped", steps: []string{"drop-by-gone", "modify-n", "add-extra", "add-by-text"},
+			rewrites: map[string][]string{"table-rebuild/000000/rename-new": {"drop-by-gone", "modify-n", "add-extra", "add-by-text"}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := rebuiltPartsRequest(c, test.steps...)
+
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Diagnostics, qt.HasLen, 0)
+			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
+			rewrites := make(map[string][]string)
+			for _, rewrite := range plan.Rewrites {
+				for _, source := range rewrite.Sources {
+					rewrites[rewrite.Replacement.Name] = append(rewrites[rewrite.Replacement.Name], source.Name)
+				}
+			}
+			c.Assert(rewrites, qt.DeepEquals, test.rewrites)
+			c.Assert(uncoveredEffects(request, plan), qt.HasLen, 0)
+		})
+	}
+}
+
+// A host step that changes something before a drop of an index the table
+// gains again refuses the rebuild: the rebuild drops what the old table holds
+// before it puts the new table in place.
+func TestRebuildPlanNamesWhatTheHostStepsChange_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := rebuiltPartsRequest(c, "add-extra", "drop-by-payload", "add-by-payload")
+
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Contributions, qt.HasLen, 0)
+	c.Assert(plan.Diagnostics, qt.HasLen, 1)
+	c.Assert(plan.Diagnostics[0].Message, qt.Equals, `rebuilding table "app/records": the host's step add-extra changes the table before it drops an index `+
+		`or a column the table gains again, and the rebuild drops what the old table holds before it puts the new table in place`)
 }
 
 // The new table of a rebuild puts a column where the declaration places it:

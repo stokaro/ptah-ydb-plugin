@@ -627,10 +627,12 @@ embedded engine writes it from its own:
   creation and a change to the settings the object held. The prediction of
   what the forward change leaves is the forward state the host plans the
   reverse against; it is never read from the server.
-- The down file carries the strategy and the limitations, in the embedded
-  engine's words: a dropped topic loses its messages and its consumers'
-  positions, a dropped coordination node its semaphores, a restored workload
-  setting cannot undo the queries run under the forward one.
+- The down file holds the reverse's statements, in the exact statement style
+  the host plans in, and a `-- Recovery limit:` line for what the rollback
+  cannot undo, in the embedded engine's words: a dropped topic loses its
+  messages and its consumers' positions, a dropped coordination node its
+  semaphores, a restored workload setting cannot undo the queries run under
+  the forward one.
 - A rotated secret has nothing to run in reverse: the value it replaced was
   never read. A secret created again takes the value of the variable for its
   path when the rollback runs.
@@ -647,10 +649,20 @@ a move back: what the forward change leaves is the column in the declared
 family, with a default or storage setting the declaration does not state
 kept as the column held it. A host that does not project a reverse's state
 onto a column cannot plan that reverse and refuses it. A change of a global
-index's settings is refused: its declaration keeps every setting it leaves
-out, so a reverse would have to state each setting the index held. A host
-that does not list the feature gets no reversal service and refuses every
-such change, naming the change kind that has no reversal.
+index's partitioning and read replicas reverses to every setting the index
+held, as the host's embedded engine restores them (`restore every setting the
+index held in place`), read replicas the forward change removed included: the
+declaration keeps every setting it leaves out, so a reverse that stated only
+some would keep the rest as the forward change left them. What the forward
+change leaves is the index's own facet with the declared settings in place of
+the ones it held. YDB removes no maximum partition count, so a maximum the
+forward change gives an index that held none stays, and the down file says so
+in the embedded engine's words. The host plans such a reverse with the
+declaration the forward change started from; the planner gives the index what
+the reverse change asks for, against the facet the reverse predicts, rather
+than what that declaration states. A host that does not list the feature gets
+no reversal service and refuses every such change, naming the change kind
+that has no reversal.
 
 A topic reverses like any other object, but no migration file holds a topic
 (see [Text units](#text-units)).
@@ -1052,7 +1064,8 @@ managed observation.
 
 Operational storage reservations support host collision and reference guards. They do not
 establish native directory-cascade safety; containment qualification remains
-pending. Coordination planning refuses overlapping directory lifecycles. Markers
+pending. Planning orders an object created below a path after the drop of the object there, and refuses
+any other overlap of directory lifecycles. Markers
 are storage-format identifiers, not an access-control mechanism against a database administrator.
 
 ## Schema observations
@@ -1093,6 +1106,12 @@ first object of a new directory. A directory its parent names but the session
 cannot list is still refused, and so is a path below an object that is not a
 directory. Execution reads the directory of each object it creates through
 the same rule; see [Execution and transactions](#execution-and-transactions).
+
+A selected path that an object holds reads as an empty directory, with
+nothing below it: YDB needs every path above an object to be a directory. The
+object itself is read with the directory that lists it. So `schema apply
+--schemas app,app/holder` reads the table `app/holder` in `app`, and a secret
+declared in `app/holder` is planned after the table's drop.
 
 A read with no selector claims more than the directories it lists. With a
 host that lists `schema.subtree-coverage` (contract 25.22, ADR 0064 in Ptah),
@@ -1196,6 +1215,13 @@ The table setting families count as the built-in engine counted them:
 | `ydb_column_tables` | Column tables. |
 | `ydb_tiered_ttl_tables` | Column tables whose TTL has any other tiers, such as one that moves rows to an external data source. |
 | `ydb_vector_indexes` | Vector indexes. |
+
+The host counts the global indexes it reads as common indexes in `indexes`. The
+index set and the column storage models add the indexes they hold under the
+same metric and help, `Indexes`: vector and full-text indexes, and a column
+table's local indexes, which the built-in engine counted among the indexes too.
+A host adds them to its count with stokaro/ptah#5378; a host without it refuses
+`schema stats` when a provider reports the metric.
 
 What YDB gives a new table or global index is automatic partitioning by size
 at 2048 MB, none by load, at least one partition, no maximum, no read replicas
@@ -2015,9 +2041,16 @@ require an explicit common path handoff. A view the host creates or drops
 occupies its path as a table does: a node beside it needs no order, and a node
 that takes the path of a dropped view comes after the drop. A grant or a revoke
 on a table or a view, and a comment, change a resource of the object's own and
-occupy no path; the step's read of the object carries the path. Unsupported
-common footprints and overlapping parent/descendant paths are refused until a
-directory lifecycle is captured. The host's window markers (such as `common/feature-creations`) and the
+occupy no path; the step's read of the object carries the path. YDB needs every
+path above an object to be a directory, so a node created below a path follows
+the step that drops the object there, and a node dropped at a path precedes a
+step that creates an object below it. That holds whichever planning service
+plans the other step: a drop records a `ydb.scheme-directory` creation at its
+path, a creation reads each directory above its own, and the host runs a
+creation before another service's read. A drop below a path where the plan
+creates an object is refused, since YDB keeps a directory after its last object
+goes and YQL has no statement that removes one. Any other overlap of parent and
+descendant paths, and an unsupported common footprint, is refused. The host's window markers (such as `common/feature-creations`) and the
 column of a column step occupy no path, so they order nothing; the host places
 the step between its markers. A common step that names another database than
 the change is refused. A parent directory that does not exist holds no node,
@@ -3022,16 +3055,30 @@ filter, the TTL where the declaration states no table properties, and the run
 interval of the TTL it holds where the declaration states a TTL, which names
 none since YQL has no setting for one. A cluster's table profile may have
 given the old table any of them, and YQL drops neither a family nor a setting,
-so a rebuild changes none that nobody declared. Each index of the new table keeps the automatic partitioning and the
-read replicas the old index under its name holds, or the old index the host
-renames it from. The call that creates a table takes no index settings, so a
-`table-rebuild/N/index-settings/M` step after the creation and before the copy
-gives the index every setting with `ALTER TABLE ... ALTER INDEX ... SET`, over
-the settings YDB gives a new index. The read describes each index the common
-model describes beside the native index set for that reason. Without the
-policy, the change is refused
-in the embedded engine's words, naming the request the host passes, such as
+so a rebuild changes none that nobody declared. Each index of the new table
+takes the automatic partitioning and the read replicas its own facet declares
+(see [Index settings from a source](#index-settings-from-a-source)), and for
+every setting the facet leaves out what the old index under its name holds,
+or the old index the host renames it from, as the host's embedded engine
+resolves a rebuilt index's declaration. An index the rebuild adds takes its
+declared settings over the ones YDB gives a new index. The call that creates a
+table takes no index settings, so a `table-rebuild/N/index-settings/M` step
+after the creation and before the copy gives the index every setting with
+`ALTER TABLE ... ALTER INDEX ... SET`, over the settings YDB gives a new index.
+The read describes each index the common model describes beside the native
+index set for that reason. A facet for an index the new table does not create
+refuses the rebuild. Without the policy, the change is refused in the embedded
+engine's words, naming the request the host passes, such as
 `--allow-table-rebuild`.
+
+The host's own steps for the table, such as the addition or the removal of an
+index or a column, are rewritten to the rename that puts the new table in
+place, and that rename names every object they change, as the host's plan
+graph requires. An index the plan drops and adds again under its name, such as
+one whose columns change, cannot be named twice by one step, so the removal,
+and every removal the host orders before it, is rewritten to the rename that
+moves the old table out of the way. A host step that changes something before
+such a removal refuses the rebuild.
 
 Every step writes as a YQL statement in the TEXT form, so a migration file
 holds the rebuild, unless the old table holds user attributes or a TTL run
@@ -3366,6 +3413,12 @@ setting from it, since the comparison could not see what the index holds.
   INDEX` and then `ALTER INDEX ... SET`. An index the plan drops is left alone.
 - Settings declared on an index that is not a global sync, async or unique
   index, or on one the table neither holds nor gains, are refused.
+- A table rebuild gives each index of the new table its declared settings, and
+  what the old index holds for every other (see
+  [Native table rebuild](#native-table-rebuild)).
+- `migrations generate` writes the reverse of a change of an index's settings
+  into the down file: every setting the index held, restored in place (see
+  [Reverse migrations](#reverse-migrations)).
 - An export writes an index's facet as the settings that differ from the ones
   YDB gives a new index, as the host's embedded engine writes them, so `ptah
   introspect` writes `auto_partitioning_by_load="ENABLED"

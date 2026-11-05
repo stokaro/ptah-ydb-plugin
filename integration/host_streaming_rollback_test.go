@@ -16,9 +16,9 @@ import (
 // TestYDBStreamingQueries_RoundTripAndRollback: `migrations generate` writes
 // a changed text of a stopped query, which allow_state_reset permits, and its
 // reverse; `migrations up` applies it and leaves nothing to plan, and
-// `migrations down` gives the query its text back, so the first declaration
-// plans nothing. The down file says what the rollback cannot recover: the
-// checkpoint the change reset.
+// `migrations down` gives the query its text back with the ALTER STREAMING
+// QUERY the down file holds, so the first declaration plans nothing. The down
+// file says what the rollback cannot recover: the checkpoint the change reset.
 func TestHostRollsBackAStreamingQueryText_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	_, directory, _, held := streamingFixture(c)
@@ -37,7 +37,7 @@ func TestHostRollsBackAStreamingQueryText_HappyPath(t *testing.T) {
 	rolledBack, downErr := hostMigrate(c, directory, migrations, "migrations", "down", "--target", "0", "--confirm")
 
 	c.Assert(up, qt.Contains, "/* changed */")
-	c.Assert(down, qt.Contains, `"restore the query body in place"`)
+	c.Assert(down, qt.Contains, "ALTER STREAMING QUERY `"+directory+"/copy` SET (RUN = FALSE, RESOURCE_POOL = `default`, FORCE = TRUE) AS DO BEGIN\n"+text+"\nEND DO;")
 	c.Assert(down, qt.Contains, streaming.CheckpointLoss)
 	c.Assert(upErr, qt.IsNil, qt.Commentf("up:\n%s", applied))
 	c.Assert(forward, qt.Contains, "WHERE TRUE")
