@@ -102,7 +102,13 @@ gives the provider's rules in full.
 
 The provider keeps the revision table, the migration log and the tag table, in
 the directory `--migrations-schema` names or at the database root; see
-[Migration history](../README.md#migration-history).
+[Migration history](../README.md#migration-history). A database Ptah's
+built-in YDB engine migrated keeps its tables: the provider reads and writes
+that engine's `schema_migrations`, `schema_migrations_log`,
+`ptah_migration_tags` and `atlas_schema_revisions` in their own layout, so
+`migrations status`, `up`, `down`, `--allow-dirty` resumes, tags and
+`ptah-compat migrate apply` continue where that engine stopped, and the
+engine can still read the tables.
 
 A primary key change, a column type change or `SET NOT NULL` is planned only as
 a table rebuild, and only when `migrations generate` is given

@@ -819,10 +819,28 @@ or `stokaro/ptah-ydb-plugin/history-v1/atlas`. This is a storage format version,
 not a stable SDK release. Reads and writes verify the marker, column types,
 primary key, and absence of automatic behavior such as TTL or changefeeds.
 Unknown fields, malformed records, altered layouts, and unmarked tables are
-refused. Older Ptah tables are left untouched. This changes storage behavior;
-pre-v1, so no compatibility is owed. The Atlas format preserves SDK revision
-semantics; it does not reproduce the legacy Atlas SQL column layout or promise
-interchange with external Atlas tools.
+refused, with one exception: the revision tables Ptah's built-in YDB engine
+wrote.
+
+That engine kept a database's migrations in tables of its own layout, with no
+attribute: the native `schema_migrations` (version, description, applied_at,
+state, applied, total, error, error_stmt, execution_time_ms, checksum), and
+the Atlas-compatible `atlas_schema_revisions` that `ptah-compat migrate apply`
+writes. A revision table with no attribute and exactly one of those layouts is
+read as history, and every revision written to it keeps that layout, so a
+dirty migration the engine left stays dirty with its progress, a resume
+continues it, and the engine still reads the table: a down run is suffixed
+`:down` in `state` as the engine wrote it, an empty error is NULL in the native
+table and an empty string in the Atlas one, and no partial hashes are the JSON
+`null`. Those layouts keep the time to the microsecond, the native run time to
+the millisecond, and no operator version or partial hashes in the native
+table, so a revision written there holds no finer part, and a native record
+with one is refused. Under the engine's default names such a table is also
+left out of a schema read, as the engine left it out, so a plan for its
+directory does not drop it. A table that is neither the provider's nor one of
+those layouts is still refused. The provider's own Atlas format preserves SDK
+revision semantics; it does not reproduce the Atlas SQL column layout or
+promise interchange with external Atlas tools.
 
 Mutations compare the complete expected record before inserting, replacing, or
 deleting it. The comparison and write share one native serializable transaction.
@@ -853,8 +871,13 @@ in one request. Its value is `stokaro/ptah-ydb-plugin/metadata-v1/log` for journ
 or `stokaro/ptah-ydb-plugin/metadata-v1/tags` for tags. Preparation and operations
 refuse unmarked tables, unknown markers, altered columns or keys, indexes,
 changefeeds, and automatic deletion settings. Reads also refuse unknown,
-noncanonical, corrupt, or mismatched record identities. Existing Ptah SQL stores
-are not adopted; pre-v1, so no compatibility is owed.
+noncanonical, corrupt, or mismatched record identities. The log and tag tables
+Ptah's built-in YDB engine wrote, `schema_migrations_log` (run_id, seq,
+operation, version, state, actor, actor_source, checksum, logged_at, error)
+and `ptah_migration_tags` (tag, version, recorded_at), are read and written in
+that layout, with no attribute, as its revision tables are; the time is kept to
+the microsecond, and an empty actor, checksum or error is NULL. Under those
+default names they are left out of a schema read too.
 
 Log writes use a separate serializable transaction and remain durable when an
 execution transaction rolls back. Log scopes cannot name that execution
