@@ -61,7 +61,8 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
 	read, unread := session.workload()
-	if err := inspect.Workload(ctx, result, session.database, request.GetSchemas(), read, unread); err != nil {
+	databaseKinds := slices.Contains(negotiatedFeatures(ctx), provider.DatabaseKindsFeature)
+	if err := inspect.Workload(ctx, result, session.database, request.GetSchemas(), databaseKinds, read, unread); err != nil {
 		if ctx.Err() != nil {
 			return nil, status.FromContextError(ctx.Err()).Err()
 		}

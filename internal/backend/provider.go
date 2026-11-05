@@ -179,6 +179,10 @@ func providerFeatures() []string {
 		// The reverse migration of a standalone object's change is the
 		// change that undoes it; see ReverseChanges.
 		provider.ReverseChangesFeature,
+		// Resource pools and their classifiers belong to the database, so a
+		// read of directories reports them beside its scope; see
+		// inspect.Workload.
+		provider.DatabaseKindsFeature,
 		// A read names each replica table no replication it describes
 		// writes, which YDB keeps read-only, so the host refuses a table
 		// declared there at planning; see inspect.unreadReplicas.
@@ -559,6 +563,7 @@ func Description() *protocol.Description {
 				Embeddings:          &protocol.EmbeddingEngine{ConsistencyModes: consistencyModes},
 				CommonObjects:       commonobject.Support(),
 				ScopeSelections:     scopeSelections(),
+				DatabaseKinds:       databaseKinds(),
 				HclSource: &protocol.HCLSourceDeclaration{
 					Blocks:      []*protocol.HCLSourceBlock{schema.CoordinationHCLBlock()},
 					HeaderKinds: []string{"coordination_node"},
@@ -570,6 +575,13 @@ func Description() *protocol.Description {
 	}
 	withSerialSequences(description.Engines[0])
 	return description
+}
+
+// databaseKinds are the kinds whose objects belong to the database rather
+// than to a directory of it: resource pools and their classifiers, which
+// YDB names by name alone.
+func databaseKinds() []string {
+	return []string{schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties}
 }
 
 // withSerialSequences adds the change of a Serial column's sequence to the
