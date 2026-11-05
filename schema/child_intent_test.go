@@ -156,8 +156,10 @@ func TestTopicDeclarationsPreserveConfigurationAndAccess(t *testing.T) {
 	c.Assert(protojson.Unmarshal(desired.Payload, &intent), qt.IsNil)
 	c.Assert(intent.Access.DirectGrants[0].Subject, qt.Equals, "writer")
 	c.Assert(intent.Access.RequiredEffectivePermissions[0].Subject, qt.Equals, "reader")
-	c.Assert(intent.Consumers[0].StreamingConsumerType, qt.IsNotNil)
-	c.Assert(intent.Consumers[1].StreamingConsumerType, qt.IsNil)
+	c.Assert(intent.Consumers[0].Name, qt.Equals, "z")
+	c.Assert(intent.Consumers[0].StreamingConsumerType, qt.IsNil)
+	c.Assert(intent.Consumers[1].Name, qt.Equals, "a")
+	c.Assert(intent.Consumers[1].StreamingConsumerType, qt.IsNotNil)
 }
 
 func TestChangefeedDeclarationsSeparateInitialScanFromProgress(t *testing.T) {

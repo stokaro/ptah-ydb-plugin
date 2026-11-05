@@ -1208,7 +1208,9 @@ Topic observations preserve partition settings and quotas, retention, codecs,
 consumer options, and attributes. Live partition topology and topic/consumer
 statistics are excluded. A missing child description refuses the entire read.
 
-Indexes, implementation tables, changefeeds, and consumers are sorted by name.
+Indexes, implementation tables, changefeeds, and the consumers of a
+changefeed's topic are sorted by name; a topic's own consumers keep their
+order (see the topic section).
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
 Every observed model has a separate desired contract and an offline conversion.
 Comparison and planning remain limited to coordination nodes, the TTL, partitioning settings and column families of row tables, and the storage of
@@ -2171,7 +2173,10 @@ parsed and refused with the host's words. A Go consumer names a topic the same
 file declares. Each source describes the topics of the directories it reads
 completely, so a topic it leaves out is dropped; a `ptah:not-described topic`
 header entry of a YQL document keeps one. HCL has no topic block. The model
-keeps the consumers of a topic sorted by name.
+keeps the consumers of a declared topic in the order the declaration lists
+them, and those of a topic it reads in the order YDB describes them, which is
+the order they were added in, so a statement Ptah writes for a topic lists
+them as Ptah's built-in YDB engine did.
 
 A setting a declaration leaves out takes the value YDB gives a new topic, and
 the comparison reads both sides that way: one partition, a day of retention, a
