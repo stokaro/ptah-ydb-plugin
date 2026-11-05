@@ -145,8 +145,12 @@ func confirmTableCreation(owner *protocol.Reference, wanted *Ydb_Table.CreateTab
 		observed.GetPartitioningSettings().GetMinPartitionsCount() != started {
 		return fmt.Errorf("YDB created table starting layout differs from the request")
 	}
-	for _, family := range wanted.ColumnFamilies {
-		var actual *Ydb_Table.ColumnFamily
+	families, err := requestFamilies(wanted.ColumnFamilies)
+	if err != nil {
+		return err
+	}
+	for _, family := range families {
+		var actual *native.ColumnFamily
 		for _, candidate := range observed.ColumnFamilies {
 			if candidate.Name == family.Name {
 				if actual != nil {

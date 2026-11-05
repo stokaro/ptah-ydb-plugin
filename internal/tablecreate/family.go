@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
@@ -25,13 +26,13 @@ const DefaultFamily = "default"
 // (see PlacedInDefault); any other column keeps the family it sits in.
 type familyInput struct {
 	// desired are the families the declaration states, with the settings it states.
-	desired []*Ydb_Table.ColumnFamily
+	desired []*native.ColumnFamily
 	// placement maps a declared column to the family the declaration puts it in.
 	// An empty family stands for the default family.
 	placement map[string]string
 	// held are the families the table holds, and heldPlacement the family each
 	// of its columns sits in.
-	held          []*Ydb_Table.ColumnFamily
+	held          []*native.ColumnFamily
 	heldPlacement map[string]string
 	// columns are the columns the declaration names, key the declared key, and
 	// existing the columns the table holds. A column the plan drops is in
@@ -43,14 +44,14 @@ type familyInput struct {
 
 // familyChange is what one AlterTable call does to a table's families.
 type familyChange struct {
-	add   []*Ydb_Table.ColumnFamily
-	alter []*Ydb_Table.ColumnFamily
+	add   []*native.ColumnFamily
+	alter []*native.ColumnFamily
 	// move lists columns with the family they move to, the default family spelled
 	// DefaultFamily.
 	move []*Ydb_Table.ColumnMeta
 	// heldFamilies are the touched families as the table holds them, and
 	// heldColumns the family each moved column sits in now.
-	heldFamilies []*Ydb_Table.ColumnFamily
+	heldFamilies []*native.ColumnFamily
 	heldColumns  map[string]string
 }
 
@@ -64,7 +65,7 @@ func familyKey(name string) string {
 	return name
 }
 
-func findFamily(families []*Ydb_Table.ColumnFamily, name string) *Ydb_Table.ColumnFamily {
+func findFamily(families []*native.ColumnFamily, name string) *native.ColumnFamily {
 	for _, family := range families {
 		if familyKey(family.GetName()) == familyKey(name) {
 			return family
@@ -87,10 +88,14 @@ func sameCompression(want, held Ydb_Table.ColumnFamily_Compression) bool {
 }
 
 // familyDelta reports which settings of the declared family want a held family
-// does not satisfy: the storage pool, and the compression.
-func familyDelta(want, held *Ydb_Table.ColumnFamily) (data, compression bool) {
+// does not satisfy: the storage pool, the compression, and the cache mode. A
+// stated cache mode is compared as the table holds it, as the host's embedded
+// engine compares it: a family that never had one reads back with none, so a
+// declared regular cache is set once and then holds.
+func familyDelta(want, held *native.ColumnFamily) (data, compression, cacheMode bool) {
 	return want.GetData().GetMedia() != "" && want.GetData().GetMedia() != held.GetData().GetMedia(),
-		!sameCompression(want.GetCompression(), held.GetCompression())
+		!sameCompression(want.GetCompression(), held.GetCompression()),
+		want.GetCacheMode() != native.ColumnFamily_CACHE_MODE_UNSPECIFIED && want.GetCacheMode() != held.GetCacheMode()
 }
 
 // planFamilies returns the change that gives the table what the declaration
@@ -109,11 +114,10 @@ func planFamilies(in familyInput) (familyChange, string) {
 			return familyChange{}, fmt.Sprintf("column family %q keeps its columns in memory (keep_in_memory) on one side only, and the table service refuses to set it", name)
 		}
 		held := findFamily(in.held, name)
-		stated := &Ydb_Table.ColumnFamily{Name: name}
+		stated := &native.ColumnFamily{Name: name, Compression: want.GetCompression(), CacheMode: want.GetCacheMode()}
 		if want.GetData().GetMedia() != "" {
 			stated.Data = &Ydb_Table.StoragePool{Media: want.Data.Media}
 		}
-		stated.Compression = want.GetCompression()
 		if held == nil {
 			if name == DefaultFamily {
 				// A table always has its default family; a read that lacks it is incomplete.
@@ -122,15 +126,18 @@ func planFamilies(in familyInput) (familyChange, string) {
 			change.add = append(change.add, stated)
 			continue
 		}
-		changed := &Ydb_Table.ColumnFamily{Name: name}
-		data, compression := familyDelta(want, held)
+		changed := &native.ColumnFamily{Name: name}
+		data, compression, cacheMode := familyDelta(want, held)
 		if data {
 			changed.Data = stated.Data
 		}
 		if compression {
 			changed.Compression = stated.Compression
 		}
-		if data || compression {
+		if cacheMode {
+			changed.CacheMode = stated.CacheMode
+		}
+		if data || compression || cacheMode {
 			change.alter = append(change.alter, changed)
 			change.heldFamilies = append(change.heldFamilies, proto.CloneOf(held))
 		}

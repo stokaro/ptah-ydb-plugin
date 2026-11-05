@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -58,7 +59,7 @@ func projectCreation(input *protocol.TableCreationInput, index int, targetFeatur
 		}
 		return result, err
 	}
-	compiled, err := predictedCreation(owner, input.Declaration, caps)
+	compiled, err := predictedCreation(owner, withoutUniqueness(input.Declaration), caps)
 	if err != nil {
 		return nil, declarationRefusal(owner, err)
 	}
@@ -130,4 +131,24 @@ func projectedColumns(columns []*Ydb_Table.ColumnMeta, key []string) ([]*protoco
 		result = append(result, item)
 	}
 	return result, nil
+}
+
+// withoutUniqueness is a copy of table without its UNIQUE constraints and
+// with no column marked UNIQUE. YDB holds a UNIQUE as a global unique index
+// beside the table, which changes no column a creation projects, and the
+// host reads a declared UNIQUE as that index before it plans, so a creation
+// this service plans never carries one. The source the operator wrote still
+// does, and both the projection and the validation of that source read the
+// table it describes without it. A UNIQUE the host cannot read as an index,
+// such as a deferrable one, reaches planning as a constraint and is refused
+// there.
+func withoutUniqueness(table *protocol.DeclaredTable) *protocol.DeclaredTable {
+	result := proto.CloneOf(table)
+	result.Constraints = slices.DeleteFunc(result.Constraints, func(constraint *protocol.DeclaredConstraint) bool {
+		return strings.EqualFold(strings.TrimSpace(constraint.GetType()), "UNIQUE")
+	})
+	for _, column := range result.Columns {
+		column.Unique = false
+	}
+	return result
 }
