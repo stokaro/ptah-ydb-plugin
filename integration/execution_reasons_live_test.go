@@ -154,3 +154,36 @@ func TestUniqueIndexRefusedBeforeItsOperationSubprocess(t *testing.T) {
 	c.Assert(result.GetMessage(), qt.Contains, "Unknown index type: syncGlobalUnique")
 	c.Assert(heldIndexKinds(c, opened, table), qt.HasLen, 0)
 }
+
+// 26.2 fails an UPSERT that names no column a synchronous index is keyed on,
+// on a table with a unique index, while it plans the query: INTERNAL_ERROR,
+// and nothing written. The unit is NOT_APPLIED, with the provider's reason
+// for it and YDB's issues as its message, where the host's embedded engine
+// printed YDB's answer; the table keeps its one row.
+func TestUpsertTheServerCannotPlanIsRefusedSubprocess(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := inspectionFixture(c)
+	table := path.Join(database, directory, "accounts")
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TABLE `"+table+"` (id Int64 NOT NULL, email Utf8, plan Utf8, "+
+		"PRIMARY KEY (id), INDEX accounts_email GLOBAL UNIQUE SYNC ON (email))"), qt.IsNil)
+	c.Cleanup(func() {
+		c.Check(execFixtureSchema(context.Background(), opened.DB, "DROP TABLE `"+table+"`"), qt.IsNil)
+	})
+	_, err := opened.DB.ExecContext(c.Context(), "UPSERT INTO `"+table+"` (id, email, plan) VALUES (1, 'a@x'u, 'free'u)") // #nosec G202 -- the path is a table under a directory this test generated
+	c.Assert(err, qt.IsNil)
+	client := startProviderFor(c, provider.ErrorReasonsFeature)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	skipOffLine(c, session.GetServerVersion(), "26.2")
+
+	result, err := executeFailing(c, client, session.Id, "UPSERT INTO `"+table+"` (id, plan) VALUES (2, 'trial'u)")
+
+	c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
+	c.Assert(result.GetDiagnosticCode(), qt.Equals, "ydb.statement-rejected")
+	c.Assert(err, qt.ErrorMatches, `provider execution: NOT_APPLIED \(0 units confirmed applied\): YDB refused the statement: YDB cannot plan an UPSERT on a table `+
+		`with a unique index when the statement names no column a synchronous index is keyed on; name every column of the table, or use UPDATE or INSERT `+
+		`\(INTERNAL_ERROR, issue 1, line 1, column \d+\)`)
+	c.Assert(result.GetMessage(), qt.Contains, "fline=kqp_opt_phy_upsert_index.cpp")
+	assertRowCount(c, opened, table, 1)
+}

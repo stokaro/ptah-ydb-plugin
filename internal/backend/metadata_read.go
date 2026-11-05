@@ -97,7 +97,7 @@ func (p *Provider) OpenMetadataRead(ctx context.Context, request *protocol.Metad
 	if active >= metadataOpenLimit {
 		return nil, runtime.ErrorWithReason(codes.ResourceExhausted, "YDB metadata open reader limit reached")
 	}
-	reader.exists, err = store.Check(ctx, s.connection.Driver)
+	store, reader.exists, err = store.Locate(ctx, s.connection.Driver)
 	if err != nil {
 		return nil, err
 	}

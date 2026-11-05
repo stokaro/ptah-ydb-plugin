@@ -21,6 +21,8 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -77,6 +79,34 @@ func Reverse(ctx context.Context, request *protocol.ReverseChangesRequest, obser
 	return result, nil
 }
 
+// topicChangeLimitations names what undoing an in-place change of the topic at
+// name from before to after cannot restore, in the words of the host's
+// embedded engine: the partitions YDB never removes, the auto-partitioning it
+// does not disable again, and the positions of the consumers the change or
+// its rollback drops.
+func topicChangeLimitations(name string, before, after ydbdecl.Topic) []string {
+	var limitations []string
+	from, to := topics.Resolve(before), topics.Resolve(after)
+	if to.MinActivePartitions > from.MinActivePartitions {
+		limitations = append(limitations, fmt.Sprintf("topic %s keeps the %d partitions the change gave it, since YDB never removes a partition",
+			name, to.MinActivePartitions))
+	}
+	if to.AutoPartitioned() && !from.AutoPartitioned() {
+		limitations = append(limitations, fmt.Sprintf("topic %s keeps auto-partitioning, paused, since YDB does not disable it once it is on", name))
+	}
+	consumers := topics.Compare(after, before)
+	for _, consumer := range consumers.Removed {
+		limitations = append(limitations, fmt.Sprintf("consumer %q of topic %s was dropped; the rollback adds it again without its position", consumer, name))
+	}
+	for _, consumer := range consumers.Added {
+		limitations = append(limitations, fmt.Sprintf("consumer %q the change added to topic %s is dropped by the rollback, with its position", consumer, name))
+	}
+	for _, consumer := range consumers.Restarted {
+		limitations = append(limitations, fmt.Sprintf("consumer %q of topic %s was dropped and added again; its earlier position is lost", consumer, name))
+	}
+	return limitations
+}
+
 // describe names the strategy and the limitations of one reverse, and sets
 // its change. A secret's rotation has no reverse statement: the value it
 // replaced was never read.
@@ -99,12 +129,8 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 			result.Limitations = []string{"Recreating the configuration cannot recover semaphores or rate limiter resources lost when the node was dropped."}
 		}
 	case schema.TopicChange:
-		result.Strategy, _ = lifecycle(created, dropped, "drop the created topic", "create the dropped topic again with its settings and consumers", "restore the topic's settings and consumers in place")
-		switch {
-		case created:
-			result.Limitations = []string{fmt.Sprintf("dropping topic %s discards every message written to it and every consumer's position", name)}
-		case dropped:
-			result.Limitations = []string{fmt.Sprintf("the messages topic %s held and its consumers' positions were dropped; the rollback creates it empty", name)}
+		if err := describeTopic(result, change, created, dropped, name); err != nil {
+			return nil, err
 		}
 	case schema.StreamingQueryChange:
 		if err := describeStreamingQuery(result, reversed); err != nil {
@@ -142,6 +168,28 @@ func describe(change *protocol.Envelope, reversed schema.Reversed) (*protocol.Re
 		return nil, authored.New("YDB change " + change.GetKind() + " has no reversal")
 	}
 	return result, nil
+}
+
+// describeTopic describes the reversal of a topic change: a created topic is
+// dropped with its messages, a dropped one is created again empty, and an
+// in-place change names what its rollback cannot restore.
+func describeTopic(result *protocol.ReversedChange, change *protocol.Envelope, created, dropped bool, name string) error {
+	result.Strategy, _ = lifecycle(created, dropped, "drop the created topic", "create the dropped topic again with its settings and consumers", "restore the topic's settings and consumers in place")
+	switch {
+	case created:
+		result.Limitations = []string{fmt.Sprintf("dropping topic %s discards every message written to it and every consumer's position", name)}
+	case dropped:
+		result.Limitations = []string{fmt.Sprintf("the messages topic %s held and its consumers' positions were dropped; the rollback creates it empty", name)}
+	default:
+		current, desired, err := schema.TopicSpecs(change)
+		if err != nil {
+			return err
+		}
+		if current != nil && desired != nil {
+			result.Limitations = topicChangeLimitations(name, *current, *desired)
+		}
+	}
+	return nil
 }
 
 // describeReplication describes the reversal of an async replication change:

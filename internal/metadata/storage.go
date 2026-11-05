@@ -18,6 +18,9 @@ type Runner interface {
 
 // Lookup reads a tag without creating storage or confusing absence with zero.
 func (s Store) Lookup(ctx context.Context, runner Runner, name string) (*protocol.MigrationTagRecord, error) {
+	if s.builtin {
+		return s.lookupBuiltin(ctx, runner, name)
+	}
 	var payload []byte
 	err := runner.QueryRowContext(ctx, "DECLARE $name AS Utf8; SELECT `record` FROM "+s.QuotedPath()+" WHERE `name` = $name", sql.Named("name", name)).Scan(&payload)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -42,10 +45,19 @@ func (s Store) Lookup(ctx context.Context, runner Runner, name string) (*protoco
 func (s Store) Mutate(ctx context.Context, runner Runner, request *protocol.MutateMetadataRequest, beforeWrite func(context.Context) error) (outcome protocol.MetadataResult_Outcome, deleted bool, err error) {
 	switch mutation := request.Mutation.(type) {
 	case *protocol.MutateMetadataRequest_AppendLog:
+		if s.builtin {
+			return s.appendBuiltinLog(ctx, runner, mutation.AppendLog, beforeWrite)
+		}
 		return s.appendLog(ctx, runner, mutation.AppendLog, beforeWrite)
 	case *protocol.MutateMetadataRequest_PutTag:
+		if s.builtin {
+			return s.putBuiltinTag(ctx, runner, mutation.PutTag, beforeWrite)
+		}
 		return s.putTag(ctx, runner, mutation.PutTag, beforeWrite)
 	case *protocol.MutateMetadataRequest_DeleteTag:
+		if s.builtin {
+			return s.deleteBuiltinTag(ctx, runner, mutation.DeleteTag, beforeWrite)
+		}
 		return s.deleteTag(ctx, runner, mutation.DeleteTag, beforeWrite)
 	default:
 		return protocol.MetadataResult_REJECTED, false, fmt.Errorf("invalid YDB metadata mutation")
@@ -150,6 +162,9 @@ func (s Store) Snapshot(ctx context.Context, runner Runner) (snapshot *Snapshot,
 	if s.Kind == protocol.MetadataScope_LOG {
 		query = "SELECT `run_id`, `sequence`, `record` FROM " + s.QuotedPath() + " ORDER BY `run_id`, `sequence`"
 	}
+	if s.builtin {
+		query = s.builtinSnapshotQuery()
+	}
 	rows, err := runner.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("read YDB metadata: query failed")
@@ -170,7 +185,11 @@ func (s Store) Snapshot(ctx context.Context, runner Runner) (snapshot *Snapshot,
 			snapshot = nil
 		}
 	}()
-	count, err := s.capture(ctx, rows, snapshot, expected)
+	capture := s.capture
+	if s.builtin {
+		capture = s.captureBuiltin
+	}
+	count, err := capture(ctx, rows, snapshot, expected)
 	if err != nil {
 		return nil, err
 	}
