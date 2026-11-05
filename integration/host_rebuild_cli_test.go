@@ -31,6 +31,14 @@ func rebuildEntities(schema, nType string) string {
 // INTEGER and two rows, and the directory that declares it with `n` as BIGINT.
 func hostRebuildFixture(c *qt.C) (directory, absolute, after string, f migrationsFixture) {
 	c.Helper()
+	return hostRebuildFixtureOf(c, "INTEGER", "BIGINT", "(1l, 10), (2l, NULL)")
+}
+
+// hostRebuildFixtureOf is a table of the fixture's directory created with `n`
+// of type from and the rows given as the VALUES of (`id`, `n`), and the
+// directory that declares it with `n` of type to.
+func hostRebuildFixtureOf(c *qt.C, from, to, rows string) (directory, absolute, after string, f migrationsFixture) {
+	c.Helper()
 	opened, directory, database := lockFixture(c)
 	absolute = path.Join(database, directory, "items")
 	c.Cleanup(func() {
@@ -40,12 +48,12 @@ func hostRebuildFixture(c *qt.C) (directory, absolute, after string, f migration
 			c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+table+"`"), qt.IsNil)
 		}
 	})
-	before := writeFiles(c, c.TempDir(), map[string]string{"items.go": rebuildEntities(directory, "INTEGER")})
-	after = writeFiles(c, c.TempDir(), map[string]string{"items.go": rebuildEntities(directory, "BIGINT")})
+	before := writeFiles(c, c.TempDir(), map[string]string{"items.go": rebuildEntities(directory, from)})
+	after = writeFiles(c, c.TempDir(), map[string]string{"items.go": rebuildEntities(directory, to)})
 	created, err := hostCommand(c, "schema", "apply", "--db-url", os.Getenv("PTAH_YDB_TEST_URL"), "--root-dir", before, "--schemas", directory,
 		"--auto-approve", "--tx-mode", "none")
 	c.Assert(err, qt.IsNil, qt.Commentf("schema apply:\n%s", created))
-	c.Assert(execFixtureSchema(c.Context(), opened.DB, "UPSERT INTO `"+absolute+"` (`id`, `n`) VALUES (1l, 10), (2l, NULL)"), qt.IsNil)
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "UPSERT INTO `"+absolute+"` (`id`, `n`) VALUES "+rows), qt.IsNil)
 	return directory, absolute, after, migrationsFixture{opened: opened, dir: directory, database: database}
 }
 
