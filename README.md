@@ -594,6 +594,12 @@ YDB does, and writes each change as the host's embedded engine writes it. A
 host that does not list it gets none of this: views stay native objects, and a
 declared comment is refused as a table setting no creation states.
 
+The comments of a table the host creates, of its columns and of its indexes,
+and of a column or an index it adds to a table, reach the provider as comment
+steps after the step that creates the object, as for any comment change. The
+provider takes them off the declaration it creates the table from, and runs
+the steps after its own steps on that table.
+
 Views and comments use these shared stages:
 
 | Step | Views | Comments |
@@ -627,7 +633,9 @@ file is split into, one statement after another. A comment statement in a
 transaction, or one that cannot be read, refuses the batch before any unit
 runs. A comment is never a table property: the table facet leaves Ptah's
 comment keys out, a declared attribute under one of them is refused, and the
-new table of a rebuild takes the comments the read reported.
+new table of a rebuild takes the comments the read reported, which the host
+carries on the observed table, its columns and its indexes of a planning
+request.
 
 Users and groups share YDB's principal namespace. Creation accepts lower-case
 ASCII letters and digits. Groups have no login or password settings. Membership
@@ -2549,6 +2557,18 @@ refused as a common index, since the pinned table protocol builds none of them
 with a table. Execution confirms each index by reading it back. In the TEXT
 form each index is an INDEX clause of the CREATE TABLE.
 
+YDB has no UNIQUE constraint: it refuses one as a parse error and holds the
+same rows with a global unique index, a second row with the same value refused
+and rows whose value is NULL not. A session reports `unique_constraints` as
+`false`, and a host that reads it so turns a declared UNIQUE constraint, and a
+column's UNIQUE, into that index before it compares and plans, under the name
+its YDB renderer gives it: the constraint's name, or `<table>_<columns>_key`.
+A UNIQUE over the key folds into the key. The provider then creates and reads
+an index, never a constraint. Schema validation and the creation projection
+read the source the operator wrote past its UNIQUE, since the index changes no
+column of the table; a UNIQUE the host does not turn into an index, such as a
+deferrable one, is refused when it is planned.
+
 The vector and full-text indexes of the table's native index set are built
 after the creation, one step each (`row-table-create-index/N`, ordered after
 the creation), with the rules and the statement of
@@ -2615,14 +2635,18 @@ below), where a table the native call creates can change them.
 The planner refuses, in the embedded engine's words, an auto-increment column
 of a type YDB has no Serial for, `GENERATED ALWAYS`, identity options other than
 the start and the increment, a default on a Serial, a start or an increment
-below 1 or not a whole number, and a start or an increment on a 16-bit or
-32-bit Serial. Every line reports `serial_sequence_keeps_range` false: any
-`ALTER SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the
-column then stores the value after its own maximum as a negative number without
-an error. The native call could create such a sequence with its range kept,
-but no later change and no migration file could, so it is refused at creation
-too. A column table takes no Serial, and YDB adds no Serial column to a table
-that exists (`Column addition with serial data type is unsupported`).
+below 1 or not a whole number, and a start or an increment a creation or a
+change would give a 16-bit or 32-bit Serial, a change back to the defaults
+included. Every line reports `serial_sequence_keeps_range` false: any `ALTER
+SEQUENCE` raises such a sequence's maximum to the Int64 maximum, and the column
+then stores the value after its own maximum as a negative number without an
+error. The native call could create such a sequence with its range kept, but no
+later change and no migration file could, so it is refused at creation too. A
+table whose 16-bit or 32-bit Serial already holds the declared start and
+increment needs no statement and plans nothing, and validation, which cannot
+tell, takes the declaration, as the host's embedded engine does. A column table
+takes no Serial, and YDB adds no Serial column to a table that exists (`Column
+addition with serial data type is unsupported`).
 
 When the declared start or increment of an existing Serial differs from what
 the read reports, the planner writes one step, `serial-sequence/N`: one YQL

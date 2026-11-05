@@ -406,7 +406,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"wide_date_time_types": true, "parameterized_decimal": true, "alter_column_default": true, "add_column_with_default": true, "small_integer_defaults": true, "document_type_defaults": true,
 		"vector_indexes": true, "vector_index_maintained_on_write": true, "vector_bit_type": true, "full_text_indexes": true,
 		"local_bloom_indexes": true, "local_ngram_indexes": true, "local_min_max_indexes": false,
-		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_index_on_existing_table": false, "index_rename": true,
+		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_constraints": false, "unique_index_on_existing_table": false, "index_rename": true,
 		"returning_clause": true, "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
 		"column_family_cache_mode": true,
 	})
@@ -424,7 +424,7 @@ func TestSessionReportsTheStatementTimeoutCapability(t *testing.T) {
 		"wide_date_time_types": false, "parameterized_decimal": false, "alter_column_default": false, "add_column_with_default": false, "small_integer_defaults": false, "document_type_defaults": false,
 		"vector_indexes": false, "vector_index_maintained_on_write": false, "vector_bit_type": false, "full_text_indexes": false,
 		"local_bloom_indexes": false, "local_ngram_indexes": false, "local_min_max_indexes": false,
-		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_index_on_existing_table": false, "index_rename": true,
+		"serial_columns": true, "serial_sequence_options": true, "serial_sequence_keeps_range": false, "unique_constraints": false, "unique_index_on_existing_table": false, "index_rename": true,
 		"returning_clause": false, "common_table_expressions": false, "correlated_subqueries": false, "non_equi_joins": false, "offset_without_limit": false,
 		"column_family_cache_mode": false,
 	})

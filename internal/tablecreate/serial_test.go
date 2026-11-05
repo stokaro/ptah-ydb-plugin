@@ -255,25 +255,42 @@ func TestProjectSerialCreation_HappyPath(t *testing.T) {
 	c.Assert([]any{id.ColumnType, id.IsNullable, id.AutoIncrement, id.IdentityStart, id.IdentityIncrement}, qt.DeepEquals, []any{"Int32", "NO", true, "100", ""})
 }
 
-// Validation refuses the settings a target does not take, with the refusal
-// planning gives.
-func TestValidateSerialSettings_FailurePath(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		id   *protocol.DeclaredColumn
-		caps map[string]bool
-		want string
-	}{
-		{name: "a start on a 32-bit Serial", id: &protocol.DeclaredColumn{Type: "SERIAL", IdentityStart: "100"}, caps: serialCapabilities(),
-			want: `giving the sequence of column "id" of table "app/records" a start or an increment \(.*\), which requires target capability serial_sequence_keeps_range, unavailable on this ydb target`},
-		{name: "settings without sequence options", id: &protocol.DeclaredColumn{Type: "BIGSERIAL", IdentityIncrement: "2"}, caps: map[string]bool{"serial_columns": true},
-			want: `giving the sequence of column "id" of table "app/records" a start or an increment, which requires target capability serial_sequence_options, unavailable on this ydb target`},
-	} {
+// serialSettingsTargets are Serial settings a target does not take, with the
+// refusal a creation of the table gives.
+var serialSettingsTargets = []struct {
+	name string
+	id   *protocol.DeclaredColumn
+	caps map[string]bool
+	want string
+}{
+	{name: "a start on a 32-bit Serial", id: &protocol.DeclaredColumn{Type: "SERIAL", IdentityStart: "100"}, caps: serialCapabilities(),
+		want: `giving the sequence of column "id" of table "app/records" a start or an increment \(.*\), which requires target capability serial_sequence_keeps_range, unavailable on this ydb target`},
+	{name: "settings without sequence options", id: &protocol.DeclaredColumn{Type: "BIGSERIAL", IdentityIncrement: "2"}, caps: map[string]bool{"serial_columns": true},
+		want: `giving the sequence of column "id" of table "app/records" a start or an increment, which requires target capability serial_sequence_options, unavailable on this ydb target`},
+}
+
+// Validation takes Serial settings a target does not take, as the host's
+// embedded engine validates them: a table that already holds them changes
+// nothing, and validation cannot tell. G113 of stokaro/ptah#4204.
+func TestValidateSerialSettings_HappyPath(t *testing.T) {
+	for _, test := range serialSettingsTargets {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			err := tablecreate.ValidateDeclaration(tableSubject(), serialTable(test.id), test.caps)
+			c.Assert(tablecreate.ValidateDeclaration(tableSubject(), serialTable(test.id), test.caps), qt.IsNil)
+		})
+	}
+}
+
+// A creation refuses the settings a target does not take, before anything is
+// written.
+func TestCompileSerialSettings_FailurePath(t *testing.T) {
+	for _, test := range serialSettingsTargets {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			created, err := tablecreate.Compile(owner(), serialTable(test.id), test.caps)
 			c.Assert(err, qt.ErrorMatches, test.want)
 			c.Assert(tablecreate.IsUnsupported(err), qt.IsTrue)
+			c.Assert(created, qt.IsNil)
 		})
 	}
 }
