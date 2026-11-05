@@ -10,7 +10,6 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/runtime"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 // ValidateSchema checks the captured desired schema offline. A refusal of the
@@ -25,7 +24,7 @@ func (*Provider) ValidateSchema(ctx context.Context, request *protocol.ValidateS
 	if err := provider.ValidateSchemaRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) {
+	if !rulesMatch(ctx, request.Identifiers.GetRules()) {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB validation requires its negotiated identifier rules")
 	}
 	result, err := schemavalidation.Validate(ctx, request)

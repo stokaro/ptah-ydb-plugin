@@ -968,10 +968,11 @@ Use `/` for its root. An unfiltered read walks subdirectories. System
 because their names begin with a dot. Traversal and snapshot size are bounded.
 Coverage names inspected subjects and records native-object completeness for
 each directory whose listing and child reads finished. These regions bind the
-exact database, empty catalog, and exact schema directory. An empty directory
-therefore establishes native-object absence there. Unread descendants, excluded
-system directories, and other namespaces remain unknown. Table and column
-facets keep subject-only coverage.
+exact database, empty catalog, and exact schema directory; an unfiltered read
+sends subtree regions instead where the host negotiates them (see below). An
+empty directory therefore establishes native-object absence there. Unread
+descendants, excluded system directories, and other namespaces remain unknown.
+Table and column facets keep subject-only coverage.
 
 A selected directory YDB does not show (it answers SCHEME_ERROR) reads as
 empty when its parent's listing, proved the same way up to the database root,
@@ -982,13 +983,19 @@ cannot list is still refused, and so is a path below an object that is not a
 directory. Execution reads the directory of each object it creates through
 the same rule; see [Execution and transactions](#execution-and-transactions).
 
-A read with no selector cannot do the same for a directory it never listed. It
-claims each directory it lists complete, and a coverage region names one exact
-directory, so no region covers a directory that does not exist. A claim for the
-whole database would also cover the dot-prefixed directories and the dev realm
-directory the walk leaves out, and everything below them, which the read does
-not know. So `schema apply` with no `--schemas` leaves a native object in a new
-directory unplanned, prints why, and exits 0, as for a topic in `fresh/nested`:
+A read with no selector claims more than the directories it lists. With a
+host that lists `schema.subtree-coverage` (contract 25.22, ADR 0064 in Ptah),
+the provider declares `/` as its schema separator, and the read sends one
+complete region over the root and every directory below it, and an unknown
+region over each directory the walk leaves out, the dot-prefixed directories
+and the dev realm directory, with everything below them. A native object in a
+directory that does not exist yet is then absent, and `schema apply` or
+`migrations generate` with no `--schemas` creates it, as the host's embedded
+engine does. One declared below a directory the walk leaves out stays
+unplanned. A filtered read keeps one exact region per directory, since a
+selector names one directory. With an older host, the read claims each
+directory it lists alone, and a native object in a new directory is left
+unplanned with a warning, as for a topic in `fresh/nested`:
 
 ```text
 Warning: github.com/stokaro/ptah-ydb-plugin/topic fresh/nested.events could not be compared between the database and the desired schema: The current topic or its absence was not established.

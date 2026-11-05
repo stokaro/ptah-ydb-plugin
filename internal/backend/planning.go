@@ -42,7 +42,7 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	if err := provider.ValidatePlanningRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if !proto.Equal(request.Identifiers.GetRules(), identifierRules()) {
+	if !rulesMatch(ctx, request.Identifiers.GetRules()) {
 		return nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB planning requires its negotiated identifier rules")
 	}
 	var result *protocol.PlannedFeatures
