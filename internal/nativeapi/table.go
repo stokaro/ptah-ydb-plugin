@@ -90,7 +90,9 @@ type Answered struct {
 	issues []*Ydb_Issue.IssueMessage
 }
 
-func (a *Answered) Error() string { return fmt.Sprintf("YDB operation failed: ready=true status=%s", a.status) }
+func (a *Answered) Error() string {
+	return fmt.Sprintf("YDB operation failed: ready=true status=%s", a.status)
+}
 
 // Code is the status YDB answered the call with.
 func (a *Answered) Code() int32 { return int32(a.status) }
