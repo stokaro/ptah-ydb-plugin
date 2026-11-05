@@ -204,6 +204,10 @@ func providerFeatures() []string {
 		// objects and the table settings with the provider's counts; see
 		// ReportValues.
 		provider.ReportCountsFeature,
+		// A vector, full-text or local index declaration reaches the provider
+		// whole, which reads it into the table's native index set or its
+		// column storage and writes it back; see tablesource.IndexKinds.
+		provider.IndexKindsFeature,
 	}
 }
 
@@ -618,6 +622,7 @@ func Description() *protocol.Description {
 				},
 				GoHeaderKinds: yqlschema.HeaderKinds(),
 				Reports:       schema.Reports(),
+				IndexKinds:    tablesource.IndexKinds(),
 			},
 		},
 	}

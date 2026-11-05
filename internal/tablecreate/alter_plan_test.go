@@ -51,6 +51,11 @@ type alterCase struct {
 	// column properties of every column it declares, as a Go, YAML or YQL
 	// source states it; zero states nothing.
 	columnKnowledge protocol.ModelKnowledge_State
+	// nativeKnowledge is what the declaring source established about the
+	// native index sets of every table it declares; zero states nothing.
+	nativeKnowledge protocol.ModelKnowledge_State
+	// features are the request's target features beside planning lifecycle.
+	features []string
 	// capabilities are the session's, beside its nontransactional DDL.
 	capabilities map[string]bool
 }
@@ -149,6 +154,10 @@ func alterRequest(c *qt.C, in alterCase) *protocol.PlanFeaturesRequest {
 		desired.Features.Facets.Coverage.Kinds = append(desired.Features.Facets.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: schema.ColumnDesiredModel(),
 			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: in.columnKnowledge, Reason: "fixture"}}}})
 	}
+	if in.nativeKnowledge != protocol.ModelKnowledge_STATE_UNSPECIFIED {
+		desired.Features.Facets.Coverage.Kinds = append(desired.Features.Facets.Coverage.Kinds, &protocol.ComparisonKindCoverage{Model: schema.NativeDesiredModel(schema.IndexProperties),
+			Sources: []*protocol.ComparisonKnowledgeSource{{Outside: &protocol.ModelKnowledge{State: in.nativeKnowledge, Reason: "fixture"}}}})
+	}
 	capabilities := map[string]bool{"transactional_ddl": false}
 	maps.Copy(capabilities, in.capabilities)
 	if in.heldTable != "" {
@@ -163,7 +172,8 @@ func alterRequest(c *qt.C, in alterCase) *protocol.PlanFeaturesRequest {
 	}) {
 		current.Features.Facets.Records = append(current.Features.Facets.Records, observedFacet(c, schema.ColumnProperties, name, in.heldColumns[name]))
 	}
-	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: []string{provider.PlanningLifecycleFeature}, PlanningId: tablecreate.ServiceID, DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
+	return &protocol.PlanFeaturesRequest{Engine: "ydb", TargetFeatures: append([]string{provider.PlanningLifecycleFeature}, in.features...), PlanningId: tablecreate.ServiceID,
+		DatabasePath: "/local", ParentKinds: tablecreate.ParentKinds(),
 		Identifiers:  &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
 		Capabilities: capabilities,
 		Tables:       []*protocol.PlanningTable{{Subject: tableSubject(), Action: protocol.PlanningTable_ALTER, Desired: desired, Current: current}}}

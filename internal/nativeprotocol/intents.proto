@@ -108,6 +108,12 @@ message ColumnStorageIntent {
     uint64 data_channel_count = 3;
     repeated LocalIndexObservation local_indexes = 4;
     ColumnTTLPolicy ttl = 5;
+    // local_indexes_stated is true when the declaration states every local
+    // index of the table, so one the table holds and local_indexes leaves out
+    // is dropped: a source that declares local indexes (source.index-kinds)
+    // and a read do. A declaration without it states no local index when it
+    // lists none, and leaves the ones the table holds alone.
+    bool local_indexes_stated = 6;
 }
 
 // IndexSettingsIntent is the automatic partitioning and the read replicas a

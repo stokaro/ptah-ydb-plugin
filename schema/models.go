@@ -319,7 +319,7 @@ func normalizeObservation(kind string, owner *protocol.Reference, target proto.M
 		}
 	}
 	if indexes, ok := target.(*native.IndexObservations); ok {
-		if err := normalizeIndexes(indexes); err != nil {
+		if err := normalizeIndexes(indexes, nil); err != nil {
 			return err
 		}
 	}

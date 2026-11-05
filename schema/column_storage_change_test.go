@@ -94,14 +94,14 @@ func TestColumnStorageChange_FailurePath(t *testing.T) {
 
 // TestColumnStorageConversionLeavesTheExpirationOut converts an observation
 // whose TTL carries the expiration the server derives into a declaration that
-// states the tiers alone.
+// states the tiers alone, and every local index the table holds: none.
 func TestColumnStorageConversionLeavesTheExpirationOut(t *testing.T) {
 	c := testcheck.New(t)
 	observed := storageEnvelope(c, protocol.ValueInput_OBSERVED, `{"hashColumns":["id"],"partitions":"3","dataChannelCount":"64",`+
 		`"ttl":{"enabled":{"column":"ts","expireAfterSeconds":"4294967295","tiers":[{"applyAfterSeconds":"86400","externalStorage":"/local/ext"}]}}}`)
 	desired, err := schema.ConvertNative(observed, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 	c.Assert(err, qt.IsNil)
-	c.Assert(string(desired.Payload), qt.Equals, `{"dataChannelCount":"64","hashColumns":["id"],"partitions":"3",`+
+	c.Assert(string(desired.Payload), qt.Equals, `{"dataChannelCount":"64","hashColumns":["id"],"localIndexesStated":true,"partitions":"3",`+
 		`"ttl":{"enabled":{"column":"ts","tiers":[{"applyAfterSeconds":"86400","externalStorage":"/local/ext"}]}}}`)
 	back, err := schema.ConvertNative(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
 	c.Assert(err, qt.IsNil)

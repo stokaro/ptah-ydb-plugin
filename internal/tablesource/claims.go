@@ -12,9 +12,11 @@
 // facet or the column-storage facet, because a document may carry only one
 // facet of a kind for a table.
 //
-// What the bundled decoder in the host reads and this package does not is
-// listed in the package README of the provider and in the tests: index
-// options. A table's changefeeds are decoded by internal/changefeedsource.
+// It also reads the index declarations of the provider's index kinds, which a
+// host that negotiates source.index-kinds sends whole: a vector or full-text
+// index into the table's native index set, a local index into the column
+// table's storage (see IndexKinds). A table's changefeeds are decoded by
+// internal/changefeedsource.
 // The host refuses a YAML key that no provider claims, and reads a Go comment
 // that none claims as no declaration. So the provider leaves unclaimed the
 // YAML keys it cannot carry, and claims the Go directives and attributes it
@@ -153,10 +155,12 @@ func tableAttributes() []string {
 		AttributeStore, AttributeHash, AttributeShards, AttributeColumnTTL, AttributeTTLColumn, AttributeTTLInterval, AttributeTTLUnit})
 }
 
-// indexAttributes are the attributes the provider claims on ptah:schema:index:
-// the ones that set a global index's partitioning and read replicas, which
-// declare the index's own facet, and the local, full-text and vector options,
-// which the provider refuses by name.
+// indexAttributes are the attributes the provider claims on ptah:schema:index,
+// the keys of a YAML index entry and the attributes of an HCL index block: the
+// ones that set a global index's partitioning and read replicas, which declare
+// the index's own facet, and the local, full-text and vector options, which a
+// declaration of one of the provider's index kinds carries (see IndexKinds)
+// and which the provider refuses by name on any other index.
 func indexAttributes() []string {
 	return slices.Concat(IndexSettingsAttributes(), refusedIndexAttributes())
 }
@@ -169,10 +173,9 @@ func IndexSettingsAttributes() []string {
 	return []string{AttributeBySize, AttributePartitionSizeMB, AttributeByLoad, AttributeMinPartitions, AttributeMaxPartitions, AttributeReadReplicas}
 }
 
-// refusedIndexAttributes are the index options the bundled decoder in the host
-// reads and the provider does not carry from a source: a column table's local
-// index options, and the full-text and vector settings, which the native
-// index facet states.
+// refusedIndexAttributes are the options of a column table's local index and
+// of a full-text or vector index, which the provider reads from an index of
+// that kind only.
 func refusedIndexAttributes() []string {
 	return []string{
 		"false_positive_probability", "ngram_size", "case_sensitive", "tokenizer", "language",
@@ -256,18 +259,26 @@ func GoDirectives() []*protocol.GoSourceDirective {
 
 // HCLIndexBlock returns the HCL claim of this package: the attributes that set
 // a global index's partitioning and read replicas inside the frontend's index
-// block, as the host's embedded engine writes them there. A switch and the
-// read replicas are strings, and a count a number, read as its text.
+// block, as the host's embedded engine writes them there, and the settings of
+// a vector, full-text or local index, which an index block of one of the
+// provider's index kinds writes (see IndexKinds). A switch, a name and the
+// read replicas are strings, and a count a number, read as its text. The
+// embedded engine wrote no full-text or local setting in HCL, and refused the
+// document it wrote for a full-text index; the provider reads them back.
 func HCLIndexBlock() *protocol.HCLSourceBlock {
 	block := &protocol.HCLSourceBlock{Site: protocol.HCLSourceBlock_INDEX_ATTRIBUTES, Type: "index", Selector: "index", Models: []string{schema.IndexSettingsProperties}}
-	for _, name := range IndexSettingsAttributes() {
+	for _, name := range indexAttributes() {
 		block.Attributes = append(block.Attributes, &protocol.HCLSourceAttribute{Name: name, Kind: protocol.HCLSourceAttribute_TEXT})
 	}
 	return block
 }
 
-// Owns reports whether the fragment carries one of the claims of this package.
+// Owns reports whether the fragment carries one of the claims of this package:
+// one of its YAML keys, Go directives, HCL blocks or index kinds.
 func Owns(fragment *protocol.SourceFragment) bool {
+	if indexKindFragment(fragment) {
+		return true
+	}
 	if key := fragment.GetYamlKey(); key != nil {
 		return slices.ContainsFunc(slices.Concat(YAMLKeys(), IndexYAMLKeys()), func(claim *protocol.YAMLSourceKey) bool {
 			return claim.GetScope() == key.GetScope() && claim.GetKey() == key.GetKey()

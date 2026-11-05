@@ -175,6 +175,9 @@ func compareUnstatedParts(ctx context.Context, request *protocol.CompareModelsRe
 		if err := compareUnstatedChangefeeds(request, result, parent.GetSubject(), held); err != nil {
 			return err
 		}
+		if err := compareUnstatedIndexes(request, result, parent.GetSubject(), held); err != nil {
+			return err
+		}
 	}
 	for _, parent := range request.GetParents() {
 		if err := ctx.Err(); err != nil {
@@ -426,6 +429,48 @@ func compareUnstatedChangefeeds(request *protocol.CompareModelsRequest, result *
 		return err
 	}
 	return compareChangefeeds(result, schema.ChangefeedProperties, subject, after, before)
+}
+
+// compareUnstatedIndexes compares the native index set of a table both sides
+// hold, for which the desired side carries no native index set, with the
+// vector and full-text indexes the table holds. A source of a host that
+// negotiates source.index-kinds declares those indexes on the table they are
+// on, so one that describes the native index sets of every table it declares
+// declares a table that writes none to have none, and each one the table
+// holds is reported to go, as the host's embedded engine plans it. Without the
+// feature a source cannot declare one, and the table keeps what it holds.
+func compareUnstatedIndexes(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, subject *protocol.ComparisonIdentity,
+	held map[string]*protocol.ComparisonRecord) error {
+	if !slices.Contains(request.GetKinds(), schema.IndexProperties) || !tablecreate.SourcesStateNativeIndexes(request.GetTargetFeatures()) {
+		return nil
+	}
+	for _, record := range request.GetDesired().GetRecords() {
+		if record.GetKind() == schema.IndexProperties && provider.CompareIdentities(record.GetSubject(), subject) == 0 {
+			return nil
+		}
+	}
+	observed := held[recordKey(schema.IndexProperties, subject)]
+	if observed == nil || !compared(request, observed) || !tablecreate.FacetKnown(request.GetDesired().GetCoverage(), schema.IndexProperties, subject, tablecreate.DesiredSide) {
+		return nil
+	}
+	before, err := tablecreate.NormalizedFacet(observed, protocol.ValueInput_OBSERVED)
+	if err != nil {
+		return err
+	}
+	after, err := tablecreate.UnstatedIndexFacet(before.Owner)
+	if err != nil {
+		return err
+	}
+	differs, err := tablecreate.FacetDiffers(after, before)
+	if err != nil || !differs {
+		return err
+	}
+	change, err := schema.CaptureTablePropertiesChange("change-"+strconv.Itoa(len(result.Changes)), after.Owner, before, after)
+	if err != nil {
+		return err
+	}
+	result.Changes = append(result.Changes, &protocol.ComparedChange{Kind: schema.IndexProperties, Subject: proto.CloneOf(subject), Value: change})
+	return nil
 }
 
 // compareChangefeeds reports how a table's changefeeds differ from the

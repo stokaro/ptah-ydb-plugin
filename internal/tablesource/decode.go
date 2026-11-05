@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -51,12 +53,18 @@ type pending struct {
 func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, error) {
 	var order []string
 	byBinding := make(map[string]*pending)
+	locals, err := localIndexes(document)
+	if err != nil {
+		return nil, err
+	}
 	for index, fragment := range document.GetFragments() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		// An index's settings are its own facet; see DecodeIndexes.
-		if !Owns(fragment) || indexFragment(fragment) {
+		// An index's settings are its own facet (see DecodeIndexes), and so
+		// is the native index set a vector or full-text index declares (see
+		// DecodeNativeIndexes). A local index joins its table's storage below.
+		if !Owns(fragment) || indexFragment(fragment) || indexKindFragment(fragment) {
 			continue
 		}
 		binding, err := bindingOf(document, fragment)
@@ -80,6 +88,9 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 			target.columnFragment = index
 		}
 	}
+	if err := addLocalIndexes(ctx, document, byBinding, locals); err != nil {
+		return nil, err
+	}
 	var tables []Table
 	for _, id := range order {
 		target := byBinding[id]
@@ -100,6 +111,31 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, er
 		tables = append(tables, Table{Binding: target.binding, Fragment: target.fragment, Value: value, ColumnFragment: target.columnFragment, Columns: columns})
 	}
 	return tables, nil
+}
+
+// addLocalIndexes gives each column table the local indexes the document
+// declares for it. A local index of a table the document declares no column
+// storage for is refused: YDB keeps local indexes on column tables. Where the
+// host negotiated source.index-kinds, a Go or YAML source states every local
+// index of each column table it declares, so the storage says that it lists
+// all of them.
+func addLocalIndexes(ctx context.Context, document *protocol.SourceDocument, tables map[string]*pending, locals map[string][]*native.LocalIndexObservation) error {
+	for _, binding := range document.GetBindings() {
+		declared := locals[binding.GetId()]
+		target := tables[binding.GetId()]
+		if len(declared) != 0 && (target == nil || target.settings.column == nil) {
+			return tableError(tableLabel(binding.GetObject()), fmt.Errorf("index %q: a local index belongs to a column table, and the table is declared as a row table",
+				declared[0].GetName()))
+		}
+		if target == nil || target.settings.column == nil {
+			continue
+		}
+		target.settings.column.LocalIndexes = append(target.settings.column.LocalIndexes, declared...)
+		if document.GetFormat() != protocol.SourceDocument_HCL && slices.Contains(provider.HostFeatures(ctx), provider.IndexKindsFeature) {
+			target.settings.column.LocalIndexesStated = true
+		}
+	}
+	return nil
 }
 
 // refuseOtherTableColumns refuses a family that lists columns and names a table
@@ -269,11 +305,14 @@ func splitTable(written string) (schemaName, name string, err error) {
 }
 
 // indexReason is why an index option other than a global index's partitioning
-// and read replicas is refused, in either format: the bundled decoder reads a
-// column table's local index options and the full-text and vector settings
-// too, and the provider would drop them.
+// and read replicas is refused on an index of another kind than its own: a
+// local index's options and a full-text or vector index's settings belong to
+// an index of that type, which the provider reads whole where the host
+// negotiates source.index-kinds.
 const indexReason = "an index directive or entry declares the partitioning and read replicas of a global index here; " +
-	"a local index's options and a full-text or vector index's settings are declared through the native index facet"
+	"a local index's options and a full-text or vector index's settings are declared on an index of that type " +
+	"(vector_kmeans_tree, fulltext_plain, fulltext_relevance, bloom_filter, bloom_ngram_filter or min_max), " +
+	"which this provider reads from a host that negotiates source.index-kinds"
 
 // tableError is err, the refusal of what a source declares for the table label
 // names, with the table in front. A TTL interval or unit YDB does not take

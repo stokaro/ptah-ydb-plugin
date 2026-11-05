@@ -68,7 +68,8 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	// the host reads the block; see tablesource.HCLPlatformBlock.
 	platform := slices.Contains(description.GetEngines()[0].GetFeatures(), provider.HCLPlatformFeature)
 	result := &protocol.EncodedSource{Complete: true, Limits: limits}
-	encoding := &sourceEncoding{result: result, tables: make(map[string]*sourceencode.Table), platform: platform}
+	encoding := &sourceEncoding{result: result, tables: make(map[string]*sourceencode.Table), platform: platform,
+		indexKinds: slices.Contains(description.GetEngines()[0].GetFeatures(), provider.IndexKindsFeature)}
 	// subjects names each value as a loss line names it.
 	subjects := make(map[string]string, len(request.GetValues()))
 	for _, value := range request.GetValues() {
@@ -140,6 +141,9 @@ type sourceEncoding struct {
 	// platform is whether the host reads a table's platform "ydb" block in
 	// HCL, which spells the table's TTL.
 	platform bool
+	// indexKinds is whether the host reads the provider's index kinds, the
+	// declarations of a table's vector, full-text and local indexes.
+	indexKinds bool
 }
 
 // add sorts one value of the request into the encoding: a facet joins its
@@ -163,7 +167,7 @@ func (e *sourceEncoding) add(request *protocol.EncodeSourceRequest, format proto
 	case value.GetPlacement() == protocol.SourceModelValue_FACET:
 		table, bound := e.tables[value.GetBindingId()]
 		if !bound {
-			table = &sourceencode.Table{Binding: bindingOf(request, value.GetBindingId())}
+			table = &sourceencode.Table{Binding: bindingOf(request, value.GetBindingId()), IndexKinds: e.indexKinds}
 			e.tables[value.GetBindingId()] = table
 			e.order = append(e.order, value.GetBindingId())
 		}

@@ -111,6 +111,7 @@ func decodeDocument(ctx context.Context, document *protocol.SourceDocument) (*pr
 type sourceKinds struct {
 	tables       []tablesource.Table
 	indexes      []tablesource.Index
+	natives      []tablesource.NativeIndexes
 	secrets      map[int][]*protocol.SourceModelValue
 	topics       map[int][]*protocol.SourceModelValue
 	feeds        []changefeedsource.Table
@@ -129,6 +130,9 @@ func decodeKinds(ctx context.Context, document *protocol.SourceDocument) (*sourc
 		return nil, sourceError(ctx, err)
 	}
 	if kinds.indexes, err = tablesource.DecodeIndexes(ctx, document); err != nil {
+		return nil, sourceError(ctx, err)
+	}
+	if kinds.natives, err = tablesource.DecodeNativeIndexes(ctx, document, kinds.tables); err != nil {
 		return nil, sourceError(ctx, err)
 	}
 	// Without the feature the host reads no index's settings, so the
@@ -181,7 +185,7 @@ func (k *sourceKinds) values(ctx context.Context, document *protocol.SourceDocum
 	case externalsource.Owns(fragment):
 		return k.externals[index], nil
 	default:
-		return fragmentValues(ctx, document, fragment, index, k.tables, k.indexes)
+		return fragmentValues(ctx, document, fragment, index, k)
 	}
 }
 
@@ -245,11 +249,17 @@ func changefeedValues(document *protocol.SourceDocument, fragment *protocol.Sour
 
 // fragmentValues returns the values one fragment declares. A table's
 // fragments declare one facet together, which its first fragment returns, and
-// so do an index's.
-func fragmentValues(ctx context.Context, document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int, tables []tablesource.Table,
-	indexes []tablesource.Index) ([]*protocol.SourceModelValue, error) {
+// so do an index's, and the vector and full-text indexes of a table.
+func fragmentValues(ctx context.Context, document *protocol.SourceDocument, fragment *protocol.SourceFragment, index int, kinds *sourceKinds) ([]*protocol.SourceModelValue, error) {
 	if !tablesource.Owns(fragment) {
 		return coordinationSource(ctx, document, fragment, index)
+	}
+	tables, indexes := kinds.tables, kinds.indexes
+	for _, declared := range kinds.natives {
+		if declared.Fragment == index {
+			trace := &protocol.SourceTrace{DocumentId: document.Id, FragmentId: fragment.Id, Root: protocol.SourceTrace_CONTENT}
+			return []*protocol.SourceModelValue{{Placement: protocol.SourceModelValue_FACET, Value: declared.Value, Source: trace}}, nil
+		}
 	}
 	for _, declared := range indexes {
 		if declared.Fragment == index {

@@ -47,7 +47,9 @@ func objectIntent(value proto.Message) (proto.Message, error) {
 		if enabled := ttl.GetEnabled(); enabled != nil {
 			enabled.ExpireAfterSeconds = nil
 		}
-		return &native.ColumnStorageIntent{HashColumns: slices.Clone(observed.HashColumns), Partitions: observed.Partitions, DataChannelCount: observed.DataChannelCount, LocalIndexes: cloneIndexes(observed.LocalIndexes), Ttl: ttl}, nil
+		// A read states every local index the table holds.
+		return &native.ColumnStorageIntent{HashColumns: slices.Clone(observed.HashColumns), Partitions: observed.Partitions, DataChannelCount: observed.DataChannelCount,
+			LocalIndexes: cloneIndexes(observed.LocalIndexes), Ttl: ttl, LocalIndexesStated: true}, nil
 	default:
 		return nil, fmt.Errorf("unsupported native YDB observation")
 	}

@@ -1050,8 +1050,14 @@ type ColumnStorageIntent struct {
 	DataChannelCount uint64                   `protobuf:"varint,3,opt,name=data_channel_count,json=dataChannelCount,proto3" json:"data_channel_count,omitempty"`
 	LocalIndexes     []*LocalIndexObservation `protobuf:"bytes,4,rep,name=local_indexes,json=localIndexes,proto3" json:"local_indexes,omitempty"`
 	Ttl              *ColumnTTLPolicy         `protobuf:"bytes,5,opt,name=ttl,proto3" json:"ttl,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// local_indexes_stated is true when the declaration states every local
+	// index of the table, so one the table holds and local_indexes leaves out
+	// is dropped: a source that declares local indexes (source.index-kinds)
+	// and a read do. A declaration without it states no local index when it
+	// lists none, and leaves the ones the table holds alone.
+	LocalIndexesStated bool `protobuf:"varint,6,opt,name=local_indexes_stated,json=localIndexesStated,proto3" json:"local_indexes_stated,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ColumnStorageIntent) Reset() {
@@ -1117,6 +1123,13 @@ func (x *ColumnStorageIntent) GetTtl() *ColumnTTLPolicy {
 		return x.Ttl
 	}
 	return nil
+}
+
+func (x *ColumnStorageIntent) GetLocalIndexesStated() bool {
+	if x != nil {
+		return x.LocalIndexesStated
+	}
+	return false
 }
 
 // IndexSettingsIntent is the automatic partitioning and the read replicas a
@@ -1300,7 +1313,7 @@ const file_internal_nativeprotocol_intents_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x0e\n" +
 	"\f_source_typeB\x13\n" +
 	"\x11_data_source_pathB\v\n" +
-	"\t_location\"\x87\x02\n" +
+	"\t_location\"\xb9\x02\n" +
 	"\x13ColumnStorageIntent\x12!\n" +
 	"\fhash_columns\x18\x01 \x03(\tR\vhashColumns\x12\x1e\n" +
 	"\n" +
@@ -1308,7 +1321,8 @@ const file_internal_nativeprotocol_intents_proto_rawDesc = "" +
 	"partitions\x12,\n" +
 	"\x12data_channel_count\x18\x03 \x01(\x04R\x10dataChannelCount\x12K\n" +
 	"\rlocal_indexes\x18\x04 \x03(\v2&.ptah.ydb.native.LocalIndexObservationR\flocalIndexes\x122\n" +
-	"\x03ttl\x18\x05 \x01(\v2 .ptah.ydb.native.ColumnTTLPolicyR\x03ttl\"\xc2\x01\n" +
+	"\x03ttl\x18\x05 \x01(\v2 .ptah.ydb.native.ColumnTTLPolicyR\x03ttl\x120\n" +
+	"\x14local_indexes_stated\x18\x06 \x01(\bR\x12localIndexesStated\"\xc2\x01\n" +
 	"\x13IndexSettingsIntent\x12T\n" +
 	"\x15partitioning_settings\x18\x01 \x01(\v2\x1f.Ydb.Table.PartitioningSettingsR\x14partitioningSettings\x12U\n" +
 	"\x16read_replicas_settings\x18\x02 \x01(\v2\x1f.Ydb.Table.ReadReplicasSettingsR\x14readReplicasSettingsB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
