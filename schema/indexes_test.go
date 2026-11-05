@@ -7,6 +7,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -56,6 +57,12 @@ func TestIndexObservationsRefuseIncompleteOrUnknownState(t *testing.T) {
 		{"unknown kind", `{"indexes":[{"description":{"name":"idx","indexColumns":["v"],"status":"STATUS_READY","localIndex":{}}}]}`},
 		{"missing kind", `{"indexes":[{"description":{"name":"idx","indexColumns":["v"],"status":"STATUS_READY"}}]}`},
 		{"path escape", `{"indexes":[{"description":{"name":"../idx","indexColumns":["v"],"status":"STATUS_READY","globalIndex":{}}}]}`},
+		{"a common index of a native kind", `{"commonIndexes":[{"name":"idx","indexColumns":["v"],"status":"STATUS_READY","globalVectorKmeansTreeIndex":{}}]}`},
+		{"a common index with no column", `{"commonIndexes":[{"name":"idx","status":"STATUS_READY","globalIndex":{}}]}`},
+		{"a common index with statistics", `{"commonIndexes":[{"name":"idx","indexColumns":["v"],"globalIndex":{},"sizeBytes":"7"}]}`},
+		{"a common index the native set holds too", `{"indexes":[{"description":{"name":"idx","indexColumns":["v"],"status":"STATUS_READY","globalIndex":{}},` +
+			`"tables":[{"name":"indexImplTable","description":{"columns":[{"name":"v","type":{"typeId":"UTF8"}}],"primaryKey":["v"]}}]}],` +
+			`"commonIndexes":[{"name":"idx","indexColumns":["v"],"globalIndex":{}}]}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -88,6 +95,39 @@ func TestIndexObservationsRefuseIncompleteOrUnknownState(t *testing.T) {
 			c.Assert(err, qt.IsNotNil)
 		})
 	}
+}
+
+// A read that leaves the indexes the common model describes out of the native
+// set describes each beside it, for the partitioning and read replicas the
+// common model has no place for. The capture keeps those settings, drops the
+// size, orders the descriptions by name, and reads no status, which the
+// common model owns.
+func TestIndexObservationsKeepTheSettingsOfCommonIndexes(t *testing.T) {
+	c := testcheck.New(t)
+	settings := &native.GlobalIndexSettings{PartitioningSettings: &Ydb_Table.PartitioningSettings{PartitioningByLoad: Ydb.FeatureFlag_ENABLED, MinPartitionsCount: 2}}
+	input := &native.IndexObservations{CommonIndexes: []*native.TableIndexDescription{
+		{Name: "z", IndexColumns: []string{"label"}, Status: native.TableIndexDescription_STATUS_BUILDING, SizeBytes: 300,
+			Type: &native.TableIndexDescription_GlobalAsyncIndex{GlobalAsyncIndex: &native.GlobalAsyncIndex{Settings: settings}}},
+		{Name: "a", IndexColumns: []string{"label"}, Type: &native.TableIndexDescription_GlobalUniqueIndex{GlobalUniqueIndex: &native.GlobalUniqueIndex{}}},
+	}}
+	captured, err := schema.CaptureIndexes(tableOwner(), input)
+	c.Assert(err, qt.IsNil)
+	var decoded native.IndexObservations
+	c.Assert(protojson.Unmarshal(captured.Payload, &decoded), qt.IsNil)
+	c.Assert(decoded.Indexes, qt.HasLen, 0)
+	c.Assert(decoded.CommonIndexes, qt.HasLen, 2)
+	c.Assert(decoded.CommonIndexes[0].Name, qt.Equals, "a")
+	c.Assert(decoded.CommonIndexes[1].SizeBytes, qt.Equals, uint64(0))
+	c.Assert(proto.Equal(decoded.CommonIndexes[1].GetGlobalAsyncIndex().GetSettings(), settings), qt.IsTrue)
+	c.Assert(input.CommonIndexes[0].SizeBytes, qt.Equals, uint64(300))
+	normalized, err := schema.Normalize(captured)
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(normalized, captured), qt.IsTrue)
+	// A declaration of the native index set states no common index, so the
+	// declaration a read converts to holds none of the descriptions.
+	declared, err := schema.ConvertNative(captured, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(declared.Payload), qt.Equals, `{}`)
 }
 
 // Field 9 is returned by YDB for the vector-prefix implementation sequence,

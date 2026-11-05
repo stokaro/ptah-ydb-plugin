@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -335,6 +336,103 @@ func TestRebuildPlanKeepsTheFamiliesTheTableHolds(t *testing.T) {
 	check.Assert(err, qt.IsNil)
 	check.Assert(rendered.Units[0].GetSql(), qt.Equals, "CREATE TABLE `app/__ptah_rebuild_records` (\n    `id` Uint64 NOT NULL,\n    `payload` Utf8 FAMILY `cold`,\n    `n` Int64,\n"+
 		"    PRIMARY KEY (`id`),\n    FAMILY `cold` (DATA = 'hdd', COMPRESSION = 'off'),\n    FAMILY `default` (COMPRESSION = 'lz4'),\n    FAMILY `extra` (COMPRESSION = 'lz4')\n);")
+}
+
+// heldPayloadIndex is the index set of a table holding a synchronous index on
+// payload under name, with the settings fields given.
+func heldPayloadIndex(name, settings string) string {
+	return `{"indexes":[{"description":{"name":"` + name + `","indexColumns":["payload"],"globalIndex":{"settings":{` + settings + `}},"status":"STATUS_READY"},` +
+		`"tables":[{"name":"indexImplTable","description":{"columns":[{"name":"payload","type":{"typeId":"UTF8"}},{"name":"id","type":{"typeId":"UINT64"}}],` +
+		`"primaryKey":["payload","id"]}}]}]}`
+}
+
+// payloadIndexSubject names index name of table.
+func payloadIndexSubject(table *protocol.ComparisonIdentity, name string) *protocol.ComparisonIdentity {
+	subject := proto.CloneOf(table)
+	subject.Kind, subject.Parent, subject.Name = "index", proto.CloneOf(table.Name), part(name)
+	return subject
+}
+
+// The native call that creates the new table of a rebuild takes no index
+// settings, and the declaration states none for an index it takes from the
+// common declaration. So each index whose held partitioning or read replicas
+// differ from a new index's keeps them through an index settings change on
+// the new table, before the copy fills it, naming every setting, as the
+// host's embedded engine names every setting of a rebuilt index. The old
+// index is the one under the same name, or under the name the host renames
+// it from.
+func TestRebuildPlanKeepsTheIndexSettingsTheTableHolds(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		declared string
+		held     string
+		renamed  bool
+		// statements are the units the plan writes between the creation
+		// and the copy.
+		statements []string
+	}{
+		{name: "an index held with its own partitioning", declared: "by_payload",
+			held: heldPayloadIndex("by_payload", `"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"2"}`),
+			statements: []string{"ALTER TABLE `app/__ptah_rebuild_records` ALTER INDEX `by_payload` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, " +
+				"AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2);"}},
+		{name: "an index that splits by size no more, with replicas and a maximum", declared: "by_payload",
+			held: heldPayloadIndex("by_payload", `"partitioningSettings":{"partitioningBySize":"DISABLED","partitioningByLoad":"DISABLED","minPartitionsCount":"1",`+
+				`"maxPartitionsCount":"9","partitionBy":["payload"]},"readReplicasSettings":{"anyAzReadReplicasCount":"1"}`),
+			statements: []string{"ALTER TABLE `app/__ptah_rebuild_records` ALTER INDEX `by_payload` SET (AUTO_PARTITIONING_BY_SIZE = DISABLED, " +
+				"AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1, AUTO_PARTITIONING_MAX_PARTITIONS_COUNT = 9, " +
+				`READ_REPLICAS_SETTINGS = "ANY_AZ:1");`}},
+		{name: "an index the common model describes, which the read describes beside the native set", declared: "by_payload",
+			held: `{"commonIndexes":[{"name":"by_payload","indexColumns":["payload"],"globalIndex":{"settings":{"partitioningSettings":{"partitioningBySize":"ENABLED",` +
+				`"partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"2"}}}}]}`,
+			statements: []string{"ALTER TABLE `app/__ptah_rebuild_records` ALTER INDEX `by_payload` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, " +
+				"AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = ENABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 2);"}},
+		{name: "an index the host renames", declared: "by_text", renamed: true,
+			held: heldPayloadIndex("by_payload", `"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"512","partitioningByLoad":"DISABLED","minPartitionsCount":"3"}`),
+			statements: []string{"ALTER TABLE `app/__ptah_rebuild_records` ALTER INDEX `by_text` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, " +
+				"AUTO_PARTITIONING_PARTITION_SIZE_MB = 512, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3);"}},
+		{name: "an index held with a new index's settings", declared: "by_payload", held: heldPayloadIndex("by_payload", heldIndexDefaults)},
+		{name: "an index the old table does not hold", declared: "by_text",
+			held: heldPayloadIndex("by_payload", `"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"ENABLED","minPartitionsCount":"2"}`)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := rebuildRequest(c, &protocol.PlanningPolicy{AllowTableRebuild: true, TableRebuildRequest: "--allow-table-rebuild"})
+			table := request.Tables[0]
+			table.Desired.Indexes = []*protocol.DeclaredIndex{{Name: test.declared, Fields: []string{"payload"}}}
+			table.Current.Features.Facets.Records = append(table.Current.Features.Facets.Records, observedFacet(c, schema.IndexProperties, "", test.held))
+			table.Current.Indexes = []*protocol.ObservedIndex{{Name: "by_payload", TableName: "records", Schema: "app", Columns: []string{"payload"}}}
+			if test.renamed {
+				rename := commonStep("rename-index", table.Subject, "",
+					&protocol.PlanningEffect{Subject: proto.CloneOf(table.Subject), Action: protocol.PlanningEffect_READ},
+					&protocol.PlanningEffect{Subject: payloadIndexSubject(table.Subject, "by_payload"), Action: protocol.PlanningEffect_DROP},
+					&protocol.PlanningEffect{Subject: payloadIndexSubject(table.Subject, test.declared), Action: protocol.PlanningEffect_CREATE})
+				rename.RenamedIndex = &protocol.CommonIndexRename{From: "by_payload", To: test.declared}
+				request.CommonSteps = append(request.CommonSteps, rename)
+				request.TargetFeatures = append(request.TargetFeatures, provider.IndexRenamesFeature)
+				request.Capabilities[tablecreate.IndexRenameCapability] = true
+			}
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Diagnostics, qt.HasLen, 0)
+			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, plan), qt.IsNil)
+			c.Assert(plan.Rewrites, qt.HasLen, 1)
+			c.Assert(plan.Rewrites[0].Replacement.Name, qt.Equals, "table-rebuild/000000/rename-new")
+			c.Assert(plan.Contributions[0].Dependencies, qt.HasLen, len(plan.Contributions[0].Steps)-1)
+
+			rendering := testplanning.RenderRequest(backend.Description(), plan, request.Capabilities)
+			rendering.Form = protocol.RenderRequest_TEXT
+			rendered, err := backend.New().Render(c.Context(), rendering)
+			c.Assert(err, qt.IsNil)
+			var statements []string
+			for _, unit := range rendered.Units {
+				statements = append(statements, unit.GetSql())
+			}
+			c.Assert(statements, qt.HasLen, 5+len(test.statements))
+			c.Assert(statements[0], qt.Matches, "(?s)CREATE TABLE `app/__ptah_rebuild_records` .*")
+			c.Assert(statements[1:1+len(test.statements)], qt.CmpEquals(cmpopts.EquateEmpty()), test.statements)
+			c.Assert(statements[1+len(test.statements)], qt.Matches, "INSERT INTO `app/__ptah_rebuild_records` .*")
+		})
+	}
 }
 
 // The new table of a rebuild puts a column where the declaration places it:
