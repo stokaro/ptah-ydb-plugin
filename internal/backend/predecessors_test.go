@@ -16,8 +16,9 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
-// builtinHeader matches the captured feature coverage header of an HCL file.
-var builtinHeader = regexp.MustCompile(`(?m)^// ptah:feature-coverage (\{.*\})$`)
+// builtinHeader matches the captured feature coverage header of an HCL file,
+// whose lines end in CRLF in a Windows checkout.
+var builtinHeader = regexp.MustCompile(`(?m)^// ptah:feature-coverage (\{.*\})\r?$`)
 
 // capturedModel is a model identity as a captured header names it.
 type capturedModel struct {
