@@ -6,10 +6,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -560,15 +563,14 @@ func withoutUniqueIndexOnExistingTables(c *qt.C, opened *connection.Connection) 
 // quotes the server's words there; the provider keeps YDB's issue text out of
 // the reason it gives (see package ydbfailure), so the refusal is the
 // provider's: on 26.2 the capability and the flag YDB refused for, and on 25.1
-// the status and issue code of an answer that does not show whether the
-// statement applied. The 26.2 test server starts with EnableAddUniqueIndex on,
+// that the release has no unique secondary index. The 26.2 test server starts with EnableAddUniqueIndex on,
 // under which it builds the index, so the test turns the flag off there while
 // it runs.
 func TestHostMigrationsUpGatesOnTheYDFamily_FailurePath(t *testing.T) {
 	refusals := map[string]string{
 		"26.2": `capability unique_index_on_existing_table is off on this YDB cluster, which runs with feature flag EnableAddUniqueIndex off: ` +
 			`YDB refused the statement \(BAD_REQUEST\)`,
-		"25.1": `the unit's outcome is unknown: YDB answered GENERIC_ERROR, issue 1060, line 1, column \d+, which does not show whether the unit applied`,
+		"25.1": `YDB refused the statement: the YDB release the cluster runs has no unique secondary index \(GENERIC_ERROR, issue 1060, line 1, column \d+\)`,
 	}
 	c := testcheck.New(t)
 	f := newMigrationsFixture(c)
@@ -588,4 +590,39 @@ func TestHostMigrationsUpGatesOnTheYDFamily_FailurePath(t *testing.T) {
 	c.Assert(ungatedErr, qt.IsNotNil)
 	c.Assert(ungated, qt.Matches, `(?s).*failed to apply migration 2: .*`+refusal+`.*`)
 	c.Assert(f.names(c), qt.Contains, "users")
+}
+
+// Ported from the host's TestYDBWriter_StatementsSucceedByStatus: YDB answers
+// CREATE TABLE IF NOT EXISTS on a table that exists, and ADD INDEX on a table
+// that holds rows, with issues and a success status, and the run reads both
+// as applied. Two scheme statements in one body run as two queries, so the
+// index sees the column the statement before it adds.
+func TestHostAppliesStatementsYDBAnswersWithIssues_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	f := newMigrationsFixture(c)
+	create := "CREATE TABLE IF NOT EXISTS `" + f.table("statused") + "` (`id` Int64 NOT NULL, PRIMARY KEY (`id`));\n"
+	migrations := writeFiles(c, c.TempDir(), map[string]string{
+		"0000000001_statused.up.sql":   create + "UPSERT INTO `" + f.table("statused") + "` (`id`) VALUES (1l), (2l);\n",
+		"0000000001_statused.down.sql": "DROP TABLE `" + f.table("statused") + "`;\n",
+		"0000000002_index.up.sql": create + "ALTER TABLE `" + f.table("statused") + "` ADD COLUMN `v` Utf8;\n" +
+			"ALTER TABLE `" + f.table("statused") + "` ADD INDEX `by_v` GLOBAL SYNC ON (`v`);\n",
+		"0000000002_index.down.sql": "ALTER TABLE `" + f.table("statused") + "` DROP INDEX `by_v`;\nALTER TABLE `" + f.table("statused") + "` DROP COLUMN `v`;\n",
+	})
+
+	up, err := hostCommand(c, append([]string{"migrations", "up"}, f.target(migrations)...)...)
+
+	absolute := path.Join(f.database, f.table("statused"))
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", up))
+	c.Assert(f.progress(c, protocol.HistoryScope_NATIVE), qt.DeepEquals, []progress{{"1", applied, 2, 2}, {"2", applied, 3, 3}})
+	c.Assert(heldColumnTypes(c, f.opened, absolute), qt.DeepEquals, map[string]string{"id": "Int64", "v": "Optional<Utf8>"})
+	c.Assert(heldIndexNames(c, f.opened, absolute), qt.DeepEquals, []string{"by_v"})
+	c.Assert(f.count(c, "SELECT COUNT(*) FROM `"+f.table("statused")+"`"), qt.Equals, int64(2))
+}
+
+// heldIndexNames is the names of the indexes the table at absolute holds, in
+// order, read through the table service.
+func heldIndexNames(c *qt.C, opened *connection.Connection, absolute string) []string {
+	c.Helper()
+	indexes, _ := describedItems(c, opened, absolute)
+	return slices.Sorted(maps.Keys(indexes))
 }

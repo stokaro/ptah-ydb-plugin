@@ -115,10 +115,8 @@ func TestHostGrantsOnAnAsyncReplication_HappyPath(t *testing.T) {
 		}
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP USER IF EXISTS `"+user+"`"), qt.IsNil)
 	})
-	// The user's password is set once, at its creation, as the host's
-	// fixture declares it.
 	base := "tables:\n  src:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n      note: {type: Utf8}\n" +
-		"roles:\n  " + user + ":\n    login: true\n    password: \"Secret1!\"\n"
+		"roles:\n  " + user + ":\n    login: true\n"
 	declared := base + "async_replications:\n  mirror:\n    schema: " + directory + "\n    connection_string: " + strconv.Quote(selfConnection(c, opened)) +
 		"\n    items:\n      - source: " + path.Join(database, directory, "src") + "\n        target: " + path.Join(directory, "rep") + "\n" +
 		"grants:\n  reader:\n    role: " + user + "\n    privileges: [ydb.generic.read]\n    on_async_replication: " + directory + ".mirror\n"
@@ -171,7 +169,7 @@ func TestHostGrantsOnATransfer_HappyPath(t *testing.T) {
 	base := "tables:\n  orders:\n    schema: " + directory + "\n    columns:\n      id: {type: Int64, primary: true, not_null: true}\n" +
 		"    changefeeds:\n      feed:\n        mode: NEW_IMAGE\n        format: JSON\n        consumers:\n          reader: {}\n" +
 		"  order_log:\n    schema: " + directory + "\n    columns:\n      offset: {type: Uint64, primary: true, not_null: true}\n      message: {type: Utf8}\n" +
-		"roles:\n  " + user + ":\n    login: true\n    password: \"Secret1!\"\n"
+		"roles:\n  " + user + ":\n    login: true\n"
 	declared := func(prefix string) string {
 		return base + "transfers:\n  ingest:\n    schema: " + directory + "\n    source: " + path.Join(directory, "orders/feed") + "\n    target: " + path.Join(directory, "order_log") +
 			"\n    consumer: reader\n    flush_interval: PT1S\n    using: " + strconv.Quote(offsetLambda(prefix)) + "\n" +
