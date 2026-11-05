@@ -31,7 +31,7 @@ func TestCoordinationComparisonLifecycle(t *testing.T) {
 		{name: "defaults", desired: &schema.CoordinationIntent{}, observed: coordinationObserved()},
 		{name: "source provenance", desired: &schema.CoordinationIntent{StructName: "Authored"}, observed: coordinationObserved()},
 		{name: "explicit defaults", desired: &schema.CoordinationIntent{ReadConsistencyMode: new("relaxed"), AttachConsistencyMode: new("strict"), SelfCheckPeriodMillis: new(uint32(1000))}, observed: coordinationObserved()},
-		{name: "create", desired: &schema.CoordinationIntent{}, changes: 1, impact: protocol.ChangeSemantics_ADDITIVE, access: protocol.ChangeSemantics_ACCESS_UNKNOWN},
+		{name: "create", desired: &schema.CoordinationIntent{}, changes: 1, impact: protocol.ChangeSemantics_ADDITIVE, access: protocol.ChangeSemantics_UNCHANGED},
 		{name: "drop", observed: coordinationObserved(), changes: 1, impact: protocol.ChangeSemantics_DESTRUCTIVE, access: protocol.ChangeSemantics_NARROWS, removal: true},
 		{name: "alter", desired: &schema.CoordinationIntent{ReadConsistencyMode: new("strict")}, observed: coordinationObserved(), changes: 1, impact: protocol.ChangeSemantics_BEHAVIORAL, access: protocol.ChangeSemantics_UNCHANGED},
 		{name: "reset to default", desired: &schema.CoordinationIntent{}, observed: &Ydb_Coordination.DescribeNodeResult{Config: &Ydb_Coordination.Config{ReadConsistencyMode: Ydb_Coordination.ConsistencyMode_CONSISTENCY_MODE_STRICT}, Self: &Ydb_Scheme.Entry{Owner: "original-owner"}}, changes: 1, impact: protocol.ChangeSemantics_BEHAVIORAL, access: protocol.ChangeSemantics_UNCHANGED},

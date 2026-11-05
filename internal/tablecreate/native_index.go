@@ -413,7 +413,7 @@ func NormalizeNativeIndex(input *protocol.ValueInput) (*protocol.NormalizedValue
 		CanonicalFormat: definition.CanonicalFormat, CanonicalProjection: bytes.Clone(payload),
 		OperationSemantics: &protocol.OperationSemantics{Impact: protocol.ChangeSemantics_ADDITIVE,
 			Reason: "Adds a " + indexFamily(index.Index) + " index; YDB builds it over the rows the table holds",
-			Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Alteration inherits server access policy"}}, nil
+			Access: protocol.ChangeSemantics_UNCHANGED, AccessReason: alteredAccess}}, nil
 }
 
 // DecodeNativeIndex returns independent native operands after validating the
