@@ -151,3 +151,22 @@ func TestCreationProjectionKeepsTheOwnerOfADeclaredFacet(t *testing.T) {
 	c.Assert(proto.Equal(projected.Value.Owner, declared.Value.Owner), qt.IsTrue, qt.Commentf("%v", projected.Value.Owner))
 	c.Assert(proto.Equal(projected.NormalizedOwner, declared.NormalizedOwner), qt.IsTrue, qt.Commentf("%v", projected.NormalizedOwner))
 }
+
+// A UNIQUE constraint and a column's UNIQUE are a global unique index YDB
+// keeps beside the table, so a projection of the source the operator wrote
+// predicts the table as it predicts one without them.
+func TestCreationProjectionReadsPastUniqueness(t *testing.T) {
+	c := testcheck.New(t)
+	plain := projectionRequest(c)
+	want, err := backend.New().ProjectTableCreations(c.Context(), plain)
+	c.Assert(err, qt.IsNil)
+	request := projectionRequest(c)
+	table := request.Tables[0].Declaration
+	table.Columns[0].Unique = true
+	table.Constraints = []*protocol.DeclaredConstraint{{Name: "uq_pair", Type: "UNIQUE", Columns: []string{"first", "second"}}}
+	got, err := backend.New().ProjectTableCreations(c.Context(), request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(got, want), qt.IsTrue)
+	c.Assert(table.Columns[0].Unique, qt.IsTrue)
+	c.Assert(table.Constraints, qt.HasLen, 1)
+}

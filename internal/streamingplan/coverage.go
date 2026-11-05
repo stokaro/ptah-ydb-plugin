@@ -116,7 +116,8 @@ func sourcesComplete(request *protocol.PlanFeaturesRequest, sources []*protocol.
 
 // outsideReaders refuses a write of an input that a running streaming query
 // outside the command's scope reads. The plan cannot stop and restart a query
-// the command does not select, so the query is named instead.
+// the command does not select, so the query is named instead, with its
+// directory, which the scope has to include.
 func outsideReaders(request *protocol.PlanFeaturesRequest, builder *lifecycleBuilder) error {
 	for _, record := range request.GetContextInventory().GetRecords() {
 		if record.GetKind() != schema.StreamingQueryProperties {
@@ -135,7 +136,7 @@ func outsideReaders(request *protocol.PlanFeaturesRequest, builder *lifecycleBui
 		}
 		if touched {
 			return fmt.Errorf("streaming query %q outside the command's scope reads a changed input; include its directory in the scope so the plan can stop and restart it",
-				record.GetSubject().GetName().GetSource())
+				streaming.Display(record.GetSubject().GetSchema().GetSource(), record.GetSubject().GetName().GetSource()))
 		}
 	}
 	return nil
