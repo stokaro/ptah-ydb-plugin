@@ -3249,6 +3249,14 @@ with the answers of the host's embedded YDB engine: its row typing
 seeds (`migration/seeder` and the YDB seed service). The host keeps which rows
 are declared, the row diff, the ordering and the seed policy.
 
+The engine declares the host's YDB query dialect for the host's query
+builder, and a session reports the capabilities the builder reads, at the
+host's line presets: `returning_clause` from 25.3, since 25.1 and 25.2 fail
+`UPDATE ... RETURNING` on a table with a unique index (`wrong returning expr
+type`), and `common_table_expressions`, `correlated_subqueries`,
+`non_equi_joins` and `offset_without_limit` on no line. The builder refuses a
+clause whose key a session leaves out.
+
 YQL types every literal and converts few of them, so every value is compared
 and written in its column's YDB type: the live table's type where the column
 exists, and otherwise the type the declared type lands on for the request's
