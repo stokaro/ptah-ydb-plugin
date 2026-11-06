@@ -89,6 +89,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 	if len(result.Diagnostics) != 0 {
 		return &protocol.PlannedFeatures{Complete: true, Diagnostics: result.Diagnostics}, nil
 	}
+	if err := builder.followTheCommonSteps(); err != nil {
+		return nil, err
+	}
 	result.Contributions = nil
 	if len(builder.contribution.Steps) != 0 {
 		result.Contributions = []*protocol.PlanningContribution{builder.contribution}

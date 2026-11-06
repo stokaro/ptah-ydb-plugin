@@ -2379,6 +2379,14 @@ A changed body requires explicit state-reset permission because it discards
 checkpoints. Stopping or changing the resource pool keeps topic offsets. The
 planner stops a running query before changing its inputs and restarts it after
 its new inputs exist; a change that only stops the query emits one statement.
+A creation, a change or a restart runs after the host's common steps, and a
+grant on the query after it, as the YDB engine built into the host at
+74de0b65b placed them: measured on 26.2.1.14, a query between two topics beside
+a group, a table and grants on the table, a third topic and the query plans
+the topics, the group, the table, the grants on the table and the topic, the
+query and then the grant on it. A principal change after a grant on the query
+waits for the grant, so the query runs ahead of that change. A stop and a drop
+run early.
 This assessment also runs when the query declaration is unchanged. Captured
 query values require `planning.object-context` (contract 25.7), and each query
 receives an assessment receipt. A changed input restarts a running query only

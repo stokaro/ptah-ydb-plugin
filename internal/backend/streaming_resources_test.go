@@ -1,6 +1,8 @@
 package backend_test
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -171,7 +173,10 @@ func TestStreamingResourcePoolSurvivesNormalization(t *testing.T) {
 }
 
 // The streaming observation contains query settings only, so a principal
-// mutation cannot invalidate its captured native precondition.
+// mutation cannot invalidate its captured native precondition: no edge orders
+// the stop against a principal change. The restart runs after every common
+// step, as the YDB engine built into the host at 74de0b65b ran a query it
+// started, so it follows the change.
 func TestStreamingSettingsDoNotFencePrincipalChanges(t *testing.T) {
 	c := testcheck.New(t)
 	request := streamingPlanRequest(c, &streaming.Spec{Text: "SELECT 1;"}, &streaming.Spec{Text: "SELECT 2;"}, true)
@@ -185,9 +190,8 @@ func TestStreamingSettingsDoNotFencePrincipalChanges(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Diagnostics, qt.HasLen, 0)
 	c.Assert(result.Contributions[0].Steps, qt.HasLen, 2)
-	for _, edge := range result.Contributions[0].Dependencies {
-		c.Assert(proto.Equal(edge.Before, principal.Id) || proto.Equal(edge.After, principal.Id), qt.IsFalse)
-	}
+	touching := slices.DeleteFunc(stepEdges(result), func(edge string) bool { return !strings.Contains(edge, principal.Id.Name) })
+	c.Assert(touching, qt.DeepEquals, []string{"principal -> " + result.Contributions[0].Steps[1].Id.Name})
 }
 
 func TestStreamingResourcesResolveNamedAndExternalInputs(t *testing.T) {
