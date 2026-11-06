@@ -54,6 +54,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	common.ContextInventory = slices.Contains(negotiatedFeatures(ctx), provider.PlanningContextInventoryFeature)
 	common.Indexes = slices.Contains(negotiatedFeatures(ctx), provider.ObservedIndexesFeature)
 	common.IndexFacets = common.Indexes && slices.Contains(negotiatedFeatures(ctx), provider.ObservedIndexFacetsFeature)
+	common.IndexMethods = slices.Contains(negotiatedFeatures(ctx), provider.IndexMethodsFeature)
 	common.UnreadTables = slices.Contains(negotiatedFeatures(ctx), provider.UnreadTablesFeature)
 	result, err := inspect.ReadObjects(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), common, session.streaming(), session.leftOut()...)
 	if err != nil {
