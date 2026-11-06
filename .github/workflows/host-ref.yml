@@ -1,0 +1,36 @@
+name: Host ref
+# .github/host-ref points a pull request's live legs at a host branch that has
+# not merged yet (see scripts/live-lines.sh). On master the file would point
+# every later run at that branch, which is stale or deleted once the host
+# change merges, so the master legs stop testing host master. A draft may
+# carry the file; a pull request that is ready for review, and master itself,
+# may not.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+permissions:
+  contents: read
+jobs:
+  host-ref:
+    name: host ref
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Refuse a host ref outside a draft
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          set -euo pipefail
+          if [ ! -f .github/host-ref ]; then
+            exit 0
+          fi
+          if [ "$EVENT" = pull_request ] && [ "$DRAFT" = true ]; then
+            echo "::notice file=.github/host-ref::This draft runs its live legs against the host ref it names. Remove the file before the pull request leaves draft."
+            exit 0
+          fi
+          echo "::error file=.github/host-ref::.github/host-ref must not reach master. Remove it once the host change it names has merged."
+          exit 1
