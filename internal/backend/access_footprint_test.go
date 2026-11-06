@@ -35,7 +35,8 @@ func tableAccessStep(resource, name string) *protocol.CommonPlanningStep {
 // A grant on a table or a view, and a comment on a table, change a resource
 // of the object's own and occupy no path, so a native object planned in the
 // same run is not refused for the step's footprint and needs no order
-// against it. The host's engine plans both in one run.
+// against it: the node follows only the last common step. The host's engine
+// plans both in one run.
 func TestTableAccessBesideANativeObject_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, action, resource string
@@ -49,7 +50,7 @@ func TestTableAccessBesideANativeObject_HappyPath(t *testing.T) {
 			c := testcheck.New(t)
 			request := nativePlan(c, test.action)
 			request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
-			request.CommonSteps = []*protocol.CommonPlanningStep{tableAccessStep(test.resource, "active")}
+			request.CommonSteps = []*protocol.CommonPlanningStep{tableAccessStep(test.resource, "active"), lastCommonStep()}
 
 			result, err := backend.New().PlanFeatures(c.Context(), request)
 
@@ -57,7 +58,7 @@ func TestTableAccessBesideANativeObject_HappyPath(t *testing.T) {
 			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
 			c.Assert(result.Diagnostics, qt.HasLen, 0)
 			c.Assert(result.Contributions, qt.HasLen, 1)
-			c.Assert(result.Contributions[0].Dependencies, qt.HasLen, 0)
+			c.Assert(stepEdges(result), qt.DeepEquals, []string{placedLast})
 		})
 	}
 }

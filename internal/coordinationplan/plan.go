@@ -30,5 +30,8 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 			before, after, err := schema.CoordinationOperands(change)
 			return before != nil, after != nil, err
 		},
+		// The YDB engine built into the host created, changed and dropped a
+		// node once its common statements could go no further without it.
+		Late: true,
 	})
 }
