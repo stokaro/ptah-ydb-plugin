@@ -1,0 +1,6 @@
+# The live tests of this change rehearse in a dev realm of a database that
+# holds the provider's objects: the resource pool default with
+# EnableResourcePools on, and a topic and a coordination node. The host branch
+# below moves the target's values into the realm before its baseline compares
+# them. Drop this file once that host change is in a release.
+fix/4204-g158-pools-rehearsal
