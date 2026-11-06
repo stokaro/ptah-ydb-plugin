@@ -2635,19 +2635,27 @@ written as SQL, such as `schema inspect --format sql`, writes it as the `ALTER
 RESOURCE POOL default SET` of the settings it names, and writes nothing for it
 when it names none, as the host's engine did.
 
-The planner writes every workload change of a plan as one step, outside a
-transaction, ordered after the steps that create or change a role and before
-those that drop one, since a classifier names one. The step runs the host's
-statements in the host's order: classifier removals, pool removals, pool
-creations and changes, classifier changes, then classifier creations. YDB keeps
-one classifier per rank and checks it at every statement, so a classifier that
+The planner writes each workload statement of a plan as a step of its own,
+outside a transaction, ordered after the steps that create or change a role and
+before those that drop one, since a classifier names one. The steps are chained
+in the host's order: classifier removals, pool removals, pool creations and
+changes, classifier changes, then classifier creations. YDB keeps one
+classifier per rank and checks it at every statement, so a classifier that
 moves to a rank another changed classifier leaves is dropped and created again
-around the move. In a migration file the step is the same statements in one
-unit, which one query takes.
+around the move, in two steps. Each step runs after the common steps that need
+neither it nor a later workload step, which is where the YDB engine built into
+the host at 74de0b65b ran its workload statements: a pool right before the
+first grant on it, and a classifier after every common step. Measured on
+25.1.4.7 and 26.2.1.14 with a group, a table, a topic, a pool, its classifier
+and grants on the table, the topic and the pool, `schema apply` and
+`migrations generate` create the pool after the table, then the grants, then
+the classifier, and the down file drops the topic, the table, the classifier,
+the pool and the group. In a migration file each step is one statement.
 
-Execution reads `.sys/resource_pools` and `.sys/resource_pool_classifiers`
-before the first statement and refuses objects that changed since the plan read
-them; it runs each statement once and reads both views back. The workload
+Execution of a step reads `.sys/resource_pools` and
+`.sys/resource_pool_classifiers` before its statement and refuses an object
+that changed since the plan read it; it runs the statement once and reads both
+views back. The workload
 manager reads its classifiers from a cache, so for a while after a classifier
 and its pool are dropped it can still route a query to the pool, and YDB
 refuses that query with `Failed to resolve pool id` before it runs it. A read of
@@ -2684,7 +2692,8 @@ another writer changed the pool, and removes them, reading the views back after
 each step. `TestHostAppliesResourcePools_HappyPath` drives `ptah schema apply`
 over the fixture directory and the root from a YAML, a Go and a YQL source: it
 creates them, finds nothing to change, changes a pool and swaps two ranks,
-finds nothing to change again, and keeps them when the source leaves them out.
+finds nothing to change again, and keeps them when the source leaves them out. `TestHostCreatesAClassifierAfterTheGrants_HappyPath` pins the order of
+`schema apply --dry-run` and of the up and down files of `migrations generate`.
 
 ## Changefeeds
 

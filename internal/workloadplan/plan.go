@@ -1,11 +1,12 @@
 // Package workloadplan lowers captured resource pool and classifier changes
-// into the host's shared graph: one step that carries every workload change
-// of the plan, so that a classifier trading ranks with another runs as the
-// drop, the moves and the creation YDB needs, in that order.
+// into the host's shared graph: one step per statement, chained in the order
+// YDB needs, so that a classifier trading ranks with another runs as the
+// drop, the moves and the creation, in that order. Each step runs where the
+// YDB engine built into the host ran its workload statements; see
+// [objectplan.FollowLateInOrder].
 package workloadplan
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -23,8 +24,9 @@ import (
 // ServiceID names the workload planner.
 const ServiceID = "ydb-workload"
 
-// StepName is the name of the one step a plan's workload changes run in.
-const StepName = "workload/000000"
+// StepPrefix starts the name of each workload step, which ends in the step's
+// position among the plan's workload statements, such as workload/000001.
+const StepPrefix = "workload"
 
 // strategy is how a receipt says a workload change is carried out.
 const strategy = "apply captured workload settings after releasing occupied classifier ranks"
@@ -34,17 +36,20 @@ func ChangeKinds() []string {
 	return []string{schema.ResourcePoolChange, schema.ResourcePoolClassifierChange}
 }
 
+// change is one planning change: its position in the request, and the name
+// of the pool or classifier it changes.
 type change struct {
 	index      int
 	input      *protocol.PlanningChange
 	classifier bool
-	action     protocol.PlanningEffect_Action
+	name       string
 }
 
-// Plan contributes the workload step, its effects and the order against the
-// roles a classifier may name, and a receipt per change. A change YDB cannot
-// make, or a target without resource pools, is refused with a diagnostic and
-// plans nothing.
+// Plan contributes a step per workload statement, chained in the order the
+// statements run, with the effects and the order against the roles a
+// classifier may name and the access on a pool, and a receipt per change
+// naming the steps that carry it out. A change YDB cannot make, or a target
+// without resource pools, is refused with a diagnostic and plans nothing.
 func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol.PlannedFeatures, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -73,51 +78,113 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 		}
 		planned = append(planned, item)
 	}
-	slices.SortFunc(changes.Pools, func(a, b workload.PoolChange) int { return cmp.Compare(a.Name, b.Name) })
-	slices.SortFunc(changes.Classifiers, func(a, b workload.ClassifierChange) int { return cmp.Compare(a.Name, b.Name) })
-	if _, err := workload.Statements(changes.Pools, changes.Classifiers); err != nil {
+	operations, err := workload.Operations(changes.Pools, changes.Classifiers)
+	if err != nil {
 		return refusal(request, refusedIndex(planned, err), err.Error()), nil
 	}
-	operation, err := schema.CaptureWorkloadOperation(StepName, "", changes)
+	result := &protocol.PlannedFeatures{Complete: true, Changes: make([]*protocol.PlanningReceipt, len(request.Changes))}
+	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
+	for i, operation := range operations {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("%s/%06d", StepPrefix, i)}
+		if refused, err := planStep(request, planned, operation, id, result, contribution); refused != nil || err != nil {
+			return refused, err
+		}
+		if i > 0 {
+			contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(contribution.Steps[i-1].Id), After: proto.CloneOf(id)})
+		}
+	}
+	for _, receipt := range result.Changes {
+		if receipt == nil {
+			return nil, errors.New("workload planning lost a change receipt")
+		}
+	}
+	objectplan.FollowLateInOrder(request, contribution, result.Rewrites)
+	result.Contributions = []*protocol.PlanningContribution{contribution}
+	return result, ctx.Err()
+}
+
+// planStep adds the step id that runs operation to contribution, with the
+// order against the roles and the access the operation's object needs, and
+// names the step in the receipt of the change the operation carries out. A
+// change whose access cannot be ordered returns a refusal.
+func planStep(request *protocol.PlanFeaturesRequest, planned []change, operation workload.Operation, id *protocol.StepIdentity,
+	result *protocol.PlannedFeatures, contribution *protocol.PlanningContribution,
+) (*protocol.PlannedFeatures, error) {
+	item, alone, err := operationChange(planned, operation)
 	if err != nil {
 		return nil, err
 	}
-	id := &protocol.StepIdentity{Owner: schema.ProviderID, Name: StepName}
-	facts := operation.OperationSemantics
-	metadata := &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason}
-	result := &protocol.PlannedFeatures{Complete: true, Changes: make([]*protocol.PlanningReceipt, len(request.Changes))}
-	var accessDependencies []*protocol.PlanningDependency
-	var accessSources []*protocol.StepIdentity
+	value, err := schema.CaptureWorkloadOperation(id.Name, "", alone)
+	if err != nil {
+		return nil, err
+	}
+	action := operationAction(operation)
+	noun := "resource pool"
+	if item.classifier {
+		noun = "resource pool classifier"
+	}
+	access, err := objectplan.OrderAccess(request, objectplan.Family{Noun: noun}, item.input.Subject, action, id)
+	if err != nil {
+		return refusal(request, item.index, err.Error()), nil
+	}
+	if len(access.Dependencies)+len(access.Sources) != 0 && !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
+		return refusal(request, item.index, "Native access ordering requires planning.lifecycle"), nil
+	}
+	facts := value.OperationSemantics
+	effects := append([]*protocol.PlanningEffect{{Subject: proto.CloneOf(item.input.Subject), Action: action}}, access.Effects...)
+	// The steps share the lifecycle window with the host's common steps, so
+	// that each can run after the common steps that need none of them.
+	contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{Id: id,
+		Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: value, Phase: protocol.PlanningOperation_LIFECYCLE},
+		Metadata:  &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects}})
+	contribution.Dependencies = append(contribution.Dependencies, principalDependencies(id, request.CommonSteps)...)
+	contribution.Dependencies = append(contribution.Dependencies, access.Dependencies...)
+	if len(access.Sources) != 0 {
+		result.Rewrites = append(result.Rewrites, &protocol.PlanningRewrite{Sources: access.Sources, Replacement: proto.CloneOf(id)})
+	}
+	receipt := result.Changes[item.index]
+	if receipt == nil {
+		receipt = &protocol.PlanningReceipt{Subject: proto.CloneOf(item.input.Subject), Kind: item.input.Value.GetValue().GetKind(), Strategy: strategy}
+		result.Changes[item.index] = receipt
+	}
+	receipt.Steps = append(receipt.Steps, proto.CloneOf(id))
+	return nil, nil
+}
+
+// operationChange returns the planned change whose object operation changes
+// and the workload changes that hold operation's change alone.
+func operationChange(planned []change, operation workload.Operation) (change, schema.WorkloadChanges, error) {
+	var alone schema.WorkloadChanges
+	name := ""
+	if operation.Pool != nil {
+		alone.Pools, name = []workload.PoolChange{*operation.Pool}, operation.Pool.Name
+	} else {
+		alone.Classifiers, name = []workload.ClassifierChange{*operation.Classifier}, operation.Classifier.Name
+	}
 	for _, item := range planned {
-		noun := "resource pool"
-		if item.classifier {
-			noun = "resource pool classifier"
+		if item.classifier == (operation.Classifier != nil) && item.name == name {
+			return item, alone, nil
 		}
-		access, err := objectplan.OrderAccess(request, objectplan.Family{Noun: noun}, item.input.Subject, item.action, id)
-		if err != nil {
-			return refusal(request, item.index, err.Error()), nil
-		}
-		if len(access.Dependencies)+len(access.Sources) != 0 && !slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
-			return refusal(request, item.index, "Native access ordering requires planning.lifecycle"), nil
-		}
-		accessDependencies = append(accessDependencies, access.Dependencies...)
-		accessSources = append(accessSources, access.Sources...)
-		metadata.Effects = append(metadata.Effects, access.Effects...)
-		metadata.Effects = append(metadata.Effects, &protocol.PlanningEffect{Subject: proto.CloneOf(item.input.Subject), Action: item.action})
-		result.Changes[item.index] = &protocol.PlanningReceipt{Subject: proto.CloneOf(item.input.Subject), Kind: item.input.Value.GetValue().GetKind(),
-			Strategy: strategy, Steps: []*protocol.StepIdentity{proto.CloneOf(id)}}
 	}
-	slices.SortFunc(metadata.Effects, func(a, b *protocol.PlanningEffect) int { return provider.CompareIdentities(a.Subject, b.Subject) })
-	step := &protocol.PlanningStep{Id: id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: operation}, Metadata: metadata}
-	if len(accessDependencies)+len(accessSources) != 0 {
-		step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
+	return change{}, alone, fmt.Errorf("workload operation names no planned change")
+}
+
+// operationAction is what operation does to its object.
+func operationAction(operation workload.Operation) protocol.PlanningEffect_Action {
+	before, after := operation.Pool != nil && operation.Pool.Before != nil, operation.Pool != nil && operation.Pool.After != nil
+	if operation.Classifier != nil {
+		before, after = operation.Classifier.Before != nil, operation.Classifier.After != nil
 	}
-	if len(accessSources) != 0 {
-		result.Rewrites = []*protocol.PlanningRewrite{{Sources: accessSources, Replacement: proto.CloneOf(id)}}
+	switch {
+	case !before:
+		return protocol.PlanningEffect_CREATE
+	case !after:
+		return protocol.PlanningEffect_DROP
 	}
-	dependencies := append(principalDependencies(id, request.CommonSteps), accessDependencies...)
-	result.Contributions = []*protocol.PlanningContribution{{Owner: schema.ProviderID, Steps: []*protocol.PlanningStep{step}, Dependencies: dependencies}}
-	return result, ctx.Err()
+	return protocol.PlanningEffect_ALTER
 }
 
 // validateAssignment refuses a request addressed to another planner or naming
@@ -159,8 +226,7 @@ func capture(request *protocol.PlanFeaturesRequest, index int, input *protocol.P
 	if request.DatabasePath != "" && owner.Database != "" && owner.Database != request.DatabasePath {
 		return change{}, fmt.Errorf("workload change targets another database")
 	}
-	item := change{index: index, input: input, classifier: classifier, action: protocol.PlanningEffect_ALTER}
-	var before, after bool
+	item := change{index: index, input: input, classifier: classifier}
 	if classifier {
 		value, err := schema.ClassifierChangeOf(captured.Value)
 		if err != nil {
@@ -170,7 +236,7 @@ func capture(request *protocol.PlanFeaturesRequest, index int, input *protocol.P
 			return change{}, fmt.Errorf("duplicate workload change")
 		}
 		changes.Classifiers = append(changes.Classifiers, value)
-		before, after = value.Before != nil, value.After != nil
+		item.name = value.Name
 	} else {
 		value, err := schema.PoolChangeOf(captured.Value)
 		if err != nil {
@@ -180,13 +246,7 @@ func capture(request *protocol.PlanFeaturesRequest, index int, input *protocol.P
 			return change{}, fmt.Errorf("duplicate workload change")
 		}
 		changes.Pools = append(changes.Pools, value)
-		before, after = value.Before != nil, value.After != nil
-	}
-	switch {
-	case !before:
-		item.action = protocol.PlanningEffect_CREATE
-	case !after:
-		item.action = protocol.PlanningEffect_DROP
+		item.name = value.Name
 	}
 	return item, nil
 }

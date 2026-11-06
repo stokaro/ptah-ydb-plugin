@@ -196,8 +196,9 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 
 	created := map[string]workload.PoolSpec{poolName: {ConcurrentQueryLimit: new(int32(2)), QueueSize: new(int32(4))}}
 	routes := map[string]workload.ClassifierSpec{first: {ResourcePool: poolName, MemberName: member, Rank: low}, second: {ResourcePool: "default", MemberName: "etl", Rank: high}}
+	// A unit per statement: the pool and each classifier.
 	units := plan(protocol.RenderRequest_ANY, created, routes)
-	c.Assert(units, qt.HasLen, 1)
+	c.Assert(units, qt.HasLen, 3)
 	execute(protocol.Execution_APPLIED, units...)
 	heldPools, heldClassifiers := held()
 	c.Assert(heldPools, qt.DeepEquals, map[string]heldPool{poolName: {ConcurrentQueryLimit: 2, QueueSize: 4, ResourceWeight: -1}})
@@ -205,12 +206,15 @@ func TestWorkloadLifecycleSubprocess(t *testing.T) {
 	c.Assert(plan(protocol.RenderRequest_ANY, created, routes), qt.HasLen, 0)
 
 	// Two classifiers trade ranks and the pool loses its queue, written as
-	// the text a migration file holds and run as one query.
+	// the text a migration file holds and run in one execution: the pool's
+	// change, and each classifier's drop and creation.
 	changed := map[string]workload.PoolSpec{poolName: {ConcurrentQueryLimit: new(int32(5))}}
 	swapped := map[string]workload.ClassifierSpec{first: {ResourcePool: poolName, MemberName: member, Rank: high}, second: {ResourcePool: poolName, MemberName: "etl", Rank: low}}
 	units = plan(protocol.RenderRequest_TEXT, changed, swapped)
-	c.Assert(units, qt.HasLen, 1)
-	c.Assert(units[0].GetSql(), qt.Not(qt.Equals), "")
+	c.Assert(units, qt.HasLen, 5)
+	for _, unit := range units {
+		c.Assert(unit.GetSql(), qt.Not(qt.Equals), "")
+	}
 	execute(protocol.Execution_APPLIED, units...)
 	heldPools, heldClassifiers = held()
 	c.Assert(heldPools, qt.DeepEquals, map[string]heldPool{poolName: {ConcurrentQueryLimit: 5, QueueSize: -1, ResourceWeight: -1}})

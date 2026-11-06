@@ -60,10 +60,20 @@ func classifierError(name, reason string) error {
 	return &ChangeError{Classifier: true, Name: name, Reason: reason}
 }
 
-type statement struct {
+type operation struct {
 	phase phase
 	name  string
-	text  string
+	Operation
+}
+
+// Operation is one statement of the workload changes Statements carries out:
+// the change of the one pool or classifier the statement makes, as that
+// object's change alone, and the statement. Exactly one of Pool and
+// Classifier is set.
+type Operation struct {
+	Pool       *PoolChange
+	Classifier *ClassifierChange
+	Statement  string
 }
 
 // Statements returns the statements that carry out the changes of the pools
@@ -81,7 +91,30 @@ type statement struct {
 // creates or drops it, and two classifiers on one rank on either side are
 // refused with a *ChangeError naming the object.
 func Statements(pools []PoolChange, classifiers []ClassifierChange) ([]string, error) {
-	var statements []statement
+	operations, err := Operations(pools, classifiers)
+	if err != nil {
+		return nil, err
+	}
+	texts := make([]string, len(operations))
+	for i, item := range operations {
+		texts[i] = item.Statement
+	}
+	return texts, nil
+}
+
+// Operations is [Statements] with the change each statement makes, refused
+// alike. The change of a classifier dropped and created again is two
+// operations, its removal and its creation, so that the operations of a
+// change can run apart: Statements of one operation's change alone is that
+// operation's statement.
+func Operations(pools []PoolChange, classifiers []ClassifierChange) ([]Operation, error) {
+	var operations []operation
+	pool := func(phase phase, change PoolChange, text string) {
+		operations = append(operations, operation{phase, change.Name, Operation{Pool: &change, Statement: text}})
+	}
+	classifier := func(phase phase, change ClassifierChange, text string) {
+		operations = append(operations, operation{phase, change.Name, Operation{Classifier: &change, Statement: text}})
+	}
 	for _, change := range pools {
 		switch {
 		case change.Before == nil && change.After == nil:
@@ -89,15 +122,15 @@ func Statements(pools []PoolChange, classifiers []ClassifierChange) ([]string, e
 		case change.Name == DefaultPool && (change.Before == nil || change.After == nil):
 			return nil, poolError(change.Name, "the default pool cannot be created or dropped")
 		case change.Before == nil:
-			statements = append(statements, statement{poolSettings, change.Name, CreatePoolStatement(change.Name, *change.After)})
+			pool(poolSettings, change, CreatePoolStatement(change.Name, *change.After))
 		case change.After == nil:
-			statements = append(statements, statement{poolRemoval, change.Name, DropPoolStatement(change.Name)})
+			pool(poolRemoval, change, DropPoolStatement(change.Name))
 		default:
 			text := AlterPoolStatement(change.Name, *change.After, *change.Before)
 			if text == "" {
 				return nil, poolError(change.Name, "the change holds no difference")
 			}
-			statements = append(statements, statement{poolSettings, change.Name, text})
+			pool(poolSettings, change, text)
 		}
 	}
 	held, err := heldRanks(classifiers)
@@ -109,26 +142,26 @@ func Statements(pools []PoolChange, classifiers []ClassifierChange) ([]string, e
 		case change.Before == nil && change.After == nil:
 			return nil, classifierError(change.Name, "the change has no operand")
 		case change.Before == nil:
-			statements = append(statements, statement{classifierCreation, change.Name, CreateClassifierStatement(change.Name, *change.After)})
+			classifier(classifierCreation, change, CreateClassifierStatement(change.Name, *change.After))
 		case change.After == nil:
-			statements = append(statements, statement{classifierRemoval, change.Name, DropClassifierStatement(change.Name)})
+			classifier(classifierRemoval, change, DropClassifierStatement(change.Name))
 		case *change.Before == *change.After:
 			return nil, classifierError(change.Name, "the change holds no difference")
 		case held[change.After.Rank] != "" && held[change.After.Rank] != change.Name:
-			statements = append(statements, statement{classifierRemoval, change.Name, DropClassifierStatement(change.Name)},
-				statement{classifierCreation, change.Name, CreateClassifierStatement(change.Name, *change.After)})
+			classifier(classifierRemoval, ClassifierChange{Name: change.Name, Before: change.Before}, DropClassifierStatement(change.Name))
+			classifier(classifierCreation, ClassifierChange{Name: change.Name, After: change.After}, CreateClassifierStatement(change.Name, *change.After))
 		default:
-			statements = append(statements, statement{classifierSettings, change.Name, AlterClassifierStatement(change.Name, *change.After, *change.Before)})
+			classifier(classifierSettings, change, AlterClassifierStatement(change.Name, *change.After, *change.Before))
 		}
 	}
-	slices.SortStableFunc(statements, func(a, b statement) int {
+	slices.SortStableFunc(operations, func(a, b operation) int {
 		return cmp.Or(cmp.Compare(a.phase, b.phase), cmp.Compare(a.name, b.name))
 	})
-	texts := make([]string, len(statements))
-	for i, s := range statements {
-		texts[i] = s.text
+	result := make([]Operation, len(operations))
+	for i, item := range operations {
+		result[i] = item.Operation
 	}
-	return texts, nil
+	return result, nil
 }
 
 // heldRanks maps the rank each changed classifier holds before and keeps
