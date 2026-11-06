@@ -3,6 +3,7 @@ package backend_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/testcomparison"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testplanning"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
@@ -234,4 +236,175 @@ func TestAuthoredStreamingQuery_FailurePath(t *testing.T) {
 			c.Assert(result.Diagnostics[0].Problem.Message, qt.Matches, test.want)
 		})
 	}
+}
+
+// Every authored creation asks for the lifecycle span where the host
+// negotiated it, so a schema render writes it as soon as what it reads
+// exists, as the host's embedded engine at 74de0b65b wrote a topic ahead of
+// the tables, and for the default window, after the tables, otherwise.
+func TestAuthoredDeclarationsAskForTheLifecycleSpan_HappyPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		lifecycle bool
+		want      protocol.PlanningOperation_Phase
+	}{
+		{name: "the host negotiated planning.lifecycle", lifecycle: true, want: protocol.PlanningOperation_LIFECYCLE},
+		{name: "the host did not", lifecycle: false, want: protocol.PlanningOperation_DEFAULT},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			topicIntent, err := topics.Intent(ydbdecl.Topic{RetentionPeriod: "P1D"})
+			c.Assert(err, qt.IsNil)
+			topic, err := schema.CaptureTopicIntent(&protocol.Reference{Engine: "ydb", Kind: schema.TopicProperties, Schema: "app", Name: "events"}, topicIntent)
+			c.Assert(err, qt.IsNil)
+			request := declarationRequest(c, declaredNode(c, "node", nil), topic)
+			request.TargetFeatures = slices.DeleteFunc(slices.Clone(request.TargetFeatures), func(feature string) bool {
+				return !test.lifecycle && feature == provider.PlanningLifecycleFeature
+			})
+
+			result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
+			var phases []protocol.PlanningOperation_Phase
+			for _, step := range result.Contributions[0].Steps {
+				phases = append(phases, step.Operation.Phase)
+			}
+			c.Assert(phases, qt.DeepEquals, []protocol.PlanningOperation_Phase{test.want, test.want})
+		})
+	}
+}
+
+// A coordination node, a resource pool, a classifier and a streaming query
+// follow the common steps, up to the first grant or revoke on an object the
+// request declares, as the host's embedded engine at 74de0b65b wrote them
+// after the common objects and before the grants on the objects it created. A
+// topic, a secret and the external objects keep no such dependency: that
+// engine wrote them first.
+func TestAuthoredLateKindsFollowTheCommonSteps_HappyPath(t *testing.T) {
+	role := &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: "role"}, Metadata: &protocol.PlanningMetadata{
+		Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Create a role",
+		Effects: []*protocol.PlanningEffect{{Subject: &protocol.ComparisonIdentity{Kind: "role", Name: testcomparison.Part("readers")}, Action: protocol.PlanningEffect_CREATE}},
+	}}
+	marker := func(name string) *protocol.CommonPlanningStep {
+		return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: name}, Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN}}
+	}
+	grant := func(name, kind string, subject *protocol.ComparisonIdentity) *protocol.CommonPlanningStep {
+		step := commonAccessFor(subject, kind, grantAccess)
+		step.Id = &protocol.StepIdentity{Owner: "host", Name: name}
+		return step
+	}
+	table := func(name string) *protocol.ComparisonIdentity {
+		return &protocol.ComparisonIdentity{Kind: "table", Schema: testcomparison.Part("app"), Name: testcomparison.Part(name)}
+	}
+	tests := []struct {
+		name      string
+		lifecycle bool
+		// common names the steps of the host: role, a marker, a grant on a
+		// table t or u, on the node, on the topic or on the database.
+		common []string
+		want   []string
+	}{
+		{name: "a grant on the node ends the run", lifecycle: true, common: []string{"role", "marker", "grant t", "grant node", "grant u", "end"}, want: []string{"grant t -> node"}},
+		{name: "a grant on the topic ends it too", lifecycle: true, common: []string{"role", "grant topic", "grant t"}, want: []string{"role -> node"}},
+		{name: "no grant on a declared object", lifecycle: true, common: []string{"role", "grant t", "grant u", "end"}, want: []string{"grant u -> node"}},
+		{name: "a grant on the database, which has no effects", lifecycle: true, common: []string{"role", "grant t", "grant database", "end"}, want: []string{"grant database -> node"}},
+		{name: "no common step", lifecycle: true},
+		{name: "the host did not negotiate planning.lifecycle", common: []string{"role", "grant t"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			topicIntent, err := topics.Intent(ydbdecl.Topic{RetentionPeriod: "P1D"})
+			c.Assert(err, qt.IsNil)
+			topic, err := schema.CaptureTopicIntent(&protocol.Reference{Engine: "ydb", Kind: schema.TopicProperties, Schema: "app", Name: "events"}, topicIntent)
+			c.Assert(err, qt.IsNil)
+			request := declarationRequest(c, declaredNode(c, "node", nil), topic)
+			request.TargetFeatures = slices.DeleteFunc(slices.Clone(request.TargetFeatures), func(feature string) bool {
+				return !test.lifecycle && feature == provider.PlanningLifecycleFeature
+			})
+			steps := map[string]*protocol.CommonPlanningStep{
+				"role": role, "marker": marker("marker"), "end": marker("end"),
+				"grant t": grant("grant t", "table", table("t")), "grant u": grant("grant u", "table", table("u")),
+				"grant node":  grant("grant node", "coordination node", request.Objects[0].Subject),
+				"grant topic": grant("grant topic", "topic", request.Objects[1].Subject),
+				"grant database": {Id: &protocol.StepIdentity{Owner: "host", Name: "grant database"}, Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_UNKNOWN},
+					CommonObject: &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_Grant{Grant: &protocol.SQLGrant{Role: "readers", Privileges: []string{"ydb.database.connect"},
+						Target: &protocol.Reference{Engine: "ydb", Kind: "database", Name: "/local"}}}}},
+			}
+			for _, name := range test.common {
+				request.CommonSteps = append(request.CommonSteps, steps[name])
+			}
+
+			result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
+			declared := make(map[string]string)
+			for _, step := range result.Contributions[0].Steps {
+				declared[step.Id.Name] = step.Operation.Value.Value.Owner.Name
+			}
+			var dependencies []string
+			for _, dependency := range result.Contributions[0].Dependencies {
+				dependencies = append(dependencies, dependency.Before.Name+" -> "+declared[dependency.After.Name])
+			}
+			c.Assert(dependencies, qt.DeepEquals, test.want)
+		})
+	}
+}
+
+// defaultPool is the pool default declared with spec.
+func defaultPool(c *qt.C, spec workload.PoolSpec) *protocol.Envelope {
+	c.Helper()
+	pool, err := schema.CaptureWorkloadIntent(&protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Name: workload.DefaultPool}, schema.PoolSettings(spec))
+	c.Assert(err, qt.IsNil)
+	return pool
+}
+
+// The pool default that names no setting is written as nothing, as the host's
+// embedded engine at 74de0b65b wrote it: YDB creates it with the database. Its
+// receipt names no step, and a classifier that reads it still plans.
+func TestAuthoredDefaultPoolThatSetsNothingWritesNothing_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	classifier, err := schema.CaptureWorkloadIntent(&protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolClassifierProperties, Name: "routing"},
+		schema.ClassifierSettings(workload.ClassifierSpec{ResourcePool: workload.DefaultPool, Rank: 100}))
+	c.Assert(err, qt.IsNil)
+	request := declarationRequest(c, defaultPool(c, workload.PoolSpec{}), classifier)
+
+	result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
+	c.Assert(result.Declarations[0].Steps, qt.HasLen, 0)
+	c.Assert(result.Declarations[1].Steps, qt.HasLen, 1)
+	c.Assert(result.Contributions, qt.HasLen, 1)
+	c.Assert(result.Contributions[0].Steps, qt.HasLen, 1)
+	c.Assert(result.Contributions[0].Steps[0].Operation.Value.Value.Owner.Name, qt.Equals, "routing")
+}
+
+// The pool default that names a setting is written as the ALTER RESOURCE POOL
+// ... SET of it, as the host's embedded engine at 74de0b65b wrote it, where
+// CREATE RESOURCE POOL fails on the pool the database holds. The step alters
+// the pool, so a classifier's read of it follows.
+func TestAuthoredDefaultPoolSetsWhatItNames_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := declarationRequest(c, defaultPool(c, workload.PoolSpec{QueryMemoryLimitPercentPerNode: new(float64(50))}))
+
+	result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
+	c.Assert(result.Contributions, qt.HasLen, 1)
+	step := result.Contributions[0].Steps[0]
+	c.Assert(step.Metadata.Effects, qt.HasLen, 1)
+	c.Assert(step.Metadata.Effects[0].Action, qt.Equals, protocol.PlanningEffect_ALTER)
+	c.Assert(step.Metadata.Impact, qt.Equals, protocol.ChangeSemantics_BEHAVIORAL)
+	rendering := testplanning.RenderRequest(backend.Description(), &protocol.PlannedFeatures{Contributions: result.Contributions}, request.Capabilities)
+	rendering.TargetFeatures = request.TargetFeatures
+	rendering.Form = protocol.RenderRequest_TEXT
+	text, err := backend.New().Render(c.Context(), rendering)
+	c.Assert(err, qt.IsNil)
+	c.Assert(text.Units, qt.HasLen, 1)
+	c.Assert(text.Units[0].GetSql(), qt.Equals, "ALTER RESOURCE POOL `default` SET (QUERY_MEMORY_LIMIT_PERCENT_PER_NODE = 50);")
 }

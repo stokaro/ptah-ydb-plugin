@@ -18,6 +18,10 @@ import (
 )
 
 // Text renders one authored CREATE after checking every target requirement.
+// The pool `default` is the exception: YDB creates it with the database, so
+// its declaration is the ALTER RESOURCE POOL ... SET of the settings it
+// names, as the host's embedded engine at 74de0b65b wrote it, and the empty
+// string where it names none, for which that engine wrote nothing.
 func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error) {
 	desired, err := Declaration(value)
 	if err != nil {
@@ -55,6 +59,9 @@ func Text(value *protocol.Envelope, capabilities map[string]bool) (string, error
 		spec, err := schema.WorkloadPool(desired)
 		if err != nil {
 			return "", err
+		}
+		if owner.Name == workload.DefaultPool {
+			return workload.SetPoolStatement(owner.Name, spec), nil
 		}
 		return workload.CreatePoolStatement(owner.Name, spec), nil
 	case schema.ResourcePoolClassifierProperties:

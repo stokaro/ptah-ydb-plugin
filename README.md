@@ -2554,7 +2554,10 @@ A source declares the pools and classifiers it manages, not every one of the
 database, so the comparison keeps one a source leaves out, as the host does;
 an absence a source claims for one object is left undecided. A pool compares
 setting by setting and a classifier as a whole. The `default` pool must be read
-before its settings change, and it is never created or dropped.
+before its settings change, and it is never created or dropped. A schema
+written as SQL, such as `schema inspect --format sql`, writes it as the `ALTER
+RESOURCE POOL default SET` of the settings it names, and writes nothing for it
+when it names none, as the host's engine did.
 
 The planner writes every workload change of a plan as one step, outside a
 transaction, ordered after the steps that create or change a role and before
