@@ -16,6 +16,7 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externals"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -97,8 +98,21 @@ func (d declared) noun() string {
 
 // Decode reads every external object a document declares and returns the
 // values of each fragment it owns, by index. An invalid declaration refuses
-// the whole document.
+// the whole document, with the reason a host prints in the words of the
+// host's embedded engine and without the value the declaration wrote (see
+// authored.Declared).
 func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
+	values, err := decode(ctx, document)
+	return values, authored.Declared(err)
+}
+
+// refuse is a refusal a host prints. Its text names the declared objects and
+// attributes and never a value.
+func refuse(format string, args ...any) error {
+	return authored.New(fmt.Sprintf(format, args...))
+}
+
+func decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	var objects []declared
 	owned := make(map[int]bool)
 	for index, fragment := range document.GetFragments() {
@@ -110,7 +124,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 		}
 		owned[index] = true
 		if fragment.BindingId != "" || fragment.Subject != nil || len(fragment.GetInheritedAttributes().GetEntries()) != 0 {
-			return nil, fmt.Errorf("unsupported YDB external object source attachment")
+			return nil, refuse("unsupported YDB external object source attachment")
 		}
 		mapping := fragment.GetValue().GetMapping()
 		var read []declared
@@ -118,7 +132,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 		switch {
 		case document.Format == protocol.SourceDocument_YAML && (fragment.Selector == KeyDataSources || fragment.Selector == KeyTables):
 			if mapping == nil && fragment.GetValue().GetNull() == nil {
-				return nil, fmt.Errorf("%s requires a mapping", fragment.Selector)
+				return nil, refuse("%s requires a mapping", fragment.Selector)
 			}
 			read, err = yamlObjects(index, fragment.Selector, mapping)
 		case document.Format == protocol.SourceDocument_GO_ANNOTATIONS && (fragment.Selector == DirectiveDataSource || fragment.Selector == DirectiveTable):
@@ -127,7 +141,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			object.fragment = index
 			read = []declared{object}
 		default:
-			return nil, fmt.Errorf("unsupported YDB external object source format")
+			return nil, refuse("unsupported YDB external object source format")
 		}
 		if err != nil {
 			return nil, err
@@ -155,7 +169,7 @@ func addObjectValues(ctx context.Context, document *protocol.SourceDocument, obj
 		}
 		display := ydbdecl.ExternalDisplay(object.schema, object.name)
 		if key := object.kind + "\x00" + display; seen[key] {
-			return fmt.Errorf("%s %s is declared twice", object.noun(), display)
+			return refuse("%s %s is declared twice", object.noun(), display)
 		}
 		seen[object.kind+"\x00"+display] = true
 		value, err := capture(object)
@@ -204,6 +218,13 @@ func path(object *declared, directory, name string) error {
 func goObject(directive string, mapping *protocol.SourceMapping) (declared, error) {
 	values, err := attributes(directive, mapping)
 	if err != nil {
+		return declared{}, err
+	}
+	required := []string{externals.AttributeName, externals.AttributeDataSource, externals.AttributeLocation}
+	if directive == DirectiveDataSource {
+		required = []string{externals.AttributeName, externals.AttributeSourceType, externals.AttributeAuthMethod}
+	}
+	if err := ydbdecl.RequireAttributes(values, required...); err != nil {
 		return declared{}, err
 	}
 	var object declared
@@ -322,7 +343,7 @@ func yamlPath(object *declared, fields map[string]string, key string) error {
 func yamlFields(entry *protocol.SourceEntry, names []string, columns bool) (fields, options map[string]string, err error) {
 	mapping := entry.GetValue().GetMapping()
 	if mapping == nil {
-		return nil, nil, fmt.Errorf("an entry requires a mapping")
+		return nil, nil, refuse("an entry requires a mapping")
 	}
 	fields = make(map[string]string)
 	for _, field := range mapping.GetEntries() {
@@ -333,7 +354,7 @@ func yamlFields(entry *protocol.SourceEntry, names []string, columns bool) (fiel
 			}
 			values := field.GetValue().GetMapping()
 			if values == nil {
-				return nil, nil, fmt.Errorf("%s requires a mapping", field.Key)
+				return nil, nil, refuse("%s requires a mapping", field.Key)
 			}
 			options = make(map[string]string)
 			for _, option := range values.GetEntries() {
@@ -351,7 +372,7 @@ func yamlFields(entry *protocol.SourceEntry, names []string, columns bool) (fiel
 			}
 			fields[field.Key] = text
 		default:
-			return nil, nil, fmt.Errorf("unknown key %q", field.Key)
+			return nil, nil, refuse("unknown key %q", field.Key)
 		}
 	}
 	return fields, options, nil
@@ -367,12 +388,12 @@ func yamlColumns(entry *protocol.SourceEntry) ([]ydbdecl.ExternalColumn, error) 
 		}
 		sequence := field.GetValue().GetSequence()
 		if sequence == nil {
-			return nil, fmt.Errorf("%s requires a sequence", field.Key)
+			return nil, refuse("%s requires a sequence", field.Key)
 		}
 		for position, item := range sequence.GetValues() {
 			mapping := item.GetMapping()
 			if mapping == nil {
-				return nil, fmt.Errorf("%s[%d] requires a mapping", field.Key, position)
+				return nil, refuse("%s[%d] requires a mapping", field.Key, position)
 			}
 			column, err := yamlColumn(field.Key, position, mapping)
 			if err != nil {
@@ -406,10 +427,10 @@ func yamlColumn(key string, position int, mapping *protocol.SourceMapping) (ydbd
 				column.NotNull = value.Boolean
 			case *protocol.SourceValue_Null:
 			default:
-				return ydbdecl.ExternalColumn{}, fmt.Errorf("%s[%d] %s requires true or false", key, position, part.Key)
+				return ydbdecl.ExternalColumn{}, refuse("%s[%d] %s requires true or false", key, position, part.Key)
 			}
 		default:
-			return ydbdecl.ExternalColumn{}, fmt.Errorf("%s[%d]: unknown key %q", key, position, part.Key)
+			return ydbdecl.ExternalColumn{}, refuse("%s[%d]: unknown key %q", key, position, part.Key)
 		}
 	}
 	return column, nil
@@ -418,13 +439,13 @@ func yamlColumn(key string, position int, mapping *protocol.SourceMapping) (ydbd
 // attributes reads a Go directive's attributes, which the host lexed as text.
 func attributes(directive string, mapping *protocol.SourceMapping) (map[string]string, error) {
 	if mapping == nil {
-		return nil, fmt.Errorf("%s requires attributes", directive)
+		return nil, refuse("%s requires attributes", directive)
 	}
 	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {
-			return nil, fmt.Errorf("attribute %s requires text", entry.Key)
+			return nil, refuse("attribute %s requires text", entry.Key)
 		}
 		values[entry.Key] = text.Text
 	}
@@ -445,6 +466,6 @@ func scalar(value *protocol.SourceValue) (string, error) {
 	case *protocol.SourceValue_Null:
 		return "", nil
 	default:
-		return "", fmt.Errorf("expected a scalar")
+		return "", refuse("expected a scalar")
 	}
 }

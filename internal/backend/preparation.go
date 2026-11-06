@@ -19,7 +19,7 @@ func (*Provider) PrepareTables(ctx context.Context, request *protocol.PrepareTab
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := Description()
+	description := described()
 	if err := provider.ValidatePreparationRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}

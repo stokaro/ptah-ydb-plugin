@@ -32,6 +32,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/releaseline"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replicationcompare"
@@ -77,14 +78,21 @@ type session struct {
 	// directory when the address names one.
 	database string
 	// realm reports a session on a dev realm, whose statements are confined to it.
-	realm            bool
-	closed           bool
-	closeErr         error
-	cleanupErr       error
-	transactions     map[string]*transaction
-	active           string
+	realm        bool
+	closed       bool
+	closeErr     error
+	cleanupErr   error
+	transactions map[string]*transaction
+	active       string
+	// lockMu guards locks, the fields of each lock record, fenced and
+	// locksClosed. A lock check takes it and not mu, so the host's watch of
+	// a lock is answered while an execution holds mu: the watch checks
+	// every second and counts a check unanswered for ten seconds as a lost
+	// lock. A caller that holds both took mu first.
+	lockMu           sync.Mutex
 	locks            map[string]*lockRecord
 	fenced           bool
+	locksClosed      bool
 	metadataReaders  map[string]*metadataReader
 	statementResults map[string]*statementResult
 	// version is what the server answered SELECT Version() with.
@@ -94,11 +102,19 @@ type session struct {
 	embeddings *embedstore.Store
 	// capabilities are the capabilities the session reported.
 	capabilities map[string]bool
+	// creations lends one table session to the table creations of the
+	// execution that runs, and is nil between executions.
+	creations *nativeapi.CreationSessions
 }
 
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
 	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
+		// A read reports each table's primary key in key order, and the
+		// planner of a row table plans the change of it the host hands over
+		// as an alteration of the table; see inspect.Common.PrimaryKeys and
+		// tablecreate.rebuildNeeds.
+		provider.ObservedPrimaryKeysFeature, provider.PrimaryKeyChangesFeature,
 		provider.IndexMethodsFeature,
 		// A read with no selector claims every directory below the root
 		// complete in one region, and each directory it leaves out unknown,
@@ -108,6 +124,14 @@ func providerFeatures() []string {
 		// A refusal reaches the host with the reason the provider wrote, and a
 		// driver's error with its code alone; see package authored.
 		provider.ErrorReasonsFeature,
+		// A model of the description travels by reference in every other
+		// message, so the coverage the host sends for each table names the
+		// models it covers rather than repeating their definitions, and a
+		// message may be 64 MiB: a database of a few thousand tables is read,
+		// compared and planned in one request. The SDK sends and resolves the
+		// references.
+		provider.ModelReferencesFeature,
+		provider.LargeMessagesFeature,
 		provider.ScopeSelectionsFeature,
 		provider.StatementsFeature,
 		provider.TypedArgumentsFeature,
@@ -208,6 +232,18 @@ func providerFeatures() []string {
 		// whole, which reads it into the table's native index set or its
 		// column storage and writes it back; see tablesource.IndexKinds.
 		provider.IndexKindsFeature,
+		// The note that counts the roles a read leaves out of the
+		// description gives the reason this read does; see
+		// inspect.RolesOutOfScopeReason.
+		provider.RoleScopeReasonsFeature,
+		// A Go export writes resource pools, their classifiers and
+		// coordination nodes after the default privileges, where the host's
+		// embedded engine wrote them; see goGroups.
+		provider.GoPlacementsFeature,
+		// A file Ptah's built-in YDB engine exported names that engine's
+		// coordination-node model in its captured header, and the host reads
+		// it as this provider's; see modelPredecessors.
+		provider.ModelPredecessorsFeature,
 	}
 }
 
@@ -226,7 +262,7 @@ func engineFeatures() []string {
 // out of the description the host reads. A session and an inspection snapshot
 // report it, so the host can check them against that description.
 func negotiatedFeatures(ctx context.Context) []string {
-	return provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx)).GetEngines()[0].GetFeatures()
+	return provider.NegotiatedDescription(described(), provider.HostFeatures(ctx)).GetEngines()[0].GetFeatures()
 }
 
 // sessionCapabilities are the host capabilities a session reports before the
@@ -419,8 +455,19 @@ const minContractMinor = 7
 // captured row-table creation, column family alteration of existing tables,
 // the table-scope YAML keys and Go directives that declare row-table
 // partitioning and column families, and offline migration lint with the YD
-// rule catalog.
+// rule catalog. Each call returns a copy the caller may change.
 func Description() *protocol.Description {
+	return proto.CloneOf(described())
+}
+
+// described is the description the provider checks its own requests and
+// replies against. It is built once and must not be changed. A request is
+// checked against it several times, and an execution checks each of its units
+// against it. Built for each check, at about a millisecond and a half of CPU
+// each, it cost a second and a half in a migration of 500 new tables.
+var described = sync.OnceValue(buildDescription)
+
+func buildDescription() *protocol.Description {
 	description := &protocol.Description{
 		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: buildversion.Version(), SemanticIdentity: "ydb-table-lifecycle-2",
@@ -447,6 +494,7 @@ func Description() *protocol.Description {
 					tablecreate.NativeIndexModel(),
 					declarationplan.Model(),
 				),
+				ModelPredecessors: modelPredecessors(),
 				Declarations: []*protocol.ModelDeclarations{
 					{
 						Id:             declarationplan.ServiceID,

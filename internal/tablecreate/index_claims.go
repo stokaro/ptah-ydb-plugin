@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 )
 
 // indexFootprint returns the index a host step of table creates or drops,
@@ -127,7 +128,7 @@ func heldIndex(current *protocol.ObservedTable, held *native.IndexObservations, 
 	switch {
 	case index.GetUnique():
 		result.Type = &native.TableIndexDescription_GlobalUniqueIndex{GlobalUniqueIndex: &native.GlobalUniqueIndex{}}
-	case index.GetMethod() == "async":
+	case asyncMethod(index.GetMethod()):
 		result.Type = &native.TableIndexDescription_GlobalAsyncIndex{GlobalAsyncIndex: &native.GlobalAsyncIndex{}}
 	default:
 		result.Type = &native.TableIndexDescription_GlobalIndex{GlobalIndex: &native.GlobalIndex{}}
@@ -191,4 +192,11 @@ func indexReplacements(steps []*indexStep) []*protocol.PlanningDependency {
 		}
 	}
 	return result
+}
+
+// asyncMethod reports the common method of an asynchronous global index, in
+// any spelling a declaration or a read gives it.
+func asyncMethod(method string) bool {
+	kind, err := ydbdecl.IndexKindOf(method)
+	return err == nil && kind == ydbdecl.IndexAsync
 }

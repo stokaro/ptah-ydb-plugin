@@ -11,11 +11,13 @@ import (
 // Known refuses unknown fields and enum values recursively. Protobuf's normal
 // unknown-field retention must never become silent field loss in JSON.
 //
-// The one unknown field it takes is the cache mode of a request's column
-// family, field 6 of Ydb.Table.ColumnFamily, holding a mode the provider's
-// ColumnFamily names: the pinned bindings lack the field, so a table service
-// request carries it there (see [RequestFamily]), and the provider writes and
-// reads it itself.
+// The unknown fields it takes are the ones the pinned bindings lack and a
+// table service request carries, which the provider writes and reads itself:
+// the cache mode of a request's column family, field 6 of
+// Ydb.Table.ColumnFamily, holding a mode the provider's ColumnFamily names
+// (see [RequestFamily]), and the vector or full-text arm of a creation
+// request's index, field 7, 8 or 9 of Ydb.Table.TableIndex, holding a known
+// arm (see [RequestIndex]).
 func Known(value proto.Message) error {
 	if value == nil || !value.ProtoReflect().IsValid() {
 		return fmt.Errorf("missing YDB description")
@@ -27,7 +29,7 @@ func knownMessage(value protoreflect.Message) error {
 	if !value.IsValid() {
 		return fmt.Errorf("missing YDB description")
 	}
-	if unknown := value.GetUnknown(); len(unknown) != 0 && !requestFamilyCacheMode(value, unknown) {
+	if unknown := value.GetUnknown(); len(unknown) != 0 && !requestFamilyCacheMode(value, unknown) && !requestIndexArm(value.Interface()) {
 		return fmt.Errorf("unknown fields in %s", value.Descriptor().FullName())
 	}
 	var result error

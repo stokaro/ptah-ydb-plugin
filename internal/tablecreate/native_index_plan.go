@@ -3,9 +3,11 @@ package tablecreate
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -175,11 +177,11 @@ func declaredKeyTypes(table *protocol.DeclaredTable, intent *native.RowTableInte
 }
 
 // creationIndexes are the vector and full-text indexes a new table declares
-// in its native index set, each added by a step of its own after the table is
-// created: the native creation call of the pinned bindings carries neither
-// kind. A global index the set states never reaches it: the compilation of the
-// creation refuses one (see tableFacets), since a new table takes its global
-// indexes from the common declaration (see declaredIndexes).
+// in its native index set, each built with the table by its native creation
+// (see withCreationIndexes). A global index the set states never reaches it:
+// the compilation of the creation refuses one (see tableFacets), since a new
+// table takes its global indexes from the common declaration (see
+// declaredIndexes).
 func creationIndexes(owner *protocol.Reference, table *protocol.DeclaredTable, request *nativeCreation, capabilities map[string]bool) ([]indexChange, string, error) {
 	facets, err := facetEnvelopes(owner, table.GetFeatures().GetFacets(), protocol.ValueInput_DESIRED)
 	if err != nil {
@@ -215,13 +217,16 @@ type nativeCreation struct {
 	columns nativeIndexColumns
 }
 
-// plannedCreationIndexes returns the steps that add the vector and full-text
-// indexes a new row table declares, after the creation captured in operation,
-// or the reason they cannot be added on this target. A column table takes
-// none: its compilation refuses the native index set.
-func plannedCreationIndexes(owner *protocol.Reference, table *protocol.DeclaredTable, operation *protocol.NormalizedValue, capabilities map[string]bool) ([]*indexStep, string, error) {
+// withCreationIndexes returns the creation captured in operation with the
+// vector and full-text indexes a new row table declares built into it, or the
+// reason they cannot be built on this target. The host's embedded engine at
+// 74de0b65b wrote every index of a new table inside its CREATE TABLE, in name
+// order, and created them with the table, on 25.1.4.7 and 26.2.1.14; the
+// request holds the indexes in that order, and its text form writes them so.
+// A column table takes none: its compilation refuses the native index set.
+func withCreationIndexes(owner *protocol.Reference, table *protocol.DeclaredTable, operation *protocol.NormalizedValue, capabilities map[string]bool) (*protocol.NormalizedValue, string, error) {
 	if isColumnCreation(operation) {
-		return nil, "", nil
+		return operation, "", nil
 	}
 	created, err := Request(operation.Value)
 	if err != nil {
@@ -239,31 +244,22 @@ func plannedCreationIndexes(owner *protocol.Reference, table *protocol.DeclaredT
 		creation.columns.types[column.GetName()] = name
 	}
 	changes, reason, err := creationIndexes(owner, table, creation, capabilities)
-	if err != nil || reason != "" {
-		return nil, reason, err
+	if err != nil || reason != "" || len(changes) == 0 {
+		return operation, reason, err
 	}
-	var steps []*indexStep
 	for _, change := range changes {
-		step := &indexStep{change: change}
-		if step.operation, err = CaptureNativeIndex("pending", owner, change.add); err != nil {
-			return nil, err.Error(), nil
+		index, err := schema.RequestIndex(change.add)
+		if err != nil {
+			return nil, "", err
 		}
-		steps = append(steps, step)
+		created.Indexes = append(created.Indexes, index)
 	}
-	return steps, "", nil
-}
-
-// creationStep is the planning step that adds the index to a table the step
-// created creates, ordered after it.
-func (step *indexStep) creationStep(number int, subject *protocol.ComparisonIdentity, created *protocol.StepIdentity) (*protocol.PlanningStep, *protocol.PlanningDependency) {
-	step.id = &protocol.StepIdentity{Owner: schema.ProviderID, Name: fmt.Sprintf("row-table-create-index/%06d", number)}
-	step.operation.Id = step.id.Name
-	facts := step.operation.OperationSemantics
-	planned := &protocol.PlanningStep{Id: step.id, Operation: &protocol.PlanningOperation{Role: protocol.NativeOperation_STATEMENT, Value: step.operation},
-		Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason,
-			Effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(subject), Action: protocol.PlanningEffect_READ},
-				{Subject: indexSubject(subject, step.change.name()), Action: protocol.PlanningEffect_CREATE}}}}
-	return planned, &protocol.PlanningDependency{Before: proto.CloneOf(created), After: proto.CloneOf(step.id)}
+	slices.SortFunc(created.Indexes, func(a, b *Ydb_Table.TableIndex) int { return strings.Compare(a.GetName(), b.GetName()) })
+	result, err := CaptureRequest(operation.GetId(), owner, created)
+	if err != nil {
+		return nil, err.Error(), nil
+	}
+	return result, "", nil
 }
 
 // rebuiltNativeIndex names a vector or full-text index the table of a rebuild

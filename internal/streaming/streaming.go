@@ -58,7 +58,7 @@ func ValidateIdentity(directory, name string) error {
 	if strings.TrimSpace(name) == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\\x00") ||
 		!utf8.ValidString(name) || !utf8.ValidString(directory) || strings.ContainsAny(directory, "\\\x00") ||
 		(directory != "" && (path.IsAbs(directory) || path.Clean(directory) != directory || directory == "." || directory == ".." || strings.HasPrefix(directory, "../"))) {
-		return fmt.Errorf("streaming query requires a relative directory and an exact leaf name")
+		return authored.New("streaming query requires a relative directory and an exact leaf name")
 	}
 	return nil
 }
@@ -123,26 +123,28 @@ func bodyTokens(text string) []yql.Token {
 }
 
 // Validate checks that the body stays one streaming query when wrapped in
-// its DO block and holds data statements only. YDB validates the data query
+// its DO block and holds data statements only. A refusal of its own is a
+// reason a host prints; one the YQL splitter gives quotes the text and is
+// not. YDB validates the data query
 // itself; Ptah refuses a schema statement and a text that escapes the
 // block before anything runs.
 func Validate(spec Spec) error {
 	if !utf8.ValidString(spec.Text) || !utf8.ValidString(spec.ResourcePool) || strings.ContainsRune(spec.ResourcePool, 0) {
-		return fmt.Errorf("streaming query text and resource pool must be valid UTF-8 without a NUL in the pool name")
+		return authored.New("streaming query text and resource pool must be valid UTF-8 without a NUL in the pool name")
 	}
 	if strings.TrimSpace(spec.Text) == "" {
-		return fmt.Errorf("streaming query text is required")
+		return authored.New("streaming query text is required")
 	}
 	queries, err := yqlquery.Split(spec.Text)
 	if err != nil {
 		return err
 	}
 	if len(queries) == 0 {
-		return fmt.Errorf("streaming query text must contain a data statement")
+		return authored.New("streaming query text must contain a data statement")
 	}
 	for _, query := range queries {
 		if query.Kind != yqlquery.Data {
-			return fmt.Errorf("streaming query text must contain data statements only")
+			return authored.New("streaming query text must contain data statements only")
 		}
 	}
 	wrapped, err := yqlquery.Split("CREATE STREAMING QUERY validation AS DO BEGIN\n" + spec.Text + "\nEND DO;")
@@ -150,7 +152,7 @@ func Validate(spec Spec) error {
 		return err
 	}
 	if len(wrapped) != 1 || wrapped[0].Kind != yqlquery.Scheme {
-		return fmt.Errorf("streaming query text must stay inside its DO BEGIN ... END DO block")
+		return authored.New("streaming query text must stay inside its DO BEGIN ... END DO block")
 	}
 	return nil
 }

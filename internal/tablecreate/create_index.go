@@ -9,6 +9,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/proto"
 
+	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -207,10 +208,19 @@ func keyComparable(ydbType string) bool {
 
 // validateIndexes refuses native creation indexes this provider does not
 // build: one of another kind, with settings of its own, or that reads a column
-// the request does not create, and two indexes of one name.
+// the request does not create, and two indexes of one name. A vector or
+// full-text index is held to the rules of its addition (see
+// validateNativeRequestIndex).
 func validateIndexes(request *Ydb_Table.CreateTableRequest, names map[string]bool) error {
 	seen := make(map[string]bool)
 	for _, index := range request.GetIndexes() {
+		spec, err := schema.NativeRequestIndex(index)
+		if err != nil {
+			return err
+		}
+		if err := validateNativeRequestIndex(request, spec); err != nil {
+			return err
+		}
 		if err := only(index, "name", "index_columns", "data_columns", "global_index", "global_async_index", "global_unique_index"); err != nil {
 			return err
 		}
@@ -229,6 +239,35 @@ func validateIndexes(request *Ydb_Table.CreateTableRequest, names map[string]boo
 				return fmt.Errorf("a YDB creation index reads each declared column once")
 			}
 		}
+	}
+	return nil
+}
+
+// validateNativeRequestIndex holds spec, the vector or full-text index of a
+// creation request, to the rules of the addition of one (see
+// decodeNativeIndex): its definition alone, and the columns, kind and
+// settings the target may take, read against the columns the request
+// creates. A nil spec is no such index.
+func validateNativeRequestIndex(request *Ydb_Table.CreateTableRequest, spec *native.IndexIntent) error {
+	if spec == nil {
+		return nil
+	}
+	if !proto.Equal(spec, nativeIndexDefinition(spec)) {
+		return fmt.Errorf("a YDB creation index states no settings of the tables that implement it")
+	}
+	columns := nativeIndexColumns{types: make(map[string]string, len(request.GetColumns())), key: slices.Clone(request.GetPrimaryKey())}
+	for _, column := range request.GetColumns() {
+		name, _, err := schema.ColumnType(column.GetType())
+		if err != nil {
+			return err
+		}
+		columns.types[column.GetName()] = name
+	}
+	// The request is checked without the target: what the target takes is
+	// the planner's to refuse, before the request is captured.
+	all := map[string]bool{VectorIndexesCapability: true, VectorBitTypeCapability: true, FullTextIndexesCapability: true}
+	if reason := nativeIndexRefusal(spec, columns, all); reason != "" {
+		return fmt.Errorf("invalid YDB creation index: %s", reason)
 	}
 	return nil
 }

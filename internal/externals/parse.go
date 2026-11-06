@@ -37,7 +37,8 @@ func ParseOptions(text string, reserved ...string) (map[string]string, error) {
 		}
 		name, value, found := strings.Cut(pair, "=")
 		if !found || strings.TrimSpace(name) == "" {
-			return nil, &ydbdecl.ExternalError{Attribute: AttributeOptions, Reason: fmt.Sprintf("%q is not NAME=value", strings.TrimSpace(pair))}
+			return nil, &ydbdecl.ExternalError{Attribute: AttributeOptions, Reason: fmt.Sprintf("%q is not NAME=value", strings.TrimSpace(pair)),
+				Plain: "an entry is not NAME=value"}
 		}
 		names = append(names, name)
 		values = append(values, value)
@@ -162,7 +163,8 @@ func columnName(entry string) (name, rest string, err error) {
 	if inner, ok := strings.CutPrefix(entry, "`"); ok {
 		end := strings.IndexByte(inner, '`')
 		if end <= 0 {
-			return "", "", &ydbdecl.ExternalError{Attribute: AttributeColumns, Reason: fmt.Sprintf("%q opens a quoted name it does not close", entry)}
+			return "", "", &ydbdecl.ExternalError{Attribute: AttributeColumns, Reason: fmt.Sprintf("%q opens a quoted name it does not close", entry),
+				Plain: "an entry opens a quoted name it does not close"}
 		}
 		return inner[:end], inner[end+1:], nil
 	}

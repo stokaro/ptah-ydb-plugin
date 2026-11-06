@@ -16,7 +16,9 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -91,8 +93,21 @@ type declared struct {
 
 // Decode reads every pool and classifier a document declares and returns the
 // values of each fragment, by index. An invalid declaration refuses the whole
-// document, and so does an object declared twice.
+// document, and so does an object declared twice. A refusal carries the
+// reason a host prints, in the words of the host's embedded engine and without
+// the value the declaration wrote (see authored.Declared).
 func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
+	values, err := decode(ctx, document)
+	return values, authored.Declared(err)
+}
+
+// refuse is a refusal a host prints. Its text names the declared objects and
+// attributes and never a value.
+func refuse(format string, args ...any) error {
+	return authored.New(fmt.Sprintf(format, args...))
+}
+
+func decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	var objects []declared
 	owned := make(map[int]bool)
 	for index, fragment := range document.GetFragments() {
@@ -104,7 +119,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 		}
 		owned[index] = true
 		if fragment.BindingId != "" || fragment.Subject != nil || len(fragment.GetInheritedAttributes().GetEntries()) != 0 {
-			return nil, fmt.Errorf("unsupported YDB workload source attachment")
+			return nil, refuse("unsupported YDB workload source attachment")
 		}
 		mapping := fragment.GetValue().GetMapping()
 		var read []declared
@@ -118,7 +133,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			object.fragment = index
 			read = []declared{object}
 		default:
-			err = fmt.Errorf("unsupported YDB workload source format")
+			err = refuse("unsupported YDB workload source format")
 		}
 		if err != nil {
 			return nil, err
@@ -136,7 +151,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			kind, noun = schema.ResourcePoolClassifierProperties, "resource pool classifier"
 		}
 		if seen[kind+"\x00"+object.name] {
-			return nil, fmt.Errorf("%s %q is declared twice", noun, object.name)
+			return nil, refuse("%s %q is declared twice", noun, object.name)
 		}
 		seen[kind+"\x00"+object.name] = true
 		owner := &protocol.Reference{Engine: "ydb", Kind: kind, Name: object.name}
@@ -161,7 +176,7 @@ func yamlObjects(fragment int, kind objectKind, mapping *protocol.SourceMapping)
 		key, noun, allowed = KeyClassifiers, "resource pool classifier", workload.ClassifierAttributes()[1:]
 	}
 	if mapping == nil {
-		return nil, fmt.Errorf("%s requires a mapping", key)
+		return nil, refuse("%s requires a mapping", key)
 	}
 	entries := slices.Clone(mapping.GetEntries())
 	slices.SortFunc(entries, func(a, b *protocol.SourceEntry) int { return strings.Compare(a.Key, b.Key) })
@@ -169,12 +184,12 @@ func yamlObjects(fragment int, kind objectKind, mapping *protocol.SourceMapping)
 	for _, entry := range entries {
 		fields := entry.GetValue().GetMapping()
 		if fields == nil && entry.GetValue().GetNull() == nil {
-			return nil, fmt.Errorf("%s %q: a %s requires a mapping", noun, entry.Key, noun)
+			return nil, refuse("%s %q: a %s requires a mapping", noun, entry.Key, noun)
 		}
 		values := make(map[string]string)
 		for _, field := range fields.GetEntries() {
 			if !slices.Contains(allowed, field.Key) {
-				return nil, fmt.Errorf("%s %q: unknown key %q", noun, entry.Key, field.Key)
+				return nil, refuse("%s %q: unknown key %q", noun, entry.Key, field.Key)
 			}
 			text, err := scalar(field.GetValue())
 			if err != nil {
@@ -194,28 +209,29 @@ func yamlObjects(fragment int, kind objectKind, mapping *protocol.SourceMapping)
 	return result, nil
 }
 
-// goObject reads one directive's attributes, which the host lexed as text.
+// goObject reads one directive's attributes, which the host lexed as text. A
+// refusal names no directive: the host names the directive and its place
+// after the reason.
 func goObject(kind objectKind, mapping *protocol.SourceMapping) (declared, error) {
-	directive := DirectivePool
+	directive, required := DirectivePool, []string{workload.AttributeName}
 	if kind == classifierObject {
-		directive = DirectiveClassifier
+		directive, required = DirectiveClassifier, []string{workload.AttributeName, workload.AttributeResourcePool, workload.AttributeRank}
 	}
 	if mapping == nil {
-		return declared{}, fmt.Errorf("%s requires attributes", directive)
+		return declared{}, refuse("%s requires attributes", directive)
 	}
 	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {
-			return declared{}, fmt.Errorf("attribute %s on %s requires text", entry.Key, directive)
+			return declared{}, refuse("attribute %s requires text", entry.Key)
 		}
 		values[entry.Key] = text.Text
 	}
-	object, err := parse(kind, values)
-	if err != nil {
-		return declared{}, fmt.Errorf("%w on //%s", err, directive)
+	if err := ydbdecl.RequireAttributes(values, required...); err != nil {
+		return declared{}, err
 	}
-	return object, nil
+	return parse(kind, values)
 }
 
 // parse reads one pool or classifier with the host's rules and words.
@@ -248,6 +264,6 @@ func scalar(value *protocol.SourceValue) (string, error) {
 	case *protocol.SourceValue_Null:
 		return "", nil
 	default:
-		return "", fmt.Errorf("expected a scalar")
+		return "", refuse("expected a scalar")
 	}
 }
