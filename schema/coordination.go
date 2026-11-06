@@ -99,13 +99,22 @@ func CoordinationSettingNames() []string {
 	return []string{"self_check_period", "session_grace_period", "read_consistency_mode", "attach_consistency_mode", "rate_limiter_counters_mode"}
 }
 
+// CoordinationGrantObjectType is the object type a grant on a node names: the
+// one the provider's scope selection of nodes declares, which the host reads
+// a grant's object type against.
+const CoordinationGrantObjectType = "COORDINATION NODE"
+
 // CoordinationHCLBlock declares the top-level HCL block that declares a node,
 // as the host's bundled YDB source reads it: labeled with its name, or its
 // directory and its name, and its settings as strings spelled as the Go
-// directive spells them. A permission names a node as a coordination node.
+// directive spells them. A permission names a node as a coordination node,
+// so its grant names CoordinationGrantObjectType. With the block's own
+// spelling, coordination_node, as the grant kind, a permission matches no
+// scope selection: native ptah plans no GRANT for it, ptah-compat refuses it,
+// and an HCL export leaves the node's permissions out.
 func CoordinationHCLBlock() *protocol.HCLSourceBlock {
 	block := &protocol.HCLSourceBlock{Site: protocol.HCLSourceBlock_TOP_LEVEL, Type: "coordination_node", Naming: protocol.HCLSourceBlock_SCHEMA_AND_NAME,
-		GrantKind: "coordination_node", Selector: "coordination_node", Models: []string{CoordinationProperties}}
+		GrantKind: CoordinationGrantObjectType, Selector: "coordination_node", Models: []string{CoordinationProperties}}
 	for _, setting := range CoordinationSettingNames() {
 		block.Attributes = append(block.Attributes, &protocol.HCLSourceAttribute{Name: setting, Kind: protocol.HCLSourceAttribute_STRING})
 	}
