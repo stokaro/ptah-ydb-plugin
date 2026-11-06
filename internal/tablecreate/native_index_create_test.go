@@ -36,37 +36,57 @@ func documentsCreation(c *qt.C, indexes string, common ...*protocol.DeclaredInde
 		Tables:       []*protocol.PlanningTable{{Subject: tableSubject(), Action: protocol.PlanningTable_CREATE, Desired: table}}}
 }
 
-// A new table's vector and full-text indexes are added after its creation,
-// one step each: the native creation call of the pinned bindings carries
-// neither kind. Its global indexes stay in the CREATE TABLE. Each step asks
-// for the lifecycle span, so a plan adds the index right after its table and
-// not after every table it creates.
+// A new table's vector and full-text indexes are built by its creation, as
+// the host's embedded engine at 74de0b65b built them: one operation, whose
+// CREATE TABLE writes every index of the table in name order, the global ones
+// among them. The creation's effects create each index.
 func TestNativeIndexCreation_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	request := documentsCreation(c, indexSet(nativeDeclared(docsEmb, prefixedTables), nativeDeclared(standardBody, relevanceTables)),
 		&protocol.DeclaredIndex{Name: "by_title", Fields: []string{"title"}})
+
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
+
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
-	c.Assert(plannedSteps(plan), qt.DeepEquals, []string{"row-table-create/000000 row-table-create-operation",
-		"row-table-create-index/000000 row-table-native-index-operation", "row-table-create-index/000001 row-table-native-index-operation"})
-	c.Assert(edges(plan), qt.DeepEquals, []string{"row-table-create/000000 -> row-table-create-index/000000", "row-table-create/000000 -> row-table-create-index/000001"})
-	steps := plan.Contributions[0].Steps
-	c.Assert(steps[1].Metadata.Effects, qt.HasLen, 2)
-	c.Assert(steps[1].Metadata.Effects[1].Subject.Kind, qt.Equals, "index")
-	c.Assert(steps[1].Metadata.Effects[1].Subject.Name.Source, qt.Equals, "docs_emb")
-	c.Assert(steps[1].Metadata.Effects[1].Action, qt.Equals, protocol.PlanningEffect_CREATE)
-	c.Assert([]protocol.PlanningOperation_Phase{steps[1].Operation.Phase, steps[2].Operation.Phase}, qt.DeepEquals,
-		[]protocol.PlanningOperation_Phase{protocol.PlanningOperation_LIFECYCLE, protocol.PlanningOperation_LIFECYCLE})
+	c.Assert(plannedSteps(plan), qt.DeepEquals, []string{"row-table-create/000000 row-table-create-operation"})
+	c.Assert(edges(plan), qt.HasLen, 0)
+	var effects []string
+	for _, effect := range plan.Contributions[0].Steps[0].Metadata.Effects {
+		effects = append(effects, effect.Action.String()+" "+effect.Subject.Kind+" "+effect.Subject.Name.Source)
+	}
+	c.Assert(effects, qt.DeepEquals, []string{"CREATE table records", "CREATE ydb.scheme-path records",
+		"CREATE index by_title", "CREATE index docs_emb", "CREATE index ft"})
 	for _, parent := range plan.Parents {
-		c.Assert(parent.Receipt.Steps, qt.HasLen, 3)
+		c.Assert(parent.Receipt.Steps, qt.HasLen, 1)
 	}
 	c.Assert(textUnits(c, plan, request.Capabilities), qt.DeepEquals, []string{
 		"CREATE TABLE `app/records` (\n    `id` Uint64 NOT NULL,\n    `gen` Int64,\n    `emb` String,\n    `body` Utf8,\n    `title` Utf8,\n" +
-			"    PRIMARY KEY (`id`),\n    INDEX `by_title` GLOBAL SYNC ON (`title`)\n);",
-		addDocsEmbSQL,
-		"ALTER TABLE `app/records` ADD INDEX `ft` GLOBAL USING fulltext_relevance ON (`body`) WITH (tokenizer=standard, use_filter_lowercase=true);",
+			"    PRIMARY KEY (`id`),\n    INDEX `by_title` GLOBAL SYNC ON (`title`),\n" +
+			"    INDEX `docs_emb` GLOBAL USING vector_kmeans_tree ON (`gen`, `emb`) COVER (`body`) WITH (distance=cosine, vector_type=float, vector_dimension=3, levels=1, clusters=2),\n" +
+			"    INDEX `ft` GLOBAL USING fulltext_relevance ON (`body`) WITH (tokenizer=standard, use_filter_lowercase=true)\n);",
 	})
+}
+
+// The creation carries a vector or full-text index through its payload and
+// back: the operation a host returns normalizes to the same request, whose
+// index holds the vector arm the pinned bindings keep as an unknown field.
+func TestNativeIndexCreation_RoundTrip(t *testing.T) {
+	c := testcheck.New(t)
+	plan, err := backend.New().PlanFeatures(c.Context(), documentsCreation(c, indexSet(nativeDeclared(docsEmb, prefixedTables))))
+	c.Assert(err, qt.IsNil)
+	value := plan.Contributions[0].Steps[0].Operation.Value.Value
+
+	normalized, err := tablecreate.Normalize(&protocol.ValueInput{Id: "again", Representation: protocol.ValueInput_OPERATION, Value: value})
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(normalized.Value.Payload), qt.Equals, string(value.Payload))
+	created, err := tablecreate.Request(normalized.Value)
+	c.Assert(err, qt.IsNil)
+	c.Assert(created.Indexes, qt.HasLen, 1)
+	spec, err := schema.NativeRequestIndex(created.Indexes[0])
+	c.Assert(err, qt.IsNil)
+	c.Assert(spec.GetGlobalVectorKmeansTreeIndex().GetVectorSettings().GetClusters(), qt.Equals, uint32(2))
 }
 
 func TestNativeIndexCreation_FailurePath(t *testing.T) {
