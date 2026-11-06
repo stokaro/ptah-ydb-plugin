@@ -1,4 +1,0 @@
-# The live test of this change needs the host to keep a grant on an object
-# its owner keeps, such as a resource pool a source leaves out
-# (stokaro/ptah#5501). Drop this file once that host change is in a release.
-fix/4204-g162-kept-object-grants
