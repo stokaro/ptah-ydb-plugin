@@ -35,6 +35,8 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 	result := &protocol.PlannedDeclarations{Complete: true, Declarations: make([]*protocol.DeclarationReceipt, len(indices))}
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
 	phase := authoredPhase(request)
+	anchor := lateAnchor(request)
+	var late []*protocol.StepIdentity
 	ranks := make(map[int64]bool)
 	for position, index := range indices {
 		if err := ctx.Err(); err != nil {
@@ -73,11 +75,17 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 			Operation: &protocol.PlanningOperation{Value: operation, Role: protocol.NativeOperation_STATEMENT, Phase: phase},
 			Metadata:  &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects},
 		})
+		if phase == protocol.PlanningOperation_LIFECYCLE && anchor != nil && !earlyKind(object.Kind) {
+			late = append(late, id)
+		}
 		result.Declarations[index] = &protocol.DeclarationReceipt{
 			Subject: proto.CloneOf(object.Subject), Strategy: "Create the authored definition without observed-state assumptions", Steps: []*protocol.StepIdentity{proto.CloneOf(id)},
 		}
 	}
 	if len(contribution.Steps) > 0 {
+		for _, step := range late {
+			contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(anchor), After: proto.CloneOf(step)})
+		}
 		result.Contributions = []*protocol.PlanningContribution{contribution}
 	}
 	return result, ctx.Err()
@@ -85,18 +93,89 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 
 // authoredPhase is the phase of every authored creation: the lifecycle span
 // where the host negotiated it, and the default window otherwise. The default
-// window lies after the tables, so a schema render wrote a topic after every
-// CREATE TABLE. The host's embedded engine at 74de0b65b wrote it first, ahead
-// of the users and the tables, on 25.1.4.7 and 26.2.1.14: its creations were
-// ordered by what they read alone. In the span a creation runs once the
-// objects its effects read exist, which places it the same way. Every kind
-// this service plans states what it reads as an effect (see kindReads and
-// sourceSecretEffects), which is what makes the span safe for it.
+// window lies after the tables and before the views, which matches no kind's
+// place in a schema render of the host's embedded engine at 74de0b65b. In the
+// span a creation runs once the objects its effects read exist, and the
+// dependency on lateAnchor moves a late kind's creation further down. Every
+// kind this service plans states what it reads as an effect (see kindReads
+// and sourceSecretEffects), which is what makes the span safe for it.
 func authoredPhase(request *protocol.PlanDeclarationsRequest) protocol.PlanningOperation_Phase {
 	if slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
 		return protocol.PlanningOperation_LIFECYCLE
 	}
 	return protocol.PlanningOperation_DEFAULT
+}
+
+// earlyKind reports whether the embedded engine at 74de0b65b created an
+// authored object of kind as soon as what it read existed: a topic, a secret,
+// an external data source and an external table, ahead of the users and the
+// tables. It created every other kind this service plans, a coordination
+// node, a resource pool, a classifier and a streaming query, after the
+// statements of the common objects and before the grants on the objects it
+// created, which it wrote last. Measured with schema render and schema
+// inspect --format sql on 25.1.4.7 and 26.2.1.14.
+func earlyKind(kind string) bool {
+	switch kind {
+	case schema.TopicProperties, schema.SecretProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties:
+		return true
+	default:
+		return false
+	}
+}
+
+// lateAnchor is the common step a creation of a late kind follows: the last
+// common step other than a marker ahead of the first grant or revoke on an
+// object request declares, or the last of all when there is none. The host keeps its
+// common steps in one sequence and writes those permissions among the others,
+// so a creation placed after the first of them would wait for a grant on
+// itself. Nil places the creation by its effects alone.
+func lateAnchor(request *protocol.PlanDeclarationsRequest) *protocol.StepIdentity {
+	var anchor *protocol.StepIdentity
+	for _, common := range request.GetCommonSteps() {
+		if permitsDeclaredObject(request, common) {
+			break
+		}
+		if !marker(common) {
+			anchor = common.GetId()
+		}
+	}
+	return anchor
+}
+
+// marker reports whether common is an ordering marker of the host, such as
+// the end of the lifecycle span, which a creation in the span cannot follow:
+// a step that names no object and has no effects. A grant on the database
+// has no effects either, and is no marker.
+func marker(common *protocol.CommonPlanningStep) bool {
+	return len(common.GetMetadata().GetEffects()) == 0 && common.GetCommonObject() == nil && common.GetParent() == nil && common.GetAddedColumn() == nil
+}
+
+// permitsDeclaredObject reports whether common grants or revokes a permission
+// on an object request declares: it reads the object, whatever database the
+// identity names.
+func permitsDeclaredObject(request *protocol.PlanDeclarationsRequest, common *protocol.CommonPlanningStep) bool {
+	if common.GetCommonObject().GetGrant() == nil && common.GetCommonObject().GetRevoke() == nil {
+		return false
+	}
+	for _, effect := range common.GetMetadata().GetEffects() {
+		if effect.GetAction() != protocol.PlanningEffect_READ {
+			continue
+		}
+		read := withoutDatabase(effect.GetSubject())
+		if slices.ContainsFunc(request.GetObjects(), func(object *protocol.ComparisonRecord) bool {
+			return provider.CompareIdentities(withoutDatabase(object.GetSubject()), read) == 0
+		}) {
+			return true
+		}
+	}
+	return false
+}
+
+// withoutDatabase is a copy of identity that names no database.
+func withoutDatabase(identity *protocol.ComparisonIdentity) *protocol.ComparisonIdentity {
+	identity = proto.CloneOf(identity)
+	identity.Database = &protocol.ComparisonPart{}
+	return identity
 }
 
 // kindReads returns the effects that make a declaration of object, the
