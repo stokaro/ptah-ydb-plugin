@@ -1,0 +1,17 @@
+tables:
+  items:
+    schema: h1
+    columns:
+      id: {type: Uint64, primary: true}
+      body: {type: Utf8}
+topics:
+  events:
+    schema: h1
+    min_active_partitions: 1
+coordination_nodes:
+  locks:
+    schema: h1
+    self_check_period: PT2S
+    read_consistency_mode: strict
+  jobs:
+    schema: h1
