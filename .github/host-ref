@@ -1,4 +1,0 @@
-# The host half of the index removal placement in a plan
-# (stokaro/ptah#5445, fix/4204-index-drops-after-creations). Remove this file
-# when a Ptah release carries it.
-fix/4204-index-drops-after-creations
