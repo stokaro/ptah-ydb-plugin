@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.21.0, which speaks provider contract 25.24.
+The module pins `provider-sdk` v0.22.0, which speaks provider contract 25.25.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -1031,6 +1031,21 @@ server. A YDB driver's error is never a
 reason, because YDB can quote a statement and its values, or a credential
 source: the host prints its code alone.
 
+A declaration a source decoder refuses gives a reason in the words of Ptah's
+built-in YDB engine: a topic, a changefeed, an external data source or table, a
+resource pool or classifier, a streaming query, an async replication or a
+transfer, by its YAML key or its name, the attribute, and what the attribute
+takes. `authored.Declared` writes it from the decoder's words around the
+refusal and the refusal itself without the value it quotes. A refusal another
+package wrote, such as the YQL splitter's, gives none. A Go directive that
+leaves out a required attribute is refused as the host's annotation parser
+refused it, and the host names the directive's place after the reason:
+
+```text
+provider decode source failed (InvalidArgument): topic "events": invalid retention_period: takes an ISO 8601 duration such as PT12H or P1D
+decode Go directives of engine "ydb": provider decode source failed (InvalidArgument): missing required annotation attribute "rank" on //ptah:schema:resourcepool:classifier at Refused
+```
+
 A failed execution and a commit that did not apply give a reason too, in
 `Execution.diagnostic` and `TransactionResult.diagnostic` (contract 25.18), and
 a host of that contract prints it after the outcome:
@@ -1265,7 +1280,9 @@ Topic observations preserve partition settings and quotas, retention, codecs,
 consumer options, and attributes. Live partition topology and topic/consumer
 statistics are excluded. A missing child description refuses the entire read.
 
-Indexes, implementation tables, changefeeds, and consumers are sorted by name.
+Indexes, implementation tables, changefeeds, and the consumers of a
+changefeed's topic are sorted by name; a topic's own consumers keep their
+order (see the topic section).
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
 Every observed model has a separate desired contract and an offline conversion.
 Comparison and planning remain limited to coordination nodes, the TTL, partitioning settings and column families of row tables, and the storage of
@@ -1427,6 +1444,19 @@ document; one that asks about every document plans to drop each node the
 document does not declare, and writes its HCL exports without the captured
 header. `TestHostKeepsTheNodesAnHCLDocumentDoesNotName` measures the first
 kind of host and skips on the second.
+
+An HCL file the host's embedded engine exported names that engine's
+coordination-node model in its captured header: owner `ptah.run/ydb`, kind
+`ptah.run/ydb/coordination-node`, schema version 1. The provider names that
+identity as a predecessor of its own coordination-node model
+(`models.predecessors`, contract 25.25), so a host that lists the feature reads
+such a file with the claim it was written with. Applied back, it plans
+nothing, and a node whose block is removed is dropped, as the embedded engine
+dropped it. A file the host cuts the document into carries the provider's
+identity. A host without the feature refuses the file with `unknown feature
+codec: "ptah.run/ydb/coordination-node"/desired`.
+`TestHostReadsTheBuiltinEnginesHCLExports_HappyPath` applies exports recorded
+from the embedded engine (`internal/backend/testdata/builtin-hcl`).
 
 A Go source carries the same entries as `ptah:schema:notdescribed`
 declarations, under `source.limits`, of the kinds the engine lists in
@@ -2234,7 +2264,10 @@ parsed and refused with the host's words. A Go consumer names a topic the same
 file declares. Each source describes the topics of the directories it reads
 completely, so a topic it leaves out is dropped; a `ptah:not-described topic`
 header entry of a YQL document keeps one. HCL has no topic block. The model
-keeps the consumers of a topic sorted by name.
+keeps the consumers of a declared topic in the order the declaration lists
+them, and those of a topic it reads in the order YDB describes them, which is
+the order they were added in, so a statement Ptah writes for a topic lists
+them as Ptah's built-in YDB engine did.
 
 A setting a declaration leaves out takes the value YDB gives a new topic, and
 the comparison reads both sides that way: one partition, a day of retention, a
@@ -3975,7 +4008,11 @@ and `@@...@@` delimit strings, a type suffix belongs to its string, and a
 backticked name carries the path it stands for. A `--!` comment is a setting
 the server reads only at the head of a text; the host clears `head` for a range
 inside one, where the comment is a comment. A string whose escape YDB refuses
-carries no value. A host of an earlier contract never calls the RPC and reads
+carries no value. A semicolon is a `SEMICOLON` token only where it ends a
+statement of the text: one that ends a statement inside a DEFINE ACTION or
+DEFINE SUBQUERY body, a DO BEGIN block or a lambda is an `OPERATOR`, so the
+host's statement splitter keeps such a body whole, as Ptah's built-in YDB
+engine split it. A host of an earlier contract never calls the RPC and reads
 YQL by its shared rules.
 
 ## Migration lint

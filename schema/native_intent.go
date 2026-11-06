@@ -93,6 +93,12 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 	if kind == IndexSettingsProperties {
 		definition["index_settings"] = indexSettingsDeclaration
 	}
+	if kind == TopicProperties {
+		// A topic's own definition says what its canonical form keeps; the
+		// shared text above stays as it is for the other kinds, whose
+		// identities it is part of.
+		definition["canonicalization"] = topicCanonicalization
+	}
 	if kind == SecretProperties {
 		definition["secrets"] = "value_env is a required PTAH_SECRET_ approved-input reference; observed presence carries no value or value reference; " +
 			"conversions derive a deterministic reference from the exact path; rotations require an explicit comparison request"
@@ -209,7 +215,9 @@ func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error)
 
 // sortNativeIntent sorts by name the lists the canonical form of a
 // declaration keeps in name order: indexes and their implementation tables,
-// changefeeds and topic consumers, and local indexes.
+// changefeeds and the consumers of their topics, and local indexes. A topic
+// keeps its consumers in the order the declaration lists them, as the host's
+// embedded engine wrote them into CREATE TOPIC and ALTER TOPIC.
 func sortNativeIntent(target proto.Message) {
 	switch intent := target.(type) {
 	case *native.IndexSetIntent:
@@ -224,8 +232,6 @@ func sortNativeIntent(target proto.Message) {
 		for _, feed := range intent.Changefeeds {
 			sortTopicIntent(feed.Topic)
 		}
-	case *native.TopicIntent:
-		sortTopicIntent(intent)
 	case *native.ColumnStorageIntent:
 		slices.SortFunc(intent.LocalIndexes, func(a, b *native.LocalIndexObservation) int { return strings.Compare(a.Name, b.Name) })
 	}

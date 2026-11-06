@@ -3,6 +3,8 @@ package authored_test
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -91,4 +93,65 @@ func TestWrapMatchesItsCause(t *testing.T) {
 	err := authored.Wrap(sentinel, "this user may not use the YDB coordination node /local/ptah_locks")
 	c.Assert(err, qt.ErrorIs, sentinel)
 	c.Assert(err, qt.ErrorMatches, "this user may not use the YDB coordination node /local/ptah_locks")
+}
+
+// valued stands for a refusal whose text quotes a declared value.
+type valued struct{ value string }
+
+func (v *valued) Error() string {
+	return fmt.Sprintf("invalid interval %q: takes an ISO 8601 duration", v.value)
+}
+func (v *valued) Unquoted() string { return "invalid interval: takes an ISO 8601 duration" }
+
+// Declared gives a source refusal the reason a host prints: the decoder's
+// words around the refusal, which name the declaration by its key, and the
+// refusal at the end of the chain, written without the value it quotes.
+func TestDeclared_HappyPath(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		reason string
+	}{
+		{name: "a reason the decoder wraps", err: fmt.Errorf("topic %q: %w", "events", authored.New(`unknown key "flavor"`)),
+			reason: `topic "events": unknown key "flavor"`},
+		{name: "a value the refusal quotes", err: fmt.Errorf("topic %q: %w", "events", &valued{value: "DO_NOT_REPORT"}),
+			reason: `topic "events": invalid interval: takes an ISO 8601 duration`},
+		{name: "a refusal alone", err: &valued{value: "DO_NOT_REPORT"}, reason: "invalid interval: takes an ISO 8601 duration"},
+		{name: "a key too long to repeat", err: fmt.Errorf("topic %q: %w", strings.Repeat("k", 600), &valued{value: "DO_NOT_REPORT"}),
+			reason: "invalid interval: takes an ISO 8601 duration"},
+		{name: "a refusal declared twice", err: authored.Declared(fmt.Errorf("topic %q: %w", "events", &valued{value: "DO_NOT_REPORT"})),
+			reason: `topic "events": invalid interval: takes an ISO 8601 duration`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			err := authored.Declared(test.err)
+			c.Assert(err, qt.ErrorMatches, regexp.QuoteMeta(test.err.Error()))
+			c.Assert(reasons(c, authored.Status(codes.InvalidArgument, err)), qt.CmpEquals(protocmp.Transform()),
+				[]*protocol.ProviderDiagnostic{{Reason: test.reason}})
+		})
+	}
+}
+
+// A refusal Declared cannot write without a value or a driver's text gives no
+// reason, so a host prints its code alone: one with no reason at the end of
+// its chain, one that joins two errors, and a quoted refusal another error
+// wraps with text after it.
+func TestDeclared_FailurePath(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "no error", err: nil},
+		{name: "a refusal written by another package", err: fmt.Errorf("topic %q: %w", "events", errors.New(driverText))},
+		{name: "two refusals joined", err: errors.Join(authored.New("a reason"), errors.New(driverText))},
+		{name: "a quoted refusal with text after it", err: fmt.Errorf("%w on //ptah:schema:topic", &valued{value: "DO_NOT_REPORT"})},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			err := authored.Declared(test.err)
+			c.Assert(err, qt.Equals, test.err)
+		})
+	}
 }
