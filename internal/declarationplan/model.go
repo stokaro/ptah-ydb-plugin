@@ -20,7 +20,9 @@ import (
 // ServiceID names the authored native-object planner.
 const ServiceID = "ydb-authored-objects"
 
-// OperationKind names an authored CREATE, with no observed operand.
+// OperationKind names an authored CREATE, with no observed operand. For the
+// resource pool default, which YDB creates with the database, it names the
+// change of the settings the declaration states (see Text).
 const OperationKind = schema.ProviderID + "/authored-create"
 
 // Kinds are the desired standalone models this service creates.
@@ -32,7 +34,8 @@ func Kinds() []string {
 // Model declares the desired-only CREATE operation and its text execution form.
 func Model() *protocol.ValueModel {
 	definition := []byte(`{"access":"creation inherits database access; explicit access requirements have no text form",` +
-		`"execution":"render one CREATE statement; the server checks existence during dispatch; SQL units only; no automatic retry",` +
+		`"execution":"render one CREATE statement, or for the resource pool default, which the database holds, one ALTER RESOURCE POOL SET of the settings ` +
+		`it names and no statement when it names none; the server checks existence during dispatch; SQL units only; no automatic retry",` +
 		`"kind":"github.com/stokaro/ptah-ydb-plugin/authored-create",` +
 		`"payload":"one complete normalized desired envelope; no current state"}`)
 	sum := sha256.Sum256(definition)
@@ -80,10 +83,14 @@ func Normalize(input *protocol.ValueInput) (*protocol.NormalizedValue, error) {
 	}
 	frozen := proto.CloneOf(value)
 	frozen.Payload = canonical
+	impact, reason := protocol.ChangeSemantics_ADDITIVE, "Create the authored object"
+	if creationAction(desired) == protocol.PlanningEffect_ALTER {
+		impact, reason = protocol.ChangeSemantics_BEHAVIORAL, "Set the settings of the pool default, which YDB creates with the database"
+	}
 	return &protocol.NormalizedValue{
 		Id: input.Id, Value: frozen, NormalizedOwner: proto.CloneOf(desired.Owner), CanonicalFormat: model.CanonicalFormat, CanonicalProjection: bytes.Clone(canonical),
 		OperationSemantics: &protocol.OperationSemantics{
-			Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Create the authored object",
+			Impact: impact, Reason: reason,
 			Access: protocol.ChangeSemantics_ACCESS_UNKNOWN, AccessReason: "Creation inherits access from the database",
 		},
 	}, nil
