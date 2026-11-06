@@ -127,6 +127,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest) (*protocol
 type planner struct {
 	request *protocol.PlanFeaturesRequest
 	result  *protocol.PlannedFeatures
+	// overlaps is what overlapRefusal reads of the request's tables, built
+	// for the first creation it checks.
+	overlaps *overlapIndex
 	// names are the tables the request declares or holds, which a rebuild's
 	// scratch name must not take.
 	names       map[string]bool
@@ -533,19 +536,20 @@ func (p *planner) contributeCreations() (*protocol.PlannedFeatures, error) {
 // request drops is refused in the words of objectplan.DirectoryKept, as the
 // host's embedded engine refused it: YDB keeps that directory after the drop.
 func (p *planner) overlapRefusal(item *creation) *protocol.PlannedFeatures {
-	for _, other := range p.request.Tables {
-		if provider.CompareIdentities(other.Subject, item.table.Subject) == 0 {
-			continue
-		}
-		if err := disjoint(item.table.Subject, other.Subject); err != nil {
-			created, held := tablePath(item.table.Subject), tablePath(other.Subject)
-			if other.Action == protocol.PlanningTable_DROP && strings.HasPrefix(held, created+"/") {
-				err = objectplan.DirectoryKept(held, created)
-			}
-			return refused(item.index, err.Error())
-		}
+	if p.overlaps == nil {
+		p.overlaps = newOverlapIndex(p.request.Tables)
 	}
-	return nil
+	at := p.overlaps.firstConflict(item.table.Subject)
+	if at < 0 {
+		return nil
+	}
+	other := p.request.Tables[at]
+	err := disjoint(item.table.Subject, other.Subject)
+	created, held := tablePath(item.table.Subject), tablePath(other.Subject)
+	if other.Action == protocol.PlanningTable_DROP && strings.HasPrefix(held, created+"/") {
+		err = objectplan.DirectoryKept(held, created)
+	}
+	return refused(item.index, err.Error())
 }
 
 // tablePath is the path of the table subject names, relative to the
