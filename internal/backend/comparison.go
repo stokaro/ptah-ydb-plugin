@@ -27,7 +27,7 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := Description()
+	description := described()
 	if err := provider.ValidateComparisonRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}

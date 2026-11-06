@@ -1,6 +1,7 @@
 package ydbdecl
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"path"
@@ -10,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 )
 
@@ -84,6 +86,9 @@ type TopicError struct {
 	Attribute string
 	Value     string
 	Reason    string
+	// Plain is Reason without the value of another attribute it quotes, or
+	// empty where Reason quotes none.
+	Plain string
 }
 
 func (e *TopicError) Error() string {
@@ -91,6 +96,17 @@ func (e *TopicError) Error() string {
 		return fmt.Sprintf("invalid %s: %s", e.Attribute, e.Reason)
 	}
 	return fmt.Sprintf("invalid %s %q: %s", e.Attribute, e.Value, e.Reason)
+}
+
+// Unquoted is the refusal without the value the declaration wrote: `invalid
+// retention_period: takes an ISO 8601 duration such as PT12H or P1D`. The
+// name and the directory of a topic or a consumer are its identity, not a
+// value, and stay quoted.
+func (e *TopicError) Unquoted() string {
+	if e.Attribute == TopicName || e.Attribute == TopicSchema {
+		return e.Error()
+	}
+	return "invalid " + e.Attribute + ": " + cmp.Or(e.Plain, e.Reason)
 }
 
 // ParseTopic reads a topic's settings out of values, keyed by attribute name.
@@ -168,7 +184,8 @@ func topicSettingsRefusal(spec Topic) *TopicError {
 		return &TopicError{Attribute: AttributeMaxActivePartitions,
 			Value: strconv.FormatUint(spec.MaxActivePartitions, 10),
 			Reason: fmt.Sprintf("it is below min_active_partitions, %d, which YDB refuses "+
-				"(`Invalid total partition count specified`)", minimum)}
+				"(`Invalid total partition count specified`)", minimum),
+			Plain: "it is below min_active_partitions, which YDB refuses (`Invalid total partition count specified`)"}
 	}
 	return nil
 }
@@ -408,8 +425,8 @@ func ValidateTopic(spec Topic) error {
 	names := make(map[string]bool, len(spec.Consumers))
 	for _, consumer := range spec.Consumers {
 		if names[consumer.Name] {
-			return fmt.Errorf("two of its consumers are named %q, and YDB names a consumer once per topic "+
-				"(`Consumer %s defined more than once`)", consumer.Name, consumer.Name)
+			return authored.New(fmt.Sprintf("two of its consumers are named %q, and YDB names a consumer once per topic "+
+				"(`Consumer %s defined more than once`)", consumer.Name, consumer.Name))
 		}
 		names[consumer.Name] = true
 		if _, err := ParseConsumer(ConsumerValues(consumer)); err != nil {

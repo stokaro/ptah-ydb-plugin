@@ -151,10 +151,10 @@ func TestHostVectorIndexesFromGo_HappyPath(t *testing.T) {
 }
 
 // The host's TestYDBVectorIndexes_CreatedWithTheTable, through Go, YAML and
-// HCL sources: a new table's vector indexes are created with it, and the next
-// run is synced, on both release lines. The host's embedded engine wrote them
-// inside the CREATE TABLE, and the provider adds each after the creation with
-// the statement that adds one to a table that exists.
+// HCL sources: a new table's vector indexes are created with it, inside its
+// CREATE TABLE as the host's embedded engine wrote them, so no statement adds
+// one to the table that exists, and the next run is synced, on both release
+// lines.
 func TestHostVectorIndexesCreatedWithTheTable_HappyPath(t *testing.T) {
 	const yamlSource = `tables:
   docs:
@@ -200,7 +200,7 @@ table "docs" {
   }
 }
 `
-	added := "ALTER TABLE `docs` ADD INDEX `docs_emb` GLOBAL USING vector_kmeans_tree ON (`gen`, `emb`) COVER (`body`) " +
+	created := "    INDEX `docs_emb` GLOBAL USING vector_kmeans_tree ON (`gen`, `emb`) COVER (`body`) " +
 		"WITH (distance=cosine, vector_type=float, vector_dimension=3, levels=1, clusters=2)"
 	for _, test := range []struct{ name, format, source string }{
 		{"Go", "go", docsTable("{directory}", "", docsEmb("docs_emb", "2"))},
@@ -211,11 +211,14 @@ table "docs" {
 			c := testcheck.New(t)
 			_, directory, _ := docsFixture(c)
 			source := strings.ReplaceAll(test.source, "{directory}", directory)
-			for _, run := range []kindRun{{"the creation", source, []string{added}}, {"a second run", source, nil}} {
-				output, err := hostApplySource(c, directory, test.format, source)
-				c.Assert(err, qt.IsNil, qt.Commentf("%s: %s", run.name, output))
-				c.Assert(statements(output, directory), qt.DeepEquals, run.want, qt.Commentf("%s: %s", run.name, output))
-			}
+			output, err := hostApplySource(c, directory, test.format, source)
+			c.Assert(err, qt.IsNil, qt.Commentf("the creation: %s", output))
+			c.Assert(statements(output, directory), qt.HasLen, 0, qt.Commentf("the creation: %s", output))
+			c.Assert(output, qt.Contains, created, qt.Commentf("the creation: %s", output))
+			again, err := hostApplySource(c, directory, test.format, source)
+			c.Assert(err, qt.IsNil, qt.Commentf("a second run: %s", again))
+			c.Assert(statements(again, directory), qt.HasLen, 0, qt.Commentf("a second run: %s", again))
+			c.Assert(pluginUnits(again), qt.HasLen, 0, qt.Commentf("a second run: %s", again))
 		})
 	}
 }
@@ -251,9 +254,10 @@ func docsFullText(directory, kind, analyzers string) string {
 }
 
 // The host's TestYDBFullText_RoundTrip, through a Go source on a line with
-// full-text indexes (26.2): the index is created with its analyzers, another
-// tokenizer and another kind each drop it and add it again, and every next run
-// is synced. `ptah-compat schema inspect` writes the analyzers in the index
+// full-text indexes (26.2): the index is created with its analyzers and with
+// its table, inside the CREATE TABLE as the host's embedded engine wrote it,
+// so no statement adds it; another tokenizer and another kind each drop it and
+// add it again, and every next run is synced. `ptah-compat schema inspect` writes the analyzers in the index
 // block and the document applied back is synced, where the host's embedded
 // engine wrote none and refused its own document (`a YDB full-text index
 // requires analyzer settings in WITH`).
@@ -270,7 +274,7 @@ func TestHostFullTextIndexFromGo_HappyPath(t *testing.T) {
 	}
 	plain := docsFullText(directory, "fulltext_plain", ` tokenizer="keyword" use_filter_lowercase="true" use_filter_stopwords="false"`)
 	applyKindRuns(c, directory, []kindRun{
-		{"the index added", relevance("standard"), []string{add("fulltext_relevance", "tokenizer=standard, use_filter_lowercase=true")}},
+		{"the table created with the index", relevance("standard"), nil},
 		{"a second run", relevance("standard"), nil},
 		{"another tokenizer", relevance("keyword"), []string{"ALTER TABLE `docs` DROP INDEX `ft`", add("fulltext_relevance", "tokenizer=keyword, use_filter_lowercase=true")}},
 		{"a run after the tokenizer", relevance("keyword"), nil},
@@ -375,9 +379,9 @@ func TestHostIntrospectsAColumnTable_HappyPath(t *testing.T) {
 		defer cancel()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	// The provider spells the store as its README does; the host's embedded
-	// engine wrote store="column", which reads the same.
-	table := `//ptah:schema:table name="events" schema="` + directory + `" store="COLUMN" partition_by_hash="id" column_shards="1"`
+	// The export writes store="column", as the host's embedded engine did;
+	// the source the test applies spells it COLUMN, which reads the same.
+	table := `//ptah:schema:table name="events" schema="` + directory + `" store="column" partition_by_hash="id" column_shards="1"`
 	for _, step := range []struct {
 		name, indexes string
 		want          []string

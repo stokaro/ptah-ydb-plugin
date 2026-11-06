@@ -19,6 +19,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 type creationFixture struct {
@@ -247,6 +248,137 @@ func TestNativeTableCreationConfirmsItsIndexes_FailurePath(t *testing.T) {
 			c := testcheck.New(t)
 			dispatched, err := indexedCreation(c, test.held)
 			c.Assert(err, qt.ErrorMatches, test.want)
+			c.Assert(dispatched, qt.IsTrue)
+		})
+	}
+}
+
+// TestNativeTableCreationsShareALentSession pins that two creations borrowing
+// from one lender run in one session, which the lender closes when the
+// execution ends, and that a session a creation failed on is closed at once
+// and never lent again: the next creation opens its own. A release that fails
+// at the end is the lender's error, not a creation's.
+func TestNativeTableCreationsShareALentSession(t *testing.T) {
+	for _, test := range []struct {
+		name               string
+		first              creationFixture
+		guardFailure       error
+		firstFailed        bool
+		firstDispatched    bool
+		closeFailure       bool
+		events             []string
+		lenderCloseFailure bool
+	}{
+		{name: "both confirmed", firstDispatched: true,
+			events: []string{"list", "open", "guard", "create", "describe", "list", "guard", "create", "describe", "close"}},
+		{name: "the first reply lost", first: creationFixture{writeFailure: true}, firstFailed: true, firstDispatched: true,
+			events: []string{"list", "open", "guard", "create", "close", "list", "open", "guard", "create", "describe", "close"}},
+		{name: "the first table read back changed", first: creationFixture{changed: true}, firstFailed: true, firstDispatched: true,
+			events: []string{"list", "open", "guard", "create", "describe", "close", "list", "open", "guard", "create", "describe", "close"}},
+		{name: "the first lock check failed", guardFailure: errors.New("lease lost"), firstFailed: true,
+			events: []string{"list", "open", "guard", "close", "list", "open", "guard", "create", "describe", "close"}},
+		{name: "the release at the end failed", closeFailure: true, firstDispatched: true, lenderCloseFailure: true,
+			events: []string{"list", "open", "guard", "create", "describe", "list", "guard", "create", "describe", "close"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			fixture := test.first
+			fixture.closeFailure = test.closeFailure
+			lender := &nativeapi.CreationSessions{Open: func(context.Context) (nativeapi.CreationSession, error) {
+				fixture.events = append(fixture.events, "open")
+				return &fixture, nil
+			}}
+			api := &nativeapi.TableCreation{Scheme: &fixture, Sessions: lender}
+			owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
+			operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}}, nil)
+			c.Assert(err, qt.IsNil)
+			guardErr := test.guardFailure
+			guard := func(context.Context) error {
+				fixture.events = append(fixture.events, "guard")
+				return guardErr
+			}
+
+			dispatched, firstErr := api.Apply(t.Context(), "/local", operation.Value, guard)
+			fixture.writeFailure, fixture.changed, guardErr = false, false, nil
+			secondDispatched, secondErr := api.Apply(t.Context(), "/local", operation.Value, guard)
+			closeErr := lender.Close()
+
+			c.Assert(dispatched, qt.Equals, test.firstDispatched)
+			c.Assert(firstErr != nil, qt.Equals, test.firstFailed)
+			c.Assert(secondDispatched, qt.IsTrue)
+			c.Assert(secondErr, qt.IsNil)
+			c.Assert(closeErr != nil, qt.Equals, test.lenderCloseFailure)
+			c.Assert(fixture.events, qt.DeepEquals, test.events)
+			c.Assert(lender.Close(), qt.IsNil)
+		})
+	}
+}
+
+// vectorIndex is a vector index on emb with clusters clusters, as a creation
+// declares it.
+func vectorIndex(clusters uint32) *native.GlobalVectorKMeansTreeIndex {
+	return &native.GlobalVectorKMeansTreeIndex{VectorSettings: &native.KMeansTreeSettings{
+		Settings: &native.VectorIndexSettings{Metric: native.VectorIndexSettings_DISTANCE_COSINE.Enum(), VectorType: native.VectorIndexSettings_VECTOR_TYPE_FLOAT.Enum(),
+			VectorDimension: new(uint32(3))}, Clusters: new(clusters), Levels: new(uint32(1))}}
+}
+
+// readyVectorIndex is the ready vector index by_emb the table reads back with.
+func readyVectorIndex(clusters uint32) *native.TableIndexDescription {
+	return &native.TableIndexDescription{Name: "by_emb", IndexColumns: []string{"emb"}, Status: native.TableIndexDescription_STATUS_READY,
+		Type: &native.TableIndexDescription_GlobalVectorKmeansTreeIndex{GlobalVectorKmeansTreeIndex: vectorIndex(clusters)}}
+}
+
+// vectorCreation creates app.records with the vector index by_emb on emb,
+// built with the table, against a table that reads back with held.
+func vectorCreation(c *qt.C, held []*native.TableIndexDescription) (*creationFixture, bool, error) {
+	c.Helper()
+	bytes := &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_STRING}}}}}
+	fixture := &creationFixture{indexes: held, columns: []*native.ColumnMeta{{Name: "emb", Type: bytes, NotNull: new(false)}}}
+	api := &nativeapi.TableCreation{Scheme: fixture, Open: func(context.Context) (nativeapi.CreationSession, error) { return fixture, nil }}
+	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
+	compiled, err := tablecreate.Compile(owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"},
+		Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "emb", Type: "String", Nullable: true}}}, nil)
+	c.Assert(err, qt.IsNil)
+	index, err := schema.RequestIndex(&native.IndexIntent{Name: "by_emb", IndexColumns: []string{"emb"},
+		Type: &native.IndexIntent_GlobalVectorKmeansTreeIndex{GlobalVectorKmeansTreeIndex: vectorIndex(4)}})
+	c.Assert(err, qt.IsNil)
+	compiled.Indexes = append(compiled.Indexes, index)
+	operation, err := tablecreate.CaptureRequest("create", owner, compiled)
+	c.Assert(err, qt.IsNil)
+	dispatched, err := api.Apply(c.Context(), "/local", operation.Value, func(context.Context) error { return nil })
+	return fixture, dispatched, err
+}
+
+// A creation that builds a vector index with the table sends its arm to the
+// table service, and is confirmed by the index the table reads back with:
+// ready, of its kind, on its columns and with its settings.
+func TestNativeTableCreationBuildsAVectorIndex_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+
+	fixture, dispatched, err := vectorCreation(c, []*native.TableIndexDescription{readyVectorIndex(4)})
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(dispatched, qt.IsTrue)
+	c.Assert(fixture.sent.Indexes, qt.HasLen, 1)
+	sent, err := schema.NativeRequestIndex(fixture.sent.Indexes[0])
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(sent.GetGlobalVectorKmeansTreeIndex(), vectorIndex(4)), qt.IsTrue)
+}
+
+func TestNativeTableCreationBuildsAVectorIndex_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		held []*native.TableIndexDescription
+	}{
+		{name: "other settings", held: []*native.TableIndexDescription{readyVectorIndex(8)}},
+		{name: "a global index", held: []*native.TableIndexDescription{readyIndex("by_emb", "sync", "emb")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			_, dispatched, err := vectorCreation(c, test.held)
+
+			c.Assert(err, qt.ErrorMatches, `YDB created index "by_emb" differs from the request`)
 			c.Assert(dispatched, qt.IsTrue)
 		})
 	}

@@ -50,13 +50,20 @@ func (s Identity) QuotedPath() string {
 	return "`" + strings.ReplaceAll(strings.ReplaceAll(s.Path(), "\\", "\\\\"), "`", "\\`") + "`"
 }
 
-// Column names a nonnullable native primitive storage column.
+// Column names a native primitive storage column, nonnullable unless
+// Nullable says so.
 type Column struct {
 	Name string
 	Type Ydb.Type_PrimitiveTypeId
+	// Nullable reports a column that holds NULL: an optional of Type with no
+	// NOT NULL. Only a layout another program wrote has one (see Definition).
+	Nullable bool
 }
 
-// Definition binds an exact native layout to one ownership marker.
+// Definition binds an exact native layout to one ownership marker. A
+// definition with no Attribute is the layout of a table that carries no
+// attribute at all: the stores Ptah's built-in YDB engine wrote, which a
+// provider reads and writes in their own layout rather than create.
 type Definition struct {
 	Identity
 	Attribute, Marker string
@@ -89,11 +96,15 @@ func (s Definition) ValidateLayout(value *native.DescribeTableResult) error {
 }
 
 // owns reports whether the described entry is a row table of the definition's
-// name whose only attribute is the definition's ownership marker.
+// name whose only attribute is the definition's ownership marker, or that
+// carries no attribute for a definition with none.
 func (s Definition) owns(value *native.DescribeTableResult) bool {
 	rowStore := value.StoreType == Ydb_Table.StoreType_STORE_TYPE_ROW || value.StoreType == Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED
-	return value.GetSelf().GetName() == s.Name && value.GetSelf().GetType() == Ydb_Scheme.Entry_TABLE && rowStore &&
-		len(value.Attributes) == 1 && value.Attributes[s.Attribute] == s.Marker
+	marked := len(value.Attributes) == 1 && value.Attributes[s.Attribute] == s.Marker
+	if s.Attribute == "" {
+		marked = len(value.Attributes) == 0
+	}
+	return value.GetSelf().GetName() == s.Name && value.GetSelf().GetType() == Ydb_Scheme.Entry_TABLE && rowStore && marked
 }
 
 // plainLayout reports whether the table has the definition's column count and
@@ -104,22 +115,23 @@ func (s Definition) plainLayout(value *native.DescribeTableResult) bool {
 }
 
 // validateColumns refuses a described column the definition does not declare
-// with the same primitive type, a column with a default or a non-default
-// family, and a declared column the table lacks.
+// with the same primitive type and nullability, a column with a default or a
+// non-default family, and a declared column the table lacks.
 func (s Definition) validateColumns(value *native.DescribeTableResult) error {
-	expected := make(map[string]Ydb.Type_PrimitiveTypeId, len(s.Columns))
+	expected := make(map[string]Column, len(s.Columns))
 	for _, column := range s.Columns {
-		expected[column.Name] = column.Type
+		expected[column.Name] = column
 	}
 	for _, column := range value.Columns {
 		wanted, ok := expected[column.Name]
 		// A primitive type is nonnullable. Optional native types may carry the
 		// explicit NOT NULL bit; compare their decoded primitive representation.
-		actual := column.Type
-		if optional := actual.GetOptionalType(); optional != nil && column.GetNotNull() {
-			actual = optional.Item
+		actual, nullable := column.Type, false
+		if optional := actual.GetOptionalType(); optional != nil {
+			actual, nullable = optional.Item, !column.GetNotNull()
 		}
-		if !ok || actual.GetTypeId() != wanted || column.DefaultValue != nil || (column.Family != "" && column.Family != "default") {
+		if !ok || actual.GetTypeId() != wanted.Type || nullable != wanted.Nullable || column.DefaultValue != nil ||
+			(column.Family != "" && column.Family != "default") {
 			return fmt.Errorf("YDB storage has an incompatible column")
 		}
 		delete(expected, column.Name)

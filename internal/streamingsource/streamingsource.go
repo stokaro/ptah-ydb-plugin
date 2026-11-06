@@ -14,7 +14,9 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streaming"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -59,8 +61,22 @@ type declared struct {
 }
 
 // Decode reads the document's claimed fragments, indexed by their positions.
-// An invalid declaration or duplicate identity refuses the whole document.
+// An invalid declaration or duplicate identity refuses the whole document,
+// with the reason a host prints in the words of the host's embedded engine
+// and without the query text or another value the declaration wrote (see
+// authored.Declared).
 func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
+	values, err := decode(ctx, document)
+	return values, authored.Declared(err)
+}
+
+// refuse is a refusal a host prints. Its text names the declared objects and
+// attributes and never a value.
+func refuse(format string, args ...any) error {
+	return authored.New(fmt.Sprintf(format, args...))
+}
+
+func decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -74,7 +90,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			continue
 		}
 		if fragment.BindingId != "" || fragment.Subject != nil || len(fragment.GetInheritedAttributes().GetEntries()) != 0 {
-			return nil, fmt.Errorf("unsupported YDB streaming query source attachment")
+			return nil, refuse("unsupported YDB streaming query source attachment")
 		}
 		var read []declared
 		switch {
@@ -84,13 +100,20 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 				return nil, err
 			}
 		case document.Format == protocol.SourceDocument_GO_ANNOTATIONS && fragment.GetGoDirective() != nil && fragment.Selector == DirectiveQuery:
+			// The host names the directive and its place after the reason;
+			// the query is named in front of it, as the host's embedded
+			// engine named it.
+			name, err := requireAttributes(fragment.GetValue().GetMapping())
+			if err != nil {
+				return nil, err
+			}
 			object, err := query("", fragment.GetValue().GetMapping(), document.Format)
 			if err != nil {
-				return nil, fmt.Errorf("%w on //%s", err, DirectiveQuery)
+				return nil, fmt.Errorf("streaming query %q: %w", name, err)
 			}
 			read = append(read, object)
 		default:
-			return nil, fmt.Errorf("unsupported YDB streaming query source format")
+			return nil, refuse("unsupported YDB streaming query source format")
 		}
 		result[index] = nil
 		for _, object := range read {
@@ -115,7 +138,7 @@ func addQueryValues(ctx context.Context, document *protocol.SourceDocument, obje
 		}
 		identity := streaming.Display(object.directory, object.name)
 		if seen[identity] {
-			return fmt.Errorf("streaming query %q is declared twice", identity)
+			return refuse("streaming query %q is declared twice", identity)
 		}
 		seen[identity] = true
 		owner := &protocol.Reference{Engine: "ydb", Kind: schema.StreamingQueryProperties, Schema: object.directory, Name: object.name}
@@ -139,13 +162,13 @@ func yamlQueries(fragment *protocol.SourceFragment, format protocol.SourceDocume
 	var read []declared
 	mapping := fragment.GetValue().GetMapping()
 	if mapping == nil && fragment.GetValue().GetNull() == nil {
-		return nil, fmt.Errorf("%s requires a mapping", KeyQueries)
+		return nil, refuse("%s requires a mapping", KeyQueries)
 	}
 	entries := slices.Clone(mapping.GetEntries())
 	slices.SortFunc(entries, func(a, b *protocol.SourceEntry) int { return strings.Compare(a.GetKey(), b.GetKey()) })
 	for position, entry := range entries {
 		if position > 0 && entry.Key == entries[position-1].Key {
-			return nil, fmt.Errorf("%s: duplicate key %q", KeyQueries, entry.Key)
+			return nil, refuse("%s: duplicate key %q", KeyQueries, entry.Key)
 		}
 		object, err := query(entry.Key, entry.GetValue().GetMapping(), format)
 		if err != nil {
@@ -157,24 +180,34 @@ func yamlQueries(fragment *protocol.SourceFragment, format protocol.SourceDocume
 	return read, nil
 }
 
+// requireAttributes refuses a Go directive that leaves out the name or the
+// text, as the host's annotation parser refused one, and returns the name.
+func requireAttributes(mapping *protocol.SourceMapping) (string, error) {
+	values := make(map[string]string)
+	for _, entry := range mapping.GetEntries() {
+		values[entry.Key] = entry.GetValue().GetText()
+	}
+	return strings.TrimSpace(values["name"]), ydbdecl.RequireAttributes(values, "name", "text")
+}
+
 func query(name string, mapping *protocol.SourceMapping, format protocol.SourceDocument_Format) (declared, error) {
 	if mapping == nil {
-		return declared{}, fmt.Errorf("a streaming query requires a mapping")
+		return declared{}, refuse("a streaming query requires a mapping")
 	}
 	object := declared{name: name}
 	seen := make(map[string]bool)
 	for _, entry := range mapping.GetEntries() {
 		if !slices.Contains(attributes(), entry.Key) {
-			return declared{}, fmt.Errorf("unknown key %q", entry.Key)
+			return declared{}, refuse("unknown key %q", entry.Key)
 		}
 		if seen[entry.Key] {
-			return declared{}, fmt.Errorf("duplicate key %q", entry.Key)
+			return declared{}, refuse("duplicate key %q", entry.Key)
 		}
 		seen[entry.Key] = true
 		value := entry.GetValue()
 		if format == protocol.SourceDocument_GO_ANNOTATIONS {
 			if _, ok := value.GetValue().(*protocol.SourceValue_Text); !ok {
-				return declared{}, fmt.Errorf("attribute %s requires text", entry.Key)
+				return declared{}, refuse("attribute %s requires text", entry.Key)
 			}
 		}
 		if entry.Key == "run" || entry.Key == "allow_state_reset" {
@@ -233,7 +266,7 @@ func scalar(value *protocol.SourceValue) (string, error) {
 	case *protocol.SourceValue_Null:
 		return "", nil
 	default:
-		return "", fmt.Errorf("expected a scalar")
+		return "", refuse("expected a scalar")
 	}
 }
 
@@ -243,7 +276,7 @@ func boolean(value *protocol.SourceValue, format protocol.SourceDocument_Format)
 	if format == protocol.SourceDocument_GO_ANNOTATIONS {
 		flag, err := strconv.ParseBool(value.GetText())
 		if err != nil {
-			return nil, fmt.Errorf("expected a boolean")
+			return nil, refuse("expected a boolean")
 		}
 		return &flag, nil
 	}
@@ -260,5 +293,5 @@ func boolean(value *protocol.SourceValue, format protocol.SourceDocument_Format)
 			return new(false), nil
 		}
 	}
-	return nil, fmt.Errorf("expected a boolean")
+	return nil, refuse("expected a boolean")
 }

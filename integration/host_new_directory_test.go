@@ -239,17 +239,83 @@ func TestHostCreatesInANewDirectoryWithoutASelector_HappyPath(t *testing.T) {
 	c.Assert(again, qt.Contains, "Schema is synced, no changes to be made")
 }
 
-// A run with no schema selector cannot create a topic in a directory the walk
-// leaves out, here a dot-prefixed one the realm holds. The root's complete
-// claim leaves that directory unknown, so nothing establishes the topic's
-// absence there. The host leaves the topic unplanned, says why, and exits as
-// for a run with nothing to change, and the directory stays empty.
-func TestHostCannotCreateInASkippedDirectoryWithoutASelector_FailurePath(t *testing.T) {
+// A run with no schema selector creates a topic in a directory whose name
+// starts with a dot, as the host's embedded engine creates it. Neither reads
+// such a directory: it holds nothing the read describes, so the root's
+// complete claim establishes the topic's absence there.
+func TestHostCreatesInADotPrefixedDirectoryWithoutASelector_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	opened, _, _ := lockFixture(c)
+	address, root, opened := dotPrefixedRealm(c)
+
+	output, err := hostApplyEverywhere(c, address, "topics:\n  events:\n    schema: .hidden\n    min_active_partitions: 1\n")
+
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
+	c.Assert(output, qt.Not(qt.Contains), "absence was not established")
+	c.Assert(output, qt.Contains, "Schema apply completed successfully")
+	c.Assert(heldEntries(c, opened, path.Join(root, ".hidden")), qt.DeepEquals, map[string]Ydb_Scheme.Entry_Type{"events": Ydb_Scheme.Entry_TOPIC})
+}
+
+// An object a directory whose name starts with a dot holds stays where it is
+// when a run with no schema selector declares nothing there, as the host's
+// embedded engine left it: the read does not describe it, so no drop is
+// planned. The cost, the engine's too, is that a run declaring an object
+// there that exists plans its creation again and fails; the provider refuses
+// that unit before it sends it, and the directory keeps what it held.
+func TestHostLeavesWhatADotPrefixedDirectoryHoldsAlone_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	address, root, opened := dotPrefixedRealm(c)
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TOPIC `"+path.Join(root, ".hidden", "kept")+"`"), qt.IsNil)
+	const declared = "topics:\n  events:\n    schema: .hidden\n    min_active_partitions: 1\n"
+
+	created, createErr := hostApplyEverywhere(c, address, declared)
+	again, againErr := hostApplyEverywhere(c, address, declared)
+
+	c.Assert(createErr, qt.IsNil, qt.Commentf("%s", created))
+	c.Assert(created, qt.Not(qt.Contains), "kept")
+	c.Assert(againErr, qt.IsNotNil, qt.Commentf("%s", again))
+	c.Assert(again, qt.Contains, "provider execution: NOT_STARTED (0 units confirmed applied)")
+	c.Assert(heldEntries(c, opened, path.Join(root, ".hidden")), qt.DeepEquals,
+		map[string]Ydb_Scheme.Entry_Type{"events": Ydb_Scheme.Entry_TOPIC, "kept": Ydb_Scheme.Entry_TOPIC})
+}
+
+// A Go export of the whole database writes no `ptah:schema:notdescribed`
+// entry for a native kind when the database holds the dev realm directory,
+// and nothing a realm holds, as the host's embedded engine at 74de0b65b,
+// which left the directory out of its read as no part of the schema. The read
+// claims the directory as holding nothing; claimed unknown, it made the export
+// name every native kind as not described, and a topic or a node left out of
+// the export was then never dropped.
+func TestHostIntrospectOfTheDatabaseClaimsTheDevRealms_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := inspectionFixture(c)
+	realm := path.Join(database, "ptah_dev", directory)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		removeTree(ctx, opened, realm)
+	})
+	createSchemaObject(c, opened, "CREATE TOPIC `"+path.Join(realm, "events")+"`", "DROP TOPIC IF EXISTS `"+path.Join(realm, "events")+"`")
+	out := c.TempDir()
+
+	hostExport(c, "introspect", "--out", out, "--single-file")
+
+	written, err := os.ReadFile(filepath.Join(out, "schema.go"))
+	c.Assert(err, qt.IsNil)
+	source := string(written)
+	c.Assert(source, qt.Not(qt.Matches), `(?s).*//ptah:schema:notdescribed kind="(coordination_node|external_data_source|external_table|replication|secret|topic|transfer)".*`)
+	c.Assert(source, qt.Not(qt.Contains), directory)
+}
+
+// dotPrefixedRealm is a dev realm of its own whose root holds the directory
+// .hidden, and the connection that made it. The cleanup removes the
+// directory, what it holds and the run's lock node, which a session on a
+// realm keeps at the realm's root.
+func dotPrefixedRealm(c *qt.C) (address, root string, opened *connection.Connection) {
+	c.Helper()
+	opened, _, _ = inspectionFixture(c)
 	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
-	address, root := realmFixture(c, opened, base)
+	address, root = realmFixture(c, opened, base)
 	c.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -257,14 +323,7 @@ func TestHostCannotCreateInASkippedDirectoryWithoutASelector_FailurePath(t *test
 		_ = opened.Driver.Coordination().DropNode(ctx, path.Join(root, locking.NodeName))
 	})
 	c.Assert(opened.Driver.Scheme().MakeDirectory(c.Context(), path.Join(root, ".hidden")), qt.IsNil)
-
-	output, err := hostApplyEverywhere(c, address, "topics:\n  events:\n    schema: .hidden\n    min_active_partitions: 1\n")
-
-	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
-	c.Assert(output, qt.Contains, `topic ".hidden".events could not be compared between the database and the desired schema: `+
-		"The current topic or its absence was not established")
-	c.Assert(output, qt.Contains, "No changes planned, but 1 comparison limit remains unresolved.")
-	c.Assert(heldEntries(c, opened, path.Join(root, ".hidden")), qt.DeepEquals, make(map[string]Ydb_Scheme.Entry_Type))
+	return address, root, opened
 }
 
 // A run with no schema selector reads the realm's root, which holds the

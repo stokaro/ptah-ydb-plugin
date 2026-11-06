@@ -40,6 +40,10 @@ type Common struct {
 	// (schema.observed-primary-keys), which the columns' membership does not
 	// state.
 	PrimaryKeys bool
+	// IndexMethods reports each common index's method in the spelling table
+	// preparation states a declared index's kind with
+	// (schema.index-methods); see commonIndexes.
+	IndexMethods bool
 	// UnreadTables names each replica table no replication the read
 	// describes writes as a table the read does not describe; see
 	// unreadReplicas. Without it such a table is left out silently.

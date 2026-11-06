@@ -8,7 +8,6 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -256,32 +255,10 @@ func plainDefaultFamily(family *native.ColumnFamily) bool {
 }
 
 // stated is a row table's settings without the ones YDB's documentation gives
-// a new table, the baseline the embedded engine reports a table against:
-// splitting by size at 2048 MB, not by load, at least one partition, and no
-// key Bloom filter. A read reports them for every table.
+// a new table (see [schema.WithoutNewTableDefaults]), the baseline the
+// embedded engine reports a table against.
 func stated(intent *native.RowTableIntent) *native.RowTableIntent {
-	settings := &native.RowTableIntent{PartitioningSettings: proto.CloneOf(intent.GetPartitioningSettings()), ReadReplicasSettings: intent.GetReadReplicasSettings(),
-		KeyBloomFilter: intent.GetKeyBloomFilter(), UniformPartitions: intent.GetUniformPartitions()}
-	if partitioning := settings.GetPartitioningSettings(); partitioning != nil {
-		if partitioning.GetPartitioningBySize() == Ydb.FeatureFlag_ENABLED {
-			partitioning.PartitioningBySize = Ydb.FeatureFlag_STATUS_UNSPECIFIED
-		}
-		if partitioning.GetPartitionSizeMb() == defaultPartitionSizeMB {
-			partitioning.PartitionSizeMb = 0
-		}
-		if partitioning.GetPartitioningByLoad() == Ydb.FeatureFlag_DISABLED {
-			partitioning.PartitioningByLoad = Ydb.FeatureFlag_STATUS_UNSPECIFIED
-		}
-		if partitioning.GetMinPartitionsCount() == 1 {
-			partitioning.MinPartitionsCount = 0
-		}
-	}
-	if settings.GetKeyBloomFilter() == Ydb.FeatureFlag_DISABLED {
-		settings.KeyBloomFilter = Ydb.FeatureFlag_STATUS_UNSPECIFIED
-	}
-	return settings
+	settings := schema.WithoutNewTableDefaults(intent)
+	return &native.RowTableIntent{PartitioningSettings: settings.GetPartitioningSettings(), ReadReplicasSettings: settings.GetReadReplicasSettings(),
+		KeyBloomFilter: settings.GetKeyBloomFilter(), UniformPartitions: settings.GetUniformPartitions()}
 }
-
-// defaultPartitionSizeMB is the partition size YDB's documentation gives a new
-// table that splits by size.
-const defaultPartitionSizeMB = 2048

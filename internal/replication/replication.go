@@ -114,6 +114,17 @@ func (e *DeclarationError) Error() string {
 	return fmt.Sprintf("invalid %s %q: %s", e.Attribute, e.Value, e.Reason)
 }
 
+// Unquoted is the refusal without the value the declaration wrote: `invalid
+// flush_interval: YDB keeps whole seconds, ...`. The name and the directory
+// of a replication or a transfer are its identity, not a value, and stay
+// quoted.
+func (e *DeclarationError) Unquoted() string {
+	if e.Attribute == AttributeName || e.Attribute == AttributeSchema {
+		return e.Error()
+	}
+	return "invalid " + e.Attribute + ": " + e.Reason
+}
+
 // ParseReplication reads a replication's connection and consistency out of
 // values, keyed by attribute name, and ignores every key it does not name:
 // the name, the directory and the items are the caller's.

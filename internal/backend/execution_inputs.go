@@ -24,7 +24,7 @@ var _ provider.ExecutionInputDescriber = (*Provider)(nil)
 // DescribeExecutionInputs validates the whole batch and reports only input
 // names. It performs no I/O and never reads the provider process environment.
 func (*Provider) DescribeExecutionInputs(ctx context.Context, request *protocol.DescribeExecutionInputsRequest) (*protocol.ExecutionInputs, error) {
-	if err := provider.ValidateExecutionInputsRequest(Description(), request); err != nil {
+	if err := provider.ValidateExecutionInputsRequest(described(), request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	inputs, err := requiredInputs(ctx, request.Units)
@@ -35,7 +35,7 @@ func (*Provider) DescribeExecutionInputs(ctx context.Context, request *protocol.
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.ExecutionInputs{Complete: true, Inputs: inputs}
-	if err := provider.ValidateExecutionInputs(Description(), request, result); err != nil {
+	if err := provider.ValidateExecutionInputs(described(), request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil

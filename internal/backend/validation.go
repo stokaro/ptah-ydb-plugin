@@ -21,7 +21,7 @@ func (*Provider) ValidateSchema(ctx context.Context, request *protocol.ValidateS
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := Description()
+	description := described()
 	if err := provider.ValidateSchemaRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}

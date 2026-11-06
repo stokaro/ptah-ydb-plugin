@@ -82,6 +82,12 @@ func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest
 		return refusal, nil
 	}
 	defer release()
+	// The table creations of the request share one table session, which the
+	// request gives back when it ends, as it does its SQL connection.
+	s.creations = &nativeapi.CreationSessions{Open: func(ctx context.Context) (nativeapi.CreationSession, error) {
+		return nativeapi.OpenTable(ctx, s.connection.Driver)
+	}}
+	defer s.releaseCreations()
 	stopped := s.timedOut(ctx, request)
 	failed := s.unitFailure(ctx, request, batch.services)
 	// The statement timeout bounds each unit's statements, not the check of
@@ -139,8 +145,8 @@ func validateBatch(request *protocol.ExecuteRequest) (*executionBatch, *protocol
 			}
 		case *protocol.Unit_Native:
 			batch.hasNative = true
-			inputs := &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: Description().Features, Values: []*protocol.ValueInput{{Id: unit.ChangeId, Representation: protocol.ValueInput_OPERATION, Value: unit.GetNative()}}}
-			if err := provider.ValidateValueInputs(Description(), inputs); err != nil {
+			inputs := &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: described().Features, Values: []*protocol.ValueInput{{Id: unit.ChangeId, Representation: protocol.ValueInput_OPERATION, Value: unit.GetNative()}}}
+			if err := provider.ValidateValueInputs(described(), inputs); err != nil {
 				return nil, &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.unsupported-unit"}, nil
 			}
 			if _, err := normalizeOperation(inputs.Values[0]); err != nil {
@@ -242,6 +248,14 @@ func (s *session) unitFailure(ctx context.Context, request *protocol.ExecuteRequ
 				}
 			}
 		}
+		if unit.GetNative() != nil {
+			// A native unit that runs one query after its reads, such as a
+			// rebuild's copy, failed whole at that query when it failed
+			// there; its text says what YDB's answer proves.
+			if query, ok := errors.AsType[*nativeapi.QueryFailure](err); ok {
+				failure.Text = query.Text
+			}
+		}
 		if first, ok := errors.AsType[*firstPieceFailure](err); ok && unit.GetNative() != nil {
 			// A native unit whose first statement failed applied nothing
 			// of itself, and YDB's answer to that statement says what it
@@ -292,7 +306,9 @@ func (s *session) applyNative(ctx context.Context, native *protocol.Envelope, bi
 	execute := first.wrap(s.executeSchema)
 	switch native.GetKind() {
 	case tablecreate.OperationKind:
-		return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, native, checkLocks)
+		creation := nativeapi.NewTableCreation(s.connection.Driver)
+		creation.Sessions = s.creations
+		return creation.Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.InventoryOperationKind:
 		return nativeapi.NewColumnInventory(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, s.capabilities, checkLocks)
 	case tablecreate.DefaultOperationKind:
@@ -624,6 +640,13 @@ func notDispatched(err error, applied uint32) *protocol.Execution {
 		message = rowdata.OneLine(refusal.Error())
 	}
 	return &protocol.Execution{Outcome: partialOr(protocol.Execution_NOT_STARTED, applied), AppliedCount: applied, DiagnosticCode: "ydb.precondition-refused", Message: message}
+}
+
+// releaseCreations closes the table session the creations of an execution
+// shared, and records a failure as the session's cleanup error.
+func (s *session) releaseCreations() {
+	s.cleanupErr = errors.Join(s.cleanupErr, s.creations.Close())
+	s.creations = nil
 }
 
 func closeSQLConnection(conn *sql.Conn) error {

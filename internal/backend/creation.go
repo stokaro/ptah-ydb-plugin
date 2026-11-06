@@ -19,7 +19,7 @@ func (*Provider) ProjectTableCreations(ctx context.Context, request *protocol.Pr
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := provider.NegotiatedDescription(Description(), request.GetTargetFeatures())
+	description := provider.NegotiatedDescription(described(), request.GetTargetFeatures())
 	if err := provider.ValidateCreationRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}

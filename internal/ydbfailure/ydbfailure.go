@@ -10,9 +10,11 @@
 // The reason of an Execute or FinishTransaction reply, which a host that
 // lists errors.reasons prints, is a sentence of the provider's own: what YDB
 // did, its status, and the issue code and the position YDB gave, with the
-// capability and the feature flag where YDB refused for want of the flag, and
-// never YDB's issue text, which quotes the statement's text, a literal in it
-// or the database's path. The one part of it a reason repeats is the paths of
+// capability and the feature flag where YDB refused for want of the flag. It
+// never repeats YDB's issue text as a whole, which quotes the statement's
+// text, a literal in it or the database's path. The parts of it a reason
+// repeats are the fixed sentences YDB writes, which quote none of those (see
+// [Answer.said]), as the host's embedded engine printed them, and the paths of
 // the objects YDB says depend on one a statement drops, which the operator
 // has to drop first.
 package ydbfailure
@@ -20,10 +22,12 @@ package ydbfailure
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 
@@ -64,6 +68,12 @@ type Answer struct {
 	// of the transaction answers again (see [RepeatedAbort]): YDB aborted it
 	// for its size, not for a conflict.
 	Repeats bool
+	// Check is the message of a check the provider wrote into the statement
+	// and the statement failed: a rebuild's copy that meets a value its
+	// column's new type cannot hold (see [rebuildCheck]). It is the
+	// provider's own sentence, naming a table and a column and no value, so
+	// a reason may carry it. It is "" for any other answer.
+	Check string
 }
 
 // repeatedAborts are the issue codes of an ABORTED answer that YDB gives for
@@ -103,6 +113,9 @@ func Read(err error) Answer {
 			if issue.GetMessage() != "" {
 				answer.Issues = append(answer.Issues, issue.GetMessage())
 			}
+			if check := rebuildCheckOf(issue.GetMessage()); check != "" {
+				answer.Check = check
+			}
 			if issue.GetIssueCode() != 0 {
 				answer.Code = issue.GetIssueCode()
 			}
@@ -120,6 +133,30 @@ func Read(err error) Answer {
 	return answer
 }
 
+// failedUnwrap is how YDB introduces the message of an Unwrap that met an
+// empty optional, in the issue of a query that stopped there: `Terminate was
+// called, reason(141): <main>:1:202: Failed to unwrap empty optional:`, then
+// a blank line and the message, on 25.1.4.7 and 26.2.1.14 alike.
+const failedUnwrap = "Failed to unwrap empty optional:"
+
+// rebuildCheck is the grammar of the messages a rebuild's copy gives its
+// Unwrap checks (tablecreate.CopyStatement), which name the table, as its
+// directory and name joined by a dot, and the column. The host's embedded
+// engine wrote the same checks and printed YDB's answer, so its user read
+// which column stopped the copy; the provider's reason says the same.
+var rebuildCheck = regexp.MustCompile(`(?m)^rebuilding table [^\n]+: column [^\n]+ holds ` +
+	`(?:NULL, and the new table declares it NOT NULL|NULL or a value that does not convert to its new type|a value that does not convert to its new type)$`)
+
+// rebuildCheckOf is the rebuild check message an issue of a failed Unwrap
+// carries, or "" for any other issue.
+func rebuildCheckOf(message string) string {
+	_, after, found := strings.Cut(message, failedUnwrap)
+	if !found {
+		return ""
+	}
+	return rebuildCheck.FindString(after)
+}
+
 // executionIssueCode is the code YQL gives the issue of its execution stage
 // (TIssuesIds::CORE_EXEC), which holds what a query reported while it ran.
 const executionIssueCode = 1060
@@ -134,6 +171,66 @@ const executionIssueCode = 1060
 // the index type.
 var unproposed = map[string]string{
 	"Unknown index type: syncGlobalUnique": "the YDB release the cluster runs has no unique secondary index",
+}
+
+// plannerFailures are the measured issues in which YDB failed a data query
+// while it planned it, for a defect of the server's, before any of it ran,
+// with what each says the statement asked for. 26.2.1.14 answers an UPSERT
+// that names no column a synchronous index of the table is keyed on, on a
+// table with a unique index, with INTERNAL_ERROR and
+// `verification=!hasUniqIndex || !usedIndexes.empty();fline=kqp_opt_phy_upsert_index.cpp:359`,
+// and writes nothing; 25.1.4.7 runs the same statement. The key leaves the
+// source line out, which another build of the server may move.
+var plannerFailures = map[string]string{
+	"verification=!hasUniqIndex || !usedIndexes.empty();fline=kqp_opt_phy_upsert_index.cpp:": "YDB cannot plan an UPSERT on a table with a unique index " +
+		"when the statement names no column a synchronous index is keyed on; name every column of the table, or use UPDATE or INSERT",
+}
+
+// plannerFailure is the meaning of the answer's issue in which YDB failed a
+// data query while it planned it, or "" for an answer with no such issue.
+func (a Answer) plannerFailure() string {
+	if a.Status != Ydb.StatusIds_INTERNAL_ERROR {
+		return ""
+	}
+	for _, issue := range a.Issues {
+		for marker, meaning := range plannerFailures {
+			if strings.Contains(issue, marker) {
+				return meaning
+			}
+		}
+	}
+	return ""
+}
+
+// fixedTexts are the sentences YDB writes into an issue that quote nothing a
+// statement or a database holds, measured on 25.1.4.7 and 26.2.1.14, each as
+// a pattern whose first group is the part a reason carries. The host's
+// embedded engine printed YDB's issues whole, so its user read these words;
+// the reason carries them alone.
+var fixedTexts = []*regexp.Regexp{
+	// 25.1.4.7 has no unique secondary index (see unproposed).
+	regexp.MustCompile(`^(Unknown index type: syncGlobalUnique)$`),
+	// A name YDB does not take in a path: `Check failed: path:
+	// '/local/<dir>/bad name', error: symbol ' ' is not allowed in the path
+	// part 'bad name'`, for CREATE SECRET on 26.2.1.14. The path and the
+	// part are the statement's and are left out. YDB writes a symbol outside
+	// ASCII as '?', so the symbol is one printable ASCII character.
+	regexp.MustCompile(`(symbol '[[:print:]]' is not allowed in the path part)`),
+}
+
+// said is what YDB said in the answer in a sentence of its own that a reason
+// may carry: the first of [fixedTexts] an issue holds, or else the text of a
+// feature flag's refusal (see featureflags.RefusalText). It is "" for an
+// answer with neither.
+func (a Answer) said() string {
+	for _, issue := range a.Issues {
+		for _, text := range fixedTexts {
+			if found := text.FindStringSubmatch(strings.TrimSpace(issue)); found != nil {
+				return found[1]
+			}
+		}
+	}
+	return featureflags.RefusalText(a.Issues)
 }
 
 // refusedUnproposed is the meaning of the answer's issue that refused a
@@ -174,10 +271,13 @@ var refusals = []Ydb.StatusIds_StatusCode{
 // compiling it. GENERIC_ERROR is also what YDB answers a compound statement, a
 // batch write or transaction control that may have applied a prefix, so for
 // those it establishes nothing unless YDB refused the text before any of it
-// ran.
+// ran. INTERNAL_ERROR establishes the failure only of a data statement the
+// query service runs in one implicit transaction, and only where the issue is
+// one YDB gives while it plans the query (see [plannerFailures]).
 func (a Answer) Confirmed(text string) bool {
 	return slices.Contains(refusals, a.Status) ||
-		a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || statisticsStatement(text) || a.Compiled || a.refusedUnproposed() != "")
+		a.Status == Ydb.StatusIds_GENERIC_ERROR && (atomicDataStatement(text) || statisticsStatement(text) || a.Compiled || a.refusedUnproposed() != "") ||
+		a.plannerFailure() != "" && atomicDataStatement(text)
 }
 
 // Rejected reports an answer that proves nothing of a unit of text was
@@ -275,9 +375,10 @@ func (a Answer) detail() string {
 }
 
 // RefusedReason is the reason of a reply to a unit YDB refused. It says that
-// YDB refused the statement, whether while compiling it, what the issue code
-// means when the provider knows, and the detail, and names the feature flag
-// the refusal says is off (see [Answer.flagged]).
+// YDB refused the statement, whether while compiling it, what YDB said where
+// it said it in a sentence of its own (see [Answer.said]), what the issue
+// code means when the provider knows, and the detail, and names the feature
+// flag the refusal says is off (see [Answer.flagged]).
 func (a Answer) RefusedReason() string {
 	return a.refusedReason("YDB refused the statement")
 }
@@ -318,14 +419,30 @@ func (a Answer) refusedReason(reason string) string {
 	if a.Compiled {
 		reason += " while compiling it"
 	}
-	if meaning := a.refusedDependents(); meaning != "" {
+	if said := a.said(); said != "" {
+		reason += `, saying "` + said + `"`
+	}
+	switch meaning, known := issueMeanings[a.Code]; {
+	case a.Check != "" && fits(reason+": "+a.Check+" ("+a.detail()+")"):
+		reason += ": " + a.Check
+	case a.refusedDependents() != "":
+		reason += ": " + a.refusedDependents()
+	case known:
 		reason += ": " + meaning
-	} else if meaning, known := issueMeanings[a.Code]; known {
-		reason += ": " + meaning
-	} else if meaning := a.refusedUnproposed(); meaning != "" {
-		reason += ": " + meaning
+	case a.refusedUnproposed() != "":
+		reason += ": " + a.refusedUnproposed()
+	case a.plannerFailure() != "":
+		reason += ": " + a.plannerFailure()
 	}
 	return a.flagged(reason + " (" + a.detail() + ")")
+}
+
+// fits reports a reason a host may show: one line of at most 512 bytes with
+// no control character (provider.ValidateDiagnostic). A rebuild check names
+// a table and a column, which may be long or hold any character YDB takes in
+// a name, so a reason that would not fit leaves it out.
+func fits(reason string) bool {
+	return provider.ValidateDiagnostic(&protocol.ProviderDiagnostic{Reason: reason}) == nil
 }
 
 // flagged is reason for an answer whose issues say a feature flag YDB keeps a

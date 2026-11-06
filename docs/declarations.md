@@ -39,6 +39,19 @@ of an index, stay with that directive in Ptah's
 so do the rules every directive follows: placement, `dialects`, and the
 `platform.ydb` group of a table.
 
+A declaration the provider refuses prints a reason after the error code: the
+object by its key or name, the attribute, and what the attribute takes, in the
+words of Ptah's built-in YDB engine. The reason never quotes the value the
+declaration wrote:
+
+```text
+provider decode source failed (InvalidArgument): topic "events": invalid retention_period: takes an ISO 8601 duration such as PT12H or P1D
+```
+
+A Go directive that leaves out an attribute the tables below mark as required
+is refused with `missing required annotation attribute "rank"`, and Ptah names
+the directive and its place after the reason.
+
 ## Go annotations
 
 ### `//ptah:schema:columnfamily`

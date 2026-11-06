@@ -173,7 +173,7 @@ func TestDecodeGo_FailurePath(t *testing.T) {
 			wantErr: `table "items": changefeed "updates" declares consumer "c" twice`},
 		{name: "a consumer without its changefeed",
 			declarations: []testsource.GoDeclaration{declaration(3, "Item", "ptah:schema:changefeed:consumer", map[string]string{"name": "c"})},
-			wantErr:      `ptah:schema:changefeed:consumer needs the changefeed whose topic it reads`},
+			wantErr:      `missing required annotation attribute "changefeed"`},
 		{name: "a table the file does not declare",
 			declarations: []testsource.GoDeclaration{declaration(2, "Item", "ptah:schema:changefeed", map[string]string{"name": "f", "mode": "UPDATES", "format": "JSON", "table": "ghost"})},
 			wantErr:      `table "ghost" is not declared in this file, and a changefeed is declared beside its table`},

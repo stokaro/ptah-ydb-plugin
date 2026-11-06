@@ -13,6 +13,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -34,6 +35,9 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 	})
 	result := &protocol.PlannedDeclarations{Complete: true, Declarations: make([]*protocol.DeclarationReceipt, len(indices))}
 	contribution := &protocol.PlanningContribution{Owner: schema.ProviderID}
+	phase := authoredPhase(request)
+	anchor := lateAnchor(request)
+	var late []*protocol.StepIdentity
 	ranks := make(map[int64]bool)
 	for position, index := range indices {
 		if err := ctx.Err(); err != nil {
@@ -45,10 +49,17 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 		if err != nil {
 			return nil, err
 		}
-		if _, err := Text(operation.Value, request.Capabilities); err != nil {
+		text, err := Text(operation.Value, request.Capabilities)
+		if err != nil {
 			return refused(index, object.Kind, err.Error()), nil
 		}
-		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(object.Subject), Action: protocol.PlanningEffect_CREATE}}
+		if text == "" {
+			// The pool default names no setting: YDB created it with the
+			// database, and nothing is written for it (see Text).
+			result.Declarations[index] = &protocol.DeclarationReceipt{Subject: proto.CloneOf(object.Subject), Strategy: keptDefaultPool}
+			continue
+		}
+		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(object.Subject), Action: creationAction(desired)}}
 		if !schema.IsWorkloadObject(object.Kind) {
 			if err := pathAvailable(request, index); err != nil {
 				return refused(index, object.Kind, err.Error()), nil
@@ -69,17 +80,111 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 		facts := operation.OperationSemantics
 		contribution.Steps = append(contribution.Steps, &protocol.PlanningStep{
 			Id:        id,
-			Operation: &protocol.PlanningOperation{Value: operation, Role: protocol.NativeOperation_STATEMENT},
+			Operation: &protocol.PlanningOperation{Value: operation, Role: protocol.NativeOperation_STATEMENT, Phase: phase},
 			Metadata:  &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: facts.Impact, Reason: facts.Reason, Effects: effects},
 		})
+		if phase == protocol.PlanningOperation_LIFECYCLE && anchor != nil && !earlyKind(object.Kind) {
+			late = append(late, id)
+		}
 		result.Declarations[index] = &protocol.DeclarationReceipt{
 			Subject: proto.CloneOf(object.Subject), Strategy: "Create the authored definition without observed-state assumptions", Steps: []*protocol.StepIdentity{proto.CloneOf(id)},
 		}
 	}
 	if len(contribution.Steps) > 0 {
+		contribution.Dependencies = readsAfterCreations(contribution.Steps)
+		for _, step := range late {
+			contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(anchor), After: proto.CloneOf(step)})
+		}
 		result.Contributions = []*protocol.PlanningContribution{contribution}
 	}
 	return result, ctx.Err()
+}
+
+// authoredPhase is the phase of every authored creation: the lifecycle span
+// where the host negotiated it, and the default window otherwise. The default
+// window lies after the tables and before the views, which matches no kind's
+// place in a schema render of the host's embedded engine at 74de0b65b. In the
+// span a creation runs once the objects its effects read exist, and the
+// dependency on lateAnchor moves a late kind's creation further down. Every
+// kind this service plans states what it reads as an effect (see kindReads
+// and sourceSecretEffects), which is what makes the span safe for it.
+func authoredPhase(request *protocol.PlanDeclarationsRequest) protocol.PlanningOperation_Phase {
+	if slices.Contains(request.GetTargetFeatures(), provider.PlanningLifecycleFeature) {
+		return protocol.PlanningOperation_LIFECYCLE
+	}
+	return protocol.PlanningOperation_DEFAULT
+}
+
+// earlyKind reports whether the embedded engine at 74de0b65b created an
+// authored object of kind as soon as what it read existed: a topic, a secret,
+// an external data source and an external table, ahead of the users and the
+// tables. It created every other kind this service plans, a coordination
+// node, a resource pool, a classifier and a streaming query, after the
+// statements of the common objects and before the grants on the objects it
+// created, which it wrote last. Measured with schema render and schema
+// inspect --format sql on 25.1.4.7 and 26.2.1.14.
+func earlyKind(kind string) bool {
+	switch kind {
+	case schema.TopicProperties, schema.SecretProperties, schema.ExternalSourceProperties, schema.ExternalTableProperties:
+		return true
+	default:
+		return false
+	}
+}
+
+// lateAnchor is the common step a creation of a late kind follows: the last
+// common step other than a marker ahead of the first grant or revoke on an
+// object request declares, or the last of all when there is none. The host keeps its
+// common steps in one sequence and writes those permissions among the others,
+// so a creation placed after the first of them would wait for a grant on
+// itself. Nil places the creation by its effects alone.
+func lateAnchor(request *protocol.PlanDeclarationsRequest) *protocol.StepIdentity {
+	var anchor *protocol.StepIdentity
+	for _, common := range request.GetCommonSteps() {
+		if permitsDeclaredObject(request, common) {
+			break
+		}
+		if !marker(common) {
+			anchor = common.GetId()
+		}
+	}
+	return anchor
+}
+
+// marker reports whether common is an ordering marker of the host, such as
+// the end of the lifecycle span, which a creation in the span cannot follow:
+// a step that names no object and has no effects. A grant on the database
+// has no effects either, and is no marker.
+func marker(common *protocol.CommonPlanningStep) bool {
+	return len(common.GetMetadata().GetEffects()) == 0 && common.GetCommonObject() == nil && common.GetParent() == nil && common.GetAddedColumn() == nil
+}
+
+// permitsDeclaredObject reports whether common grants or revokes a permission
+// on an object request declares: it reads the object, whatever database the
+// identity names.
+func permitsDeclaredObject(request *protocol.PlanDeclarationsRequest, common *protocol.CommonPlanningStep) bool {
+	if common.GetCommonObject().GetGrant() == nil && common.GetCommonObject().GetRevoke() == nil {
+		return false
+	}
+	for _, effect := range common.GetMetadata().GetEffects() {
+		if effect.GetAction() != protocol.PlanningEffect_READ {
+			continue
+		}
+		read := withoutDatabase(effect.GetSubject())
+		if slices.ContainsFunc(request.GetObjects(), func(object *protocol.ComparisonRecord) bool {
+			return provider.CompareIdentities(withoutDatabase(object.GetSubject()), read) == 0
+		}) {
+			return true
+		}
+	}
+	return false
+}
+
+// withoutDatabase is a copy of identity that names no database.
+func withoutDatabase(identity *protocol.ComparisonIdentity) *protocol.ComparisonIdentity {
+	identity = proto.CloneOf(identity)
+	identity.Database = &protocol.ComparisonPart{}
+	return identity
 }
 
 // kindReads returns the effects that make a declaration of object, the
@@ -160,6 +265,21 @@ func streamingQueryReads(index int, object *protocol.ComparisonRecord, desired *
 	return effects, nil, nil
 }
 
+// keptDefaultPool is the strategy of the pool default where it names no
+// setting.
+const keptDefaultPool = "Write nothing for the pool default, which YDB creates with the database, since it names no setting"
+
+// creationAction is what the step of desired does to its subject: it alters
+// the pool default, which YDB creates with the database, and creates any
+// other object. A classifier's read of the pool default then follows the
+// change of its settings.
+func creationAction(desired *protocol.Envelope) protocol.PlanningEffect_Action {
+	if desired.GetKind() == schema.ResourcePoolProperties && desired.GetOwner().GetName() == workload.DefaultPool {
+		return protocol.PlanningEffect_ALTER
+	}
+	return protocol.PlanningEffect_CREATE
+}
+
 func refused(index int, kind, message string) *protocol.PlannedDeclarations {
 	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedDeclarations{Complete: true, Diagnostics: []*protocol.DeclarationDiagnostic{{
@@ -193,4 +313,47 @@ func schemePath(directory, name string) string {
 		return name
 	}
 	return directory + "/" + name
+}
+
+// readsAfterCreations orders each step after the steps that create what it
+// reads: a classifier after its resource pool, an external table after its
+// data source, a streaming query after the topics its text names. The host
+// orders the effects of two contributions on one subject, and leaves the
+// steps of one contribution to the contribution's dependencies; without
+// these it refuses the plan (`unordered effects on ... resource-pool`).
+func readsAfterCreations(steps []*protocol.PlanningStep) []*protocol.PlanningDependency {
+	type creation struct {
+		subject *protocol.ComparisonIdentity
+		step    *protocol.StepIdentity
+	}
+	var creations []creation
+	for _, step := range steps {
+		for _, effect := range step.GetMetadata().GetEffects() {
+			if effect.GetAction() == protocol.PlanningEffect_CREATE {
+				creations = append(creations, creation{subject: effect.GetSubject(), step: step.GetId()})
+			}
+		}
+	}
+	slices.SortStableFunc(creations, func(a, b creation) int { return provider.CompareIdentities(a.subject, b.subject) })
+	var edges []*protocol.PlanningDependency
+	for _, step := range steps {
+		for _, effect := range step.GetMetadata().GetEffects() {
+			if effect.GetAction() != protocol.PlanningEffect_READ {
+				continue
+			}
+			first, _ := slices.BinarySearchFunc(creations, effect.GetSubject(), func(have creation, subject *protocol.ComparisonIdentity) int {
+				return provider.CompareIdentities(have.subject, subject)
+			})
+			for _, created := range creations[first:] {
+				if provider.CompareIdentities(created.subject, effect.GetSubject()) != 0 {
+					break
+				}
+				edge := &protocol.PlanningDependency{Before: proto.CloneOf(created.step), After: proto.CloneOf(step.GetId())}
+				if !proto.Equal(edge.Before, edge.After) && !slices.ContainsFunc(edges, func(have *protocol.PlanningDependency) bool { return proto.Equal(have, edge) }) {
+					edges = append(edges, edge)
+				}
+			}
+		}
+	}
+	return edges
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/releaseline"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replicationcompare"
@@ -101,6 +102,9 @@ type session struct {
 	embeddings *embedstore.Store
 	// capabilities are the capabilities the session reported.
 	capabilities map[string]bool
+	// creations lends one table session to the table creations of the
+	// execution that runs, and is nil between executions.
+	creations *nativeapi.CreationSessions
 }
 
 // providerFeatures are the services and behaviors the provider offers.
@@ -236,6 +240,10 @@ func providerFeatures() []string {
 		// coordination nodes after the default privileges, where the host's
 		// embedded engine wrote them; see goGroups.
 		provider.GoPlacementsFeature,
+		// A file Ptah's built-in YDB engine exported names that engine's
+		// coordination-node model in its captured header, and the host reads
+		// it as this provider's; see modelPredecessors.
+		provider.ModelPredecessorsFeature,
 	}
 }
 
@@ -254,7 +262,7 @@ func engineFeatures() []string {
 // out of the description the host reads. A session and an inspection snapshot
 // report it, so the host can check them against that description.
 func negotiatedFeatures(ctx context.Context) []string {
-	return provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx)).GetEngines()[0].GetFeatures()
+	return provider.NegotiatedDescription(described(), provider.HostFeatures(ctx)).GetEngines()[0].GetFeatures()
 }
 
 // sessionCapabilities are the host capabilities a session reports before the
@@ -447,8 +455,19 @@ const minContractMinor = 7
 // captured row-table creation, column family alteration of existing tables,
 // the table-scope YAML keys and Go directives that declare row-table
 // partitioning and column families, and offline migration lint with the YD
-// rule catalog.
+// rule catalog. Each call returns a copy the caller may change.
 func Description() *protocol.Description {
+	return proto.CloneOf(described())
+}
+
+// described is the description the provider checks its own requests and
+// replies against. It is built once and must not be changed. A request is
+// checked against it several times, and an execution checks each of its units
+// against it. Built for each check, at about a millisecond and a half of CPU
+// each, it cost a second and a half in a migration of 500 new tables.
+var described = sync.OnceValue(buildDescription)
+
+func buildDescription() *protocol.Description {
 	description := &protocol.Description{
 		Revision: provider.Revision, MinContract: &protocol.ContractVersion{Major: provider.Revision, Minor: minContractMinor}, ProviderId: schema.ProviderID,
 		Version: buildversion.Version(), SemanticIdentity: "ydb-table-lifecycle-2",
@@ -475,6 +494,7 @@ func Description() *protocol.Description {
 					tablecreate.NativeIndexModel(),
 					declarationplan.Model(),
 				),
+				ModelPredecessors: modelPredecessors(),
 				Declarations: []*protocol.ModelDeclarations{
 					{
 						Id:             declarationplan.ServiceID,

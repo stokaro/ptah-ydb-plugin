@@ -1,10 +1,13 @@
 package ydbdecl
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/stokaro/ptah-ydb-plugin/internal/ttlgrammar"
 )
 
 // The attributes that declare a changefeed.
@@ -149,10 +152,16 @@ func feedInterval(values map[string]string, attribute string) (string, error) {
 	}
 	seconds, err := IntervalSeconds(strings.ToUpper(strings.TrimSpace(raw)))
 	if err == nil && seconds == 0 {
-		err = fmt.Errorf("interval %q is no time at all, and YDB takes only a positive interval", raw)
+		return "", &DeclarationError{Attribute: attribute, Value: raw,
+			Reason: fmt.Sprintf("interval %q is no time at all, and YDB takes only a positive interval", raw),
+			Plain:  "the interval is no time at all, and YDB takes only a positive interval"}
 	}
 	if err != nil {
-		return "", &DeclarationError{Attribute: attribute, Value: raw, Reason: err.Error()}
+		plain := "the interval is not one YDB takes"
+		if grammar, refused := errors.AsType[*ttlgrammar.Error](err); refused {
+			plain = grammar.Reason()
+		}
+		return "", &DeclarationError{Attribute: attribute, Value: raw, Reason: err.Error(), Plain: plain}
 	}
 	return raw, nil
 }

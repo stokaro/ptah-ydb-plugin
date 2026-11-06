@@ -18,7 +18,7 @@ import (
 // ConvertValues converts a complete batch offline. Source normalization is
 // recomputed from payloads; a caller-supplied projection is never authoritative.
 func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertValuesRequest) (*protocol.NormalizedValues, error) {
-	if err := provider.ValidateConversionRequest(Description(), request); err != nil {
+	if err := provider.ValidateConversionRequest(described(), request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	source := &protocol.NormalizeValuesRequest{Engine: request.Engine, TargetFeatures: request.TargetFeatures}
@@ -69,7 +69,7 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 	if err != nil {
 		return nil, err
 	}
-	if err := provider.ValidateConvertedValues(Description(), request, result); err != nil {
+	if err := provider.ValidateConvertedValues(described(), request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
