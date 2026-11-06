@@ -54,6 +54,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	common.ContextInventory = slices.Contains(negotiatedFeatures(ctx), provider.PlanningContextInventoryFeature)
 	common.Indexes = slices.Contains(negotiatedFeatures(ctx), provider.ObservedIndexesFeature)
 	common.IndexFacets = common.Indexes && slices.Contains(negotiatedFeatures(ctx), provider.ObservedIndexFacetsFeature)
+	common.PrimaryKeys = slices.Contains(negotiatedFeatures(ctx), provider.ObservedPrimaryKeysFeature)
 	common.IndexMethods = slices.Contains(negotiatedFeatures(ctx), provider.IndexMethodsFeature)
 	common.UnreadTables = slices.Contains(negotiatedFeatures(ctx), provider.UnreadTablesFeature)
 	result, err := inspect.ReadObjects(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), common, session.streaming(), session.leftOut()...)
@@ -107,6 +108,9 @@ func (s *session) inspectAccess(ctx context.Context, result *protocol.Schema) er
 	}
 	if err := inspect.Access(ctx, result, s.database, s.scope(), nativeapi.AccessReader(s.connection.Driver), principals); err != nil {
 		return inspectError(ctx, err)
+	}
+	if len(result.GetCommonObjects().GetRolesOutOfScope()) > 0 && slices.Contains(negotiatedFeatures(ctx), provider.RoleScopeReasonsFeature) {
+		result.CommonObjects.RolesOutOfScopeReason = inspect.RolesOutOfScopeReason
 	}
 	return nil
 }

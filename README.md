@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.22.0, which speaks provider contract 25.25.
+The module pins `provider-sdk` v0.23.0, which speaks provider contract 25.26.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -753,6 +753,14 @@ can name a cluster-managed group, but cannot declare self-membership or make a
 principal a member of a declared user. Inspection preserves every observed
 membership, including edges whose principals are outside the managed role list.
 
+A read leaves out of the description the users and groups the cluster made for
+itself, the database's owner, and every user and group of a dev realm, and
+names them as roles the server holds outside its scope. Under
+`schema.role-scope-reasons` (contract 25.26, ADR 0076) the read also says why,
+and the host's note gives the reason the host's embedded engine gave: `because
+the cluster made them or they own the database, or the read was of a dev realm,
+which shares its database's users and groups`.
+
 A user's password is set when the user is created, from a YAML or Go
 declaration, and is never read back: a declaration that names another password
 plans nothing, as the host's embedded engine plans it.
@@ -1167,7 +1175,10 @@ are storage-format identifiers, not an access-control mechanism against a databa
 ## Schema observations
 
 Inspection reads the native scheme, table, topic, view, and coordination APIs. Common columns preserve
-YDB type spelling, Decimal precision/scale, nullability, and key membership.
+YDB type spelling, Decimal precision/scale, nullability, and key membership,
+and with `schema.observed-primary-keys` each table's key in key order, so a Go
+export writes `primary_key="b,a"` for a table keyed in an order other than its
+columns'.
 Provider-owned table properties retain key order, TTL, column families,
 partitioning, storage settings, attributes, and access metadata. Column
 properties retain family assignment and typed literal or sequence defaults.
@@ -1508,6 +1519,15 @@ attributes in the host's embedded engine's order: a column table's storage,
 with `store="column"`, then the TTL, then the partitioning and the starting
 layout. It also gives each column the Go type of its YDB type, as that engine
 does, and refuses a nullable key column, which no declaration can ask for.
+
+A Go export writes the directives of the standalone objects in the order the
+host's embedded engine wrote them, each with its attributes in the order its
+claim lists them: topics and their consumers, secrets, external data sources,
+external tables and streaming queries after the views, then resource pools,
+their classifiers and coordination nodes. Under `source.go-placements`
+(contract 25.26, ADR 0077) those last three stand after the default
+privileges, below the grants, where the embedded engine wrote them; a host
+that does not list the feature writes them after the views.
 
 What no declaration states is a loss for its value, in one line that names it:
 an access requirement, table attributes, storage settings, tiering, a temporary
@@ -3191,6 +3211,17 @@ renames the new one into its place, and drops the old one. The host's steps for 
 are rewritten to the rename that puts the new table in place. A REBUILD the
 host proposes is planned the same way, and refused like any other rebuild
 without the policy.
+
+A key change reaches the planner from a host that lists
+`schema.observed-primary-keys` and `planning.primary-key-changes` (contract
+25.26): the read reports each table's key in key order, under the name
+`<table>_pkey` the host's embedded engine gave it, so a declaration that orders
+the same columns otherwise is a key change. The host hands it over as an
+alteration of the table, and the planner rebuilds the table with the declared
+key, or without the policy refuses it as the embedded engine did:
+`adding constraint <table>_pkey, the primary key, which requires target
+capability primary_key_alterable, unavailable on this ydb target`. The reverse
+plan rebuilds the table with the key it held.
 
 The copy reads each column as the new table declares it. A changed type is
 converted with `CAST` and unwrapped, so a value that does not convert fails the

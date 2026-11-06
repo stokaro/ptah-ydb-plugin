@@ -91,8 +91,14 @@ func hostApplyAt(c *qt.C, address string, args ...string) (string, error) {
 // against address and returns what it printed and how it exited.
 func hostRunAt(c *qt.C, address string, args ...string) (string, error) {
 	c.Helper()
+	return hostRunWithin(c, 4*time.Minute, address, args...)
+}
+
+// hostRunWithin is hostRunAt for a command line that may run up to limit.
+func hostRunWithin(c *qt.C, limit time.Duration, address string, args ...string) (string, error) {
+	c.Helper()
 	host, manifest := hostManifest(c)
-	ctx, cancel := context.WithTimeout(c.Context(), 4*time.Minute)
+	ctx, cancel := context.WithTimeout(c.Context(), limit)
 	defer cancel()
 	cmd := testCommand(ctx, host, append(args, "--provider-config", manifest, "--provider-engine", "ydb", "--db-url", address)...)
 	var output bytes.Buffer

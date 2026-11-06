@@ -94,6 +94,19 @@ func TestRebuildPlanNamesEachChange(t *testing.T) {
 			r.Tables[0].Desired.Features.Facets.Records = []*protocol.ComparisonRecord{key}
 		}, want: `changing the primary key of table "app/records" (id -> id, payload), which requires target capability primary_key_alterable, unavailable on this ydb target; ` +
 			`YDB makes it by rebuilding the table, which Ptah plans when asked with --allow-table-rebuild`},
+		// The host's key constraint is the held key, over the read of the
+		// table's properties, and a key over the same columns in another order
+		// is named as the host's embedded engine named it.
+		{name: "the key order", modify: func(r *protocol.PlanFeaturesRequest) {
+			r.Tables[0].Desired.Columns = []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "payload", Type: "Utf8", Primary: true},
+				{Name: "n", Type: "Int32", Nullable: true}}
+			r.Tables[0].Desired.PrimaryKey = []string{"id", "payload"}
+			r.Tables[0].Desired.Features.Facets.Records = []*protocol.ComparisonRecord{key}
+			r.Tables[0].Current.Columns[1].PrimaryKey = true
+			r.Tables[0].Current.Constraints = []*protocol.ObservedConstraint{{Name: "records_pkey", TableName: "records", Schema: "app", Type: "PRIMARY KEY",
+				ColumnNames: []string{"payload", "id"}}}
+		}, want: `adding constraint records_pkey, the primary key, which requires target capability primary_key_alterable, unavailable on this ydb target; ` +
+			`YDB makes it by rebuilding the table, which Ptah plans when asked with --allow-table-rebuild`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			check := testcheck.New(t)

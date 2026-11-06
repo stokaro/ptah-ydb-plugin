@@ -110,6 +110,11 @@ type session struct {
 // providerFeatures are the services and behaviors the provider offers.
 func providerFeatures() []string {
 	return []string{provider.DatabaseContextFeature, provider.ValueContextFeature, provider.ColumnsFeature, provider.ObservedColumnsFeature, provider.ObservedIndexesFeature, provider.SensitiveInputsFeature, provider.SchemaDeclarationsFeature,
+		// A read reports each table's primary key in key order, and the
+		// planner of a row table plans the change of it the host hands over
+		// as an alteration of the table; see inspect.Common.PrimaryKeys and
+		// tablecreate.rebuildNeeds.
+		provider.ObservedPrimaryKeysFeature, provider.PrimaryKeyChangesFeature,
 		provider.IndexMethodsFeature,
 		// A read with no selector claims every directory below the root
 		// complete in one region, and each directory it leaves out unknown,
@@ -119,6 +124,14 @@ func providerFeatures() []string {
 		// A refusal reaches the host with the reason the provider wrote, and a
 		// driver's error with its code alone; see package authored.
 		provider.ErrorReasonsFeature,
+		// A model of the description travels by reference in every other
+		// message, so the coverage the host sends for each table names the
+		// models it covers rather than repeating their definitions, and a
+		// message may be 64 MiB: a database of a few thousand tables is read,
+		// compared and planned in one request. The SDK sends and resolves the
+		// references.
+		provider.ModelReferencesFeature,
+		provider.LargeMessagesFeature,
 		provider.ScopeSelectionsFeature,
 		provider.StatementsFeature,
 		provider.TypedArgumentsFeature,
@@ -219,6 +232,14 @@ func providerFeatures() []string {
 		// whole, which reads it into the table's native index set or its
 		// column storage and writes it back; see tablesource.IndexKinds.
 		provider.IndexKindsFeature,
+		// The note that counts the roles a read leaves out of the
+		// description gives the reason this read does; see
+		// inspect.RolesOutOfScopeReason.
+		provider.RoleScopeReasonsFeature,
+		// A Go export writes resource pools, their classifiers and
+		// coordination nodes after the default privileges, where the host's
+		// embedded engine wrote them; see goGroups.
+		provider.GoPlacementsFeature,
 		// A file Ptah's built-in YDB engine exported names that engine's
 		// coordination-node model in its captured header, and the host reads
 		// it as this provider's; see modelPredecessors.

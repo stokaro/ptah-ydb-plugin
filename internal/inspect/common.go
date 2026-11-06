@@ -36,6 +36,10 @@ type Common struct {
 	// IndexFacets reports each common index's partitioning and read replicas
 	// as a facet the index owns (schema.observed-index-facets).
 	IndexFacets bool
+	// PrimaryKeys reports each table's primary key in key order
+	// (schema.observed-primary-keys), which the columns' membership does not
+	// state.
+	PrimaryKeys bool
 	// IndexMethods reports each common index's method in the spelling table
 	// preparation states a declared index's kind with
 	// (schema.index-methods); see commonIndexes.
