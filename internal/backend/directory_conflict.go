@@ -32,6 +32,21 @@ func directoryConflict(request *protocol.PlanFeaturesRequest) *protocol.PlannedF
 	return nil
 }
 
+// nestedDatabaseCreation refuses a plan that creates a table, a view or a
+// native object inside a database nested in the session's database (see
+// objectplan.NestedDatabaseCreations), or returns nil. It runs in the streaming
+// query service's call for the reason directoryConflict does: no other service
+// sees the host's common steps beside every native change. Without it the plan
+// holds a CREATE TABLE that YDB runs into the nested database.
+func nestedDatabaseCreation(request *protocol.PlanFeaturesRequest) *protocol.PlannedFeatures {
+	if err := objectplan.NestedDatabaseCreations(request); err != nil {
+		return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{
+			Code: protocol.PlanningDiagnostic_INVALID_SCHEMA, Kind: objectplan.PathKind, Message: err.Error(),
+		}}}
+	}
+	return nil
+}
+
 // planningServices maps each object kind the description's engine compares
 // to the planning service that plans the changes its comparison reports.
 func planningServices(description *protocol.Description) map[string]string {

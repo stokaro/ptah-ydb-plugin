@@ -1199,10 +1199,16 @@ snapshot size are bounded.
 A database nested in the selected one, such as `/local/db2` in `/local`, is
 another database, and the read leaves it out as the host's embedded engine
 did: YDB lists it as an entry of type DATABASE, and an unfiltered read neither
-descends into it nor reads what it holds. The read's claim still covers its
-path as holding nothing, so a declared object there is planned for creation,
-as that engine planned it. A selector that names a nested database, or a path
-below one, is refused, where that engine read it as an empty directory.
+descends into it nor reads what it holds. A selector that names a nested
+database, or a path below one, reads as an empty directory, as that engine
+read it. The read claims the nested database's path as holding nothing of the
+selected database and says why, and a plan that creates a table, a view or a
+native object there is refused with a reason that names the nested database.
+Here the provider is stricter than that engine on purpose: that engine planned
+the `CREATE TABLE`, YDB ran it through the outer session into the nested
+database, and every later run planned it again and failed (`path exist`). A
+native write whose directory is at or below a nested database is also refused
+before anything is sent.
 Coverage names inspected subjects and records native-object completeness for
 each directory whose listing and child reads finished. These regions bind the
 exact database, empty catalog, and exact schema directory; an unfiltered read

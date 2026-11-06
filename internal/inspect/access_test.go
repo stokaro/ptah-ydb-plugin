@@ -219,3 +219,21 @@ func TestAccessOfADirectoryAnObjectHolds_HappyPath(t *testing.T) {
 	c.Assert(snapshot.CommonObjects.ObjectOwners, qt.HasLen, 1)
 	c.Assert(snapshot.CommonObjects.ObjectOwners[0].Object.Kind, qt.Equals, "database")
 }
+
+// The root of a nested database, which a read claims with the nested
+// database's reason, is no directory of the database read: the access list
+// YDB describes there is the nested database's, and the read records none for
+// it. Described as a directory, the DATABASE entry refuses the whole read
+// (`YDB access description disagrees with the captured object`).
+func TestAccessOfANestedDatabase_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	snapshot := accessDirectory("db2")
+	snapshot.Coverage.Kinds[0].Regions[0].Knowledge.Reason = schema.NestedDatabaseReason("db2")
+	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, described(map[string]*Ydb_Scheme.Entry{
+		"/local":     accessRoot("root"),
+		"/local/db2": {Name: "db2", Type: Ydb_Scheme.Entry_DATABASE, Owner: "alice"},
+	}), func(context.Context) (nativeapi.Principals, error) { return nativeapi.Principals{}, nil })
+	c.Assert(err, qt.IsNil)
+	c.Assert(snapshot.CommonObjects.ObjectOwners, qt.HasLen, 1)
+	c.Assert(snapshot.CommonObjects.ObjectOwners[0].Object.Kind, qt.Equals, "database")
+}

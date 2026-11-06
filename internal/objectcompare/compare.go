@@ -14,6 +14,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // Family is what one kind of standalone object brings to a comparison. Every
@@ -476,8 +477,8 @@ func compareObject(request *protocol.CompareModelsRequest, result *protocol.Comp
 	if namespace := item.subject.GetSchema().GetSource(); namespace != "" {
 		name = namespace + "/" + name
 	}
-	if leftOut(request, result, family, item, name) || unestablished(request, result, family, item) {
-		return nil, nil
+	if screened, err := screenedOut(request, result, family, item, name); screened || err != nil {
+		return nil, err
 	}
 	if settled, err := settleOmitted(request, result, family, item, id); settled || err != nil {
 		return nil, err
@@ -572,6 +573,36 @@ func unestablished(request *protocol.CompareModelsRequest, result *protocol.Comp
 		return true
 	}
 	return false
+}
+
+// screenedOut reports whether item, declared or read as name, is settled
+// before its sides are compared: the comparison leaves it out (see leftOut),
+// it is a creation inside a nested database, which is refused (see
+// nestedCreation), or a side of it is not established (see unestablished).
+func screenedOut(request *protocol.CompareModelsRequest, result *protocol.ComparedModels, family Family, item object, name string) (bool, error) {
+	if leftOut(request, result, family, item, name) {
+		return true, nil
+	}
+	if err := nestedCreation(request, family, item, name); err != nil {
+		return true, err
+	}
+	return unestablished(request, result, family, item), nil
+}
+
+// nestedCreation refuses the creation of item, declared as name, inside a
+// database nested in the session's database, where the read claims the kind
+// with that database's reason (see schema.NestedDatabaseReason). The claim is
+// complete, since this database holds nothing there, so without the refusal
+// the comparison reports a creation, which YDB runs into the nested database.
+func nestedCreation(request *protocol.CompareModelsRequest, family Family, item object, name string) error {
+	if item.desired == nil || item.current != nil {
+		return nil
+	}
+	root, nested := nestedRoot(request.Current.Coverage, family.Kind, item.subject)
+	if !nested {
+		return nil
+	}
+	return authored.New(schema.NestedDatabaseCreation(family.Noun, name, root, request.GetDatabasePath()))
 }
 
 // settleOmitted settles an item the desired side leaves out. A family that
