@@ -80,6 +80,7 @@ func Declared(err error) error {
 	text := err.Error()
 	for current := err; current != nil; current = errors.Unwrap(current) {
 		var leaf string
+		//nolint:errorlint // the loop walks the chain one wrapping at a time; errors.As would reach into a joined error, whose other part can quote a driver's text.
 		switch refusal := current.(type) {
 		case *Error:
 			leaf = refusal.text

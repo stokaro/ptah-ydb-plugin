@@ -55,6 +55,7 @@ func yamlDocument(c *qt.C, key, source string) *protocol.DecodeSourceRequest {
 // DO_NOT_REPORT is such a value); a name it quotes is the name of a declared
 // object, a column or an attribute.
 func TestNativeDeclarationRefusalGivesTheReason_FailurePath(t *testing.T) {
+	// #nosec G101 -- the rows are declarations and the reasons a host prints for them; the one password in a connection string is a placeholder a reason must not repeat
 	tests := []struct {
 		name, key, source, reason string
 	}{
