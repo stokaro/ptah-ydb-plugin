@@ -80,11 +80,11 @@ func manyTablesSource(names []string) string {
 // count whose creation lost the lock and ran past the SDK's 30-second bound.
 const appliedTables = 500
 
-// emptyRealm is a dev realm of its own with no tables, whose tables named
+// newTablesRealm is a dev realm of its own with no tables, whose tables named
 // t0000 to t0499 and lock node go when the test ends. It returns a
 // connection to the database, the realm's address, its root and the names of
 // those tables.
-func emptyRealm(c *qt.C) (opened *connection.Connection, address, root string, names []string) {
+func newTablesRealm(c *qt.C) (opened *connection.Connection, address, root string, names []string) {
 	c.Helper()
 	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
@@ -139,7 +139,7 @@ func TestHostPlansARealmOfManyTables_HappyPath(t *testing.T) {
 func TestHostAppliesARealmOfManyNewTables_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.LargeMessagesFeature)
-	opened, address, root, names := emptyRealm(c)
+	opened, address, root, names := newTablesRealm(c)
 	schema := filepath.Join(c.TempDir(), "schema.yaml")
 	c.Assert(os.WriteFile(schema, []byte(manyTablesSource(names)), 0o600), qt.IsNil)
 
