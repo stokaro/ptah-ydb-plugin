@@ -139,8 +139,8 @@ func validateBatch(request *protocol.ExecuteRequest) (*executionBatch, *protocol
 			}
 		case *protocol.Unit_Native:
 			batch.hasNative = true
-			inputs := &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: Description().Features, Values: []*protocol.ValueInput{{Id: unit.ChangeId, Representation: protocol.ValueInput_OPERATION, Value: unit.GetNative()}}}
-			if err := provider.ValidateValueInputs(Description(), inputs); err != nil {
+			inputs := &protocol.NormalizeValuesRequest{Engine: "ydb", TargetFeatures: described().Features, Values: []*protocol.ValueInput{{Id: unit.ChangeId, Representation: protocol.ValueInput_OPERATION, Value: unit.GetNative()}}}
+			if err := provider.ValidateValueInputs(described(), inputs); err != nil {
 				return nil, &protocol.Execution{Outcome: protocol.Execution_NOT_STARTED, DiagnosticCode: "ydb.unsupported-unit"}, nil
 			}
 			if _, err := normalizeOperation(inputs.Values[0]); err != nil {

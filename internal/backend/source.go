@@ -34,7 +34,7 @@ import (
 // database session. Unsupported syntax or any invalid entry discards the
 // complete result.
 func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourceRequest) (*protocol.DecodedSource, error) {
-	if err := provider.ValidateSourceRequest(Description(), request); err != nil {
+	if err := provider.ValidateSourceRequest(described(), request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.DecodedSource{Complete: true}
@@ -51,7 +51,7 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	if err := provider.ValidateDecodedSource(Description(), request, result); err != nil {
+	if err := provider.ValidateDecodedSource(described(), request, result); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	return result, nil
