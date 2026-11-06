@@ -1,6 +1,10 @@
 package backend
 
-import protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+import (
+	"strings"
+
+	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+)
 
 // unprobedReason is why four of the six lines run no job in the plugin's own
 // suite. YDB publishes no support period for its open-source lines, and the
@@ -8,16 +12,23 @@ import protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 const unprobedReason = "YDB publishes no support period for its open-source lines, and the test suite runs only " +
 	"the newest and the oldest certified line; the others were measured by hand once."
 
+// presetName is the label of a release line, which the host prints as the
+// name of the line's capability preset: the name the host's embedded engine
+// gave the preset, YDB and the line's digits, such as YDB251 for 25.1.
+func presetName(line string) string {
+	return "YDB" + strings.ReplaceAll(line, ".", "")
+}
+
 // releaseLines declares the YDB release lines the plugin has a launch recipe
 // for, newest first. Certified lines run the live suite; the others are
 // best-effort and say why.
 func releaseLines() []*protocol.ReleaseLine {
 	certified := func(line, note string) *protocol.ReleaseLine {
-		return &protocol.ReleaseLine{Line: line, Label: "YDB " + line, Support: protocol.ReleaseLine_CERTIFIED,
+		return &protocol.ReleaseLine{Line: line, Label: presetName(line), Support: protocol.ReleaseLine_CERTIFIED,
 			Image: "ydbplatform/local-ydb:" + line, Note: note, Capabilities: lineCapabilities(line)}
 	}
 	bestEffort := func(line, note string) *protocol.ReleaseLine {
-		return &protocol.ReleaseLine{Line: line, Label: "YDB " + line, Support: protocol.ReleaseLine_BEST_EFFORT,
+		return &protocol.ReleaseLine{Line: line, Label: presetName(line), Support: protocol.ReleaseLine_BEST_EFFORT,
 			Image: "ydbplatform/local-ydb:" + line, Unprobed: unprobedReason, Note: note, Capabilities: lineCapabilities(line)}
 	}
 	return []*protocol.ReleaseLine{
