@@ -4290,10 +4290,13 @@ whole batch. Use live schema planning for access requirements that a CREATE
 statement cannot express. External tables follow their declared data sources;
 classifiers follow their declared resource pools. External sources follow their
 declared secrets. A streaming query follows each topic and table its text reads
-or writes, since YDB compiles a query when it creates it, and a query that
-names a path by its database is refused, since a rendered schema names no
-database. Secret statements retain approved input references; rendering
-opens no session and reads no input value.
+or writes, since YDB compiles a query when it creates it. A path the text names
+by its database is read below the database the query's value names, the one a
+read took it from, as `schema inspect --format sql` renders it, and the text
+stays as written. A value that names no database, such as a query a source
+declares for an offline render, cannot place such a path and is refused.
+Secret statements retain approved input references; rendering opens no session
+and reads no input value.
 
 ## Operator statements and object scopes
 

@@ -242,14 +242,17 @@ func externalTableReads(object *protocol.ComparisonRecord, desired *protocol.Env
 
 // streamingQueryReads returns the reads of the scheme slots of every topic
 // and table a streaming query reads or writes. YDB compiles a streaming query
-// when it creates it, so the query follows their creations. A query whose
-// reads cannot be named is refused.
+// when it creates it, so the query follows their creations. An absolute path
+// names an object below the root desired names its paths in: the database a
+// read took the query from, whose text YDB holds as written. A query whose
+// reads cannot be named is refused, and so is one with an absolute path
+// outside that root or with no root to read it below.
 func streamingQueryReads(index int, object *protocol.ComparisonRecord, desired *protocol.Envelope) ([]*protocol.PlanningEffect, *protocol.PlannedDeclarations, error) {
 	spec, _, err := schema.DesiredStreamingQuery(desired)
 	if err != nil {
 		return nil, nil, err
 	}
-	reads, err := streamingplan.QueryReads("", spec)
+	reads, err := streamingplan.QueryReads(schema.InterpretationRoot(desired), spec)
 	if err != nil {
 		return nil, refused(index, object.Kind, err.Error()), nil
 	}
