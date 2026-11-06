@@ -1,5 +1,0 @@
-# TestHostDevDatabaseOnAnotherServer_HappyPath now holds the target's root
-# permissions to what they were, and the host branch below stops a derived
-# rollback from revoking them (stokaro/ptah#5511). Drop this file once that
-# host change is on host master.
-fix/4204-derived-rollback-keeps-grants
