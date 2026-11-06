@@ -208,3 +208,61 @@ func TestDiff_KeepsATransfersConsumer(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(statements, qt.DeepEquals, []string{"ALTER TOPIC `/local/app/t/a` SET (retention_period = Interval('P2D'));"})
 }
+
+// consumers is changefeed a, in UPDATES mode, whose topic's consumers are
+// named names in that order.
+func consumers(names ...string) ydbdecl.Changefeed {
+	feed := ydbdecl.Changefeed{Name: "a", Mode: "UPDATES", Format: "JSON"}
+	for _, name := range names {
+		feed.Consumers = append(feed.Consumers, ydbdecl.Consumer{Name: name})
+	}
+	return feed
+}
+
+// heldConsumers is changefeed a as an observation holds it, with its topic's
+// consumers named names in that order.
+func heldConsumers(names ...string) *native.ChangefeedObservations {
+	set := held("a")
+	for _, name := range names {
+		set.Changefeeds[0].Topic.Consumers = append(set.Changefeeds[0].Topic.Consumers, &native.Consumer{Name: name})
+	}
+	return set
+}
+
+// A topic change drops the consumers the held changefeed alone names, in the
+// order its observation lists them, and adds the ones the declaration alone
+// names, in the declaration's order, as the host's embedded engine at
+// 74de0b65b wrote them on 25.1.4.7 and 26.2.1.14. A read lists a changefeed
+// topic's consumers by name, so a declaration that moves aa, mm, zz to zz, qq,
+// bb drops aa and mm and adds qq and bb, and its reverse, whose held side is
+// the observation predicted from that declaration, drops qq and bb and adds
+// aa and mm.
+func TestStatements_KeepTheConsumersOrder_HappyPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		desired  ydbdecl.Changefeed
+		held     *native.ChangefeedObservations
+		expected []string
+	}{
+		{name: "a declaration over a read", desired: consumers("zz", "qq", "bb"), held: heldConsumers("aa", "mm", "zz"), expected: []string{
+			"ALTER TOPIC `/local/t/a` DROP CONSUMER `aa`;", "ALTER TOPIC `/local/t/a` DROP CONSUMER `mm`;",
+			"ALTER TOPIC `/local/t/a` ADD CONSUMER `qq`;", "ALTER TOPIC `/local/t/a` ADD CONSUMER `bb`;",
+		}},
+		{name: "the reverse over the predicted observation", desired: consumers("aa", "mm", "zz"), held: heldConsumers("zz", "qq", "bb"), expected: []string{
+			"ALTER TOPIC `/local/t/a` DROP CONSUMER `qq`;", "ALTER TOPIC `/local/t/a` DROP CONSUMER `bb`;",
+			"ALTER TOPIC `/local/t/a` ADD CONSUMER `aa`;", "ALTER TOPIC `/local/t/a` ADD CONSUMER `mm`;",
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			planned, undecided := changefeeds.Diff(declared(c, test.desired), test.held)
+			c.Assert(undecided, qt.Equals, "")
+
+			statements, err := changefeeds.Statements("/local/t", planned)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(statements, qt.DeepEquals, test.expected)
+		})
+	}
+}

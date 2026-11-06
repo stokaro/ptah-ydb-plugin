@@ -99,6 +99,10 @@ func buildNativeIntentModel(kind string) *protocol.ValueModel {
 		// identities it is part of.
 		definition["canonicalization"] = topicCanonicalization
 	}
+	if kind == ChangefeedProperties {
+		// The same holds for a changefeed's topic (see sortNativeIntent).
+		definition["canonicalization"] = changefeedCanonicalization
+	}
 	if kind == SecretProperties {
 		definition["secrets"] = "value_env is a required PTAH_SECRET_ approved-input reference; observed presence carries no value or value reference; " +
 			"conversions derive a deterministic reference from the exact path; rotations require an explicit comparison request"
@@ -215,9 +219,12 @@ func normalizeNativeIntent(value *protocol.Envelope) (*protocol.Envelope, error)
 
 // sortNativeIntent sorts by name the lists the canonical form of a
 // declaration keeps in name order: indexes and their implementation tables,
-// changefeeds and the consumers of their topics, and local indexes. A topic
+// changefeeds, and local indexes. A topic, and the topic of a changefeed,
 // keeps its consumers in the order the declaration lists them, as the host's
-// embedded engine wrote them into CREATE TOPIC and ALTER TOPIC.
+// embedded engine wrote them into CREATE TOPIC and ALTER TOPIC: measured on
+// 25.1.4.7 and 26.2.1.14 at 74de0b65b, a new changefeed declared with
+// consumers zz, aa and mm took `ADD CONSUMER zz`, `ADD CONSUMER aa` and `ADD
+// CONSUMER mm` in that order.
 func sortNativeIntent(target proto.Message) {
 	switch intent := target.(type) {
 	case *native.IndexSetIntent:
@@ -229,16 +236,9 @@ func sortNativeIntent(target proto.Message) {
 		}
 	case *native.ChangefeedSetIntent:
 		slices.SortFunc(intent.Changefeeds, func(a, b *native.ChangefeedIntent) int { return strings.Compare(a.Name, b.Name) })
-		for _, feed := range intent.Changefeeds {
-			sortTopicIntent(feed.Topic)
-		}
 	case *native.ColumnStorageIntent:
 		slices.SortFunc(intent.LocalIndexes, func(a, b *native.LocalIndexObservation) int { return strings.Compare(a.Name, b.Name) })
 	}
-}
-
-func sortTopicIntent(intent *native.TopicIntent) {
-	slices.SortFunc(intent.Consumers, func(a, b *native.ConsumerIntent) int { return strings.Compare(a.Name, b.Name) })
 }
 
 // ConvertNative converts native models without publishing coverage or

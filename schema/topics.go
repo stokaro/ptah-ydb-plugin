@@ -129,7 +129,6 @@ func normalizeChangefeeds(observed *native.ChangefeedObservations) error {
 		if err := normalizeTopic(feed.Topic); err != nil {
 			return err
 		}
-		slices.SortFunc(feed.Topic.Consumers, func(a, b *native.Consumer) int { return strings.Compare(a.Name, b.Name) })
 	}
 	slices.SortFunc(observed.Changefeeds, func(a, b *native.ObservedChangefeed) int {
 		return strings.Compare(a.Description.Name, b.Description.Name)
@@ -144,6 +143,19 @@ const (
 	topicCanonicalization = "protojson followed by modeljson canonical JSON; consumers retain the order the declaration lists them in"
 	topicObservations     = "retain topic and consumer configuration, attributes and access metadata; omit partitions, topic/consumer stats and transient self fields; " +
 		"consumers retain the order the server describes them in"
+	// changefeedCanonicalization is the desired changefeed model's:
+	// changefeeds in name order, and the consumers of each one's topic in the
+	// order the declaration lists them.
+	changefeedCanonicalization = "protojson followed by modeljson canonical JSON; changefeeds sorted by name; the consumers of a changefeed's topic retain " +
+		"the order the declaration lists them in"
+	// changefeedObservedDefinition is the observed changefeed model's: the
+	// consumers of a changefeed's topic in the order the observation lists
+	// them. A read lists them by name, as the host's embedded engine at
+	// 74de0b65b read them; an observation predicted from a declaration lists
+	// them in the declaration's order, so that the reverse of a change drops
+	// the consumers it added in the order the change added them.
+	changefeedObservedDefinition = "retain topic and consumer configuration, attributes and access metadata; omit partitions, topic/consumer stats and transient self fields; " +
+		"consumers retain the order the observation lists them in, which is name order for a read"
 )
 
 // normalizeTopic checks a topic's description and keeps its consumers in the
@@ -152,8 +164,8 @@ const (
 // zz first, and a consumer an ALTER TOPIC adds comes after those it found. The
 // host's embedded engine wrote a topic's consumers in that order wherever it
 // rewrote the topic, such as in the CREATE TOPIC that undoes its drop. A
-// changefeed's topic keeps its consumers in name order (see
-// normalizeChangefeeds).
+// changefeed's topic keeps its consumers in the order its observation lists
+// them, which is name order for a read (see changefeedObservedDefinition).
 func normalizeTopic(topic *native.DescribeTopicResult) error {
 	if err := Known(topic); err != nil {
 		return err

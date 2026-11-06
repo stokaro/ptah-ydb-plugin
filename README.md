@@ -1257,7 +1257,7 @@ consumer options, and attributes. Live partition topology and topic/consumer
 statistics are excluded. A missing child description refuses the entire read.
 
 Indexes, implementation tables, changefeeds, and the consumers of a
-changefeed's topic are sorted by name; a topic's own consumers keep their
+changefeed's topic are read in name order; a topic's own consumers keep their
 order (see the topic section).
 Column and key arrays retain their observed order. Desired coordination-node declarations are available as described below.
 Every observed model has a separate desired contract and an offline conversion.
@@ -2046,8 +2046,9 @@ progress counters remain excluded.
 
 Unknown fields/enums, runtime state in declarations, null settings, duplicate
 names, and incomplete child descriptions are refused. Empty index/changefeed
-sets keep their own desired model definitions. Indexes, implementation tables,
-changefeeds, and consumers normalize by name; column and key order is retained.
+sets keep their own desired model definitions. Indexes, implementation tables
+and changefeeds normalize by name; consumers keep the order the declaration
+lists them in, and column and key order is retained.
 
 ## Offline native-object declarations
 
@@ -2656,7 +2657,11 @@ column table takes no changefeed.
 The comparison reads both sides as the host's specification: a mode, a format
 and a codec in any case, an interval by the seconds it denotes, YDB's 24 hours
 for a retention left out, consumers by name and their codecs as a set, and a
-topic's starting partition count only where both sides name one. A changefeed
+topic's starting partition count only where both sides name one. The
+statements of a change list the consumers as Ptah's built-in YDB engine did:
+those it drops in the order the read lists them, which is name order, and those
+it adds in the order the declaration lists them, so the rollback of a change
+drops the consumers it added in the order it added them. A changefeed
 the read cannot represent (an AWS region, attributes, a fraction of a second,
 an auto-partitioning strategy no changefeed declares, a consumer attribute
 other than YDB's own) leaves the table's changefeeds undecided, and so does a

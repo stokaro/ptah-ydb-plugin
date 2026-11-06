@@ -138,6 +138,9 @@ func buildModel(kind string) *protocol.ValueModel {
 		// identities it is part of.
 		definition["topic_observations"] = topicObservations
 	}
+	if kind == ChangefeedProperties {
+		definition["topic_observations"] = changefeedObservedDefinition
+	}
 	if kind == IndexProperties {
 		definition["implementation_state"] = "internal sequence positions excluded after unknown-field validation; row storage canonicalized; sequence configuration retained"
 	}
