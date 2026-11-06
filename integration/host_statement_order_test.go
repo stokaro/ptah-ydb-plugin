@@ -92,7 +92,7 @@ func TestHostInspectsStatementsInTheBuiltInOrder_HappyPath(t *testing.T) {
 // changefeed after the last table.
 func TestHostAppliesANewTablesChangefeedRightAfterIt_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	opened, directory, database := inspectionFixture(c)
+	opened, directory, database := lockFixture(c)
 	c.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
