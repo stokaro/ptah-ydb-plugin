@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -87,5 +88,20 @@ func TestHostCompatPlansAnHCLGrantOnANode_HappyPath(t *testing.T) {
 	stdout, stderr, exit := runCompat(c, nil, "schema", "apply", "--url", realm.address, "--to", desired, "--dry-run")
 
 	c.Assert(exit, qt.Equals, 0, qt.Commentf("stdout:\n%s\nstderr:\n%s", stdout, stderr))
-	c.Assert(stdout, qt.Contains, "CREATE COORDINATION NODE `app/workers`;\nGRANT 'ydb.granular.describe_schema' ON `app/workers` TO `"+group+"`;\n")
+	c.Assert(previewStatements(stdout), qt.DeepEquals, []string{
+		"CREATE COORDINATION NODE `app/workers`;", "GRANT 'ydb.granular.describe_schema' ON `app/workers` TO `" + group + "`;",
+	}, qt.Commentf("%s", stdout))
+}
+
+// previewStatements lists the lines of a plan preview that start a
+// statement, in order, leaving out the headings and the comments a host
+// writes above a statement.
+func previewStatements(output string) []string {
+	var statements []string
+	for line := range strings.SplitSeq(output, "\n") {
+		if slices.ContainsFunc([]string{"CREATE ", "ALTER ", "DROP ", "GRANT ", "REVOKE "}, func(verb string) bool { return strings.HasPrefix(line, verb) }) {
+			statements = append(statements, line)
+		}
+	}
+	return statements
 }
