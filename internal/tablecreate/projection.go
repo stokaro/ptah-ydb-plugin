@@ -144,7 +144,7 @@ func projectedColumns(columns []*Ydb_Table.ColumnMeta, key []string) ([]*protoco
 // such as a deferrable one, reaches planning as a constraint and is refused
 // there.
 func withoutUniqueness(table *protocol.DeclaredTable) *protocol.DeclaredTable {
-	result := proto.CloneOf(table)
+	result := provider.CloneSharingModels(table)
 	result.Constraints = slices.DeleteFunc(result.Constraints, func(constraint *protocol.DeclaredConstraint) bool {
 		return strings.EqualFold(strings.TrimSpace(constraint.GetType()), "UNIQUE")
 	})

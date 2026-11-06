@@ -9,7 +9,15 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
+	"github.com/stokaro/ptah-ydb-plugin/internal/coordinationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/externalplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replicationplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/secretplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topicplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workloadplan"
 )
 
 // TestDescriptionListsOneFeatureSet pins that the engine offers every
@@ -86,4 +94,38 @@ func TestInspectionRequiresObservedColumnsFeature(t *testing.T) {
 	result, err = backend.New().Inspect(ctx, &protocol.InspectRequest{})
 	c.Assert(result, qt.IsNil)
 	c.Assert(err, qt.ErrorMatches, "rpc error: code = NotFound desc = unknown YDB session")
+}
+
+// Every planning service but two reads the outline of each table: the
+// planner of row tables plans their settings, and the planner of external
+// data sources reads the TTL a column table keeps. The provider lists
+// planning.table-outlines and transport.shared-coverage, and a host that
+// lists neither negotiates a description whose services read whole tables.
+func TestDescriptionOutlinesTheServicesThatReadNoTableSettings(t *testing.T) {
+	c := testcheck.New(t)
+	description := backend.Description()
+	negotiated := provider.NegotiatedDescription(description, nil)
+	tables, unlisted := make(map[string]protocol.PlanningTables), make(map[string]protocol.PlanningTables)
+	for i, service := range description.Engines[0].Planning {
+		tables[service.GetId()] = service.GetTables()
+		unlisted[service.GetId()] = negotiated.Engines[0].Planning[i].GetTables()
+	}
+
+	c.Assert(provider.ValidateDescription(description, nil), qt.IsNil)
+	c.Assert(description.Features, qt.Contains, provider.TableOutlinesFeature)
+	c.Assert(description.Features, qt.Contains, provider.SharedCoverageFeature)
+	c.Assert(tables, qt.DeepEquals, map[string]protocol.PlanningTables{
+		secretplan.ServiceID:                 protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
+		streamingplan.ServiceID:              protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
+		coordinationplan.ServiceID:           protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
+		topicplan.ServiceID:                  protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
+		externalplan.ServiceID:               protocol.PlanningTables_PLANNING_TABLES_CAPTURED,
+		workloadplan.ServiceID:               protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
+		replicationplan.ReplicationServiceID: protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
+		replicationplan.TransferServiceID:    protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
+		tablecreate.ServiceID:                protocol.PlanningTables_PLANNING_TABLES_CAPTURED,
+	})
+	for id := range unlisted {
+		c.Assert(unlisted[id], qt.Equals, protocol.PlanningTables_PLANNING_TABLES_CAPTURED, qt.Commentf("%s", id))
+	}
 }

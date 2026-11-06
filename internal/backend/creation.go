@@ -44,7 +44,7 @@ func (*Provider) ProjectTableCreations(ctx context.Context, request *protocol.Pr
 			column.Comment = request.Tables[i].Declaration.Columns[j].Comment
 		}
 	}
-	if err := provider.ValidateProjectedCreations(description, request, result); err != nil {
+	if err := provider.ValidateProjectedCreationsReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil

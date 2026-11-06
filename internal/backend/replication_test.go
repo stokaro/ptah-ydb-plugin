@@ -2,11 +2,14 @@ package backend_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
@@ -567,6 +570,8 @@ func replicationContextState(c *qt.C, representation protocol.ValueInput_Represe
 // keptReplicationRequest plans no replication change beside table, with the
 // replication mirror held in state and declared as it is held. The read
 // replication names database, the session's as the host sends it, or none.
+// The planner of replications reads outlines, so the request carries the
+// outline of table, as a host that lists planning.table-outlines sends it.
 func keptReplicationRequest(c *qt.C, state, database string, table *protocol.PlanningTable) *protocol.PlanFeaturesRequest {
 	c.Helper()
 	read := readReplication(c, new(mirror()), state)
@@ -574,7 +579,40 @@ func keptReplicationRequest(c *qt.C, state, database string, table *protocol.Pla
 	return &protocol.PlanFeaturesRequest{Engine: "ydb", PlanningId: replicationplan.ReplicationServiceID, DatabasePath: "/local", ContextKinds: []string{schema.ReplicationProperties},
 		TargetFeatures: backend.Description().Features, Capabilities: replicationCapabilities(), Identifiers: &protocol.ComparisonIdentifiers{Rules: proto.CloneOf(backend.Description().Engines[0].Identifiers)},
 		DesiredObjects: replicationContextState(c, protocol.ValueInput_DESIRED, declaredReplication(c, new(mirror()))),
-		CurrentObjects: replicationContextState(c, protocol.ValueInput_OBSERVED, read), Tables: []*protocol.PlanningTable{table}}
+		CurrentObjects: replicationContextState(c, protocol.ValueInput_OBSERVED, read), Tables: []*protocol.PlanningTable{provider.TableOutline(table)}}
+}
+
+// A host that does not list planning.table-outlines sends the planner of
+// replications the whole table, and the planner refuses the table at a live
+// replica in the words it uses for the outline.
+func TestKeptReplicationAssessmentOfAWholeTable_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	table := &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_CREATE, Desired: declaredReplica()}
+	request := keptReplicationRequest(c, replication.StateRunning, "", table)
+	request.Tables = []*protocol.PlanningTable{table}
+	request.TargetFeatures = slices.DeleteFunc(slices.Clone(request.TargetFeatures), func(feature string) bool { return feature == provider.TableOutlinesFeature })
+
+	result, err := backend.New().PlanFeatures(t.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Objects, qt.HasLen, 0)
+	c.Assert(result.Diagnostics, qt.HasLen, 1)
+	c.Assert(result.Diagnostics[0].Message, qt.Matches, "table replica/accounts: it is a replica table async replication app/mirror writes, read-only while the replication runs .*")
+}
+
+// A host that lists planning.table-outlines sends the outline, and a whole
+// table is refused before the planner reads it.
+func TestKeptReplicationAssessmentOfAWholeTableFromAnOutliningHost_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	table := &protocol.PlanningTable{Subject: replicaTable(), Action: protocol.PlanningTable_CREATE, Desired: declaredReplica()}
+	request := keptReplicationRequest(c, replication.StateRunning, "", table)
+	request.Tables = []*protocol.PlanningTable{table}
+
+	result, err := backend.New().PlanFeatures(t.Context(), request)
+
+	c.Assert(status.Code(err), qt.Equals, codes.InvalidArgument)
+	c.Assert(err, qt.ErrorMatches, `.*an outlined table carries more than its subject, action and the names of its states`)
+	c.Assert(result, qt.IsNil)
 }
 
 // TestKeptReplicationAssessment_HappyPath acknowledges a replication the plan

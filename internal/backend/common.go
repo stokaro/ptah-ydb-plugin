@@ -9,7 +9,6 @@ import (
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
@@ -28,7 +27,7 @@ func (*Provider) PrepareCommonObjects(ctx context.Context, request *protocol.Pre
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.PreparedCommonObjects{Complete: true, Prepared: commonobject.Prepare(request.GetDeclared())}
-	if err := provider.ValidatePreparedCommonObjects(description, request, result); err != nil {
+	if err := provider.ValidatePreparedCommonObjectsReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
@@ -74,7 +73,7 @@ func withoutDeclaredComments(features []string, declarations ...**protocol.Decla
 // preparationWithoutComments is a copy of a preparation request whose tables
 // declare no comment the common wire carries.
 func preparationWithoutComments(request *protocol.PrepareTablesRequest) (*protocol.PrepareTablesRequest, error) {
-	result := proto.CloneOf(request)
+	result := provider.CloneSharingModels(request)
 	for _, table := range result.GetTables() {
 		if err := withoutDeclaredComments(result.GetTargetFeatures(), &table.Desired); err != nil {
 			return nil, err
@@ -86,7 +85,7 @@ func preparationWithoutComments(request *protocol.PrepareTablesRequest) (*protoc
 // creationsWithoutComments is a copy of a creation projection request whose
 // tables declare no comment the common wire carries.
 func creationsWithoutComments(request *protocol.ProjectTableCreationsRequest) (*protocol.ProjectTableCreationsRequest, error) {
-	result := proto.CloneOf(request)
+	result := provider.CloneSharingModels(request)
 	for _, table := range result.GetTables() {
 		if err := withoutDeclaredComments(result.GetTargetFeatures(), &table.Declaration); err != nil {
 			return nil, err
@@ -98,7 +97,7 @@ func creationsWithoutComments(request *protocol.ProjectTableCreationsRequest) (*
 // planningWithoutComments is a copy of a planning request whose desired
 // tables declare no comment the common wire carries.
 func planningWithoutComments(request *protocol.PlanFeaturesRequest) (*protocol.PlanFeaturesRequest, error) {
-	result := proto.CloneOf(request)
+	result := provider.CloneSharingModels(request)
 	for _, table := range result.GetTables() {
 		if err := withoutDeclaredComments(result.GetTargetFeatures(), &table.Desired); err != nil {
 			return nil, err

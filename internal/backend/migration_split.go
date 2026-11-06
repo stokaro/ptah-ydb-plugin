@@ -39,7 +39,7 @@ func (*Provider) SplitMigration(ctx context.Context, request *protocol.SplitMigr
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	if err := provider.ValidateMigrationSplit(description, request, result); err != nil {
+	if err := provider.ValidateMigrationSplitReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil

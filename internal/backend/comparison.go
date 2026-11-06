@@ -62,7 +62,7 @@ func (*Provider) CompareModels(ctx context.Context, request *protocol.CompareMod
 		}
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if err := provider.ValidateComparedModels(description, request, result); err != nil {
+	if err := provider.ValidateComparedModelsReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {

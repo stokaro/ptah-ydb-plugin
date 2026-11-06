@@ -34,7 +34,7 @@ func (*Provider) ReadSQLSchema(ctx context.Context, request *protocol.ReadSQLSch
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	if err := provider.ValidateSQLSchema(Description(), request, reply); err != nil {
+	if err := provider.ValidateSQLSchemaReply(Description(), request, reply); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return reply, nil

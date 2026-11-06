@@ -51,7 +51,7 @@ func (p *Provider) PlanDeclarations(ctx context.Context, request *protocol.PlanD
 		}
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if err := provider.ValidatePlannedDeclarations(description, request, result); err != nil {
+	if err := provider.ValidatePlannedDeclarationsReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {

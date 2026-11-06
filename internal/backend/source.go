@@ -51,7 +51,7 @@ func (*Provider) DecodeSource(ctx context.Context, request *protocol.DecodeSourc
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	if err := provider.ValidateDecodedSource(Description(), request, result); err != nil {
+	if err := provider.ValidateDecodedSourceReply(Description(), request, result); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	return result, nil
