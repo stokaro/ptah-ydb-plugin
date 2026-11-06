@@ -67,16 +67,18 @@ func TestAccessReportsGrantsInReadingOrder_HappyPath(t *testing.T) {
 	})
 }
 
-// A read reports the users, then the groups, then the memberships, each in
-// the order its system view lists them, as the host's embedded engine read
-// them, so a render writes them in that order.
-func TestAccessReportsPrincipalsInReadingOrder_HappyPath(t *testing.T) {
+// A read reports the users and the groups together by name, and the
+// memberships by group and then member, as the YDB engine built into the host
+// at 74de0b65b sorted them, so a render writes a group ahead of a user whose
+// name sorts after it. The read kept the users ahead of the groups, each in
+// the order its system view lists them.
+func TestAccessReportsPrincipalsByName_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	snapshot := accessSnapshot()
 	held := nativeapi.Principals{
 		Users:       []nativeapi.User{{Name: "zed", Enabled: true}, {Name: "amy", Enabled: true}},
 		Groups:      []string{"beta", "alpha"},
-		Memberships: []nativeapi.Membership{{Group: "beta", Member: "zed"}, {Group: "alpha", Member: "amy"}},
+		Memberships: []nativeapi.Membership{{Group: "beta", Member: "zed"}, {Group: "alpha", Member: "zed"}, {Group: "alpha", Member: "amy"}},
 	}
 
 	err := inspect.Access(c.Context(), snapshot, "/local", inspect.DatabaseScope, described(map[string]*Ydb_Scheme.Entry{"/local": accessRoot("root")}),
@@ -90,6 +92,6 @@ func TestAccessReportsPrincipalsInReadingOrder_HappyPath(t *testing.T) {
 	for _, membership := range snapshot.CommonObjects.Memberships {
 		memberships = append(memberships, membership.Group+" "+membership.Member)
 	}
-	c.Assert(roles, qt.DeepEquals, []string{"zed", "amy", "beta", "alpha"})
-	c.Assert(memberships, qt.DeepEquals, []string{"beta zed", "alpha amy"})
+	c.Assert(roles, qt.DeepEquals, []string{"alpha", "amy", "beta", "zed"})
+	c.Assert(memberships, qt.DeepEquals, []string{"alpha amy", "alpha zed", "beta zed"})
 }
