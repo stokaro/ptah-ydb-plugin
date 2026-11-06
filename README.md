@@ -1470,21 +1470,24 @@ codec: "ptah.run/ydb/coordination-node"/desired`.
 `TestHostReadsTheBuiltinEnginesHCLExports_HappyPath` applies exports recorded
 from the embedded engine (`internal/backend/testdata/builtin-hcl`).
 
-A captured header the host writes for this provider's models does not carry
-a model's definition digest as this provider describes it. It carries a
-digest the host computes over the definition together with the provider's
-version, the features the host and the provider negotiated, and the engine's
-source keys, Go directives, comparisons and planning. So an HCL export that
-one release of this provider wrote is refused by another release, even where
-no definition changed: `incompatible feature codec: coverage model
-"github.com/stokaro/ptah-ydb-plugin/coordination-node"/desired`. The provider
-cannot name that identity as a predecessor of its model: it does not know the
-digest, and the SDK refuses a predecessor whose kind is one of the provider's
-own. An export from a host that writes no captured header for a provider
-carries `ptah:not-described` entries instead, which name no model identity,
-and a Go export names none either, so no release refuses either for one.
-`TestModelIdentitiesAreDescribedOrDeclaredPredecessors` pins the definition
-digest of every desired model, so a definition text cannot change unseen.
+A captured header the host writes for this provider's models names each
+model by the identity the provider describes: the provider as the owner, the
+model's kind and representation, its schema version and its definition
+digest. The release version, the features a host negotiated and the engine's
+other declarations do not enter it, so an HCL export one release of this
+provider wrote reads with the next one while no definition text changed.
+When a text changes without changing what a claim of the model means, the
+identity it replaces is named a predecessor of the model itself
+(`models.own-predecessors`), and an earlier export still reads; a header
+that names a definition the provider neither describes nor names is refused:
+`incompatible feature codec: coverage model
+"github.com/stokaro/ptah-ydb-plugin/coordination-node"/desired`.
+`TestModelIdentitiesAreDescribedOrDeclaredPredecessors` pins the identity of
+every desired model, so a definition text cannot change unseen, and
+`TestHostReadsAnEarlierProviderHCLExport_HappyPath` applies an export an
+earlier build recorded (`internal/backend/testdata/provider-hcl`). A Go export,
+and an HCL export from a host that writes no captured header for a provider,
+name no model identity.
 
 A Go source carries the same entries as `ptah:schema:notdescribed`
 declarations, under `source.limits`, of the kinds the engine lists in

@@ -13,6 +13,17 @@ import (
 // coordination node stays a claim, and a node the file leaves out is dropped
 // as the built-in engine dropped it.
 //
+// It also names, under provider.OwnPredecessorsFeature, each identity a
+// desired model of this provider had in a release before its definition text
+// changed, where the text changed without changing what a claim of the model
+// means: a host names this provider's models in an HCL export's header by
+// the identity the provider describes, so the export of an earlier release
+// reads as the same claim. exportedModels lists every such identity, and
+// TestModelIdentitiesAreDescribedOrDeclaredPredecessors fails while one of
+// them is neither described nor named here. A text whose change does change
+// the meaning is not named, and an earlier export that claims the model is
+// then refused, as it has to be.
+//
 // The built-in engine's HCL export records what it knows of the coordination
 // nodes in a ptah:feature-coverage header, and names no other model there. It
 // writes the same identity on 25.1.4.7 and 26.2.1.14, with and without

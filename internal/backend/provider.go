@@ -252,6 +252,11 @@ func providerFeatures() []string {
 		// coordination-node model in its captured header, and the host reads
 		// it as this provider's; see modelPredecessors.
 		provider.ModelPredecessorsFeature,
+		// A file an earlier release of this provider exported names a model
+		// whose definition text has changed since by the identity it had, and
+		// the host reads it as the same claim once modelPredecessors names
+		// that identity; see TestModelIdentitiesAreDescribedOrDeclaredPredecessors.
+		provider.OwnPredecessorsFeature,
 	}
 }
 

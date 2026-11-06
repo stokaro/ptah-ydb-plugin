@@ -1,11 +1,16 @@
 package backend_test
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -29,17 +34,16 @@ type exportedModel struct {
 // refuses any other file before anything is compared. Observed models are not
 // listed: no export writes one.
 //
+// The host's header names a model by the identity the provider describes:
+// the provider as owner, the kind, desired, the schema version and the
+// definition digest, which is what an entry here holds. It moves only when a
+// definition text changes, not with the release version, the features a host
+// negotiated or the engine's other declarations.
+//
 // The list only grows. A definition text that changes moves its model's
 // digest. The new identity joins the list, and the one it replaces stays and
-// is declared a predecessor of the model (modelPredecessors), so a file
-// exported before still reads. Two gaps keep that from working. The
-// host's header names a model by a digest it computes over the definition
-// together with the provider's version, the negotiated features and the
-// engine's source keys, directives, comparisons and planning, so every
-// release moves it whatever these texts say. And the SDK refuses a
-// predecessor that has the provider as owner and one of its own kinds as
-// kind (provider.ValidateDescription). This test holds the part the provider
-// owns: a definition text does not change unseen.
+// is declared a predecessor of the model (modelPredecessors, under
+// provider.OwnPredecessorsFeature), so a file exported before still reads.
 var exportedModels = []exportedModel{
 	{kind: schema.ReplicationProperties, version: 1, digest: "faa84b8be10b750b58f9154e77499f7a2ce1d357ae66bf2e3ec0342cea1ca3ba"},
 	{kind: schema.ColumnProperties, version: 1, digest: "6dbd837c2dc3fee253658063922d283a5d44206812d8c69b6b2da927ae836824"},
@@ -107,4 +111,58 @@ func TestModelIdentitiesAreDescribedOrDeclaredPredecessors(t *testing.T) {
 		qt.Commentf("a desired model whose identity exportedModels does not list: a new model, or a definition text that changed"))
 	c.Assert(missing(exportedModels, readable), qt.HasLen, 0,
 		qt.Commentf("an identity a release had that the provider neither describes nor declares as a predecessor"))
+}
+
+// The remedy the guard asks for is open to the provider: its description
+// names an identity a model had before the text changed as a predecessor of
+// the model itself, which then counts as readable, and the description stays
+// valid. A host whose SDK does not know such a predecessor is not sent it,
+// and keeps the built-in engine's.
+func TestAReplacedIdentityCanBeDeclaredAPredecessor(t *testing.T) {
+	c := testcheck.New(t)
+	description := backend.Description()
+	engine := description.GetEngines()[0]
+	model := engine.GetValueModels()[slices.IndexFunc(engine.GetValueModels(), func(model *protocol.ValueModel) bool {
+		return model.GetRepresentation() == protocol.ValueInput_DESIRED
+	})]
+	replaced := exportedModel{kind: model.GetKind(), version: model.GetSchemaVersion(), digest: strings.Repeat("0", 64)}
+	builtin := len(engine.GetModelPredecessors())
+	engine.ModelPredecessors = append(engine.ModelPredecessors, &protocol.ModelPredecessor{Kind: replaced.kind, Representation: protocol.ValueInput_DESIRED,
+		FormerOwner: schema.ProviderID, FormerKind: replaced.kind, SchemaVersion: replaced.version, DefinitionSha256: replaced.digest})
+	hostFeatures := []string{provider.ModelPredecessorsFeature, provider.OwnPredecessorsFeature}
+
+	c.Assert(provider.ValidateDescription(provider.NegotiatedDescription(description, hostFeatures), nil), qt.IsNil)
+	c.Assert(ownPredecessors(description), qt.Contains, replaced)
+	earlier := provider.NegotiatedDescription(description, []string{provider.ModelPredecessorsFeature})
+	c.Assert(provider.ValidateDescription(earlier, nil), qt.IsNil)
+	c.Assert(earlier.GetEngines()[0].GetModelPredecessors(), qt.HasLen, builtin)
+	c.Assert(ownPredecessors(earlier), qt.HasLen, 0)
+}
+
+// The header of the export an earlier build of this provider recorded
+// (testdata/provider-hcl) names each model by an identity exportedModels
+// holds, with this provider as owner: the identities the guard pins are the
+// ones a header carries.
+func TestTheRecordedProviderHeaderNamesPinnedIdentities(t *testing.T) {
+	c := testcheck.New(t)
+	data, err := os.ReadFile(filepath.Join("testdata", "provider-hcl", "inspect.hcl"))
+	c.Assert(err, qt.IsNil)
+	header := builtinHeader.FindSubmatch(data)
+	c.Assert(header, qt.HasLen, 2)
+	var document struct {
+		Kinds []struct {
+			Model capturedModel `json:"model"`
+		} `json:"kinds"`
+	}
+	c.Assert(json.Unmarshal(header[1], &document), qt.IsNil)
+	c.Assert(document.Kinds, qt.Not(qt.HasLen), 0)
+	var named []exportedModel
+	for _, kind := range document.Kinds {
+		c.Assert(kind.Model.Owner, qt.Equals, schema.ProviderID)
+		c.Assert(kind.Model.Representation, qt.Equals, "desired")
+		digest, found := strings.CutPrefix(kind.Model.Definition, "sha256:")
+		c.Assert(found, qt.IsTrue)
+		named = append(named, exportedModel{kind: kind.Model.Kind, version: kind.Model.Version, digest: digest})
+	}
+	c.Assert(missing(named, exportedModels), qt.HasLen, 0)
 }
