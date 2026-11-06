@@ -1046,18 +1046,26 @@ showing whether it applied), followed by YDB's status, the most specific issue
 code and the position YDB named, counted in the unit's own text: on a dev
 realm, the realm's pragma YDB received first is not counted. For the issue
 codes 2003, 2012, 2031 and 2032
-it also says what the statement did, in the provider's words. Apart from the
-paths of the objects a refused DROP leaves in place, it never quotes YDB's
-issue text: measured on 25.1.4.7 and 26.2.1.14, that text quotes the
-token YDB refused, a string literal of the statement and the table's path, and
-a statement can carry a password or a bound secret. The issue text stays in the
-result's message. The one sentence a reason takes from YDB's answer is the
-check a rebuild's copy fails with, which the provider wrote into the statement
-and which names the table and the column, as the host's embedded engine printed
-it:
+it also says what the statement did, in the provider's words. A reason never
+repeats YDB's issue text as a whole: measured on 25.1.4.7 and 26.2.1.14, that
+text quotes the token YDB refused, a string literal of the statement and the
+table's path, and a statement can carry a password or a bound secret. The issue
+text stays in the result's message. A reason carries the parts of it that quote
+none of those, as the host's embedded engine printed them: the paths of the
+objects a refused DROP leaves in place, YDB's fixed sentences, and the check a
+rebuild's copy fails with, which the provider wrote into the statement and which
+names the table and the column:
 
 ```text
 provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the statement: rebuilding table app.items: column n holds a value that does not convert to its new type (PRECONDITION_FAILED)
+```
+
+YDB's fixed sentences follow `saying`. A name YDB does not take in a path, such
+as a secret whose name holds a space, is refused on 26.2.1.14 with an issue that
+quotes the path and the name; the reason carries YDB's sentence without them:
+
+```text
+provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the statement, saying "symbol ' ' is not allowed in the path part" (SCHEME_ERROR, issue 2019)
 ```
 
 INTERNAL_ERROR shows nothing about a statement, with one measured exception:
@@ -1076,25 +1084,25 @@ sentence.
 Where YDB's issues say a feature flag is off, the reason names the capability
 and the flag, as the host's embedded engine words such a refusal, around the
 provider's own reason where the host's engine quotes YDB's text, then what to
-do. A session whose address names no monitoring endpoint took the capability
-from its release line's default, and is told to name the endpoint as well as
-to turn the flag on; one whose address names it read the flags already, and is
-told only to turn the flag on. The texts and the flags they name are the
+do. The provider's reason carries YDB's sentence for the flag, without what
+YDB wrote around it. A session whose address names no monitoring endpoint took
+the capability from its release line's default, and is told to name the
+endpoint as well as to turn the flag on; one whose address names it read the
+flags already, and is told only to turn the flag on. The texts and the flags they name are the
 host's measured ones (`internal/ydbflags` in Ptah). Measured on 25.1.4.7 and
 26.2.1.14, where `EnableResourcePools` is off by default, without the endpoint:
 
 ```text
-provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans
+provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, which runs with feature flag EnableResourcePools off: YDB refused the statement, saying "Resource pools are disabled" (UNSUPPORTED, issue 2030). Turn the flag on, or name the cluster's monitoring endpoint in the URL (monitoring=http://host:8765) so Ptah reads the flags before it plans
 ```
 
 and with it, the same sentence up to `Turn the flag on`.
 
 YDB refuses a DROP of an object other objects depend on, such as an external
 data source an external table reads, with `SCHEME_ERROR` before it changes
-anything, and names the dependents inside issue 2019. Their paths are the one
-part of YDB's text a reason repeats, as Ptah's built-in YDB engine printed
-them, because the operator has to drop them first. Measured on 25.1.4.7 and
-26.2.1.14:
+anything, and names the dependents inside issue 2019. A reason repeats their
+paths, as Ptah's built-in YDB engine printed them, because the operator has to
+drop them first. Measured on 25.1.4.7 and 26.2.1.14:
 
 ```text
 provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the statement: other scheme objects depend on what it drops, /local/readers/tbl; drop them first (SCHEME_ERROR, issue 2019)
@@ -1103,8 +1111,9 @@ provider execution: NOT_APPLIED (0 units confirmed applied): YDB refused the sta
 25.1.4.7 has no unique secondary index, and refuses one with `Unknown index
 type: syncGlobalUnique` inside its execution stage, before it proposes a
 schema operation. The unit is NOT_APPLIED (PARTIAL after an applied prefix),
-with the reason `YDB refused the statement: the YDB release the cluster runs
-has no unique secondary index (GENERIC_ERROR, issue 1060, line 1, column N)`.
+with the reason `YDB refused the statement, saying "Unknown index type:
+syncGlobalUnique": the YDB release the cluster runs has no unique secondary
+index (GENERIC_ERROR, issue 1060, line 1, column N)`.
 
 ## Operational storage reservations
 
@@ -3239,7 +3248,14 @@ The equivalent Go annotation is
 A YQL schema declares
 `CREATE SECRET \`app/pg_password\` WITH (value = $PTAH_SECRET_PG_PASSWORD);`.
 Schema sources refuse inline values. Input names must start with `PTAH_SECRET_`
-and contain only ASCII letters, digits, and underscores.
+and contain only ASCII letters, digits, and underscores. A refused declaration
+gives the reason a host prints, in the words of Ptah's built-in YDB engine: the
+secret, by its YAML key, the attribute and what it takes. It never repeats the
+value a declaration wrote or the variable it names:
+
+```text
+provider decode source failed (InvalidArgument): secret "pw": invalid value_env: the variable it names does not start with PTAH_SECRET_ and a name after it; Ptah reads a secret's value only from a variable under that prefix, so a migration file cannot copy any other variable of the machine that applies it
+```
 
 An absent secret is created. An existing secret is unchanged unless the
 operator requests rotation with `--rotate-secret app/pg_password`. Rotation
