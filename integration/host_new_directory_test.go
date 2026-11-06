@@ -278,12 +278,41 @@ func TestHostLeavesWhatADotPrefixedDirectoryHoldsAlone_FailurePath(t *testing.T)
 		map[string]Ydb_Scheme.Entry_Type{"events": Ydb_Scheme.Entry_TOPIC, "kept": Ydb_Scheme.Entry_TOPIC})
 }
 
+// A Go export of the whole database writes no `ptah:schema:notdescribed`
+// entry for a native kind when the database holds the dev realm directory,
+// and nothing a realm holds, as the host's embedded engine at 74de0b65b,
+// which left the directory out of its read as no part of the schema. The read
+// claims the directory as holding nothing; claimed unknown, it made the export
+// name every native kind as not described, and a topic or a node left out of
+// the export was then never dropped.
+func TestHostIntrospectOfTheDatabaseClaimsTheDevRealms_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := inspectionFixture(c)
+	realm := path.Join(database, "ptah_dev", directory)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		removeTree(ctx, opened, realm)
+	})
+	createSchemaObject(c, opened, "CREATE TOPIC `"+path.Join(realm, "events")+"`", "DROP TOPIC IF EXISTS `"+path.Join(realm, "events")+"`")
+	out := c.TempDir()
+
+	hostExport(c, "introspect", "--out", out, "--single-file")
+
+	written, err := os.ReadFile(filepath.Join(out, "schema.go"))
+	c.Assert(err, qt.IsNil)
+	source := string(written)
+	c.Assert(source, qt.Not(qt.Matches), `(?s).*//ptah:schema:notdescribed kind="(coordination_node|external_data_source|external_table|replication|secret|topic|transfer)".*`)
+	c.Assert(source, qt.Not(qt.Contains), directory)
+}
+
 // dotPrefixedRealm is a dev realm of its own whose root holds the directory
 // .hidden, and the connection that made it. The cleanup removes the
-// directory, what it holds and the run's lock node.
+// directory, what it holds and the run's lock node, which a session on a
+// realm keeps at the realm's root.
 func dotPrefixedRealm(c *qt.C) (address, root string, opened *connection.Connection) {
 	c.Helper()
-	opened, _, _ = lockFixture(c)
+	opened, _, _ = inspectionFixture(c)
 	base, err := connection.Parse(os.Getenv("PTAH_YDB_TEST_URL"))
 	c.Assert(err, qt.IsNil)
 	address, root = realmFixture(c, opened, base)
