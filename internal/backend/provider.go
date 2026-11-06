@@ -208,6 +208,10 @@ func providerFeatures() []string {
 		// whole, which reads it into the table's native index set or its
 		// column storage and writes it back; see tablesource.IndexKinds.
 		provider.IndexKindsFeature,
+		// A file Ptah's built-in YDB engine exported names that engine's
+		// coordination-node model in its captured header, and the host reads
+		// it as this provider's; see modelPredecessors.
+		provider.ModelPredecessorsFeature,
 	}
 }
 
@@ -447,6 +451,7 @@ func Description() *protocol.Description {
 					tablecreate.NativeIndexModel(),
 					declarationplan.Model(),
 				),
+				ModelPredecessors: modelPredecessors(),
 				Declarations: []*protocol.ModelDeclarations{
 					{
 						Id:             declarationplan.ServiceID,

@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.21.0, which speaks provider contract 25.24.
+The module pins `provider-sdk` v0.22.0, which speaks provider contract 25.25.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -1429,6 +1429,19 @@ document; one that asks about every document plans to drop each node the
 document does not declare, and writes its HCL exports without the captured
 header. `TestHostKeepsTheNodesAnHCLDocumentDoesNotName` measures the first
 kind of host and skips on the second.
+
+An HCL file the host's embedded engine exported names that engine's
+coordination-node model in its captured header: owner `ptah.run/ydb`, kind
+`ptah.run/ydb/coordination-node`, schema version 1. The provider names that
+identity as a predecessor of its own coordination-node model
+(`models.predecessors`, contract 25.25), so a host that lists the feature reads
+such a file with the claim it was written with. Applied back, it plans
+nothing, and a node whose block is removed is dropped, as the embedded engine
+dropped it. A file the host cuts the document into carries the provider's
+identity. A host without the feature refuses the file with `unknown feature
+codec: "ptah.run/ydb/coordination-node"/desired`.
+`TestHostReadsTheBuiltinEnginesHCLExports_HappyPath` applies exports recorded
+from the embedded engine (`internal/backend/testdata/builtin-hcl`).
 
 A Go source carries the same entries as `ptah:schema:notdescribed`
 declarations, under `source.limits`, of the kinds the engine lists in
