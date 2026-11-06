@@ -89,7 +89,7 @@ func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest
 	// failed check, so a timeout that ended during the check would fence it as
 	// if the lock were lost, and the unit would not be sent at all. The checks
 	// run under the request's context, which a lost lock ends (see guard).
-	checkLocks := func(context.Context) error { return s.verifyLocks(ctx) }
+	checkLocks := func(context.Context) error { return s.confirmLocks(ctx) }
 	result := executeUnits(ctx, time.Duration(request.GetStatementTimeoutNanoseconds()), stopped, failed, s.unitRunner(runner, batch, bindings, checkLocks), request.Units)
 	if s.verifyLocks(ctx) != nil && (result.AppliedCount > 0 || result.Outcome == protocol.Execution_UNKNOWN) {
 		result.Outcome = protocol.Execution_UNKNOWN

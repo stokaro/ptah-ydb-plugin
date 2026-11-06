@@ -77,14 +77,21 @@ type session struct {
 	// directory when the address names one.
 	database string
 	// realm reports a session on a dev realm, whose statements are confined to it.
-	realm            bool
-	closed           bool
-	closeErr         error
-	cleanupErr       error
-	transactions     map[string]*transaction
-	active           string
+	realm        bool
+	closed       bool
+	closeErr     error
+	cleanupErr   error
+	transactions map[string]*transaction
+	active       string
+	// lockMu guards locks, the fields of each lock record, fenced and
+	// locksClosed. A lock check takes it and not mu, so the host's watch of
+	// a lock is answered while an execution holds mu: the watch checks
+	// every second and counts a check unanswered for ten seconds as a lost
+	// lock. A caller that holds both took mu first.
+	lockMu           sync.Mutex
 	locks            map[string]*lockRecord
 	fenced           bool
+	locksClosed      bool
 	metadataReaders  map[string]*metadataReader
 	statementResults map[string]*statementResult
 	// version is what the server answered SELECT Version() with.

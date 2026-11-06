@@ -20,6 +20,9 @@ import (
 // acquisition. The real hold uses strict native ownership reads and a watchdog.
 type lockHold interface {
 	Check(context.Context) error
+	// Confirm is Check that trusts a confirmation the hold's watch made
+	// within the last second.
+	Confirm(context.Context) error
 	Context() context.Context
 	Close(context.Context) error
 }
@@ -35,6 +38,7 @@ const lockHandleLimit = 1024
 // heldLockLimit is the most locks one session holds at once.
 const heldLockLimit = 16
 
+// reserveLock records a handle for scope. The caller holds lockMu.
 func (s *session) reserveLock(scope *protocol.LockScope) (*lockRecord, error) {
 	if s.locks[scope.LockId] != nil {
 		return nil, runtime.ErrorWithReason(codes.AlreadyExists, "YDB lock handle was already reserved")
@@ -49,6 +53,9 @@ func (s *session) reserveLock(scope *protocol.LockScope) (*lockRecord, error) {
 	s.locks[scope.LockId] = record
 	return record, nil
 }
+
+// lockSession returns the session request names holding mu and lockMu, for
+// an acquisition or a release, and the function that unlocks both.
 func (p *Provider) lockSession(request *protocol.LockRequest) (*session, func(), error) {
 	if err := provider.ValidateLockRequest(request); err != nil {
 		return nil, nil, authored.Status(codes.InvalidArgument, err)
@@ -62,11 +69,45 @@ func (p *Provider) lockSession(request *protocol.LockRequest) (*session, func(),
 		s.mu.Unlock()
 		return nil, nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
 	}
-	if record := s.locks[request.Scope.LockId]; record != nil && record.name != request.Scope.Name {
-		s.mu.Unlock()
-		return nil, nil, runtime.ErrorWithReason(codes.InvalidArgument, "YDB lock handle names a different lock")
+	s.lockMu.Lock()
+	unlock := func() { s.lockMu.Unlock(); s.mu.Unlock() }
+	if err := s.namesItsLock(request); err != nil {
+		unlock()
+		return nil, nil, err
 	}
-	return s, s.mu.Unlock, nil
+	return s, unlock, nil
+}
+
+// lockState returns the session request names holding lockMu alone, for a
+// check, which an execution holding mu does not delay, and the function that
+// unlocks it.
+func (p *Provider) lockState(request *protocol.LockRequest) (*session, func(), error) {
+	if err := provider.ValidateLockRequest(request); err != nil {
+		return nil, nil, authored.Status(codes.InvalidArgument, err)
+	}
+	s, err := p.lookup(request.Scope.SessionId)
+	if err != nil {
+		return nil, nil, err
+	}
+	s.lockMu.Lock()
+	if s.locksClosed {
+		s.lockMu.Unlock()
+		return nil, nil, runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session is closed")
+	}
+	if err := s.namesItsLock(request); err != nil {
+		s.lockMu.Unlock()
+		return nil, nil, err
+	}
+	return s, s.lockMu.Unlock, nil
+}
+
+// namesItsLock refuses a request whose handle the session reserved for
+// another lock name. The caller holds lockMu.
+func (s *session) namesItsLock(request *protocol.LockRequest) error {
+	if record := s.locks[request.Scope.LockId]; record != nil && record.name != request.Scope.Name {
+		return runtime.ErrorWithReason(codes.InvalidArgument, "YDB lock handle names a different lock")
+	}
+	return nil
 }
 func lockResult(request *protocol.LockRequest, outcome protocol.LockResult_Outcome) *protocol.LockResult {
 	result := &protocol.LockResult{Scope: proto.CloneOf(request.Scope), RequestId: request.RequestId, Outcome: outcome}
@@ -134,13 +175,13 @@ func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (
 	if active >= heldLockLimit {
 		return failedLock(request, record.outcome, fmt.Sprintf("the YDB session already holds %d locks, the most one session holds", heldLockLimit)), nil
 	}
-	guarded, stop, err := s.guard(ctx)
+	guarded, stop, err := s.guardLocked(ctx)
 	if err != nil {
 		return failedLock(request, record.outcome, "the YDB session lost its lock guarantee"), nil
 	}
 	defer stop()
 	record.outcome = protocol.LockResult_UNKNOWN
-	hold, busy, err := locking.Try(guarded, s.connection.Driver, s.database, request.Scope.Name)
+	hold, busy, err := s.tryWithoutLockState(guarded, request.Scope.Name)
 	if refused, ok := refusedLock(request, record, err); ok {
 		return refused, nil
 	}
@@ -154,15 +195,27 @@ func (p *Provider) TryLock(ctx context.Context, request *protocol.LockRequest) (
 	}
 	record.hold = hold
 	record.outcome = protocol.LockResult_ACQUIRED
-	if s.verifyLocks(ctx) != nil {
+	if s.verifyLocksLocked(ctx) != nil {
 		record.outcome = protocol.LockResult_UNKNOWN
 	}
 	return lockResult(request, record.outcome), nil
 }
 
+// tryWithoutLockState takes the lock name on the server with lockMu
+// released, so the checks of the session's other locks are answered while
+// the acquisition waits for the server. The caller holds mu, which keeps
+// every other acquisition, release and execution out, and holds lockMu
+// again when it returns.
+func (s *session) tryWithoutLockState(ctx context.Context, name string) (*locking.Hold, bool, error) {
+	s.lockMu.Unlock()
+	defer s.lockMu.Lock()
+	return locking.Try(ctx, s.connection.Driver, s.database, name)
+}
+
 // CheckLock verifies native ownership rather than returning a cached receipt.
+// It holds lockMu alone (see lockState).
 func (p *Provider) CheckLock(ctx context.Context, request *protocol.LockRequest) (*protocol.LockResult, error) {
-	s, unlock, err := p.lockSession(request)
+	s, unlock, err := p.lockState(request)
 	if err != nil {
 		return nil, err
 	}
@@ -180,8 +233,16 @@ func (p *Provider) CheckLock(ctx context.Context, request *protocol.LockRequest)
 	}
 	return lockResult(request, outcome), nil
 }
+
+// checkLock checks record's hold and fences the session when the check
+// fails. The caller holds lockMu.
 func (s *session) checkLock(ctx context.Context, record *lockRecord) error {
-	err := record.hold.Check(ctx)
+	return s.settleLock(record, record.hold.Check(ctx))
+}
+
+// settleLock records the failure of a check of record: the session is
+// fenced, and the lock reads as lost or unknown. The caller holds lockMu.
+func (s *session) settleLock(record *lockRecord, err error) error {
 	if err != nil {
 		s.fenced = true
 		record.outcome = protocol.LockResult_UNKNOWN
@@ -229,6 +290,9 @@ func (p *Provider) ReleaseLock(ctx context.Context, request *protocol.LockReques
 }
 
 func (s *session) closeLocks() {
+	s.lockMu.Lock()
+	defer s.lockMu.Unlock()
+	s.locksClosed = true
 	// Each dedicated session receives its own bounded cleanup opportunity.
 	for _, record := range s.locks {
 		if record.hold == nil || record.released {
@@ -241,6 +305,9 @@ func (s *session) closeLocks() {
 		s.cleanupErr = errors.Join(s.cleanupErr, err)
 	}
 }
+
+// observeLockLoss fences the session when a lease ended. The caller holds
+// lockMu.
 func (s *session) observeLockLoss() bool {
 	for _, record := range s.locks {
 		if record.hold != nil && !record.released && record.hold.Context().Err() != nil {
@@ -249,21 +316,58 @@ func (s *session) observeLockLoss() bool {
 	}
 	return s.fenced
 }
+
+// verifyLocks checks every lock the session holds; see verifyLocksLocked.
 func (s *session) verifyLocks(ctx context.Context) error {
+	s.lockMu.Lock()
+	defer s.lockMu.Unlock()
+	return s.verifyLocksLocked(ctx)
+}
+
+// confirmLocks is verifyLocks before one statement of an execution, which
+// takes a confirmation the watch of a hold made within the last second rather
+// than asking the server before every statement (see locking.Hold.Confirm):
+// two calls per statement, one of them to the scheme service that a long
+// schema change keeps busy, made a creation of 500 tables slower than Ptah's
+// built-in YDB engine, which asked between statements only once its last
+// answer was five seconds old.
+func (s *session) confirmLocks(ctx context.Context) error {
+	s.lockMu.Lock()
+	defer s.lockMu.Unlock()
+	return s.verifyEachLock(func(record *lockRecord) error { return s.settleLock(record, record.hold.Confirm(ctx)) })
+}
+
+// verifyLocksLocked checks every lock the session holds and fences the
+// session on a loss or an unconfirmed check. The caller holds lockMu.
+func (s *session) verifyLocksLocked(ctx context.Context) error {
+	return s.verifyEachLock(func(record *lockRecord) error { return s.checkLock(ctx, record) })
+}
+
+func (s *session) verifyEachLock(check func(*lockRecord) error) error {
 	if s.observeLockLoss() {
 		return runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session lost its lock guarantee")
 	}
 	for _, record := range s.locks {
 		if record.hold != nil && !record.released {
-			if s.checkLock(ctx, record) != nil {
+			if check(record) != nil {
 				return runtime.ErrorWithReason(codes.FailedPrecondition, "YDB session lost its lock guarantee")
 			}
 		}
 	}
 	return nil
 }
+
+// guard verifies the session's locks and returns a context that ends when
+// any of their holds ends; see guardLocked.
 func (s *session) guard(ctx context.Context) (context.Context, func(), error) {
-	if err := s.verifyLocks(ctx); err != nil {
+	s.lockMu.Lock()
+	defer s.lockMu.Unlock()
+	return s.guardLocked(ctx)
+}
+
+// guardLocked is guard for a caller that holds lockMu.
+func (s *session) guardLocked(ctx context.Context) (context.Context, func(), error) {
+	if err := s.verifyLocksLocked(ctx); err != nil {
 		return nil, nil, err
 	}
 	guarded, cancel := context.WithCancel(ctx)
