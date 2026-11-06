@@ -1,4 +1,0 @@
-# The tests in integration/host_other_database_test.go need the host to move
-# the target's values to a dev database of another name (stokaro/ptah#4204,
-# gap G165). Drop this file once that host change is on host master.
-fix/4204-g165-root-moves
