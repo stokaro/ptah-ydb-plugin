@@ -82,7 +82,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	}
 	// The reply is checked against the description the host holds: one that
 	// did not list the common wire declares no common object.
-	if _, err := provider.InspectionValues(provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx)), request, result); err != nil {
+	if _, err := provider.InspectionValues(provider.NegotiatedDescription(described(), provider.HostFeatures(ctx)), request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -181,7 +181,7 @@ func (s *session) columnTables() inspect.ColumnTables {
 // NormalizeValues validates captured YDB schema models offline. Results
 // preserve the complete input provenance and expose no successful prefix.
 func (*Provider) NormalizeValues(ctx context.Context, request *protocol.NormalizeValuesRequest) (*protocol.NormalizedValues, error) {
-	if err := provider.ValidateValueInputs(Description(), request); err != nil {
+	if err := provider.ValidateValueInputs(described(), request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.NormalizedValues{Complete: true}

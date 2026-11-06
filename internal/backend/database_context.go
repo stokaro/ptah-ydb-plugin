@@ -20,7 +20,7 @@ func (*Provider) ResolveDatabaseContext(ctx context.Context, request *protocol.D
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	if err := provider.ValidateDatabaseContextRequest(Description(), request); err != nil {
+	if err := provider.ValidateDatabaseContextRequest(described(), request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	address, err := connection.Parse(request.GetAddress())
