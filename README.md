@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.21.0, which speaks provider contract 25.24.
+The module pins `provider-sdk` v0.23.0, which speaks provider contract 25.26.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
@@ -753,6 +753,14 @@ can name a cluster-managed group, but cannot declare self-membership or make a
 principal a member of a declared user. Inspection preserves every observed
 membership, including edges whose principals are outside the managed role list.
 
+A read leaves out of the description the users and groups the cluster made for
+itself, the database's owner, and every user and group of a dev realm, and
+names them as roles the server holds outside its scope. Under
+`schema.role-scope-reasons` (contract 25.26, ADR 0076) the read also says why,
+and the host's note gives the reason the host's embedded engine gave: `because
+the cluster made them or they own the database, or the read was of a dev realm,
+which shares its database's users and groups`.
+
 A user's password is set when the user is created, from a YAML or Go
 declaration, and is never read back: a declaration that names another password
 plans nothing, as the host's embedded engine plans it.
@@ -1031,6 +1039,21 @@ server. A YDB driver's error is never a
 reason, because YDB can quote a statement and its values, or a credential
 source: the host prints its code alone.
 
+A declaration a source decoder refuses gives a reason in the words of Ptah's
+built-in YDB engine: a topic, a changefeed, an external data source or table, a
+resource pool or classifier, a streaming query, an async replication or a
+transfer, by its YAML key or its name, the attribute, and what the attribute
+takes. `authored.Declared` writes it from the decoder's words around the
+refusal and the refusal itself without the value it quotes. A refusal another
+package wrote, such as the YQL splitter's, gives none. A Go directive that
+leaves out a required attribute is refused as the host's annotation parser
+refused it, and the host names the directive's place after the reason:
+
+```text
+provider decode source failed (InvalidArgument): topic "events": invalid retention_period: takes an ISO 8601 duration such as PT12H or P1D
+decode Go directives of engine "ydb": provider decode source failed (InvalidArgument): missing required annotation attribute "rank" on //ptah:schema:resourcepool:classifier at Refused
+```
+
 A failed execution and a commit that did not apply give a reason too, in
 `Execution.diagnostic` and `TransactionResult.diagnostic` (contract 25.18), and
 a host of that contract prints it after the outcome:
@@ -1152,7 +1175,10 @@ are storage-format identifiers, not an access-control mechanism against a databa
 ## Schema observations
 
 Inspection reads the native scheme, table, topic, view, and coordination APIs. Common columns preserve
-YDB type spelling, Decimal precision/scale, nullability, and key membership.
+YDB type spelling, Decimal precision/scale, nullability, and key membership,
+and with `schema.observed-primary-keys` each table's key in key order, so a Go
+export writes `primary_key="b,a"` for a table keyed in an order other than its
+columns'.
 Provider-owned table properties retain key order, TTL, column families,
 partitioning, storage settings, attributes, and access metadata. Column
 properties retain family assignment and typed literal or sequence defaults.
@@ -1204,13 +1230,14 @@ declared in `app/holder` is planned after the table's drop.
 A read with no selector claims more than the directories it lists. With a
 host that lists `schema.subtree-coverage` (contract 25.22, ADR 0064 in Ptah),
 the provider declares `/` as its schema separator, and the read sends one
-complete region over the root and every directory below it, and an unknown
-region over the directory the walk leaves out, the dev realm directory, with
-everything below it. A native object in a
+complete region over the root and every directory below it. The directories
+the walk does not list, a dot-prefixed one and at the database root the dev
+realm directory, are covered by it as holding nothing, as the host's embedded
+engine read them, so an export of the whole database claims every native kind
+and writes no `ptah:schema:notdescribed` entry for them. A native object in a
 directory that does not exist yet is then absent, and `schema apply` or
 `migrations generate` with no `--schemas` creates it, as the host's embedded
-engine does. One declared below a directory the walk leaves out stays
-unplanned. A filtered read keeps one exact region per directory, since a
+engine does. A filtered read keeps one exact region per directory, since a
 selector names one directory. With an older host, the read claims each
 directory it lists alone, and a native object in a new directory is left
 unplanned with a warning, as for a topic in `fresh/nested`:
@@ -1430,6 +1457,19 @@ document does not declare, and writes its HCL exports without the captured
 header. `TestHostKeepsTheNodesAnHCLDocumentDoesNotName` measures the first
 kind of host and skips on the second.
 
+An HCL file the host's embedded engine exported names that engine's
+coordination-node model in its captured header: owner `ptah.run/ydb`, kind
+`ptah.run/ydb/coordination-node`, schema version 1. The provider names that
+identity as a predecessor of its own coordination-node model
+(`models.predecessors`, contract 25.25), so a host that lists the feature reads
+such a file with the claim it was written with. Applied back, it plans
+nothing, and a node whose block is removed is dropped, as the embedded engine
+dropped it. A file the host cuts the document into carries the provider's
+identity. A host without the feature refuses the file with `unknown feature
+codec: "ptah.run/ydb/coordination-node"/desired`.
+`TestHostReadsTheBuiltinEnginesHCLExports_HappyPath` applies exports recorded
+from the embedded engine (`internal/backend/testdata/builtin-hcl`).
+
 A Go source carries the same entries as `ptah:schema:notdescribed`
 declarations, under `source.limits`, of the kinds the engine lists in
 `go_header_kinds`: `coordination_node`, `streaming_query`, `resource_pool`,
@@ -1479,6 +1519,15 @@ attributes in the host's embedded engine's order: a column table's storage,
 with `store="column"`, then the TTL, then the partitioning and the starting
 layout. It also gives each column the Go type of its YDB type, as that engine
 does, and refuses a nullable key column, which no declaration can ask for.
+
+A Go export writes the directives of the standalone objects in the order the
+host's embedded engine wrote them, each with its attributes in the order its
+claim lists them: topics and their consumers, secrets, external data sources,
+external tables and streaming queries after the views, then resource pools,
+their classifiers and coordination nodes. Under `source.go-placements`
+(contract 25.26, ADR 0077) those last three stand after the default
+privileges, below the grants, where the embedded engine wrote them; a host
+that does not list the feature writes them after the views.
 
 What no declaration states is a loss for its value, in one line that names it:
 an access requirement, table attributes, storage settings, tiering, a temporary
@@ -2123,9 +2172,11 @@ and column family fields, such as a family's cache mode. The provider's typed
 definitions preserve their native wire numbers; attribution and the pinned
 upstream source are in `third_party/ydb/NOTICE.md`. Unsupported fields remain
 errors, a family's compression level among them. A table service request is
-built with the pinned bindings and carries a family's cache mode as an unknown
-field 6, the one unknown field the provider accepts. Runtime statistics are
-omitted from schema observations.
+built with the pinned bindings and carries the fields they lack as unknown
+fields, the only ones the provider accepts: a family's cache mode as field 6
+of the family, and a new table's vector or full-text index as field 7, 8 or 9
+of its index, the upstream arm. Runtime statistics are omitted from schema
+observations.
 
 With protoc 35.1 on `PATH`, regenerate with:
 
@@ -2560,7 +2611,10 @@ A source declares the pools and classifiers it manages, not every one of the
 database, so the comparison keeps one a source leaves out, as the host does;
 an absence a source claims for one object is left undecided. A pool compares
 setting by setting and a classifier as a whole. The `default` pool must be read
-before its settings change, and it is never created or dropped.
+before its settings change, and it is never created or dropped. A schema
+written as SQL, such as `schema inspect --format sql`, writes it as the `ALTER
+RESOURCE POOL default SET` of the settings it names, and writes nothing for it
+when it names none, as the host's engine did.
 
 The planner writes every workload change of a plan as one step, outside a
 transaction, ordered after the steps that create or change a role and before
@@ -3024,14 +3078,18 @@ read the source the operator wrote past its UNIQUE, since the index changes no
 column of the table; a UNIQUE the host does not turn into an index, such as a
 deferrable one, is refused when it is planned.
 
-The vector and full-text indexes of the table's native index set are built
-after the creation, one step each (`row-table-create-index/N`, ordered after
-the creation), with the rules and the statement of
-[Vector and full-text indexes](#vector-and-full-text-indexes). The host's
-embedded engine writes them inside the CREATE TABLE instead; the end state is
-the same, and a target that cannot build one refuses the whole creation before
-the table is created. A global index the native set states is refused at
-creation: a new table takes its global indexes from the common declaration.
+The vector and full-text indexes of the table's native index set are built by
+the creation itself, with the rules of
+[Vector and full-text indexes](#vector-and-full-text-indexes), as the host's
+embedded engine built them: the native `CreateTable` call carries each one as
+the upstream arm of its index, and the TEXT form, an inspection and a
+migration file write every index of the table inside its `CREATE TABLE`, in
+name order, the vector or full-text one as `INDEX name GLOBAL USING
+vector_kmeans_tree ON (...) WITH (...)`. YDB then builds no index over rows the
+table holds, so the operation service lists no index build for the table. A
+target that cannot build one refuses the whole creation before the table is
+created. A global index the native set states is refused at creation: a new
+table takes its global indexes from the common declaration.
 
 Access requirements, temporary tables, changefeeds, column
 compression or encoding, and richer common constraints are refused.
@@ -3158,6 +3216,17 @@ renames the new one into its place, and drops the old one. The host's steps for 
 are rewritten to the rename that puts the new table in place. A REBUILD the
 host proposes is planned the same way, and refused like any other rebuild
 without the policy.
+
+A key change reaches the planner from a host that lists
+`schema.observed-primary-keys` and `planning.primary-key-changes` (contract
+25.26): the read reports each table's key in key order, under the name
+`<table>_pkey` the host's embedded engine gave it, so a declaration that orders
+the same columns otherwise is a key change. The host hands it over as an
+alteration of the table, and the planner rebuilds the table with the declared
+key, or without the policy refuses it as the embedded engine did:
+`adding constraint <table>_pkey, the primary key, which requires target
+capability primary_key_alterable, unavailable on this ydb target`. The reverse
+plan rebuilds the table with the key it held.
 
 The copy reads each column as the new table declares it. A changed type is
 converted with `CAST` and unwrapped, so a value that does not convert fails the
@@ -3629,8 +3698,8 @@ A vector index (`vector_kmeans_tree`) and a full-text index (`fulltext_plain`,
 and the comparison, the planner and execution follow the rules of the host's
 embedded engine for them:
 
-- An index the set states and the table does not hold is added with one step,
-  `row-table-add-index/N`, of its own operation kind,
+- An index the set states and a table that exists does not hold is added with
+  one step, `row-table-add-index/N`, of its own operation kind,
   `row-table-native-index-operation`. The native `AlterTable` call of the
   pinned bindings carries neither kind, so execution runs YQL's `ALTER TABLE ...
   ADD INDEX` through the query service, as the host's embedded engine writes
@@ -3982,7 +4051,11 @@ and `@@...@@` delimit strings, a type suffix belongs to its string, and a
 backticked name carries the path it stands for. A `--!` comment is a setting
 the server reads only at the head of a text; the host clears `head` for a range
 inside one, where the comment is a comment. A string whose escape YDB refuses
-carries no value. A host of an earlier contract never calls the RPC and reads
+carries no value. A semicolon is a `SEMICOLON` token only where it ends a
+statement of the text: one that ends a statement inside a DEFINE ACTION or
+DEFINE SUBQUERY body, a DO BEGIN block or a lambda is an `OPERATOR`, so the
+host's statement splitter keeps such a body whole, as Ptah's built-in YDB
+engine split it. A host of an earlier contract never calls the RPC and reads
 YQL by its shared rules.
 
 ## Migration lint

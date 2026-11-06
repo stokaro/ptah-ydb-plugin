@@ -197,3 +197,33 @@ func TestHoldKeepsACheckItsContextCutUnknown(t *testing.T) {
 
 	c.Assert(h.Check(ctx), qt.ErrorIs, ErrUnknown)
 }
+
+// Confirm takes a confirmation younger than the watch's interval without
+// asking the server, asks once the confirmation is that old, and reports a
+// failure as Check reports it, without asking again.
+func TestHoldConfirmTrustsARecentConfirmation(t *testing.T) {
+	c := testcheck.New(t)
+	now := time.Now()
+	native := &fakeSession{description: ownedDescription()}
+	h := newHold(native, fakeLease{context.Background()}, "lock", now, func() time.Time { return now }, func(context.Context) error { return nil })
+	c.Assert(h.Check(c.Context()), qt.IsNil)
+
+	now = now.Add(checkInterval / 2)
+	recent := h.Confirm(c.Context())
+	callsWhenRecent := native.calls.Load()
+	now = now.Add(checkInterval / 2)
+	aged := h.Confirm(c.Context())
+	callsWhenAged := native.calls.Load()
+	native.description.Owners[0].SessionID = 8
+	now = now.Add(checkInterval)
+	lost := h.Confirm(c.Context())
+	again := h.Confirm(c.Context())
+
+	c.Assert(recent, qt.IsNil)
+	c.Assert(callsWhenRecent, qt.Equals, int32(1))
+	c.Assert(aged, qt.IsNil)
+	c.Assert(callsWhenAged, qt.Equals, int32(2))
+	c.Assert(lost, qt.ErrorIs, ErrLost)
+	c.Assert(again, qt.ErrorIs, ErrLost)
+	c.Assert(native.calls.Load(), qt.Equals, int32(3))
+}

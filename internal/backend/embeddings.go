@@ -60,7 +60,7 @@ func (p *Provider) embeddingStore(ctx context.Context, id string) (*embedstore.S
 // embeddingDescription is the description as the host of the call negotiated
 // it, which lists the store only for a host that lists it too.
 func embeddingDescription(ctx context.Context) *protocol.Description {
-	return provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx))
+	return provider.NegotiatedDescription(described(), provider.HostFeatures(ctx))
 }
 
 // embeddingSession validates a session request and returns its store.

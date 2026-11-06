@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 )
@@ -261,7 +262,7 @@ func connectionValues(connection Connection) map[string]string {
 // replica targets. The source reader and renderer use the same rule.
 func ValidateReplicationItems(items []Item) error {
 	if len(items) == 0 {
-		return fmt.Errorf("it replicates no table; declare an item naming a source and a " +
+		return authored.New("it replicates no table; declare an item naming a source and a " +
 			"target, since YDB takes no replication without one (`expecting {',', WITH}`)")
 	}
 	targets := make(map[string]bool, len(items))
@@ -271,7 +272,7 @@ func ValidateReplicationItems(items []Item) error {
 		}
 		target := cleanRelative(item.Target)
 		if targets[target] {
-			return fmt.Errorf("two of its items create a replica at %q, where one table can stand", target)
+			return authored.New(fmt.Sprintf("two of its items create a replica at %q, where one table can stand", target))
 		}
 		targets[target] = true
 	}

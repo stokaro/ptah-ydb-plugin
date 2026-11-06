@@ -15,15 +15,17 @@ func TestDescriptionDeclaresReleaseLines_HappyPath(t *testing.T) {
 	lines := backend.Description().GetEngines()[0].GetReleaseLines()
 	got := make([]string, len(lines))
 	for i, line := range lines {
-		got[i] = line.GetLine() + " " + line.GetSupport().String() + " " + line.GetImage()
+		got[i] = line.GetLine() + " " + line.GetLabel() + " " + line.GetSupport().String() + " " + line.GetImage()
 	}
+	// The labels are the names the host's embedded engine gave the lines'
+	// presets, which `ptah db capabilities` prints.
 	c.Assert(got, qt.DeepEquals, []string{
-		"26.2 CERTIFIED ydbplatform/local-ydb:26.2",
-		"26.1 BEST_EFFORT ydbplatform/local-ydb:26.1",
-		"25.4 BEST_EFFORT ydbplatform/local-ydb:25.4",
-		"25.3 BEST_EFFORT ydbplatform/local-ydb:25.3",
-		"25.2 BEST_EFFORT ydbplatform/local-ydb:25.2",
-		"25.1 CERTIFIED ydbplatform/local-ydb:25.1",
+		"26.2 YDB262 CERTIFIED ydbplatform/local-ydb:26.2",
+		"26.1 YDB261 BEST_EFFORT ydbplatform/local-ydb:26.1",
+		"25.4 YDB254 BEST_EFFORT ydbplatform/local-ydb:25.4",
+		"25.3 YDB253 BEST_EFFORT ydbplatform/local-ydb:25.3",
+		"25.2 YDB252 BEST_EFFORT ydbplatform/local-ydb:25.2",
+		"25.1 YDB251 CERTIFIED ydbplatform/local-ydb:25.1",
 	})
 }
 

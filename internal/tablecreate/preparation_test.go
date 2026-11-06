@@ -79,16 +79,16 @@ func indexKindRequest(c *qt.C) *protocol.PrepareTablesRequest {
 }
 
 // A host that lists schema.index-methods gets the kind of each declared
-// index in the spelling inspection reports a held index's method with: none
-// for a synchronous index and async for an asynchronous one, whatever the
-// source wrote. A host that does not list it gets none.
+// index in the spelling inspection reports a held index's method with: GLOBAL
+// SYNC for a synchronous index and GLOBAL ASYNC for an asynchronous one,
+// whatever the source wrote. A host that does not list it gets none.
 func TestPrepareTablesStatesIndexKinds(t *testing.T) {
 	for _, row := range []struct {
 		name     string
 		features []string
 		want     []*protocol.PreparedIndex
 	}{
-		{"negotiated", []string{provider.IndexMethodsFeature}, []*protocol.PreparedIndex{{Name: "by_value"}, {Name: "by_value_async", Method: "async"}}},
+		{"negotiated", []string{provider.IndexMethodsFeature}, []*protocol.PreparedIndex{{Name: "by_value", Method: "GLOBAL SYNC"}, {Name: "by_value_async", Method: "GLOBAL ASYNC"}}},
 		{"not negotiated", nil, nil},
 	} {
 		t.Run(row.name, func(t *testing.T) {

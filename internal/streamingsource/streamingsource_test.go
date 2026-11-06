@@ -172,7 +172,7 @@ func TestDecodeRefusesInvalidDeclarations(t *testing.T) {
 		{"duplicate map entry", yamlDocument(mapping(entry("q", valid()), entry("q", valid(entry("name", text("other")))))), `.*duplicate key "q".*`},
 		{"duplicate identity", yamlDocument(mapping(entry("a", valid(entry("name", text("q")))), entry("b", valid(entry("name", text("q")))))), `.*"q" is declared twice.*`},
 		{"duplicate Go identity", goDocument(valid(entry("name", text("q"))), valid(entry("name", text("q")))), `.*"q" is declared twice.*`},
-		{"no name", goDocument(valid()), `.*relative directory and an exact leaf name.*`},
+		{"no name", goDocument(valid()), `missing required annotation attribute "name"`},
 		{"leaf slash", yamlDocument(mapping(entry("dir/q", valid()))), `.*relative directory and an exact leaf name.*`},
 		{"parent directory", yamlDocument(mapping(entry("q", valid(entry("schema", text("../app")))))), `.*relative directory and an exact leaf name.*`},
 		{"unclean directory", yamlDocument(mapping(entry("q", valid(entry("schema", text("app/../jobs")))))), `.*relative directory and an exact leaf name.*`},

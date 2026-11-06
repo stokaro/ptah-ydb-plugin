@@ -118,7 +118,7 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 		}
 	}
 	if len(selectors) == 0 && slices.Contains(provider.HostFeatures(ctx), provider.SchemaSubtreeCoverageFeature) {
-		common.subtreeRegions(result, database, read.skipped)
+		common.subtreeRegions(result, database)
 	}
 	if err := read.streamingInventory(ctx, selectors); err != nil {
 		return nil, err
@@ -164,9 +164,6 @@ type traversal struct {
 	// replicas it cannot name.
 	replicas           []*protocol.Reference
 	replicationsUnread bool
-	// skipped are the directories an unscoped walk leaves out, below which a
-	// subtree claim of the root must stay unknown.
-	skipped []string
 }
 
 // directory reads every entry of the listed directory selected into the
@@ -282,10 +279,11 @@ func (t *traversal) entry(ctx context.Context, selected, name string, kind Ydb_S
 	case Ydb_Scheme.Entry_TABLE:
 		return t.readRowTable(ctx, selected, name)
 	case Ydb_Scheme.Entry_COLUMN_TABLE:
-		table, err := t.source.readColumnTable(ctx, t.columns, t.database, selected, name)
+		table, key, err := t.source.readColumnTable(ctx, t.columns, t.database, selected, name)
 		if err != nil {
 			return err
 		}
+		t.common.primaryKey(table, key)
 		t.addColumnTable(table)
 	case Ydb_Scheme.Entry_TOPIC, Ydb_Scheme.Entry_PERS_QUEUE_GROUP:
 		return t.readTopic(ctx, selected, name)
@@ -362,6 +360,7 @@ func (t *traversal) readRowTable(ctx context.Context, selected, name string) err
 	if err != nil {
 		return err
 	}
+	t.common.primaryKey(table, description.table.GetPrimaryKey())
 	t.common.tableComments(t.result.CommonObjects, table.Identity, description)
 	indexes, err := t.source.readIndexes(ctx, path.Join(t.database, selected, name), description)
 	if err != nil {
@@ -543,8 +542,10 @@ func (t *traversal) streamingInventory(ctx context.Context, selectors []string) 
 
 // leftOut reports a directory entry of the listed directory selected that the
 // walk neither reads nor returns: a directory whose name starts with a dot
-// (see dotted), and a directory at the root that leaveOut names, which the
-// walk records as skipped.
+// (see dotted), and a directory at the root that leaveOut names. The dev
+// realms other runs keep there are no part of the database's schema, as the
+// host's embedded engine left them out, so the root's claim covers that
+// directory as holding nothing; the walk records that it left the realms out.
 func (t *traversal) leftOut(selected string, entry *Ydb_Scheme.Entry) bool {
 	if entry.GetType() != Ydb_Scheme.Entry_DIRECTORY {
 		return false
@@ -554,7 +555,6 @@ func (t *traversal) leftOut(selected string, entry *Ydb_Scheme.Entry) bool {
 	}
 	if selected == "" && slices.Contains(t.leaveOut, entry.GetName()) {
 		t.skippedRealm = true
-		t.skipped = append(t.skipped, entry.GetName())
 		return true
 	}
 	return false

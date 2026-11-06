@@ -105,9 +105,9 @@ func TestDecodeYAML_FailurePath(t *testing.T) {
 		{"an empty count", mapping(entry("events", mapping(entry("min_active_partitions", &protocol.SourceValue{Value: &protocol.SourceValue_Null{Null: &protocol.Empty{}}})))),
 			`topic "events": invalid min_active_partitions: takes a whole number above zero`},
 		{"an important consumer with an availability period", mapping(entry("events", mapping(entry("consumers", mapping(entry("c", mapping(entry("important", text("true")), entry("availability_period", text("PT1H"))))))))),
-			`topic "events": consumer "c": invalid availability_period "PT1H": .*`},
+			`topic "events", consumer "c": invalid availability_period "PT1H": .*`},
 		{"two names for one topic", mapping(entry("a", mapping(entry("name", text("same")))), entry("b", mapping(entry("name", text("same"))))), `topic same is declared twice`},
-		{"a slash in a name", mapping(entry("events", mapping(entry("name", text("a/b"))))), `invalid name "a/b": holds a slash; name the directory with schema`},
+		{"a slash in a name", mapping(entry("events", mapping(entry("name", text("a/b"))))), `topic "events": invalid name "a/b": holds a slash; name the directory with schema`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -154,8 +154,8 @@ func TestDecodeGo_FailurePath(t *testing.T) {
 			`the file declares no topic "other" for consumer "c"`},
 		{"a consumer declared twice", [][2]any{topic, {topicsource.DirectiveConsumer, map[string]string{"name": "c", "topic": "events"}}, {topicsource.DirectiveConsumer, map[string]string{"name": "c", "topic": "events"}}},
 			`topic "events" declares consumer "c" twice`},
-		{"a consumer naming no topic", [][2]any{topic, {topicsource.DirectiveConsumer, map[string]string{"name": "c"}}}, `ptah:schema:topic:consumer needs the topic it reads`},
-		{"a topic without a name", [][2]any{{topicsource.DirectiveTopic, map[string]string{"schema": "app"}}}, `invalid name: a topic needs a name`},
+		{"a consumer naming no topic", [][2]any{topic, {topicsource.DirectiveConsumer, map[string]string{"name": "c"}}}, `missing required annotation attribute "topic"`},
+		{"a topic without a name", [][2]any{{topicsource.DirectiveTopic, map[string]string{"schema": "app"}}}, `missing required annotation attribute "name"`},
 		{"a topic declared twice", [][2]any{topic, topic}, `topic events is declared twice`},
 		{"an absolute directory", [][2]any{{topicsource.DirectiveTopic, map[string]string{"name": "events", "schema": "/local/app"}}}, `invalid schema "/local/app": starts with a slash; .*`},
 	} {

@@ -75,13 +75,12 @@ func Access(ctx context.Context, snapshot *protocol.Schema, database string, sco
 	if err == nil {
 		recordPrincipals(objects, held, scope)
 	}
-	// The owners, grants, roles and memberships stay in the order the read
-	// met them, which is the host's embedded engine's: owners and grants by
-	// target in readingOrder, each target's grants as YDB describes its
-	// entries, and the users, then the groups, then the memberships, each as
-	// its system view lists them. A schema render writes the GRANT statements
-	// and the roles in this order. Only the names left out of scope are
-	// sorted: a note counts them and names none.
+	// The owners and grants stay in the order the read met them, which is the
+	// host's embedded engine's: by target in readingOrder, each target's
+	// grants as YDB describes its entries. The roles and the memberships are
+	// sorted, as that engine sorted them (recordPrincipals). A schema render
+	// writes the GRANT statements and the roles in this order. The names left
+	// out of scope are sorted too: a note counts them and names none.
 	slices.Sort(objects.RolesOutOfScope)
 	candidate := proto.CloneOf(snapshot)
 	candidate.CommonObjects = objects
@@ -371,6 +370,11 @@ func defaultPoolEntry(names []string) bool {
 	return len(names) == 2 && slices.Contains(names, "ydb.granular.select_row") && slices.Contains(names, "ydb.granular.describe_schema")
 }
 
+// RolesOutOfScopeReason is why a read leaves the users and groups
+// recordPrincipals names out of scope out of the description, in the words
+// of the host's embedded engine, which the host prints after "because".
+const RolesOutOfScopeReason = "the cluster made them or they own the database, or the read was of a dev realm, which shares its database's users and groups"
+
 func recordPrincipals(objects *protocol.ObservedCommonObjects, held nativeapi.Principals, scope Scope) {
 	owner := ""
 	for _, entry := range objects.ObjectOwners {
@@ -397,6 +401,15 @@ func recordPrincipals(objects *protocol.ObservedCommonObjects, held nativeapi.Pr
 	for _, membership := range held.Memberships {
 		objects.Memberships = append(objects.Memberships, &protocol.RoleMembership{Group: membership.Group, Member: membership.Member})
 	}
+	// The YDB engine built into the host at 74de0b65b sorted the users and
+	// the groups together by name, and the memberships by group and then
+	// member, so `schema inspect --format sql` wrote CREATE GROUP readers
+	// ahead of CREATE USER u. Kept in the order the system views list them,
+	// every user came before every group.
+	slices.SortStableFunc(objects.Roles, func(a, b *protocol.ObservedRole) int { return strings.Compare(a.GetName(), b.GetName()) })
+	slices.SortStableFunc(objects.Memberships, func(a, b *protocol.RoleMembership) int {
+		return cmp.Or(strings.Compare(a.GetGroup(), b.GetGroup()), strings.Compare(a.GetMember(), b.GetMember()))
+	})
 	for _, entry := range objects.ObjectOwners {
 		if login, known := canLogin[entry.Owner]; known {
 			entry.OwnerCanLogin = new(login)

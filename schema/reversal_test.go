@@ -6,6 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
+	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -92,6 +93,40 @@ func TestReverseTableChange_PredictsTheAlteredTable(t *testing.T) {
 	c.Assert(restored.GetPartitioningSettings().GetMinPartitionsCount(), qt.Equals, uint64(3))
 	c.Assert(reversed.Kind, qt.Equals, schema.TableProperties)
 	c.Assert(reversed.Value.Value.Kind, qt.Equals, schema.TablePropertiesChange)
+}
+
+// observedDefaults is a table read with the settings YDB gives every new
+// table, and minimumThree a declaration that raises its minimum partition
+// count.
+const (
+	observedDefaults = `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}],` +
+		`"partitioningSettings":{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","minPartitionsCount":"1"}}`
+	minimumThree = `{"primaryKey":["id"],"columnFamilies":[{"name":"default"}],"partitioningSettings":{"minPartitionsCount":"3"}}`
+)
+
+// The reverse of a changed partitioning asks for every setting the table held,
+// those YDB gives a new table included, as the host's embedded engine
+// restored them: a declaration that leaves one out keeps what the table
+// holds, so a reverse without them would plan nothing. A read converted for
+// an export leaves them out.
+func TestReverseTableChange_RestoresTheNewTableDefaults(t *testing.T) {
+	c := testcheck.New(t)
+	before := tableOperand(c, protocol.ValueInput_OBSERVED, observedDefaults)
+	change, err := schema.CaptureTablePropertiesChange("change", tableOwner(), before, tableOperand(c, protocol.ValueInput_DESIRED, minimumThree))
+	c.Assert(err, qt.IsNil)
+
+	reversed, err := schema.ReverseTableChange("reverse", change.Value, schema.NativeAccess)
+
+	c.Assert(err, qt.IsNil)
+	restored := &native.RowTableIntent{}
+	c.Assert(protojson.Unmarshal(reversed.Restored.Payload, restored), qt.IsNil)
+	c.Assert(proto.Equal(restored.PartitioningSettings, &Ydb_Table.PartitioningSettings{PartitioningBySize: Ydb.FeatureFlag_ENABLED, PartitionSizeMb: 2048,
+		PartitioningByLoad: Ydb.FeatureFlag_DISABLED, MinPartitionsCount: 1}), qt.IsTrue, qt.Commentf("%v", restored.PartitioningSettings))
+	exported, err := schema.ConvertTable(before, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	c.Assert(err, qt.IsNil)
+	declared := &native.RowTableIntent{}
+	c.Assert(protojson.Unmarshal(exported.Payload, declared), qt.IsNil)
+	c.Assert(declared.PartitioningSettings, qt.IsNil)
 }
 
 // columnFamilyChange is a change that moves a column holding a literal

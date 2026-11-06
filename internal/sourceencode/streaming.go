@@ -40,5 +40,5 @@ func StreamingQuery(format protocol.SourceDocument_Format, value *protocol.Norma
 	if allowStateReset {
 		fields = append(fields, flag("allow_state_reset", true))
 	}
-	return nativePart(format, value, fields, streamingsource.YAMLKey(), streamingsource.GoDirectives()[0], streamingsource.Decode)
+	return nativePart(format, value, fields, streamingsource.YAMLKey(), streamingsource.GoDirectives()[0], streamingsource.Decode, exact)
 }

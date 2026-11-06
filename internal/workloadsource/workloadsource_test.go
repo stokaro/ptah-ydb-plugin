@@ -149,9 +149,9 @@ func TestDecode_FailurePath(t *testing.T) {
 		{name: "an unknown YAML key", document: yamlDocument(mapping(entry("batch", mapping(entry("max_queries", number("3"))))), nil),
 			wantErr: `resource pool "batch": unknown key "max_queries"`},
 		{name: "a percentage out of range in Go", document: goDocument([]string{workloadsource.DirectivePool, "name", "p", "total_cpu_limit_percent_per_node", "101"}),
-			wantErr: `invalid total_cpu_limit_percent_per_node "101": takes a percentage from 0 to 100; leave it out for no limit on //ptah:schema:resourcepool`},
+			wantErr: `invalid total_cpu_limit_percent_per_node "101": takes a percentage from 0 to 100; leave it out for no limit`},
 		{name: "a pool with no name in Go", document: goDocument([]string{workloadsource.DirectivePool, "concurrent_query_limit", "3"}),
-			wantErr: `invalid name "": a resource pool needs a name on //ptah:schema:resourcepool`},
+			wantErr: `missing required annotation attribute "name"`},
 		{name: "a pool declared twice", document: goDocument([]string{workloadsource.DirectivePool, "name", "p"}, []string{workloadsource.DirectivePool, "name", "p"}),
 			wantErr: `resource pool "p" is declared twice`},
 	} {

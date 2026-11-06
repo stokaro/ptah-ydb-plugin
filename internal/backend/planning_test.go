@@ -229,11 +229,11 @@ func TestCoordinationPlanningPassesOverMarkersAndColumns_HappyPath(t *testing.T)
 	column := &protocol.ComparisonIdentity{Kind: "column", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: proto.CloneOf(table.Schema), Parent: testcomparison.Part("items"), Name: testcomparison.Part("note")}
 	added := &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "host", Name: "common/000001"}, Metadata: &protocol.PlanningMetadata{Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "Fixture column",
 		Effects: []*protocol.PlanningEffect{{Subject: table, Action: protocol.PlanningEffect_READ}, {Subject: column, Action: protocol.PlanningEffect_CREATE}}}}
-	request.CommonSteps = []*protocol.CommonPlanningStep{marker, added}
+	request.CommonSteps = []*protocol.CommonPlanningStep{marker, added, lastCommonStep()}
 	result, err := backend.New().PlanFeatures(t.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Diagnostics, qt.HasLen, 0)
-	c.Assert(result.Contributions[0].Dependencies, qt.HasLen, 0)
+	c.Assert(stepEdges(result), qt.DeepEquals, []string{placedLast})
 	// The node's path effect names no database, as the host's table does.
 	c.Assert(result.Contributions[0].Steps[0].Metadata.Effects[1].Subject.GetDatabase().GetNormalized(), qt.Equals, "")
 }

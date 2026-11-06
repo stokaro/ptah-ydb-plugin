@@ -107,6 +107,16 @@ func (e *DeclarationError) Error() string {
 	return fmt.Sprintf("invalid %s %q: %s", e.Attribute, e.Value, e.Reason)
 }
 
+// Unquoted is the refusal without the value the declaration wrote: `invalid
+// queue_size: a queue needs ...`. A pool's or a classifier's name is its
+// identity, not a value, and stays quoted.
+func (e *DeclarationError) Unquoted() string {
+	if e.Attribute == AttributeName {
+		return e.Error()
+	}
+	return "invalid " + e.Attribute + ": " + e.Reason
+}
+
 // ParsePool reads one resource pool out of values, keyed by attribute name,
 // and ignores every key it does not name.
 //

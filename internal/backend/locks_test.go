@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,8 +36,9 @@ func (l *lockProbe) Check(ctx context.Context) error {
 	}
 	return l.failure
 }
-func (l *lockProbe) Context() context.Context        { return l.ctx }
-func (l *lockProbe) Close(ctx context.Context) error { l.closes.Add(1); l.cancel(); return ctx.Err() }
+func (l *lockProbe) Confirm(ctx context.Context) error { return l.Check(ctx) }
+func (l *lockProbe) Context() context.Context          { return l.ctx }
+func (l *lockProbe) Close(ctx context.Context) error   { l.closes.Add(1); l.cancel(); return ctx.Err() }
 func attachLock(s *session) *lockProbe {
 	ctx, cancel := context.WithCancel(context.Background())
 	hold := &lockProbe{ctx: ctx, cancel: cancel}
@@ -221,6 +223,10 @@ func (l *slowLock) Check(ctx context.Context) error {
 	}
 }
 
+// Confirm asks as Check does, as a hold whose last confirmation is older than
+// the watch's interval asks the server.
+func (l *slowLock) Confirm(ctx context.Context) error { return l.Check(ctx) }
+
 // A statement timeout shorter than the check of the session's locks before a
 // unit bounds the unit, not the check: the check completes, the unit is sent
 // and stopped by the timeout, and the session keeps its lock. A check run
@@ -247,4 +253,36 @@ func TestStatementTimeoutDoesNotFenceTheLockCheck(t *testing.T) {
 	checked, err := p.CheckLock(c.Context(), lockRequest())
 	c.Assert(err, qt.IsNil)
 	c.Assert(checked.Outcome, qt.Equals, protocol.LockResult_ACQUIRED)
+}
+
+// A check of a lock is answered while an execution of the same session runs:
+// the host's watch checks its lock every second and counts a check
+// unanswered for ten seconds as lost. A check waiting for the session's
+// mutex, which the execution holds, was answered only after the execution.
+func TestCheckLockIsAnsweredDuringAnExecution(t *testing.T) {
+	c := testcheck.New(t)
+	entered, release := make(chan struct{}), make(chan struct{})
+	probe := &driverProbe{onExec: func(context.Context) error { close(entered); <-release; return nil }}
+	p := probeProvider(c, probe)
+	attachLock(p.sessions["session"])
+	releaseOnce := sync.OnceFunc(func() { close(release) })
+	c.Cleanup(releaseOnce)
+	executed := make(chan *protocol.Execution, 1)
+	go func() {
+		result, _ := p.Execute(context.Background(), sqlRequest(""))
+		executed <- result
+	}()
+	<-entered
+	stop := time.AfterFunc(2*time.Second, releaseOnce)
+	c.Cleanup(func() { stop.Stop() })
+	started := time.Now()
+
+	checked, err := p.CheckLock(c.Context(), lockRequest())
+	took := time.Since(started)
+	releaseOnce()
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(checked.Outcome, qt.Equals, protocol.LockResult_ACQUIRED)
+	c.Assert(took < time.Second, qt.IsTrue, qt.Commentf("the check took %s", took))
+	c.Assert((<-executed).Outcome, qt.Equals, protocol.Execution_APPLIED)
 }

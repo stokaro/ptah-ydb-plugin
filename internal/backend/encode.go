@@ -55,7 +55,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx))
+	description := provider.NegotiatedDescription(described(), provider.HostFeatures(ctx))
 	if err := provider.ValidateEncodeSourceRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
@@ -110,6 +110,10 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	}
 	if format == protocol.SourceDocument_GO_ANNOTATIONS {
 		result.FieldTypes = fieldTypes(request)
+		arrangeGo(encoding.units)
+		if slices.Contains(description.GetEngines()[0].GetFeatures(), provider.GoPlacementsFeature) {
+			placeAfterPrivileges(encoding.units)
+		}
 	}
 	encoding.place(description.GetEngines()[0], subjects)
 	if err := ctx.Err(); err != nil {

@@ -48,9 +48,16 @@ func TestTableConversionPreservesConfigurationAndAccessRequirements(t *testing.T
 	c.Assert(intent.ColumnFamilies[0].Name, qt.Equals, "cold")
 	c.Assert(intent.ColumnFamilies[1].Name, qt.Equals, "default")
 	c.Assert(intent.Attributes, qt.DeepEquals, original.Attributes)
+	// The settings YDB gives every new table are left out, as the host's
+	// embedded engine wrote a read against them; the others stay.
+	c.Assert(proto.Equal(intent.PartitioningSettings, &Ydb_Table.PartitioningSettings{PartitionBy: []string{"tenant"}, MinPartitionsCount: 2, MaxPartitionsCount: 16}),
+		qt.IsTrue, qt.Commentf("%v", intent.PartitioningSettings))
+	c.Assert(intent.KeyBloomFilter, qt.Equals, Ydb.FeatureFlag_ENABLED)
 	back, err := schema.ConvertTable(desired, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
 	c.Assert(err, qt.IsNil)
-	c.Assert(proto.Equal(back, observed), qt.IsTrue)
+	again, err := schema.ConvertTable(back, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(again, desired), qt.IsTrue)
 	c.Assert(proto.Equal(observed, before), qt.IsTrue)
 	c.Assert(original.StoreType, qt.Equals, Ydb_Table.StoreType_STORE_TYPE_UNSPECIFIED)
 }

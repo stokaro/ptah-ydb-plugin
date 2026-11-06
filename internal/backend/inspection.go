@@ -54,6 +54,8 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	common.ContextInventory = slices.Contains(negotiatedFeatures(ctx), provider.PlanningContextInventoryFeature)
 	common.Indexes = slices.Contains(negotiatedFeatures(ctx), provider.ObservedIndexesFeature)
 	common.IndexFacets = common.Indexes && slices.Contains(negotiatedFeatures(ctx), provider.ObservedIndexFacetsFeature)
+	common.PrimaryKeys = slices.Contains(negotiatedFeatures(ctx), provider.ObservedPrimaryKeysFeature)
+	common.IndexMethods = slices.Contains(negotiatedFeatures(ctx), provider.IndexMethodsFeature)
 	common.UnreadTables = slices.Contains(negotiatedFeatures(ctx), provider.UnreadTablesFeature)
 	result, err := inspect.ReadObjects(ctx, session.connection.Driver, session.columnTables(), session.database, request.GetSchemas(), common, session.streaming(), session.leftOut()...)
 	if err != nil {
@@ -81,7 +83,7 @@ func (p *Provider) Inspect(ctx context.Context, request *protocol.InspectRequest
 	}
 	// The reply is checked against the description the host holds: one that
 	// did not list the common wire declares no common object.
-	if _, err := provider.InspectionValues(provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx)), request, result); err != nil {
+	if _, err := provider.InspectionValues(provider.NegotiatedDescription(described(), provider.HostFeatures(ctx)), request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -106,6 +108,9 @@ func (s *session) inspectAccess(ctx context.Context, result *protocol.Schema) er
 	}
 	if err := inspect.Access(ctx, result, s.database, s.scope(), nativeapi.AccessReader(s.connection.Driver), principals); err != nil {
 		return inspectError(ctx, err)
+	}
+	if len(result.GetCommonObjects().GetRolesOutOfScope()) > 0 && slices.Contains(negotiatedFeatures(ctx), provider.RoleScopeReasonsFeature) {
+		result.CommonObjects.RolesOutOfScopeReason = inspect.RolesOutOfScopeReason
 	}
 	return nil
 }
@@ -180,7 +185,7 @@ func (s *session) columnTables() inspect.ColumnTables {
 // NormalizeValues validates captured YDB schema models offline. Results
 // preserve the complete input provenance and expose no successful prefix.
 func (*Provider) NormalizeValues(ctx context.Context, request *protocol.NormalizeValuesRequest) (*protocol.NormalizedValues, error) {
-	if err := provider.ValidateValueInputs(Description(), request); err != nil {
+	if err := provider.ValidateValueInputs(described(), request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.NormalizedValues{Complete: true}

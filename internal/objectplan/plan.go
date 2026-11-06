@@ -58,6 +58,12 @@ type Family struct {
 	// change acts on beyond its own, such as the replica tables an async
 	// replication creates, each with its action. A nil Paths names none.
 	Paths func(request *protocol.PlanFeaturesRequest, change *protocol.Envelope) ([]PathEffect, error)
+	// Late places every step of the family after the common steps that need
+	// none of them: each follows the step lateAnchor names. Without it a
+	// step runs as soon as its effects and dependencies allow, which is
+	// ahead of the host's next common step, since the host breaks a tie by
+	// owner and this provider's owner sorts first.
+	Late bool
 }
 
 // PathEffect is one scheme path a change acts on beyond its own: a path
@@ -120,6 +126,9 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 			return refused, nil
 		}
 	}
+	if family.Late {
+		followAnchor(contribution, lateAnchor(request, contribution))
+	}
 	if len(contribution.Steps) > 0 {
 		result.Contributions = []*protocol.PlanningContribution{contribution}
 	}
@@ -127,6 +136,90 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 		return nil, err
 	}
 	return result, nil
+}
+
+// lateAnchor is the common step the steps of a late family follow: the last
+// common step other than a marker ahead of the first common step that has to
+// follow one of contribution's steps, or the last of all when none has to.
+// Nil, where only markers come first, leaves the steps where their effects
+// and dependencies place them.
+//
+// The host places a step once every step it depends on has run, and breaks a
+// tie by owner and name. The YDB engine built into the host at 74de0b65b
+// owned its common steps and its coordination nodes under one owner and named
+// the common steps first, so a node's statement ran only when the common
+// sequence could go no further without it: before the first common step that
+// needs the node, or after the whole sequence. Measured with schema apply and
+// migrations generate on 25.1.4.7 and 26.2.1.14: a group, a table and a
+// grant on a new node and on the table planned the table, the node and then
+// the grants, and the drop of a node and a table planned the table first.
+// The anchor comes before every common step a step of the family has to
+// precede, so following it closes no cycle.
+func lateAnchor(request *protocol.PlanFeaturesRequest, contribution *protocol.PlanningContribution) *protocol.StepIdentity {
+	var anchor *protocol.StepIdentity
+	for _, common := range request.GetCommonSteps() {
+		if needsContribution(common, contribution) {
+			break
+		}
+		if !Marker(common) {
+			anchor = common.GetId()
+		}
+	}
+	return anchor
+}
+
+// needsContribution reports whether common has to follow a step of
+// contribution: a dependency of the contribution puts it after the step, or
+// the host's lifecycle order does, because common reads an object the step
+// creates or alters, or creates one the step drops.
+func needsContribution(common *protocol.CommonPlanningStep, contribution *protocol.PlanningContribution) bool {
+	for _, edge := range contribution.GetDependencies() {
+		if proto.Equal(edge.GetAfter(), common.GetId()) && edge.GetBefore().GetOwner() == contribution.GetOwner() {
+			return true
+		}
+	}
+	for _, step := range contribution.GetSteps() {
+		for _, own := range step.GetMetadata().GetEffects() {
+			for _, other := range common.GetMetadata().GetEffects() {
+				if !sameAccessSubject(own.GetSubject(), other.GetSubject()) {
+					continue
+				}
+				switch own.GetAction() {
+				case protocol.PlanningEffect_CREATE, protocol.PlanningEffect_ALTER:
+					if other.GetAction() == protocol.PlanningEffect_READ {
+						return true
+					}
+				case protocol.PlanningEffect_DROP:
+					if other.GetAction() == protocol.PlanningEffect_CREATE {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// followAnchor orders every step of contribution after anchor, unless a
+// dependency already does; a nil anchor orders nothing.
+func followAnchor(contribution *protocol.PlanningContribution, anchor *protocol.StepIdentity) {
+	if anchor == nil {
+		return
+	}
+	for _, step := range contribution.GetSteps() {
+		edge := &protocol.PlanningDependency{Before: proto.CloneOf(anchor), After: proto.CloneOf(step.GetId())}
+		if !slices.ContainsFunc(contribution.Dependencies, func(have *protocol.PlanningDependency) bool { return proto.Equal(have, edge) }) {
+			contribution.Dependencies = append(contribution.Dependencies, edge)
+		}
+	}
+}
+
+// Marker reports whether common is an ordering marker of the host, such as
+// the end of the lifecycle span, which a step cannot be placed after: a step
+// that names no object and has no effects. A grant on the database has no
+// effects either, and is no marker.
+func Marker(common *protocol.CommonPlanningStep) bool {
+	return len(common.GetMetadata().GetEffects()) == 0 && common.GetCommonObject() == nil && common.GetParent() == nil && common.GetAddedColumn() == nil
 }
 
 // checkAssignment checks that request is the family's planning assignment
