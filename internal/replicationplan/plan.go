@@ -50,7 +50,11 @@ func replicationFamily() objectplan.Family {
 	return objectplan.Family{
 		ServiceID: ReplicationServiceID, Kind: schema.ReplicationProperties, ChangeKind: schema.ReplicationChange,
 		Capability: replication.CapabilityReplication, Noun: "async replication", StepPrefix: "replication",
-		Strategy: "Create the replication with its replica tables, point a paused one at the declared connection, or drop it with CASCADE unless it was failed over",
+		// The YDB engine built into the host at 74de0b65b created an async
+		// replication after the tables and before the grants, and dropped
+		// one ahead of the topics and tables, on 25.1.4.7 and 26.2.1.14.
+		LateCreations: true,
+		Strategy:      "Create the replication with its replica tables, point a paused one at the declared connection, or drop it with CASCADE unless it was failed over",
 		Owner: func(subject *protocol.ComparisonIdentity) (*protocol.Reference, error) {
 			return schema.NativeBoundOwner(schema.ReplicationProperties, subject)
 		},
