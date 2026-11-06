@@ -37,6 +37,21 @@ func declarationRequest(c *qt.C, values ...*protocol.Envelope) *protocol.PlanDec
 	}
 	return request
 }
+
+// dependencyNames lists the dependencies of contribution as `before ->
+// after`, each step named by the object it creates.
+func dependencyNames(contribution *protocol.PlanningContribution) []string {
+	names := make(map[string]string)
+	for _, step := range contribution.Steps {
+		names[step.Id.Name] = step.Operation.Value.Value.Owner.Name
+	}
+	var listed []string
+	for _, edge := range contribution.Dependencies {
+		listed = append(listed, names[edge.Before.Name]+" -> "+names[edge.After.Name])
+	}
+	return listed
+}
+
 func declaredNode(c *qt.C, name string, access *native.AccessIntent) *protocol.Envelope {
 	c.Helper()
 	value, err := schema.CaptureCoordinationIntent(&protocol.Reference{Engine: "ydb", Kind: schema.CoordinationProperties, Schema: "app", Name: name}, schema.CoordinationIntent{SelfCheckPeriodMillis: new(uint32(2000)), Access: access})
@@ -95,6 +110,7 @@ func TestAuthoredDeclarationsCreateEveryNativeFamily(t *testing.T) {
 			c.Assert(step.Metadata.Effects[len(step.Metadata.Effects)-1].Action, qt.Equals, protocol.PlanningEffect_READ)
 		}
 	}
+	c.Assert(dependencyNames(result.Contributions[0]), qt.DeepEquals, []string{"store -> external", "batch.pool -> routing"})
 	rendering.Form = protocol.RenderRequest_ANY
 	executable, err := backend.New().Render(c.Context(), rendering)
 	c.Assert(err, qt.IsNil)
@@ -185,6 +201,7 @@ func TestAuthoredStreamingQueryFollowsItsTopics(t *testing.T) {
 		"input":  {"CREATE " + schema.TopicProperties + " app/input", "CREATE ydb.scheme-path app/input"},
 		"output": {"CREATE " + schema.TopicProperties + " app/output", "CREATE ydb.scheme-path app/output"},
 	})
+	c.Assert(dependencyNames(result.Contributions[0]), qt.DeepEquals, []string{"output -> copy", "input -> copy"})
 	rendering := testplanning.RenderRequest(backend.Description(), &protocol.PlannedFeatures{Contributions: result.Contributions}, request.Capabilities)
 	rendering.TargetFeatures, rendering.Form = request.TargetFeatures, protocol.RenderRequest_TEXT
 	text, err := backend.New().Render(c.Context(), rendering)

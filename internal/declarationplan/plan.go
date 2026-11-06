@@ -91,6 +91,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 		}
 	}
 	if len(contribution.Steps) > 0 {
+		contribution.Dependencies = readsAfterCreations(contribution.Steps)
 		for _, step := range late {
 			contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(anchor), After: proto.CloneOf(step)})
 		}
@@ -312,4 +313,47 @@ func schemePath(directory, name string) string {
 		return name
 	}
 	return directory + "/" + name
+}
+
+// readsAfterCreations orders each step after the steps that create what it
+// reads: a classifier after its resource pool, an external table after its
+// data source, a streaming query after the topics its text names. The host
+// orders the effects of two contributions on one subject, and leaves the
+// steps of one contribution to the contribution's dependencies; without
+// these it refuses the plan (`unordered effects on ... resource-pool`).
+func readsAfterCreations(steps []*protocol.PlanningStep) []*protocol.PlanningDependency {
+	type creation struct {
+		subject *protocol.ComparisonIdentity
+		step    *protocol.StepIdentity
+	}
+	var creations []creation
+	for _, step := range steps {
+		for _, effect := range step.GetMetadata().GetEffects() {
+			if effect.GetAction() == protocol.PlanningEffect_CREATE {
+				creations = append(creations, creation{subject: effect.GetSubject(), step: step.GetId()})
+			}
+		}
+	}
+	slices.SortStableFunc(creations, func(a, b creation) int { return provider.CompareIdentities(a.subject, b.subject) })
+	var edges []*protocol.PlanningDependency
+	for _, step := range steps {
+		for _, effect := range step.GetMetadata().GetEffects() {
+			if effect.GetAction() != protocol.PlanningEffect_READ {
+				continue
+			}
+			first, _ := slices.BinarySearchFunc(creations, effect.GetSubject(), func(have creation, subject *protocol.ComparisonIdentity) int {
+				return provider.CompareIdentities(have.subject, subject)
+			})
+			for _, created := range creations[first:] {
+				if provider.CompareIdentities(created.subject, effect.GetSubject()) != 0 {
+					break
+				}
+				edge := &protocol.PlanningDependency{Before: proto.CloneOf(created.step), After: proto.CloneOf(step.GetId())}
+				if !proto.Equal(edge.Before, edge.After) && !slices.ContainsFunc(edges, func(have *protocol.PlanningDependency) bool { return proto.Equal(have, edge) }) {
+					edges = append(edges, edge)
+				}
+			}
+		}
+	}
+	return edges
 }
