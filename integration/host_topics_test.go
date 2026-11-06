@@ -158,7 +158,8 @@ func (h *hostTopics) topic(name string) ydbdecl.Topic {
 
 // fullTopic declares a topic naming every setting and two consumers, one
 // with an availability period on a line that takes one, as YAML and as the
-// read takes it, with the consumers by name.
+// read takes it, with the consumers in the order YDB keeps them: the order
+// the topic was created with.
 func fullTopic(capabilities map[string]bool) (string, ydbdecl.Topic) {
 	audit := ydbdecl.Consumer{Name: "audit", ReadFrom: "2026-01-01T00:00:00Z", SupportedCodecs: []string{"raw", "gzip"}}
 	auditText := "        audit: {read_from: \"2026-01-01T00:00:00Z\", supported_codecs: \"raw,gzip\"}\n"
@@ -173,7 +174,7 @@ func fullTopic(capabilities map[string]bool) (string, ydbdecl.Topic) {
 	return text, ydbdecl.Topic{MinActivePartitions: 2, MaxActivePartitions: 6, AutoPartitioningStrategy: "scale_up",
 		AutoPartitioningUpUtilizationPercent: 70, AutoPartitioningDownUtilizationPercent: 10, AutoPartitioningStabilizationWindow: "PT2M", RetentionPeriod: "P1DT12H",
 		PartitionWriteSpeedBytesPerSecond: 2097152, PartitionWriteBurstBytes: 3145728, SupportedCodecs: []string{"raw", "gzip"},
-		Consumers: []ydbdecl.Consumer{audit, {Name: "billing", Important: true}}}
+		Consumers: []ydbdecl.Consumer{{Name: "billing", Important: true}, audit}}
 }
 
 // Ported from the host's TestYDBTopics_RoundTrip: a topic naming every setting
@@ -221,7 +222,9 @@ func TestHostConvergesTopicChanges_HappyPath(t *testing.T) {
 	c.Assert(h.topic("orders"), qt.DeepEquals, ydbdecl.Topic{MinActivePartitions: 2, MaxActivePartitions: 4, AutoPartitioningStrategy: "scale_up",
 		AutoPartitioningUpUtilizationPercent: 90, AutoPartitioningDownUtilizationPercent: 30, AutoPartitioningStabilizationWindow: "PT5M", RetentionPeriod: "PT2H",
 		PartitionWriteSpeedBytesPerSecond: 4194304, PartitionWriteBurstBytes: 4194304,
-		Consumers: []ydbdecl.Consumer{{Name: "fresh", Important: true}, {Name: "kept", ReadFrom: "2026-01-01T00:00:00Z"}, {Name: "narrowed"}}})
+		// YDB keeps the consumers in the order they were added: kept stays,
+		// fresh is added, and narrowed is dropped and added again after it.
+		Consumers: []ydbdecl.Consumer{{Name: "kept", ReadFrom: "2026-01-01T00:00:00Z"}, {Name: "fresh", Important: true}, {Name: "narrowed"}}})
 }
 
 // Ported from the host's TestYDBTopics_ATopicAndATableTradeAPath: a table is

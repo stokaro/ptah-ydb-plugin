@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -23,6 +24,7 @@ type releaseLineProfile struct {
 	Certification struct {
 		Level string `json:"level"`
 		Line  string `json:"line"`
+		Label string `json:"label"`
 	} `json:"certification"`
 	Capabilities []struct {
 		Key       string `json:"key"`
@@ -59,7 +61,10 @@ func TestHostReportsTheReleaseLineOfTheServer_HappyPath(t *testing.T) {
 	c.Assert(profile.Certification.Line, qt.Equals, line)
 	c.Assert(profile.Certification.Level, qt.Equals, "certified")
 	c.Assert(profile.Preset.Source, qt.Equals, "version-ladder")
-	c.Assert(profile.Preset.Name, qt.Equals, "YDB "+line)
+	// The preset's name is the one the built-in engine gave it, YDB251 for
+	// 25.1, and the line has no label of its own.
+	c.Assert(profile.Preset.Name, qt.Equals, "YDB"+strings.ReplaceAll(line, ".", ""))
+	c.Assert(profile.Certification.Label, qt.Equals, "")
 	supported := make(map[string]bool, len(profile.Capabilities))
 	for _, entry := range profile.Capabilities {
 		supported[entry.Key] = entry.Supported

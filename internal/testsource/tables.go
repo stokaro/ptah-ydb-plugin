@@ -15,7 +15,11 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeedsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/replicationsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/streamingsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/topicsource"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workloadsource"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -153,7 +157,8 @@ func GoDirectives(tables []GoTable, declarations []GoDeclaration) (*protocol.Dec
 		if i == 0 {
 			document.File, document.ByteLength = declaration.File, uint64(declaration.FileSize) // #nosec G115 -- a test fixture file of a few kilobytes
 		}
-		claims := slices.Concat(tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{schema.CoordinationGoDirective()}, externalsource.GoDirectives())
+		claims := slices.Concat(tablesource.GoDirectives(), changefeedsource.GoDirectives(), []*protocol.GoSourceDirective{schema.CoordinationGoDirective()}, externalsource.GoDirectives(),
+			topicsource.GoDirectives(), workloadsource.GoDirectives(), streamingsource.GoDirectives(), replicationsource.GoDirectives())
 		claim := slices.IndexFunc(claims, func(claim *protocol.GoSourceDirective) bool { return claim.Directive == declaration.Directive })
 		if claim < 0 {
 			return nil, fmt.Errorf("the provider claims no Go directive %q", declaration.Directive)

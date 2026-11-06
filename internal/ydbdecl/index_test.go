@@ -10,8 +10,9 @@ import (
 )
 
 // A global index has the common spelling inspection and table preparation
-// both use: none for a synchronous one and async for an asynchronous one.
-// Every other kind is no common index.
+// both use, the type the host's embedded engine read a held index as: GLOBAL
+// SYNC for a synchronous one and GLOBAL ASYNC for an asynchronous one. Every
+// other kind is no common index.
 func TestIndexKindCommonMethod(t *testing.T) {
 	for _, row := range []struct {
 		name   string
@@ -19,8 +20,8 @@ func TestIndexKindCommonMethod(t *testing.T) {
 		method string
 		common bool
 	}{
-		{"synchronous", ydbdecl.IndexSync, "", true},
-		{"asynchronous", ydbdecl.IndexAsync, "async", true},
+		{"synchronous", ydbdecl.IndexSync, "GLOBAL SYNC", true},
+		{"asynchronous", ydbdecl.IndexAsync, "GLOBAL ASYNC", true},
 		{"vector", ydbdecl.IndexVector, "", false},
 		{"full-text", ydbdecl.IndexFullTextPlain, "", false},
 		{"local", ydbdecl.IndexLocalBloom, "", false},
@@ -42,8 +43,8 @@ func TestIndexKindOfReadsTheCommonKinds(t *testing.T) {
 		declared string
 		method   string
 	}{
-		{"", ""}, {"BTREE", ""}, {"GLOBAL", ""}, {"SYNC", ""}, {"GLOBAL SYNC", ""}, {"global_sync", ""},
-		{"ASYNC", "async"}, {"GLOBAL ASYNC", "async"}, {"async", "async"},
+		{"", "GLOBAL SYNC"}, {"BTREE", "GLOBAL SYNC"}, {"GLOBAL", "GLOBAL SYNC"}, {"SYNC", "GLOBAL SYNC"}, {"GLOBAL SYNC", "GLOBAL SYNC"},
+		{"global_sync", "GLOBAL SYNC"}, {"ASYNC", "GLOBAL ASYNC"}, {"GLOBAL ASYNC", "GLOBAL ASYNC"}, {"async", "GLOBAL ASYNC"},
 	} {
 		t.Run(row.declared, func(t *testing.T) {
 			c := testcheck.New(t)

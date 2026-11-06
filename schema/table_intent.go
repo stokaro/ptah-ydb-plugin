@@ -186,8 +186,28 @@ func validatePermissionSet(grants []*Ydb_Scheme.Permissions) error {
 }
 
 // ConvertTable changes row-table representations without treating physical
-// topology as creation intent or inherited permissions as direct grants.
+// topology as creation intent or inherited permissions as direct grants. A
+// read becomes a declaration without the settings YDB gives every new table
+// (see [WithoutNewTableDefaults]), as the host's embedded engine wrote a
+// read's report against them, so an export or a rendering of the read names
+// only what sets the table apart.
 func ConvertTable(value *protocol.Envelope, from, to protocol.ValueInput_Representation) (*protocol.Envelope, error) {
+	return convertTable(value, from, to, WithoutNewTableDefaults)
+}
+
+// restoredTable is [ConvertTable] keeping every setting a read reports: the
+// declaration a reverse restores, as the host's embedded engine restored every
+// setting a table held. A setting a declaration leaves out keeps what the
+// table holds, so a reverse without the new-table defaults keeps each setting
+// the forward change moved away from one, and the reverse of a changed
+// partitioning plans nothing.
+func restoredTable(value *protocol.Envelope, from, to protocol.ValueInput_Representation) (*protocol.Envelope, error) {
+	return convertTable(value, from, to, proto.CloneOf[*native.RowTableIntent])
+}
+
+// convertTable is [ConvertTable] with declared choosing the settings a read's
+// declaration states.
+func convertTable(value *protocol.Envelope, from, to protocol.ValueInput_Representation, declared func(*native.RowTableIntent) *native.RowTableIntent) (*protocol.Envelope, error) {
 	if value.GetKind() != TableProperties {
 		return nil, fmt.Errorf("YDB table conversion requires a row-table model")
 	}
@@ -203,7 +223,7 @@ func ConvertTable(value *protocol.Envelope, from, to protocol.ValueInput_Represe
 		if len(observed.ShardKeyBounds) != 0 {
 			return nil, fmt.Errorf("YDB physical shard boundaries cannot become schema split points")
 		}
-		return convertedEnvelope(value, TableDesiredModel(), tableIntent(&observed), NormalizeDesired)
+		return convertedEnvelope(value, TableDesiredModel(), declared(tableIntent(&observed)), NormalizeDesired)
 	}
 	if from == protocol.ValueInput_DESIRED && to == protocol.ValueInput_OBSERVED {
 		normalized, err := normalizeTableIntent(value)
@@ -231,6 +251,42 @@ func tableIntent(observed *native.DescribeTableResult) *native.RowTableIntent {
 	result.Access = accessIntent(observed.Self)
 	return result
 }
+
+// WithoutNewTableDefaults is intent without each setting that has the value
+// YDB's documentation gives a new table, the baseline the host's embedded
+// engine wrote a read's report against: splitting by size at 2048 MB, not by
+// load, at least one partition, and no key Bloom filter. A read reports them
+// for every table, and a setting a declaration leaves out keeps what the
+// table holds, so leaving them out changes no forward plan; a reverse states
+// them (see restoredTable). intent is not changed.
+func WithoutNewTableDefaults(intent *native.RowTableIntent) *native.RowTableIntent {
+	result := proto.CloneOf(intent)
+	if partitioning := result.GetPartitioningSettings(); partitioning != nil {
+		if partitioning.GetPartitioningBySize() == Ydb.FeatureFlag_ENABLED {
+			partitioning.PartitioningBySize = Ydb.FeatureFlag_STATUS_UNSPECIFIED
+		}
+		if partitioning.GetPartitionSizeMb() == defaultPartitionSizeMB {
+			partitioning.PartitionSizeMb = 0
+		}
+		if partitioning.GetPartitioningByLoad() == Ydb.FeatureFlag_DISABLED {
+			partitioning.PartitioningByLoad = Ydb.FeatureFlag_STATUS_UNSPECIFIED
+		}
+		if partitioning.GetMinPartitionsCount() == 1 {
+			partitioning.MinPartitionsCount = 0
+		}
+		if proto.Equal(partitioning, &Ydb_Table.PartitioningSettings{}) {
+			result.PartitioningSettings = nil
+		}
+	}
+	if result.GetKeyBloomFilter() == Ydb.FeatureFlag_DISABLED {
+		result.KeyBloomFilter = Ydb.FeatureFlag_STATUS_UNSPECIFIED
+	}
+	return result
+}
+
+// defaultPartitionSizeMB is the partition size YDB's documentation gives a new
+// table that splits by size.
+const defaultPartitionSizeMB = 2048
 
 // tableObservation writes a desired table as a read of it would report it. A
 // starting layout is create-time only and YDB keeps no record of it, so a read

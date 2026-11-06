@@ -274,10 +274,10 @@ func TestVectorIndexRoundTripSubprocess(t *testing.T) {
 
 // TestVectorIndexCreatedWithTheTableSubprocess is the host's
 // TestYDBVectorIndexes_CreatedWithTheTable. A new table's vector indexes are
-// built right after its creation, one step each, where the host's embedded
-// engine writes them inside the CREATE TABLE: the native creation call of the
-// pinned bindings carries no vector index. The table reads back with every
-// setting declared, and a comparison afterward finds nothing to change.
+// built by its creation, one step whose CREATE TABLE writes them in name
+// order, as the host's embedded engine wrote them: the native creation call
+// carries each one's upstream arm. The table reads back with every setting
+// declared, and a comparison afterward finds nothing to change.
 func TestVectorIndexCreatedWithTheTableSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
@@ -309,10 +309,11 @@ func TestVectorIndexCreatedWithTheTableSubprocess(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0, qt.Commentf("%s", plan))
 	names, statements := fixture.planned(c, plan)
-	c.Assert(names, qt.DeepEquals, []string{"row-table-create/000000", "row-table-create-index/000000", "row-table-create-index/000001"})
-	c.Assert(statements[1:], qt.DeepEquals, []string{fmt.Sprintf(addDocsEmb, 2),
-		"ALTER TABLE `<dir>/records` ADD INDEX `docs_title_ip` GLOBAL USING vector_kmeans_tree ON (`emb`) " +
-			"WITH (similarity=inner_product, vector_type=int8, vector_dimension=3, levels=2, clusters=2);"})
+	c.Assert(names, qt.DeepEquals, []string{"row-table-create/000000"})
+	c.Assert(statements, qt.HasLen, 1)
+	c.Assert(statements[0], qt.Contains, "    INDEX `docs_emb` GLOBAL USING vector_kmeans_tree ON (`gen`, `emb`) COVER (`body`) "+
+		"WITH (distance=cosine, vector_type=float, vector_dimension=3, levels=1, clusters=2),\n"+
+		"    INDEX `docs_title_ip` GLOBAL USING vector_kmeans_tree ON (`emb`) WITH (similarity=inner_product, vector_type=int8, vector_dimension=3, levels=2, clusters=2)\n);")
 	fixture.run(c, "vector-create", plan)
 	c.Assert(fixture.compareIndexes(c, declared).Changes, qt.HasLen, 0)
 	settings := fixture.heldIndexes(c)["docs_title_ip"].GetGlobalVectorKmeansTreeIndex().GetVectorSettings()

@@ -15,6 +15,7 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/topics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -73,17 +74,33 @@ func Owns(fragment *protocol.SourceFragment) bool {
 // trace points at.
 type declared struct {
 	fragment int
-	path     []*protocol.SourcePathStep
-	schema   string
-	name     string
-	spec     ydbdecl.Topic
+	// key is the YAML key that declares the topic, and empty for a Go
+	// directive.
+	key    string
+	path   []*protocol.SourcePathStep
+	schema string
+	name   string
+	spec   ydbdecl.Topic
 }
 
 // Decode reads every topic a document declares and returns the values of
 // each fragment, by index: a topic's value under the fragment that declares
 // it, and none for a consumer's directive, whose consumer the topic carries.
-// An invalid declaration refuses the whole document.
+// An invalid declaration refuses the whole document, with the reason a host
+// prints in the words of the host's embedded engine and without the value the
+// declaration wrote (see authored.Declared).
 func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
+	values, err := decode(ctx, document)
+	return values, authored.Declared(err)
+}
+
+// refuse is a refusal a host prints. Its text names the declared objects and
+// attributes and never a value.
+func refuse(format string, args ...any) error {
+	return authored.New(fmt.Sprintf(format, args...))
+}
+
+func decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	var topicsDeclared []declared
 	var consumers []pendingConsumer
 	owned := make(map[int]bool)
@@ -96,13 +113,13 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 		}
 		owned[index] = true
 		if fragment.BindingId != "" || fragment.Subject != nil || len(fragment.GetInheritedAttributes().GetEntries()) != 0 {
-			return nil, fmt.Errorf("unsupported YDB topic source attachment")
+			return nil, refuse("unsupported YDB topic source attachment")
 		}
 		mapping := fragment.GetValue().GetMapping()
 		switch {
 		case document.Format == protocol.SourceDocument_YAML && fragment.Selector == KeyTopics:
 			if mapping == nil {
-				return nil, fmt.Errorf("%s requires a mapping", KeyTopics)
+				return nil, refuse("%s requires a mapping", KeyTopics)
 			}
 			read, err := yamlTopics(index, mapping)
 			if err != nil {
@@ -122,7 +139,7 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			}
 			consumers = append(consumers, pending)
 		default:
-			return nil, fmt.Errorf("unsupported YDB topic source format")
+			return nil, refuse("unsupported YDB topic source format")
 		}
 	}
 	if err := attachConsumers(topicsDeclared, consumers); err != nil {
@@ -151,6 +168,9 @@ func goTopic(fragment int, mapping *protocol.SourceMapping) (declared, error) {
 	if err != nil {
 		return declared{}, err
 	}
+	if err := ydbdecl.RequireAttributes(values, ydbdecl.TopicName); err != nil {
+		return declared{}, err
+	}
 	spec, err := ydbdecl.ParseTopic(values)
 	if err != nil {
 		return declared{}, err
@@ -165,14 +185,14 @@ func goConsumer(mapping *protocol.SourceMapping) (pendingConsumer, error) {
 	if err != nil {
 		return pendingConsumer{}, err
 	}
+	if err := ydbdecl.RequireAttributes(values, ydbdecl.TopicName, attributeTopic); err != nil {
+		return pendingConsumer{}, err
+	}
 	consumer, err := ydbdecl.ParseConsumer(values)
 	if err != nil {
 		return pendingConsumer{}, err
 	}
 	topic := strings.TrimSpace(values[attributeTopic])
-	if topic == "" {
-		return pendingConsumer{}, fmt.Errorf("%s needs the topic it reads", DirectiveConsumer)
-	}
 	// The directory is held to the rules of a topic's, as the host
 	// holds it.
 	if err := ydbdecl.CheckTopic(values[ydbdecl.TopicSchema], topic, ydbdecl.Topic{}); err != nil {
@@ -190,11 +210,11 @@ func attachConsumers(topicsDeclared []declared, consumers []pendingConsumer) err
 	for _, pending := range consumers {
 		index := slices.IndexFunc(topicsDeclared, func(topic declared) bool { return topic.name == pending.topic && topic.schema == pending.schema })
 		if index < 0 {
-			return fmt.Errorf("the file declares no topic %q for consumer %q", topics.Display(pending.schema, pending.topic), pending.consumer.Name)
+			return refuse("the file declares no topic %q for consumer %q", topics.Display(pending.schema, pending.topic), pending.consumer.Name)
 		}
 		topic := &topicsDeclared[index]
 		if slices.ContainsFunc(topic.spec.Consumers, func(have ydbdecl.Consumer) bool { return have.Name == pending.consumer.Name }) {
-			return fmt.Errorf("topic %q declares consumer %q twice", topics.Display(topic.schema, topic.name), pending.consumer.Name)
+			return refuse("topic %q declares consumer %q twice", topics.Display(topic.schema, topic.name), pending.consumer.Name)
 		}
 		topic.spec.Consumers = append(topic.spec.Consumers, pending.consumer)
 	}
@@ -211,11 +231,14 @@ func addTopicValues(ctx context.Context, document *protocol.SourceDocument, topi
 			return err
 		}
 		if err := ydbdecl.CheckTopic(topic.schema, topic.name, topic.spec); err != nil {
+			if topic.key != "" {
+				return fmt.Errorf("topic %q: %w", topic.key, err)
+			}
 			return err
 		}
 		path := topics.Display(topic.schema, topic.name)
 		if seen[path] {
-			return fmt.Errorf("topic %s is declared twice", path)
+			return refuse("topic %s is declared twice", path)
 		}
 		seen[path] = true
 		intent, err := topics.Intent(topic.spec)
@@ -245,19 +268,39 @@ func yamlTopics(fragment int, mapping *protocol.SourceMapping) ([]declared, erro
 	for _, entry := range entries {
 		topic, err := yamlTopic(entry)
 		if err != nil {
-			return nil, fmt.Errorf("topic %q: %w", entry.Key, err)
+			return nil, err
 		}
-		topic.fragment = fragment
+		topic.fragment, topic.key = fragment, entry.Key
 		topic.path = []*protocol.SourcePathStep{{Step: &protocol.SourcePathStep_Key{Key: entry.Key}}}
 		result = append(result, topic)
 	}
 	return result, nil
 }
 
+// yamlTopic reads one entry of the topics mapping. A refusal names the topic
+// by its key, and a consumer's refusal names the consumer after it, as the
+// host's embedded engine wrote it: `topic "events", consumer "c": ...`.
 func yamlTopic(entry *protocol.SourceEntry) (declared, error) {
+	topic, consumers, err := yamlTopicSettings(entry)
+	if err != nil {
+		return declared{}, fmt.Errorf("topic %q: %w", entry.Key, err)
+	}
+	for _, consumerEntry := range consumers {
+		consumer, err := yamlConsumer(consumerEntry)
+		if err != nil {
+			return declared{}, fmt.Errorf("topic %q, consumer %q: %w", entry.Key, consumerEntry.Key, err)
+		}
+		topic.spec.Consumers = append(topic.spec.Consumers, consumer)
+	}
+	return topic, nil
+}
+
+// yamlTopicSettings reads a topic entry's own settings and returns its
+// consumers' entries unread.
+func yamlTopicSettings(entry *protocol.SourceEntry) (declared, []*protocol.SourceEntry, error) {
 	fields := entry.GetValue().GetMapping()
 	if fields == nil {
-		return declared{}, fmt.Errorf("a topic requires a mapping")
+		return declared{}, nil, refuse("a topic requires a mapping")
 	}
 	values := make(map[string]string)
 	var consumerEntries []*protocol.SourceEntry
@@ -267,23 +310,23 @@ func yamlTopic(entry *protocol.SourceEntry) (declared, error) {
 		case field.Key == "consumers":
 			consumerMapping := field.GetValue().GetMapping()
 			if consumerMapping == nil && field.GetValue().GetNull() == nil {
-				return declared{}, fmt.Errorf("consumers requires a mapping")
+				return declared{}, nil, refuse("consumers requires a mapping")
 			}
 			consumerEntries = consumerMapping.GetEntries()
 		case field.Key == ydbdecl.AttributeSupportedCodecs:
 			list, err := codecList(field.GetValue())
 			if err != nil {
-				return declared{}, fmt.Errorf("%s: %w", field.Key, err)
+				return declared{}, nil, fmt.Errorf("%s: %w", field.Key, err)
 			}
 			values[field.Key] = list
 		case field.Key == ydbdecl.TopicName || field.Key == ydbdecl.TopicSchema || slices.Contains(topicSettings(), field.Key):
 			text, err := scalar(field.GetValue())
 			if err != nil {
-				return declared{}, fmt.Errorf("%s: %w", field.Key, err)
+				return declared{}, nil, fmt.Errorf("%s: %w", field.Key, err)
 			}
 			values[field.Key] = text
 		default:
-			return declared{}, fmt.Errorf("unknown key %q", field.Key)
+			return declared{}, nil, refuse("unknown key %q", field.Key)
 		}
 	}
 	if name := values[ydbdecl.TopicName]; name != "" {
@@ -294,17 +337,10 @@ func yamlTopic(entry *protocol.SourceEntry) (declared, error) {
 	delete(values, ydbdecl.TopicSchema)
 	spec, err := ydbdecl.ParseTopic(values)
 	if err != nil {
-		return declared{}, err
-	}
-	for _, consumerEntry := range consumerEntries {
-		consumer, err := yamlConsumer(consumerEntry)
-		if err != nil {
-			return declared{}, fmt.Errorf("consumer %q: %w", consumerEntry.Key, err)
-		}
-		spec.Consumers = append(spec.Consumers, consumer)
+		return declared{}, nil, err
 	}
 	topic.spec = spec
-	return topic, nil
+	return topic, consumerEntries, nil
 }
 
 func yamlConsumer(entry *protocol.SourceEntry) (ydbdecl.Consumer, error) {
@@ -312,7 +348,7 @@ func yamlConsumer(entry *protocol.SourceEntry) (ydbdecl.Consumer, error) {
 	if entry.GetValue().GetNull() == nil {
 		fields := entry.GetValue().GetMapping()
 		if fields == nil {
-			return ydbdecl.Consumer{}, fmt.Errorf("a consumer requires a mapping")
+			return ydbdecl.Consumer{}, refuse("a consumer requires a mapping")
 		}
 		for _, field := range fields.GetEntries() {
 			switch {
@@ -329,7 +365,7 @@ func yamlConsumer(entry *protocol.SourceEntry) (ydbdecl.Consumer, error) {
 				}
 				values[field.Key] = text
 			default:
-				return ydbdecl.Consumer{}, fmt.Errorf("unknown key %q", field.Key)
+				return ydbdecl.Consumer{}, refuse("unknown key %q", field.Key)
 			}
 		}
 	}
@@ -340,13 +376,13 @@ func yamlConsumer(entry *protocol.SourceEntry) (ydbdecl.Consumer, error) {
 // attributes reads a Go directive's attributes, which the host lexed as text.
 func attributes(mapping *protocol.SourceMapping) (map[string]string, error) {
 	if mapping == nil {
-		return nil, fmt.Errorf("a topic directive requires attributes")
+		return nil, refuse("a topic directive requires attributes")
 	}
 	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {
-			return nil, fmt.Errorf("attribute %s requires text", entry.Key)
+			return nil, refuse("attribute %s requires text", entry.Key)
 		}
 		values[entry.Key] = text.Text
 	}
@@ -367,7 +403,7 @@ func scalar(value *protocol.SourceValue) (string, error) {
 	case *protocol.SourceValue_Null:
 		return "", nil
 	default:
-		return "", fmt.Errorf("expected a scalar")
+		return "", refuse("expected a scalar")
 	}
 }
 
