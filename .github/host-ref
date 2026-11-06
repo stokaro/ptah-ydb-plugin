@@ -1,4 +1,0 @@
-# The host half of the membership placement in a schema render
-# (stokaro/ptah#5444, fix/4204-render-memberships). Remove this file when a Ptah
-# release carries it.
-fix/4204-render-memberships
