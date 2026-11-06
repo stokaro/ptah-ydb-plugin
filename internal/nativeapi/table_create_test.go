@@ -251,3 +251,64 @@ func TestNativeTableCreationConfirmsItsIndexes_FailurePath(t *testing.T) {
 		})
 	}
 }
+
+// TestNativeTableCreationsShareALentSession pins that two creations borrowing
+// from one lender run in one session, which the lender closes when the
+// execution ends, and that a session a creation failed on is closed at once
+// and never lent again: the next creation opens its own. A release that fails
+// at the end is the lender's error, not a creation's.
+func TestNativeTableCreationsShareALentSession(t *testing.T) {
+	for _, test := range []struct {
+		name               string
+		first              creationFixture
+		guardFailure       error
+		firstFailed        bool
+		firstDispatched    bool
+		closeFailure       bool
+		events             []string
+		lenderCloseFailure bool
+	}{
+		{name: "both confirmed", firstDispatched: true,
+			events: []string{"list", "open", "guard", "create", "describe", "list", "guard", "create", "describe", "close"}},
+		{name: "the first reply lost", first: creationFixture{writeFailure: true}, firstFailed: true, firstDispatched: true,
+			events: []string{"list", "open", "guard", "create", "close", "list", "open", "guard", "create", "describe", "close"}},
+		{name: "the first table read back changed", first: creationFixture{changed: true}, firstFailed: true, firstDispatched: true,
+			events: []string{"list", "open", "guard", "create", "describe", "close", "list", "open", "guard", "create", "describe", "close"}},
+		{name: "the first lock check failed", guardFailure: errors.New("lease lost"), firstFailed: true,
+			events: []string{"list", "open", "guard", "close", "list", "open", "guard", "create", "describe", "close"}},
+		{name: "the release at the end failed", closeFailure: true, firstDispatched: true, lenderCloseFailure: true,
+			events: []string{"list", "open", "guard", "create", "describe", "list", "guard", "create", "describe", "close"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			fixture := test.first
+			fixture.closeFailure = test.closeFailure
+			lender := &nativeapi.CreationSessions{Open: func(context.Context) (nativeapi.CreationSession, error) {
+				fixture.events = append(fixture.events, "open")
+				return &fixture, nil
+			}}
+			api := &nativeapi.TableCreation{Scheme: &fixture, Sessions: lender}
+			owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
+			operation, err := tablecreate.Capture("create", owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"}, Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}}}, nil)
+			c.Assert(err, qt.IsNil)
+			guardErr := test.guardFailure
+			guard := func(context.Context) error {
+				fixture.events = append(fixture.events, "guard")
+				return guardErr
+			}
+
+			dispatched, firstErr := api.Apply(t.Context(), "/local", operation.Value, guard)
+			fixture.writeFailure, fixture.changed, guardErr = false, false, nil
+			secondDispatched, secondErr := api.Apply(t.Context(), "/local", operation.Value, guard)
+			closeErr := lender.Close()
+
+			c.Assert(dispatched, qt.Equals, test.firstDispatched)
+			c.Assert(firstErr != nil, qt.Equals, test.firstFailed)
+			c.Assert(secondDispatched, qt.IsTrue)
+			c.Assert(secondErr, qt.IsNil)
+			c.Assert(closeErr != nil, qt.Equals, test.lenderCloseFailure)
+			c.Assert(fixture.events, qt.DeepEquals, test.events)
+			c.Assert(lender.Close(), qt.IsNil)
+		})
+	}
+}

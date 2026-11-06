@@ -82,6 +82,12 @@ func (p *Provider) execute(ctx context.Context, request *protocol.ExecuteRequest
 		return refusal, nil
 	}
 	defer release()
+	// The table creations of the request share one table session, which the
+	// request gives back when it ends, as it does its SQL connection.
+	s.creations = &nativeapi.CreationSessions{Open: func(ctx context.Context) (nativeapi.CreationSession, error) {
+		return nativeapi.OpenTable(ctx, s.connection.Driver)
+	}}
+	defer s.releaseCreations()
 	stopped := s.timedOut(ctx, request)
 	failed := s.unitFailure(ctx, request, batch.services)
 	// The statement timeout bounds each unit's statements, not the check of
@@ -300,7 +306,9 @@ func (s *session) applyNative(ctx context.Context, native *protocol.Envelope, bi
 	execute := first.wrap(s.executeSchema)
 	switch native.GetKind() {
 	case tablecreate.OperationKind:
-		return nativeapi.NewTableCreation(s.connection.Driver).Apply(ctx, s.database, native, checkLocks)
+		creation := nativeapi.NewTableCreation(s.connection.Driver)
+		creation.Sessions = s.creations
+		return creation.Apply(ctx, s.database, native, checkLocks)
 	case tablecreate.InventoryOperationKind:
 		return nativeapi.NewColumnInventory(s.connection.Driver, s.executeSchema).Apply(ctx, s.database, native, s.capabilities, checkLocks)
 	case tablecreate.DefaultOperationKind:
@@ -632,6 +640,13 @@ func notDispatched(err error, applied uint32) *protocol.Execution {
 		message = rowdata.OneLine(refusal.Error())
 	}
 	return &protocol.Execution{Outcome: partialOr(protocol.Execution_NOT_STARTED, applied), AppliedCount: applied, DiagnosticCode: "ydb.precondition-refused", Message: message}
+}
+
+// releaseCreations closes the table session the creations of an execution
+// shared, and records a failure as the session's cleanup error.
+func (s *session) releaseCreations() {
+	s.cleanupErr = errors.Join(s.cleanupErr, s.creations.Close())
+	s.creations = nil
 }
 
 func closeSQLConnection(conn *sql.Conn) error {

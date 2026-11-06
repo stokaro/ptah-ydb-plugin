@@ -29,9 +29,71 @@ type CreationSession interface {
 }
 
 // TableCreation owns the absence check, single dispatch, and confirmation.
+// A creation opens a session with Open and closes it, unless Sessions lends it
+// one.
 type TableCreation struct {
-	Scheme Ydb_Scheme_V1.SchemeServiceClient
-	Open   func(context.Context) (CreationSession, error)
+	Scheme   Ydb_Scheme_V1.SchemeServiceClient
+	Open     func(context.Context) (CreationSession, error)
+	Sessions *CreationSessions
+}
+
+// CreationSessions lends the creations of one execution one table session in
+// turn, so a batch of creations opens and closes one session rather than one
+// for each table. A session is
+// lent again only after a creation that succeeded on it; one a creation failed
+// on, or gave up waiting for, is closed at once. The zero value is not usable:
+// Open opens a session.
+type CreationSessions struct {
+	Open func(context.Context) (CreationSession, error)
+	held CreationSession
+}
+
+// borrow returns the session the lender holds, or opens one.
+func (s *CreationSessions) borrow(ctx context.Context) (CreationSession, error) {
+	if s.held != nil {
+		session := s.held
+		s.held = nil
+		return session, nil
+	}
+	return s.Open(ctx)
+}
+
+// giveBack keeps session for the next creation when the creation that
+// borrowed it succeeded, and closes it when the creation failed.
+func (s *CreationSessions) giveBack(session CreationSession, failure error) error {
+	if failure != nil || s.held != nil {
+		return session.Close()
+	}
+	s.held = session
+	return nil
+}
+
+// Close closes the session the lender holds. Closing twice, or with no session
+// held, does nothing.
+func (s *CreationSessions) Close() error {
+	if s.held == nil {
+		return nil
+	}
+	session := s.held
+	s.held = nil
+	return session.Close()
+}
+
+// session returns the session a creation runs in, and the function that
+// releases it once the creation has an answer, given the creation's failure.
+func (c *TableCreation) session(ctx context.Context) (CreationSession, func(failure error) error, error) {
+	if c.Sessions != nil {
+		session, err := c.Sessions.borrow(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		return session, func(failure error) error { return c.Sessions.giveBack(session, failure) }, nil
+	}
+	session, err := c.Open(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return session, func(error) error { return session.Close() }, nil
 }
 
 // NewTableCreation binds native clients to the authenticated session driver.
@@ -62,11 +124,11 @@ func (c *TableCreation) Apply(ctx context.Context, database string, value *proto
 	if err := absent(ctx, c.Scheme, database, owner); err != nil {
 		return false, err
 	}
-	session, err := c.Open(ctx)
+	session, release, err := c.session(ctx)
 	if err != nil {
 		return false, err
 	}
-	defer func() { err = errors.Join(err, session.Close()) }()
+	defer func() { err = errors.Join(err, release(err)) }()
 	if err := beforeWrite(ctx); err != nil {
 		return false, err
 	}

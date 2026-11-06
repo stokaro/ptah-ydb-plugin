@@ -32,6 +32,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalsource"
 	"github.com/stokaro/ptah-ydb-plugin/internal/featureflags"
 	"github.com/stokaro/ptah-ydb-plugin/internal/migrationlint"
+	"github.com/stokaro/ptah-ydb-plugin/internal/nativeapi"
 	"github.com/stokaro/ptah-ydb-plugin/internal/releaseline"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replicationcompare"
@@ -94,6 +95,9 @@ type session struct {
 	embeddings *embedstore.Store
 	// capabilities are the capabilities the session reported.
 	capabilities map[string]bool
+	// creations lends one table session to the table creations of the
+	// execution that runs, and is nil between executions.
+	creations *nativeapi.CreationSessions
 }
 
 // providerFeatures are the services and behaviors the provider offers.
