@@ -11,6 +11,7 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
+	"github.com/ydb-platform/ydb-go-sdk/v3/scheme"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
@@ -73,16 +74,33 @@ func TestHostRehearsalRefusesAUserItsRealmCannotHold_FailurePath(t *testing.T) {
 	c.Assert(entryNames(heldEntries(c, other, other.Driver.Name())), qt.Not(qt.Contains), connection.RealmDirectory)
 }
 
+// rootPermissions is what the database root grants, as a description of its
+// path reports it.
+func rootPermissions(c *qt.C, opened *connection.Connection, database string) []scheme.Permissions {
+	c.Helper()
+	described, err := opened.Driver.Scheme().DescribePath(c.Context(), database)
+	c.Assert(err, qt.IsNil)
+	return described.Permissions
+}
+
 // Ported from the host's TestYDBBinary_DevDatabaseOnAnotherServer: the dev
 // and shadow URLs name the other server, so each one a run compares with the
 // target names a dev realm there, which no comparison confuses with the
 // target's database. The rollback verification, the derived rollback and the
 // rehearsal all run there, and the other server keeps nothing.
+//
+// The target's database root keeps what it grants. The derived rollback
+// compares the target with a realm that holds what the migrations make, and
+// no realm holds the grants of its database's root: read as a whole answer,
+// the realm's silence planned a REVOKE of each grant the root gives the
+// built-in groups (USERS, METADATA-READERS, DATA-READERS and the rest), and
+// every later test on the server read a database without them.
 func TestHostDevDatabaseOnAnotherServer_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	devURL, other := otherServer(c)
 	fixture := newMigrationsFixture(c)
 	opened, directory, database := fixture.opened, path.Dir(fixture.dir), fixture.database
+	granted := rootPermissions(c, opened, database)
 	c.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -111,6 +129,7 @@ func TestHostDevDatabaseOnAnotherServer_HappyPath(t *testing.T) {
 	c.Assert(upAgainErr, qt.IsNil, qt.Commentf("%s", upAgain))
 	c.Assert(deriveErr, qt.IsNil, qt.Commentf("%s", derived))
 	c.Assert(derived, qt.Contains, "DROP TABLE `"+fixture.table("notes")+"`")
+	c.Assert(derived, qt.Not(qt.Contains), "REVOKE")
 	c.Assert(applyErr, qt.IsNil, qt.Commentf("%s", applied))
 	c.Assert(applied, qt.Contains, "Schema apply completed successfully.")
 	c.Assert(heldEntries(c, opened, path.Join(database, directory)), qt.DeepEquals,
@@ -118,4 +137,6 @@ func TestHostDevDatabaseOnAnotherServer_HappyPath(t *testing.T) {
 	c.Assert(fixture.names(c), qt.Not(qt.Contains), "notes")
 	c.Assert(entryNames(heldEntries(c, other, other.Driver.Name())), qt.Not(qt.Contains), connection.RealmDirectory)
 	c.Assert(entryNames(heldEntries(c, other, other.Driver.Name())), qt.Not(qt.Contains), directory)
+	c.Assert(rootPermissions(c, opened, database), qt.DeepEquals, granted)
+	c.Assert(granted, qt.Not(qt.HasLen), 0)
 }
