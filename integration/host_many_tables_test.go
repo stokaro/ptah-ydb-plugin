@@ -13,13 +13,22 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	"github.com/stokaro/ptah-ydb-plugin/internal/locking"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
 
-// manyTablesRealm is a dev realm of its own holding manyTables tables, each
+// realmTables is how many tables the live test plans: more than a 4 MiB
+// message holds once the models travel by reference (about 180), and fewer
+// than offline validation takes (manyTables), since the read of each table
+// runs within the host's 30-second call to the provider on a shared
+// runner. A realm of 500 tables was measured to plan as synced on 25.1.4.7 and
+// 26.2.1.14 in 104 to 144 seconds.
+const realmTables = 300
+
+// manyTablesRealm is a dev realm of its own holding realmTables tables, each
 // keyed by id with one text column, created directly so the test measures the
 // plan and not the creation. It returns the realm's address and the source
 // that declares those tables.
@@ -33,7 +42,7 @@ func manyTablesRealm(c *qt.C) (address, source string) {
 	c.Assert(err, qt.IsNil)
 	c.Cleanup(func() { c.Check(opened.Close(), qt.IsNil) })
 	address, root := realmFixture(c, opened, base)
-	names := make([]string, manyTables)
+	names := make([]string, realmTables)
 	for i := range names {
 		names[i] = fmt.Sprintf("t%04d", i)
 	}
@@ -59,8 +68,8 @@ func manyTablesRealm(c *qt.C) (address, source string) {
 	return address, declared.String()
 }
 
-// A realm of 500 tables plans as synced in one run, as the built-in engine
-// planned it: every model of each table's coverage travels by reference, and
+// A realm of realmTables tables plans as synced in one run, as the built-in
+// engine planned it: every model of each table's coverage travels by reference, and
 // the requests that carry what the read found in each table pass 4 MiB, which
 // the host and the provider negotiate. Without the two features the host
 // refused to send the table preparation (`provider prepare tables failed
@@ -68,6 +77,7 @@ func manyTablesRealm(c *qt.C) (address, source string) {
 // measures the plan alone.
 func TestHostPlansARealmOfManyTables_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.LargeMessagesFeature)
 	address, source := manyTablesRealm(c)
 	schema := filepath.Join(c.TempDir(), "schema.yaml")
 	c.Assert(os.WriteFile(schema, []byte(source), 0o600), qt.IsNil)

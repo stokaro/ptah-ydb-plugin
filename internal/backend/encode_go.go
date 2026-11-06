@@ -23,13 +23,13 @@ import (
 var goGroups = map[string]int{
 	topicsource.DirectiveTopic: 0, topicsource.DirectiveConsumer: 0,
 	replicationsource.DirectiveReplication: 1, replicationsource.DirectiveItem: 1,
-	replicationsource.DirectiveTransfer: 2,
-	secretsource.Directive:              3,
-	externalsource.DirectiveDataSource:  4,
-	externalsource.DirectiveTable:       5,
-	streamingsource.DirectiveQuery:      6,
-	workloadsource.DirectivePool:        7,
-	workloadsource.DirectiveClassifier:  8,
+	replicationsource.DirectiveTransfer:             2,
+	secretsource.Directive:                          3,
+	externalsource.DirectiveDataSource:              4,
+	externalsource.DirectiveTable:                   5,
+	streamingsource.DirectiveQuery:                  6,
+	workloadsource.DirectivePool:                    7,
+	workloadsource.DirectiveClassifier:              8,
 	schema.CoordinationGoDirective().GetDirective(): 9,
 }
 
@@ -51,20 +51,29 @@ func goRank(unit encodedUnit) int {
 
 // arrangeGo writes a Go export's directives of the document as the host's
 // embedded engine wrote them: in its order of groups, keeping the request's
-// order within a group; each with its attributes in the order its claim lists
-// them; and, where the host reads placements, the workload objects and the
-// coordination nodes after the default privileges. Without placements the
-// host writes every one of them after the views.
-func arrangeGo(units []encodedUnit, placements bool) {
+// order within a group, and each with its attributes in the order its claim
+// lists them.
+func arrangeGo(units []encodedUnit) {
 	slices.SortStableFunc(units, func(a, b encodedUnit) int { return cmp.Compare(goRank(a), goRank(b)) })
 	for _, unit := range units {
 		for _, part := range unit.parts {
 			claim := part.GetFragment().GetGoDirective()
-			if claim.GetScope() != protocol.GoSourceDirective_DOCUMENT {
-				continue
+			if claim.GetScope() == protocol.GoSourceDirective_DOCUMENT {
+				orderAttributes(part.GetFragment().GetValue().GetMapping(), claim.GetAttributes())
 			}
-			orderAttributes(part.GetFragment().GetValue().GetMapping(), claim.GetAttributes())
-			if rank, ranked := goGroups[claim.GetDirective()]; placements && ranked && rank >= afterPrivileges {
+		}
+	}
+}
+
+// placeAfterPrivileges places the workload objects and the coordination
+// nodes after the default privileges, where the host's embedded engine wrote
+// them, for a host that reads Go placements. Without placements the host
+// writes every directive of the document after the views.
+func placeAfterPrivileges(units []encodedUnit) {
+	for _, unit := range units {
+		for _, part := range unit.parts {
+			claim := part.GetFragment().GetGoDirective()
+			if rank, ranked := goGroups[claim.GetDirective()]; claim.GetScope() == protocol.GoSourceDirective_DOCUMENT && ranked && rank >= afterPrivileges {
 				part.Placement = protocol.EncodedFragment_GO_AFTER_PRIVILEGES
 			}
 		}
