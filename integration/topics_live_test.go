@@ -78,8 +78,10 @@ func TestNativeStreamsSubprocess(t *testing.T) {
 	c.Assert(topic.GetSupportedCodecs().GetCodecs(), qt.DeepEquals, []int32{1, 2})
 	c.Assert(topic.Partitions, qt.HasLen, 0)
 	c.Assert(topic.Consumers, qt.HasLen, 2)
-	c.Assert(topic.Consumers[0].Name, qt.Equals, "a_billing")
-	c.Assert(topic.Consumers[0].Important, qt.IsTrue)
+	// The topic keeps its consumers in the order it was created with them.
+	c.Assert(topic.Consumers[0].Name, qt.Equals, "z_plain")
+	c.Assert(topic.Consumers[1].Name, qt.Equals, "a_billing")
+	c.Assert(topic.Consumers[1].Important, qt.IsTrue)
 	c.Assert(topic.GetSelf().GetName(), qt.Equals, "")
 	c.Assert(snapshot.Tables, qt.HasLen, 1)
 	c.Assert(snapshot.Tables[0].Facets, qt.HasLen, 3)

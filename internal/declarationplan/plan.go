@@ -13,6 +13,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -48,10 +49,17 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 		if err != nil {
 			return nil, err
 		}
-		if _, err := Text(operation.Value, request.Capabilities); err != nil {
+		text, err := Text(operation.Value, request.Capabilities)
+		if err != nil {
 			return refused(index, object.Kind, err.Error()), nil
 		}
-		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(object.Subject), Action: protocol.PlanningEffect_CREATE}}
+		if text == "" {
+			// The pool default names no setting: YDB created it with the
+			// database, and nothing is written for it (see Text).
+			result.Declarations[index] = &protocol.DeclarationReceipt{Subject: proto.CloneOf(object.Subject), Strategy: keptDefaultPool}
+			continue
+		}
+		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(object.Subject), Action: creationAction(desired)}}
 		if !schema.IsWorkloadObject(object.Kind) {
 			if err := pathAvailable(request, index); err != nil {
 				return refused(index, object.Kind, err.Error()), nil
@@ -254,6 +262,21 @@ func streamingQueryReads(index int, object *protocol.ComparisonRecord, desired *
 		effects = append(effects, &protocol.PlanningEffect{Subject: read, Action: protocol.PlanningEffect_READ})
 	}
 	return effects, nil, nil
+}
+
+// keptDefaultPool is the strategy of the pool default where it names no
+// setting.
+const keptDefaultPool = "Write nothing for the pool default, which YDB creates with the database, since it names no setting"
+
+// creationAction is what the step of desired does to its subject: it alters
+// the pool default, which YDB creates with the database, and creates any
+// other object. A classifier's read of the pool default then follows the
+// change of its settings.
+func creationAction(desired *protocol.Envelope) protocol.PlanningEffect_Action {
+	if desired.GetKind() == schema.ResourcePoolProperties && desired.GetOwner().GetName() == workload.DefaultPool {
+		return protocol.PlanningEffect_ALTER
+	}
+	return protocol.PlanningEffect_CREATE
 }
 
 func refused(index int, kind, message string) *protocol.PlannedDeclarations {

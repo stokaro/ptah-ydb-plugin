@@ -64,10 +64,13 @@ func TestTopicObservationPreservesSettingsAndOmitsRuntimeState(t *testing.T) {
 	c.Assert(decoded.RetentionStorageMb, qt.Equals, int64(100))
 	c.Assert(decoded.GetMetricsLevel(), qt.Equals, uint32(2))
 	c.Assert(decoded.GetRetentionPeriod().AsDuration(), qt.Equals, 12*time.Hour)
-	c.Assert(decoded.Consumers[0].Name, qt.Equals, "a")
-	c.Assert(decoded.Consumers[0].GetStreamingConsumerType(), qt.IsNotNil)
-	c.Assert(decoded.Consumers[1].ConsumerStats, qt.IsNil)
-	c.Assert(decoded.Consumers[1].Attributes, qt.DeepEquals, input.Consumers[0].Attributes)
+	// The consumers keep the order YDB described them in, the order they
+	// were added in.
+	c.Assert(decoded.Consumers[0].Name, qt.Equals, "z")
+	c.Assert(decoded.Consumers[0].ConsumerStats, qt.IsNil)
+	c.Assert(decoded.Consumers[0].Attributes, qt.DeepEquals, input.Consumers[0].Attributes)
+	c.Assert(decoded.Consumers[1].Name, qt.Equals, "a")
+	c.Assert(decoded.Consumers[1].GetStreamingConsumerType(), qt.IsNotNil)
 	c.Assert(input.Consumers[0].ConsumerStats, qt.IsNotNil)
 	c.Assert(input.Partitions, qt.HasLen, 1)
 	normalized, err := schema.Normalize(result)
@@ -90,6 +93,8 @@ func TestChangefeedsRetainScanProvenanceAndOwnershipAttributes(t *testing.T) {
 	c.Assert(decoded.Changefeeds[0].Description.UserSids, qt.IsTrue)
 	c.Assert(decoded.Changefeeds[0].Description.Attributes, qt.DeepEquals, input.Changefeeds[1].Description.Attributes)
 	c.Assert(decoded.Changefeeds[0].Topic.GetRetentionPeriod().AsDuration(), qt.Equals, 12*time.Hour)
+	// A changefeed's topic keeps its consumers in name order.
+	c.Assert([]string{decoded.Changefeeds[0].Topic.Consumers[0].Name, decoded.Changefeeds[0].Topic.Consumers[1].Name}, qt.DeepEquals, []string{"a", "z"})
 	c.Assert(input.Changefeeds[1].Description.InitialScanProgress.PartsTotal, qt.Equals, uint32(9))
 	normalized, err := schema.Normalize(result)
 	c.Assert(err, qt.IsNil)
@@ -219,4 +224,33 @@ func TestChangefeedInitialScan_ReadMatchesTheDeclaration(t *testing.T) {
 			c.Assert(changefeeds.Equal(desired, current), qt.IsTrue)
 		})
 	}
+}
+
+// A declared topic keeps its consumers in the order the declaration lists
+// them, as the host's embedded engine wrote them into CREATE TOPIC, and a
+// declared changefeed's topic keeps its consumers in name order.
+func TestDesiredConsumersKeepTheirOrder_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	consumers := []*native.ConsumerIntent{{Name: "z"}, {Name: "a"}, {Name: "m"}}
+	topic, err := schema.CaptureTopicIntent(topicOwner(), &native.TopicIntent{PartitioningSettings: &Ydb_Topic.PartitioningSettings{}, Consumers: consumers})
+	c.Assert(err, qt.IsNil)
+	feeds, err := schema.CaptureChangefeedIntent(tableOwner(), &native.ChangefeedSetIntent{Changefeeds: []*native.ChangefeedIntent{{Name: "f",
+		Mode: Ydb_Table.ChangefeedMode_MODE_UPDATES, Format: Ydb_Table.ChangefeedFormat_FORMAT_JSON,
+		Topic: &native.TopicIntent{PartitioningSettings: &Ydb_Topic.PartitioningSettings{}, Consumers: consumers}}}})
+	c.Assert(err, qt.IsNil)
+
+	declared, err := schema.DesiredTopic(topic)
+	c.Assert(err, qt.IsNil)
+	var set native.ChangefeedSetIntent
+	c.Assert(protojson.Unmarshal(feeds.Payload, &set), qt.IsNil)
+
+	names := func(consumers []*native.ConsumerIntent) []string {
+		var listed []string
+		for _, consumer := range consumers {
+			listed = append(listed, consumer.GetName())
+		}
+		return listed
+	}
+	c.Assert(names(declared.Consumers), qt.DeepEquals, []string{"z", "a", "m"})
+	c.Assert(names(set.Changefeeds[0].Topic.Consumers), qt.DeepEquals, []string{"a", "m", "z"})
 }

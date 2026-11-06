@@ -1,6 +1,7 @@
 package ydbdecl
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -29,10 +30,20 @@ var (
 type ExternalError struct {
 	Attribute string
 	Reason    string
+	// Plain is Reason without the declaration's text it quotes, or empty
+	// where Reason quotes only a name.
+	Plain string
 }
 
 func (e *ExternalError) Error() string {
 	return fmt.Sprintf("invalid %s: %s", e.Attribute, e.Reason)
+}
+
+// Unquoted is the refusal without the text of the declaration it quotes: an
+// option's or a column's whole entry. The name of the object, of a column or
+// of an option stays quoted.
+func (e *ExternalError) Unquoted() string {
+	return "invalid " + e.Attribute + ": " + cmp.Or(e.Plain, e.Reason)
 }
 
 // ExternalDataSource is an external data source as the host's spec encodes

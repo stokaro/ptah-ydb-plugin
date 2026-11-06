@@ -1,26 +1,20 @@
 package inspect
 
 import (
-	"slices"
-
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
-// skippedReason is the knowledge of a directory an unscoped read leaves out.
-const skippedReason = "The read leaves out the dev realm directory, and everything below it"
-
 // subtreeRegions replaces the exact directory regions of an unscoped read
-// with one complete region over the root and every directory below it, and
-// an unknown region over each directory the walk left out with everything
-// below it (ADR 0064). A native object declared in a directory that does not
-// exist yet is then absent rather than unknown. Streaming queries keep their
-// coverage: the streaming inventory that follows decides it. Views the common
-// wire carries are not read as native objects and have no region.
-func (c Common) subtreeRegions(result *protocol.Schema, database string, skipped []string) {
-	slices.Sort(skipped)
-	skipped = slices.Compact(skipped)
+// with one complete region over the root and every directory below it (ADR
+// 0064). A native object declared in a directory that does not exist yet is
+// then absent rather than unknown. The directories the walk does not list, a
+// dot-prefixed one and the dev realm directory, are claimed as holding
+// nothing, as the host's embedded engine read them. Streaming queries keep
+// their coverage: the streaming inventory that follows decides it. Views the
+// common wire carries are not read as native objects and have no region.
+func (c Common) subtreeRegions(result *protocol.Schema, database string) {
 	region := func(directory string, knowledge *protocol.ModelKnowledge) *protocol.ModelNamespaceKnowledge {
 		return &protocol.ModelNamespaceKnowledge{Knowledge: knowledge, Scope: &protocol.ModelNamespace{
 			Database: &protocol.NamespaceComponent{Source: database, Normalized: database}, Catalog: &protocol.NamespaceComponent{},
@@ -33,8 +27,5 @@ func (c Common) subtreeRegions(result *protocol.Schema, database string, skipped
 			continue
 		}
 		record.Regions = []*protocol.ModelNamespaceKnowledge{region("", &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE})}
-		for _, directory := range skipped {
-			record.Regions = append(record.Regions, region(directory, &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNINSPECTED, Reason: skippedReason}))
-		}
 	}
 }
