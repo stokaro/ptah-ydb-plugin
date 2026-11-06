@@ -421,8 +421,10 @@ func edges(planned *protocol.PlannedFeatures) []string {
 // TestReplicationPlanningOrdersSourceTables reads the tables a replication of
 // the session's database replicates: its creation comes after a common step
 // that creates its source table, and its drop, with CASCADE or without, before
-// one that drops it. A replication of another database orders against no
-// table here.
+// one that drops it. A replication of another database reads no table here,
+// and its creation still follows the last common step that needs none of the
+// replication's steps, as every replication's creation does: the YDB engine
+// built into the host at 74de0b65b created one after every table.
 func TestReplicationPlanningOrdersSourceTables(t *testing.T) {
 	absolute := mirror()
 	absolute.Items[0].Source = "/local/src/accounts"
@@ -442,7 +444,7 @@ func TestReplicationPlanningOrdersSourceTables(t *testing.T) {
 			want: []string{"step -> drop"}},
 		{name: "a failed-over one's drop before its source table's", read: new(mirror()), state: replication.StateDone, common: sourceStep("drop", protocol.PlanningEffect_DROP),
 			want: []string{"step -> drop"}},
-		{name: "a replication of another database", declared: &elsewhere, common: sourceStep("create", protocol.PlanningEffect_CREATE)},
+		{name: "a replication of another database", declared: &elsewhere, common: sourceStep("create", protocol.PlanningEffect_CREATE), want: []string{"create -> step"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)

@@ -64,6 +64,10 @@ type Family struct {
 	// ahead of the host's next common step, since the host breaks a tie by
 	// owner and this provider's owner sorts first.
 	Late bool
+	// LateCreations is Late for the steps that create an object alone. The
+	// family's other steps run as soon as their effects and dependencies
+	// allow.
+	LateCreations bool
 }
 
 // PathEffect is one scheme path a change acts on beyond its own: a path
@@ -126,8 +130,13 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 			return refused, nil
 		}
 	}
-	if family.Late {
+	switch {
+	case family.Late:
 		followAnchor(contribution, lateAnchor(request, contribution))
+	case family.LateCreations:
+		created := creationSteps(contribution, changes, siblings)
+		followAnchor(created, lateAnchor(request, created))
+		contribution.Dependencies = append(contribution.Dependencies, created.Dependencies[len(contribution.Dependencies):]...)
 	}
 	if len(contribution.Steps) > 0 {
 		result.Contributions = []*protocol.PlanningContribution{contribution}
@@ -136,6 +145,22 @@ func Plan(ctx context.Context, request *protocol.PlanFeaturesRequest, family Fam
 		return nil, err
 	}
 	return result, nil
+}
+
+// creationSteps is a copy of contribution that holds only the steps of the
+// changes that create their object, and the dependencies of the contribution,
+// so that the dependencies a copy gains follow the contribution's own.
+// siblings holds the step identity of each change, at the change's index.
+func creationSteps(contribution *protocol.PlanningContribution, changes []change, siblings []sibling) *protocol.PlanningContribution {
+	created := &protocol.PlanningContribution{Owner: contribution.GetOwner(), Dependencies: slices.Clone(contribution.GetDependencies())}
+	for _, step := range contribution.GetSteps() {
+		for i, item := range changes {
+			if item.action == protocol.PlanningEffect_CREATE && proto.Equal(siblings[i].id, step.GetId()) {
+				created.Steps = append(created.Steps, step)
+			}
+		}
+	}
+	return created
 }
 
 // lateAnchor is the common step the steps of a late family follow: the last
