@@ -65,7 +65,8 @@ func declaredSpec(c *qt.C, value *protocol.SourceModelValue) (string, ydbdecl.To
 
 // A YAML document declares topics with the host's keys: settings as text,
 // numbers or booleans, a codec list as a sequence, and consumers. A name key
-// overrides the entry's key. The model keeps consumers sorted by name.
+// overrides the entry's key. The model keeps the consumers in the order the
+// document lists them, as the host's embedded engine wrote them.
 func TestDecodeYAML_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	number := func(value string) *protocol.SourceValue {
@@ -85,7 +86,7 @@ func TestDecodeYAML_HappyPath(t *testing.T) {
 	path, spec := declaredSpec(c, values[0][0])
 	c.Assert(path, qt.Equals, "app/order_events")
 	c.Assert(spec, qt.DeepEquals, ydbdecl.Topic{MinActivePartitions: 2, RetentionPeriod: "P1DT12H", SupportedCodecs: []string{"raw", "gzip"},
-		Consumers: []ydbdecl.Consumer{{Name: "audit", ReadFrom: "2026-01-01T00:00:00Z"}, {Name: "billing", Important: true}}})
+		Consumers: []ydbdecl.Consumer{{Name: "billing", Important: true}, {Name: "audit", ReadFrom: "2026-01-01T00:00:00Z"}}})
 	c.Assert(values[0][0].Source.Path[0].GetKey(), qt.Equals, "order_events")
 	path, spec = declaredSpec(c, values[0][1])
 	c.Assert(path, qt.Equals, "renamed")
@@ -119,7 +120,8 @@ func TestDecodeYAML_FailurePath(t *testing.T) {
 
 // A Go file declares a topic with ptah:schema:topic and each consumer with a
 // ptah:schema:topic:consumer that names it, as the host's directives do; the
-// consumer's directive itself contributes no value.
+// consumer's directive itself contributes no value. The consumers keep the
+// order of their directives.
 func TestDecodeGo_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	document := goDocument(
@@ -135,7 +137,7 @@ func TestDecodeGo_HappyPath(t *testing.T) {
 	path, spec := declaredSpec(c, values[0][0])
 	c.Assert(path, qt.Equals, "app/order_events")
 	c.Assert(spec, qt.DeepEquals, ydbdecl.Topic{MinActivePartitions: 2, RetentionPeriod: "P1DT12H", SupportedCodecs: []string{"raw", "gzip"},
-		Consumers: []ydbdecl.Consumer{{Name: "audit", ReadFrom: "2026-01-01T00:00:00Z"}, {Name: "billing", Important: true}}})
+		Consumers: []ydbdecl.Consumer{{Name: "billing", Important: true}, {Name: "audit", ReadFrom: "2026-01-01T00:00:00Z"}}})
 	payload, err := json.Marshal(spec)
 	c.Assert(err, qt.IsNil)
 	c.Assert(string(payload), qt.Contains, `"consumers"`)
