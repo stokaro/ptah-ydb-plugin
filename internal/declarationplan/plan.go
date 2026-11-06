@@ -133,29 +133,24 @@ func earlyKind(kind string) bool {
 
 // lateAnchor is the common step a creation of a late kind follows: the last
 // common step other than a marker ahead of the first grant or revoke on an
-// object request declares, or the last of all when there is none. The host keeps its
-// common steps in one sequence and writes those permissions among the others,
-// so a creation placed after the first of them would wait for a grant on
-// itself. Nil places the creation by its effects alone.
+// object request declares, or the last of all when there is none. A host
+// that writes those permissions after every scheduled statement, as the YDB
+// engine built into the host did, leaves them out of the common steps, and
+// the anchor is the last common step. A host that keeps them in its sequence
+// among the other grants lists them, and a creation placed after the first
+// of them would wait for a grant on itself. Nil places the creation by its
+// effects alone.
 func lateAnchor(request *protocol.PlanDeclarationsRequest) *protocol.StepIdentity {
 	var anchor *protocol.StepIdentity
 	for _, common := range request.GetCommonSteps() {
 		if permitsDeclaredObject(request, common) {
 			break
 		}
-		if !marker(common) {
+		if !objectplan.Marker(common) {
 			anchor = common.GetId()
 		}
 	}
 	return anchor
-}
-
-// marker reports whether common is an ordering marker of the host, such as
-// the end of the lifecycle span, which a creation in the span cannot follow:
-// a step that names no object and has no effects. A grant on the database
-// has no effects either, and is no marker.
-func marker(common *protocol.CommonPlanningStep) bool {
-	return len(common.GetMetadata().GetEffects()) == 0 && common.GetCommonObject() == nil && common.GetParent() == nil && common.GetAddedColumn() == nil
 }
 
 // permitsDeclaredObject reports whether common grants or revokes a permission
