@@ -82,7 +82,7 @@ GOWORK=off goreleaser release --snapshot --clean
 
 ## Build and test
 
-The module pins `provider-sdk` v0.23.0, which speaks provider contract 25.26.
+The module pins `provider-sdk` v0.24.0, which speaks provider contract 25.27.
 The provider still requires 25.7 of its host and offers each later feature to a
 host that lists it. Builds require neither the Ptah application source nor a local SDK
 checkout.
