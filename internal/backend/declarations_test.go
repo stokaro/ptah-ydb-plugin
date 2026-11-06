@@ -218,3 +218,58 @@ func TestAuthoredStreamingQuery_FailurePath(t *testing.T) {
 		})
 	}
 }
+
+// defaultPool is the pool default declared with spec.
+func defaultPool(c *qt.C, spec workload.PoolSpec) *protocol.Envelope {
+	c.Helper()
+	pool, err := schema.CaptureWorkloadIntent(&protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolProperties, Name: workload.DefaultPool}, schema.PoolSettings(spec))
+	c.Assert(err, qt.IsNil)
+	return pool
+}
+
+// The pool default that names no setting is written as nothing, as the host's
+// embedded engine at 74de0b65b wrote it: YDB creates it with the database. Its
+// receipt names no step, and a classifier that reads it still plans.
+func TestAuthoredDefaultPoolThatSetsNothingWritesNothing_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	classifier, err := schema.CaptureWorkloadIntent(&protocol.Reference{Engine: "ydb", Kind: schema.ResourcePoolClassifierProperties, Name: "routing"},
+		schema.ClassifierSettings(workload.ClassifierSpec{ResourcePool: workload.DefaultPool, Rank: 100}))
+	c.Assert(err, qt.IsNil)
+	request := declarationRequest(c, defaultPool(c, workload.PoolSpec{}), classifier)
+
+	result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
+	c.Assert(result.Declarations[0].Steps, qt.HasLen, 0)
+	c.Assert(result.Declarations[1].Steps, qt.HasLen, 1)
+	c.Assert(result.Contributions, qt.HasLen, 1)
+	c.Assert(result.Contributions[0].Steps, qt.HasLen, 1)
+	c.Assert(result.Contributions[0].Steps[0].Operation.Value.Value.Owner.Name, qt.Equals, "routing")
+}
+
+// The pool default that names a setting is written as the ALTER RESOURCE POOL
+// ... SET of it, as the host's embedded engine at 74de0b65b wrote it, where
+// CREATE RESOURCE POOL fails on the pool the database holds. The step alters
+// the pool, so a classifier's read of it follows.
+func TestAuthoredDefaultPoolSetsWhatItNames_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := declarationRequest(c, defaultPool(c, workload.PoolSpec{QueryMemoryLimitPercentPerNode: new(float64(50))}))
+
+	result, err := backend.New().PlanDeclarations(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(provider.ValidatePlannedDeclarations(backend.Description(), request, result), qt.IsNil)
+	c.Assert(result.Contributions, qt.HasLen, 1)
+	step := result.Contributions[0].Steps[0]
+	c.Assert(step.Metadata.Effects, qt.HasLen, 1)
+	c.Assert(step.Metadata.Effects[0].Action, qt.Equals, protocol.PlanningEffect_ALTER)
+	c.Assert(step.Metadata.Impact, qt.Equals, protocol.ChangeSemantics_BEHAVIORAL)
+	rendering := testplanning.RenderRequest(backend.Description(), &protocol.PlannedFeatures{Contributions: result.Contributions}, request.Capabilities)
+	rendering.TargetFeatures = request.TargetFeatures
+	rendering.Form = protocol.RenderRequest_TEXT
+	text, err := backend.New().Render(c.Context(), rendering)
+	c.Assert(err, qt.IsNil)
+	c.Assert(text.Units, qt.HasLen, 1)
+	c.Assert(text.Units[0].GetSql(), qt.Equals, "ALTER RESOURCE POOL `default` SET (QUERY_MEMORY_LIMIT_PERCENT_PER_NODE = 50);")
+}
