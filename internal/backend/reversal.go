@@ -47,7 +47,7 @@ func (p *Provider) ReverseChanges(ctx context.Context, request *protocol.Reverse
 		}
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if err := provider.ValidateReversedChanges(description, request, result); err != nil {
+	if err := provider.ValidateReversedChangesReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {

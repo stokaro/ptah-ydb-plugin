@@ -37,7 +37,7 @@ func (*Provider) PrepareTables(ctx context.Context, request *protocol.PrepareTab
 		}
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if err := provider.ValidatePreparedTables(description, request, result); err != nil {
+	if err := provider.ValidatePreparedTablesReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil

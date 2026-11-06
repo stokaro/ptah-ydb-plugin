@@ -123,7 +123,7 @@ type AccessOrdering struct {
 
 // PathContext retains physical occupants after validating and separating common access steps.
 func PathContext(request *protocol.PlanFeaturesRequest) (*protocol.PlanFeaturesRequest, error) {
-	result := proto.CloneOf(request)
+	result := provider.CloneSharingModels(request)
 	result.CommonSteps = nil
 	for _, common := range request.GetCommonSteps() {
 		step, err := accessContext(common)

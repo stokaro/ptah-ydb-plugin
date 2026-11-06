@@ -69,7 +69,7 @@ func (p *Provider) ConvertValues(ctx context.Context, request *protocol.ConvertV
 	if err != nil {
 		return nil, err
 	}
-	if err := provider.ValidateConvertedValues(described(), request, result); err != nil {
+	if err := provider.ValidateConvertedValuesReply(described(), request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil

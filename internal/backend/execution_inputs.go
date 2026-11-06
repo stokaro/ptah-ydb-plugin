@@ -35,7 +35,7 @@ func (*Provider) DescribeExecutionInputs(ctx context.Context, request *protocol.
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	result := &protocol.ExecutionInputs{Complete: true, Inputs: inputs}
-	if err := provider.ValidateExecutionInputs(described(), request, result); err != nil {
+	if err := provider.ValidateExecutionInputsReply(described(), request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil

@@ -81,7 +81,7 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 		}
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if err := provider.ValidatePlannedFeatures(description, request, result); err != nil {
+	if err := provider.ValidatePlannedFeaturesReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -135,7 +135,7 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 			result.Units = append(result.Units, unit)
 		}
 	}
-	if err := provider.ValidateRenderedBatch(described(), request, result); err != nil {
+	if err := provider.ValidateRenderedBatchReply(described(), request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {

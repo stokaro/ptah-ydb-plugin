@@ -132,6 +132,14 @@ func providerFeatures() []string {
 		// references.
 		provider.ModelReferencesFeature,
 		provider.LargeMessagesFeature,
+		// A planning service that plans no table's settings reads each table
+		// of a request by its subject, its action and the names of its
+		// states, and the host sends it no more; see the services that read
+		// outlines in Description. The coverage kinds every table of a
+		// request repeats travel once per message; the SDK shares and
+		// resolves them.
+		provider.TableOutlinesFeature,
+		provider.SharedCoverageFeature,
 		provider.ScopeSelectionsFeature,
 		provider.StatementsFeature,
 		provider.TypedArgumentsFeature,
@@ -502,25 +510,34 @@ func buildDescription() *protocol.Description {
 						OperationKinds: []string{declarationplan.OperationKind},
 					},
 				},
+				// A service reads the outline of each table, by its subject,
+				// its action and the names of its states, unless it reads
+				// more: the planner of external data sources reads the TTL a
+				// column table keeps, and the planner of row tables plans
+				// their settings.
 				Planning: []*protocol.ModelPlanning{
 					{
 						Id:             secretplan.ServiceID,
+						Tables:         protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
 						ChangeKinds:    []string{schema.SecretChange},
 						OperationKinds: []string{schema.SecretOperation},
 					},
 					{
 						Id:             streamingplan.ServiceID,
+						Tables:         protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
 						ContextKinds:   []string{schema.StreamingQueryProperties},
 						ChangeKinds:    []string{schema.StreamingQueryChange},
 						OperationKinds: []string{schema.StreamingQueryOperation},
 					},
 					{
 						Id:             coordinationplan.ServiceID,
+						Tables:         protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
 						ChangeKinds:    []string{schema.CoordinationChange},
 						OperationKinds: []string{schema.CoordinationOperation},
 					},
 					{
 						Id:             topicplan.ServiceID,
+						Tables:         protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
 						ChangeKinds:    []string{schema.TopicChange},
 						OperationKinds: []string{schema.TopicOperation},
 					},
@@ -531,17 +548,20 @@ func buildDescription() *protocol.Description {
 					},
 					{
 						Id:             workloadplan.ServiceID,
+						Tables:         protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
 						ChangeKinds:    workloadplan.ChangeKinds(),
 						OperationKinds: []string{schema.WorkloadOperation},
 					},
 					{
 						Id:             replicationplan.ReplicationServiceID,
+						Tables:         protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
 						ContextKinds:   []string{schema.ReplicationProperties},
 						ChangeKinds:    []string{schema.ReplicationChange},
 						OperationKinds: []string{schema.ReplicationOperation},
 					},
 					{
 						Id:             replicationplan.TransferServiceID,
+						Tables:         protocol.PlanningTables_PLANNING_TABLES_OUTLINED,
 						ChangeKinds:    []string{schema.TransferChange},
 						OperationKinds: []string{schema.TransferOperation},
 					},

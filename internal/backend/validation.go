@@ -35,7 +35,7 @@ func (*Provider) ValidateSchema(ctx context.Context, request *protocol.ValidateS
 		}
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
-	if err := provider.ValidateSchemaResult(description, request, result); err != nil {
+	if err := provider.ValidateSchemaResultReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil

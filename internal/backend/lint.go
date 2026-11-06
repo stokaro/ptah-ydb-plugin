@@ -32,7 +32,7 @@ func (*Provider) SplitLintStatements(ctx context.Context, request *protocol.Spli
 	if err != nil {
 		return nil, lintError(ctx, err)
 	}
-	if err := provider.ValidateSplitLint(description, request, result); err != nil {
+	if err := provider.ValidateSplitLintReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
@@ -52,7 +52,7 @@ func (*Provider) AnnotateLintStatements(ctx context.Context, request *protocol.A
 	if err != nil {
 		return nil, lintError(ctx, err)
 	}
-	if err := provider.ValidateAnnotatedLint(description, request, result); err != nil {
+	if err := provider.ValidateAnnotatedLintReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
@@ -71,7 +71,7 @@ func (*Provider) CheckLintMigrations(ctx context.Context, request *protocol.Chec
 	if err != nil {
 		return nil, lintError(ctx, err)
 	}
-	if err := provider.ValidateCheckedLint(description, request, result); err != nil {
+	if err := provider.ValidateCheckedLintReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil

@@ -27,7 +27,7 @@ func (*Provider) CompareColumns(ctx context.Context, request *protocol.CompareCo
 	if err != nil {
 		return nil, columnsError(ctx, err)
 	}
-	if err := provider.ValidateComparedColumns(description, request, result); err != nil {
+	if err := provider.ValidateComparedColumnsReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
@@ -47,7 +47,7 @@ func (*Provider) ReadColumnDefaults(ctx context.Context, request *protocol.ReadC
 	if err != nil {
 		return nil, columnsError(ctx, err)
 	}
-	if err := provider.ValidateColumnDefaults(description, request, result); err != nil {
+	if err := provider.ValidateColumnDefaultsReply(description, request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return result, nil
