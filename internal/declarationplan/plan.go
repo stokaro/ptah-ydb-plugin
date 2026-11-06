@@ -13,6 +13,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/externalpath"
 	"github.com/stokaro/ptah-ydb-plugin/internal/objectplan"
 	"github.com/stokaro/ptah-ydb-plugin/internal/streamingplan"
+	"github.com/stokaro/ptah-ydb-plugin/internal/workload"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -48,10 +49,17 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 		if err != nil {
 			return nil, err
 		}
-		if _, err := Text(operation.Value, request.Capabilities); err != nil {
+		text, err := Text(operation.Value, request.Capabilities)
+		if err != nil {
 			return refused(index, object.Kind, err.Error()), nil
 		}
-		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(object.Subject), Action: protocol.PlanningEffect_CREATE}}
+		if text == "" {
+			// The pool default names no setting: YDB created it with the
+			// database, and nothing is written for it (see Text).
+			result.Declarations[index] = &protocol.DeclarationReceipt{Subject: proto.CloneOf(object.Subject), Strategy: keptDefaultPool}
+			continue
+		}
+		effects := []*protocol.PlanningEffect{{Subject: proto.CloneOf(object.Subject), Action: creationAction(desired)}}
 		if !schema.IsWorkloadObject(object.Kind) {
 			if err := pathAvailable(request, index); err != nil {
 				return refused(index, object.Kind, err.Error()), nil
@@ -83,6 +91,7 @@ func Plan(ctx context.Context, request *protocol.PlanDeclarationsRequest) (*prot
 		}
 	}
 	if len(contribution.Steps) > 0 {
+		contribution.Dependencies = readsAfterCreations(contribution.Steps)
 		for _, step := range late {
 			contribution.Dependencies = append(contribution.Dependencies, &protocol.PlanningDependency{Before: proto.CloneOf(anchor), After: proto.CloneOf(step)})
 		}
@@ -256,6 +265,21 @@ func streamingQueryReads(index int, object *protocol.ComparisonRecord, desired *
 	return effects, nil, nil
 }
 
+// keptDefaultPool is the strategy of the pool default where it names no
+// setting.
+const keptDefaultPool = "Write nothing for the pool default, which YDB creates with the database, since it names no setting"
+
+// creationAction is what the step of desired does to its subject: it alters
+// the pool default, which YDB creates with the database, and creates any
+// other object. A classifier's read of the pool default then follows the
+// change of its settings.
+func creationAction(desired *protocol.Envelope) protocol.PlanningEffect_Action {
+	if desired.GetKind() == schema.ResourcePoolProperties && desired.GetOwner().GetName() == workload.DefaultPool {
+		return protocol.PlanningEffect_ALTER
+	}
+	return protocol.PlanningEffect_CREATE
+}
+
 func refused(index int, kind, message string) *protocol.PlannedDeclarations {
 	// #nosec G115 -- index is a position in the request, which runtime.MaxMessageBytes bounds to 4 MiB
 	return &protocol.PlannedDeclarations{Complete: true, Diagnostics: []*protocol.DeclarationDiagnostic{{
@@ -289,4 +313,47 @@ func schemePath(directory, name string) string {
 		return name
 	}
 	return directory + "/" + name
+}
+
+// readsAfterCreations orders each step after the steps that create what it
+// reads: a classifier after its resource pool, an external table after its
+// data source, a streaming query after the topics its text names. The host
+// orders the effects of two contributions on one subject, and leaves the
+// steps of one contribution to the contribution's dependencies; without
+// these it refuses the plan (`unordered effects on ... resource-pool`).
+func readsAfterCreations(steps []*protocol.PlanningStep) []*protocol.PlanningDependency {
+	type creation struct {
+		subject *protocol.ComparisonIdentity
+		step    *protocol.StepIdentity
+	}
+	var creations []creation
+	for _, step := range steps {
+		for _, effect := range step.GetMetadata().GetEffects() {
+			if effect.GetAction() == protocol.PlanningEffect_CREATE {
+				creations = append(creations, creation{subject: effect.GetSubject(), step: step.GetId()})
+			}
+		}
+	}
+	slices.SortStableFunc(creations, func(a, b creation) int { return provider.CompareIdentities(a.subject, b.subject) })
+	var edges []*protocol.PlanningDependency
+	for _, step := range steps {
+		for _, effect := range step.GetMetadata().GetEffects() {
+			if effect.GetAction() != protocol.PlanningEffect_READ {
+				continue
+			}
+			first, _ := slices.BinarySearchFunc(creations, effect.GetSubject(), func(have creation, subject *protocol.ComparisonIdentity) int {
+				return provider.CompareIdentities(have.subject, subject)
+			})
+			for _, created := range creations[first:] {
+				if provider.CompareIdentities(created.subject, effect.GetSubject()) != 0 {
+					break
+				}
+				edge := &protocol.PlanningDependency{Before: proto.CloneOf(created.step), After: proto.CloneOf(step.GetId())}
+				if !proto.Equal(edge.Before, edge.After) && !slices.ContainsFunc(edges, func(have *protocol.PlanningDependency) bool { return proto.Equal(have, edge) }) {
+					edges = append(edges, edge)
+				}
+			}
+		}
+	}
+	return edges
 }

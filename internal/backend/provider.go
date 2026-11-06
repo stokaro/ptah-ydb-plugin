@@ -78,14 +78,21 @@ type session struct {
 	// directory when the address names one.
 	database string
 	// realm reports a session on a dev realm, whose statements are confined to it.
-	realm            bool
-	closed           bool
-	closeErr         error
-	cleanupErr       error
-	transactions     map[string]*transaction
-	active           string
+	realm        bool
+	closed       bool
+	closeErr     error
+	cleanupErr   error
+	transactions map[string]*transaction
+	active       string
+	// lockMu guards locks, the fields of each lock record, fenced and
+	// locksClosed. A lock check takes it and not mu, so the host's watch of
+	// a lock is answered while an execution holds mu: the watch checks
+	// every second and counts a check unanswered for ten seconds as a lost
+	// lock. A caller that holds both took mu first.
+	lockMu           sync.Mutex
 	locks            map[string]*lockRecord
 	fenced           bool
+	locksClosed      bool
 	metadataReaders  map[string]*metadataReader
 	statementResults map[string]*statementResult
 	// version is what the server answered SELECT Version() with.
@@ -212,6 +219,10 @@ func providerFeatures() []string {
 		// whole, which reads it into the table's native index set or its
 		// column storage and writes it back; see tablesource.IndexKinds.
 		provider.IndexKindsFeature,
+		// A file Ptah's built-in YDB engine exported names that engine's
+		// coordination-node model in its captured header, and the host reads
+		// it as this provider's; see modelPredecessors.
+		provider.ModelPredecessorsFeature,
 	}
 }
 
@@ -462,6 +473,7 @@ func buildDescription() *protocol.Description {
 					tablecreate.NativeIndexModel(),
 					declarationplan.Model(),
 				),
+				ModelPredecessors: modelPredecessors(),
 				Declarations: []*protocol.ModelDeclarations{
 					{
 						Id:             declarationplan.ServiceID,

@@ -215,12 +215,13 @@ func limitedClaim(ctx context.Context, document *protocol.SourceDocument, covera
 
 // refuseColumnTableChangefeeds refuses a changefeed of a table the document
 // declares as a column table: YDB keeps changefeeds on row tables only, and
-// the host's bundled source refuses the declaration with these words.
+// the host's bundled source refuses the declaration with these words, which
+// are the reason a host prints.
 func refuseColumnTableChangefeeds(tables []tablesource.Table, feeds []changefeedsource.Table) error {
 	for _, feed := range feeds {
 		for _, table := range tables {
 			if table.Binding.GetId() == feed.Binding.GetId() && table.Value.GetValue().GetKind() == schema.ColumnStorageProperties {
-				return fmt.Errorf("table %q: %s", tableName(feed.Binding.GetObject()), schema.ColumnTableRowSettingsRefusal)
+				return authored.New(fmt.Sprintf("table %q: %s", tableName(feed.Binding.GetObject()), schema.ColumnTableRowSettingsRefusal))
 			}
 		}
 	}

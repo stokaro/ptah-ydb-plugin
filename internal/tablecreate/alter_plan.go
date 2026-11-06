@@ -88,6 +88,9 @@ func planAlteration(owner *protocol.Reference, table *protocol.PlanningTable, st
 	if err != nil || reason != "" {
 		return alterationChanges{}, reason, err
 	}
+	if err := sides.changedSettings(); err != nil {
+		return alterationChanges{}, "", err
+	}
 	ttl, partitioning, reason := sides.settings()
 	if reason != "" {
 		return alterationChanges{}, reason, nil
@@ -214,6 +217,38 @@ func (a *alterationSides) readHeldFamilies() error {
 			return err
 		}
 		a.family.heldPlacement[name] = column.Family
+	}
+	return nil
+}
+
+// changedSettings gives the declared table properties the automatic
+// partitioning and the key Bloom filter a change of the table's properties
+// among the request's changes asks the table to hold: the change's after
+// operand. A forward change asks for what the table's facet declares. The
+// reverse of one asks for every setting the table held before the forward
+// change, while the declaration the host plans the reverse with is a read of
+// that table, which leaves out the settings YDB gives every new table (see
+// [schema.WithoutNewTableDefaults]): planned from that declaration alone, a
+// setting the forward change moved away from one would stay.
+func (a *alterationSides) changedSettings() error {
+	for _, change := range a.changes {
+		value := change.GetValue().GetValue()
+		if value.GetKind() != schema.TablePropertiesChange || change.GetSubject().GetKind() != "table" ||
+			provider.CompareIdentities(change.GetSubject(), a.table.Subject) != 0 {
+			continue
+		}
+		_, after, err := schema.TablePropertiesOperands(value)
+		if err != nil {
+			return err
+		}
+		if after.GetKind() != schema.TableProperties {
+			continue
+		}
+		changed := &native.RowTableIntent{}
+		if err := protojson.Unmarshal(after.GetPayload(), changed); err != nil {
+			return err
+		}
+		a.intent.PartitioningSettings, a.intent.KeyBloomFilter = changed.GetPartitioningSettings(), changed.GetKeyBloomFilter()
 	}
 	return nil
 }

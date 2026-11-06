@@ -184,7 +184,8 @@ func TestHostIndexSettingsFromGo_FailurePath(t *testing.T) {
 // The host exports a table whose indexes' settings were changed with ALTER
 // INDEX ... SET, as the host's TestYDBCompatBinary export tests build it: Go
 // writes each changed setting on the index directive and HCL in the index
-// block, as the host's embedded engine writes them, a setting a new index
+// block, as the host's embedded engine writes them, with the index type in
+// that engine's spelling (GLOBAL SYNC, GLOBAL ASYNC), a setting a new index
 // holds is left out, and either export applies back with nothing planned. An
 // HCL document that changes a setting alters the index.
 func TestHostExportsIndexSettings_HappyPath(t *testing.T) {
@@ -199,15 +200,15 @@ func TestHostExportsIndexSettings_HappyPath(t *testing.T) {
 		c.Assert(execFixtureSchema(c.Context(), opened.DB, statement), qt.IsNil, qt.Commentf("%s", statement))
 	}
 	written := introspectDirectory(c, directory)
-	c.Assert(written, qt.Matches, `(?s).*//ptah:schema:index name="by_body" fields="body" include="n" table="[^"]*" auto_partitioning_by_load="ENABLED" auto_partitioning_min_partitions_count="2"\n.*`)
-	c.Assert(written, qt.Matches, `(?s).*//ptah:schema:index name="by_n" fields="n" type="async" table="[^"]*" read_replicas_settings="PER_AZ:1"\n.*`)
+	c.Assert(written, qt.Matches, `(?s).*//ptah:schema:index name="by_body" fields="body" include="n" type="GLOBAL SYNC" table="[^"]*" auto_partitioning_by_load="ENABLED" auto_partitioning_min_partitions_count="2"\n.*`)
+	c.Assert(written, qt.Matches, `(?s).*//ptah:schema:index name="by_n" fields="n" type="GLOBAL ASYNC" table="[^"]*" read_replicas_settings="PER_AZ:1"\n.*`)
 	output, err := hostApply(c, directory, written)
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output))
 	c.Assert(output, qt.Matches, `(?s).*Schema is synced, no changes to be made.*`)
 
 	document, _ := hostExport(c, "schema", "inspect", "--schemas", directory, "--format", "hcl")
-	c.Assert(document, qt.Matches, `(?s).*index "by_body" \{\n    include = \[column\.n\]\n    auto_partitioning_by_load = "ENABLED"\n    auto_partitioning_min_partitions_count = 2\n    columns = \[column\.body\]\n  \}.*`)
-	c.Assert(document, qt.Matches, `(?s).*index "by_n" \{\n    type = "async"\n    read_replicas_settings = "PER_AZ:1"\n    columns = \[column\.n\]\n  \}.*`)
+	c.Assert(document, qt.Matches, `(?s).*index "by_body" \{\n    type = "GLOBAL SYNC"\n    include = \[column\.n\]\n    auto_partitioning_by_load = "ENABLED"\n    auto_partitioning_min_partitions_count = 2\n    columns = \[column\.body\]\n  \}.*`)
+	c.Assert(document, qt.Matches, `(?s).*index "by_n" \{\n    type = "GLOBAL ASYNC"\n    read_replicas_settings = "PER_AZ:1"\n    columns = \[column\.n\]\n  \}.*`)
 	for _, run := range []struct{ name, source, want string }{
 		{"the HCL export", document, `(?s).*Schema is synced, no changes to be made.*`},
 		{"a changed partition count", strings.Replace(document, "auto_partitioning_min_partitions_count = 2", "auto_partitioning_min_partitions_count = 3", 1),
