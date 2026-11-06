@@ -9,8 +9,10 @@ package authored
 
 import (
 	"errors"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -52,3 +54,63 @@ func Status(code codes.Code, err error) error {
 	}
 	return reasoned.Err()
 }
+
+// Valued is the refusal of a declaration whose text quotes a value the
+// declaration wrote, such as an interval YDB does not take. Unquoted says the
+// same without the value: the attribute and what it takes.
+type Valued interface {
+	error
+	Unquoted() string
+}
+
+// Declared returns err, the refusal of a source declaration, with the reason a
+// host prints. The reason is err's whole text: the words a decoder wrapped
+// around the refusal, which name the declared object by its key or its path
+// and never quote a value, and the refusal at the end of the chain, which is
+// either an Error or a Valued error written without its value.
+//
+// Any other refusal, such as one that quotes a declaration's text or one
+// that joins two errors, is returned as it is, and a host prints its code
+// alone. A reason too long or not on one line, which a host does not show, is
+// the refusal at the end of the chain alone, without the words around it.
+func Declared(err error) error {
+	if err == nil {
+		return nil
+	}
+	text := err.Error()
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		var leaf string
+		switch refusal := current.(type) {
+		case *Error:
+			leaf = refusal.text
+		case Valued:
+			quoted, unquoted := refusal.Error(), refusal.Unquoted()
+			if !strings.HasSuffix(text, quoted) {
+				return err
+			}
+			text, leaf = strings.TrimSuffix(text, quoted)+unquoted, unquoted
+		default:
+			continue
+		}
+		for _, reason := range []string{text, leaf} {
+			if provider.ValidateDiagnostic(&protocol.ProviderDiagnostic{Reason: reason}) == nil {
+				return &declared{err: err, reason: &Error{text: reason}}
+			}
+		}
+		return err
+	}
+	return err
+}
+
+// declared is a refusal joined to the reason Declared wrote for it.
+type declared struct {
+	err    error
+	reason *Error
+}
+
+// Error returns the refusal's own text.
+func (d *declared) Error() string { return d.err.Error() }
+
+// Unwrap returns the reason first, so that Status finds it before any reason
+// the refusal holds, and then the refusal.
+func (d *declared) Unwrap() []error { return []error{d.reason, d.err} }
