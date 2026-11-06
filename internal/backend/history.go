@@ -55,8 +55,10 @@ func historyResult(scope *protocol.HistoryScope, id string, outcome protocol.His
 	return &protocol.HistoryResult{Scope: proto.CloneOf(scope), RequestId: id, Outcome: outcome, DiagnosticCode: code}
 }
 
-// PrepareHistory creates owned storage and verifies its format. It never adopts
-// an unmarked table, changes revision rows, or upgrades an earlier layout.
+// PrepareHistory creates owned storage and verifies its format. It keeps a
+// revision table in the layout Ptah's built-in YDB engine wrote, as that
+// engine's history, and never adopts another unmarked table, changes revision
+// rows, or upgrades an earlier layout.
 func (p *Provider) PrepareHistory(ctx context.Context, request *protocol.PrepareHistoryRequest) (*protocol.HistoryResult, error) {
 	if err := provider.ValidatePrepareHistoryRequest(request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
@@ -101,7 +103,7 @@ func (p *Provider) ReadHistory(ctx context.Context, request *protocol.ReadHistor
 			s.transactions[request.Scope.TransactionId].failed = true
 		}
 	}()
-	exists, err := store.Check(ctx, s.connection.Driver)
+	store, exists, err := store.Locate(ctx, s.connection.Driver)
 	if err != nil {
 		return nil, authored.Status(codes.FailedPrecondition, err)
 	}
@@ -163,7 +165,7 @@ func (p *Provider) MutateHistory(ctx context.Context, request *protocol.MutateHi
 			}
 		}
 	}
-	exists, err := store.Check(ctx, s.connection.Driver)
+	store, exists, err := store.Locate(ctx, s.connection.Driver)
 	if err != nil || !exists {
 		return historyResult(request.Scope, request.RequestId, protocol.HistoryResult_REFUSED, "ydb.history-storage-invalid"), nil
 	}

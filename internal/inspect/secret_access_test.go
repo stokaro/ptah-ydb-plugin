@@ -71,7 +71,8 @@ func secretGrants(objects *protocol.ObservedCommonObjects) []secretGrant {
 // that may describe its directory. The read marks those entries implicit, as
 // the host's embedded engine marks them, and leaves every other entry of the
 // secret, a describe_schema of a subject that may not describe the directory
-// included, an ordinary grant.
+// included, an ordinary grant. The grants come in the order YDB describes the
+// entries, as the host's embedded engine read them.
 func TestAccessMarksTheEntriesYDBGivesASecret_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	snapshot := accessSecret()
@@ -85,9 +86,9 @@ func TestAccessMarksTheEntriesYDBGivesASecret_HappyPath(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(secretGrants(snapshot.CommonObjects), qt.DeepEquals, []secretGrant{
 		{Role: "METADATA-READERS", Privilege: "ydb.granular.describe_schema", Implicit: true},
-		{Role: "app", Privilege: "ydb.granular.describe_schema"},
 		{Role: "team", Privilege: "ydb.granular.describe_schema", Implicit: true},
 		{Role: "team", Privilege: "ydb.granular.select_row"},
+		{Role: "app", Privilege: "ydb.granular.describe_schema"},
 	})
 }
 

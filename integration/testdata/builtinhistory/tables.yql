@@ -1,0 +1,50 @@
+CREATE TABLE IF NOT EXISTS `ptah_builtin_history/schema_migrations` (
+    version Int64 NOT NULL,
+    description Utf8 NOT NULL,
+    applied_at Timestamp NOT NULL,
+    state Utf8 NOT NULL,
+    applied Int64 NOT NULL,
+    total Int64 NOT NULL,
+    error Utf8,
+    error_stmt Utf8,
+    execution_time_ms Int64 NOT NULL,
+    checksum Utf8 NOT NULL,
+    PRIMARY KEY (version)
+);
+CREATE TABLE IF NOT EXISTS `ptah_builtin_history/schema_migrations_log` (
+    run_id Utf8 NOT NULL,
+    seq Int64 NOT NULL,
+    operation Utf8 NOT NULL,
+    version Int64 NOT NULL,
+    state Utf8 NOT NULL,
+    actor Utf8,
+    actor_source Utf8 NOT NULL,
+    checksum Utf8,
+    logged_at Timestamp NOT NULL,
+    error Utf8,
+    PRIMARY KEY (run_id, seq)
+);
+CREATE TABLE IF NOT EXISTS `ptah_builtin_history/ptah_migration_tags` (
+    tag Utf8 NOT NULL,
+    version Int64 NOT NULL,
+    recorded_at Timestamp NOT NULL,
+    PRIMARY KEY (tag)
+);
+CREATE TABLE `ptah_builtin_history/items` (id Int64 NOT NULL, PRIMARY KEY (id));
+CREATE TABLE `ptah_builtin_history/more` (id Int64 NOT NULL, PRIMARY KEY (id));
+CREATE TABLE IF NOT EXISTS `ptah_builtin_history_atlas/atlas_schema_revisions` (
+    version Utf8 NOT NULL,
+    description Utf8 NOT NULL,
+    type Int64 NOT NULL,
+    applied Int64 NOT NULL,
+    total Int64 NOT NULL,
+    executed_at Timestamp NOT NULL,
+    execution_time Int64 NOT NULL,
+    error Utf8,
+    error_stmt Utf8,
+    hash Utf8 NOT NULL,
+    partial_hashes Utf8,
+    operator_version Utf8 NOT NULL,
+    PRIMARY KEY (version)
+);
+CREATE TABLE `ptah_builtin_history_atlas/items` (id Int64 NOT NULL, PRIMARY KEY (id));

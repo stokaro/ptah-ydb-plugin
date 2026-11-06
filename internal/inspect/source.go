@@ -99,8 +99,15 @@ func classifyTable(absolute string, result *native.DescribeTableResult) (*descri
 	if err != nil {
 		return nil, err
 	}
-	if owned {
+	switch {
+	case owned || history.BuiltinOwned(path.Base(absolute), result):
 		purpose = protocol.ReservedObject_HISTORY
+	case purpose == protocol.ReservedObject_PURPOSE_UNSPECIFIED:
+		// Ptah's built-in YDB engine left its revision, log and tag tables
+		// out of every read by name; one in its layout is still the
+		// record of the migrations the database ran, and a plan must not
+		// drop it.
+		purpose = metadata.BuiltinOwned(path.Base(absolute), result)
 	}
 	if err := schema.ValidateChangefeeds(result.Changefeeds); err != nil {
 		return nil, err

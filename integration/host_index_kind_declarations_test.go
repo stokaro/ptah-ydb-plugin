@@ -375,9 +375,9 @@ func TestHostIntrospectsAColumnTable_HappyPath(t *testing.T) {
 		defer cancel()
 		c.Check(execFixtureSchema(cleanup, opened.DB, "DROP TABLE IF EXISTS `"+absolute+"`"), qt.IsNil)
 	})
-	// The provider spells the store as its README does; the host's embedded
-	// engine wrote store="column", which reads the same.
-	table := `//ptah:schema:table name="events" schema="` + directory + `" store="COLUMN" partition_by_hash="id" column_shards="1"`
+	// The export writes store="column", as the host's embedded engine did;
+	// the source the test applies spells it COLUMN, which reads the same.
+	table := `//ptah:schema:table name="events" schema="` + directory + `" store="column" partition_by_hash="id" column_shards="1"`
 	for _, step := range []struct {
 		name, indexes string
 		want          []string

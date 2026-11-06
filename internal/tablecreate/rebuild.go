@@ -435,7 +435,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	self, scratchSubject, replacedSubject := table.GetSubject(), subjectOf(scratch), subjectOf(replaced)
 	planned := []rebuildStep{
 		{operation: create, effects: []*protocol.PlanningEffect{{Subject: scratchSubject, Action: protocol.PlanningEffect_CREATE},
-			{Subject: slot(scratchSubject), Action: protocol.PlanningEffect_CREATE}}, notes: rebuildNotes(label)},
+			{Subject: slot(scratchSubject), Action: protocol.PlanningEffect_CREATE}}, notes: append(rebuildNotes(label), feeds.notes...)},
 	}
 	// The settings of an index change on the empty new table, before the copy
 	// fills it.
@@ -451,7 +451,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 		if err != nil {
 			return nil, subject + ": " + err.Error(), nil
 		}
-		planned = append(planned, rebuildStep{operation: operation, effects: changefeedEffects(self, feeds.drops, protocol.PlanningEffect_DROP), notes: feeds.notes})
+		planned = append(planned, rebuildStep{operation: operation, effects: changefeedEffects(self, feeds.drops, protocol.PlanningEffect_DROP)})
 	}
 	planned = append(planned,
 		rebuildStep{operation: moveOld, effects: []*protocol.PlanningEffect{{Subject: proto.CloneOf(self), Action: protocol.PlanningEffect_ALTER},
@@ -583,13 +583,6 @@ func rebuildChangefeeds(owner *protocol.Reference, table *protocol.PlanningTable
 			return rebuiltChangefeeds{}, "the table holds a changefeed an asynchronous replication controls, and YDB moves no table that carries one " +
 				"(`Cannot move table with cdc streams`); the rebuild cannot drop it and add it again", nil
 		}
-		for _, change := range drops {
-			feed, err := changefeeds.FromObserved(change.Before)
-			if err != nil {
-				return rebuiltChangefeeds{}, "", err
-			}
-			result.notes = append(result.notes, changefeeds.RebuiltNote(label, feed))
-		}
 		result.drops = drops
 	}
 	wanted := declared.changefeeds
@@ -608,7 +601,34 @@ func rebuildChangefeeds(owner *protocol.Reference, table *protocol.PlanningTable
 		return rebuiltChangefeeds{}, reason, err
 	}
 	result.adds = adds
+	if result.notes, err = rebuiltChangefeedNotes(label, result.drops, adds); err != nil {
+		return rebuiltChangefeeds{}, "", err
+	}
 	return result, "", nil
+}
+
+// rebuiltChangefeedNotes are the notes a rebuild of table carries above its
+// first step about the changefeeds the old table holds, as the host's
+// embedded engine writes them there: what dropping each one the new table
+// does not get loses, then why the ones it gets again are dropped before the
+// swap and what their restart costs.
+func rebuiltChangefeedNotes(table string, drops, adds []changefeeds.Change) ([]string, error) {
+	var notes, restored []string
+	for _, change := range drops {
+		if slices.ContainsFunc(adds, func(add changefeeds.Change) bool { return add.Name == change.Name }) {
+			restored = append(restored, change.Name)
+			continue
+		}
+		feed, err := changefeeds.FromObserved(change.Before)
+		if err != nil {
+			return nil, err
+		}
+		notes = append(notes, changefeeds.DroppedNote(table, feed))
+	}
+	if len(restored) != 0 {
+		notes = append(notes, changefeeds.RebuiltNote(table, restored))
+	}
+	return notes, nil
 }
 
 // rebuiltIndexSettings returns the changes that give each global index of the
@@ -836,6 +856,12 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 	}
 	if request.KeyBloomFilter == Ydb.FeatureFlag_STATUS_UNSPECIFIED {
 		request.KeyBloomFilter = held.GetKeyBloomFilter()
+	}
+	// A table nobody gave a key bloom filter reads with none stated, which
+	// is a filter that is off; the new table names it so, as the host's
+	// embedded engine writes every setting of a rebuilt table.
+	if request.KeyBloomFilter == Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+		request.KeyBloomFilter = Ydb.FeatureFlag_DISABLED
 	}
 	for key, value := range held.GetAttributes() {
 		if _, declared := request.GetAttributes()[key]; !declared {
