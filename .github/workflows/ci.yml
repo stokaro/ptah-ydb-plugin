@@ -174,6 +174,10 @@ jobs:
       # A second server, for the tests whose dev database must be on a server
       # other than the target's. Both name their database /local.
       PTAH_YDB_OTHER_TEST_URL: ydb://127.0.0.1:2236/local?go_balancer=disable&monitoring=http://127.0.0.1:8766
+      # A second database on the test server, of another name, for the tests
+      # whose dev database reads authored references against another root.
+      # scripts/second-database.sh serves it from a dynamic node of its own.
+      PTAH_YDB_OTHER_DATABASE_TEST_URL: ydb://127.0.0.1:2137/local/db2?go_balancer=disable&monitoring=http://127.0.0.1:8767
     services:
       ydb:
         image: ${{ matrix.line.image }}
@@ -187,6 +191,8 @@ jobs:
         ports:
           - 2136:2136
           - 8765:8765
+          - 2137:2137
+          - 8767:8767
         options: >-
           --hostname localhost
           --health-cmd "sh /health_check"
@@ -213,6 +219,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - name: Serve a second database on the test server
+        run: scripts/second-database.sh "${{ job.services.ydb.id }}"
       - name: Resolve the host
         id: host
         env:
