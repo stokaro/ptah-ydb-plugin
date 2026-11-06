@@ -104,6 +104,29 @@ func (h *Hold) Check(ctx context.Context) error {
 	return nil
 }
 
+// Confirm is Check for a caller that asks before each statement it sends: a
+// confirmation younger than checkInterval stands without asking the server
+// again. The watch asks every checkInterval, so a statement goes out at most
+// one interval after the server last confirmed ownership, within the
+// freshness window Check trusts a confirmation for, as Ptah's built-in YDB
+// engine trusted one for the whole window. A failure, a close, and an ended
+// lease are reported as Check reports them.
+func (h *Hold) Confirm(ctx context.Context) error {
+	h.mu.Lock()
+	recent := h.failure == nil && !h.closed && h.lease.Context().Err() == nil && confirmedWithin(h.now(), h.confirmed, checkInterval)
+	h.mu.Unlock()
+	if recent {
+		return nil
+	}
+	return h.Check(ctx)
+}
+
+// confirmedWithin reports a confirmation at before younger than bound at now
+// on both elapsed clocks; see confirmationExpired.
+func confirmedWithin(now, before time.Time, bound time.Duration) bool {
+	return now.Sub(before) < bound && now.Round(0).Sub(before.Round(0)) < bound
+}
+
 // ownedBySession reports whether description shows the hold's semaphore as an
 // ephemeral exclusive one whose only owner is this session, holding all of it.
 func (h *Hold) ownedBySession(description *coordination.SemaphoreDescription) bool {
