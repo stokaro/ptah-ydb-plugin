@@ -1,4 +1,0 @@
-# The realm diff tests need the host to move a diff's --to read into the
-# context of its --from read (stokaro/ptah#4204, gap G165). Drop this file once
-# that host change is on host master.
-fix/4204-g165-dev-contexts
