@@ -77,3 +77,17 @@ func (b *lifecycleBuilder) add(prefix string, subject *protocol.ComparisonIdenti
 	}
 	return steps, nil
 }
+
+// followTheCommonSteps orders each step that creates, changes or starts a
+// query after the common steps (see objectplan.FollowTheCommonSteps): a query
+// runs against the schema the rest of the plan leaves. A stop or a drop runs
+// early instead.
+func (b *lifecycleBuilder) followTheCommonSteps() error {
+	var late []*protocol.StepIdentity
+	for _, step := range b.contribution.Steps {
+		if step.Metadata.Placement != protocol.PlanningMetadata_EARLY {
+			late = append(late, step.Id)
+		}
+	}
+	return objectplan.FollowTheCommonSteps(b.request, b.contribution, late, b.rewrites)
+}
