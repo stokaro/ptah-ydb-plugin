@@ -1031,6 +1031,21 @@ server. A YDB driver's error is never a
 reason, because YDB can quote a statement and its values, or a credential
 source: the host prints its code alone.
 
+A declaration a source decoder refuses gives a reason in the words of Ptah's
+built-in YDB engine: a topic, a changefeed, an external data source or table, a
+resource pool or classifier, a streaming query, an async replication or a
+transfer, by its YAML key or its name, the attribute, and what the attribute
+takes. `authored.Declared` writes it from the decoder's words around the
+refusal and the refusal itself without the value it quotes. A refusal another
+package wrote, such as the YQL splitter's, gives none. A Go directive that
+leaves out a required attribute is refused as the host's annotation parser
+refused it, and the host names the directive's place after the reason:
+
+```text
+provider decode source failed (InvalidArgument): topic "events": invalid retention_period: takes an ISO 8601 duration such as PT12H or P1D
+decode Go directives of engine "ydb": provider decode source failed (InvalidArgument): missing required annotation attribute "rank" on //ptah:schema:resourcepool:classifier at Refused
+```
+
 A failed execution and a commit that did not apply give a reason too, in
 `Execution.diagnostic` and `TransactionResult.diagnostic` (contract 25.18), and
 a host of that contract prints it after the outcome:
