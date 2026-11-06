@@ -173,3 +173,86 @@ func TestHostCompatMigrateDiffWritesTheBuiltInChangeComments_HappyPath(t *testin
 	want := diffCommentsFiles()
 	c.Assert(writtenMigrations(c, dir, want), qt.DeepEquals, want)
 }
+
+// diffRebuildDirectory is the directory the table that
+// TestHostCompatMigrateDiffNamesARebuildAsTheBuiltIn_HappyPath rebuilds sits in.
+const diffRebuildDirectory = "ptah_ydb_diff_rebuild"
+
+// diffRebuildInit creates table t of diffRebuildDirectory with an Int32 column
+// v and a changefeed, which HCL cannot declare.
+const diffRebuildInit = "CREATE TABLE `" + diffRebuildDirectory + "/t` (`id` Int64 NOT NULL, `v` Int32, PRIMARY KEY (`id`));\n" +
+	"ALTER TABLE `" + diffRebuildDirectory + "/t` ADD CHANGEFEED `feed` WITH (MODE = 'UPDATES', FORMAT = 'JSON');\n"
+
+// diffRebuildWidened declares t with column v widened to Int64, a change YDB
+// makes only by rebuilding the table.
+const diffRebuildWidened = `schema "` + diffRebuildDirectory + `" {
+}
+
+table "t" {
+  schema = schema.` + diffRebuildDirectory + `
+  column "id" {
+    type = Int64
+  }
+  column "v" {
+    type = Int64
+    null = true
+  }
+  primary_key {
+    columns = [column.id]
+  }
+}
+`
+
+// diffRebuildFile is the migration file the host's embedded engine at
+// 74de0b65b wrote through ptah-compat migrate diff for the rebuild of t that
+// diffRebuildWidened asks for, on 25.1.4.7 and 26.2.1.14: a change comment
+// above the new table's creation, above each change to t and above the old
+// table's drop, and none above the copy or the two renames.
+func diffRebuildFile() string {
+	// A raw string cannot hold a backquote, so ~ stands for one.
+	file := `-- Rebuild of table DIR/t: YDB cannot make this change in place, so the table is created anew, the rows are copied, and the two tables are swapped.
+-- The steps are not atomic. Rows written to DIR/t between the copy and the swap are lost, and YDB has no lock to stop them: stop writing to the table until the last step has run.
+-- The copy is one query. YDB refuses one that carries more than about 48 MiB on 25.1 or 64 MiB on 26.2; nothing is then copied, and the old table keeps serving.
+-- Changefeed feed of table DIR/t is dropped before the swap and added again after it, because YDB moves no table that carries a changefeed. Its stream restarts: the records nobody read are lost, and its consumers start again from the beginning of the new stream.
+-- Create "__ptah_rebuild_t" table
+CREATE TABLE ~DIR/__ptah_rebuild_t~ (
+    ~id~ Int64 NOT NULL,
+    ~v~ Int64,
+    PRIMARY KEY (~id~),
+    FAMILY ~default~ (COMPRESSION = 'off')
+) WITH (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1, KEY_BLOOM_FILTER = DISABLED);
+INSERT INTO ~DIR/__ptah_rebuild_t~ (~id~, ~v~) SELECT Unwrap(~id~, 'rebuilding table DIR.t: column id holds NULL, and the new table declares it NOT NULL'u) AS ~id~, IF(~v~ IS NULL, NULL, Unwrap(CAST(~v~ AS Int64), 'rebuilding table DIR.t: column v holds a value that does not convert to its new type'u)) AS ~v~ FROM ~DIR/t~;
+-- Modify "t" table
+ALTER TABLE ~DIR/t~ DROP CHANGEFEED ~feed~;
+ALTER TABLE ~DIR/t~ RENAME TO ~DIR/__ptah_replaced_t~;
+ALTER TABLE ~DIR/__ptah_rebuild_t~ RENAME TO ~DIR/t~;
+-- Modify "t" table
+ALTER TABLE ~DIR/t~ ADD CHANGEFEED ~feed~ WITH (MODE = 'UPDATES', FORMAT = 'JSON');
+-- Drop "__ptah_replaced_t" table
+DROP TABLE ~DIR/__ptah_replaced_t~;
+`
+	return strings.ReplaceAll(strings.ReplaceAll(file, "~", "`"), "DIR", diffRebuildDirectory)
+}
+
+// ptah-compat migrate diff names the steps of a table rebuild as the host's
+// embedded engine did, byte for byte. The rebuild's copy and its two renames
+// carry no comment; one named after its subject would call the rename that
+// moves the new table onto t a drop of the new table.
+func TestHostCompatMigrateDiffNamesARebuildAsTheBuiltIn_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	hostCompat(c)
+	realm := newCLIRealm(c)
+	dir := c.TempDir()
+	directory := "file://" + filepath.ToSlash(dir)
+	c.Assert(os.WriteFile(filepath.Join(dir, "20260101000000_init.sql"), []byte(diffRebuildInit), 0o600), qt.IsNil)
+	widened := "file://" + compatFile(c, c.TempDir(), "widened.hcl", diffRebuildWidened)
+
+	hashed, hashNotes, hashExit := runCompat(c, nil, "migrate", "hash", "--dir", directory)
+	diffed, diffNotes, diffExit := runCompat(c, []string{"PTAH_ALLOW_TABLE_REBUILD=1"}, "migrate", "diff", "widen", "--dir", directory, "--to", widened,
+		"--dev-url", realm.address)
+
+	c.Assert(hashExit, qt.Equals, 0, qt.Commentf("migrate hash:\n%s\n%s", hashed, hashNotes))
+	c.Assert(diffExit, qt.Equals, 0, qt.Commentf("migrate diff:\n%s\n%s", diffed, diffNotes))
+	want := map[string]string{"_widen.sql": diffRebuildFile()}
+	c.Assert(writtenMigrations(c, dir, want), qt.DeepEquals, want)
+}

@@ -209,11 +209,16 @@ table "cf" {
 }
 
 // compatChangefeedRebuildPlan is what ptah-compat schema apply prints for the
-// rebuild of table cf of directory that widens column v, as the host's
-// embedded engine at 74de0b65b printed it on 25.1.4.7 and 26.2.1.14: the
-// rebuild's notes with the changefeed's among them, every setting of the new
-// table, and the changefeed dropped before the swap and added after it with
-// its consumer.
+// rebuild of table cf of directory that widens column v. The statements and
+// notes are those the host's embedded engine at 74de0b65b printed on 25.1.4.7
+// and 26.2.1.14: the rebuild's notes with the changefeed's among them, every
+// setting of the new table, and the changefeed dropped before the swap and
+// added after it with its consumer. Above them are the change comments the
+// embedded engine wrote for the same rebuild in a migrate diff file: the new
+// table's creation, each change to cf and the old table's drop, and nothing
+// above the copy or the two renames. ptah-compat writes the comments of a
+// migration file on schema apply too, as the community binary does; the
+// embedded engine's schema apply wrote none, on every engine.
 func compatChangefeedRebuildPlan(directory string) string {
 	// A raw string cannot hold a backquote, so ~ stands for one.
 	plan := `Planned schema changes:
@@ -221,6 +226,7 @@ func compatChangefeedRebuildPlan(directory string) string {
 -- The steps are not atomic. Rows written to DIR/cf between the copy and the swap are lost, and YDB has no lock to stop them: stop writing to the table until the last step has run.
 -- The copy is one query. YDB refuses one that carries more than about 48 MiB on 25.1 or 64 MiB on 26.2; nothing is then copied, and the old table keeps serving.
 -- Changefeed feed of table DIR/cf is dropped before the swap and added again after it, because YDB moves no table that carries a changefeed. Its stream restarts: the records nobody read are lost, and its consumers start again from the beginning of the new stream.
+-- Create "__ptah_rebuild_cf" table
 CREATE TABLE ~DIR/__ptah_rebuild_cf~ (
     ~id~ Int64 NOT NULL,
     ~v~ Int64,
@@ -228,11 +234,14 @@ CREATE TABLE ~DIR/__ptah_rebuild_cf~ (
     FAMILY ~default~ (COMPRESSION = 'off')
 ) WITH (AUTO_PARTITIONING_BY_SIZE = ENABLED, AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1, KEY_BLOOM_FILTER = DISABLED);
 INSERT INTO ~DIR/__ptah_rebuild_cf~ (~id~, ~v~) SELECT Unwrap(~id~, 'rebuilding table DIR.cf: column id holds NULL, and the new table declares it NOT NULL'u) AS ~id~, IF(~v~ IS NULL, NULL, Unwrap(CAST(~v~ AS Int64), 'rebuilding table DIR.cf: column v holds a value that does not convert to its new type'u)) AS ~v~ FROM ~DIR/cf~;
+-- Modify "cf" table
 ALTER TABLE ~DIR/cf~ DROP CHANGEFEED ~feed~;
 ALTER TABLE ~DIR/cf~ RENAME TO ~DIR/__ptah_replaced_cf~;
 ALTER TABLE ~DIR/__ptah_rebuild_cf~ RENAME TO ~DIR/cf~;
+-- Modify "cf" table
 ALTER TABLE ~DIR/cf~ ADD CHANGEFEED ~feed~ WITH (MODE = 'UPDATES', FORMAT = 'JSON');
 ALTER TOPIC ~DIR/cf/feed~ ADD CONSUMER ~reader~;
+-- Drop "__ptah_replaced_cf" table
 DROP TABLE ~DIR/__ptah_replaced_cf~;
 Auto-approval enabled; applying schema changes.
 Schema apply completed successfully.

@@ -1,0 +1,3 @@
+# The live tests of this change name the change of each rebuild step as the built-in did
+# (stokaro/ptah#5484). Drop this file once that host change is in a release.
+fix/4204-rebuild-change-names
