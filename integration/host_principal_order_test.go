@@ -20,12 +20,13 @@ import (
 // principalCreations lists the CREATE USER and CREATE GROUP statements of a
 // schema render that create one of names, each as its first words and the
 // principal, such as `CREATE GROUP readers`, in the order the render wrote
-// them.
+// them. A render may write several statements on one line, as Ptah v0.21.0
+// writes the roles, so the text is read one statement at a time.
 func principalCreations(output string, names []string) []string {
 	var created []string
-	for line := range strings.SplitSeq(output, "\n") {
+	for _, statement := range strings.FieldsFunc(output, func(r rune) bool { return r == ';' || r == '\n' }) {
 		for _, verb := range []string{"CREATE USER", "CREATE GROUP"} {
-			rest, found := strings.CutPrefix(line, verb+" `")
+			rest, found := strings.CutPrefix(strings.TrimSpace(statement), verb+" `")
 			name, _, _ := strings.Cut(rest, "`")
 			if found && slices.Contains(names, name) {
 				created = append(created, verb+" "+name)
