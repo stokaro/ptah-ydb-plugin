@@ -19,6 +19,7 @@ import (
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 type creationFixture struct {
@@ -247,6 +248,76 @@ func TestNativeTableCreationConfirmsItsIndexes_FailurePath(t *testing.T) {
 			c := testcheck.New(t)
 			dispatched, err := indexedCreation(c, test.held)
 			c.Assert(err, qt.ErrorMatches, test.want)
+			c.Assert(dispatched, qt.IsTrue)
+		})
+	}
+}
+
+// vectorIndex is a vector index on emb with clusters clusters, as a creation
+// declares it.
+func vectorIndex(clusters uint32) *native.GlobalVectorKMeansTreeIndex {
+	return &native.GlobalVectorKMeansTreeIndex{VectorSettings: &native.KMeansTreeSettings{
+		Settings: &native.VectorIndexSettings{Metric: native.VectorIndexSettings_DISTANCE_COSINE.Enum(), VectorType: native.VectorIndexSettings_VECTOR_TYPE_FLOAT.Enum(),
+			VectorDimension: new(uint32(3))}, Clusters: new(clusters), Levels: new(uint32(1))}}
+}
+
+// readyVectorIndex is the ready vector index by_emb the table reads back with.
+func readyVectorIndex(clusters uint32) *native.TableIndexDescription {
+	return &native.TableIndexDescription{Name: "by_emb", IndexColumns: []string{"emb"}, Status: native.TableIndexDescription_STATUS_READY,
+		Type: &native.TableIndexDescription_GlobalVectorKmeansTreeIndex{GlobalVectorKmeansTreeIndex: vectorIndex(clusters)}}
+}
+
+// vectorCreation creates app.records with the vector index by_emb on emb,
+// built with the table, against a table that reads back with held.
+func vectorCreation(c *qt.C, held []*native.TableIndexDescription) (*creationFixture, bool, error) {
+	c.Helper()
+	bytes := &Ydb.Type{Type: &Ydb.Type_OptionalType{OptionalType: &Ydb.OptionalType{Item: &Ydb.Type{Type: &Ydb.Type_TypeId{TypeId: Ydb.Type_STRING}}}}}
+	fixture := &creationFixture{indexes: held, columns: []*native.ColumnMeta{{Name: "emb", Type: bytes, NotNull: new(false)}}}
+	api := &nativeapi.TableCreation{Scheme: fixture, Open: func(context.Context) (nativeapi.CreationSession, error) { return fixture, nil }}
+	owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
+	compiled, err := tablecreate.Compile(owner, &protocol.DeclaredTable{Name: "records", Schema: "app", PrimaryKey: []string{"id"},
+		Columns: []*protocol.DeclaredColumn{{Name: "id", Type: "Uint64", Primary: true}, {Name: "emb", Type: "String", Nullable: true}}}, nil)
+	c.Assert(err, qt.IsNil)
+	index, err := schema.RequestIndex(&native.IndexIntent{Name: "by_emb", IndexColumns: []string{"emb"},
+		Type: &native.IndexIntent_GlobalVectorKmeansTreeIndex{GlobalVectorKmeansTreeIndex: vectorIndex(4)}})
+	c.Assert(err, qt.IsNil)
+	compiled.Indexes = append(compiled.Indexes, index)
+	operation, err := tablecreate.CaptureRequest("create", owner, compiled)
+	c.Assert(err, qt.IsNil)
+	dispatched, err := api.Apply(c.Context(), "/local", operation.Value, func(context.Context) error { return nil })
+	return fixture, dispatched, err
+}
+
+// A creation that builds a vector index with the table sends its arm to the
+// table service, and is confirmed by the index the table reads back with:
+// ready, of its kind, on its columns and with its settings.
+func TestNativeTableCreationBuildsAVectorIndex_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+
+	fixture, dispatched, err := vectorCreation(c, []*native.TableIndexDescription{readyVectorIndex(4)})
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(dispatched, qt.IsTrue)
+	c.Assert(fixture.sent.Indexes, qt.HasLen, 1)
+	sent, err := schema.NativeRequestIndex(fixture.sent.Indexes[0])
+	c.Assert(err, qt.IsNil)
+	c.Assert(proto.Equal(sent.GetGlobalVectorKmeansTreeIndex(), vectorIndex(4)), qt.IsTrue)
+}
+
+func TestNativeTableCreationBuildsAVectorIndex_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		held []*native.TableIndexDescription
+	}{
+		{name: "other settings", held: []*native.TableIndexDescription{readyVectorIndex(8)}},
+		{name: "a global index", held: []*native.TableIndexDescription{readyIndex("by_emb", "sync", "emb")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			_, dispatched, err := vectorCreation(c, test.held)
+
+			c.Assert(err, qt.ErrorMatches, `YDB created index "by_emb" differs from the request`)
 			c.Assert(dispatched, qt.IsTrue)
 		})
 	}

@@ -48,6 +48,7 @@ func TextPath(schemaPath, name string) string {
 //	    `c` Type [FAMILY `f`] [NOT NULL] [DEFAULT literal],
 //	    PRIMARY KEY (`k`),
 //	    INDEX `i` GLOBAL SYNC ON (`c`) COVER (`d`),
+//	    INDEX `v` GLOBAL USING vector_kmeans_tree ON (`e`) WITH (...),
 //	    FAMILY `f` (DATA = 'ssd', COMPRESSION = 'lz4')
 //	) WITH (TTL = ..., AUTO_PARTITIONING_..., KEY_BLOOM_FILTER = ..., UNIFORM_PARTITIONS = n);
 //
@@ -610,6 +611,13 @@ func splittingActions(held, changes *Ydb_Table.PartitioningSettings) []string {
 // indexClause writes a global index the way an ADD INDEX names it:
 // `INDEX `i` GLOBAL SYNC ON (`a`) COVER (`b`)`.
 func indexClause(index *Ydb_Table.TableIndex) (string, error) {
+	spec, err := schema.NativeRequestIndex(index)
+	if err != nil {
+		return "", err
+	}
+	if spec != nil {
+		return nativeIndexClause(spec), nil
+	}
 	var kind string
 	switch index.GetType().(type) {
 	case *Ydb_Table.TableIndex_GlobalIndex:

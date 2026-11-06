@@ -52,14 +52,17 @@ func buildOperationModel() *protocol.ValueModel {
 			"6, which the request carries to the table service; a cache mode requires the column_family_cache_mode capability",
 		"settings": "row storage only; no access changes, temporary lifetime, changefeeds, profiles or compaction policy; a starting layout is " +
 			"either a count of uniform partitions over a Uint32 or Uint64 first key column, or split points of optional tuples over the leading key columns",
-		"indexes":   "global indexes, sync, async or unique, each with its ordered key columns and covered columns over declared columns and no settings of its own, built with the table",
+		"indexes": "global indexes, sync, async or unique, each with its ordered key columns and covered columns over declared columns and no settings of its own, " +
+			"and vector and full-text indexes, each with its definition and no settings of the tables that implement it, carried as the upstream arm " +
+			"(fields 7, 8 and 9 of Ydb.Table.TableIndex) the pinned bindings keep as an unknown field; all in name order, built with the table",
 		"omission":  "omitted creation settings request server defaults; explicit settings are confirmed after creation",
 		"execution": "native CreateTable once outside SQL transactions; no retries; session and absolute path bound at dispatch",
 		"precondition": "the complete listing of the parent directory must establish absence; a parent directory YDB does not show establishes absence " +
 			"when the listing of its own parent, proved the same way up to the database root, does not name it, and YDB creates it with the table; root " +
 			"ptah_locks is reserved; no atomic compare-and-set",
-		"confirmation": "read back columns, ordered primary key, requested settings, the requested indexes ready with their definitions and no other index, and no changefeed; a successful create does not establish exclusive ownership",
-		"database":     "an explicit owner database must match the selected session; an empty database binds to that session",
+		"confirmation": "read back columns, ordered primary key, requested settings, the requested indexes ready with their definitions, a vector or full-text index's " +
+			"settings among them, and no other index, and no changefeed; a successful create does not establish exclusive ownership",
+		"database": "an explicit owner database must match the selected session; an empty database binds to that session",
 	})
 	if err != nil {
 		panic(err)
