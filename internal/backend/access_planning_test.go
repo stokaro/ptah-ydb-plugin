@@ -145,7 +145,9 @@ func TestExternalRecreationKeepsRevokesAfterRestoration(t *testing.T) {
 	c.Assert(guarded, qt.Equals, 2)
 }
 
-func TestWorkloadDropRewritesRevokesAsOneCompleteReplacement(t *testing.T) {
+// The drop of each pool is a step of its own, which replaces the revoke on
+// that pool: the drop takes the pool's access list with it.
+func TestWorkloadDropRewritesEachRevokeIntoItsPoolsDrop(t *testing.T) {
 	c := testcheck.New(t)
 	request, _ := workloadPlan(c, workloadCapabilities(), nil, workloadRequest(c, schema.ResourcePoolProperties, nil, nil))
 	for _, name := range []string{"batch", "online"} {
@@ -167,20 +169,20 @@ func TestWorkloadDropRewritesRevokesAsOneCompleteReplacement(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	c.Assert(result.Diagnostics, qt.HasLen, 0)
 	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
-	c.Assert(result.Rewrites, qt.HasLen, 1)
-	c.Assert(result.Rewrites[0].Sources, qt.HasLen, 2)
-	c.Assert(result.Contributions[0].Steps, qt.HasLen, 1)
-	step := result.Contributions[0].Steps[0]
-	c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
-	c.Assert(step.Metadata.Effects, qt.HasLen, 4)
-	var accessCount int
-	for _, effect := range step.Metadata.Effects {
-		if effect.Subject.Kind == "object_access" {
-			accessCount++
-			c.Assert(effect.Action, qt.Equals, protocol.PlanningEffect_ALTER)
-		}
+	var rewrites []string
+	for _, rewrite := range result.Rewrites {
+		c.Assert(rewrite.Sources, qt.HasLen, 1)
+		rewrites = append(rewrites, rewrite.Sources[0].Name+" -> "+rewrite.Replacement.Name)
 	}
-	c.Assert(accessCount, qt.Equals, 2)
+	c.Assert(rewrites, qt.DeepEquals, []string{"access/batch -> workload/000000", "access/online -> workload/000001"})
+	c.Assert(result.Contributions[0].Steps, qt.HasLen, 2)
+	for _, step := range result.Contributions[0].Steps {
+		c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
+		c.Assert(step.Metadata.Effects, qt.HasLen, 2)
+		c.Assert(step.Metadata.Effects[0].Action, qt.Equals, protocol.PlanningEffect_DROP)
+		c.Assert(step.Metadata.Effects[1].Subject.Kind, qt.Equals, "object_access")
+		c.Assert(step.Metadata.Effects[1].Action, qt.Equals, protocol.PlanningEffect_ALTER)
+	}
 }
 
 func TestNativeAccessOrderingWithPrincipalEdits(t *testing.T) {

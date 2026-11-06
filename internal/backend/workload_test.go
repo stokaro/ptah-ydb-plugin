@@ -2,6 +2,7 @@ package backend_test
 
 import (
 	"regexp"
+	"slices"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -202,36 +203,51 @@ func workloadPlan(c *qt.C, capabilities map[string]bool, common []*protocol.Comm
 	return planning, plan
 }
 
-// Every workload change of a plan is one native step that forbids a
-// transaction, with an effect and a receipt per object, that renders as a
-// native unit and as the host's statements.
+// plannedWorkloadStep is what a test reads of one workload step: its name,
+// what it does to its object, its impact and the statement it renders as.
+type plannedWorkloadStep struct {
+	Name   string
+	Action protocol.PlanningEffect_Action
+	Impact protocol.ChangeSemantics_Impact
+	Text   string
+}
+
+// Every workload statement of a plan is a native step of its own that
+// forbids a transaction, chained in the order the statements run, with an
+// effect on its object, and every change has a receipt naming the steps that
+// carry it out. Each step renders as a native unit and as its statement, and
+// its operation normalizes to itself.
 func TestWorkloadPlanning_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name                         string
 		pools                        map[string]proto.Message
 		classifiers, readClassifiers map[string]proto.Message
-		actions                      []protocol.PlanningEffect_Action
-		impact                       protocol.ChangeSemantics_Impact
-		text                         string
+		steps                        []plannedWorkloadStep
+		receipts                     map[string][]string
 	}{
 		{
 			name:        "a pool and a classifier routing to it",
 			pools:       map[string]proto.Message{"batch": pool(workload.PoolSpec{ConcurrentQueryLimit: new(int32(2))})},
 			classifiers: map[string]proto.Message{"etl": routing("batch", 10)},
-			actions:     []protocol.PlanningEffect_Action{protocol.PlanningEffect_CREATE, protocol.PlanningEffect_CREATE},
-			impact:      protocol.ChangeSemantics_BEHAVIORAL,
-			text: "CREATE RESOURCE POOL `batch` WITH (CONCURRENT_QUERY_LIMIT = 2);\n" +
-				"CREATE RESOURCE POOL CLASSIFIER `etl` WITH (RESOURCE_POOL = 'batch', RANK = 10);",
+			steps: []plannedWorkloadStep{
+				{"workload/000000", protocol.PlanningEffect_CREATE, protocol.ChangeSemantics_ADDITIVE, "CREATE RESOURCE POOL `batch` WITH (CONCURRENT_QUERY_LIMIT = 2);"},
+				{"workload/000001", protocol.PlanningEffect_CREATE, protocol.ChangeSemantics_BEHAVIORAL, "CREATE RESOURCE POOL CLASSIFIER `etl` WITH (RESOURCE_POOL = 'batch', RANK = 10);"},
+			},
+			receipts: map[string][]string{"batch": {"workload/000000"}, "etl": {"workload/000001"}},
 		},
 		{
+			// Each classifier is dropped before the other moves into its
+			// rank, so the change of each is two steps.
 			name:            "two classifiers trading ranks",
 			classifiers:     map[string]proto.Message{"alpha": routing("batch", 20), "beta": routing("batch", 10)},
 			readClassifiers: map[string]proto.Message{"alpha": routing("batch", 10), "beta": routing("batch", 20)},
-			actions:         []protocol.PlanningEffect_Action{protocol.PlanningEffect_ALTER, protocol.PlanningEffect_ALTER},
-			impact:          protocol.ChangeSemantics_BEHAVIORAL,
-			text: "DROP RESOURCE POOL CLASSIFIER `alpha`;\nDROP RESOURCE POOL CLASSIFIER `beta`;\n" +
-				"CREATE RESOURCE POOL CLASSIFIER `alpha` WITH (RESOURCE_POOL = 'batch', RANK = 20);\n" +
-				"CREATE RESOURCE POOL CLASSIFIER `beta` WITH (RESOURCE_POOL = 'batch', RANK = 10);",
+			steps: []plannedWorkloadStep{
+				{"workload/000000", protocol.PlanningEffect_DROP, protocol.ChangeSemantics_BEHAVIORAL, "DROP RESOURCE POOL CLASSIFIER `alpha`;"},
+				{"workload/000001", protocol.PlanningEffect_DROP, protocol.ChangeSemantics_BEHAVIORAL, "DROP RESOURCE POOL CLASSIFIER `beta`;"},
+				{"workload/000002", protocol.PlanningEffect_CREATE, protocol.ChangeSemantics_BEHAVIORAL, "CREATE RESOURCE POOL CLASSIFIER `alpha` WITH (RESOURCE_POOL = 'batch', RANK = 20);"},
+				{"workload/000003", protocol.PlanningEffect_CREATE, protocol.ChangeSemantics_BEHAVIORAL, "CREATE RESOURCE POOL CLASSIFIER `beta` WITH (RESOURCE_POOL = 'batch', RANK = 10);"},
+			},
+			receipts: map[string][]string{"alpha": {"workload/000000", "workload/000002"}, "beta": {"workload/000001", "workload/000003"}},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -241,57 +257,151 @@ func TestWorkloadPlanning_HappyPath(t *testing.T) {
 			c.Assert(plan.Diagnostics, qt.HasLen, 0)
 			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), planning, plan), qt.IsNil)
 			c.Assert(plan.Contributions, qt.HasLen, 1)
-			c.Assert(plan.Contributions[0].Steps, qt.HasLen, 1)
-			step := plan.Contributions[0].Steps[0]
-			c.Assert(step.Id.Name, qt.Equals, workloadplan.StepName)
-			c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
-			c.Assert(step.Metadata.Impact, qt.Equals, test.impact)
-			var actions []protocol.PlanningEffect_Action
-			for _, effect := range step.Metadata.Effects {
-				actions = append(actions, effect.Action)
+			var steps []plannedWorkloadStep
+			var chain []string
+			for _, step := range plan.Contributions[0].Steps {
+				c.Assert(step.Metadata.Transaction, qt.Equals, protocol.PlanningMetadata_FORBIDDEN)
+				c.Assert(step.Operation.Phase, qt.Equals, protocol.PlanningOperation_LIFECYCLE)
+				c.Assert(step.Metadata.Effects, qt.HasLen, 1)
+				rendering := testplanning.RenderRequest(backend.Description(), &protocol.PlannedFeatures{Contributions: []*protocol.PlanningContribution{
+					{Owner: plan.Contributions[0].Owner, Steps: []*protocol.PlanningStep{step}}}}, workloadCapabilities())
+				rendered, err := backend.New().Render(t.Context(), rendering)
+				c.Assert(err, qt.IsNil)
+				c.Assert(rendered.Units, qt.HasLen, 1)
+				c.Assert(proto.Equal(rendered.Units[0].GetNative(), step.Operation.Value.Value), qt.IsTrue)
+				rendering.Form = protocol.RenderRequest_TEXT
+				text, err := backend.New().Render(t.Context(), rendering)
+				c.Assert(err, qt.IsNil)
+				c.Assert(text.Units, qt.HasLen, 1)
+				normalized, err := backend.New().NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: step.Operation.Value.Id, Representation: protocol.ValueInput_OPERATION, Value: step.Operation.Value.Value}}})
+				c.Assert(err, qt.IsNil)
+				c.Assert(proto.Equal(normalized.Values[0], step.Operation.Value), qt.IsTrue)
+				steps = append(steps, plannedWorkloadStep{step.Id.Name, step.Metadata.Effects[0].Action, step.Metadata.Impact, text.Units[0].GetSql()})
 			}
-			c.Assert(actions, qt.DeepEquals, test.actions)
-			c.Assert(plan.Changes, qt.HasLen, len(planning.Changes))
+			for _, edge := range plan.Contributions[0].Dependencies {
+				chain = append(chain, edge.Before.Name+" -> "+edge.After.Name)
+			}
+			receipts := make(map[string][]string)
 			for _, receipt := range plan.Changes {
-				c.Assert(receipt.Steps, qt.HasLen, 1)
-				c.Assert(proto.Equal(receipt.Steps[0], step.Id), qt.IsTrue)
+				for _, id := range receipt.Steps {
+					receipts[receipt.Subject.Name.Normalized] = append(receipts[receipt.Subject.Name.Normalized], id.Name)
+				}
 			}
-			rendering := testplanning.RenderRequest(backend.Description(), plan, workloadCapabilities())
-			rendered, err := backend.New().Render(t.Context(), rendering)
-			c.Assert(err, qt.IsNil)
-			c.Assert(rendered.Units, qt.HasLen, 1)
-			c.Assert(proto.Equal(rendered.Units[0].GetNative(), step.Operation.Value.Value), qt.IsTrue)
-			rendering.Form = protocol.RenderRequest_TEXT
-			text, err := backend.New().Render(t.Context(), rendering)
-			c.Assert(err, qt.IsNil)
-			c.Assert(text.Units, qt.HasLen, 1)
-			c.Assert(text.Units[0].GetSql(), qt.Equals, test.text)
-			normalized, err := backend.New().NormalizeValues(t.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb", Values: []*protocol.ValueInput{{Id: step.Operation.Value.Id, Representation: protocol.ValueInput_OPERATION, Value: step.Operation.Value.Value}}})
-			c.Assert(err, qt.IsNil)
-			c.Assert(proto.Equal(normalized.Values[0], step.Operation.Value), qt.IsTrue)
+			c.Assert(steps, qt.DeepEquals, test.steps)
+			c.Assert(receipts, qt.DeepEquals, test.receipts)
+			var want []string
+			for i := 1; i < len(test.steps); i++ {
+				want = append(want, test.steps[i-1].Name+" -> "+test.steps[i].Name)
+			}
+			c.Assert(chain, qt.DeepEquals, want)
 		})
 	}
 }
 
-// A classifier names a user or a group, so the workload step runs after the
-// common steps that create or change a role and before those that drop one.
+// A classifier names a user or a group, so every workload step runs after
+// the common steps that create or change a role and before those that drop
+// one.
 func TestWorkloadPlanningOrdersRoles_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
-	role := func(name string, action protocol.PlanningEffect_Action) *protocol.CommonPlanningStep {
-		return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "ptah.run", Name: "common/" + name},
-			Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "role",
-				Effects: []*protocol.PlanningEffect{{Subject: &protocol.ComparisonIdentity{Kind: "role", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: &protocol.ComparisonPart{},
-					Parent: &protocol.ComparisonPart{}, Name: testcomparison.Part(name)}, Action: action}}}}
-	}
-	common := []*protocol.CommonPlanningStep{role("etl", protocol.PlanningEffect_CREATE), role("old", protocol.PlanningEffect_DROP), role("reader", protocol.PlanningEffect_READ)}
+	common := []*protocol.CommonPlanningStep{workloadRoleStep("etl", protocol.PlanningEffect_CREATE), workloadRoleStep("old", protocol.PlanningEffect_DROP),
+		workloadRoleStep("reader", protocol.PlanningEffect_READ)}
 	planning, plan := workloadPlan(c, workloadCapabilities(), common, workloadRequest(c, schema.ResourcePoolClassifierProperties, map[string]proto.Message{"etl": routing("default", 1)}, nil))
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
 	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), planning, plan), qt.IsNil)
+	c.Assert(workloadEdges(plan), qt.DeepEquals, []string{"common/etl -> workload/000000", "workload/000000 -> common/old"})
+}
+
+// workloadRoleStep is a common step that does action to the role name and
+// nothing else.
+func workloadRoleStep(name string, action protocol.PlanningEffect_Action) *protocol.CommonPlanningStep {
+	return &protocol.CommonPlanningStep{Id: &protocol.StepIdentity{Owner: "ptah.run", Name: "common/" + name},
+		Metadata: &protocol.PlanningMetadata{Transaction: protocol.PlanningMetadata_FORBIDDEN, Impact: protocol.ChangeSemantics_ADDITIVE, Reason: "role",
+			Effects: []*protocol.PlanningEffect{{Subject: &protocol.ComparisonIdentity{Kind: "role", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{}, Schema: &protocol.ComparisonPart{},
+				Parent: &protocol.ComparisonPart{}, Name: testcomparison.Part(name)}, Action: action}}}}
+}
+
+// workloadEdges names each dependency of plan's contribution as
+// "before -> after".
+func workloadEdges(plan *protocol.PlannedFeatures) []string {
 	var edges []string
 	for _, edge := range plan.Contributions[0].Dependencies {
 		edges = append(edges, edge.Before.Name+" -> "+edge.After.Name)
 	}
-	c.Assert(edges, qt.DeepEquals, []string{"common/etl -> " + workloadplan.StepName, workloadplan.StepName + " -> common/old"})
+	return edges
+}
+
+// workloadDrops is a planning change per object the read side of request
+// holds, dropping it, as a reverse plan asks: a comparison never drops a
+// workload object the source leaves out.
+func workloadDrops(c *qt.C, request *protocol.CompareModelsRequest) []*protocol.PlanningChange {
+	c.Helper()
+	capture := schema.CaptureResourcePoolChange
+	if request.Kinds[0] == schema.ResourcePoolClassifierProperties {
+		capture = schema.CaptureResourcePoolClassifierChange
+	}
+	var changes []*protocol.PlanningChange
+	for _, record := range request.Current.Records {
+		owner, err := schema.WorkloadBoundOwner(record.Kind, record.Subject)
+		c.Assert(err, qt.IsNil)
+		before := proto.CloneOf(record.Value.Value)
+		before.Owner = proto.CloneOf(owner)
+		value, err := capture(request.ComparisonId+"/drop-"+record.Subject.Name.Normalized, owner, before, nil)
+		c.Assert(err, qt.IsNil)
+		changes = append(changes, &protocol.PlanningChange{Subject: proto.CloneOf(record.Subject), Value: value})
+	}
+	return changes
+}
+
+// Each workload step runs after the common steps that need neither it nor a
+// step after it, as the YDB engine built into the host at 74de0b65b ran its
+// workload statements: a pool right before the grant on it, and the
+// classifier routing to it after every common step. The reverse drops the
+// classifier and then the pool right before the drop of the role the
+// classifier routes, and the revoke the pool's drop takes the place of is no
+// anchor of either.
+func TestWorkloadPlanningPlacesEachStatement_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	pools := workloadRequest(c, schema.ResourcePoolProperties, map[string]proto.Message{"batch": pool(workload.PoolSpec{})}, nil)
+	classifiers := workloadRequest(c, schema.ResourcePoolClassifierProperties, map[string]proto.Message{"etl": routing("batch", 10)}, nil)
+	creation, _ := workloadPlan(c, workloadCapabilities(), nil, pools, classifiers)
+	readPools := workloadRequest(c, schema.ResourcePoolProperties, nil, map[string]proto.Message{"batch": pool(workload.PoolSpec{})})
+	readClassifiers := workloadRequest(c, schema.ResourcePoolClassifierProperties, nil, map[string]proto.Message{"etl": routing("batch", 10)})
+	drop := proto.CloneOf(creation)
+	drop.Changes = slices.Concat(workloadDrops(c, readPools), workloadDrops(c, readClassifiers))
+	for _, test := range []struct {
+		name          string
+		request       *protocol.PlanFeaturesRequest
+		access        accessVerb
+		before, after *protocol.CommonPlanningStep
+		want          []string
+	}{
+		{
+			name: "a creation", request: creation, access: grantAccess,
+			before: workloadRoleStep("reader", protocol.PlanningEffect_READ), after: workloadRoleStep("last", protocol.PlanningEffect_READ),
+			want: []string{"workload/000000 -> access", "workload/000000 -> workload/000001", "common/reader -> workload/000000", "common/last -> workload/000001"},
+		},
+		{
+			name: "a drop", request: drop, access: revokeAccess,
+			before: workloadRoleStep("reader", protocol.PlanningEffect_READ), after: workloadRoleStep("old", protocol.PlanningEffect_DROP),
+			want: []string{"workload/000000 -> common/old", "workload/000001 -> common/old", "workload/000000 -> workload/000001",
+				"common/reader -> workload/000000", "common/reader -> workload/000001"},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			planning := proto.CloneOf(test.request)
+			pool := slices.IndexFunc(planning.Changes, func(change *protocol.PlanningChange) bool {
+				return change.Subject.Kind == schema.ResourcePoolProperties
+			})
+			planning.CommonSteps = []*protocol.CommonPlanningStep{test.before, commonAccessFor(planning.Changes[pool].Subject, "resource pool", test.access), test.after}
+			planning.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
+			plan, err := backend.New().PlanFeatures(c.Context(), planning)
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Diagnostics, qt.HasLen, 0)
+			c.Assert(provider.ValidatePlannedFeatures(backend.Description(), planning, plan), qt.IsNil)
+			c.Assert(workloadEdges(plan), qt.DeepEquals, test.want)
+		})
+	}
 }
 
 // A target without resource pools, or with transactional DDL, plans nothing

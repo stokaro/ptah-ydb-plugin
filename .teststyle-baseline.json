@@ -313,12 +313,6 @@
       "count": 1
     },
     {
-      "path": "internal/backend/access_planning_test.go",
-      "function": "TestWorkloadDropRewritesRevokesAsOneCompleteReplacement",
-      "kind": "if",
-      "count": 1
-    },
-    {
       "path": "internal/backend/comparison_test.go",
       "function": "TestCoordinationAccessRequirementsCannotBecomeIgnoredChanges",
       "kind": "if",
