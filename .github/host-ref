@@ -1,6 +1,0 @@
-# The live tests of this change read an HCL export whose header names this
-# provider's models by the identities the provider describes, which the host
-# branch below writes and reads (stokaro/ptah#5493). The branch also carries
-# stokaro/ptah#5484, which the compat rebuild tests need. Drop this file once
-# that host change is in a release.
-fix/4204-g156-provider-claim-identity
