@@ -143,7 +143,8 @@ func TestHostAppliesARealmOfManyNewTables_HappyPath(t *testing.T) {
 	schema := filepath.Join(c.TempDir(), "schema.yaml")
 	c.Assert(os.WriteFile(schema, []byte(manyTablesSource(names)), 0o600), qt.IsNil)
 
-	output, err := hostRunAt(c, address, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--schema-file", schema)
+	// On a loaded runner the plan and the 500 creations ran past four minutes.
+	output, err := hostRunWithin(c, 15*time.Minute, address, "schema", "apply", "--auto-approve", "--tx-mode", "none", "--schema-file", schema)
 
 	c.Assert(err, qt.IsNil, qt.Commentf("%s", output[max(0, len(output)-4000):]))
 	c.Assert(output, qt.Contains, "Schema apply completed successfully")
