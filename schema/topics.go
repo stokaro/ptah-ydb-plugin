@@ -129,7 +129,6 @@ func normalizeChangefeeds(observed *native.ChangefeedObservations) error {
 		if err := normalizeTopic(feed.Topic); err != nil {
 			return err
 		}
-		slices.SortFunc(feed.Topic.Consumers, func(a, b *native.Consumer) int { return strings.Compare(a.Name, b.Name) })
 	}
 	slices.SortFunc(observed.Changefeeds, func(a, b *native.ObservedChangefeed) int {
 		return strings.Compare(a.Description.Name, b.Description.Name)
