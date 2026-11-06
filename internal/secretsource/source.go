@@ -4,14 +4,17 @@ package secretsource
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
 	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/secrets"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
@@ -37,6 +40,10 @@ func Owns(fragment *protocol.SourceFragment) bool {
 
 // Decode preserves exact paths and reference names. Any invalid entry rejects
 // the complete document without repeating a possible inline value in errors.
+// The refusal is a reason a host prints (see authored): it names the secret
+// and the attribute and says what the attribute takes, as the host's embedded
+// engine did, and never quotes the value a declaration wrote or the variable
+// it names.
 func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	result := make(map[int][]*protocol.SourceModelValue)
 	seen := make(map[string]bool)
@@ -79,9 +86,9 @@ func fragmentSecrets(document *protocol.SourceDocument, index int, seen map[stri
 	var decoded []*protocol.SourceModelValue
 	for position, entry := range entries {
 		if entry.fields == nil {
-			return nil, fmt.Errorf("a secret requires a mapping")
+			return nil, refusal(entry.name, "a secret is declared as a mapping of name, schema and value_env")
 		}
-		values, err := secretAttributes(entry.fields)
+		values, err := secretAttributes(entry.name, entry.fields)
 		if err != nil {
 			return nil, err
 		}
@@ -90,19 +97,27 @@ func fragmentSecrets(document *protocol.SourceDocument, index int, seen map[stri
 			name = value
 		}
 		directory := values["schema"]
-		if err := secrets.ValidateIdentity(directory, name); err != nil {
+		if err := checkIdentity(entry.name, directory, name); err != nil {
 			return nil, err
 		}
 		if err := secrets.CheckValueEnv(values["value_env"]); err != nil {
-			return nil, fmt.Errorf("secret value_env requires a valid PTAH_SECRET_ input name")
+			declared, ok := errors.AsType[*secrets.DeclarationError](err)
+			if !ok {
+				return nil, err
+			}
+			named := declared.Reason
+			if declared.Variable != "" {
+				named = "the variable it names " + named
+			}
+			return nil, refusal(entry.name, "invalid "+declared.Attribute+": "+named)
 		}
 		path := secrets.Display(directory, name)
 		if seen[path] {
-			return nil, fmt.Errorf("a secret path is declared twice")
+			return nil, refusal(entry.name, "secret "+strconv.Quote(path)+" is declared twice")
 		}
 		seen[path] = true
 		if declaresTable(document, directory, name) {
-			return nil, fmt.Errorf("secret conflicts with a declared table")
+			return nil, refusal(entry.name, "secret "+strconv.Quote(path)+" is at the path of a table the document declares")
 		}
 		owner := &protocol.Reference{Engine: "ydb", Kind: schema.SecretProperties, Schema: directory, Name: name}
 		value, err := schema.CaptureSecretIntent(owner, &native.SecretIntent{ValueEnv: values["value_env"]})
@@ -142,28 +157,67 @@ func secretEntries(document *protocol.SourceDocument, fragment *protocol.SourceF
 	return entries, nil
 }
 
-// secretAttributes reads the text attributes of one secret, trimmed. An inline
-// value, an unknown or repeated attribute, or one that is not text refuses the
-// secret without repeating the value.
-func secretAttributes(fields *protocol.SourceMapping) (map[string]string, error) {
+// secretAttributes reads the text attributes of the secret keyed key, trimmed.
+// An inline value, an unknown or repeated attribute, or one that is not text
+// refuses the secret without repeating the value.
+func secretAttributes(key string, fields *protocol.SourceMapping) (map[string]string, error) {
 	values := make(map[string]string)
 	for _, field := range fields.Entries {
 		if field.Key == "value" {
-			return nil, fmt.Errorf("a secret declaration must name value_env instead of an inline value")
+			return nil, refusal(key, "invalid value: a secret's value is never written in a schema file; "+
+				"name the environment variable that holds it with value_env")
 		}
 		if field.Key != "name" && field.Key != "schema" && field.Key != "value_env" {
-			return nil, fmt.Errorf("unknown secret declaration attribute")
+			return nil, refusal(key, "unknown attribute "+strconv.Quote(field.Key)+"; a secret takes name, schema and value_env")
 		}
 		if _, exists := values[field.Key]; exists {
-			return nil, fmt.Errorf("duplicate secret declaration attribute")
+			return nil, refusal(key, "attribute "+field.Key+" is written twice")
 		}
 		text, ok := field.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {
-			return nil, fmt.Errorf("secret declaration attributes require text")
+			return nil, refusal(key, "invalid "+field.Key+": it takes text")
 		}
 		values[field.Key] = strings.TrimSpace(text.Text)
 	}
 	return values, nil
+}
+
+// checkIdentity refuses the directory and the name the secret keyed key
+// declares where they are not an exact path, in the order and the words of the
+// host's embedded engine.
+func checkIdentity(key, directory, name string) error {
+	if secrets.ValidateIdentity(directory, name) == nil {
+		return nil
+	}
+	switch {
+	case strings.TrimSpace(name) == "":
+		return refusal(key, "invalid name: a secret needs a name")
+	case strings.Contains(name, "/"):
+		return refusal(key, "invalid name: "+strconv.Quote(name)+" holds a slash; name the directory with schema")
+	case secrets.ValidateIdentity("", name) != nil:
+		return refusal(key, "invalid name: "+strconv.Quote(name)+" is not a path segment")
+	case strings.HasPrefix(directory, "/"):
+		return refusal(key, "invalid schema: "+strconv.Quote(directory)+" starts with a slash; "+
+			"name the directory relative to the database root, without the database's own path")
+	default:
+		return refusal(key, "invalid schema: "+strconv.Quote(directory)+" is not a directory path relative to the database root")
+	}
+}
+
+// refusal is the reason the declaration of the secret keyed key is refused for,
+// the words of the host's embedded engine: `secret "<key>": text`. A Go
+// directive keys no secret, and the host names the directive's place in front
+// of the reason, so key is "" there and text stands alone, as it does when the
+// key would make the reason longer than a host shows.
+func refusal(key, text string) error {
+	if key == "" {
+		return authored.New(text)
+	}
+	keyed := "secret " + strconv.Quote(key) + ": " + text
+	if provider.ValidateDiagnostic(&protocol.ProviderDiagnostic{Reason: keyed}) != nil {
+		return authored.New(text)
+	}
+	return authored.New(keyed)
 }
 
 // declaresTable reports whether the document binds a table at the secret's

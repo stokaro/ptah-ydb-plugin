@@ -21,11 +21,18 @@ type Spec struct {
 	ValueEnv string `json:"value_env"`
 }
 
-// DeclarationError reports an invalid attribute without retaining its value.
-type DeclarationError struct{ Attribute, Reason string }
+// DeclarationError reports an invalid attribute: its name, the variable it
+// names where the refusal is about that variable, and why. Reason never holds
+// the variable, so a reason the provider gives a host may carry it.
+type DeclarationError struct{ Attribute, Variable, Reason string }
 
+// Error names the variable in front of the reason, where the refusal is about
+// one: `invalid value_env: "HOME" does not start with PTAH_SECRET_ ...`.
 func (e *DeclarationError) Error() string {
-	return fmt.Sprintf("invalid %s: %s", e.Attribute, e.Reason)
+	if e.Variable == "" {
+		return fmt.Sprintf("invalid %s: %s", e.Attribute, e.Reason)
+	}
+	return fmt.Sprintf("invalid %s: %q %s", e.Attribute, e.Variable, e.Reason)
 }
 
 // AttributeValueEnv names the declared approved-input reference.
@@ -54,13 +61,13 @@ func CheckValueEnv(name string) error {
 		return &DeclarationError{Attribute: AttributeValueEnv,
 			Reason: "a secret names the environment variable that holds its value"}
 	case !prefixed || rest == "":
-		return &DeclarationError{Attribute: AttributeValueEnv,
-			Reason: fmt.Sprintf("%q does not start with %s and a name after it; Ptah reads a secret's value only "+
-				"from a variable under that prefix, so a migration file cannot copy any other variable of the "+
-				"machine that applies it", name, ValuePrefix)}
+		return &DeclarationError{Attribute: AttributeValueEnv, Variable: name,
+			Reason: "does not start with " + ValuePrefix + " and a name after it; Ptah reads a secret's value only " +
+				"from a variable under that prefix, so a migration file cannot copy any other variable of the " +
+				"machine that applies it"}
 	case !variableName(name):
-		return &DeclarationError{Attribute: AttributeValueEnv,
-			Reason: fmt.Sprintf("%q holds a character other than an ASCII letter, a digit or an underscore", name)}
+		return &DeclarationError{Attribute: AttributeValueEnv, Variable: name,
+			Reason: "holds a character other than an ASCII letter, a digit or an underscore"}
 	default:
 		return nil
 	}
