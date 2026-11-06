@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"slices"
+	"strings"
 
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Scheme"
 
@@ -38,6 +39,11 @@ func (s *source) readChangefeeds(ctx context.Context, tablePath string, table *d
 		if err := topicIdentity(topic, feed.Name); err != nil {
 			return nil, err
 		}
+		// By name, as the host's embedded engine at 74de0b65b read them: YDB
+		// lists a topic's consumers in the order they were added, and that
+		// engine wrote a changefeed's in name order, in an inspection and in
+		// the statement that adds a dropped changefeed back alike.
+		slices.SortFunc(topic.Consumers, func(a, b *native.Consumer) int { return strings.Compare(a.Name, b.Name) })
 		result.Changefeeds = append(result.Changefeeds, &native.ObservedChangefeed{Description: feed, Topic: topic})
 	}
 	return result, nil

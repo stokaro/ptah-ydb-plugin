@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"slices"
 	"strings"
 
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Table"
@@ -168,7 +167,10 @@ func replication(attributes map[string]string) (bool, error) {
 }
 
 // readTopic reads the retention, the partitions and the consumers of a
-// changefeed's topic. Its other settings are YDB's own and are not read.
+// changefeed's topic, the consumers in the order the observation lists them:
+// by name for a read (see the inspection's readChangefeeds), and in the
+// declaration's order for an observation predicted from one. Its other
+// settings are YDB's own and are not read.
 func readTopic(spec *ydbdecl.Changefeed, topic *native.DescribeTopicResult) error {
 	retention, err := seconds("its topic's retention period", topic.GetRetentionPeriod())
 	if err != nil {
@@ -194,9 +196,6 @@ func readTopic(spec *ydbdecl.Changefeed, topic *native.DescribeTopicResult) erro
 		}
 		spec.Consumers = append(spec.Consumers, read)
 	}
-	// By name, as the changefeeds are: the server lists consumers in the order
-	// they were added, which a consumer dropped and added again changes.
-	slices.SortFunc(spec.Consumers, func(a, b ydbdecl.Consumer) int { return strings.Compare(a.Name, b.Name) })
 	return nil
 }
 

@@ -54,12 +54,12 @@ func TestFromObserved_HappyPath(t *testing.T) {
 	}{
 		{name: "the two options YQL requires, with YDB's defaults left out", observed: observed(),
 			want: changefeeds.Feed{Changefeed: ydbdecl.Changefeed{Name: "feed", Mode: "UPDATES", Format: "JSON"}}},
-		{name: "every option, consumers by name", observed: every,
+		{name: "every option, consumers in the observation's order", observed: every,
 			want: changefeeds.Feed{Changefeed: ydbdecl.Changefeed{Name: "feed", Mode: "NEW_AND_OLD_IMAGES", Format: "DEBEZIUM_JSON", VirtualTimestamps: true,
 				ResolvedTimestamps: "PT1M30S", InitialScan: true, UserSIDs: true, SchemaChanges: true, TopicMinActivePartitions: 3, TopicAutoPartitioning: true,
 				RetentionPeriod: "PT12H", Consumers: []ydbdecl.Consumer{
-					{Name: "billing", Important: true, ReadFrom: "2026-01-01T00:00:00Z", SupportedCodecs: []string{"raw", "gzip"}},
 					{Name: "search"},
+					{Name: "billing", Important: true, ReadFrom: "2026-01-01T00:00:00Z", SupportedCodecs: []string{"raw", "gzip"}},
 				}}}},
 		{name: "a disabled changefeed", observed: disabled,
 			want: changefeeds.Feed{Changefeed: ydbdecl.Changefeed{Name: "feed", Mode: "UPDATES", Format: "JSON"}, Disabled: true}},

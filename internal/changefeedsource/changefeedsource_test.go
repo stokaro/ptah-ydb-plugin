@@ -70,7 +70,8 @@ func TestClaims_HappyPath(t *testing.T) {
 
 // A YAML table declares its changefeeds keyed by name, with each option keyed
 // as the annotation keys it and the consumers of its topic keyed by name. The
-// facet keeps the changefeeds and each topic's consumers by name.
+// facet keeps the changefeeds by name and each topic's consumers in the order
+// the document lists them.
 func TestDecodeYAML_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	request, err := testsource.YAMLTables(`{"tables": {"items": {"columns": {"id": {"type": "bigint", "primary": true}}, "changefeeds": {
@@ -82,7 +83,7 @@ func TestDecodeYAML_HappyPath(t *testing.T) {
 	c.Assert(declared(c, request), qt.DeepEquals, map[string][]changefeeds.Feed{"items": {
 		feed(ydbdecl.Changefeed{Name: "keys", Mode: "KEYS_ONLY", Format: "JSON", VirtualTimestamps: true, ResolvedTimestamps: "PT1S"}),
 		feed(ydbdecl.Changefeed{Name: "updates", Mode: "UPDATES", Format: "JSON", RetentionPeriod: "PT12H", InitialScan: true, TopicMinActivePartitions: 2,
-			Consumers: []ydbdecl.Consumer{{Name: "audit", SupportedCodecs: []string{"raw", "gzip"}, ReadFrom: "2026-01-01T00:00:00Z"}, {Name: "billing", Important: true}}}),
+			Consumers: []ydbdecl.Consumer{{Name: "billing", Important: true}, {Name: "audit", SupportedCodecs: []string{"raw", "gzip"}, ReadFrom: "2026-01-01T00:00:00Z"}}}),
 	}})
 }
 
@@ -143,7 +144,7 @@ func TestDecodeGo_HappyPath(t *testing.T) {
 	)
 	c.Assert(declared(c, request), qt.DeepEquals, map[string][]changefeeds.Feed{
 		"items": {feed(ydbdecl.Changefeed{Name: "updates", Mode: "UPDATES", Format: "JSON", RetentionPeriod: "PT6H",
-			Consumers: []ydbdecl.Consumer{{Name: "audit", SupportedCodecs: []string{"raw", "zstd"}}, {Name: "billing", Important: true}}})},
+			Consumers: []ydbdecl.Consumer{{Name: "billing", Important: true}, {Name: "audit", SupportedCodecs: []string{"raw", "zstd"}}}})},
 		"orders": {feed(ydbdecl.Changefeed{Name: "keys", Mode: "KEYS_ONLY", Format: "JSON", Consumers: []ydbdecl.Consumer{{Name: "search"}}})},
 	})
 }
