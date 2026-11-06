@@ -1,6 +1,7 @@
 package ydbdecl
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"regexp"
@@ -49,10 +50,19 @@ type DeclarationError struct {
 	Value string
 	// Reason says what the attribute takes.
 	Reason string
+	// Plain is Reason without the value it quotes, or empty where Reason
+	// quotes none.
+	Plain string
 }
 
 func (e *DeclarationError) Error() string {
 	return fmt.Sprintf("invalid %s %q: %s", e.Attribute, e.Value, e.Reason)
+}
+
+// Unquoted is the refusal without the value the declaration wrote: `invalid
+// mode: takes one of KEYS_ONLY, UPDATES, ...`.
+func (e *DeclarationError) Unquoted() string {
+	return "invalid " + e.Attribute + ": " + cmp.Or(e.Plain, e.Reason)
 }
 
 // TablePartitioning is what a row table's declaration names of how it splits

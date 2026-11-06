@@ -17,7 +17,9 @@ import (
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/replication"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbdecl"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -91,11 +93,26 @@ func transferKeys() []string {
 
 // Decode reads every replication and transfer a YAML document declares and
 // returns the values of each fragment that declares them, by index. An invalid
-// declaration refuses the whole document.
+// declaration refuses the whole document, with the reason a host prints in
+// the words of the host's embedded engine and without the value the
+// declaration wrote (see authored.Declared).
 func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
+	decode := decodeYAML
 	if document.GetFormat() == protocol.SourceDocument_GO_ANNOTATIONS {
-		return decodeGo(ctx, document)
+		decode = decodeGo
 	}
+	values, err := decode(ctx, document)
+	return values, authored.Declared(err)
+}
+
+// refuse is a refusal a host prints. Its text names the declared objects and
+// attributes and never a value.
+func refuse(format string, args ...any) error {
+	return authored.New(fmt.Sprintf(format, args...))
+}
+
+// decodeYAML reads the replications and transfers of a YAML document.
+func decodeYAML(ctx context.Context, document *protocol.SourceDocument) (map[int][]*protocol.SourceModelValue, error) {
 	result := make(map[int][]*protocol.SourceModelValue)
 	seen := make(map[string]bool)
 	position := 0
@@ -107,14 +124,14 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 			continue
 		}
 		if document.Format != protocol.SourceDocument_YAML {
-			return nil, fmt.Errorf("unsupported YDB replication source format")
+			return nil, refuse("unsupported YDB replication source format")
 		}
 		if fragment.BindingId != "" || fragment.Subject != nil || len(fragment.GetInheritedAttributes().GetEntries()) != 0 {
-			return nil, fmt.Errorf("unsupported YDB replication source attachment")
+			return nil, refuse("unsupported YDB replication source attachment")
 		}
 		mapping := fragment.GetValue().GetMapping()
 		if mapping == nil {
-			return nil, fmt.Errorf("%s requires a mapping", fragment.Selector)
+			return nil, refuse("%s requires a mapping", fragment.Selector)
 		}
 		result[index] = nil
 		entries := slices.Clone(mapping.GetEntries())
@@ -131,13 +148,13 @@ func Decode(ctx context.Context, document *protocol.SourceDocument) (map[int][]*
 				family = "transfer"
 				value, display, err = transferEntry(entry)
 			default:
-				return nil, fmt.Errorf("unsupported YDB replication source key")
+				return nil, refuse("unsupported YDB replication source key")
 			}
 			if err != nil {
 				return nil, err
 			}
 			if key := value.Kind + "\x00" + display; seen[key] {
-				return nil, fmt.Errorf("%s %q: %s %s is declared twice", family, entry.Key, family, display)
+				return nil, refuse("%s %q: %s %s is declared twice", family, entry.Key, family, display)
 			}
 			seen[value.Kind+"\x00"+display] = true
 			result[index] = append(result[index], &protocol.SourceModelValue{Placement: protocol.SourceModelValue_NATIVE_OBJECT,
@@ -164,7 +181,7 @@ func replicationEntry(entry *protocol.SourceEntry) (*protocol.Envelope, string, 
 		return nil, "", fmt.Errorf("async replication %q: %w", entry.Key, err)
 	}
 	if len(items) == 0 {
-		return nil, "", fmt.Errorf("async replication %q: declares no item; list the tables it replicates under items", entry.Key)
+		return nil, "", refuse("async replication %q: declares no item; list the tables it replicates under items", entry.Key)
 	}
 	for position, written := range items {
 		item, err := replication.ParseItem(written)
@@ -220,7 +237,7 @@ func transferEntry(entry *protocol.SourceEntry) (*protocol.Envelope, string, err
 func fields(entry *protocol.SourceEntry, keys []string, withItems bool) (map[string]string, []map[string]string, error) {
 	mapping := entry.GetValue().GetMapping()
 	if mapping == nil {
-		return nil, nil, fmt.Errorf("requires a mapping")
+		return nil, nil, refuse("requires a mapping")
 	}
 	values := make(map[string]string)
 	var items []map[string]string
@@ -229,7 +246,7 @@ func fields(entry *protocol.SourceEntry, keys []string, withItems bool) (map[str
 		case withItems && field.Key == keyItems:
 			sequence := field.GetValue().GetSequence()
 			if sequence == nil && field.GetValue().GetNull() == nil {
-				return nil, nil, fmt.Errorf("%s requires a sequence", keyItems)
+				return nil, nil, refuse("%s requires a sequence", keyItems)
 			}
 			for position, value := range sequence.GetValues() {
 				item, err := itemFields(value)
@@ -245,7 +262,7 @@ func fields(entry *protocol.SourceEntry, keys []string, withItems bool) (map[str
 			}
 			values[field.Key] = text
 		default:
-			return nil, nil, fmt.Errorf("field %s not found", field.Key)
+			return nil, nil, refuse("field %s not found", field.Key)
 		}
 	}
 	return values, items, nil
@@ -255,12 +272,12 @@ func fields(entry *protocol.SourceEntry, keys []string, withItems bool) (map[str
 func itemFields(value *protocol.SourceValue) (map[string]string, error) {
 	mapping := value.GetMapping()
 	if mapping == nil {
-		return nil, fmt.Errorf("an item requires a mapping")
+		return nil, refuse("an item requires a mapping")
 	}
 	item := map[string]string{replication.AttributeSource: "", replication.AttributeTarget: ""}
 	for _, field := range mapping.GetEntries() {
 		if field.Key != replication.AttributeSource && field.Key != replication.AttributeTarget {
-			return nil, fmt.Errorf("field %s not found", field.Key)
+			return nil, refuse("field %s not found", field.Key)
 		}
 		text, err := scalar(field.GetValue())
 		if err != nil {
@@ -314,7 +331,7 @@ func scalar(value *protocol.SourceValue) (string, error) {
 	case *protocol.SourceValue_Null:
 		return "", nil
 	default:
-		return "", fmt.Errorf("expected a scalar")
+		return "", refuse("expected a scalar")
 	}
 }
 
@@ -345,11 +362,14 @@ func decodeGo(ctx context.Context, document *protocol.SourceDocument) (map[int][
 			continue
 		}
 		if fragment.BindingId != "" || fragment.Subject != nil || len(fragment.GetInheritedAttributes().GetEntries()) != 0 {
-			return nil, fmt.Errorf("unsupported YDB replication source attachment")
+			return nil, refuse("unsupported YDB replication source attachment")
 		}
 		result[index] = nil
 		values, err := attributes(fragment.GetValue().GetMapping(), fragment.Selector)
 		if err != nil {
+			return nil, err
+		}
+		if err := ydbdecl.RequireAttributes(values, requiredAttributes(fragment.Selector)...); err != nil {
 			return nil, err
 		}
 		switch fragment.Selector {
@@ -370,7 +390,7 @@ func decodeGo(ctx context.Context, document *protocol.SourceDocument) (map[int][
 		case DirectiveTransfer:
 			transfers = append(transfers, pendingTransfer{fragment: index, values: values})
 		default:
-			return nil, fmt.Errorf("unsupported YDB replication source directive")
+			return nil, refuse("unsupported YDB replication source directive")
 		}
 	}
 	if err := attachItems(replications, items); err != nil {
@@ -405,13 +425,13 @@ func attachItems(replications []pendingReplication, items []pendingItem) error {
 			return declared.name == pending.replication && declared.schema == pending.schema
 		})
 		if index < 0 {
-			return fmt.Errorf("the file declares no async replication %q for the item replicating %q", display(pending.schema, pending.replication), pending.item.Source)
+			return refuse("the file declares no async replication %q for the item replicating %q", display(pending.schema, pending.replication), pending.item.Source)
 		}
 		declared := &replications[index]
 		if slices.ContainsFunc(declared.spec.Items, func(have replication.Item) bool {
 			return strings.Trim(have.Target, "/") == strings.Trim(pending.item.Target, "/")
 		}) {
-			return fmt.Errorf("async replication %q declares two items with target %q", display(declared.schema, declared.name), pending.item.Target)
+			return refuse("async replication %q declares two items with target %q", display(declared.schema, declared.name), pending.item.Target)
 		}
 		declared.spec.Items = append(declared.spec.Items, pending.item)
 	}
@@ -427,7 +447,7 @@ func addGoValues(document *protocol.SourceDocument, result map[int][]*protocol.S
 	position := 0
 	add := func(fragment int, value *protocol.Envelope, family, path string) error {
 		if key := value.Kind + "\x00" + path; seen[key] {
-			return fmt.Errorf("%s %s is declared twice", family, path)
+			return refuse("%s %s is declared twice", family, path)
 		}
 		seen[value.Kind+"\x00"+path] = true
 		result[fragment] = append(result[fragment], &protocol.SourceModelValue{Placement: protocol.SourceModelValue_NATIVE_OBJECT,
@@ -439,7 +459,7 @@ func addGoValues(document *protocol.SourceDocument, result map[int][]*protocol.S
 	}
 	for _, declared := range replications {
 		if len(declared.spec.Items) == 0 {
-			return fmt.Errorf("async replication %q declares no item; declare the tables it replicates with //%s in the same file", display(declared.schema, declared.name), DirectiveItem)
+			return refuse("async replication %q declares no item; declare the tables it replicates with //%s in the same file", display(declared.schema, declared.name), DirectiveItem)
 		}
 		owner, path, err := declaredOwner(schema.ReplicationProperties, declared.values, "")
 		if err != nil {
@@ -480,17 +500,33 @@ func addGoValues(document *protocol.SourceDocument, result map[int][]*protocol.S
 // text.
 func attributes(mapping *protocol.SourceMapping, directive string) (map[string]string, error) {
 	if mapping == nil {
-		return nil, fmt.Errorf("%s requires attributes", directive)
+		return nil, refuse("%s requires attributes", directive)
 	}
 	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {
-			return nil, fmt.Errorf("attribute %s requires text", entry.Key)
+			return nil, refuse("attribute %s requires text", entry.Key)
 		}
 		values[entry.Key] = text.Text
 	}
 	return values, nil
+}
+
+// requiredAttributes are the attributes a Go directive needs, in the order the
+// host's directive lists them: a replication's name and connection string, an
+// item's replication, source and target, and a transfer's name, source,
+// target and lambda.
+func requiredAttributes(directive string) []string {
+	switch directive {
+	case DirectiveReplication:
+		return []string{replication.AttributeName, replication.AttributeConnectionString}
+	case DirectiveItem:
+		return []string{replication.AttributeReplication, replication.AttributeSource, replication.AttributeTarget}
+	case DirectiveTransfer:
+		return []string{replication.AttributeName, replication.AttributeSource, replication.AttributeTarget, replication.AttributeUsing}
+	}
+	return nil
 }
 
 // display names an object by its path relative to the database root, for
