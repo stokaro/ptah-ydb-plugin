@@ -2120,9 +2120,11 @@ and column family fields, such as a family's cache mode. The provider's typed
 definitions preserve their native wire numbers; attribution and the pinned
 upstream source are in `third_party/ydb/NOTICE.md`. Unsupported fields remain
 errors, a family's compression level among them. A table service request is
-built with the pinned bindings and carries a family's cache mode as an unknown
-field 6, the one unknown field the provider accepts. Runtime statistics are
-omitted from schema observations.
+built with the pinned bindings and carries the fields they lack as unknown
+fields, the only ones the provider accepts: a family's cache mode as field 6
+of the family, and a new table's vector or full-text index as field 7, 8 or 9
+of its index, the upstream arm. Runtime statistics are omitted from schema
+observations.
 
 With protoc 35.1 on `PATH`, regenerate with:
 
@@ -3014,14 +3016,18 @@ read the source the operator wrote past its UNIQUE, since the index changes no
 column of the table; a UNIQUE the host does not turn into an index, such as a
 deferrable one, is refused when it is planned.
 
-The vector and full-text indexes of the table's native index set are built
-after the creation, one step each (`row-table-create-index/N`, ordered after
-the creation), with the rules and the statement of
-[Vector and full-text indexes](#vector-and-full-text-indexes). The host's
-embedded engine writes them inside the CREATE TABLE instead; the end state is
-the same, and a target that cannot build one refuses the whole creation before
-the table is created. A global index the native set states is refused at
-creation: a new table takes its global indexes from the common declaration.
+The vector and full-text indexes of the table's native index set are built by
+the creation itself, with the rules of
+[Vector and full-text indexes](#vector-and-full-text-indexes), as the host's
+embedded engine built them: the native `CreateTable` call carries each one as
+the upstream arm of its index, and the TEXT form, an inspection and a
+migration file write every index of the table inside its `CREATE TABLE`, in
+name order, the vector or full-text one as `INDEX name GLOBAL USING
+vector_kmeans_tree ON (...) WITH (...)`. YDB then builds no index over rows the
+table holds, so the operation service lists no index build for the table. A
+target that cannot build one refuses the whole creation before the table is
+created. A global index the native set states is refused at creation: a new
+table takes its global indexes from the common declaration.
 
 Access requirements, temporary tables, changefeeds, column
 compression or encoding, and richer common constraints are refused.
@@ -3619,8 +3625,8 @@ A vector index (`vector_kmeans_tree`) and a full-text index (`fulltext_plain`,
 and the comparison, the planner and execution follow the rules of the host's
 embedded engine for them:
 
-- An index the set states and the table does not hold is added with one step,
-  `row-table-add-index/N`, of its own operation kind,
+- An index the set states and a table that exists does not hold is added with
+  one step, `row-table-add-index/N`, of its own operation kind,
   `row-table-native-index-operation`. The native `AlterTable` call of the
   pinned bindings carries neither kind, so execution runs YQL's `ALTER TABLE ...
   ADD INDEX` through the query service, as the host's embedded engine writes
