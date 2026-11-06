@@ -55,7 +55,9 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 		result, err = coordinationplan.Plan(ctx, request)
 	case streamingplan.ServiceID:
 		if result = directoryConflict(request); result == nil {
-			result, err = streamingplan.Plan(ctx, request)
+			if result = nestedDatabaseCreation(request); result == nil {
+				result, err = streamingplan.Plan(ctx, request)
+			}
 		}
 	case topicplan.ServiceID:
 		result, err = topicplan.Plan(ctx, request)

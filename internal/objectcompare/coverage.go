@@ -148,6 +148,20 @@ func kindSources(coverage *protocol.ComparisonCoverage, kind string) []*protocol
 	return nil
 }
 
+// nestedRoot returns the root of the nested database that a region of
+// coverage covering subject claims for kind, as the read wrote its reason (see
+// schema.NestedDatabaseReason), and whether such a region covers it.
+func nestedRoot(coverage *protocol.ComparisonCoverage, kind string, subject *protocol.ComparisonIdentity) (string, bool) {
+	for _, source := range kindSources(coverage, kind) {
+		for _, region := range source.GetRegions() {
+			if root, nested := schema.NestedDatabase(region.GetKnowledge()); nested && namespaceMatches(region.GetScope(), subject) {
+				return root, true
+			}
+		}
+	}
+	return "", false
+}
+
 // knowledge is what the coverage establishes about one subject. Each
 // independent source must establish absence. Matching regions intersect; a
 // narrower unknown region cannot borrow a wider complete region's authority.

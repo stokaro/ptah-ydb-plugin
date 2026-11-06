@@ -123,6 +123,9 @@ func ReadObjects(ctx context.Context, driver *ydb.Driver, columns ColumnTables, 
 	if err := read.streamingInventory(ctx, selectors); err != nil {
 		return nil, err
 	}
+	if len(selectors) == 0 {
+		read.nestedRegions(slices.Contains(provider.HostFeatures(ctx), provider.SchemaSubtreeCoverageFeature))
+	}
 	if err := markTransferReaders(result); err != nil {
 		return nil, err
 	}
@@ -164,6 +167,9 @@ type traversal struct {
 	// replicas it cannot name.
 	replicas           []*protocol.Reference
 	replicationsUnread bool
+	// nested are the roots of the nested databases the walk left out,
+	// relative to database; see leftOut.
+	nested []string
 }
 
 // directory reads every entry of the listed directory selected into the
@@ -179,12 +185,19 @@ type traversal struct {
 // an object a declaration places there and the drop of none it holds. A
 // selected path below one is such a directory too. The walk neither lists
 // nor returns one, and the root's claim covers it (see dotted).
+//
+// A selected path that is the root of a nested database, or lies below one,
+// holds nothing of this database either; see nestedDirectory.
 func (t *traversal) directory(ctx context.Context, selected string) ([]string, error) {
 	if dotted(selected) {
 		t.completeDirectory(selected)
 		return nil, nil
 	}
 	listed, err := nativeapi.ListDirectory(ctx, t.source.directory, t.database, selected)
+	if nested, isNested := errors.AsType[*nativeapi.NestedDatabaseError](err); isNested {
+		t.nestedDirectory(selected, nested.Root)
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -255,6 +268,59 @@ func (t *traversal) completeDirectory(selected string) {
 			record.Regions = append(record.Regions, directoryRegion(t.database, selected))
 		}
 	}
+}
+
+// nestedDirectory records the selected directory, the root of the nested
+// database at root or a directory below it, as holding nothing of this
+// database. The host's embedded engine read such a selection as an empty
+// directory: its walk never entered a nested database. Read as a directory to
+// list, the selection is refused (`YDB schema selector did not describe the
+// expected directory` at the root, `its parent is not a directory` below it),
+// and so is every read, introspection and apply that names it.
+//
+// The directory is claimed complete, as a listed one is (see
+// completeDirectory), and each claim carries the nested database's reason: a
+// session of this database neither reads nor drops what the nested database
+// holds, and an object it creates there lands in the nested database's scheme.
+// The comparison and the planning check read the reason back and refuse a
+// declaration there (see objectplan.NestedDatabaseCreations), and the access
+// read leaves the directory out. A claim of unknown knowledge would make a Go
+// export declare every native kind not described.
+func (t *traversal) nestedDirectory(selected, root string) {
+	t.nested = append(t.nested, root)
+	scope := directoryRegion(t.database, selected).GetScope()
+	t.nestedClaims(scope, root, func(kind string) bool { return slices.Contains(tablecompare.Kinds(), kind) || t.nestedKind(kind) })
+}
+
+// nestedRegions claims the root of each nested database a read of the whole
+// database left out, and with subtree every directory below it, for the
+// native kinds, as nestedDirectory claims a selected one. Like the root's
+// claim, each is complete: this database holds nothing there. The table facets
+// get no claim, as no directory the walk did not list gets one.
+func (t *traversal) nestedRegions(subtree bool) {
+	for _, root := range t.nested {
+		scope := directoryRegion(t.database, root).GetScope()
+		scope.SchemaSubtree = subtree
+		t.nestedClaims(scope, root, t.nestedKind)
+	}
+}
+
+// nestedClaims claims each kind claimed selects complete at scope, with the
+// reason of the nested database at root.
+func (t *traversal) nestedClaims(scope *protocol.ModelNamespace, root string, claimed func(string) bool) {
+	for _, record := range t.result.Coverage.Kinds {
+		if claimed(record.Model.Kind) {
+			record.Regions = append(record.Regions, &protocol.ModelNamespaceKnowledge{Scope: proto.CloneOf(scope),
+				Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_COMPLETE, Reason: schema.NestedDatabaseReason(root)}})
+		}
+	}
+}
+
+// nestedKind reports whether the read gives its claim on kind at a nested
+// database the nested database's reason: every native kind but views the
+// common wire carries, which are not read as native objects.
+func (t *traversal) nestedKind(kind string) bool {
+	return schema.IsNativeObject(kind) && (kind != schema.ViewProperties || !t.common.Views)
 }
 
 // occupant reports whether an entry of kind is an object entry reads: one
@@ -553,9 +619,10 @@ func (t *traversal) streamingInventory(ctx context.Context, selectors []string) 
 // what it holds is that database's schema, not a directory of this one: a
 // session of this database cannot drop a table there (`Cannot find table`).
 // The host's embedded engine left every such entry out; a read that refused
-// it refused the whole database.
+// it refused the whole database. The walk records its root for nestedRegions.
 func (t *traversal) leftOut(selected string, entry *Ydb_Scheme.Entry) bool {
 	if entry.GetType() == Ydb_Scheme.Entry_DATABASE {
+		t.nested = append(t.nested, path.Join(selected, entry.GetName()))
 		return true
 	}
 	if entry.GetType() != Ydb_Scheme.Entry_DIRECTORY {

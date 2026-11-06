@@ -15,6 +15,23 @@ import (
 // SCHEME_ERROR: the path does not exist, or the session may not see it.
 var ErrDirectoryNotVisible = errors.New("YDB directory does not exist or is not visible")
 
+// NestedDatabaseError reports a path at or below the root of another database
+// that sits below the session's database, such as /local/db2 below /local.
+// YDB lists that root in its parent as an entry of type DATABASE, lists the
+// root itself to the session, and answers a path below it with SCHEME_ERROR.
+// What the nested database holds is its own schema: a session of the outer
+// database cannot drop a table there (`Cannot find table`), and a table it
+// creates there lands in the nested database's scheme.
+type NestedDatabaseError struct {
+	// Path is the absolute path whose listing was asked for, and Root the
+	// nested database's root, relative to the session's database.
+	Path, Root string
+}
+
+func (e *NestedDatabaseError) Error() string {
+	return fmt.Sprintf("list YDB directory %s: %s is another YDB database, nested in this one", e.Path, e.Root)
+}
+
 // DirectoryLister lists the directory at an absolute path. It answers a path
 // YDB does not show with an error that wraps [ErrDirectoryNotVisible].
 type DirectoryLister func(ctx context.Context, absolute string) (*Ydb_Scheme.ListDirectoryResult, error)
@@ -51,9 +68,18 @@ func SchemeLister(client Ydb_Scheme_V1.SchemeServiceClient) DirectoryLister {
 // it stands, and a parent that is not a directory refuses the read: nothing can
 // be created below it. database itself is never read as empty. Inspection and
 // every native write's precondition read through this one rule.
+//
+// A path at or below a nested database is refused with a
+// [NestedDatabaseError]: the root because YDB lists it as a DATABASE, a path
+// below it because the root is its nearest listed ancestor. Read as a
+// directory, the root would let a write's precondition pass and the write
+// create its object in the nested database.
 func ListDirectory(ctx context.Context, list DirectoryLister, database, relative string) (*Ydb_Scheme.ListDirectoryResult, error) {
 	absolute := path.Join(database, relative)
 	listed, err := list(ctx, absolute)
+	if relative != "" && err == nil && listed.GetSelf().GetType() == Ydb_Scheme.Entry_DATABASE {
+		return nil, &NestedDatabaseError{Path: absolute, Root: relative}
+	}
 	if relative == "" || !errors.Is(err, ErrDirectoryNotVisible) {
 		return listed, err
 	}
@@ -62,6 +88,9 @@ func ListDirectory(ctx context.Context, list DirectoryLister, database, relative
 		parent = ""
 	}
 	above, parentErr := ListDirectory(ctx, list, database, parent)
+	if nested, ok := errors.AsType[*NestedDatabaseError](parentErr); ok {
+		return nil, &NestedDatabaseError{Path: absolute, Root: nested.Root}
+	}
 	if parentErr != nil {
 		return nil, parentErr
 	}

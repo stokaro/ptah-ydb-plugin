@@ -258,7 +258,10 @@ func (s *accessTargetSet) addDirectories(kinds []*protocol.ModelKindCoverage) er
 				continue
 			}
 			directory := region.GetScope().GetSchema().GetSource()
-			if directory == "" {
+			// The root of a nested database, and a directory below one, is no
+			// directory of this database: the access list there is the
+			// nested database's (see traversal.nestedDirectory).
+			if _, nested := schema.NestedDatabase(region.GetKnowledge()); nested || directory == "" {
 				continue
 			}
 			if region.GetScope().GetDatabase().GetSource() != s.database {
