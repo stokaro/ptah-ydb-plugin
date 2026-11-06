@@ -541,12 +541,23 @@ func (t *traversal) streamingInventory(ctx context.Context, selectors []string) 
 }
 
 // leftOut reports a directory entry of the listed directory selected that the
-// walk neither reads nor returns: a directory whose name starts with a dot
-// (see dotted), and a directory at the root that leaveOut names. The dev
-// realms other runs keep there are no part of the database's schema, as the
-// host's embedded engine left them out, so the root's claim covers that
-// directory as holding nothing; the walk records that it left the realms out.
+// walk neither reads nor returns: a nested database, a directory whose name
+// starts with a dot (see dotted), and a directory at the root that leaveOut
+// names. The dev realms other runs keep there are no part of the database's
+// schema, as the host's embedded engine left them out, so the root's claim
+// covers that directory as holding nothing; the walk records that it left the
+// realms out.
+//
+// A nested database is another database whose root sits below this one, such
+// as /local/db2 below /local. YDB lists it as an entry of type DATABASE, and
+// what it holds is that database's schema, not a directory of this one: a
+// session of this database cannot drop a table there (`Cannot find table`).
+// The host's embedded engine left every such entry out; a read that refused
+// it refused the whole database.
 func (t *traversal) leftOut(selected string, entry *Ydb_Scheme.Entry) bool {
+	if entry.GetType() == Ydb_Scheme.Entry_DATABASE {
+		return true
+	}
 	if entry.GetType() != Ydb_Scheme.Entry_DIRECTORY {
 		return false
 	}

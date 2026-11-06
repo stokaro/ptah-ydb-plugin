@@ -1196,6 +1196,13 @@ creation again on the next run, which YDB refuses (`path exist`); through the
 provider the next run is refused before the unit is sent.
 A table whose own name begins with a dot is read like any other. Traversal and
 snapshot size are bounded.
+A database nested in the selected one, such as `/local/db2` in `/local`, is
+another database, and the read leaves it out as the host's embedded engine
+did: YDB lists it as an entry of type DATABASE, and an unfiltered read neither
+descends into it nor reads what it holds. The read's claim still covers its
+path as holding nothing, so a declared object there is planned for creation,
+as that engine planned it. A selector that names a nested database, or a path
+below one, is refused, where that engine read it as an empty directory.
 Coverage names inspected subjects and records native-object completeness for
 each directory whose listing and child reads finished. These regions bind the
 exact database, empty catalog, and exact schema directory; an unfiltered read
