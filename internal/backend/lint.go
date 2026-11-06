@@ -80,7 +80,7 @@ func (*Provider) CheckLintMigrations(ctx context.Context, request *protocol.Chec
 // lintDescription is the description as the host of the call negotiated it,
 // which lists the statement facts only for a host that lists them too.
 func lintDescription(ctx context.Context) *protocol.Description {
-	return provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx))
+	return provider.NegotiatedDescription(described(), provider.HostFeatures(ctx))
 }
 
 // lintError is the status of a lint call that failed: the caller's

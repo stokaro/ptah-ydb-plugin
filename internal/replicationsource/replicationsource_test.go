@@ -199,7 +199,7 @@ func TestDecodeGo_FailurePath(t *testing.T) {
 		{name: "no item", directives: []goDirective{replicationDirective},
 			wantErr: `async replication "mirror" declares no item; declare the tables it replicates with //ptah:schema:async_replication:item in the same file`},
 		{name: "a transfer with no name", directives: []goDirective{{replicationsource.DirectiveTransfer, [][2]string{{"source", "tp"}, {"target", "t"}, {"using", "($m) -> { return []; }"}}}},
-			wantErr: `invalid name: an async replication or a transfer needs a name`},
+			wantErr: `missing required annotation attribute "name"`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -19,7 +19,7 @@ func (p *Provider) PlanDeclarations(ctx context.Context, request *protocol.PlanD
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := provider.NegotiatedDescription(Description(), request.GetTargetFeatures())
+	description := provider.NegotiatedDescription(described(), request.GetTargetFeatures())
 	if err := provider.ValidateDeclarationsRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}

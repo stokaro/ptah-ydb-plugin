@@ -75,7 +75,13 @@ func Access(ctx context.Context, snapshot *protocol.Schema, database string, sco
 	if err == nil {
 		recordPrincipals(objects, held, scope)
 	}
-	sortAccess(objects)
+	// The owners and grants stay in the order the read met them, which is the
+	// host's embedded engine's: by target in readingOrder, each target's
+	// grants as YDB describes its entries. The roles and the memberships are
+	// sorted, as that engine sorted them (recordPrincipals). A schema render
+	// writes the GRANT statements and the roles in this order. The names left
+	// out of scope are sorted too: a note counts them and names none.
+	slices.Sort(objects.RolesOutOfScope)
 	candidate := proto.CloneOf(snapshot)
 	candidate.CommonObjects = objects
 	if err := provider.ValidateSchema(candidate); err != nil {
@@ -186,8 +192,25 @@ func accessTargets(snapshot *protocol.Schema, database string) ([]accessTarget, 
 	if err := targets.addDirectories(snapshot.GetCoverage().GetKinds()); err != nil {
 		return nil, err
 	}
-	slices.SortFunc(targets.result, func(a, b accessTarget) int { return strings.Compare(a.absolute, b.absolute) })
+	slices.SortFunc(targets.result, readingOrder)
 	return targets.result, nil
+}
+
+// readingOrder orders access targets as the host's embedded engine read them,
+// so the grants, owners and principals of a read come in its order: the
+// resource pools first, which it read from the system views before it walked
+// the database, then the database and each directory before the entries in
+// it, the entries of a directory by name and a directory's own entries where
+// its name falls among them. Comparing the paths one component at a time is
+// that walk: a whole-string comparison puts `a.b` before the entries of `a`.
+func readingOrder(a, b accessTarget) int {
+	pool := func(target accessTarget) int {
+		if target.reference.GetKind() == "resource pool" {
+			return 0
+		}
+		return 1
+	}
+	return cmp.Or(cmp.Compare(pool(a), pool(b)), slices.Compare(strings.Split(a.absolute, "/"), strings.Split(b.absolute, "/")))
 }
 
 // accessTargetSet collects the access targets of one database, one per
@@ -378,22 +401,18 @@ func recordPrincipals(objects *protocol.ObservedCommonObjects, held nativeapi.Pr
 	for _, membership := range held.Memberships {
 		objects.Memberships = append(objects.Memberships, &protocol.RoleMembership{Group: membership.Group, Member: membership.Member})
 	}
+	// The YDB engine built into the host at 74de0b65b sorted the users and
+	// the groups together by name, and the memberships by group and then
+	// member, so `schema inspect --format sql` wrote CREATE GROUP readers
+	// ahead of CREATE USER u. Kept in the order the system views list them,
+	// every user came before every group.
+	slices.SortStableFunc(objects.Roles, func(a, b *protocol.ObservedRole) int { return strings.Compare(a.GetName(), b.GetName()) })
+	slices.SortStableFunc(objects.Memberships, func(a, b *protocol.RoleMembership) int {
+		return cmp.Or(strings.Compare(a.GetGroup(), b.GetGroup()), strings.Compare(a.GetMember(), b.GetMember()))
+	})
 	for _, entry := range objects.ObjectOwners {
 		if login, known := canLogin[entry.Owner]; known {
 			entry.OwnerCanLogin = new(login)
 		}
 	}
-}
-
-func sortAccess(objects *protocol.ObservedCommonObjects) {
-	refKey := func(ref *protocol.Reference) string { return ref.Kind + "\x00" + ref.Schema + "\x00" + ref.Name }
-	slices.SortFunc(objects.ObjectOwners, func(a, b *protocol.ObjectOwner) int { return strings.Compare(refKey(a.Object), refKey(b.Object)) })
-	slices.SortFunc(objects.Grants, func(a, b *protocol.ObservedGrant) int {
-		return cmp.Or(strings.Compare(refKey(a.Target), refKey(b.Target)), strings.Compare(a.Role, b.Role), strings.Compare(a.Privilege, b.Privilege))
-	})
-	slices.SortFunc(objects.Roles, func(a, b *protocol.ObservedRole) int { return strings.Compare(a.Name, b.Name) })
-	slices.Sort(objects.RolesOutOfScope)
-	slices.SortFunc(objects.Memberships, func(a, b *protocol.RoleMembership) int {
-		return cmp.Or(strings.Compare(a.Group, b.Group), strings.Compare(a.Member, b.Member))
-	})
 }

@@ -1,0 +1,68 @@
+//ptah:schema:table name="cols" schema="ex" store="column" partition_by_hash="id" column_shards="2"
+type Cols struct {
+	//ptah:schema:field name="id" type="Uint64" not_null="true" primary="true"
+	Id uint64
+	//ptah:schema:field name="body" type="Utf8"
+	Body *string
+}
+
+//ptah:schema:table name="colttl" schema="ex" primary_key="ts,id" store="column" partition_by_hash="id" column_shards="64" platform.ydb.row_deletion_column="ts" platform.ydb.row_deletion_interval="P1D"
+type Colttl struct {
+	//ptah:schema:field name="ts" type="Timestamp" not_null="true"
+	Ts time.Time
+	//ptah:schema:field name="id" type="Uint64" not_null="true"
+	Id uint64
+}
+
+//ptah:schema:table name="kinds" schema="ex"
+type Kinds struct {
+	//ptah:schema:field name="id" type="Uint64" not_null="true" primary="true"
+	Id uint64
+	//ptah:schema:field name="a" type="Utf8"
+	A *string
+	//ptah:schema:field name="b" type="Utf8"
+	B *string
+	//ptah:schema:index name="by_a" fields="a" type="GLOBAL ASYNC" table="ex.kinds"
+	_ struct{}
+	//ptah:schema:index name="by_b" fields="b" unique="true" type="GLOBAL SYNC" table="ex.kinds"
+	_ struct{}
+}
+
+//ptah:schema:table name="plain" schema="ex"
+type Plain struct {
+	//ptah:schema:field name="id" type="Uint64" not_null="true" primary="true"
+	Id uint64
+	//ptah:schema:field name="body" type="Utf8"
+	Body *string
+}
+
+//ptah:schema:table name="rowkey" schema="ex" primary_key="a,b"
+type Rowkey struct {
+	//ptah:schema:field name="a" type="Uint64" not_null="true"
+	A uint64
+	//ptah:schema:field name="b" type="Uint64" not_null="true"
+	B uint64
+	//ptah:schema:field name="v" type="Utf8"
+	V *string
+}
+
+//ptah:schema:table name="rowkeyrev" schema="ex" primary_key="b,a"
+type Rowkeyrev struct {
+	//ptah:schema:field name="a" type="Uint64" not_null="true"
+	A uint64
+	//ptah:schema:field name="b" type="Uint64" not_null="true"
+	B uint64
+}
+
+//ptah:schema:table name="tuned" schema="ex" platform.ydb.row_deletion_column="created_at" platform.ydb.row_deletion_interval="P30D" auto_partitioning_by_load="ENABLED" auto_partitioning_min_partitions_count="2" read_replicas_settings="ANY_AZ:1" key_bloom_filter="ENABLED"
+//ptah:schema:columnfamily name="cold" compression="lz4"
+type Tuned struct {
+	//ptah:schema:field name="id" type="Uint64" not_null="true" primary="true"
+	Id uint64
+	//ptah:schema:field name="body" type="Utf8"
+	Body *string
+	//ptah:schema:field name="created_at" type="Timestamp"
+	CreatedAt *time.Time
+	//ptah:schema:index name="by_body" fields="body" type="GLOBAL SYNC" table="ex.tuned" auto_partitioning_min_partitions_count="3"
+	_ struct{}
+}

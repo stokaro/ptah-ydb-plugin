@@ -22,7 +22,7 @@ func (*Provider) PrepareCommonObjects(ctx context.Context, request *protocol.Pre
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := Description()
+	description := described()
 	if err := provider.ValidatePrepareCommonObjectsRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}

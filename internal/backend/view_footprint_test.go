@@ -42,13 +42,13 @@ func commonView(name string, operation viewChange) *protocol.CommonPlanningStep 
 }
 
 // viewPlan plans the coordination node app/node, created as action says,
-// beside the host's step on the view name.
-func viewPlan(c *qt.C, action, name string, operation viewChange) (*protocol.PlannedFeatures, *protocol.CommonPlanningStep) {
+// beside the host's step on the view name and the steps after it.
+func viewPlan(c *qt.C, action, name string, operation viewChange, after ...*protocol.CommonPlanningStep) (*protocol.PlannedFeatures, *protocol.CommonPlanningStep) {
 	c.Helper()
 	request := nativePlan(c, action)
 	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.PlanningLifecycleFeature}
 	view := commonView(name, operation)
-	request.CommonSteps = []*protocol.CommonPlanningStep{view}
+	request.CommonSteps = append([]*protocol.CommonPlanningStep{view}, after...)
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
@@ -57,7 +57,8 @@ func viewPlan(c *qt.C, action, name string, operation viewChange) (*protocol.Pla
 
 // A view occupies a path of its directory, as a table does, so a native
 // object planned in the same run as a view at another path is not refused for
-// the view's footprint, and needs no order against it.
+// the view's footprint, and needs no order against it: the node follows only
+// the last common step.
 func TestViewBesideANativeObject_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, action string
@@ -70,11 +71,11 @@ func TestViewBesideANativeObject_HappyPath(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 
-			result, _ := viewPlan(c, test.action, "summary", test.operation)
+			result, _ := viewPlan(c, test.action, "summary", test.operation, lastCommonStep())
 
 			c.Assert(result.Diagnostics, qt.HasLen, 0)
 			c.Assert(result.Contributions, qt.HasLen, 1)
-			c.Assert(result.Contributions[0].Dependencies, qt.HasLen, 0)
+			c.Assert(stepEdges(result), qt.DeepEquals, []string{placedLast})
 		})
 	}
 }

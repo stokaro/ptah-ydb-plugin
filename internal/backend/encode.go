@@ -55,7 +55,7 @@ func (*Provider) EncodeSource(ctx context.Context, request *protocol.EncodeSourc
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx))
+	description := provider.NegotiatedDescription(described(), provider.HostFeatures(ctx))
 	if err := provider.ValidateEncodeSourceRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}

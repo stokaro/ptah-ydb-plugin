@@ -23,7 +23,7 @@ var _ provider.MigrationSplitter = (*Provider)(nil)
 // against the catalog. An unusable request, cancellation or a reply the SDK
 // would not accept returns an error and no unit.
 func (*Provider) SplitMigration(ctx context.Context, request *protocol.SplitMigrationRequest) (*protocol.MigrationSplit, error) {
-	description := provider.NegotiatedDescription(Description(), provider.HostFeatures(ctx))
+	description := provider.NegotiatedDescription(described(), provider.HostFeatures(ctx))
 	if err := provider.ValidateSplitMigrationRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}

@@ -30,13 +30,13 @@ func commonDirectoryAccess(directory string, verb accessVerb) *protocol.CommonPl
 }
 
 // directoryPlan plans a coordination node at app/node beside a host step on
-// the access of directory.
-func directoryPlan(c *qt.C, action, directory string, verb accessVerb) (*protocol.PlannedFeatures, *protocol.CommonPlanningStep) {
+// the access of directory and the steps after it.
+func directoryPlan(c *qt.C, action, directory string, verb accessVerb, after ...*protocol.CommonPlanningStep) (*protocol.PlannedFeatures, *protocol.CommonPlanningStep) {
 	c.Helper()
 	request := nativePlan(c, action)
 	request.TargetFeatures = []string{provider.CommonObjectsFeature, provider.CommonAccessFeature, provider.PlanningLifecycleFeature}
 	access := commonDirectoryAccess(directory, verb)
-	request.CommonSteps = []*protocol.CommonPlanningStep{access}
+	request.CommonSteps = append([]*protocol.CommonPlanningStep{access}, after...)
 	result, err := backend.New().PlanFeatures(c.Context(), request)
 	c.Assert(err, qt.IsNil)
 	c.Assert(provider.ValidatePlannedFeatures(backend.Description(), request, result), qt.IsNil)
@@ -69,7 +69,8 @@ func TestDirectoryAccessFollowsACreationBelowIt_HappyPath(t *testing.T) {
 }
 
 // A directory's access needs no order against an object outside it, nor
-// against an alteration or a drop of one in it.
+// against an alteration or a drop of one in it: the node follows only the
+// last common step.
 func TestDirectoryAccessLeavesOtherOperationsUnordered_HappyPath(t *testing.T) {
 	for _, test := range []struct {
 		name, action, directory string
@@ -81,10 +82,10 @@ func TestDirectoryAccessLeavesOtherOperationsUnordered_HappyPath(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
-			result, _ := directoryPlan(c, test.action, test.directory, grantAccess)
+			result, _ := directoryPlan(c, test.action, test.directory, grantAccess, lastCommonStep())
 			c.Assert(result.Diagnostics, qt.HasLen, 0)
 			c.Assert(result.Contributions, qt.HasLen, 1)
-			c.Assert(result.Contributions[0].Dependencies, qt.HasLen, 0)
+			c.Assert(stepEdges(result), qt.DeepEquals, []string{placedLast})
 		})
 	}
 }

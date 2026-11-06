@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
@@ -26,15 +27,38 @@ var scannedKinds = map[yql.TokenType]protocol.SQLToken_Kind{
 // it stands for and an identifier the name it stands for, where YDB reads
 // one. A translation setting at the head of the text is UNKNOWN, so a host
 // reader that removes comments keeps it.
+//
+// SEMICOLON is the separator between two statements of the text, so a
+// semicolon that ends a statement inside a body that holds statements -- a
+// DEFINE ACTION or DEFINE SUBQUERY, a DO BEGIN block or a lambda -- is an
+// OPERATOR, as internal/yqlquery cuts a migration body. The host splits a text
+// at its SEMICOLON tokens, and the built-in engine kept such a body whole:
+// without this, ptah-compat migrate apply listed `DO BEGIN UPSERT ...` and the
+// statements inside it as separate applied statements.
 func (*Provider) ScanSQL(ctx context.Context, request *protocol.ScanSQLRequest) (*protocol.SQLScan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
 	tokens := yql.Scan(request.GetText(), request.GetHead())
 	result := &protocol.SQLScan{Tokens: make([]*protocol.SQLToken, 0, len(tokens))}
+	var bodies yql.Bodies
 	for _, token := range tokens {
+		kind := scannedKinds[token.Type]
+		switch token.Type {
+		case yql.TokenIdentifier:
+			bodies.Word(strings.ToUpper(token.Value))
+		case yql.TokenOperator:
+			bodies.Symbol(token.Value)
+		case yql.TokenSemicolon:
+			bodies.Separate()
+			if bodies.Inside() {
+				kind = protocol.SQLToken_OPERATOR
+			} else {
+				bodies = yql.Bodies{}
+			}
+		}
 		// #nosec G115 -- the SDK bounds a request below 4 MiB, so every offset fits.
-		scanned := &protocol.SQLToken{Kind: scannedKinds[token.Type], End: uint32(token.End)}
+		scanned := &protocol.SQLToken{Kind: kind, End: uint32(token.End)}
 		if value, ok := tokenValue(token); ok {
 			scanned.Value = &value
 		}

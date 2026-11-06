@@ -39,7 +39,7 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 	}
 	// Optional common kinds belong to the negotiated request profile. A host
 	// without independent access observations cannot supply their coverage.
-	description := provider.NegotiatedDescription(Description(), request.GetTargetFeatures())
+	description := provider.NegotiatedDescription(described(), request.GetTargetFeatures())
 	if err := provider.ValidatePlanningRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
@@ -96,7 +96,7 @@ func (*Provider) PlanFeatures(ctx context.Context, request *protocol.PlanFeature
 // wire is YQL in either form: Ptah's COMMENT ON statement is what execution
 // reads. Both forms check the whole batch before writing a unit.
 func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*protocol.RenderResult, error) {
-	if err := provider.ValidateRenderRequest(Description(), request); err != nil {
+	if err := provider.ValidateRenderRequest(described(), request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if len(request.Changes) > 0 {
@@ -135,7 +135,7 @@ func (*Provider) Render(ctx context.Context, request *protocol.RenderRequest) (*
 			result.Units = append(result.Units, unit)
 		}
 	}
-	if err := provider.ValidateRenderedBatchReply(Description(), request, result); err != nil {
+	if err := provider.ValidateRenderedBatchReply(described(), request, result); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	if err := ctx.Err(); err != nil {

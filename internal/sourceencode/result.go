@@ -133,8 +133,11 @@ func exact(before, after *protocol.Envelope) (bool, error) {
 	return bytes.Equal(before.GetPayload(), after.GetPayload()), nil
 }
 
+// nativePart writes fields as the YAML key or Go directive of a native object
+// and keeps them when what they decode to is the same declaration as value,
+// which same decides.
 func nativePart(format protocol.SourceDocument_Format, value *protocol.NormalizedValue, fields []*protocol.SourceEntry,
-	yaml *protocol.YAMLSourceKey, annotation *protocol.GoSourceDirective, decode decoder,
+	yaml *protocol.YAMLSourceKey, annotation *protocol.GoSourceDirective, decode decoder, same sameValue,
 ) (Result, error) {
 	fragment := &protocol.SourceFragment{Id: "native." + value.GetId()}
 	switch format {
@@ -152,7 +155,7 @@ func nativePart(format protocol.SourceDocument_Format, value *protocol.Normalize
 	default:
 		return Result{}, fmt.Errorf("unsupported native source format")
 	}
-	return nativeParts(value, format, []*protocol.SourceFragment{fragment}, decode, exact)
+	return nativeParts(value, format, []*protocol.SourceFragment{fragment}, decode, same)
 }
 
 // HCLLoss reports a native object HCL declares no block for: the provider

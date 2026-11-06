@@ -11,6 +11,7 @@ import (
 	"github.com/stokaro/ptah-ydb-plugin/internal/backend"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
+	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
 // partitionedTable is a table whose partitioning is the given JSON object.
@@ -303,4 +304,35 @@ func TestPartitioningOperation_FailurePath(t *testing.T) {
 			c.Assert(normalized, qt.IsNil)
 		})
 	}
+}
+
+// The reverse of a raised minimum partition count gives the table every
+// setting it held, YDB's settings for a new table among them, which is what
+// the reverse change asks for, as the host's embedded engine restored them.
+// The declaration the host plans the reverse with is a read of the table,
+// which leaves those settings out: planned from it alone, the minimum the
+// forward change raised would stay.
+func TestPartitioningPlan_PlansTheReverseOfAChange(t *testing.T) {
+	c := testcheck.New(t)
+	const (
+		raised   = `{"partitionBy":["id"],"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","minPartitionsCount":"3","maxPartitionsCount":"50"}`
+		restored = `{"partitioningBySize":"ENABLED","partitionSizeMb":"2048","partitioningByLoad":"DISABLED","minPartitionsCount":"1"}`
+	)
+	request := alterRequest(c, partitioningCase(plainTable, partitionedTable(raised)))
+	change, err := schema.CaptureTablePropertiesChange("reverse", owner(), observedFacet(c, schema.TableProperties, "", partitionedTable(raised)).Value.Value,
+		facet(c, schema.TableProperties, "", partitionedTable(restored)).Value.Value)
+	c.Assert(err, qt.IsNil)
+	request.Changes = []*protocol.PlanningChange{{Subject: tableSubject(), Value: change}}
+
+	plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(plan.Diagnostics, qt.HasLen, 0)
+	c.Assert(plan.Contributions, qt.HasLen, 1)
+	c.Assert(plan.Contributions[0].Steps, qt.HasLen, 1)
+	alteration, err := tablecreate.DecodeAlteration(plan.Contributions[0].Steps[0].Operation.Value.Value)
+	c.Assert(err, qt.IsNil)
+	got, err := protojson.Marshal(alteration.Request)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(got), qt.JSONEquals, jsonValue(c, `{"alterPartitioningSettings":{"minPartitionsCount":"1"}}`))
 }

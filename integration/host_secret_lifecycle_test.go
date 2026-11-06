@@ -152,8 +152,10 @@ func refusedSecretsEntities(directory, variable string) string {
 // the host drives a secret through its life with the value in the
 // environment: schema apply creates it beside a table, schema compare
 // --exit-code finds nothing to change, a dry run rotates it, and a run that
-// declares a second secret the server refuses fails. No output holds the
-// value. The host's test also rotates the secret through a generated migration
+// declares a second secret the server refuses fails, with the reason YDB gave,
+// in YDB's sentence (`symbol ' ' is not allowed in the path part`), as the
+// host printed it. No output holds the value. The host's test also rotates
+// the secret through a generated migration
 // that migrations up applies; through this provider migrations generate
 // refuses a secret change it cannot reverse, so that part is not run here.
 func TestHostKeepsASecretsValueOutOfEveryOutput_HappyPath(t *testing.T) {
@@ -180,6 +182,8 @@ func TestHostKeepsASecretsValueOutOfEveryOutput_HappyPath(t *testing.T) {
 	c.Assert(previewErr, qt.IsNil, qt.Commentf("schema apply --dry-run:\n%s", previewed))
 	c.Assert(previewed, qt.Contains, "secret-operation")
 	c.Assert(refusedErr, qt.IsNotNil, qt.Commentf("%s", refused))
+	c.Assert(refused, qt.Contains, "NOT_APPLIED")
+	c.Assert(refused, qt.Contains, `YDB refused the statement, saying "symbol ' ' is not allowed in the path part" (SCHEME_ERROR, issue 2019)`)
 	c.Assert(listedNames(c, opened, path.Join(database, directory)), qt.DeepEquals, []string{"accounts", "pg_password"})
 	for _, text := range []string{applied, compared, previewed, refused} {
 		c.Assert(text, qt.Not(qt.Contains), "SENTINEL")

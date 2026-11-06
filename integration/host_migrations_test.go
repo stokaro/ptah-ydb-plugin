@@ -560,17 +560,18 @@ func withoutUniqueIndexOnExistingTables(c *qt.C, opened *connection.Connection) 
 // creates, in YD101's words, and no migration runs: the directory holds the
 // revision table the host creates first, and no users. Without the gate section
 // the first version runs and the server refuses the second. The host's test
-// quotes the server's words there; the provider keeps YDB's issue text out of
-// the reason it gives (see package ydbfailure), so the refusal is the
-// provider's: on 26.2 the capability and the flag YDB refused for, and on 25.1
-// that the release has no unique secondary index. The 26.2 test server starts with EnableAddUniqueIndex on,
-// under which it builds the index, so the test turns the flag off there while
-// it runs.
+// quotes the server's words there, and the provider's reason carries the same
+// words, YDB's fixed sentence (see package ydbfailure): on 26.2 with the
+// capability and the flag YDB refused for, and on 25.1 with what it means,
+// that the release has no unique secondary index (gap G122). The 26.2 test
+// server starts with EnableAddUniqueIndex on, under which it builds the
+// index, so the test turns the flag off there while it runs.
 func TestHostMigrationsUpGatesOnTheYDFamily_FailurePath(t *testing.T) {
 	refusals := map[string]string{
 		"26.2": `capability unique_index_on_existing_table is off on this YDB cluster, which runs with feature flag EnableAddUniqueIndex off: ` +
-			`YDB refused the statement \(BAD_REQUEST\)`,
-		"25.1": `YDB refused the statement: the YDB release the cluster runs has no unique secondary index \(GENERIC_ERROR, issue 1060, line 1, column \d+\)`,
+			`YDB refused the statement, saying "Adding a unique index to an existing table is disabled" \(BAD_REQUEST\)`,
+		"25.1": `YDB refused the statement, saying "Unknown index type: syncGlobalUnique": the YDB release the cluster runs has no unique secondary index ` +
+			`\(GENERIC_ERROR, issue 1060, line 1, column \d+\)`,
 	}
 	c := testcheck.New(t)
 	f := newMigrationsFixture(c)

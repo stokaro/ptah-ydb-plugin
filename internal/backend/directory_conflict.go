@@ -22,7 +22,7 @@ import (
 // app/holder/t the source no longer declares, plans both and YDB refuses the
 // node after the topic is gone.
 func directoryConflict(request *protocol.PlanFeaturesRequest) *protocol.PlannedFeatures {
-	services := planningServices(Description())
+	services := planningServices(described())
 	sameService := func(a, b string) bool { return services[a] != "" && services[a] == services[b] }
 	if err := objectplan.DirectoryConflict(request, sameService); err != nil {
 		return &protocol.PlannedFeatures{Complete: true, Diagnostics: []*protocol.PlanningDiagnostic{{

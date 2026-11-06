@@ -24,7 +24,7 @@ func sqlSchemaDeclaration() *protocol.SQLSchemaDeclaration {
 // refused load is answered with complete false and diagnostics, never with a
 // partial schema.
 func (*Provider) ReadSQLSchema(ctx context.Context, request *protocol.ReadSQLSchemaRequest) (*protocol.SQLSchema, error) {
-	if err := provider.ValidateReadSQLSchemaRequest(Description(), request); err != nil {
+	if err := provider.ValidateReadSQLSchemaRequest(described(), request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -34,7 +34,7 @@ func (*Provider) ReadSQLSchema(ctx context.Context, request *protocol.ReadSQLSch
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	if err := provider.ValidateSQLSchemaReply(Description(), request, reply); err != nil {
+	if err := provider.ValidateSQLSchemaReply(described(), request, reply); err != nil {
 		return nil, authored.Status(codes.Internal, err)
 	}
 	return reply, nil

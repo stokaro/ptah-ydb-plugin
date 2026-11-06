@@ -22,7 +22,7 @@ func (p *Provider) ReverseChanges(ctx context.Context, request *protocol.Reverse
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	description := Description()
+	description := described()
 	if err := provider.ValidateReverseChangesRequest(description, request); err != nil {
 		return nil, authored.Status(codes.InvalidArgument, err)
 	}
