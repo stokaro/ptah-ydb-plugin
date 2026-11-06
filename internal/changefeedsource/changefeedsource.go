@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablesource"
@@ -108,8 +109,21 @@ type declaredTable struct {
 // fragment. It reads no file and no environment, and any invalid declaration
 // refuses the whole document. A consumer of a changefeed the file does not
 // declare for its table is refused rather than dropped, as the host refuses it:
-// a reader nobody creates is a declaration with no effect.
+// a reader nobody creates is a declaration with no effect. A refusal carries
+// the reason a host prints, in the words of the host's embedded engine and
+// without the value the declaration wrote (see authored.Declared).
 func Decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, error) {
+	tables, err := decode(ctx, document)
+	return tables, authored.Declared(err)
+}
+
+// refuse is a refusal a host prints. Its text names the declared objects and
+// attributes and never a value.
+func refuse(format string, args ...any) error {
+	return authored.New(fmt.Sprintf(format, args...))
+}
+
+func decode(ctx context.Context, document *protocol.SourceDocument) ([]Table, error) {
 	collected := &declarations{tables: make(map[string]*declaredTable)}
 	for index, fragment := range document.GetFragments() {
 		if err := ctx.Err(); err != nil {
@@ -167,6 +181,9 @@ func (c *declarations) read(document *protocol.SourceDocument, fragment *protoco
 		if err != nil {
 			return err
 		}
+		if err := ydbdecl.RequireAttributes(values, ydbdecl.ChangefeedName, ydbdecl.AttributeMode, ydbdecl.AttributeFormat); err != nil {
+			return err
+		}
 		feed, err := ydbdecl.ParseChangefeed(values)
 		if err != nil {
 			return err
@@ -179,7 +196,7 @@ func (c *declarations) read(document *protocol.SourceDocument, fragment *protoco
 	case document.GetFormat() == protocol.SourceDocument_GO_ANNOTATIONS && fragment.GetSelector() == DirectiveConsumer:
 		return c.readConsumer(document, fragment)
 	default:
-		return fmt.Errorf("unsupported YDB changefeed source format")
+		return refuse("unsupported YDB changefeed source format")
 	}
 }
 
@@ -196,7 +213,7 @@ func (c *declarations) readYAML(document *protocol.SourceDocument, fragment *pro
 		if fragment.GetValue().GetNull() != nil {
 			return nil
 		}
-		return fmt.Errorf("table %q: %s requires a mapping", label, KeyChangefeeds)
+		return refuse("table %q: %s requires a mapping", label, KeyChangefeeds)
 	}
 	target := c.tableOf(binding, index)
 	for _, entry := range mapping.GetEntries() {
@@ -218,14 +235,14 @@ func (c *declarations) readConsumer(document *protocol.SourceDocument, fragment 
 	if err != nil {
 		return err
 	}
+	if err := ydbdecl.RequireAttributes(values, ydbdecl.TopicName, attributeChangefeed); err != nil {
+		return err
+	}
 	consumer, err := ydbdecl.ParseConsumer(values)
 	if err != nil {
 		return err
 	}
 	changefeed := strings.TrimSpace(values[attributeChangefeed])
-	if changefeed == "" {
-		return fmt.Errorf("%s needs the changefeed whose topic it reads", DirectiveConsumer)
-	}
 	binding, err := tablesource.Binding(document, fragment, "a changefeed")
 	if err != nil {
 		return err
@@ -246,11 +263,11 @@ func (c *declarations) attachConsumers() error {
 			index = slices.IndexFunc(target.feeds, func(feed ydbdecl.Changefeed) bool { return feed.Name == pending.changefeed })
 		}
 		if index < 0 {
-			return fmt.Errorf("table %q declares no changefeed %q for consumer %q", label, pending.changefeed, pending.consumer.Name)
+			return refuse("table %q declares no changefeed %q for consumer %q", label, pending.changefeed, pending.consumer.Name)
 		}
 		feed := &target.feeds[index]
 		if slices.ContainsFunc(feed.Consumers, func(have ydbdecl.Consumer) bool { return have.Name == pending.consumer.Name }) {
-			return fmt.Errorf("table %q: changefeed %q declares consumer %q twice", label, feed.Name, pending.consumer.Name)
+			return refuse("table %q: changefeed %q declares consumer %q twice", label, feed.Name, pending.consumer.Name)
 		}
 		feed.Consumers = append(feed.Consumers, pending.consumer)
 	}
@@ -281,7 +298,7 @@ func (c *declarations) facets(ctx context.Context, document *protocol.SourceDocu
 // add declares one changefeed of the table, refusing a second of one name.
 func (t *declaredTable) add(feed ydbdecl.Changefeed) error {
 	if slices.ContainsFunc(t.feeds, func(have ydbdecl.Changefeed) bool { return have.Name == feed.Name }) {
-		return fmt.Errorf("table %q declares changefeed %q twice", tableLabel(t.binding.GetObject()), feed.Name)
+		return refuse("table %q declares changefeed %q twice", tableLabel(t.binding.GetObject()), feed.Name)
 	}
 	t.feeds = append(t.feeds, feed)
 	return nil
@@ -321,14 +338,14 @@ func yamlChangefeed(entry *protocol.SourceEntry) (ydbdecl.Changefeed, error) {
 	if entry.GetValue().GetNull() == nil {
 		fields := entry.GetValue().GetMapping()
 		if fields == nil {
-			return ydbdecl.Changefeed{}, fmt.Errorf("a changefeed requires a mapping")
+			return ydbdecl.Changefeed{}, refuse("a changefeed requires a mapping")
 		}
 		for _, field := range fields.GetEntries() {
 			switch {
 			case field.GetKey() == keyConsumers:
 				consumerMapping := field.GetValue().GetMapping()
 				if consumerMapping == nil && field.GetValue().GetNull() == nil {
-					return ydbdecl.Changefeed{}, fmt.Errorf("%s requires a mapping", keyConsumers)
+					return ydbdecl.Changefeed{}, refuse("%s requires a mapping", keyConsumers)
 				}
 				consumerEntries = consumerMapping.GetEntries()
 			case slices.Contains(options(), field.GetKey()):
@@ -338,7 +355,7 @@ func yamlChangefeed(entry *protocol.SourceEntry) (ydbdecl.Changefeed, error) {
 				}
 				values[field.GetKey()] = text
 			default:
-				return ydbdecl.Changefeed{}, fmt.Errorf("unknown key %q", field.GetKey())
+				return ydbdecl.Changefeed{}, refuse("unknown key %q", field.GetKey())
 			}
 		}
 	}
@@ -363,7 +380,7 @@ func yamlConsumer(entry *protocol.SourceEntry) (ydbdecl.Consumer, error) {
 	if entry.GetValue().GetNull() == nil {
 		fields := entry.GetValue().GetMapping()
 		if fields == nil {
-			return ydbdecl.Consumer{}, fmt.Errorf("a consumer requires a mapping")
+			return ydbdecl.Consumer{}, refuse("a consumer requires a mapping")
 		}
 		for _, field := range fields.GetEntries() {
 			switch {
@@ -380,7 +397,7 @@ func yamlConsumer(entry *protocol.SourceEntry) (ydbdecl.Consumer, error) {
 				}
 				values[field.GetKey()] = text
 			default:
-				return ydbdecl.Consumer{}, fmt.Errorf("unknown key %q", field.GetKey())
+				return ydbdecl.Consumer{}, refuse("unknown key %q", field.GetKey())
 			}
 		}
 	}
@@ -391,13 +408,13 @@ func yamlConsumer(entry *protocol.SourceEntry) (ydbdecl.Consumer, error) {
 // attributes reads a Go directive's attributes, which the host lexed as text.
 func attributes(mapping *protocol.SourceMapping) (map[string]string, error) {
 	if mapping == nil {
-		return nil, fmt.Errorf("a changefeed directive requires attributes")
+		return nil, refuse("a changefeed directive requires attributes")
 	}
 	values := make(map[string]string)
 	for _, entry := range mapping.GetEntries() {
 		text, ok := entry.GetValue().GetValue().(*protocol.SourceValue_Text)
 		if !ok {
-			return nil, fmt.Errorf("attribute %s requires text", entry.GetKey())
+			return nil, refuse("attribute %s requires text", entry.GetKey())
 		}
 		values[entry.GetKey()] = text.Text
 	}
@@ -418,7 +435,7 @@ func scalar(value *protocol.SourceValue) (string, error) {
 	case *protocol.SourceValue_Null:
 		return "", nil
 	default:
-		return "", fmt.Errorf("expected a scalar")
+		return "", refuse("expected a scalar")
 	}
 }
 

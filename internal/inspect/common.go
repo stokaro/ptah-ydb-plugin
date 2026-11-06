@@ -36,6 +36,10 @@ type Common struct {
 	// IndexFacets reports each common index's partitioning and read replicas
 	// as a facet the index owns (schema.observed-index-facets).
 	IndexFacets bool
+	// IndexMethods reports each common index's method in the spelling table
+	// preparation states a declared index's kind with
+	// (schema.index-methods); see commonIndexes.
+	IndexMethods bool
 	// UnreadTables names each replica table no replication the read
 	// describes writes as a table the read does not describe; see
 	// unreadReplicas. Without it such a table is left out silently.

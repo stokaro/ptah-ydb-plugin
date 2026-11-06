@@ -58,10 +58,13 @@ func (s *source) readIndexes(ctx context.Context, tablePath string, table *descr
 // the common model has no place for, so it stays in the native index facet
 // alone, where the host can neither create nor drop it. An index's method is
 // its kind's common spelling ([ydbdecl.IndexKind.CommonMethod]), the one table
-// preparation states for a declared index: "async" for an asynchronous index
-// and none for a synchronous one. The comment travels on the common-object
-// wire. With IndexFacets, each index carries its partitioning and read
-// replicas as the facet it owns.
+// preparation states for a declared index: "GLOBAL ASYNC" for an asynchronous
+// index and "GLOBAL SYNC" for a synchronous one. A host without IndexMethods
+// compares the method with the type a source wrote, so it gets the spelling a
+// source gives a global index: none for a synchronous one and "async" for an
+// asynchronous one. The comment travels on the common-object wire. With
+// IndexFacets, each index carries its partitioning and read replicas as the
+// facet it owns.
 func (c Common) commonIndexes(table *protocol.Reference, observed *native.IndexObservations) ([]*protocol.ObservedIndex, error) {
 	var result []*protocol.ObservedIndex
 	for _, index := range observed.GetIndexes() {
@@ -78,6 +81,9 @@ func (c Common) commonIndexes(table *protocol.Reference, observed *native.IndexO
 		// A common index is global, synchronous or asynchronous, and either
 		// kind has a common spelling.
 		common.Method, _ = kind.CommonMethod()
+		if !c.IndexMethods {
+			common.Method = map[ydbdecl.IndexKind]string{ydbdecl.IndexAsync: "async"}[kind]
+		}
 		common.Unique = description.GetGlobalUniqueIndex() != nil
 		if c.IndexFacets {
 			facet, err := schema.CaptureIndexSettings(provider.IndexReference(table, description.GetName()), heldSettings(description))

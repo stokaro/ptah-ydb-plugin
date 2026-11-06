@@ -33,9 +33,6 @@ type creation struct {
 	id        *protocol.StepIdentity
 	// feeds adds the changefeeds the new table declares, after its creation.
 	feeds *changefeedStep
-	// indexes add the vector and full-text indexes the new table declares,
-	// each after its creation.
-	indexes []*indexStep
 	// settings give the new table's global indexes the partitioning and read
 	// replicas their own facets declare, each after the creation: the call
 	// that creates a table takes no index settings.
@@ -440,7 +437,7 @@ func (p *planner) planTableCreation(i int, table *protocol.PlanningTable, owner 
 	if reason != "" {
 		return refused(i, reason), nil
 	}
-	indexes, reason, err := plannedCreationIndexes(owner, table.Desired, operation, capabilities)
+	operation, reason, err = withCreationIndexes(owner, table.Desired, operation, capabilities)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +451,7 @@ func (p *planner) planTableCreation(i int, table *protocol.PlanningTable, owner 
 	if reason != "" {
 		return refused(i, reason), nil
 	}
-	p.creations = append(p.creations, creation{index: i, table: table, operation: operation, feeds: feeds, indexes: indexes, settings: settings})
+	p.creations = append(p.creations, creation{index: i, table: table, operation: operation, feeds: feeds, settings: settings})
 	return nil, nil
 }
 
@@ -483,7 +480,7 @@ func columnCreationRefusal(owner *protocol.Reference, operation *protocol.Normal
 // overlaps another table of the request is refused.
 func (p *planner) contributeCreations() (*protocol.PlannedFeatures, error) {
 	slices.SortFunc(p.creations, func(a, b creation) int { return provider.CompareIdentities(a.table.Subject, b.table.Subject) })
-	var rowCreations, columnCreations, creationIndexNumber int
+	var rowCreations, columnCreations int
 	for i := range p.creations {
 		item := &p.creations[i]
 		prefix, number := "row-table-create", &rowCreations
@@ -502,22 +499,15 @@ func (p *planner) contributeCreations() (*protocol.PlannedFeatures, error) {
 		}
 		p.contribution.Steps = append(p.contribution.Steps, step)
 		p.receiptSteps[item.index] = []*protocol.StepIdentity{item.id}
-		// The vector and full-text indexes and the changefeeds of a new
-		// table follow its creation directly, in the lifecycle span, where
-		// the default window would put them after every table the plan
-		// creates. The host's embedded engine at 74de0b65b wrote a new
-		// table's changefeed right after its CREATE TABLE, in a plan and in
-		// a schema render alike, on 25.1.4.7 and 26.2.1.14. Each step reads
-		// its table, which orders it after the creation, and nothing else
-		// of the plan.
-		for _, index := range item.indexes {
-			step, dependency := index.creationStep(creationIndexNumber, item.table.Subject, item.id)
-			step.Operation.Phase = protocol.PlanningOperation_LIFECYCLE
-			creationIndexNumber++
-			p.contribution.Steps = append(p.contribution.Steps, step)
-			p.contribution.Dependencies = append(p.contribution.Dependencies, dependency)
-			p.receiptSteps[item.index] = append(p.receiptSteps[item.index], index.id)
-		}
+		// The changefeeds of a new table follow its creation directly, in
+		// the lifecycle span, where the default window would put them after
+		// every table the plan creates. The host's embedded engine at
+		// 74de0b65b wrote a new table's changefeed right after its CREATE
+		// TABLE, in a plan and in a schema render alike, on 25.1.4.7 and
+		// 26.2.1.14. The step reads its table, which orders it after the
+		// creation, and nothing else of the plan. The table's vector and
+		// full-text indexes are built by the creation itself (see
+		// withCreationIndexes).
 		for _, settings := range item.settings {
 			step := settings.planningStep(p.indexSettingsNumber, item.table.Subject)
 			p.indexSettingsNumber++

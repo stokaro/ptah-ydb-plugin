@@ -132,6 +132,12 @@ func buildModel(kind string) *protocol.ValueModel {
 	if kind == IndexSettingsProperties {
 		definition["index_settings"] = indexSettingsDefinition
 	}
+	if kind == TopicProperties {
+		// A topic's own definition says what its observation keeps; the
+		// shared text above stays as it is for the other kinds, whose
+		// identities it is part of.
+		definition["topic_observations"] = topicObservations
+	}
 	if kind == IndexProperties {
 		definition["implementation_state"] = "internal sequence positions excluded after unknown-field validation; row storage canonicalized; sequence configuration retained"
 	}

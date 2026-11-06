@@ -191,7 +191,7 @@ func ReverseTableChange(id string, change *protocol.Envelope, access AccessWire)
 	var altered func(before, after *protocol.Envelope) (*protocol.Envelope, error)
 	switch before.Kind {
 	case TableProperties:
-		convert, altered = ConvertTable, alteredTable
+		convert, altered = restoredTable, alteredTable
 	case ColumnProperties:
 		convert, altered = ConvertColumn, alteredColumn
 	}

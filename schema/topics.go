@@ -129,6 +129,7 @@ func normalizeChangefeeds(observed *native.ChangefeedObservations) error {
 		if err := normalizeTopic(feed.Topic); err != nil {
 			return err
 		}
+		slices.SortFunc(feed.Topic.Consumers, func(a, b *native.Consumer) int { return strings.Compare(a.Name, b.Name) })
 	}
 	slices.SortFunc(observed.Changefeeds, func(a, b *native.ObservedChangefeed) int {
 		return strings.Compare(a.Description.Name, b.Description.Name)
@@ -136,6 +137,23 @@ func normalizeChangefeeds(observed *native.ChangefeedObservations) error {
 	return nil
 }
 
+// The parts of the topic models' definitions that say in which order a topic
+// keeps its consumers: the order a declaration lists them in, and the order
+// YDB describes them in (see normalizeTopic).
+const (
+	topicCanonicalization = "protojson followed by modeljson canonical JSON; consumers retain the order the declaration lists them in"
+	topicObservations     = "retain topic and consumer configuration, attributes and access metadata; omit partitions, topic/consumer stats and transient self fields; " +
+		"consumers retain the order the server describes them in"
+)
+
+// normalizeTopic checks a topic's description and keeps its consumers in the
+// order YDB describes them, which is the order they were added in: measured on
+// 25.1.4.7 and 26.2.1.14, `CREATE TOPIC t (CONSUMER zz, CONSUMER aa)` describes
+// zz first, and a consumer an ALTER TOPIC adds comes after those it found. The
+// host's embedded engine wrote a topic's consumers in that order wherever it
+// rewrote the topic, such as in the CREATE TOPIC that undoes its drop. A
+// changefeed's topic keeps its consumers in name order (see
+// normalizeChangefeeds).
 func normalizeTopic(topic *native.DescribeTopicResult) error {
 	if err := Known(topic); err != nil {
 		return err
@@ -160,6 +178,5 @@ func normalizeTopic(topic *native.DescribeTopicResult) error {
 			return fmt.Errorf("topic properties contain consumer statistics")
 		}
 	}
-	slices.SortFunc(topic.Consumers, func(a, b *native.Consumer) int { return strings.Compare(a.Name, b.Name) })
 	return nil
 }
