@@ -18,5 +18,5 @@ func Secret(format protocol.SourceDocument_Format, value *protocol.NormalizedVal
 		return result, err
 	}
 	fields = append(fields, field("value_env", intent.GetValueEnv()))
-	return nativePart(format, value, fields, secretsource.YAMLKey(), secretsource.GoDirective(), secretsource.Decode)
+	return nativePart(format, value, fields, secretsource.YAMLKey(), secretsource.GoDirective(), secretsource.Decode, exact)
 }
