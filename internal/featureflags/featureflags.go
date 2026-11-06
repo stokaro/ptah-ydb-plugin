@@ -127,14 +127,29 @@ func Gates() []Gate { return slices.Clone(gates) }
 // texts and their gates are the host's embedded engine's (internal/ydbflags
 // in Ptah), so both name the same flag for the same answer.
 func Refused(issues []string) (Gate, bool) {
+	gate, _, off := refusal(issues)
+	return gate, off
+}
+
+// RefusalText is the text of a gate's refusal that issues hold, as YDB wrote
+// it, or "" when the refusal is about something else. Each text is YDB's own
+// fixed sentence for the flag, measured, and quotes no statement, value or
+// path, so a reason may carry it, as the host's embedded engine printed it.
+func RefusalText(issues []string) string {
+	_, text, _ := refusal(issues)
+	return text
+}
+
+// refusal is the gate whose refusal issues hold, and that refusal's text.
+func refusal(issues []string) (Gate, string, bool) {
 	for _, gate := range append(slices.Clone(gates), streaming) {
 		for _, refusal := range gate.refusals {
 			if slices.ContainsFunc(issues, func(issue string) bool { return strings.Contains(issue, refusal) }) {
-				return gate, true
+				return gate, refusal, true
 			}
 		}
 	}
-	return Gate{}, false
+	return Gate{}, "", false
 }
 
 // Clause is what a refusal for want of capability key adds when a feature

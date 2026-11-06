@@ -84,14 +84,16 @@ func TestRefusedUnitGivesItsReasonSubprocess(t *testing.T) {
 
 // A unit YDB refuses because a feature flag is off names the capability and
 // the flag in the host's embedded engine's words, around the provider's own
-// reason, and not YDB's text. A resource pool is refused on every line, which
-// runs with EnableResourcePools off by default. A session whose address names
-// the monitoring endpoint read the flags, so the sentence asks only to turn
-// the flag on; one without it took the line's default, and is told to name
-// the endpoint too.
+// reason, which carries YDB's sentence for the flag and nothing else of YDB's
+// text. A resource pool is refused on every line, which runs with
+// EnableResourcePools off by default. A session whose address names the
+// monitoring endpoint read the flags, so the sentence asks only to turn the
+// flag on; one without it took the line's default, and is told to name the
+// endpoint too.
 func TestRefusedUnitNamesTheFeatureFlagSubprocess(t *testing.T) {
 	const refusal = "provider execution: NOT_APPLIED (0 units confirmed applied): capability resource_pools is off on this YDB cluster, " +
-		"which runs with feature flag EnableResourcePools off: YDB refused the statement (UNSUPPORTED, issue 2030). Turn the flag on"
+		`which runs with feature flag EnableResourcePools off: YDB refused the statement, saying "Resource pools are disabled" (UNSUPPORTED, issue 2030). ` +
+		"Turn the flag on"
 	c := testcheck.New(t)
 	monitored := testAddress(c, nil, "", "")
 	for _, test := range []struct {
@@ -113,7 +115,6 @@ func TestRefusedUnitNamesTheFeatureFlagSubprocess(t *testing.T) {
 			c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
 			c.Assert(err.Error(), qt.Equals, test.want)
 			c.Assert(result.GetMessage(), qt.Contains, "Resource pools are disabled")
-			c.Assert(err.Error(), qt.Not(qt.Contains), "Resource pools are disabled")
 		})
 	}
 }
@@ -129,8 +130,9 @@ func skipOffLine(c *qt.C, version, line string) {
 
 // 25.1 has no unique secondary index, and refuses one inside its execution
 // stage, before it proposes a schema operation, so nothing of the statement
-// applied. The unit is NOT_APPLIED, with the provider's reason for it, as the
-// host's embedded engine names the refusal; the table keeps no index.
+// applied. The unit is NOT_APPLIED, with the provider's reason for it, which
+// carries YDB's sentence as the host's embedded engine printed it (gap G122);
+// the table keeps no index.
 func TestUniqueIndexRefusedBeforeItsOperationSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	opened, directory, database := inspectionFixture(c)
@@ -149,8 +151,8 @@ func TestUniqueIndexRefusedBeforeItsOperationSubprocess(t *testing.T) {
 
 	c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
 	c.Assert(result.GetDiagnosticCode(), qt.Equals, "ydb.statement-rejected")
-	c.Assert(err, qt.ErrorMatches, `provider execution: NOT_APPLIED \(0 units confirmed applied\): YDB refused the statement: the YDB release the cluster runs has no unique `+
-		`secondary index \(GENERIC_ERROR, issue 1060, line 1, column \d+\)`)
+	c.Assert(err, qt.ErrorMatches, `provider execution: NOT_APPLIED \(0 units confirmed applied\): YDB refused the statement, saying "Unknown index type: syncGlobalUnique": `+
+		`the YDB release the cluster runs has no unique secondary index \(GENERIC_ERROR, issue 1060, line 1, column \d+\)`)
 	c.Assert(result.GetMessage(), qt.Contains, "Unknown index type: syncGlobalUnique")
 	c.Assert(heldIndexKinds(c, opened, table), qt.HasLen, 0)
 }

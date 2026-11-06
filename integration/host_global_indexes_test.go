@@ -153,9 +153,8 @@ func TestRawIndexRenameWithoutMoveIndex_FailurePath(t *testing.T) {
 	c.Assert(result.GetOutcome(), qt.Equals, protocol.Execution_NOT_APPLIED)
 	c.Assert(result.GetDiagnosticCode(), qt.Equals, "ydb.statement-rejected")
 	c.Assert(err, qt.ErrorMatches, `provider execution: NOT_APPLIED \(0 units confirmed applied\): capability index_rename is off on this YDB cluster, `+
-		`which runs with feature flag EnableMoveIndex off: YDB refused the statement \(PRECONDITION_FAILED[^)]*\)\. Turn the flag on`)
+		`which runs with feature flag EnableMoveIndex off: YDB refused the statement, saying "Move index is not supported yet" \(PRECONDITION_FAILED[^)]*\)\. Turn the flag on`)
 	c.Assert(result.GetMessage(), qt.Matches, `(?s).*Move index is not supported yet.*`)
-	c.Assert(err.Error(), qt.Not(qt.Contains), "Move index is not supported yet")
 	held := heldIndexColumns(c, opened, absolute)
 	c.Assert(held["idx_items_kind"], qt.DeepEquals, [2][]string{{"kind"}, nil})
 }
