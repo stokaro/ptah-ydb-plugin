@@ -93,11 +93,11 @@ func TestRenderGrantPath_FailurePath(t *testing.T) {
 		want     string
 	}{
 		{name: "the database without its path", relative: true, target: &protocol.Reference{Engine: "ydb", Kind: "database"},
-			want: "YDB takes this grant target only by its absolute database path; plan it against the database"},
+			want: "YDB takes this object only by its absolute path, which begins with the database's own path; plan it against the database, which names it by that path"},
 		{name: "a root topic where a single name does not resolve", target: &protocol.Reference{Engine: "ydb", Kind: "topic", Name: "events"},
-			want: "YDB takes this grant target only by its absolute database path; plan it against the database"},
+			want: "YDB takes this object only by its absolute path, which begins with the database's own path; plan it against the database, which names it by that path"},
 		{name: "an inexact database path", target: &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/Root/db/", Name: "events"},
-			want: "YDB takes this grant target only by its absolute database path; plan it against the database"},
+			want: "YDB takes this object only by its absolute path, which begins with the database's own path; plan it against the database, which names it by that path"},
 		{name: "the database by a name", relative: true, target: &protocol.Reference{Engine: "ydb", Kind: "database", Database: "/local", Name: "local"},
 			want: "a database grant names the database the connection opens"},
 		{name: "a directory with no name", relative: true, target: &protocol.Reference{Engine: "ydb", Kind: "schema", Name: "/"},

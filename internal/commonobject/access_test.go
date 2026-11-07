@@ -5,7 +5,11 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/testing/protocmp"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/authored"
 	"github.com/stokaro/ptah-ydb-plugin/internal/commonobject"
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -109,7 +113,7 @@ func TestRenderAccess_FailurePath(t *testing.T) {
 		{name: "a grant on a secret on a line without secrets", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT ROW"},
 			Target: &protocol.Reference{Engine: "ydb", Kind: "secret", Schema: "ext", Name: "pw"}}), want: "YDB access operation requires target capability secrets"},
 		{name: "the database with no path to name it by", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"CONNECT"},
-			Target: &protocol.Reference{Engine: "ydb", Kind: "database"}}), want: "YDB takes this grant target only by its absolute database path; plan it against the database"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "database"}}), want: "YDB takes this object only by its absolute path, which begins with the database's own path; plan it against the database, which names it by that path"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -245,8 +249,50 @@ func TestRenderGrantRefusesAnUnboundDatabaseOnOlderLines(t *testing.T) {
 	}}}
 	got, err := commonobject.Render(change, caps)
 	c.Assert(err, qt.ErrorIs, commonobject.ErrUnsupported)
-	c.Assert(err.Error(), qt.Contains, "absolute database path")
+	c.Assert(err.Error(), qt.Contains, "absolute path, which begins with the database's own path")
 	c.Assert(got, qt.Equals, "")
+}
+
+// A refused grant reaches the host as a reason it prints, which names the
+// statement, the object and the principal the way the host's embedded engine
+// named them (`GRANT on table items to app: ...`). Without the reason the
+// host prints the gRPC code alone, "provider render failed
+// (FailedPrecondition)".
+func TestRenderGrantRefusalNamesTheGrant(t *testing.T) {
+	caps := accessCapabilities()
+	caps["relative_grant_paths"] = false
+	reason := "YDB takes this object only by its absolute path, which begins with the database's own path; plan it against the database, which names it by that path"
+	for _, test := range []struct {
+		name   string
+		change *protocol.CommonObjectChange
+		want   string
+	}{
+		{name: "a grant on a root table", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "table", Name: "items"}}), want: "unsupported feature: GRANT on table items to app: " + reason},
+		{name: "a revoke on a root topic", change: revokeChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "Topic", Name: "events"}}), want: "unsupported feature: REVOKE on topic events from app: " + reason},
+		{name: "the database", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"CONNECT"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "database"}}), want: "unsupported feature: GRANT on the database to app: " + reason},
+		{name: "a secret on a line without secrets", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "secret", Schema: "ext", Name: "pw"}}),
+			want: "unsupported feature: GRANT on secret ext/pw to app: YDB access operation requires target capability secrets"},
+		{name: "a column grant", change: grantChange(&protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"}, Columns: []string{"a"},
+			Target: &protocol.Reference{Engine: "ydb", Kind: "schema", Name: "shop/eu"}}),
+			want: "unsupported feature: GRANT on directory shop/eu to app: a YDB permission is on a whole object, not on columns"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			got, err := commonobject.Render(test.change, caps)
+
+			c.Assert(err, qt.ErrorIs, commonobject.ErrUnsupported)
+			c.Assert(err.Error(), qt.Equals, test.want)
+			c.Assert(got, qt.Equals, "")
+			details := status.Convert(authored.Status(codes.FailedPrecondition, err)).Details()
+			c.Assert(details, qt.HasLen, 1)
+			c.Assert(details[0], qt.CmpEquals(protocmp.Transform()), &protocol.ProviderDiagnostic{Reason: test.want})
+		})
+	}
 }
 
 func TestDeclaredAccessRefusesUnsupportedIntent(t *testing.T) {

@@ -198,12 +198,15 @@ func passwordClause(user, value string, input *protocol.ExecutionInput) (string,
 // grant renders the access statement verb names for declared: GRANT with
 // direction TO, or REVOKE with direction FROM.
 func grant(declared *protocol.SQLGrant, verb, direction string, capabilities map[string]bool) (string, error) {
+	target := declared.GetTarget()
+	subject := fmt.Sprintf("%s on %s %s %s", verb, ydbacl.Describe(target.GetKind(), qualified(target.GetSchema(), target.GetName())),
+		strings.ToLower(direction), declared.GetRole())
 	if err := GrantRefusal(declared); err != nil {
-		return "", err
+		return "", about(subject, err)
 	}
-	object, err := grantPath(declared.GetTarget(), capabilities)
+	object, err := grantPath(target, capabilities)
 	if err != nil {
-		return "", err
+		return "", about(subject, err)
 	}
 	var names []string
 	for _, privilege := range declared.GetPrivileges() {

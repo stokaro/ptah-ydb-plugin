@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -101,6 +102,27 @@ func TestHostRendersYDBOffline_FailurePath(t *testing.T) {
 			c.Assert(out, qt.Not(qt.Contains), "CREATE TABLE")
 		})
 	}
+}
+
+// A grant the target line cannot write fails the offline render, and the
+// host prints the provider's reason, which names the statement, the object
+// and the principal in the words of the host's embedded engine: on 25.1 YDB
+// takes a single name only as an absolute path, and an offline render knows
+// no database path. Without the reason the host prints the gRPC code alone,
+// "provider render failed (FailedPrecondition)". Ported from the host's
+// TestDescribe, for the words the host prints.
+func TestHostRendersAGrantTheLineCannotWrite_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	file := filepath.Join(c.TempDir(), "schema.sql")
+	c.Assert(os.WriteFile(file, []byte("CREATE TABLE items (id Uint64 NOT NULL, PRIMARY KEY (id));\nCREATE USER alice;\n"+
+		"GRANT 'ydb.generic.read' ON items TO alice;\n"), 0o600), qt.IsNil)
+
+	out, err := hostCommand(c, "schema", "render", "--schema-file", file, "--dialect", "ydb", "--server-version", "25.1.4.7")
+
+	var exited *exec.ExitError
+	c.Assert(err, qt.ErrorAs, &exited, qt.Commentf("%s", out))
+	c.Assert(out, qt.Contains, "unsupported feature: GRANT on table items to alice: YDB takes this object only by its absolute path, "+
+		"which begins with the database's own path; plan it against the database, which names it by that path")
 }
 
 // A YDB URL that names no database is refused before anything is read, in the
