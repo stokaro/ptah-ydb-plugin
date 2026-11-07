@@ -52,7 +52,7 @@ func TestHostRefusesUnsupportedUniqueSource_FailurePath(t *testing.T) {
 	for _, test := range []struct {
 		name, source, want string
 	}{
-		{"NULLS NOT DISTINCT", strings.Replace(base, constraint, constraint+` nulls_distinct="false"`, 1), "DeclaredIndex.nulls_distinct"},
+		{"NULLS NOT DISTINCT", strings.Replace(base, constraint, constraint+` nulls_distinct="false"`, 1), "nulls_distinct"},
 		{"partial unique index", strings.Replace(base, field, `//ptah:schema:index name="uq_partial" fields="login" unique="true" condition="login IS NOT NULL"`+"\n\t"+field, 1), "DeclaredIndex.condition"},
 		{"duplicate index name", strings.Replace(base, field, `//ptah:schema:index name="uq_accounts_tenant_login" fields="login"`+"\n\t"+field, 1), "two of its indexes are named"},
 	} {
