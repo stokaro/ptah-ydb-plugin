@@ -96,17 +96,60 @@ func TestDropPlan_FailurePath(t *testing.T) {
 	c.Assert(plan.Diagnostics[0].Message, qt.Equals, "YDB table removal requires established nontransactional DDL")
 }
 
-// A table that holds a changefeed an asynchronous replication controls is
-// dropped with it: the plan that drops the table drops the replication first,
-// with CASCADE, which releases the stream. The host's embedded engine refused
-// the drop instead, which left a declaration that removes both unappliable.
-func TestDropPlanDropsATableAReplicationReads(t *testing.T) {
+// replicatedFeed is a changefeed an asynchronous replication controls, which
+// writes the replica at path.
+func replicatedFeed(path string) string {
+	return `{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",` +
+		`"attributes":{"__async_replication":"{\"path\":\"` + path + `\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},"topic":{"partitioningSettings":{}}}]}`
+}
+
+// A table that holds a changefeed an asynchronous replication of another
+// database controls is not dropped: YDB drops it and leaves the replication
+// failing (`Discovery for all topics failed`), measured on 25.1.4.7 and
+// 26.2.1.14, and no plan of this database drops the replication, as the
+// host's embedded engine refused it. A replication lives in its replicas'
+// database. Ported from the host's
+// TestParentOperationsRefuseReplicationBindingsWithoutChildChanges.
+func TestDropPlanRefusesATableAReplicationOfAnotherDatabaseReads(t *testing.T) {
+	for _, test := range []struct {
+		name, database, replica string
+	}{
+		{name: "a replica of another database", database: "/local", replica: "/other/replica/records"},
+		{name: "a replica at a sibling of the database", database: "/local", replica: "/localother/records"},
+		{name: "a session that names no database", replica: "/local/replica/records"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := dropRequest(c)
+			request.DatabasePath = test.database
+			request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records,
+				observedFacet(c, schema.ChangefeedProperties, "", replicatedFeed(test.replica)))
+
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Contributions, qt.HasLen, 0)
+			c.Assert(plan.Diagnostics, qt.HasLen, 1)
+			c.Assert(plan.Diagnostics[0].Message, qt.Equals, `table "app/records": changefeed "updates" is a replication-managed stream that depends on this table; `+
+				`its replication's controller must release it before the table is dropped, and the replication, which writes `+
+				test.replica+`, lives in another database; drop it there first, or keep the table`)
+		})
+	}
+}
+
+// A table a replication of the database reads is left to the planner of
+// replications, which reads whether the plan keeps the replication: a plan
+// that drops the replication drops it first, with CASCADE, which releases the
+// stream, and the table goes after it.
+func TestDropPlanDropsATableAReplicationOfTheDatabaseReads(t *testing.T) {
 	c := testcheck.New(t)
 	request := dropRequest(c)
-	request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records, observedFacet(c, schema.ChangefeedProperties, "",
-		`{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",`+
-			`"attributes":{"__async_replication":"{\"path\":\"/local/r\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},"topic":{"partitioningSettings":{}}}]}`))
+	request.DatabasePath = "/local"
+	request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records,
+		observedFacet(c, schema.ChangefeedProperties, "", replicatedFeed("/local/replica/records")))
+
 	plan, err := backend.New().PlanFeatures(c.Context(), request)
+
 	c.Assert(err, qt.IsNil)
 	c.Assert(plan.Diagnostics, qt.HasLen, 0)
 	c.Assert(plannedSteps(plan), qt.DeepEquals, []string{"table-drop/000000 table-drop-operation"})
