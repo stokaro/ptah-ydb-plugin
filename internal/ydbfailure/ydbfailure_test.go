@@ -13,7 +13,7 @@ import (
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb"
 	"github.com/ydb-platform/ydb-go-genproto/protos/Ydb_Issue"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
@@ -708,11 +708,11 @@ func TestFailedReadsACallTheGRPCLayerRefused_HappyPath(t *testing.T) {
 		applied      uint32
 		want         protocol.Execution_Outcome
 	}{
-		{name: "a request too large to send", err: fmt.Errorf("execute: %w", status.Error(codes.ResourceExhausted, "trying to send message larger than max (73400430 vs. 64000000)")),
+		{name: "a request too large to send", err: fmt.Errorf("execute: %w", grpcstatus.Error(codes.ResourceExhausted, "trying to send message larger than max (73400430 vs. 64000000)")),
 			reason: "the unit never left: it is larger than the YDB driver sends in one request (gRPC ResourceExhausted)", want: protocol.Execution_NOT_APPLIED},
-		{name: "a call the gRPC layer denied", err: status.Error(codes.PermissionDenied, "access denied"),
+		{name: "a call the gRPC layer denied", err: grpcstatus.Error(codes.PermissionDenied, "access denied"),
 			reason: "YDB's gRPC layer denied the call before YDB ran it (gRPC PermissionDenied)", want: protocol.Execution_NOT_APPLIED},
-		{name: "after an applied prefix", err: status.Error(codes.PermissionDenied, "access denied"), applied: 2,
+		{name: "after an applied prefix", err: grpcstatus.Error(codes.PermissionDenied, "access denied"), applied: 2,
 			reason: "YDB's gRPC layer denied the call before YDB ran it (gRPC PermissionDenied)", want: protocol.Execution_PARTIAL},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -738,9 +738,9 @@ func TestFailedReadsACallTheGRPCLayerRefused_FailurePath(t *testing.T) {
 		name string
 		err  error
 	}{
-		{name: "a response too large to receive", err: status.Error(codes.ResourceExhausted, "grpc: received message larger than max (73400430 vs. 64000000)")},
-		{name: "a server out of resources", err: status.Error(codes.ResourceExhausted, "resource exhausted")},
-		{name: "a connection lost", err: status.Error(codes.Unavailable, "connection reset by peer")},
+		{name: "a response too large to receive", err: grpcstatus.Error(codes.ResourceExhausted, "grpc: received message larger than max (73400430 vs. 64000000)")},
+		{name: "a server out of resources", err: grpcstatus.Error(codes.ResourceExhausted, "resource exhausted")},
+		{name: "a connection lost", err: grpcstatus.Error(codes.Unavailable, "connection reset by peer")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
