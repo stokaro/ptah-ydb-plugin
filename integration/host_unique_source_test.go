@@ -53,7 +53,7 @@ func TestHostRefusesUnsupportedUniqueSource_FailurePath(t *testing.T) {
 		name, source, want string
 	}{
 		{"NULLS NOT DISTINCT", strings.Replace(base, constraint, constraint+` nulls_distinct="false"`, 1), "nulls_distinct"},
-		{"partial unique index", strings.Replace(base, field, `//ptah:schema:index name="uq_partial" fields="login" unique="true" condition="login IS NOT NULL"`+"\n\t"+field, 1), "DeclaredIndex.condition"},
+		{"partial unique index", strings.Replace(base, field, `//ptah:schema:index name="uq_partial" fields="login" unique="true" condition="login IS NOT NULL"`+"\n\t"+field, 1), `index "uq_partial": YDB has no partial index`},
 		{"duplicate index name", strings.Replace(base, field, `//ptah:schema:index name="uq_accounts_tenant_login" fields="login"`+"\n\t"+field, 1), "two of its indexes are named"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
