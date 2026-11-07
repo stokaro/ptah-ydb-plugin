@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"path"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -48,6 +49,46 @@ func TestHostRollsBackIndexSettings_HappyPath(t *testing.T) {
 	c.Assert(downErr, qt.IsNil, qt.Commentf("down:\n%s\n%s", rolledBack, down))
 	c.Assert(heldSettings(c, opened, absolute), qt.DeepEquals, held)
 	c.Assert(held, qt.DeepEquals, map[string]string{"by_body": "min=1 load=DISABLED replicas=PER_AZ:1", "by_n": "min=2 load=DISABLED", "by_id_body": "min=1 load=DISABLED"})
+	c.Assert(hostPlanned(c, directory, "go", before), qt.HasLen, 0)
+}
+
+// The reverse of a rename and two in-place index setting changes names the
+// renamed index under its old name before restoring its settings. It also
+// restores the other index's default splitting policy, which a declaration
+// that omits the setting would otherwise leave enabled. This ports
+// TestPlanBidirectionalSchemaDiff_IndexChangesInPlaceRollBack through the host
+// binary and a live table.
+func TestHostRollsBackRenamedIndexesWithSettings_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ObservedIndexFacetsFeature)
+	requireHostNegotiates(c, provider.IndexRenamesFeature)
+	opened, directory, database := lockFixture(c)
+	emptyAtCleanup(c, opened, path.Join(database, directory))
+	absolute := path.Join(database, directory, "items")
+	before := indexSettingsItems(directory, "", "by_n", ` auto_partitioning_min_partitions_count="3"`, "")
+	after := indexSettingsItems(directory, ` auto_partitioning_by_load="ENABLED"`, "by_number", ` auto_partitioning_min_partitions_count="4"`, "")
+	created, createErr := hostApply(c, directory, before)
+	c.Assert(createErr, qt.IsNil, qt.Commentf("%s", created))
+	c.Assert(heldSettings(c, opened, absolute), qt.DeepEquals, map[string]string{
+		"by_body": "min=1 load=DISABLED", "by_n": "min=3 load=DISABLED"})
+
+	migrations, up, down := hostGenerate(c, directory, "go", after)
+	applied, upErr := hostMigrate(c, directory, migrations, "migrations", "up")
+	c.Assert(upErr, qt.IsNil, qt.Commentf("%s\n%s", applied, up))
+	c.Assert(heldSettings(c, opened, absolute), qt.DeepEquals, map[string]string{
+		"by_body": "min=1 load=ENABLED", "by_number": "min=4 load=DISABLED"})
+	c.Assert(hostPlanned(c, directory, "go", after), qt.HasLen, 0)
+
+	rolledBack, downErr := hostMigrate(c, directory, migrations, "migrations", "down", "--target", "0", "--confirm")
+	c.Assert(downErr, qt.IsNil, qt.Commentf("%s\n%s", rolledBack, down))
+	c.Assert(down, qt.Contains, "ALTER TABLE `"+directory+"/items` RENAME INDEX `by_number` TO `by_n`;")
+	c.Assert(down, qt.Contains, "ALTER TABLE `"+directory+"/items` ALTER INDEX `by_n` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, "+
+		"AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 3);")
+	c.Assert(down, qt.Contains, "ALTER TABLE `"+directory+"/items` ALTER INDEX `by_body` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, "+
+		"AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1);")
+	c.Assert(strings.Index(down, "RENAME INDEX `by_number` TO `by_n`") < strings.Index(down, "ALTER INDEX `by_n` SET"), qt.IsTrue, qt.Commentf("%s", down))
+	c.Assert(heldSettings(c, opened, absolute), qt.DeepEquals, map[string]string{
+		"by_body": "min=1 load=DISABLED", "by_n": "min=3 load=DISABLED"})
 	c.Assert(hostPlanned(c, directory, "go", before), qt.HasLen, 0)
 }
 
