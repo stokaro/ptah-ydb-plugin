@@ -47,6 +47,8 @@ func normalizeTableOperation(input *protocol.ValueInput) (*protocol.NormalizedVa
 		return tablecreate.NormalizeInventory(input)
 	case tablecreate.DefaultOperationKind:
 		return tablecreate.NormalizeDefault(input)
+	case tablecreate.NullabilityOperationKind:
+		return tablecreate.NormalizeNullability(input)
 	case tablecreate.AlterOperationKind:
 		return tablecreate.NormalizeAlteration(input)
 	case tablecreate.IndexSettingsOperationKind:

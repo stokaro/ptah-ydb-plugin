@@ -37,6 +37,7 @@ type alteration struct {
 	feeds                 *changefeedStep
 	claims                []*columnClaim
 	defaults              []defaultStep
+	nullables             []nullabilityStep
 	inventory             []inventoryStep
 	sequences             []sequenceStep
 }

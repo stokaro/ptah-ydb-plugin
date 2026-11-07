@@ -670,3 +670,91 @@ func TestCompare_ReportsAChangeForATableTheSourceStatesKnowledgeFor(t *testing.T
 		})
 	}
 }
+
+// unrepresentableProperties claims the table properties of app.records
+// unrepresentable on side, as a source that met a setting it could not
+// describe claims them.
+func unrepresentableProperties(side *protocol.ComparisonState) {
+	side.Coverage.Subjects = append(side.Coverage.Subjects, &protocol.ComparisonSubjectCoverage{Kind: schema.TableProperties, Subject: subject("table", ""),
+		Knowledge: &protocol.ModelKnowledge{State: protocol.ModelKnowledge_UNREPRESENTABLE, Reason: "an unknown TTL parameter"}})
+}
+
+// A declared table whose source could not describe its TTL, families or
+// partitioning is left undecided rather than kept as it is held or created
+// without them, whether the plan keeps the table or creates it. Ported from
+// the desired-source rows of the host's TestTTLCompareFacets_UnknownStateIsUndecided,
+// TestColumnFamiliesCompareFacets_UnknownStateIsUndecided and
+// TestTablePartitioningCompareFacets_UnknownStateIsUndecided, and from
+// TestTTLCompareFacets_ACreatedTableWithAnUndescribedDeclarationIsUndecided.
+func TestCompare_LeavesAnUndescribedDeclarationUndecided(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		held    side
+		current bool
+	}{
+		{name: "a table both sides hold", held: side{table: withTTL(daily)}, current: true},
+		{name: "a table the plan creates"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := request(c, side{}, test.held)
+			unrepresentableProperties(request.Desired)
+			request.Parents = []*protocol.ComparisonParent{{Subject: subject("table", ""), Desired: true, Current: test.current}}
+
+			result, err := backend.New().CompareModels(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateComparedModels(backend.Description(), request, result), qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 0)
+			c.Assert(result.Undecided, qt.HasLen, 1)
+			c.Assert(result.Undecided[0].Kind, qt.Equals, schema.TableProperties)
+			c.Assert(result.Undecided[0].Reason, qt.Equals, "The desired source could not describe the table's TTL, column families or partitioning: an unknown TTL parameter")
+		})
+	}
+}
+
+// A table both sides hold whose read could not describe its TTL, families or
+// partitioning, such as a family field a newer server writes, is left
+// undecided where the declaration states the properties: a change of what
+// nobody read would be a guess. A declaration that states nothing of them
+// leaves the table as it is. Ported from the read rows of the host's
+// TestTTLCompareFacets_UnknownStateIsUndecided and
+// TestColumnFamiliesCompareFacets_UnknownStateIsUndecided.
+func TestCompare_LeavesAnUndescribedReadUndecided_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		desired side
+	}{
+		{name: "a declared TTL", desired: side{table: withTTL(daily)}},
+		{name: "a declaration of no TTL", desired: side{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := request(c, test.desired, side{})
+			unrepresentableProperties(request.Current)
+			request.Parents = []*protocol.ComparisonParent{{Subject: subject("table", ""), Desired: true, Current: true}}
+
+			result, err := backend.New().CompareModels(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(provider.ValidateComparedModels(backend.Description(), request, result), qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 0)
+			c.Assert(result.Undecided, qt.HasLen, 1)
+			c.Assert(result.Undecided[0].Reason, qt.Equals, "The read found a TTL, a column family or a partitioning setting of the table it could not describe: an unknown TTL parameter")
+		})
+	}
+}
+
+// A declaration whose source could not describe the properties at all
+// leaves the table as it holds them, so a read it could not describe
+// decides nothing either.
+func TestCompare_LeavesAnUndescribedReadUndecided_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := request(c, side{uninspected: true}, side{})
+	unrepresentableProperties(request.Current)
+	request.Parents = []*protocol.ComparisonParent{{Subject: subject("table", ""), Desired: true, Current: true}}
+
+	result := compare(c, request)
+
+	c.Assert(result.Changes, qt.HasLen, 0)
+}

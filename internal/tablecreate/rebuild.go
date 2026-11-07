@@ -1,6 +1,7 @@
 package tablecreate
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"slices"
@@ -410,7 +411,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	request := proto.CloneOf(desired)
 	keepHeldSettings(request, table)
 	keepHeldComments(request, table.GetCurrent())
-	if reason := rebuiltTableRefusal(subject, request, capabilities); reason != "" {
+	if reason := rebuiltTableRefusal(subject, table, request, capabilities); reason != "" {
 		return nil, reason, nil
 	}
 	indexSettings, reason, err := rebuiltIndexSettings(owner, request, table, steps, changes)
@@ -914,12 +915,18 @@ func keepHeldSettings(request *Ydb_Table.CreateTableRequest, table *protocol.Pla
 }
 
 // rebuiltTableRefusal is why the new table of a rebuild, request with what
-// the old table holds, cannot be created, or "". YDB refuses a new table that
+// the old table holds, cannot be created, or "". A read that could not
+// describe the old table's properties leaves the rebuild nothing to keep
+// them from (see undescribedProperties). YDB refuses a new table that
 // stores external blobs (`Setting store_external_blobs to ENABLED is not
 // allowed`), measured on 25.1.4.7 and 26.2.1.14, so a rebuild cannot keep
 // them; and a cache mode the old table holds is written into the new table
 // too, so the target must take one.
-func rebuiltTableRefusal(subject string, request *Ydb_Table.CreateTableRequest, capabilities map[string]bool) string {
+func rebuiltTableRefusal(subject string, table *protocol.PlanningTable, request *Ydb_Table.CreateTableRequest, capabilities map[string]bool) string {
+	if reason := undescribedProperties(table); reason != "" {
+		return subject + ": the read could not describe the table's TTL, column families or partitioning (" + reason +
+			"), so the new table would drop them; change the table by hand"
+	}
 	if request.GetStorageSettings().GetStoreExternalBlobs() == Ydb.FeatureFlag_ENABLED {
 		return subject + ": the table stores external blobs, which YDB does not let a new table do " +
 			"(`Setting store_external_blobs to ENABLED is not allowed`), so the new table would drop them; change the table by hand"
@@ -1070,4 +1077,17 @@ func requestTableNames(request *protocol.PlanFeaturesRequest) map[string]bool {
 		names[TextPath(table.GetSubject().GetSchema().GetNormalized(), table.GetSubject().GetName().GetNormalized())] = true
 	}
 	return names
+}
+
+// undescribedProperties is the reason the read of table gives for claiming
+// its table properties unrepresentable, such as a column family holding a
+// field a newer server writes, or "".
+func undescribedProperties(table *protocol.PlanningTable) string {
+	for _, claim := range table.GetCurrent().GetFeatures().GetFacets().GetCoverage().GetSubjects() {
+		if claim.GetKind() == schema.TableProperties && claim.GetKnowledge().GetState() == protocol.ModelKnowledge_UNREPRESENTABLE &&
+			provider.CompareIdentities(claim.GetSubject(), table.GetSubject()) == 0 && forThisEngine(claim.GetTargets()) {
+			return cmp.Or(claim.GetKnowledge().GetReason(), "the read gives no reason")
+		}
+	}
+	return ""
 }
