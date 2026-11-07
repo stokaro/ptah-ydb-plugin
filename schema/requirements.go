@@ -3,6 +3,8 @@ package schema
 import (
 	"cmp"
 	"errors"
+	"path"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 
@@ -76,8 +78,43 @@ func replicationRequirements(value *protocol.Envelope) ([]*protocol.ComparisonId
 	}
 	// SecretPaths returns no path with its refusal of one outside the
 	// database, which names no secret this database holds.
-	paths, _ := replication.SecretPaths(cmp.Or(InterpretationRoot(value), value.GetOwner().GetDatabase()), connection)
-	return pathIdentities(SecretProperties, paths, value.GetOwner().GetDatabase()), false, nil
+	root := cmp.Or(InterpretationRoot(value), value.GetOwner().GetDatabase())
+	paths, _ := replication.SecretPaths(root, connection)
+	required := pathIdentities(SecretProperties, paths, value.GetOwner().GetDatabase())
+	if value.GetKind() != TransferProperties {
+		return required, false, nil
+	}
+	topic, local, err := transferTopic(value, root)
+	if err != nil || !local {
+		return required, false, err
+	}
+	return append(required, pathIdentities(TopicProperties, []ydbdecl.Path{topic}, value.GetOwner().GetDatabase())...), false, nil
+}
+
+// transferTopic is the topic of this database a transfer reads, by its path
+// below root, and whether it reads one: a transfer of another database's
+// topic, which names a connection, or of a path outside root reads none.
+// YDB drops a topic a transfer reads and keeps the transfer, which then
+// fails (`Discovery for all topics failed`), measured on 26.2.1.14, so a
+// declared transfer requires its topic. A source that is a changefeed of a
+// table names no topic, and requires none here.
+func transferTopic(value *protocol.Envelope, root string) (ydbdecl.Path, bool, error) {
+	var spec replication.TransferSpec
+	var err error
+	if value.GetDefinitionSha256() == NativeDesiredModel(value.GetKind()).GetDefinitionSha256() {
+		spec, err = DesiredTransfer(value)
+	} else {
+		spec, _, err = ObservedTransfer(value)
+	}
+	if err != nil || !replication.LocalSource(spec) {
+		return ydbdecl.Path{}, false, err
+	}
+	source := replication.SourceKey(spec.Source, root)
+	if strings.HasPrefix(source, "/") || source == "" {
+		return ydbdecl.Path{}, false, nil
+	}
+	directory, name := path.Split(source)
+	return ydbdecl.Path{Schema: strings.TrimSuffix(directory, "/"), Name: name}, true, nil
 }
 
 // replicationConnection returns the connection of an async replication or a

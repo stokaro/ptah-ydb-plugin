@@ -430,6 +430,34 @@ func TestHostOrdersATransferAroundItsTopic_HappyPath(t *testing.T) {
 	c.Assert(settled, qt.Contains, "Schema is synced, no changes to be made")
 }
 
+// A schema that drops the topic a transfer reads and keeps the transfer is
+// refused before anything runs: YDB drops the topic and keeps the transfer,
+// which then fails (`Discovery for all topics failed`), measured on
+// 26.2.1.14. The host's embedded engine refused the plan. The topic and the
+// running transfer stay, and a schema that drops both drops the transfer
+// first. Ported from the host's
+// TestGenerateMigrationAST_Replications_TransferReadsADeclaredTopic.
+func TestHostRefusesToDropATopicATransferReads_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	h := newHostTransfer(c)
+	topic := "topics:\n  events:\n    schema: " + h.directory + "\n    consumers:\n      ingest: {}\n"
+	transfer := h.transfer(lambdaWriting("a:"), "    consumer: ingest\n    flush_interval: PT1S\n")
+	created, err := h.apply(h.orderLog() + topic + transfer)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", created))
+	h.awaitRunning()
+
+	refused, err := h.apply(h.orderLog() + "topics: {}\n" + transfer)
+
+	c.Assert(err, qt.IsNotNil, qt.Commentf("%s", refused))
+	c.Assert(refused, qt.Contains, "topic "+h.directory+"/events is dropped while a declared transfer reads it, and YDB keeps the transfer, "+
+		"which then stops (`Discovery for all topics failed`); declare the topic, or remove the transfer")
+	c.Assert(listedNames(c, h.opened, path.Join(h.database, h.directory)), qt.DeepEquals, []string{"events", "ingest", "order_log"})
+	c.Assert(h.awaitRunning().Consumer, qt.Equals, "ingest")
+	removed, err := h.apply(h.orderLog() + "topics: {}\ntransfers: {}\n")
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", removed))
+	c.Assert(operations(removed), qt.DeepEquals, []string{"transfer-operation " + h.directory + ".ingest", "topic-operation " + h.directory + ".events"}, qt.Commentf("%s", removed))
+}
+
 // Ported from the host's TestYDBTransfer_RefusedOn251: a transfer is refused
 // on a line without transfers, such as 25.1 with its default flags (`Topic
 // transfer creation is disabled`), before any statement runs. The host
