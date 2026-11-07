@@ -216,8 +216,11 @@ func requestedSettings(sequence *Ydb_Table.SequenceDescription) ydbsequence.Sett
 // next value at 1 and the new table holds no row a restart could collide with.
 //
 // Such a statement names the sequence by its absolute path, so a request in
-// no named database has no text form; nor has a 16-bit or 32-bit Serial with
-// such settings, whose maximum the statement would raise to the Int64 maximum.
+// no named database, such as an offline render's, is written without it and
+// goes without the settings, as the host's embedded engine wrote it (see
+// [SequenceOmissions]). A 16-bit or 32-bit Serial with such settings has no
+// text form, since the statement would raise its maximum to the Int64
+// maximum.
 func createdSequenceStatements(database, path string, request *Ydb_Table.CreateTableRequest) ([]string, error) {
 	var statements []string
 	for _, column := range request.GetColumns() {
@@ -226,14 +229,14 @@ func createdSequenceStatements(database, path string, request *Ydb_Table.CreateT
 			continue
 		}
 		settings := requestedSettings(sequence)
-		if settings.IsDefault() {
+		// Without a database no ALTER SEQUENCE can name the sequence, so the
+		// table is written without the settings, which the render reports
+		// as omissions (see SequenceOmissions).
+		if settings.IsDefault() || database == "" {
 			continue
 		}
-		switch {
-		case SerialTypeOf(column) != ydbtype.BigSerial:
+		if SerialTypeOf(column) != ydbtype.BigSerial {
 			return nil, noTextForm("the sequence of column %q gets a start or an increment, and the ALTER SEQUENCE that would give it one raises the maximum of a 16-bit or 32-bit Serial to the Int64 maximum", column.GetName())
-		case database == "":
-			return nil, noTextForm("the sequence of column %q takes its start and increment from an ALTER SEQUENCE, which names the sequence by its absolute path, and the creation names no database", column.GetName())
 		}
 		statements = append(statements, newSequenceStatement(ydbsequence.Path(database, "", path, column.GetName()), settings))
 	}

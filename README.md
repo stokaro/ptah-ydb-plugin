@@ -3126,7 +3126,11 @@ any capture order. A key, type or unsupported-field refusal is
 `UNSUPPORTED_FEATURE`, as in the host's bundled YDB validation; other refusals
 are `INVALID_SCHEMA`. A standalone enum, and a directory comment, character set or
 collation, are reported as unsupported and `OMITTED_DECLARATION` only when the
-request asks that nothing be skipped, which is also the host's behavior.
+request asks that nothing be skipped, which is also the host's behavior. So is
+what an offline render of a table's creation goes without (see [Offline schema
+rendering](#offline-schema-rendering)), in the host's bundled validation's
+words: `ydb: column "app.accounts.email": type modifier=VARCHAR(255): length 255
+would be skipped` and `identity start=100 would be skipped`.
 
 `internal/schemavalidation/testdata/corpus` holds declarations and what the host's
 bundled validation answered, recorded by `testdata/oracle` (the program header says
@@ -3273,7 +3277,10 @@ The TEXT form writes the column as its Serial type and, for a start or an
 increment other than 1, the `ALTER SEQUENCE` the host's embedded engine writes
 after the CREATE TABLE, with `RESTART WITH` the start where it is not 1:
 `START` alone leaves the next value at 1. The statement names the sequence by
-its absolute path, so the migration file carries the database path, and YDB
+its absolute path, so a creation that names no database, such as an offline
+render's, is written without it, and the render reports the start and the
+increment as omissions, as the host's embedded engine did (see [Offline schema
+rendering](#offline-schema-rendering)). The migration file carries the database path, and YDB
 records the restart, which it replays on every later `ALTER SEQUENCE`. A table
 created from such a file therefore keeps the settings it was created with (see
 below), where a table the native call creates can change them.
@@ -4468,6 +4475,21 @@ stays as written. A value that names no database, such as a query a source
 declares for an offline render, cannot place such a path and is refused.
 Secret statements retain approved input references; rendering opens no session
 and reads no input value.
+
+Under `render.omissions` (contract 25.33, ADR 0110 in Ptah) a render reports
+what its statements go on without, as the host's embedded engine reported it,
+and the host carries the omissions into the result of a schema render and of a
+node render, where a caller that must not lose anything refuses the rendering.
+They are the part of a created column's declared type YDB does not keep, such
+as `VARCHAR(255): length 255` for a Utf8 column or `TIMESTAMP(3): precision 3
+(YDB keeps microseconds)`, in either form, and in the TEXT form of a creation
+that names no database, such as an offline render's, the start and the
+increment of a Serial's sequence: only an `ALTER SEQUENCE` naming the sequence
+by its absolute path sets them, so the table is written without them, where a
+plan against a database writes the statement (see [Serial columns](#serial-columns)).
+Each names its column `<directory>.<table>.<column>`, as the host did. The
+creation carries the declared type a column keeps only in part, since the
+operation holds the YDB type alone.
 
 ## Operator statements and object scopes
 

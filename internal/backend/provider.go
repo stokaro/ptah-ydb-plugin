@@ -268,6 +268,11 @@ func providerFeatures() []string {
 		// transfer of a topic it does not declare is refused; see
 		// replicationcompare.CompareTransfers.
 		provider.DeclaredObjectsFeature,
+		// A render reports what its units go on without: the part of a
+		// created column's declared type YDB does not keep, and a Serial's
+		// start and increment an offline creation cannot set; see
+		// renderOmissions.
+		provider.RenderOmissionsFeature,
 	}
 }
 

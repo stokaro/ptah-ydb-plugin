@@ -29,6 +29,7 @@ const (
 	kindEnum      = "enum"
 	kindPaths     = "table path"
 	kindView      = "view"
+	kindColumn    = "column"
 )
 
 // Validate checks every captured declaration and returns one completed result.
@@ -42,7 +43,8 @@ const (
 // tables are valid declarations. Standalone enums are unsupported and namespace
 // comments, character sets and collations are dropped by YDB directories; both
 // are reported only when the request asks for no skipped declarations, as the
-// host's bundled validation does.
+// host's bundled validation does, and so is what an offline render of a
+// table's creation goes without (see validateOmissions).
 func Validate(ctx context.Context, request *protocol.ValidateSchemaRequest) (*protocol.SchemaValidation, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -59,6 +61,7 @@ func Validate(ctx context.Context, request *protocol.ValidateSchemaRequest) (*pr
 		return nil, err
 	}
 	validateCommonObjects(request.GetCommonObjects(), tablePaths, add)
+	validateOmissions(request, add)
 	validateNamespaces(request, add)
 	validateEnums(request, add)
 	if err := validateObjects(ctx, request, add); err != nil {
@@ -188,6 +191,25 @@ func validateNamespaces(request *protocol.ValidateSchemaRequest, add addFunc) {
 			if setting.value != "" {
 				add(protocol.SchemaDiagnostic_OMITTED_DECLARATION, kindNamespace, namespace.Name, "", "%s=%s would be skipped", setting.name, setting.value)
 			}
+		}
+	}
+}
+
+// validateOmissions reports, for a request that asks for no skipped
+// declarations, what an offline render of each table's creation goes
+// without, in the words of the host's bundled validation: the part of a
+// column's declared type YDB does not keep, and a Serial's start and
+// increment (see tablecreate.DeclaredOmissions). Each is named as the host's
+// embedded engine named it, `<directory>.<table>.<column>`.
+func validateOmissions(request *protocol.ValidateSchemaRequest, add addFunc) {
+	if !request.NoSkipped {
+		return
+	}
+	for _, table := range request.GetTables() {
+		declaration := table.GetDeclaration()
+		for _, omission := range tablecreate.DeclaredOmissions(declaration, request.GetCapabilities()) {
+			add(protocol.SchemaDiagnostic_OMITTED_DECLARATION, kindColumn, tablecreate.TableName(declaration.GetSchema(), declaration.GetName())+"."+omission.Column, "",
+				"%s=%s would be skipped", omission.Property, omission.Detail)
 		}
 	}
 }
