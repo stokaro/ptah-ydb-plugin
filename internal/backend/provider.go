@@ -264,6 +264,10 @@ func providerFeatures() []string {
 		// YDB has no enum type, and an enum column is refused before any
 		// call, as the host's embedded engine refused it (EnumColumns).
 		provider.EnumColumnsFeature,
+		// The transfer comparison reads the topics the schema declares, so a
+		// transfer of a topic it does not declare is refused; see
+		// replicationcompare.CompareTransfers.
+		provider.DeclaredObjectsFeature,
 	}
 }
 
@@ -656,6 +660,10 @@ func buildDescription() *protocol.Description {
 						Placement:   protocol.ModelComparison_OBJECTS,
 						Kinds:       []string{schema.TransferProperties},
 						ChangeKinds: []string{schema.TransferChange},
+						// The topics the schema declares, so a transfer of a
+						// topic it does not declare is refused; see
+						// replicationcompare.CompareTransfers.
+						DeclaredKinds: replicationcompare.TransferDeclaredKinds(),
 					},
 					{
 						Id:          tablecompare.ServiceID,

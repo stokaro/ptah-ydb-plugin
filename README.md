@@ -2627,8 +2627,22 @@ operation neither checks nor confirms a marked consumer, since the transfer's
 drop, which the plan may run first, takes the one YDB made. A transfer read
 outside the selected directories marks nothing.
 
-Not modeled yet: HCL blocks, and a transfer's check that its table and topic
-are declared.
+A declared transfer whose table or topic the plan would not leave is refused
+before anything is planned, in the host's embedded engine's words. The table
+has to be declared, where the host lists every declared table among a
+comparison's declared relations (`models.declared-relations`, contract 25.32):
+YDB creates no transfer into a missing table (`Path does not exist`). A topic of
+the transfer's own database has to be declared as a topic, where the host also
+sends the transfer comparison the declared topics (`models.declared-objects`,
+contract 25.33, ADR 0109 in Ptah), or be a changefeed of a declared table: YDB
+accepts a transfer of a missing topic and then stops it (`Discovery error`). The
+comparison does not see a table's changefeeds, a facet of the table that the
+row-table comparison owns, so it takes any stream of a declared table for one of
+its changefeeds, where the host's embedded engine also refused a changefeed the
+table does not declare. A target without transfers refuses the transfer by the
+capability first, as the embedded engine did.
+
+Not modeled yet: HCL blocks.
 
 `TestReplicationLifecycleSubprocess` creates a replication of the server's own
 table, finds nothing to change, refuses a connection change while it runs,
