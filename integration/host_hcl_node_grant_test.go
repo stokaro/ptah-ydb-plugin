@@ -105,3 +105,59 @@ func previewStatements(output string) []string {
 	}
 	return statements
 }
+
+// A revoke block whose for names a coordination node at the database root,
+// by its name alone, renders as a REVOKE on the node, in the statement the
+// host's embedded engine wrote for the same document. Ported from the revoke
+// half of the host's TestParsePermissionOnACoordinationNode.
+func TestHostRendersAnHCLRevokeOnARootNode_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	document := "coordination_node \"locks\" {\n}\n\nrevoke {\n  from = \"workers\"\n  for = coordination_node.locks\n" +
+		"  privileges = [\"ydb.generic.full\"]\n}\n"
+	file := compatFile(c, c.TempDir(), "schema.hcl", document)
+
+	out, err := hostCommand(c, "schema", "render", "--schema-file", file, "--dialect", "ydb")
+
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
+	c.Assert(out, qt.Contains, "CREATE COORDINATION NODE `locks`;")
+	c.Assert(out, qt.Contains, "REVOKE 'ydb.generic.full' ON `locks` FROM `workers`;")
+}
+
+// A permission whose for names a block no owner declares, here a topic, which
+// HCL has no block for, is refused rather than read as a grant on nothing,
+// in the host's words. Ported from the host's
+// TestParsePermissionOnAnUnownedBlock.
+func TestHostRefusesAnHCLPermissionOnAnUnownedBlock_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	document := "permission {\n  to = \"reader\"\n  for = topic.app.events\n  privileges = [\"ydb.generic.read\"]\n}\n"
+	file := compatFile(c, c.TempDir(), "schema.hcl", document)
+
+	out, err := hostCommand(c, "schema", "render", "--schema-file", file, "--dialect", "ydb")
+
+	c.Assert(err, qt.IsNotNil, qt.Commentf("%s", out))
+	c.Assert(out, qt.Matches, `(?s).*permission requires table, view, schema, sequence, function or procedure target, or an object an owner's block declares.*`)
+}
+
+// An HCL export writes a grant on a coordination node as a permission naming
+// the node's block, and leaves out a grant on a topic, which no HCL block
+// declares, with a warning rather than writing it as a grant on something
+// else. Ported from the topic half of the host's
+// TestRenderedObjectGrantsRoundTrip.
+func TestHostExportLeavesOutAGrantOnATopic_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	opened, directory, database := lockFixture(c)
+	group := hclGrantGroup(c, opened.DB)
+	topic := path.Join(database, directory, "events")
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE TOPIC `"+topic+"`"), qt.IsNil)
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "GRANT 'ydb.generic.read' ON `"+topic+"` TO `"+group+"`"), qt.IsNil)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		c.Check(execFixtureSchema(ctx, opened.DB, "DROP TOPIC `"+topic+"`"), qt.IsNil)
+	})
+
+	exported, warnings := hostExport(c, "schema", "inspect", "--schemas", directory, "--format", "hcl")
+
+	c.Assert(exported, qt.Not(qt.Contains), "permission {", qt.Commentf("%s", exported))
+	c.Assert(warnings, qt.Contains, "cannot be represented in HCL", qt.Commentf("%s", warnings))
+}
