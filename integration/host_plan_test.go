@@ -145,7 +145,7 @@ func hostPlannedUnitsAt(c *qt.C, address, selectors, format, text string, flags 
 	c.Helper()
 	host, manifest := hostManifest(c)
 	root := c.TempDir()
-	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql", "hcl": "schema.hcl"}[format]
+	name := map[string]string{"go": "entities.go", "yaml": "schema.yaml", "sql": "schema.sql", "hcl": "schema.hcl", "dbml": "schema.dbml"}[format]
 	c.Assert(os.WriteFile(filepath.Join(root, name), []byte(text), 0o600), qt.IsNil)
 	source := []string{"--schema-file", filepath.Join(root, name)}
 	if format == "go" {
