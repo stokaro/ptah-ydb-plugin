@@ -138,6 +138,30 @@ func TestRenderGrant_HappyPath(t *testing.T) {
 	}
 }
 
+// A grant on a secret is refused on a target without secrets, as 25.1 is,
+// and written where the target has them. Ported from the host's
+// TestRenderSQL_AccessNodes_FailurePath row "a grant on a secret on YDB 25.1".
+func TestRenderGrantOnASecretRequiresSecrets_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_Grant{Grant: &protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"},
+		Target: &protocol.Reference{Engine: "ydb", Kind: "secret", Schema: "ext", Name: "pw"}}}}
+	got, err := commonobject.Render(change, accessCapabilities())
+	c.Assert(err, qt.ErrorIs, commonobject.ErrUnsupported)
+	c.Assert(err, qt.ErrorMatches, ".*YDB access operation requires target capability secrets")
+	c.Assert(got, qt.Equals, "")
+}
+
+func TestRenderGrantOnASecret_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	caps := accessCapabilities()
+	caps["secrets"] = true
+	change := &protocol.CommonObjectChange{Operation: &protocol.CommonObjectChange_Grant{Grant: &protocol.SQLGrant{Role: "app", Privileges: []string{"SELECT"},
+		Target: &protocol.Reference{Engine: "ydb", Kind: "secret", Schema: "ext", Name: "pw"}}}}
+	got, err := commonobject.Render(change, caps)
+	c.Assert(err, qt.IsNil)
+	c.Assert(got, qt.Equals, "GRANT 'ydb.generic.read' ON `ext/pw` TO `app`;")
+}
+
 func TestRenderGrantUsesTheDatabaseOnOlderLines(t *testing.T) {
 	c := testcheck.New(t)
 	caps := accessCapabilities()

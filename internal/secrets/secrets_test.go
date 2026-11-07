@@ -52,3 +52,23 @@ func TestCheckValueEnv_FailurePath(t *testing.T) {
 		})
 	}
 }
+
+// The variable Ptah names for a secret it did not declare is the prefix and
+// the secret's path in upper case, each character a variable cannot hold an
+// underscore, and it passes CheckValueEnv. Ported from the host's
+// TestDefaultValueEnv_HappyPath.
+func TestDefaultValueEnv_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, schema, secret, want string
+	}{
+		{name: "at the root", secret: "pw", want: "PTAH_SECRET_PW"},
+		{name: "in a directory, with characters a variable cannot hold", schema: "/app/ext/", secret: "pg.pass-1", want: "PTAH_SECRET_APP_EXT_PG_PASS_1"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			got := secrets.DefaultValueEnv(test.schema, test.secret)
+			c.Assert(got, qt.Equals, test.want)
+			c.Assert(secrets.CheckValueEnv(got), qt.IsNil)
+		})
+	}
+}
