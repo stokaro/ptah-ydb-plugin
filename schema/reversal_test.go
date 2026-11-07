@@ -1,6 +1,7 @@
 package schema_test
 
 import (
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -255,4 +256,157 @@ func TestReverseTableChange_RestoresEveryIndexSetting(t *testing.T) {
 			c.Assert(reversed.Value.Id, qt.Equals, "reverse")
 		})
 	}
+}
+
+// The reverse of a change of a column family's settings asks for the
+// settings the family held: what the forward change leaves is the family as
+// declared, and the reverse restores its storage pool and its compression.
+// Ported from the host's TestReverseColumnFamilies_RestoresThePriorFamilies.
+func TestReverseTableChange_RestoresAFamilysSettings(t *testing.T) {
+	c := testcheck.New(t)
+	before := tableOperand(c, protocol.ValueInput_OBSERVED, `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"cold","data":{"media":"hdd"},"compression":"COMPRESSION_LZ4"}]}`)
+	after := tableOperand(c, protocol.ValueInput_DESIRED, `{"primaryKey":["id"],"columnFamilies":[{"name":"default"},{"name":"cold","data":{"media":"ssd"},"compression":"COMPRESSION_NONE"}]}`)
+	change, err := schema.CaptureTablePropertiesChange("change", tableOwner(), before, after)
+	c.Assert(err, qt.IsNil)
+
+	reversed, err := schema.ReverseTableChange("reverse", change.Value, schema.NativeAccess)
+
+	c.Assert(err, qt.IsNil)
+	left, restored := &native.DescribeTableResult{}, &native.RowTableIntent{}
+	c.Assert(protojson.Unmarshal(reversed.Left.Payload, left), qt.IsNil)
+	c.Assert(protojson.Unmarshal(reversed.Restored.Payload, restored), qt.IsNil)
+	c.Assert(left.ColumnFamilies[1].GetData().GetMedia(), qt.Equals, "ssd")
+	c.Assert(left.ColumnFamilies[1].GetCompression(), qt.Equals, Ydb_Table.ColumnFamily_COMPRESSION_NONE)
+	c.Assert(restored.ColumnFamilies[1].GetName(), qt.Equals, "cold")
+	c.Assert(restored.ColumnFamilies[1].GetData().GetMedia(), qt.Equals, "hdd")
+	c.Assert(restored.ColumnFamilies[1].GetCompression(), qt.Equals, Ydb_Table.ColumnFamily_COMPRESSION_LZ4)
+}
+
+// The changefeed sets the reversal tests below change: a held changefeed f
+// whose topic has four partitions and a consumer, the same changefeed
+// declared with a longer retention, declared in another mode, and no
+// changefeed at all.
+const (
+	heldFeeds      = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED"},"topic":{"partitioningSettings":{"minActivePartitions":"4"},"consumers":[{"name":"audit"}]}}]}`
+	retainedFeeds  = `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","topic":{"partitioningSettings":{},"retentionPeriod":"43200s","consumers":[{"name":"audit"}]}}]}`
+	recreatedFeeds = `{"changefeeds":[{"name":"f","mode":"MODE_NEW_IMAGE","format":"FORMAT_JSON","topic":{"partitioningSettings":{},"consumers":[{"name":"audit"}]}}]}`
+	noFeeds        = `{"changefeeds":[]}`
+)
+
+// reversedFeeds reverses the change of app.records's changefeeds from before,
+// read, to after, declared.
+func reversedFeeds(c *qt.C, before, after string) (schema.Reversed, error) {
+	c.Helper()
+	change, err := schema.CaptureTablePropertiesChange("change", tableOwner(), changefeedSet(c, protocol.ValueInput_OBSERVED, before), changefeedSet(c, protocol.ValueInput_DESIRED, after))
+	c.Assert(err, qt.IsNil)
+	return schema.ReverseTableChange("reverse", change.Value, schema.NativeAccess)
+}
+
+// The reverse of a changefeed's drop declares it again as the table held it,
+// its consumer and its topic's partitions included. Ported from the host's
+// TestRegisteredYDBReversalRestoresDefinitionsAndReportsStateLoss.
+func TestReverseTableChange_RestoresADroppedChangefeed(t *testing.T) {
+	c := testcheck.New(t)
+
+	reversed, err := reversedFeeds(c, heldFeeds, noFeeds)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(reversed.Left.Payload), qt.Equals, `{}`)
+	c.Assert(string(reversed.Restored.Payload), qt.Equals,
+		`{"changefeeds":[{"format":"FORMAT_JSON","mode":"MODE_UPDATES","name":"f","topic":{"consumers":[{"name":"audit"}],"partitioningSettings":{"minActivePartitions":"4"}}}]}`)
+	c.Assert(reversed.Kind, qt.Equals, schema.ChangefeedProperties)
+}
+
+// What a change of a changefeed's topic in place leaves keeps the partitions
+// the topic held, which ALTER TOPIC does not change; what a changefeed added
+// again leaves states none, since YDB derives them from the table. Either
+// reverse declares the partitions the topic held. Ported from the host's
+// TestReversalPreservesOnlyEstablishedPartitionCounts.
+func TestReverseTableChange_KeepsAnEstablishedPartitionCount(t *testing.T) {
+	for _, test := range []struct {
+		name, after, left string
+	}{
+		{"a topic changed in place", retainedFeeds,
+			`{"changefeeds":[{"description":{"format":"FORMAT_JSON","mode":"MODE_UPDATES","name":"f","state":"STATE_ENABLED"},` +
+				`"topic":{"consumers":[{"name":"audit"}],"partitioningSettings":{"minActivePartitions":"4"},"retentionPeriod":"43200s"}}]}`},
+		{"a changefeed added again", recreatedFeeds,
+			`{"changefeeds":[{"description":{"format":"FORMAT_JSON","mode":"MODE_NEW_IMAGE","name":"f","state":"STATE_ENABLED"},` +
+				`"topic":{"consumers":[{"name":"audit"}],"partitioningSettings":{}}}]}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			reversed, err := reversedFeeds(c, heldFeeds, test.after)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(string(reversed.Left.Payload), qt.Equals, test.left)
+			restored := &native.ChangefeedSetIntent{}
+			c.Assert(protojson.Unmarshal(reversed.Restored.Payload, restored), qt.IsNil)
+			c.Assert(restored.Changefeeds[0].GetTopic().GetPartitioningSettings().GetMinActivePartitions(), qt.Equals, int64(4))
+		})
+	}
+}
+
+// A changefeed an asynchronous replication controller owns has no reverse:
+// the controller creates and removes it, so the reverse of a change that
+// drops or declares it is refused. Ported from the host's
+// TestReversalRefusesIndependentReplicationStreamOperations.
+func TestReverseTableChange_RefusesAReplicationManagedChangefeed(t *testing.T) {
+	const binding = `"attributes":{"__async_replication":"{\"path\":\"/local/repl/records\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}`
+	for _, test := range []struct {
+		name, before, after string
+	}{
+		{"a drop", `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",` + binding + `},"topic":{"partitioningSettings":{}}}]}`, noFeeds},
+		{"a creation", noFeeds, `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON",` + binding + `,"topic":{"partitioningSettings":{}}}]}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			reversed, err := reversedFeeds(c, test.before, test.after)
+
+			c.Assert(err, qt.ErrorMatches, `the changefeed change has no reverse: changefeed "f" is declared as a replication-managed stream, .*`)
+			c.Assert(reversed.Value, qt.IsNil)
+		})
+	}
+}
+
+// A changefeed change that leaves an operand out cannot be reconstructed, so
+// it has no reverse. Ported from the host's
+// TestReversalRefusesUnreconstructibleOrMalformedChanges.
+func TestReverseTableChange_RefusesAChangefeedChangeWithoutAnOperand(t *testing.T) {
+	c := testcheck.New(t)
+	change, err := schema.CaptureTablePropertiesChange("change", tableOwner(), changefeedSet(c, protocol.ValueInput_OBSERVED, heldFeeds), changefeedSet(c, protocol.ValueInput_DESIRED, noFeeds))
+	c.Assert(err, qt.IsNil)
+	forged := payload(change.Value, `{"after":null,"before":`+heldFeeds+`,"facet":"`+schema.ChangefeedProperties+`"}`)
+
+	reversed, err := schema.ReverseTableChange("reverse", forged, schema.NativeAccess)
+
+	c.Assert(err, qt.ErrorMatches, `table properties change requires both operands`)
+	c.Assert(reversed.Value, qt.IsNil)
+}
+
+// The reverse of a change that did not permit a reset of the query's state
+// cannot grant one: a text change without the permission is refused, and the
+// reverse of a change of how the query runs declares no permission. Ported
+// from the host's TestStreamingReversalCannotInventResetPermission and
+// TestStreamingSettingReversalDoesNotClaimCheckpointLoss.
+func TestReverseObjectChange_GrantsNoStateReset(t *testing.T) {
+	c := testcheck.New(t)
+	permitted := streamingTextChange(c).Value
+	unpermitted := payload(permitted, strings.Replace(string(permitted.Payload), `"allowStateReset":true,`, "", 1))
+
+	refused, err := schema.ReverseObjectChange("reverse", unpermitted, schema.NativeAccess)
+
+	c.Assert(err, qt.ErrorMatches, `streaming query "app/copy": changing text resets aggregation state; declare allow_state_reset=true to permit it`)
+	c.Assert(refused.Value, qt.IsNil)
+
+	read, err := schema.Normalize(forgedValue(schema.StreamingQueryProperties, protocol.ValueInput_OBSERVED, streamingOwner(), `{"text":"SELECT 1;"}`))
+	c.Assert(err, qt.IsNil)
+	stopped, err := schema.CaptureStreamingQueryIntent(streamingOwner(), streaming.Spec{Text: "SELECT 1;", Run: new(false)}, false)
+	c.Assert(err, qt.IsNil)
+	change, err := schema.CaptureStreamingQueryChange("change", streamingOwner(), read, stopped)
+	c.Assert(err, qt.IsNil)
+	reversed, err := schema.ReverseObjectChange("reverse", change.Value, schema.NativeAccess)
+	c.Assert(err, qt.IsNil)
+	c.Assert(string(reversed.Restored.Payload), qt.Equals, `{"text":"SELECT 1;"}`)
 }
