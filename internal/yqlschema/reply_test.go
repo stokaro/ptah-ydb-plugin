@@ -550,7 +550,8 @@ var claimedHostKinds = map[string][]string{
 	schema.ResourcePoolClassifierProperties: {"ptah.run/ydb/resource-pool-classifier"},
 	schema.ChangefeedProperties:             {"ptah.run/ydb/changefeed"},
 	// The host claims every async replication and transfer of a complete
-	// load, as its TestReadYQLReplication and TestReadYQLTransfer assert.
+	// load, as its TestReadYQLReplication, TestReadYQLTransfer and
+	// TestYQLSupportedFamilyCoverageSurvivesFileLoading assert.
 	schema.ReplicationProperties: {"ptah.run/ydb/async-replication"},
 	schema.TransferProperties:    {"ptah.run/ydb/transfer"},
 }
