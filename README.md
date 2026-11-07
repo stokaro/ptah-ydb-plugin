@@ -3291,7 +3291,11 @@ with one removal step, and its receipts name it for every table facet. A row
 table goes with its indexes and changefeeds, and a column table the same way.
 The removal is written as YQL's `DROP TABLE`, as the host's embedded engine
 writes it, in either form: execution runs it through the query service once,
-outside a transaction, and confirms that the path is gone.
+outside a transaction, and confirms that the path is gone. A table whose read
+records its changefeeds as uninspected or unrepresentable, and carries none, is
+not dropped (`dropping table "app/t": the changefeed namespace is not fully
+described: ...`): `DROP TABLE` takes every changefeed with it, and the plan
+cannot tell whether a replication reads one.
 
 Before the statement is sent, execution reads the path: it must still hold a
 table of the store the plan read, with the columns the plan read, in order, and
@@ -3388,7 +3392,12 @@ before the swap and added again after it, because YDB moves no table that
 carries a changefeed`, and a changefeed the new table does not get is noted as
 dropped with its topic. A changefeed an asynchronous replication
 controls refuses the rebuild, as does a column table, whose rebuild needs an
-explicit data migration.
+explicit data migration. So does a read that does not say which changefeeds
+the table holds, since the rename would fail after the new table is created and
+filled: a read that captured none while the declaration states some, a read
+whose coverage records them as uninspected or unrepresentable and carries none,
+as the host records them for two HCL documents (`the changefeed namespace is
+not fully described: ...`), and a changefeed the read cannot represent.
 The live tests rebuild a table natively and by text on both release lines,
 read the copied rows back, and fail a copy whose value does not convert.
 

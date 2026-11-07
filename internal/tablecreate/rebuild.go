@@ -51,7 +51,9 @@ import (
 // embedded engine does: the ones the declaration states, or the ones the old
 // table held where the declaration does not state them. Each stream starts
 // again, and its consumers lose their positions. A changefeed an asynchronous
-// replication controls, or one the read cannot represent, is refused.
+// replication controls, or one the read cannot represent, is refused, and so is
+// a table whose read does not describe its changefeeds (see
+// undescribedChangefeeds).
 
 // rebuildPrefix and replacedPrefix name the scratch tables of a rebuild, as
 // the host's embedded engine names them.
@@ -592,6 +594,16 @@ func rebuildChangefeeds(owner *protocol.Reference, table *protocol.PlanningTable
 	observed, err := facetEnvelopes(owner, table.GetCurrent().GetFeatures().GetFacets(), protocol.ValueInput_OBSERVED)
 	if err != nil {
 		return rebuiltChangefeeds{}, "", err
+	}
+	if reason := undescribedChangefeeds(table); reason != "" {
+		return rebuiltChangefeeds{}, reason, nil
+	}
+	// As the alteration refuses it: without the table's own read, a changefeed
+	// the table holds would look absent, and the rename would fail after the
+	// new table is created and filled.
+	if declared.changefeeds != nil && observed.changefeeds == nil {
+		return rebuiltChangefeeds{}, "the table's current changefeeds were not captured, and YDB moves no table that carries one " +
+			"(`Cannot move table with cdc streams`)", nil
 	}
 	_, held, err := changefeedSets(nil, observed.changefeeds)
 	if err != nil {

@@ -254,6 +254,9 @@ func (p *planner) planTableDrop(i int, table *protocol.PlanningTable) (*protocol
 	if err != nil {
 		return refused(i, fmt.Sprintf("table %q: %v", tableLabel(owner), err)), nil
 	}
+	if reason := undescribedChangefeeds(table); reason != "" {
+		return refused(i, fmt.Sprintf("dropping table %q: %s", tableLabel(owner), reason)), nil
+	}
 	p.drops = append(p.drops, removal{index: i, table: table, operation: operation})
 	return nil, nil
 }
