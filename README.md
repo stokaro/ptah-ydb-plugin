@@ -669,6 +669,19 @@ embedded engine writes it from its own:
   path when the rollback runs.
 - A changed streaming query text keeps `allow_state_reset` in the reverse,
   which resets the query's checkpoint again.
+- The reverse asks for the nearest state YDB reaches in place, and the down
+  file says what it keeps. A topic keeps the partitions the forward change
+  added, and keeps auto-partitioning, paused, once the change turned it on.
+  An async replication or a transfer keeps a credential the change added.
+  A replication failed over before the forward change dropped it is not
+  created again, since its tables stayed as ordinary tables. A reverse that
+  leaves nothing YDB can run has no statement, only its recovery limit.
+- What the forward change leaves of a replication or a transfer runs in the
+  state the change found it in, so the reverse of a paused replication's
+  connection change is an ALTER that YDB takes.
+- A change on a target without the capability its forward change needed,
+  such as `secrets` or `external_data_sources`, is not reversed: the reversal
+  refuses it, as the host's embedded engine did.
 
 The service also undoes a change of a table's own settings: a row table's
 properties, such as its TTL and its partitioning, and a column table's

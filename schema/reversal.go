@@ -17,7 +17,9 @@ import (
 // what the forward change leaves.
 type Reversed struct {
 	// Value is the reverse change: its before operand is Left and its after
-	// operand is the declaration of the object the forward change found.
+	// operand is the declaration of the object the forward change found. It
+	// is nil where YDB reaches nothing in place that the reverse could run
+	// (see rollbackReached).
 	Value *protocol.NormalizedValue
 	// Kind is the object model of the operands.
 	Kind string
@@ -29,7 +31,8 @@ type Reversed struct {
 	// evidence that the forward change ran.
 	Left *protocol.Envelope
 	// Restored is the declaration the reverse asks for, the conversion of
-	// Before, or nil where the reverse drops the object.
+	// Before with what YDB keeps in place, or nil where the reverse drops
+	// the object or runs nothing.
 	Restored *protocol.Envelope
 }
 
@@ -101,11 +104,18 @@ func ReverseObjectChange(id string, change *protocol.Envelope, access AccessWire
 	if restored, err = keepStateReset(family, parts.After, restored); err != nil {
 		return Reversed{}, err
 	}
-	value, err := family.captureIn(id, change.Owner, parts.Database, left, restored)
+	nearest, err := rollbackReached(family, parts.Before, parts.After, left, restored)
 	if err != nil {
 		return Reversed{}, err
 	}
-	return Reversed{Value: value, Kind: family.kind, Before: parts.Before, After: parts.After, Left: left, Restored: restored}, nil
+	reversed := Reversed{Kind: family.kind, Before: parts.Before, After: parts.After, Left: nearest.left, Restored: nearest.restored}
+	if !nearest.runs {
+		return reversed, nil
+	}
+	if reversed.Value, err = family.captureIn(id, change.Owner, parts.Database, nearest.left, nearest.restored); err != nil {
+		return Reversed{}, err
+	}
+	return reversed, nil
 }
 
 // reversedOperands converts the forward change's operands into the reverse

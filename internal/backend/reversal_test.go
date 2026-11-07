@@ -193,7 +193,7 @@ func TestReverseChanges_ReversesABatch(t *testing.T) {
 	}
 	changes[1].Value.Id = "second"
 	reverse := &protocol.ReverseChangesRequest{Engine: "ydb", ReversalId: reversal.ServiceID, TargetFeatures: backend.Description().Engines[0].Features,
-		Identifiers: node.Identifiers, Changes: changes}
+		Identifiers: node.Identifiers, Capabilities: map[string]bool{"coordination_nodes": true, "secrets": true}, Changes: changes}
 
 	reversed, err := backend.New().ReverseChanges(c.Context(), reverse)
 
