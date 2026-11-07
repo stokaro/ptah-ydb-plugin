@@ -312,8 +312,8 @@ func refused(index int, kind, message string) *protocol.PlannedDeclarations {
 	}}}
 }
 
-// A table and a native object share one scheme path; no object is a directory
-// under which another declaration can be placed.
+// A table, a view, and a native object share one scheme path; no object is a
+// directory under which another declaration can be placed.
 func pathAvailable(request *protocol.PlanDeclarationsRequest, index int) error {
 	object := request.Objects[index]
 	path := schemePath(object.Subject.GetSchema().GetSource(), object.Subject.GetName().GetSource())
@@ -323,6 +323,12 @@ func pathAvailable(request *protocol.PlanDeclarationsRequest, index int) error {
 	for _, table := range request.Tables {
 		if overlaps(schemePath(table.Declaration.Schema, table.Declaration.Name)) {
 			return fmt.Errorf("authored native object conflicts with a declared table path")
+		}
+	}
+	for _, step := range request.CommonSteps {
+		view := step.GetCommonObject().GetCreateView().GetView()
+		if view != nil && overlaps(schemePath(view.Schema, view.Name)) {
+			return fmt.Errorf("authored native object conflicts with a declared view path")
 		}
 	}
 	for i, other := range request.Objects {
