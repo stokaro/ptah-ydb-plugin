@@ -969,3 +969,150 @@ func TestTransferComparisonRefusesAnUndeclaredTable_HappyPath(t *testing.T) {
 		c.Assert(result.Changes, qt.HasLen, 1)
 	}
 }
+
+// topicObject is a declared topic of the schema, as a host that lists
+// models.declared-objects names it among the declared objects of the
+// transfer comparison.
+func topicObject(directory, name string) *protocol.ComparisonIdentity {
+	return &protocol.ComparisonIdentity{Kind: schema.TopicProperties, Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{},
+		Schema: testcomparison.Part(directory), Parent: &protocol.ComparisonPart{}, Name: testcomparison.Part(name)}
+}
+
+// transferTopicsRequest compares the declared transfer app/ingest of spec
+// from a host that lists every declared table among the relations and sends
+// the declared topics, with the table order_log declared beside relations
+// and objects.
+func transferTopicsRequest(c *qt.C, spec replication.TransferSpec, relations []*protocol.ComparisonIdentity, objects ...*protocol.ComparisonIdentity) *protocol.CompareModelsRequest {
+	c.Helper()
+	request := transferRelationsRequest(c, append([]*protocol.ComparisonIdentity{tableRelation("", "order_log")}, relations...)...)
+	request.Desired.Records[0].Value = declaredTransferValue(c, spec)
+	request.TargetFeatures = append(request.TargetFeatures, provider.DeclaredObjectsFeature)
+	request.DeclaredObjects = objects
+	return request
+}
+
+// declaredTransferValue normalizes the declaration of the transfer
+// app/ingest of spec, as the host sends it in a comparison.
+func declaredTransferValue(c *qt.C, spec replication.TransferSpec) *protocol.NormalizedValue {
+	c.Helper()
+	normalized, err := backend.New().NormalizeValues(c.Context(), &protocol.NormalizeValuesRequest{Engine: "ydb",
+		Values: []*protocol.ValueInput{{Id: "value", Representation: protocol.ValueInput_DESIRED, Value: declaredTransfer(c, &spec)}}})
+	c.Assert(err, qt.IsNil)
+	return normalized.Values[0]
+}
+
+// withSource is ingest reading source.
+func withSource(source string) replication.TransferSpec {
+	spec := ingest()
+	spec.Source = source
+	return spec
+}
+
+// The transfer comparison names topics among its declared kinds, so a host
+// that lists models.declared-objects sends it the topics the schema
+// declares.
+func TestTransferComparisonReadsTheDeclaredTopics(t *testing.T) {
+	c := testcheck.New(t)
+
+	comparisons := backend.Description().GetEngines()[0].GetComparisons()
+
+	transfers := slices.IndexFunc(comparisons, func(comparison *protocol.ModelComparison) bool {
+		return comparison.GetId() == replicationcompare.TransferServiceID
+	})
+
+	c.Assert(transfers >= 0, qt.IsTrue)
+	c.Assert(comparisons[transfers].GetDeclaredKinds(), qt.DeepEquals, []string{schema.TopicProperties})
+	c.Assert(backend.Description().GetFeatures(), qt.Contains, provider.DeclaredObjectsFeature)
+}
+
+// A declared transfer of a topic of its own database that the schema declares
+// neither as a topic nor as a changefeed of a declared table is refused before
+// anything is planned, in the words of the host's embedded engine: YDB
+// accepts the transfer and then stops it (`Discovery error`). Measured with
+// built-in 74de0b65b on 26.2.1.14 for a topic and for a stream of a declared
+// table: both refused.
+func TestTransferComparisonRefusesAnUndeclaredTopic_FailurePath(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		source    string
+		relations []*protocol.ComparisonIdentity
+		objects   []*protocol.ComparisonIdentity
+		topic     string
+	}{
+		{name: "no topic declared", source: "events", topic: "events"},
+		{name: "a topic of another name", source: "events", objects: []*protocol.ComparisonIdentity{topicObject("", "other")}, topic: "events"},
+		{name: "the topic in another directory", source: "app/events", objects: []*protocol.ComparisonIdentity{topicObject("ext", "events")}, topic: "app/events"},
+		{name: "a stream of an undeclared table", source: "orders/feed", topic: "orders/feed"},
+		{name: "a stream of a view of the table's name", source: "orders/feed", topic: "orders/feed",
+			relations: []*protocol.ComparisonIdentity{{Kind: "view", Database: &protocol.ComparisonPart{}, Catalog: &protocol.ComparisonPart{},
+				Schema: &protocol.ComparisonPart{}, Parent: &protocol.ComparisonPart{}, Name: testcomparison.Part("orders")}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result, err := backend.New().CompareModels(c.Context(), transferTopicsRequest(c, withSource(test.source), test.relations, test.objects...))
+
+			c.Assert(err, qt.ErrorMatches, "rpc error: code = InvalidArgument desc = transfer app/ingest: it reads topic "+test.topic+", which the schema "+
+				"declares neither as a topic nor as a changefeed, so the plan leaves no such topic, and YDB accepts such a transfer and then stops it "+
+				"\\(`Discovery error`\\); declare the topic or the changefeed")
+			c.Assert(result, qt.IsNil)
+		})
+	}
+}
+
+// A transfer of a declared topic is compared, and so is one of a stream of a
+// declared table, which the comparison takes for one of the table's
+// changefeeds, and one of another database's topic, which this plan does not
+// keep. Measured with built-in 74de0b65b on 26.2.1.14: a transfer of a
+// declared changefeed is planned.
+func TestTransferComparisonRefusesAnUndeclaredTopic_HappyPath(t *testing.T) {
+	other := withSource("events")
+	other.Connection = replication.Connection{ConnectionString: "grpc://localhost:2136/?database=/other", TokenSecretName: "token"}
+	for _, test := range []struct {
+		name      string
+		spec      replication.TransferSpec
+		relations []*protocol.ComparisonIdentity
+		objects   []*protocol.ComparisonIdentity
+	}{
+		{name: "a declared topic", spec: withSource("app/events"), objects: []*protocol.ComparisonIdentity{topicObject("app", "events")}},
+		{name: "a changefeed of a declared table", spec: withSource("orders/feed"), relations: []*protocol.ComparisonIdentity{tableRelation("", "orders")}},
+		{name: "another database's topic", spec: other},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+
+			result, err := backend.New().CompareModels(c.Context(), transferTopicsRequest(c, test.spec, test.relations, test.objects...))
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(result.Changes, qt.HasLen, 1)
+		})
+	}
+}
+
+// A host that does not send the declared topics cannot say a topic is
+// undeclared, so a transfer of a topic is compared as before.
+func TestTransferComparisonWithoutDeclaredTopics_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	request := transferRelationsRequest(c, tableRelation("", "order_log"))
+	request.Desired.Records[0].Value = declaredTransferValue(c, withSource("events"))
+
+	result, err := backend.New().CompareModels(c.Context(), request)
+
+	c.Assert(err, qt.IsNil)
+	c.Assert(result.Changes, qt.HasLen, 1)
+}
+
+// A target without transfers refuses a declared transfer by the capability,
+// before its topic is asked about, as the host's embedded engine refused it on
+// 25.1.4.7 (`transfer c2533.ingest, which requires target capability
+// transfers`, measured with built-in 74de0b65b).
+func TestTransferComparisonRefusesWithoutTransfersFirst_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	request := transferTopicsRequest(c, withSource("events"), nil)
+	request.Capabilities[replication.CapabilityTransfers] = false
+
+	result, err := backend.New().CompareModels(c.Context(), request)
+
+	c.Assert(err, qt.ErrorMatches, "rpc error: code = InvalidArgument desc = changing transfers requires transfers.*")
+	c.Assert(result, qt.IsNil)
+}

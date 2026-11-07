@@ -16,6 +16,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -38,8 +39,11 @@ func DropModel() *protocol.ValueModel { return proto.CloneOf(dropModel) }
 func buildDropModel() *protocol.ValueModel {
 	raw, err := json.Marshal(map[string]any{
 		"kind": DropOperationKind, "representation": "operation", "schema_version": 1, "encoding": "json",
-		"payload":      "store: row or column; columns: the names of the table's columns in order; key: the table's key columns",
-		"execution":    "YQL DROP TABLE through the query service once, outside SQL transactions; no retries; session and absolute path bound at dispatch",
+		"payload": "store: row or column; columns: the names of the table's columns in order; key: the table's key columns; for the old table of a " +
+			"rebuild, grants_on and grants: the table in the owner's directory that took the old table's name, and the permissions the read found " +
+			"on the old table, each a subject and a permission once, which the TEXT form grants on that table after the drop",
+		"execution": "YQL DROP TABLE through the query service once, outside SQL transactions; no retries; session and absolute path bound at " +
+			"dispatch; the grants are the TEXT form's, since natively the rebuild's copy gives the new table the old one's access control entries",
 		"precondition": "the path must hold a table of the captured store with exactly the captured columns, in order, and the captured key columns",
 		"confirmation": "the path must be gone from its directory",
 		"semantics":    "destructive: the table's rows, indexes and changefeeds go with it",
@@ -144,6 +148,20 @@ type Drop struct {
 	// Key are the table's key columns, in key order where the read reports
 	// one.
 	Key []string `json:"key"`
+	// GrantsOn names, for the old table of a rebuild, the table in the
+	// owner's directory that took its name, and Grants are the permissions
+	// the read found on the old table, which the TEXT form grants on that
+	// table after the drop: a migration file runs later and reads no server.
+	// Execution leaves them to the rebuild's copy, which gives the new table
+	// the old one's access control entries as they are when it runs.
+	GrantsOn string       `json:"grants_on,omitempty"`
+	Grants   []TableGrant `json:"grants,omitempty"`
+}
+
+// TableGrant is one permission a subject holds on a table.
+type TableGrant struct {
+	Role       string `json:"role"`
+	Permission string `json:"permission"`
 }
 
 // validate refuses a removal that does not say what it drops.
@@ -164,6 +182,14 @@ func (d Drop) validate() error {
 	for i, key := range d.Key {
 		if !names[key] || slices.Contains(d.Key[:i], key) {
 			return fmt.Errorf("a YDB table removal's key names its columns once each")
+		}
+	}
+	if (d.GrantsOn == "") != (len(d.Grants) == 0) || (d.GrantsOn != "" && !validName(d.GrantsOn)) {
+		return fmt.Errorf("a YDB table removal names the table its grants go to exactly when it carries grants")
+	}
+	for i, grant := range d.Grants {
+		if !oneLine(grant.Role) || !oneLine(grant.Permission) || slices.Contains(d.Grants[:i], grant) {
+			return fmt.Errorf("a YDB table removal grants each permission of a subject once")
 		}
 	}
 	return nil
@@ -270,4 +296,22 @@ func decodeDrop(payload []byte) (*Drop, error) {
 // embedded engine writes it: `DROP TABLE `path`;`.
 func DropStatement(path string) string {
 	return "DROP TABLE " + QuoteIdentifier(path) + ";"
+}
+
+// DropText writes a removal at path in the TEXT form: its [DropStatement],
+// then, for the old table of a rebuild, a GRANT of each of its grants on the
+// table that took its name, one to a line, as the host's embedded engine
+// wrote them after the rebuild. YDB creates the new table with its
+// directory's permissions alone and drops the old one with its own, so a
+// migration file has to state them. They follow the drop so the rebuild's
+// statements stay the consecutive steps a migration lint reads as one
+// rebuild.
+func DropText(path string, drop *Drop) string {
+	statements := []string{DropStatement(path)}
+	directory := path[:max(strings.LastIndex(path, "/"), 0)]
+	for _, grant := range drop.Grants {
+		statements = append(statements, "GRANT "+ydbtype.StringLiteral(grant.Permission)+" ON "+QuoteIdentifier(TextPath(directory, drop.GrantsOn))+
+			" TO "+QuoteIdentifier(grant.Role)+";")
+	}
+	return strings.Join(statements, "\n")
 }

@@ -17,6 +17,7 @@ import (
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/changefeeds"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbacl"
 	"github.com/stokaro/ptah-ydb-plugin/internal/ydbcomment"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
@@ -434,6 +435,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	if err != nil {
 		return nil, subject + ": " + err.Error(), nil
 	}
+	grants, grantsNote := regrants(label, table, steps)
 	copyOperation, err := CaptureCopy(prefix+"copy", scratchOwner, Copy{Source: owner.GetName(), Columns: copied})
 	if err != nil {
 		return nil, "", err
@@ -446,7 +448,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	if err != nil {
 		return nil, "", err
 	}
-	drop, err := CaptureDropShape(prefix+"drop-old", replacedOwner, Drop{Store: RowStore, Columns: heldColumns, Key: heldKeyColumns})
+	drop, err := CaptureDropShape(prefix+"drop-old", replacedOwner, retiredTable(heldColumns, heldKeyColumns, owner.GetName(), grants))
 	if err != nil {
 		return nil, "", err
 	}
@@ -463,7 +465,7 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 	self, scratchSubject, replacedSubject := table.GetSubject(), subjectOf(scratch), subjectOf(replaced)
 	planned := []rebuildStep{
 		{operation: create, effects: []*protocol.PlanningEffect{{Subject: scratchSubject, Action: protocol.PlanningEffect_CREATE},
-			{Subject: slot(scratchSubject), Action: protocol.PlanningEffect_CREATE}}, notes: append(rebuildNotes(label), feeds.notes...)},
+			{Subject: slot(scratchSubject), Action: protocol.PlanningEffect_CREATE}}, notes: slices.Concat(rebuildNotes(label), feeds.notes, grantsNote)},
 	}
 	// The settings of an index change on the empty new table, before the copy
 	// fills it.
@@ -498,6 +500,77 @@ func planRebuild(number int, owner *protocol.Reference, table *protocol.Planning
 		{Subject: slot(replacedSubject), Action: protocol.PlanningEffect_DROP}}})
 	result.steps = rebuildPlanningSteps(planned)
 	return result, "", nil
+}
+
+// regrants are the grants the new table of a rebuild of table, which label
+// names, takes in the TEXT form, after the old table is dropped (see
+// DropText): each grant the read found on the held table
+// (planning.table-grants, contract 25.33), except a privilege the table holds
+// by default rather than by a grant and one the plan revokes, whose REVOKE in
+// steps runs after the rebuild, as the host's embedded engine left out an
+// entry the plan removes. They are sorted by subject and permission. A host
+// that does not send the grants leaves them unknown, and so does a read that
+// did not describe them, which the note says: a rebuild run from a migration
+// file then gives the new table none, while one Ptah runs copies them from
+// the old table when it runs.
+func regrants(label string, table *protocol.PlanningTable, steps []*protocol.CommonPlanningStep) ([]TableGrant, []string) {
+	held := table.GetCurrentGrants()
+	if held == nil {
+		return nil, nil
+	}
+	if !held.GetComplete() {
+		return nil, []string{fmt.Sprintf("The read did not describe the grants of table %s, so the rebuild written into a migration file gives the new "+
+			"table none of them; run by Ptah, the rebuild copies them from the old table.", label)}
+	}
+	revoked := make(map[TableGrant]bool)
+	for _, step := range steps {
+		revoke := step.GetCommonObject().GetRevoke()
+		target := revoke.GetTarget()
+		if revoke == nil || target.GetKind() != "table" || len(revoke.GetColumns()) != 0 || !sameTable(target, table.GetCurrent()) {
+			continue
+		}
+		for _, privilege := range revoke.GetPrivileges() {
+			revoked[TableGrant{Role: revoke.GetRole(), Permission: permissionName(privilege)}] = true
+		}
+	}
+	var grants []TableGrant
+	for _, grant := range held.GetGrants() {
+		copied := TableGrant{Role: grant.GetRole(), Permission: permissionName(grant.GetPrivilege())}
+		if grant.GetImplicit() || revoked[copied] || slices.Contains(grants, copied) {
+			continue
+		}
+		grants = append(grants, copied)
+	}
+	slices.SortFunc(grants, func(a, b TableGrant) int {
+		return cmp.Or(cmp.Compare(a.Role, b.Role), cmp.Compare(a.Permission, b.Permission))
+	})
+	return grants, nil
+}
+
+// retiredTable is the drop of the old table of a rebuild, which holds columns
+// and key, with the grants the TEXT form gives the table that takes its name,
+// name, after the drop.
+func retiredTable(columns, key []string, name string, grants []TableGrant) Drop {
+	drop := Drop{Store: RowStore, Columns: columns, Key: key, Grants: grants}
+	if len(grants) != 0 {
+		drop.GrantsOn = name
+	}
+	return drop
+}
+
+// sameTable reports whether target names the held table current, by its
+// directory and name.
+func sameTable(target *protocol.Reference, current *protocol.ObservedTable) bool {
+	return strings.Trim(target.GetSchema(), "/") == strings.Trim(current.GetSchema(), "/") && target.GetName() == current.GetName()
+}
+
+// permissionName is the YDB permission a privilege names, in YDB's spelling,
+// or the privilege as it stands where it names none Ptah knows.
+func permissionName(privilege string) string {
+	if permission, known := ydbacl.Permission(privilege); known {
+		return permission
+	}
+	return privilege
 }
 
 // rebuildStep is one operation of a rebuild, with its footprint and the notes

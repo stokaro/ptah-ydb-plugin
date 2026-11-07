@@ -1,0 +1,1 @@
+{"tables":[{"name":"accounts","schema":"app","primary_key":["id"],"columns":[{"name":"id","type":"BIGINT","primary":true},{"name":"email","type":"VARCHAR(255)","nullable":true},{"name":"seen","type":"TIMESTAMP(3)","nullable":true},{"name":"note","type":"TEXT","nullable":true}]}]}

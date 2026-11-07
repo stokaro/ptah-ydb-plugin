@@ -174,10 +174,11 @@ func tableStatementText(value *protocol.Envelope, path string) (string, error) {
 		}
 		return tablecreate.ColumnLocalIndexStatement(path, alteration), nil
 	case tablecreate.DropOperationKind:
-		if _, err := tablecreate.DecodeDrop(value); err != nil {
+		drop, err := tablecreate.DecodeDrop(value)
+		if err != nil {
 			return "", err
 		}
-		return tablecreate.DropStatement(path), nil
+		return tablecreate.DropText(path, drop), nil
 	case tablecreate.CopyOperationKind:
 		copied, err := tablecreate.DecodeCopy(value)
 		if err != nil {

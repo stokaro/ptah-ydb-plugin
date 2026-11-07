@@ -60,8 +60,9 @@ func TextPath(schemaPath, name string) string {
 // [ErrNoTextForm]: storage settings, user attributes other than comments,
 // tiering, a TTL run interval other than YDB's own, the partition columns, a
 // family kept in memory, and a default YQL cannot write. A Serial whose
-// sequence states a start or an increment other than 1 needs the database
-// [RowTableStatementIn] takes.
+// sequence states a start or an increment other than 1 gets them only from
+// the database [RowTableStatementIn] takes; without one the statement goes
+// without them (see [SequenceOmissions]).
 func RowTableStatement(path string, request *Ydb_Table.CreateTableRequest) (string, error) {
 	return RowTableStatementIn("", path, request)
 }

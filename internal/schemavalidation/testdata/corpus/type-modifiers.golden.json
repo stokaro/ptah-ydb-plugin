@@ -1,0 +1,18 @@
+{
+  "host": "7076368bcb2093fd0d074765dd5c597dccdc1491",
+  "default": [],
+  "no_skipped": [
+    {
+      "code": "omitted-declaration",
+      "kind": "column",
+      "object": "app.accounts.email",
+      "message": "type modifier=VARCHAR(255): length 255 would be skipped"
+    },
+    {
+      "code": "omitted-declaration",
+      "kind": "column",
+      "object": "app.accounts.seen",
+      "message": "type modifier=TIMESTAMP(3): precision 3 (YDB keeps microseconds) would be skipped"
+    }
+  ]
+}

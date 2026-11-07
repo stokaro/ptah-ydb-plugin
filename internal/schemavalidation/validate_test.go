@@ -311,3 +311,49 @@ func TestValidateSchema_SecretCapabilityNamesThePath(t *testing.T) {
 	c.Assert(got, qt.HasLen, 1)
 	c.Assert(got[0].Message, qt.Matches, `secret app/pw requires the unavailable target capability secrets.*`)
 }
+
+// A request that asks for no skipped declarations hears what an offline
+// render of each table's creation goes without, in the words of the host's
+// bundled validation: the part of a column's declared type YDB does not keep,
+// and a Serial's start and increment, each named by the column's directory,
+// table and name. Measured with built-in 74de0b65b, `schema validate
+// --no-skipped` (G219, G220); the corpus row type-modifiers holds the host's
+// answer for the first. A request that does not ask hears none of it.
+func TestValidateSchema_ReportsOmissions_HappyPath(t *testing.T) {
+	declared := func() []*protocol.ValidationTable {
+		return []*protocol.ValidationTable{
+			table("app/sub", "accounts", column("id", "BIGINT", true), &protocol.DeclaredColumn{Name: "email", Type: "VARCHAR(255)", Nullable: true},
+				&protocol.DeclaredColumn{Name: "seen", Type: "TIMESTAMP(3)", Nullable: true}, &protocol.DeclaredColumn{Name: "note", Type: "TEXT", Nullable: true}),
+			table("app", "orders", &protocol.DeclaredColumn{Name: "id", Type: "BIGSERIAL", Primary: true, IdentityStart: "100", IdentityIncrement: "5"}),
+		}
+	}
+	for _, test := range []struct {
+		name      string
+		noSkipped bool
+		want      []string
+	}{
+		{name: "asked", noSkipped: true, want: []string{
+			`column app.orders.id: identity increment=5 would be skipped`,
+			`column app.orders.id: identity start=100 would be skipped`,
+			`column app/sub.accounts.email: type modifier=VARCHAR(255): length 255 would be skipped`,
+			`column app/sub.accounts.seen: type modifier=TIMESTAMP(3): precision 3 (YDB keeps microseconds) would be skipped`,
+		}},
+		{name: "not asked", want: make([]string, 0)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := newRequest(declared()...)
+			request.NoSkipped = test.noSkipped
+			request.Capabilities = map[string]bool{"transactional_ddl": false, "serial_columns": true, "serial_sequence_options": true, "wide_date_time_types": true}
+
+			got := diagnostics(c, request)
+
+			texts := make([]string, 0, len(got))
+			for _, diagnostic := range got {
+				c.Assert(diagnostic.Code, qt.Equals, protocol.SchemaDiagnostic_OMITTED_DECLARATION)
+				texts = append(texts, diagnostic.Kind+" "+diagnostic.Object+": "+diagnostic.Message)
+			}
+			c.Assert(texts, qt.DeepEquals, test.want)
+		})
+	}
+}
