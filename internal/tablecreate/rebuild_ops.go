@@ -171,7 +171,7 @@ func DecodeRename(value *protocol.Envelope) (*Rename, error) {
 }
 
 type statementPayload interface {
-	Copy | Rename | defaultPayload | inventoryPayload | sequencePayload
+	Copy | Rename | defaultPayload | inventoryPayload | sequencePayload | nullabilityPayload
 	validate() error
 }
 

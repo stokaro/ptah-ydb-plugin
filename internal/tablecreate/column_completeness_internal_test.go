@@ -45,7 +45,7 @@ func TestCompleteColumnAlterationSerial_FailurePath(t *testing.T) {
 			c := testcheck.New(t)
 			owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
 			caps := map[string]bool{"serial_columns": true, "serial_sequence_options": true}
-			c.Assert(completeColumnAlteration(owner, serialPlanningTable(test.id, test.autoIncrement), nil, nil, nil, nil, caps), qt.Equals, test.want)
+			c.Assert(completeColumnAlteration(owner, serialPlanningTable(test.id, test.autoIncrement), nil, nil, nil, nil, nil, caps), qt.Equals, test.want)
 		})
 	}
 }
@@ -65,7 +65,7 @@ func TestCompleteColumnAlterationSerial_HappyPath(t *testing.T) {
 			c := testcheck.New(t)
 			owner := &protocol.Reference{Engine: "ydb", Kind: "table", Database: "/local", Schema: "app", Name: "records"}
 			caps := map[string]bool{"serial_columns": true, "serial_sequence_options": true}
-			c.Assert(completeColumnAlteration(owner, serialPlanningTable(test.id, true), nil, nil, nil, test.steps, caps), qt.Equals, "")
+			c.Assert(completeColumnAlteration(owner, serialPlanningTable(test.id, true), nil, nil, nil, nil, test.steps, caps), qt.Equals, "")
 		})
 	}
 }
