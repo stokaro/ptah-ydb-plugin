@@ -84,6 +84,24 @@ func TestHostDiffsYDBTypesAndIndexesAgainstThemselves_HappyPath(t *testing.T) {
 	c.Assert(out, qt.Equals, "Schemas are synced, no changes to be made.\n")
 }
 
+// A file-to-file comparison turns one declaration into the catalog shape
+// that a YDB read would return. A Serial's start and increment must survive
+// that conversion, or an unchanged file plans ALTER SEQUENCE. This ports the
+// host's TestCompareSchemas_YDBSerialSequenceSelfCompareReportsNothing.
+func TestHostDiffsYDBSerialAgainstItself_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	realm := newCLIRealm(c)
+	const schema = "tables:\n  orders:\n    columns:\n" +
+		"      id: {type: BIGSERIAL, primary: true, identity_start: 100, identity_increment: 5}\n" +
+		"      note: {type: Utf8}\n"
+	file := filepath.Join(writeFiles(c, c.TempDir(), map[string]string{"schema.yaml": schema}), "schema.yaml")
+
+	out, err := hostCommand(c, "schema", "diff", "--from", file, "--to", file, "--dev-url", realm.address)
+
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
+	c.Assert(out, qt.Equals, "Schemas are synced, no changes to be made.\n")
+}
+
 // A changed index kind still produces a replacement after both documents
 // have gone through the provider's index preparation.
 func TestHostDiffsChangedYDBIndexKind_HappyPath(t *testing.T) {
