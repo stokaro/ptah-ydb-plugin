@@ -133,11 +133,12 @@ func TestHostScopesSecrets_HappyPath(t *testing.T) {
 }
 
 // The host selects an external data source and an external table each by
-// its own type: an exclusion of the tables plans only the source's drop, and
-// an exclusion of the source as well keeps both. Ported from the host's
-// TestScope_ExternalObjects and TestExclude_ExternalObjects. The include row
-// is left out: an include of the table also drops its data source, which the
-// selection keeps as the table's requirement on the read alone (gap G225).
+// its own type: an include of the table plans only the table's drop, not the
+// drop of the data source it reads, an exclusion of the tables plans only the
+// source's drop, and an exclusion of the source as well keeps both. Ported
+// from the host's TestScope_ExternalObjects and TestExclude_ExternalObjects;
+// the include row matches the host's embedded engine at 74de0b65b on
+// 25.1.4.7 and 26.2.1.14.
 func TestHostScopesExternalObjects_HappyPath(t *testing.T) {
 	c := testcheck.New(t)
 	requireHostNegotiates(c, provider.ScopeSelectionsFeature)
@@ -156,10 +157,71 @@ func TestHostScopesExternalObjects_HappyPath(t *testing.T) {
 	dropTable, dropSource := "DROP EXTERNAL TABLE `"+directory+"/files`", "DROP EXTERNAL DATA SOURCE `"+directory+"/s3`"
 
 	runScopeRows(t, directory, "external_data_sources: {}\nexternal_tables: {}\n", []scopeRow{
+		{name: "include the table", flags: []string{"--include", directory + ".files[type=external_table]"}, want: []string{dropTable}},
 		{name: "exclude the tables", flags: []string{"--exclude", directory + ".*[type=external_table]"}, want: []string{dropSource}},
 		{name: "exclude everything external", flags: []string{"--exclude", directory + ".*[type=external_table]", "--exclude", directory + ".s3[type=external_data_source]"},
 			want: make([]string, 0)},
 		{name: "the directory", want: []string{dropSource, dropTable}},
+	})
+}
+
+// An include of an external table the declaration adds beside a held data
+// source plans only the table's creation: the selection keeps the source on
+// neither side, so the plan does not create the held source again. The
+// host's embedded engine planned the same at 74de0b65b.
+func TestHostScopesAnExternalTableWithoutItsSource_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ScopeSelectionsFeature)
+	opened, directory, database := inspectionFixture(c)
+	source := path.Join(database, directory, "s3")
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE EXTERNAL DATA SOURCE `"+source+
+		"` WITH (SOURCE_TYPE = 'ObjectStorage', LOCATION = 'https://storage.example.test/scope/', AUTH_METHOD = 'NONE')"), qt.IsNil)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_ = execFixtureSchema(ctx, opened.DB, "DROP EXTERNAL DATA SOURCE `"+source+"`")
+	})
+	declared := "external_data_sources:\n  s3:\n    schema: " + directory + "\n    source_type: ObjectStorage\n" +
+		"    location: https://storage.example.test/scope/\n    auth_method: NONE\n" +
+		"external_tables:\n  files:\n    schema: " + directory + "\n    data_source: " + directory + "/s3\n    location: /\n" +
+		"    columns:\n      - {name: id, type: Int64, not_null: true}\n    options:\n      FORMAT: json_each_row\n"
+	createTable := "CREATE EXTERNAL TABLE `" + directory + "/files` (\n    `id` Int64 NOT NULL\n) WITH (\n    DATA_SOURCE = '" + directory +
+		"/s3',\n    LOCATION = '/',\n    FORMAT = 'json_each_row'\n)"
+
+	runScopeRows(t, directory, declared, []scopeRow{
+		{name: "include the table", flags: []string{"--include", directory + ".files[type=external_table]"}, want: []string{createTable}},
+		{name: "the directory", want: []string{createTable}},
+	})
+}
+
+// An include of an external data source plans only the source's drop, not
+// the drop of the secret its password names: the selection keeps the secret
+// on neither side. The host's embedded engine planned the same at 74de0b65b
+// on 26.2.1.14; a line without secrets has no secret to name.
+func TestHostScopesADataSourceWithoutItsSecret_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ScopeSelectionsFeature)
+	opened, directory, database := inspectionFixture(c)
+	client := startProviderFor(c)
+	session, err := client.Open(c.Context(), &protocol.OpenRequest{Engine: "ydb", Address: os.Getenv("PTAH_YDB_TEST_URL")})
+	c.Assert(err, qt.IsNil)
+	c.Cleanup(func() { c.Check(client.CloseSession(context.Background(), session.Id), qt.IsNil) })
+	skipWithout(c, session, secrets.Capability)
+	secret, source := path.Join(database, directory, "pw"), path.Join(database, directory, "warehouse")
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE SECRET `"+secret+"` WITH (value = 'probe');"), qt.IsNil)
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE EXTERNAL DATA SOURCE `"+source+"` WITH (SOURCE_TYPE = 'PostgreSQL', "+
+		"LOCATION = 'pg.invalid:5432', AUTH_METHOD = 'BASIC', DATABASE_NAME = 'app', LOGIN = 'reader', PASSWORD_SECRET_PATH = '"+secret+"')"), qt.IsNil)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		_ = execFixtureSchema(ctx, opened.DB, "DROP EXTERNAL DATA SOURCE `"+source+"`")
+		_ = execFixtureSchema(ctx, opened.DB, "DROP SECRET `"+secret+"`")
+	})
+	dropSource, dropSecret := "DROP EXTERNAL DATA SOURCE `"+directory+"/warehouse`", "DROP SECRET `"+directory+"/pw`"
+
+	runScopeRows(t, directory, "external_data_sources: {}\nexternal_tables: {}\nsecrets: {}\n", []scopeRow{
+		{name: "include the source", flags: []string{"--include", directory + ".warehouse[type=external_data_source]"}, want: []string{dropSource}},
+		{name: "the directory", want: []string{dropSource, dropSecret}},
 	})
 }
 

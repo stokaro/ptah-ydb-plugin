@@ -46,6 +46,32 @@ func TestScopeSelectionsNegotiation(t *testing.T) {
 		schema.ReplicationProperties, schema.TransferProperties, schema.ResourcePoolProperties, schema.ResourcePoolClassifierProperties})
 }
 
+// Only a classifier and a streaming query keep what they require, the
+// resource pool each routes to, as the host's embedded engine kept it. An
+// external table keeps no data source and a data source no secret: the host
+// keeps a requirement on one side of a comparison alone, so an --include of a
+// table being dropped would drop the source it reads too.
+func TestScopeSelectionsKeepOnlyRoutedPools(t *testing.T) {
+	c := testcheck.New(t)
+	selections := provider.NegotiatedDescription(backend.Description(), []string{provider.ScopeSelectionsFeature}).Engines[0].ScopeSelections
+	kept := make(map[string][]string, len(selections))
+	for _, selection := range selections {
+		kept[selection.Kind] = selection.KeepsRequired
+	}
+	c.Assert(kept, qt.DeepEquals, map[string][]string{
+		schema.SecretProperties:                 nil,
+		schema.StreamingQueryProperties:         {schema.ResourcePoolProperties},
+		schema.CoordinationProperties:           nil,
+		schema.TopicProperties:                  nil,
+		schema.ExternalSourceProperties:         nil,
+		schema.ExternalTableProperties:          nil,
+		schema.ReplicationProperties:            nil,
+		schema.TransferProperties:               nil,
+		schema.ResourcePoolProperties:           nil,
+		schema.ResourcePoolClassifierProperties: {schema.ResourcePoolProperties},
+	})
+}
+
 // Every object with an access list of its own has a selection, so the host
 // reads a grant on it as a grant on that object, by the type the host's
 // embedded engine names it with. The host spells the grant's target kind as
