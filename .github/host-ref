@@ -1,0 +1,4 @@
+# Draft only: TestHostRefusesATransferOfAnUndeclaredChangefeed_FailurePath
+# needs the host adoption of contract 25.37, which this branch of the host
+# carries. Remove this file before marking the PR ready.
+feat/4204-contract-2537-adoption
