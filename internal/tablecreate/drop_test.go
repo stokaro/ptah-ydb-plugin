@@ -155,6 +155,41 @@ func TestDropPlanDropsATableAReplicationOfTheDatabaseReads(t *testing.T) {
 	c.Assert(plannedSteps(plan), qt.DeepEquals, []string{"table-drop/000000 table-drop-operation"})
 }
 
+// A table that holds a changefeed the read cannot represent is not dropped:
+// the changefeed may be a stream a replication controls through a binding
+// Ptah does not read, or hold consumers whose settings Ptah cannot say, and a
+// reverse plan could not create it again. The host's embedded engine refused
+// the drop. Ported from the host's
+// TestPlannerRefusesDropWithUnknownCapturedChildren.
+func TestDropPlanRefusesATableWithAChangefeedItCannotRepresent(t *testing.T) {
+	for _, test := range []struct {
+		name, feed, want string
+	}{
+		{name: "a consumer with a custom codec", want: `consumer "custom": its codec list names codec 10042, which Ptah does not declare`,
+			feed: `{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED"},` +
+				`"topic":{"partitioningSettings":{},"consumers":[{"name":"custom","supportedCodecs":{"codecs":[10042]}}]}}]}`},
+		{name: "a replication binding Ptah does not read", want: "its replication binding is not one Ptah reads",
+			feed: `{"changefeeds":[{"description":{"name":"updates","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",` +
+				`"attributes":{"__async_replication":"{\"path\":\"/local/replica\",\"id\":\"1\"}"}},"topic":{"partitioningSettings":{}}}]}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			request := dropRequest(c)
+			request.DatabasePath = "/local"
+			request.Tables[0].Current.Features.Facets.Records = append(request.Tables[0].Current.Features.Facets.Records,
+				observedFacet(c, schema.ChangefeedProperties, "", test.feed))
+
+			plan, err := backend.New().PlanFeatures(c.Context(), request)
+
+			c.Assert(err, qt.IsNil)
+			c.Assert(plan.Contributions, qt.HasLen, 0)
+			c.Assert(plan.Diagnostics, qt.HasLen, 1)
+			c.Assert(plan.Diagnostics[0].Message, qt.Equals, `table "app/records": changefeed "updates" is not fully described: `+test.want+
+				`, so a plan cannot say what dropping the table takes with it; drop the changefeed by hand first`)
+		})
+	}
+}
+
 // The control: a table whose changefeeds Ptah manages is dropped with them.
 func TestDropPlanDropsATableWithItsChangefeeds(t *testing.T) {
 	c := testcheck.New(t)

@@ -243,7 +243,7 @@ func (p *planner) planTableDrop(i int, table *protocol.PlanningTable) (*protocol
 	if table.Current == nil || len(table.Current.GetColumns()) == 0 {
 		return refused(i, fmt.Sprintf("table %q: a removal checks the table it drops against the read of it, and the table was not read", tableLabel(owner))), nil
 	}
-	reason, err := replicationRefusal(p.request, owner, table)
+	reason, err := changefeedDropRefusal(p.request, owner, table)
 	if err != nil {
 		return nil, err
 	}

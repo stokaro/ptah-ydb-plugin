@@ -57,19 +57,27 @@ func buildDropModel() *protocol.ValueModel {
 		DefinitionJson: canonical, DefinitionSha256: hex.EncodeToString(sum[:]), CanonicalFormat: DropOperationKind + "/json-v1"}
 }
 
-// replicationRefusal is why table cannot be dropped, or "": it holds a
-// changefeed an asynchronous replication of another database controls, which
-// the replication reads the table through. YDB drops such a table and leaves
-// the replication failing (`Discovery for all topics failed`), measured on
-// 25.1.4.7 and 26.2.1.14, and no plan of this database drops that
-// replication, so the removal waits until it goes, as the host's embedded
-// engine refused it. A replication lives in its replicas' database, and the
-// stream names the replica it writes. A replica in this database belongs to a
-// replication the planner of replications reads on both sides, and it refuses
-// the drop where the plan keeps the replication; a plan that drops both drops
-// the replication first, with CASCADE, which releases the stream. A changefeed
-// the read cannot represent goes with the table.
-func replicationRefusal(request *protocol.PlanFeaturesRequest, owner *protocol.Reference, table *protocol.PlanningTable) (string, error) {
+// changefeedDropRefusal is why table cannot be dropped, or "", for a
+// changefeed it holds: one the read cannot represent, or one an asynchronous
+// replication of another database controls.
+//
+// A changefeed the read cannot represent may be a stream a replication
+// controls through a binding Ptah does not read, or hold consumers whose
+// settings Ptah cannot say, and a reverse plan could not create it again, so
+// the drop is refused, as the host's embedded engine refused it. Dropping the
+// changefeed by hand first leaves a table Ptah reads whole.
+//
+// A replication reads the table through its stream, and YDB drops such a
+// table and leaves the replication failing (`Discovery for all topics
+// failed`), measured on 25.1.4.7 and 26.2.1.14. A replication lives in its
+// replicas' database, and the stream names the replica it writes: one of
+// another database is one no plan of this database drops, so the removal
+// waits until it goes, as the host's embedded engine refused it. A replica in
+// this database belongs to a replication the planner of replications reads
+// on both sides, and it refuses the drop where the plan keeps the
+// replication; a plan that drops both drops the replication first, with
+// CASCADE, which releases the stream.
+func changefeedDropRefusal(request *protocol.PlanFeaturesRequest, owner *protocol.Reference, table *protocol.PlanningTable) (string, error) {
 	for _, record := range table.GetCurrent().GetFeatures().GetFacets().GetRecords() {
 		if record.GetKind() != schema.ChangefeedProperties || record.GetValue() == nil || !forThisEngine(record.GetTargets()) {
 			continue
@@ -83,6 +91,10 @@ func replicationRefusal(request *protocol.PlanFeaturesRequest, owner *protocol.R
 			return "", err
 		}
 		for _, stream := range held.GetChangefeeds() {
+			if _, err := changefeeds.FromObserved(stream); err != nil {
+				return fmt.Sprintf("table %q: changefeed %q is not fully described: %v, so a plan cannot say what dropping the table "+
+					"takes with it; drop the changefeed by hand first", tableLabel(owner), stream.GetDescription().GetName(), err), nil
+			}
 			replica := changefeeds.ReplicaPath(stream.GetDescription().GetAttributes())
 			if replica == "" || inDatabase(replica, request.GetDatabasePath()) {
 				continue
