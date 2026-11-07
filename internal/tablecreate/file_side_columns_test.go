@@ -6,7 +6,6 @@ import (
 	qt "github.com/frankban/quicktest"
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	"github.com/stokaro/ptah-ydb-plugin/internal/tablecreate"
@@ -26,7 +25,7 @@ func fileSideRequest(c *qt.C, knowledge protocol.ModelKnowledge_State, notNull b
 	table := request.Tables[0]
 	table.Current.Columns[0].DataType, table.Current.Columns[0].IsNullable = "Uint64", "NO"
 	table.Current.Columns[1].DataType, table.Current.Columns[1].IsNullable = "Utf8", map[bool]string{true: "NO", false: "YES"}[notNull]
-	table.Current.Columns[1].DefaultExpression = proto.String(held)
+	table.Current.Columns[1].DefaultExpression = new(held)
 	table.Desired.Columns[1].Nullable = true
 	table.Desired.Columns[1].DefaultSet = declared
 	var model *protocol.ValueModel
