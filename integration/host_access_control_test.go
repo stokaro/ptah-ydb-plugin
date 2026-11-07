@@ -206,13 +206,15 @@ func TestHostSetsAUserPasswordOnce_HappyPath(t *testing.T) {
 	c.Assert(loginError(c, names.user, first), qt.IsNil)
 }
 
-// A password in a YQL schema file has no home on the provider wire: a SQL
-// schema reading carries no password to the host, which would create the user
-// without one. The provider refuses the statement by the user's name, and no
-// output repeats the password. The host's embedded engine reads it and sets
-// it once; the parity gap is the wire's.
+// A password in a YQL schema file has no home on the wire of a host that does
+// not list source.sql-role-passwords: the SQL schema reading would carry no
+// password to the host, which would create the user without one. The provider
+// refuses the statement by the user's name, and no output repeats the
+// password. A host that lists the feature takes the password, as
+// TestHostAppliesAYQLUsersPassword_HappyPath shows.
 func TestHostRefusesAPasswordInAYQLSchema_FailurePath(t *testing.T) {
 	c := testcheck.New(t)
+	requireHostWithout(c, provider.SQLRolePasswordsFeature)
 	opened, directory, database := lockFixture(c)
 	names := newAccessNames()
 	removeAccess(c, opened, database, names)
