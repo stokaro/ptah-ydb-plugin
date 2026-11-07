@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -98,6 +99,54 @@ func TestHostScopesTopics_HappyPath(t *testing.T) {
 		{name: "exclude the directory's topics", flags: []string{"--exclude", directory + ".*[type=topic]"}, want: make([]string, 0)},
 		{name: "the directory", want: []string{"CREATE TOPIC " + topic("created"), "DROP TOPIC " + topic("events"), "DROP TOPIC " + topic("queue")}},
 	})
+}
+
+// A classifier selected by name keeps the pool it routes to, including a
+// dotted pool name, while selecting the pool alone does not pull in its
+// classifiers. An explicit pool exclusion remains authoritative when the
+// pool already exists. These host-binary checks exercise the selection rules
+// of the host's TestScopeWorkloadObjects; its direct post-filter object list
+// still needs a separate port.
+func TestHostScopesResourcePoolsAndClassifiers_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.ScopeSelectionsFeature)
+	opened, directory, _ := inspectionFixture(c)
+	enableResourcePools(c, opened)
+	pool, other, classifier := directory+".batch", directory+"_other", directory+"_etl"
+	rank, _ := workloadRanks(directory)
+	source := fmt.Sprintf("resource_pools:\n  %q:\n    concurrent_query_limit: 5\n  %s: {}\n"+
+		"resource_pool_classifiers:\n  %s:\n    resource_pool: %q\n    member_name: %s\n    rank: %d\n",
+		pool, other, classifier, pool, workloadMember(directory), rank)
+	selectors := directory + ",/"
+	statements := func(flags ...string) string {
+		c.Helper()
+		return strings.Join(scopedStatements(c, selectors, source, flags...), "\n")
+	}
+
+	selected := statements("--include", classifier+"[type=resource_pool_classifier]")
+	c.Assert(selected, qt.Contains, "CREATE RESOURCE POOL `"+pool+"`")
+	c.Assert(selected, qt.Contains, "CREATE RESOURCE POOL CLASSIFIER `"+classifier+"`")
+	c.Assert(selected, qt.Not(qt.Contains), other)
+
+	poolOnly := statements("--include", pool+"[type=resource_pool]")
+	c.Assert(poolOnly, qt.Contains, "CREATE RESOURCE POOL `"+pool+"`")
+	c.Assert(poolOnly, qt.Not(qt.Contains), "CREATE RESOURCE POOL CLASSIFIER")
+
+	c.Assert(execFixtureSchema(c.Context(), opened.DB, "CREATE RESOURCE POOL `"+pool+"` WITH (CONCURRENT_QUERY_LIMIT = 2)"), qt.IsNil)
+	c.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		c.Check(execFixtureSchema(ctx, opened.DB, "DROP RESOURCE POOL `"+pool+"`"), qt.IsNil)
+	})
+	// Excluding the pool leaves the classifier without its declared dependency.
+	// The provider refuses that plan, even when the pool exists in the target;
+	// the exclusion must not silently add the pool back to the desired scope.
+	file := filepath.Join(c.TempDir(), "excluded.yaml")
+	c.Assert(os.WriteFile(file, []byte(source), 0o600), qt.IsNil)
+	refused, err := hostCommand(c, "schema", "diff", "--from", os.Getenv("PTAH_YDB_TEST_URL"), "--to", file, "--schemas", selectors,
+		"--include", classifier+"[type=resource_pool_classifier]", "--exclude", pool+"[type=resource_pool]")
+	c.Assert(err, qt.IsNotNil)
+	c.Assert(refused, qt.Contains, "a declared resource pool classifier names resource pool \""+pool+"\", which is not declared")
 }
 
 // The host selects a YDB secret by its own name, on both sides: an include
