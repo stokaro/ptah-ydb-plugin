@@ -32,12 +32,53 @@ func TestStatementText_HappyPath(t *testing.T) {
 			want:      "ALTER COORDINATION NODE `app/limits` SET (self_check_period = Interval('PT0.5S'));"},
 		{name: "a removal", statement: coordinationsql.Statement{Verb: coordinationsql.Drop, Path: "app/limits"},
 			want: "DROP COORDINATION NODE `app/limits`;"},
+		// Ported from the host's TestStatementText_HappyPath: a backtick in
+		// the path is escaped inside the quoted name.
+		{name: "a removal of a name that needs escaping", statement: coordinationsql.Statement{Verb: coordinationsql.Drop, Path: "dir/tick`name"},
+			want: "DROP COORDINATION NODE `dir/tick\\`name`;"},
+		// Ported from the host's TestRenderSQL_YDBWritesCoordinationNodeStatements:
+		// a dotted name at the root stays one quoted name, and a node named
+		// like Ptah's lock node inside a directory is an ordinary node.
+		{name: "a root node under a dotted name", statement: coordinationsql.Statement{Verb: coordinationsql.Create, Path: "app.locks"},
+			want: "CREATE COORDINATION NODE `app.locks`;"},
+		{name: "a removal of a node named like the lock node in a directory",
+			statement: coordinationsql.Statement{Verb: coordinationsql.Drop, Path: "app/ptah_locks"},
+			want:      "DROP COORDINATION NODE `app/ptah_locks`;"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			got, err := tc.statement.Text()
 			c.Assert(err, qt.IsNil)
 			c.Assert(got, qt.Equals, tc.want)
+		})
+	}
+}
+
+// A period is written as the ISO 8601 text the setting reads back to the same
+// milliseconds, a fraction, minutes and the longest period a node keeps
+// included. Ported from the host's TestPeriodText_IsWhatParsePeriodReads.
+func TestStatementTextWritesPeriodsTheSettingReadsBack(t *testing.T) {
+	for _, tc := range []struct {
+		millis uint32
+		want   string
+	}{
+		{millis: 500, want: "PT0.5S"},
+		{millis: 1_000, want: "PT1S"},
+		{millis: 1_001, want: "PT1.001S"},
+		{millis: 90_000, want: "PT1M30S"},
+		{millis: 4_294_967_295, want: "P49DT17H2M47.295S"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			c := testcheck.New(t)
+			statement := coordinationsql.Statement{Verb: coordinationsql.Alter, Path: "n",
+				Settings: ydbdecl.CoordinationNode{SessionGracePeriodMillis: tc.millis}}
+			text, err := statement.Text()
+			c.Assert(err, qt.IsNil)
+			c.Assert(text, qt.Equals, "ALTER COORDINATION NODE `n` SET (session_grace_period = Interval('"+tc.want+"'));")
+			var read ydbdecl.CoordinationNode
+			err = ydbdecl.SetCoordinationSetting(&read, ydbdecl.SettingSessionGracePeriod, tc.want)
+			c.Assert(err, qt.IsNil)
+			c.Assert(read.SessionGracePeriodMillis, qt.Equals, tc.millis)
 		})
 	}
 }
@@ -71,6 +112,12 @@ func TestRecognizeReadsWhatTextWrites(t *testing.T) {
 		{Verb: coordinationsql.Create, Path: "app/limits", Settings: every},
 		{Verb: coordinationsql.Alter, Path: "app/limits", Settings: ydbdecl.CoordinationNode{SessionGracePeriodMillis: 2_500, RateLimiterCountersMode: "aggregated"}},
 		{Verb: coordinationsql.Drop, Path: "/local/app/limits"},
+		// Ported from the host's TestRecognize_ReadsWhatTextWrites: a dot, a
+		// backtick and a backslash in a name survive the round trip.
+		{Verb: coordinationsql.Create, Path: "app/sub/locks", Settings: ydbdecl.CoordinationNode{SelfCheckPeriodMillis: 750,
+			SessionGracePeriodMillis: 30_000, ReadConsistencyMode: "strict", AttachConsistencyMode: "relaxed", RateLimiterCountersMode: "detailed"}},
+		{Verb: coordinationsql.Alter, Path: "a.b", Settings: ydbdecl.CoordinationNode{SessionGracePeriodMillis: 12_000}},
+		{Verb: coordinationsql.Drop, Path: "tick`back\\slash"},
 	} {
 		t.Run(statement.Path, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -108,6 +155,16 @@ func TestRecognize_HappyPath(t *testing.T) {
 		{name: "a self-check period alone at its upper bound", text: "ALTER COORDINATION NODE n SET (self_check_period = Interval('PT10S'))",
 			want: coordinationsql.Query{Statement: coordinationsql.Statement{Verb: coordinationsql.Alter, Path: "n",
 				Settings: ydbdecl.CoordinationNode{SelfCheckPeriodMillis: 10_000}}}},
+		// Ported from the host's TestRecognize_HappyPath: setting names, the
+		// Interval function and a mode are read in any case, and of two
+		// prefix pragmas the last one wins.
+		{name: "setting names and values in any case",
+			text: "ALTER COORDINATION NODE `l` SET (Read_Consistency_Mode = \"Strict\"u, SELF_CHECK_PERIOD = interval(\"PT2S\"))",
+			want: coordinationsql.Query{Statement: coordinationsql.Statement{Verb: coordinationsql.Alter, Path: "l",
+				Settings: ydbdecl.CoordinationNode{ReadConsistencyMode: "strict", SelfCheckPeriodMillis: 2_000}}}},
+		{name: "the last of two prefix pragmas",
+			text: "PRAGMA TablePathPrefix('/local/a'); PRAGMA tablepathprefix = '/local/b'; CREATE COORDINATION NODE n",
+			want: coordinationsql.Query{Statement: coordinationsql.Statement{Verb: coordinationsql.Create, Path: "n"}, PathPrefix: "/local/b"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -128,6 +185,12 @@ func TestRecognizeLeavesOtherText(t *testing.T) {
 		"-- DROP COORDINATION NODE n\nSELECT 1;",
 		"CREATE TABLE coordination (id Uint64, PRIMARY KEY (id));",
 		"",
+		// Ported from the host's TestRecognize_LeavesOtherTextAlone. The
+		// multiline string holds a semicolon ahead of the statement, so the
+		// row fails if the literal is split there.
+		"CREATE TABLE coordination_node (id Int64 NOT NULL, PRIMARY KEY (id))",
+		"UPSERT INTO t (note) VALUES (@@a note;\nDROP COORDINATION NODE n@@)",
+		"CREATE TOPIC coordination",
 	} {
 		t.Run(text, func(t *testing.T) {
 			c := testcheck.New(t)
@@ -153,11 +216,18 @@ func TestRecognize_FailurePath(t *testing.T) {
 			want: "CREATE COORDINATION NODE shares its query with SELECT 1, and Ptah runs it through YDB's coordination service, which takes it alone"},
 		{name: "a prefix it cannot read", text: "PRAGMA TablePathPrefix(\"/a\", \"b\"); CREATE COORDINATION NODE a;",
 			want: `CREATE COORDINATION NODE follows a TablePathPrefix pragma Ptah cannot read; write it as PRAGMA TablePathPrefix\("/database/path"\)`},
+		// Ported from the host's TestRecognize_FailurePath, with its words.
+		{name: "a prefix that is not a plain string", text: "PRAGMA TablePathPrefix($p); CREATE COORDINATION NODE a",
+			want: "CREATE COORDINATION NODE follows a TablePathPrefix pragma whose path is not a plain string"},
 		{name: "no node", text: "DROP COORDINATION NODE", want: "DROP COORDINATION NODE names no node"},
+		{name: "a string for the node", text: "DROP COORDINATION NODE 'a'",
+			want: "DROP COORDINATION NODE 'a' does not name a node; write its path in backticks"},
 		{name: "a named expression for the node", text: "DROP COORDINATION NODE $n", want: `DROP COORDINATION NODE \$n does not name a node; write its path in backticks`},
 		{name: "a change without SET", text: "ALTER COORDINATION NODE n", want: `ALTER COORDINATION NODE n names no setting; write SET \(...\)`},
 		{name: "a removal with settings", text: "DROP COORDINATION NODE n WITH (self_check_period = Interval('PT1S'))",
 			want: "DROP COORDINATION NODE n is followed by WITH, which Ptah does not read"},
+		{name: "a creation with SET", text: "CREATE COORDINATION NODE a SET (read_consistency_mode = 'strict')",
+			want: "CREATE COORDINATION NODE a is followed by SET, which Ptah does not read"},
 		{name: "settings without parentheses", text: "CREATE COORDINATION NODE n WITH self_check_period = Interval('PT1S')",
 			want: "CREATE COORDINATION NODE n: the settings are written in parentheses"},
 		{name: "an unknown setting", text: "CREATE COORDINATION NODE n WITH (period = Interval('PT1S'))",
@@ -168,17 +238,23 @@ func TestRecognize_FailurePath(t *testing.T) {
 			want: "CREATE COORDINATION NODE n: read_consistency_mode is followed by 'strict', not ="},
 		{name: "a mode that is not a string", text: "CREATE COORDINATION NODE n WITH (read_consistency_mode = strict)",
 			want: "CREATE COORDINATION NODE n: read_consistency_mode takes a string such as 'strict', not strict"},
+		{name: "an escaped string as a mode", text: `ALTER COORDINATION NODE a SET (read_consistency_mode = 'str\x69ct')`,
+			want: `ALTER COORDINATION NODE a: read_consistency_mode takes a string such as 'strict', not 'str\\x69ct'`},
 		{name: "a period that is not an interval", text: "CREATE COORDINATION NODE n WITH (self_check_period = 'PT1S')",
 			want: `CREATE COORDINATION NODE n: self_check_period takes an interval such as Interval\('PT1S'\)`},
 		{name: "a mode YDB does not take", text: "CREATE COORDINATION NODE n WITH (read_consistency_mode = 'eventual')",
 			want: `CREATE COORDINATION NODE n: read_consistency_mode "eventual": the mode is "strict" or "relaxed"`},
 		{name: "a self-check period YDB moves", text: "ALTER COORDINATION NODE n SET (self_check_period = Interval('PT11S'))",
 			want: "ALTER COORDINATION NODE n: self_check_period PT11S: YDB runs a node's self-check every PT0.5S to PT10S and moves a period outside that range into it"},
+		{name: "a grace period above its range", text: "ALTER COORDINATION NODE a SET (session_grace_period = Interval('PT1M'))",
+			want: `ALTER COORDINATION NODE a: session_grace_period PT1M: YDB runs a node with a grace period from the self-check period plus PT1S \(PT2S here\) to PT30S and moves a period outside that range into it`},
 		{name: "a creation whose grace period the default self-check does not leave room for",
 			text: "CREATE COORDINATION NODE n WITH (session_grace_period = Interval('PT1.5S'))",
 			want: `CREATE COORDINATION NODE n: session_grace_period PT1.5S: YDB runs a node with a grace period from the self-check period plus PT1S \(PT2S here\) to PT30S and moves a period outside that range into it`},
 		{name: "text after the settings", text: "CREATE COORDINATION NODE n WITH (read_consistency_mode = 'strict') x",
 			want: "CREATE COORDINATION NODE n: the settings end with \\) and nothing follows it"},
+		{name: "a trailing comma", text: "ALTER COORDINATION NODE a SET (read_consistency_mode = 'strict',)",
+			want: "ALTER COORDINATION NODE a: the settings end early; write name = value, separated by commas, in parentheses"},
 		{name: "settings that end early", text: "CREATE COORDINATION NODE n WITH (read_consistency_mode =",
 			want: "CREATE COORDINATION NODE n: the settings end early; write name = value, separated by commas, in parentheses"},
 	} {
