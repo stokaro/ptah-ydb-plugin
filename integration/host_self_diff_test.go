@@ -4,9 +4,11 @@ package integration_test
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stokaro/ptah/provider-sdk/provider"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/testcheck"
 )
@@ -93,4 +95,64 @@ func TestHostDiffsChangedYDBIndexKind_HappyPath(t *testing.T) {
 	c.Assert(out, qt.Contains, "DROP INDEX")
 	c.Assert(out, qt.Contains, "ADD INDEX")
 	c.Assert(out, qt.Contains, "GLOBAL ASYNC")
+}
+
+// The former host's TestIndexesWithDialect_YDBRebuildsAChangedIndex compared
+// indexes by their fixed YDB properties. Through the host and this provider,
+// a changed kind, key, or covered column replaces the index under its same
+// name rather than trying an in-place alteration.
+func TestHostDiffsChangedYDBIndexProperties_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	realm := newCLIRealm(c)
+	const table = "CREATE TABLE `records` (id Int64 NOT NULL, a Utf8, b Utf8, c Utf8, " +
+		"PRIMARY KEY (id), INDEX `by_a` %s);\n"
+	for _, test := range []struct {
+		name, before, after, added string
+	}{
+		{"made asynchronous", "GLOBAL SYNC ON (a)", "GLOBAL ASYNC ON (a)", "GLOBAL ASYNC"},
+		{"a key column added", "GLOBAL SYNC ON (a)", "GLOBAL SYNC ON (a, b)", "ON (`a`, `b`)"},
+		{"a covered column added", "GLOBAL SYNC ON (a)", "GLOBAL SYNC ON (a) COVER (c)", "COVER (`c`)"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			files := writeFiles(c, c.TempDir(), map[string]string{
+				"from.sql": strings.Replace(table, "%s", test.before, 1),
+				"to.sql":   strings.Replace(table, "%s", test.after, 1),
+			})
+			out, err := hostCommand(c, "schema", "diff", "--from", filepath.Join(files, "from.sql"),
+				"--to", filepath.Join(files, "to.sql"), "--dev-url", realm.address)
+			c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
+			c.Assert(strings.Count(out, "DROP INDEX `by_a`"), qt.Equals, 1, qt.Commentf("%s", out))
+			c.Assert(strings.Count(out, "ADD INDEX `by_a`"), qt.Equals, 1, qt.Commentf("%s", out))
+			c.Assert(strings.Index(out, "DROP INDEX `by_a`") < strings.Index(out, "ADD INDEX `by_a`"), qt.IsTrue,
+				qt.Commentf("%s", out))
+			c.Assert(out, qt.Contains, test.added)
+		})
+	}
+}
+
+// A vector index whose key gains a prefix is replaced under its original
+// name, as in the former host's changed-vector comparison test.
+func TestHostDiffsChangedYDBVectorIndexPrefix_HappyPath(t *testing.T) {
+	c := testcheck.New(t)
+	requireHostNegotiates(c, provider.IndexKindsFeature)
+	realm := newCLIRealm(c)
+	const table = "tables:\n  docs:\n    columns:\n" +
+		"      id: {type: Uint64, primary: true, not_null: true}\n" +
+		"      gen: {type: Uint64}\n      emb: {type: String}\n      body: {type: Utf8}\n" +
+		"    indexes:\n      by_emb: %s\n"
+	const vector = "{fields: [%s], type: vector_kmeans_tree, distance: cosine, " +
+		"vector_type: float, vector_dimension: 3, levels: 1, clusters: 2}"
+	files := writeFiles(c, c.TempDir(), map[string]string{
+		"from.yaml": strings.Replace(table, "%s", strings.Replace(vector, "%s", "emb", 1), 1),
+		"to.yaml":   strings.Replace(table, "%s", strings.Replace(vector, "%s", "gen, emb", 1), 1),
+	})
+	out, err := hostCommand(c, "schema", "diff", "--from", filepath.Join(files, "from.yaml"),
+		"--to", filepath.Join(files, "to.yaml"), "--dev-url", realm.address)
+	c.Assert(err, qt.IsNil, qt.Commentf("%s", out))
+	c.Assert(strings.Count(out, "DROP INDEX `by_emb`"), qt.Equals, 1, qt.Commentf("%s", out))
+	c.Assert(strings.Count(out, "ADD INDEX `by_emb`"), qt.Equals, 1, qt.Commentf("%s", out))
+	c.Assert(strings.Index(out, "DROP INDEX `by_emb`") < strings.Index(out, "ADD INDEX `by_emb`"), qt.IsTrue,
+		qt.Commentf("%s", out))
+	c.Assert(out, qt.Contains, "ON (`gen`, `emb`)")
 }
