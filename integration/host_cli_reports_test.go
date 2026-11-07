@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -120,13 +121,14 @@ func TestHostReportsAGrantOnTheDatabaseByItsPath_HappyPath(t *testing.T) {
 		} `json:"findings"`
 	}
 	c.Assert(json.Unmarshal([]byte(report[strings.Index(report, "{"):]), &findings), qt.IsNil, qt.Commentf("%s", report))
-	var named []string
+	named := make([]string, 0, len(findings.Findings))
 	for _, finding := range findings.Findings {
-		if finding.Code == "ROL01" && strings.Contains(finding.Message, group) {
-			named = append(named, finding.Subject.Kind+" "+finding.Subject.Name+": "+finding.Message)
-		}
+		named = append(named, finding.Code+" "+finding.Subject.Kind+" "+finding.Subject.Name+": "+finding.Message)
 	}
-	c.Assert(named, qt.DeepEquals, []string{"database " + database + ": role " + group + " holds privileges on database " + database + ", which it was not observed using"})
+	named = slices.DeleteFunc(named, func(line string) bool {
+		return !strings.HasPrefix(line, "ROL01 ") || !strings.Contains(line, group)
+	})
+	c.Assert(named, qt.DeepEquals, []string{"ROL01 database " + database + ": role " + group + " holds privileges on database " + database + ", which it was not observed using"})
 	c.Assert(inspected, qt.Contains, "GRANT 'ydb.database.connect' ON `"+database+"` TO `"+group+"`;")
 }
 
