@@ -4479,7 +4479,12 @@ coordination nodes, topics, external data sources, external tables, async
 replications and transfers selectable by their directory and name. Resource
 pools and classifiers use database-wide names, including literal dots. A kept
 classifier keeps the pool it requires when the input contains that pool; an
-explicit exclusion of the pool still wins. Grants follow the object their
+explicit exclusion of the pool still wins. An external table keeps no data
+source and a data source no secret: an `--include` of a table plans that
+table alone, whether it is created or dropped, as the host's embedded engine
+did. The host keeps a requirement on each side of a comparison alone, so a
+kept source would be dropped with a table the declaration leaves out, and
+created again beside a held one. Grants follow the object their
 target names: each kind except the classifier declares the grant object type
 the host's embedded engine names it with, such as `ASYNC REPLICATION` or
 `TRANSFER`. A grant on a type no selection declares is read as a grant on a
