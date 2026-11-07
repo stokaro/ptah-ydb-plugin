@@ -11,3 +11,8 @@ local-ydb container's monitoring endpoint answered, unedited.
   `enable_vector_index,enable_add_unique_index,enable_external_data_sources`,
   after a dynamic configuration turned on `enable_tiering_in_column_shard`
   together with those three flags.
+- `local-ydb-25.1.4.7-async-indexes-off.json` and
+  `local-ydb-26.2.1.14-async-indexes-off.json` were copied unchanged from Ptah
+  commit `74de0b65b3a167bdf9597eb41a399fb2c643a7b1`,
+  `internal/ydbflags/testdata/`. They are the two lines with
+  `EnableAsyncIndexes` turned off.
