@@ -111,6 +111,10 @@ const (
 		`"attributes":{"__async_replication":"{\"path\":\"/local/repl/records\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},"topic":{"partitioningSettings":{}}}]}`
 	// heldReplicatedTransfer is heldReplicated with the consumer YDB gave a
 	// transfer that reads the stream, which the read marks as the transfer's.
+	// declaredReplicated declares heldReplicated's stream with the binding
+	// the read found, as an observation converted to the desired side does.
+	declaredReplicated = `{"changefeeds":[{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON",` +
+		`"attributes":{"__async_replication":"{\"path\":\"/local/repl/records\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"},"topic":{"partitioningSettings":{}}}]}`
 	heldReplicatedTransfer = `{"changefeeds":[{"description":{"name":"f","mode":"MODE_UPDATES","format":"FORMAT_JSON","state":"STATE_ENABLED",` +
 		`"attributes":{"__async_replication":"{\"path\":\"/local/repl/records\",\"id\":\"1\",\"supports_topic_autopartitioning\":false}"}},` +
 		`"topic":{"partitioningSettings":{},"consumers":[{"name":"generated","important":true,"transfer":"app/ingest"}]}}]}`
@@ -456,10 +460,11 @@ func TestCompare_ReportsNoChange(t *testing.T) {
 		{"a default family stating nothing against one a table profile set", side{table: plain},
 			side{table: `{"primaryKey":["id"],"columnFamilies":[{"name":"default","compression":"COMPRESSION_LZ4","keepInMemory":"ENABLED"}]}`}},
 		// The consumer a transfer reads a replication-managed stream through
-		// is the transfer's, so a declaration of the stream as held changes
+		// is the transfer's, so a declaration of the stream as held, with the
+		// binding the read found, changes
 		// nothing. Ported from the host's
 		// TestTransferConsumerAdoptionPreservesReplicationBinding.
-		{"a replication-managed stream as held, with a transfer's consumer", side{changefeeds: declaredFeed}, side{changefeeds: heldReplicatedTransfer}},
+		{"a replication-managed stream as held, with a transfer's consumer", side{changefeeds: declaredReplicated}, side{changefeeds: heldReplicatedTransfer}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
