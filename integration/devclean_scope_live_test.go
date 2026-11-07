@@ -63,14 +63,13 @@ func TestDevCleanupOfADirectoryLeavesItsSiblingSubprocess(t *testing.T) {
 	c.Assert(childNames(c, opened, path.Join(root, "keep")), qt.DeepEquals, []string{"t3"})
 }
 
-// A dev cleanup names and drops the migrator's own tables in every directory
-// that holds one: a revision table at the root and another in a directory,
-// and the tag table beside it. Inspection reports them as reserved for the
-// migrator rather than as tables a schema declares, and the cleanup still
-// lists them with the user's table and leaves the realm empty. The read
-// selects no directory, so on a server with streaming queries it also takes
-// the database-wide streaming query inventory, which must keep what the
-// reservations claim.
+// A dev cleanup names and drops the migrator's own tables at the root and in
+// nested directories, including a tag table. A view with a reserved table's
+// name stays a view. Inspection reports only the tables as reserved, and
+// cleanup lists every object before leaving the realm empty. This ports the
+// old YDB writer's TablesNamed inventory through the provider calls the host
+// makes. The read selects no directory, so on a server with streaming queries
+// it also takes the database-wide inventory, which must keep the reservations.
 func TestDevCleanupNamesTheMigratorsTablesSubprocess(t *testing.T) {
 	c := testcheck.New(t)
 	client := startProviderFor(c)
@@ -79,7 +78,7 @@ func TestDevCleanupNamesTheMigratorsTablesSubprocess(t *testing.T) {
 	c.Assert(executeSQL(c, client, session, "", "CREATE TABLE `users` (`id` Int64 NOT NULL, PRIMARY KEY (`id`))").Outcome, qt.Equals, protocol.Execution_APPLIED)
 	for _, scope := range []*protocol.HistoryScope{
 		{SessionId: session, Table: "schema_migrations", Format: protocol.HistoryScope_NATIVE},
-		{SessionId: session, Schema: "app", Table: "schema_migrations", Format: protocol.HistoryScope_NATIVE},
+		{SessionId: session, Schema: "app/sub", Table: "schema_migrations", Format: protocol.HistoryScope_NATIVE},
 	} {
 		prepared, err := client.PrepareHistory(c.Context(), &protocol.PrepareHistoryRequest{Scope: scope, RequestId: "prepare " + scope.Schema})
 		c.Assert(err, qt.IsNil)
@@ -89,6 +88,8 @@ func TestDevCleanupNamesTheMigratorsTablesSubprocess(t *testing.T) {
 		Scope: &protocol.MetadataScope{SessionId: session, Schema: "app", Table: "ptah_migration_tags", Kind: protocol.MetadataScope_TAGS}})
 	c.Assert(err, qt.IsNil)
 	c.Assert(tags.GetOutcome(), qt.Equals, protocol.MetadataResult_APPLIED)
+	view := executeSQL(c, client, session, "", "CREATE VIEW `app/schema_migrations` WITH (security_invoker = TRUE) AS SELECT id FROM `users`")
+	c.Assert(view.GetOutcome(), qt.Equals, protocol.Execution_APPLIED, qt.Commentf("%s", view.GetMessage()))
 
 	snapshot, err := client.Inspect(c.Context(), &protocol.InspectRequest{SessionId: session})
 	c.Assert(err, qt.IsNil)
@@ -104,9 +105,10 @@ func TestDevCleanupNamesTheMigratorsTablesSubprocess(t *testing.T) {
 	}
 	slices.Sort(reserved)
 	c.Assert(tables, qt.DeepEquals, []string{"users"})
-	c.Assert(reserved, qt.DeepEquals, []string{"app/ptah_migration_tags", "app/schema_migrations", "schema_migrations"})
+	c.Assert(reserved, qt.DeepEquals, []string{"app/ptah_migration_tags", "app/sub/schema_migrations", "schema_migrations"})
 	c.Assert(listed, qt.DeepEquals, []string{
-		"table app/ptah_migration_tags", "table app/schema_migrations", "directory app", "table schema_migrations", "table users",
+		"table app/ptah_migration_tags", "view app/schema_migrations", "table app/sub/schema_migrations", "directory app/sub", "directory app",
+		"table schema_migrations", "table users",
 	})
 	c.Assert(err, qt.IsNil)
 	c.Assert(cleaned.GetOutcome(), qt.Equals, protocol.DevCleanup_CLEANED, qt.Commentf("%s", cleaned.GetMessage()))
