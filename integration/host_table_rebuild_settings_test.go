@@ -11,7 +11,7 @@ import (
 	qt "github.com/frankban/quicktest"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table"
 	"github.com/ydb-platform/ydb-go-sdk/v3/table/options"
-	"github.com/ydb-platform/ydb-go-sdk/v3/table/types"
+	"github.com/ydb-platform/ydb-go-sdk/v3/types"
 
 	"github.com/stokaro/ptah-ydb-plugin/internal/connection"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
