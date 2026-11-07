@@ -64,6 +64,17 @@ func TestCompileUniqueFoldsPrimaryMarksWithoutAnExplicitKey(t *testing.T) {
 	c.Assert(created.Indexes, qt.HasLen, 3)
 }
 
+func TestCompileUniqueKeepsItsCommentForTheHost(t *testing.T) {
+	c := testcheck.New(t)
+	table := uniqueTable()
+	table.Constraints[0].Comment = "One login each"
+	before := proto.CloneOf(table)
+	created, err := tablecreate.Compile(owner(), table, nil)
+	c.Assert(err, qt.IsNil)
+	c.Assert(created.Indexes[0].GetName(), qt.Equals, "uq_tenant_login")
+	c.Assert(proto.Equal(table, before), qt.IsTrue)
+}
+
 func TestCompileRefusesUnsupportedUniqueDeclarations(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -76,7 +87,6 @@ func TestCompileRefusesUnsupportedUniqueDeclarations(t *testing.T) {
 		{"other table", func(d *protocol.DeclaredTable) { d.Constraints[0].Table = "other" }, `.*names another table.*`},
 		{"missing column", func(d *protocol.DeclaredTable) { d.Constraints[0].Columns = []string{"missing"} }, `.*does not declare.*`},
 		{"duplicate name", func(d *protocol.DeclaredTable) { d.Constraints[1].Name = "uq_tenant_login" }, `.*two of its indexes are named.*`},
-		{"comment without a common step", func(d *protocol.DeclaredTable) { d.Constraints[0].Comment = "keep" }, `.*DeclaredConstraint.comment.*`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
