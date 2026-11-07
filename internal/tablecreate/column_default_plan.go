@@ -42,7 +42,10 @@ func planDefaults(owner *protocol.Reference, table *protocol.PlanningTable, caps
 			return nil, fmt.Sprintf("Changing the default of column %q requires alter_column_default, unavailable on this YDB target%s", column.Name,
 				featureflags.Clause("alter_column_default")), nil
 		}
-		captured := observed.columns[column.Name]
+		captured, err := heldColumnFacet(owner, table, observed, table.Current.Columns[at], caps)
+		if err != nil {
+			return nil, "", err
+		}
 		if captured == nil {
 			return nil, "A column default change requires the complete native column observation", nil
 		}

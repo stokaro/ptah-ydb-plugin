@@ -3015,6 +3015,15 @@ is a present literal. A stale before-state refuses execution; an unconfirmed
 write has an unknown outcome and is not retried. The session reports
 `alter_column_default` from the release line and `EnableSetDropDefaultValue`.
 
+A default change, a column made nullable, a column removal and a sequence
+change each hold the native column they change. The side the host builds from a
+schema file for a diff of two files states its column facets completely and
+carries one only for a column whose declaration states a native setting, so a
+column without one is held as the common column says, its common default read
+back as the native literal. A diff of two files plans these changes offline, as
+Ptah's built-in YDB engine did. A side that does not state its column facets
+refuses them.
+
 The parent planner derives column additions and removals from the complete
 captured table. Nullable additions without defaults use native `AlterTable`.
 Additions with typed literal defaults use one pinned YQL `ADD COLUMN`; existing

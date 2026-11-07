@@ -3,13 +3,16 @@ package tablecreate
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	protocol "github.com/stokaro/ptah/provider-sdk/protocol/experimental"
 	"github.com/stokaro/ptah/provider-sdk/provider"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stokaro/ptah-ydb-plugin/internal/columnsemantics"
 	native "github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocol"
+	"github.com/stokaro/ptah-ydb-plugin/internal/ydbtype"
 	"github.com/stokaro/ptah-ydb-plugin/schema"
 )
 
@@ -57,7 +60,11 @@ func planInventory(owner *protocol.Reference, table *protocol.PlanningTable, cla
 		if claimed(column.Name) || slices.ContainsFunc(table.Desired.Columns, func(c *protocol.DeclaredColumn) bool { return c.Name == column.Name }) {
 			continue
 		}
-		captured, err := capturedColumn(column, observed.columns[column.Name])
+		value, err := heldColumnFacet(owner, table, observed, column, caps)
+		if err != nil {
+			return nil, "", err
+		}
+		captured, err := capturedColumn(column, value)
 		if err != nil {
 			return nil, err.Error(), nil
 		}
@@ -91,6 +98,48 @@ func bindInventorySources(table *protocol.PlanningTable, result []inventoryStep,
 		}
 	}
 	return ""
+}
+
+// heldColumnFacet is the native observation of the column common that the
+// read of table holds. A read that states its column facets completely and
+// carries none for the column describes a column with no native setting of
+// its own, no family and a default the common column states whole, and
+// heldColumnFacet returns that observation: the one a declaration of the
+// column with its common default as the native literal converts to. The host
+// builds such a side from a schema file for a diff of two files, where only a
+// column whose declaration states a native setting carries a facet; the
+// host's embedded engine planned a change of such a column offline. A read
+// that does not state its column facets, or a common default no literal
+// reads back as, leaves the observation nil, which the callers refuse.
+func heldColumnFacet(owner *protocol.Reference, table *protocol.PlanningTable, observed capturedFacets, common *protocol.ObservedColumn, caps map[string]bool) (*protocol.Envelope, error) {
+	if captured := observed.columns[common.GetName()]; captured != nil {
+		return captured, nil
+	}
+	if !FacetKnown(table.GetCurrent().GetFeatures().GetFacets().GetCoverage(), schema.ColumnProperties, ColumnSubject(table.GetSubject(), common.GetName()), ObservedSide) {
+		return nil, nil
+	}
+	intent := &native.ColumnIntent{}
+	if text := common.GetDefaultExpression(); text != "" {
+		value, ok := ydbtype.LiteralValue(text)
+		if !ok {
+			return nil, nil
+		}
+		literal, err := columnsemantics.NativeDefault(&protocol.DeclaredColumn{Name: common.GetName(), Type: heldType(common), Nullable: common.GetIsNullable() == "YES",
+			DefaultSet: true, DefaultValue: "'" + strings.ReplaceAll(value, "'", "''") + "'"}, heldType(common), caps)
+		// A common default no literal reads back as leaves the observation
+		// unknown, which the callers refuse; the error says no more.
+		if err != nil || literal == nil {
+			return nil, nil
+		}
+		intent.DefaultValue = &native.ColumnIntent_Literal{Literal: literal}
+	}
+	column := proto.CloneOf(owner)
+	column.Kind, column.Path, column.Name = "column", []string{owner.GetName()}, common.GetName()
+	declared, err := schema.CaptureColumnIntent(column, intent)
+	if err != nil {
+		return nil, err
+	}
+	return schema.ConvertColumn(declared, protocol.ValueInput_DESIRED, protocol.ValueInput_OBSERVED)
 }
 
 func capturedColumn(common *protocol.ObservedColumn, value *protocol.Envelope) (*native.ColumnMeta, error) {
