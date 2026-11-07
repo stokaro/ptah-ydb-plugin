@@ -583,9 +583,17 @@ type ObservedChangefeed struct {
 	// Records the requested scan: the native initial_scan_progress, which stays
 	// after the scan completes, or STATE_INITIAL_SCAN, which YDB reports before
 	// the first progress. Progress counters themselves are not schema.
-	InitialScan   bool `protobuf:"varint,3,opt,name=initial_scan,json=initialScan,proto3" json:"initial_scan,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	InitialScan bool `protobuf:"varint,3,opt,name=initial_scan,json=initialScan,proto3" json:"initial_scan,omitempty"`
+	// Says why the async replication that controls the changefeed lives in
+	// another database, where its replication binding names a replica below
+	// this database's root: the replica lies in a database nested in this
+	// one, or this database holds no table at its path, so the replication
+	// is one of a database of the same name on another server. The read
+	// sets it; it is empty for a changefeed without a binding, and for one
+	// whose replica path holds a table of this database.
+	ForeignReplication string `protobuf:"bytes,4,opt,name=foreign_replication,json=foreignReplication,proto3" json:"foreign_replication,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ObservedChangefeed) Reset() {
@@ -637,6 +645,13 @@ func (x *ObservedChangefeed) GetInitialScan() bool {
 		return x.InitialScan
 	}
 	return false
+}
+
+func (x *ObservedChangefeed) GetForeignReplication() string {
+	if x != nil {
+		return x.ForeignReplication
+	}
+	return ""
 }
 
 type Consumer_ConsumerStats struct {
@@ -1026,11 +1041,12 @@ const file_internal_nativeprotocol_topics_proto_rawDesc = "" +
 	"\x0eSTATE_DISABLED\x10\x02\x12\x16\n" +
 	"\x12STATE_INITIAL_SCAN\x10\x03\"_\n" +
 	"\x16ChangefeedObservations\x12E\n" +
-	"\vchangefeeds\x18\x01 \x03(\v2#.ptah.ydb.native.ObservedChangefeedR\vchangefeeds\"\xbd\x01\n" +
+	"\vchangefeeds\x18\x01 \x03(\v2#.ptah.ydb.native.ObservedChangefeedR\vchangefeeds\"\xee\x01\n" +
 	"\x12ObservedChangefeed\x12H\n" +
 	"\vdescription\x18\x01 \x01(\v2&.ptah.ydb.native.ChangefeedDescriptionR\vdescription\x12:\n" +
 	"\x05topic\x18\x02 \x01(\v2$.ptah.ydb.native.DescribeTopicResultR\x05topic\x12!\n" +
-	"\finitial_scan\x18\x03 \x01(\bR\vinitialScanB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
+	"\finitial_scan\x18\x03 \x01(\bR\vinitialScan\x12/\n" +
+	"\x13foreign_replication\x18\x04 \x01(\tR\x12foreignReplicationB<Z:github.com/stokaro/ptah-ydb-plugin/internal/nativeprotocolb\x06proto3"
 
 var (
 	file_internal_nativeprotocol_topics_proto_rawDescOnce sync.Once

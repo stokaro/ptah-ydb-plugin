@@ -22,10 +22,12 @@ func topicIdentity(topic *native.DescribeTopicResult, name string) error {
 }
 
 // readChangefeeds reads the topic of each changefeed the description of the
-// table at tablePath names. It waits out a topic the table names before the
-// topic service describes it, such as the one of the changefeed an async
-// replication adds to its source table; see [nativeapi.DescribeListed].
-func (s *source) readChangefeeds(ctx context.Context, tablePath string, table *description) (*native.ChangefeedObservations, error) {
+// table at tablePath names, and where an async replication of another
+// database controls one, why (see foreignReplication). It waits out a topic
+// the table names before the topic service describes it, such as the one of
+// the changefeed an async replication adds to its source table; see
+// [nativeapi.DescribeListed].
+func (s *source) readChangefeeds(ctx context.Context, root, tablePath string, table *description) (*native.ChangefeedObservations, error) {
 	result := &native.ChangefeedObservations{}
 	for _, feed := range table.changefeeds {
 		topicPath := path.Join(tablePath, feed.Name)
@@ -44,7 +46,11 @@ func (s *source) readChangefeeds(ctx context.Context, tablePath string, table *d
 		// engine wrote a changefeed's in name order, in an inspection and in
 		// the statement that adds a dropped changefeed back alike.
 		slices.SortFunc(topic.Consumers, func(a, b *native.Consumer) int { return strings.Compare(a.Name, b.Name) })
-		result.Changefeeds = append(result.Changefeeds, &native.ObservedChangefeed{Description: feed, Topic: topic})
+		foreign, err := s.foreignReplication(ctx, root, feed)
+		if err != nil {
+			return nil, err
+		}
+		result.Changefeeds = append(result.Changefeeds, &native.ObservedChangefeed{Description: feed, Topic: topic, ForeignReplication: foreign})
 	}
 	return result, nil
 }

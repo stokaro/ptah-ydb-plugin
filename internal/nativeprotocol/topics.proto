@@ -105,4 +105,12 @@ message ObservedChangefeed {
     // after the scan completes, or STATE_INITIAL_SCAN, which YDB reports before
     // the first progress. Progress counters themselves are not schema.
     bool initial_scan = 3;
+    // Says why the async replication that controls the changefeed lives in
+    // another database, where its replication binding names a replica below
+    // this database's root: the replica lies in a database nested in this
+    // one, or this database holds no table at its path, so the replication
+    // is one of a database of the same name on another server. The read
+    // sets it; it is empty for a changefeed without a binding, and for one
+    // whose replica path holds a table of this database.
+    string foreign_replication = 4;
 }
