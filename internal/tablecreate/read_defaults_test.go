@@ -103,6 +103,48 @@ func TestCompileReadLiteralDefault_HappyPath(t *testing.T) {
 	c.Assert(string(literal), qt.JSONEquals, jsonValue(c, `{"type":{"typeId":"UTF8"},"value":{"textValue":"untitled"}}`))
 }
 
+// YDB describes an optional column's literal with its bare storage type.
+// The common column has the optional type and a present empty default, so
+// both descriptions must compile to the same literal.
+func TestCompileReadOptionalEmptyLiteralDefault_HappyPath(t *testing.T) {
+	for _, test := range []struct {
+		name, columnType, typeID, valueField string
+	}{
+		{"Utf8", "Utf8", "UTF8", "textValue"},
+		{"String", "String", "STRING", "bytesValue"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := testcheck.New(t)
+			table := titledTable()
+			table.Columns[1].Type = test.columnType
+			table.Columns[1].Nullable = true
+			table.Columns[1].DefaultValue = ""
+			settings := `{"literal":{"type":{"typeId":"` + test.typeID + `"},"value":{"` + test.valueField + `":""}}}`
+
+			request, err := tablecreate.Compile(owner(), readTable(c, table, "title", settings), nil)
+
+			c.Assert(err, qt.IsNil)
+			literal, err := protojson.Marshal(request.Columns[1].GetFromLiteral())
+			c.Assert(err, qt.IsNil)
+			c.Assert(string(literal), qt.JSONEquals, jsonValue(c, `{"type":{"optionalType":{"item":{"typeId":"`+test.typeID+`"}}},"value":{"`+test.valueField+`":""}}`))
+		})
+	}
+}
+
+func TestCompileReadOptionalLiteralDefault_FailurePath(t *testing.T) {
+	c := testcheck.New(t)
+	table := titledTable()
+	table.Columns[1].Nullable = true
+	table.Columns[1].DefaultValue = ""
+	settings := `{"literal":{"type":{"typeId":"UTF8"},"value":{"textValue":"other"}}}`
+
+	request, err := tablecreate.Compile(owner(), readTable(c, table, "title", settings), nil)
+
+	c.Assert(err, qt.ErrorMatches, `a column default must have one declaration, common or native`)
+	c.Assert(tablecreate.IsUnsupported(err), qt.IsTrue)
+	c.Assert(request, qt.IsNil)
+}
+
 // A native literal other than the common default is a second default, and is
 // refused.
 func TestCompileReadLiteralDefault_FailurePath(t *testing.T) {
