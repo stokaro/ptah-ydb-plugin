@@ -28,18 +28,23 @@ func TestHostRollsBackTableSettings_HappyPath(t *testing.T) {
 		{name: "an added TTL", after: "P7D", statement: "ALTER TABLE `{dir}/items` RESET (TTL);", lostRows: true},
 		{name: "a changed partitioning", after: "partitions", statement: "ALTER TABLE `{dir}/items` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, " +
 			"AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 1);"},
+		{name: "every changed partitioning setting", before: "held partitions", after: "changed partitions",
+			statement: "ALTER TABLE `{dir}/items` SET (AUTO_PARTITIONING_BY_SIZE = ENABLED, " +
+				"AUTO_PARTITIONING_PARTITION_SIZE_MB = 2048, AUTO_PARTITIONING_BY_LOAD = DISABLED, " +
+				"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 6, KEY_BLOOM_FILTER = DISABLED);"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := testcheck.New(t)
 			opened, directory, database := lockFixture(c)
 			emptyAtCleanup(c, opened, path.Join(database, directory))
-			// declared states the TTL of the interval given, the minimum
-			// partition count 3 for "partitions", or no setting for "".
+			// declared states the TTL or partitioning of the named source.
 			ttl := func(interval string) string {
 				return "    platform:\n      ydb: {row_deletion_column: created_at, row_deletion_interval: " + interval + "}\n"
 			}
 			declared := func(setting string) string {
-				stated := map[string]string{"": "", "P30D": ttl("P30D"), "P7D": ttl("P7D"), "partitions": "    auto_partitioning_min_partitions_count: 3\n"}[setting]
+				stated := map[string]string{"": "", "P30D": ttl("P30D"), "P7D": ttl("P7D"), "partitions": "    auto_partitioning_min_partitions_count: 3\n",
+					"held partitions":    "    auto_partitioning_min_partitions_count: 6\n",
+					"changed partitions": "    auto_partitioning_min_partitions_count: 4\n    auto_partitioning_by_load: ENABLED\n    key_bloom_filter: ENABLED\n"}[setting]
 				return "tables:\n  items:\n    schema: " + directory + "\n" + stated +
 					"    columns:\n      id: {type: Uint64, primary: true, not_null: true}\n      created_at: {type: Timestamp}\n"
 			}

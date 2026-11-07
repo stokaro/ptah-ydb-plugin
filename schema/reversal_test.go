@@ -123,11 +123,13 @@ func TestReverseTableChange_RestoresTheNewTableDefaults(t *testing.T) {
 	c.Assert(protojson.Unmarshal(reversed.Restored.Payload, restored), qt.IsNil)
 	c.Assert(proto.Equal(restored.PartitioningSettings, &Ydb_Table.PartitioningSettings{PartitioningBySize: Ydb.FeatureFlag_ENABLED, PartitionSizeMb: 2048,
 		PartitioningByLoad: Ydb.FeatureFlag_DISABLED, MinPartitionsCount: 1}), qt.IsTrue, qt.Commentf("%v", restored.PartitioningSettings))
+	c.Assert(restored.KeyBloomFilter, qt.Equals, Ydb.FeatureFlag_DISABLED)
 	exported, err := schema.ConvertTable(before, protocol.ValueInput_OBSERVED, protocol.ValueInput_DESIRED)
 	c.Assert(err, qt.IsNil)
 	declared := &native.RowTableIntent{}
 	c.Assert(protojson.Unmarshal(exported.Payload, declared), qt.IsNil)
 	c.Assert(declared.PartitioningSettings, qt.IsNil)
+	c.Assert(declared.KeyBloomFilter, qt.Equals, Ydb.FeatureFlag_STATUS_UNSPECIFIED)
 }
 
 // columnFamilyChange is a change that moves a column holding a literal

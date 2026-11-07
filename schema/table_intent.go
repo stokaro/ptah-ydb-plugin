@@ -199,10 +199,17 @@ func ConvertTable(value *protocol.Envelope, from, to protocol.ValueInput_Represe
 // declaration a reverse restores, as the host's embedded engine restored every
 // setting a table held. A setting a declaration leaves out keeps what the
 // table holds, so a reverse without the new-table defaults keeps each setting
-// the forward change moved away from one, and the reverse of a changed
-// partitioning plans nothing.
+// the forward change moved away from one. YDB can report a disabled key bloom
+// filter as unspecified; the reverse must state DISABLED to turn off a filter
+// the forward change enabled.
 func restoredTable(value *protocol.Envelope, from, to protocol.ValueInput_Representation) (*protocol.Envelope, error) {
-	return convertTable(value, from, to, proto.CloneOf[*native.RowTableIntent])
+	return convertTable(value, from, to, func(intent *native.RowTableIntent) *native.RowTableIntent {
+		result := proto.CloneOf(intent)
+		if result.KeyBloomFilter == Ydb.FeatureFlag_STATUS_UNSPECIFIED {
+			result.KeyBloomFilter = Ydb.FeatureFlag_DISABLED
+		}
+		return result
+	})
 }
 
 // convertTable is [ConvertTable] with declared choosing the settings a read's
@@ -255,10 +262,10 @@ func tableIntent(observed *native.DescribeTableResult) *native.RowTableIntent {
 // WithoutNewTableDefaults is intent without each setting that has the value
 // YDB's documentation gives a new table, the baseline the host's embedded
 // engine wrote a read's report against: splitting by size at 2048 MB, not by
-// load, at least one partition, and no key Bloom filter. A read reports them
-// for every table, and a setting a declaration leaves out keeps what the
-// table holds, so leaving them out changes no forward plan; a reverse states
-// them (see restoredTable). intent is not changed.
+// load, at least one partition, and no key Bloom filter. A read can report
+// those defaults explicitly, and a setting a declaration leaves out keeps
+// what the table holds, so leaving them out changes no forward plan. A reverse
+// states them (see restoredTable). intent is not changed.
 func WithoutNewTableDefaults(intent *native.RowTableIntent) *native.RowTableIntent {
 	result := proto.CloneOf(intent)
 	if partitioning := result.GetPartitioningSettings(); partitioning != nil {
